@@ -250,3 +250,33 @@ chore(release): prepare v0.1.0
 - 默认分支 history 无高频统计噪声；每个 squash commit 能独立解释、验证和回滚。
 
 这套目标不是“文件最多”，而是“品牌可记忆、安装低摩擦、行为可证明、贡献可执行、发布可追溯、安全边界诚实”。
+
+## 七、第二轮复查：从“文件齐全”转向“能力可见”
+
+复查基线：Azhou AI Hub `main@7c6cbdb`。这一轮重新读取三个参考仓当前公开页面，并通过 GitHub API 核对本仓远端设置；不再把已经完成的 P0 重复列成待办。[来源：Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) [来源：alchaincyf](https://github.com/alchaincyf/alchaincyf) [来源：ECC](https://github.com/affaan-m/ECC) [来源：Matt Pocock Skills](https://github.com/mattpocock/skills)
+
+| 面向 | 当前结论 | 状态 |
+|---|---|---|
+| 首屏与品牌 | 中英文 README 已共用 1280×640 阿舟 hero；本轮不再重复新增装饰图。 | `complete` |
+| 社区治理 | Community Profile 100%；README、License、Code of Conduct、Contributing、PR template 已被 GitHub 识别。 | `complete` |
+| 合并与历史 | 只允许 squash merge，合并后自动删分支；`main` 与 `v*` 均有 active ruleset。 | `complete` |
+| Actions 与安全 | Actions 默认只读、禁止 workflow 批准 PR、只允许选定 Actions、强制 SHA pinning；CodeQL、Dependabot security updates、secret scanning/push protection、private vulnerability reporting 已启用。 | `complete` |
+| 能力展示 | 参考项目不只给安装，还让访客快速理解产品作用；本轮增加两个可复制的 60 秒输入/输出 demo，并明确 reference fixture 不是模型成绩。 | `complete` |
+| 外部可信度 | OpenSSF Scorecard 当前为 6.9；依赖更新、权限、依赖 pinning、SAST、CI 等项通过，项目年龄、独立 code review 和尚未发布 Release 仍拉低分数。 | `partial` |
+| 首次交付 | `v0.1.0` 仍是 draft，目标 commit 早于当前 `main`；公开安装 smoke receipt 与跨 harness 真实 receipt 尚未闭环。 | `hold` |
+| Social Preview | Git 版本化 1280×640 资产与 README 展示已完成；GitHub 设置页媒体对象/CDN 的上传成功仍需独立平台回执，不能用 README HTTP 200 代替。 | `hold` |
+
+远端核对命令：
+
+```bash
+gh api repos/TeFuirnever/azhou-ai-hub
+gh api repos/TeFuirnever/azhou-ai-hub/rulesets
+gh api repos/TeFuirnever/azhou-ai-hub/actions/permissions
+gh api repos/TeFuirnever/azhou-ai-hub/actions/permissions/workflow
+gh api repos/TeFuirnever/azhou-ai-hub/community/profile
+gh api repos/TeFuirnever/azhou-ai-hub/private-vulnerability-reporting
+gh release view v0.1.0 --json isDraft,targetCommitish,url
+curl -fsSL https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub
+```
+
+下一轮只保留三个真实缺口：从公开 GitHub 源做两个 skill 的独立安装 smoke；采集不夸大的跨 harness receipt；在发布授权后把 draft Release、tag、CHANGELOG 与同一 commit 对齐。继续不复制 alchaincyf 的统计型 commits、ECC 的 vendor-specific 运行副本或 Matt 的 npm-specific Changesets 基础设施。
