@@ -55,10 +55,15 @@ REQUIRED_PATHS = (
     "skills/repo-pedant/SKILL.md",
 )
 
+INSTALLABLE_SKILL_PATHS = {
+    "skills/excalidraw-diagram/SKILL.md",
+    "skills/repo-pedant/SKILL.md",
+}
+
 BASELINE_HASHES = {
-    "neat-freak/SKILL.md": "dfa7ba124e896ae16d8cec21071fbeb10841f2d1b497a46c85c6bed6fc89bbf5",
-    "neat-freak/references/agent-paths.md": "7e739076a005599463cd77e4b2deff22502c8cb1f97d258bc02c115ceafbe50f",
-    "neat-freak/references/sync-matrix.md": "0dc219f53695d722e69b82e3c1e5573937c110ec625311f78f1e811c049079eb",
+    "benchmarks/repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "dfa7ba124e896ae16d8cec21071fbeb10841f2d1b497a46c85c6bed6fc89bbf5",
+    "benchmarks/repo-pedant/upstream/neat-freak/references/agent-paths.md": "7e739076a005599463cd77e4b2deff22502c8cb1f97d258bc02c115ceafbe50f",
+    "benchmarks/repo-pedant/upstream/neat-freak/references/sync-matrix.md": "0dc219f53695d722e69b82e3c1e5573937c110ec625311f78f1e811c049079eb",
 }
 
 
@@ -76,6 +81,13 @@ def public_files(root: Path = ROOT) -> list[Path]:
 
 def check_required(root: Path) -> list[str]:
     return [f"required public file missing: {name}" for name in REQUIRED_PATHS if not (root / name).is_file()]
+
+
+def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
+    actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"}
+    errors = [f"installable skill missing: {path}" for path in sorted(INSTALLABLE_SKILL_PATHS - actual)]
+    errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - INSTALLABLE_SKILL_PATHS))
+    return errors
 
 
 def check_json(files: list[Path], root: Path) -> list[str]:
@@ -208,6 +220,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     files = public_files(root)
     errors: list[str] = []
     errors.extend(check_required(root))
+    errors.extend(check_skill_discovery(files, root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))
