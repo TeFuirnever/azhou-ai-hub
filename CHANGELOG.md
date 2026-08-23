@@ -7,6 +7,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Added
 
 - Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
+- Added a redacted public-source discovery and clean-install receipt for both canonical skills.
 
 ### Fixed
 
@@ -21,7 +22,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Planned
 
-- Public install smoke receipts from the tagged GitHub source.
+- First tagged release aligned to the verified public source after explicit publication authorization.
 - First complete cross-harness evidence set.
 
 ## [0.1.0] - 2026-08-23

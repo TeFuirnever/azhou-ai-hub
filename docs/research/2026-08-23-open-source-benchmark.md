@@ -280,3 +280,17 @@ curl -fsSL https://api.securityscorecards.dev/projects/github.com/TeFuirnever/az
 ```
 
 下一轮只保留三个真实缺口：从公开 GitHub 源做两个 skill 的独立安装 smoke；采集不夸大的跨 harness receipt；在发布授权后把 draft Release、tag、CHANGELOG 与同一 commit 对齐。继续不复制 alchaincyf 的统计型 commits、ECC 的 vendor-specific 运行副本或 Matt 的 npm-specific Changesets 基础设施。
+
+## 八、第三轮复查：从“能力可见”到“公网可安装”
+
+复查基线：Azhou AI Hub `main@0a3fa879ce36062f66a61941e433ef446807c99c`。使用 `skills` CLI 1.5.23 从公开 GitHub 地址执行发现和两次隔离复制安装；完整脱敏收据见 [`evidence/public-install-smoke-2026-08-23.md`](../../evidence/public-install-smoke-2026-08-23.md)。
+
+| 面向 | 结果 | 状态 |
+|---|---|---|
+| 公网发现 | 只发现 `repo-pedant`、`excalidraw-diagram`；上游 `neat-freak` 快照不再被当成第三个运行包。 | `complete` |
+| Repo Pedant 安装 | 从公开地址复制 28 个文件，入口、closeout hook 与 `neat-freak` 兼容合同存在。 | `complete` |
+| Excalidraw 安装 | 从公开地址复制 505 个文件，入口、离线运行时、字体、组件库和锁文件存在。 | `complete` |
+| 开发环境隔离 | 两次安装前后，现有 contributor softlink 均未改变。 | `complete` |
+| 首次交付 | 公网默认分支安装已闭环；跨 harness 真实 receipt 与对齐后的首个正式 Release 仍未闭环。 | `hold` |
+
+真实缺口从三个缩减为两个：采集不夸大的跨 harness receipt；在明确发布授权后，让 draft Release、tag、CHANGELOG 与同一验证 commit 对齐。Social Preview 平台上传和 Excalidraw 模型级视觉结果仍维持各自的独立 `hold`，不由安装成功替代。
