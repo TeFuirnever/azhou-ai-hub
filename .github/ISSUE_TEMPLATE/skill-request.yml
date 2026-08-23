@@ -1,0 +1,47 @@
+name: Skill or capability request
+description: Propose one bounded real task the hub should handle.
+title: "proposal: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: Real job
+      description: What concrete task should a user be able to complete?
+      placeholder: When ..., the user needs ..., so that ...
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround and failure
+      description: Name existing tools/skills and the observed gap. Link public evidence where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Observable success
+      description: What output, deterministic checks, and human judgment would prove the skill useful?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Explicit non-goals and safety boundaries
+      description: What must remain out of scope, require confirmation, or stay private?
+    validations:
+      required: true
+  - type: input
+    id: harnesses
+    attributes:
+      label: Relevant harnesses
+      placeholder: Codex, Claude Code, zcode, other
+  - type: checkboxes
+    id: source
+    attributes:
+      label: Source rights
+      options:
+        - label: Linked examples are public and their licenses/usage rights are identified.
+          required: true

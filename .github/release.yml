@@ -1,0 +1,26 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: "🚀 Skills"
+      labels:
+        - skill
+        - enhancement
+    - title: "🐛 Fixes"
+      labels:
+        - bug
+    - title: "🧪 Evidence and tests"
+      labels:
+        - benchmark
+        - tests
+    - title: "📚 Documentation"
+      labels:
+        - documentation
+    - title: "🔐 Security and dependencies"
+      labels:
+        - security
+        - dependencies
+    - title: "🧰 Repository"
+      labels:
+        - "*"

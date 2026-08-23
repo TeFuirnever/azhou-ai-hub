@@ -1,0 +1,49 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Shanghai
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - github-actions
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /skills/excalidraw-diagram/scripts
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Shanghai
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - excalidraw-diagram
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: pip
+    directory: /skills/excalidraw-diagram/references
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Shanghai
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - excalidraw-diagram
+    open-pull-requests-limit: 5
