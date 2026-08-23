@@ -1,23 +1,71 @@
+# OS and editor noise
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+*.swp
+*.swo
+*.bak
+
+# Python environments, caches, coverage and build output
 .venv/
-node_modules/
+venv/
+env/
+ENV/
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# JavaScript / Node environments and caches
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.parcel-cache/
+.cache/
+
+# Local agent, planning and review state
 .omc/
 .planning/
 .repo-pedant/
 .lavish/
+
+# Local reports and temporary files
 *.sarif
-coverage.xml
-.coverage
+*.log
+*.tmp
+tmp/
+temp/
+
+# Local credentials and private records
+.env
+.env.*
+!.env.example
+*.private.json
 
 # Local task-manager state; keep it on disk, outside the public repository.
 /backlog.md
 /note-archive.md
+
+# Agent-history and benchmark workspace state; checked-in fixtures/results stay public.
 benchmarks/repo-pedant/history/raw/
 benchmarks/repo-pedant/history/local/
 benchmarks/repo-pedant/workspace/
 benchmarks/excalidraw-diagram/history/raw/
 benchmarks/excalidraw-diagram/history/local/
 benchmarks/excalidraw-diagram/workspace/
-*.private.json

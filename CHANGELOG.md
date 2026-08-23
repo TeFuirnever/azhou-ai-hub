@@ -8,6 +8,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
 - Added a redacted public-source discovery and clean-install receipt for both canonical skills.
+- Added Azhou Scenes effect previews for both canonical skills; the Excalidraw preview was regenerated after a P0 eye-identity review.
 
 ### Fixed
 
