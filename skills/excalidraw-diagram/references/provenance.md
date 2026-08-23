@@ -19,7 +19,7 @@ The following are Azhou-maintained implementations: \`SKILL.md\`, the brand life
 | SVG converter | \`excalidraw/svg-to-excalidraw\` | \`0.0.2\`; bundled into the official engine build |
 | component libraries | \`excalidraw/excalidraw-libraries\` | 231 gzipped libraries, 4,134 catalogued items |
 
-The consolidated engine retains its generated bundled-license comment. Rebuilds must preserve that block and update this table, lockfiles and verification evidence together.
+The consolidated engine retains its generated bundled-license comment. Its upstream public Firebase client identifier is neutralized in this offline package because collaboration services are outside the runtime boundary. Rebuilds must repeat that neutralization, preserve the license block, and update this table, lockfiles and verification evidence together.
 
 ## Fonts and libraries
 

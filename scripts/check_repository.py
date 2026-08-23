@@ -18,6 +18,13 @@ MARKDOWN_LINK = re.compile(
     r"!?\[[^\]]*\]\((?P<target><[^>]+>|[^)\s]+)(?:\s+[\"'][^)]*)?\)"
 )
 ACTION_USE = re.compile(r"^\s*-\s+uses:\s*(?P<action>[^#\s]+)", re.MULTILINE)
+SECRET_PATTERNS = (
+    ("aws-access-key", re.compile(rb"(?<![A-Z0-9])AKIA[0-9A-Z]{16}(?![A-Z0-9])")),
+    ("github-classic-token", re.compile(rb"gh[pousr]_[A-Za-z0-9]{36,255}")),
+    ("github-fine-grained-token", re.compile(rb"github_pat_[A-Za-z0-9_]{40,255}")),
+    ("google-api-key", re.compile(rb"AIza[0-9A-Za-z_-]{35}")),
+    ("private-key", re.compile(rb"-----BEGIN (?:EC |OPENSSH |RSA )?PRIVATE KEY-----")),
+)
 
 REQUIRED_PATHS = (
     ".github/CODEOWNERS",
@@ -29,6 +36,9 @@ REQUIRED_PATHS = (
     ".github/release.yml",
     ".github/workflows/ci.yml",
     ".github/workflows/codeql.yml",
+    ".github/workflows/dependency-review.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/scorecard.yml",
     "AGENTS.md",
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
@@ -158,6 +168,25 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+def check_secret_patterns(files: list[Path], root: Path) -> list[str]:
+    """Reject high-confidence credential shapes without printing their values."""
+    errors: list[str] = []
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            errors.append(f"cannot scan {rel}: {exc}")
+            continue
+        if b"\0" in data[:8192]:
+            continue
+        for label, pattern in SECRET_PATTERNS:
+            for match in pattern.finditer(data):
+                line = data.count(b"\n", 0, match.start()) + 1
+                errors.append(f"secret-like value ({label}) in {rel}:{line}")
+    return errors
+
+
 def check_provenance(root: Path) -> list[str]:
     errors: list[str] = []
     for rel, expected in BASELINE_HASHES.items():
@@ -183,6 +212,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
+    errors.extend(check_secret_patterns(files, root))
     errors.extend(check_provenance(root))
     return errors
 

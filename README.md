@@ -47,7 +47,7 @@ Both packages are independently installable. Runtime instructions live under <co
 ## Why trust it?
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
-- **Claims have gates.** The repository runs 78 deterministic tests, a 3-case Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, JSON/link/provenance policy and whitespace checks.
+- **Claims have gates.** The repository runs 80 deterministic tests, a 3-case Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, JSON/link/provenance/credential policy and whitespace checks.
 - **Harness differences stay visible.** Codex, Claude Code and zcode share the same runtime packages, but hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md).
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).

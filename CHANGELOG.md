@@ -4,6 +4,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Security
+
+- Neutralized the upstream public Firebase client identifier in the offline Excalidraw bundle.
+- Added non-echoing repository checks for high-confidence credential shapes.
+- Scoped CodeQL write permissions to the analysis job.
+
 ### Planned
 
 - Public install smoke receipts from the tagged GitHub source.

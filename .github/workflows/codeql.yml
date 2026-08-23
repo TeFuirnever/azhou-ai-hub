@@ -10,8 +10,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  packages: read
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +18,10 @@ concurrency:
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
