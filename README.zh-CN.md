@@ -47,7 +47,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库执行 78 项确定性测试、3-case Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源策略和空白检查。
+- **主张必须有 gate。** 仓库执行 80 项确定性测试、3-case Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。

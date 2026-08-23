@@ -7,6 +7,7 @@ import unittest
 from scripts.check_repository import (
     check_action_pins,
     check_markdown_links,
+    check_secret_patterns,
     relative_markdown_targets,
 )
 
@@ -39,6 +40,31 @@ class RepositoryPolicyTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], check_action_pins([workflow], root))
+
+    def test_secret_shapes_are_reported_without_echoing_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "fixture.txt"
+            marker = "AI" + "za" + ("A" * 35)
+            fixture.write_text(f"credential={marker}\n", encoding="utf-8")
+
+            errors = check_secret_patterns([fixture], root)
+
+            self.assertEqual(1, len(errors))
+            self.assertIn("google-api-key", errors[0])
+            self.assertNotIn(marker, errors[0])
+            fixture.write_text("credential=offline-renderer-disabled\n", encoding="utf-8")
+            self.assertEqual([], check_secret_patterns([fixture], root))
+
+    def test_aws_shape_requires_token_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "fixture.txt"
+            marker = "AK" + "IA" + ("A" * 16)
+            fixture.write_text(f"encoded=Q{marker}Z\n", encoding="utf-8")
+            self.assertEqual([], check_secret_patterns([fixture], root))
+            fixture.write_text(f'credential="{marker}"\n', encoding="utf-8")
+            self.assertEqual(1, len(check_secret_patterns([fixture], root)))
 
 
 if __name__ == "__main__":
