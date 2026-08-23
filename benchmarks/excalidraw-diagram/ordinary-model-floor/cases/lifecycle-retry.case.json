@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "lifecycle-retry",
+  "diagram_type": "lifecycle",
+  "preset": "hand-drawn",
+  "prompt": "Draw a retry state loop: Active -> Waiting; Waiting -> Retry; Retry returns to Active; Active -> Done is the terminal path.",
+  "semantic": {
+    "required_texts": [
+      "Active",
+      "Waiting",
+      "Retry",
+      "Done"
+    ],
+    "required_flows": [
+      {
+        "from": "Active",
+        "to": "Waiting"
+      },
+      {
+        "from": "Waiting",
+        "to": "Retry"
+      },
+      {
+        "from": "Retry",
+        "to": "Active"
+      },
+      {
+        "from": "Active",
+        "to": "Done"
+      }
+    ]
+  }
+}

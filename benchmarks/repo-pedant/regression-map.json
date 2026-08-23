@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "regressions": {
+    "trigger-contract": ["tests/test_repo_pedant_parity.py::RepoPedantParityTest.test_full_trigger_vocabulary_and_inferred_reminder_contract"],
+    "trigger-accuracy": ["benchmarks/repo-pedant/trigger-cases.json", "tests/test_repo_pedant_parity.py::RepoPedantParityTest.test_full_trigger_vocabulary_and_inferred_reminder_contract"],
+    "fixed-stage-protocol": ["tests/test_validate_execution_protocol.py::ValidateExecutionProtocolTest.test_valid_protocol_passes", "tests/test_validate_execution_protocol.py::ValidateExecutionProtocolTest.test_prior_freeform_brand_drift_is_rejected"],
+    "verification-timing": ["tests/test_validate_execution_protocol.py::ValidateExecutionProtocolTest.test_success_requires_every_check_and_must_be_last", "tests/test_validate_execution_protocol.py::ValidateExecutionProtocolTest.test_failed_run_ends_with_exact_failure_anchor"],
+    "memory-inventory-proof": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_unresolved_memory_inventory_blocks_closeout", "tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_explicit_external_memory_binds_to_single_project", "tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_bound_memory_proof_must_reference_an_enumerated_file"],
+    "multi-surface-handoff": ["benchmarks/repo-pedant/cases/multi-surface-handoff.case.json", "tests/test_repo_pedant_benchmark.py::RepoPedantBenchmarkTest.test_multi_surface_case_requires_project_memory_sync"],
+    "exhaustive-closeout": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_complete_inventory_passes", "tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_bloat_and_agent_rule_growth_are_gates"],
+    "history-coverage": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_unclassified_file_and_incomplete_history_fail", "tests/test_collect_agent_history.py"],
+    "consumer-propagation": ["tests/test_repo_pedant_parity.py::RepoPedantParityTest.test_detailed_consumer_matrix_and_semantic_checks_are_mandatory"],
+    "cross-project-closeout": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_snapshot_enumerates_all_affected_project_surfaces"],
+    "authorization-boundary": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_global_instruction_is_read_only", "tests/test_closeout_hook.py::CloseoutHookTest.test_symlinked_state_is_rejected"],
+    "semantic-closeout": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_complete_inventory_passes"],
+    "missing-surfaces": ["tests/test_inventory_knowledge.py::InventoryKnowledgeTest.test_runnable_project_requires_minimum_surfaces"],
+    "no-new-facts": ["tests/test_repo_pedant_parity.py::RepoPedantParityTest.test_no_new_facts_still_requires_drift_audit"],
+    "runtime-discovery": ["tests/test_repo_pedant_parity.py::RepoPedantParityTest.test_runtime_candidates_are_concrete_but_verified"],
+    "stable-receipt": ["tests/test_validate_evidence_bundle.py::ValidateEvidenceBundleTest.test_receipt_requires_stable_fields"]
+  }
+}

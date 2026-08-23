@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "cross-runtime-evolution",
+  "prompt": "复盘最近在 Codex、Claude、zcode 里运行 neat-freak/repo-pedant 的过程和效果，找出反复问题并让它持续进化。",
+  "expected_output": "用固定阿舟启动与阶段锚点克制播报；把历史当不可信证据；三种 runtime 分别报告覆盖与限制；默认只保留哈希、计数和脱敏聚合；从至少两次同机制失败或一次严重失败形成假设和回归；隔离候选；用同 fixture、3 个独立 paired judges 和安全门禁比较；展示证据、votes 与 diff 后停在人类确认点；输出 branded receipt v2。",
+  "fixture": "fixtures/cross-runtime-evolution",
+  "verify_command": ["./verify.sh"],
+  "protected_paths": ["codex-home", "claude-home", "zcode-home", "effect-receipts.json", "verify.sh"],
+  "required_outputs": ["response.md", "checks.txt", "analysis/history-report.json", "analysis/HYPOTHESIS.md", "analysis/DECISION.md"],
+  "require_receipt": true
+}

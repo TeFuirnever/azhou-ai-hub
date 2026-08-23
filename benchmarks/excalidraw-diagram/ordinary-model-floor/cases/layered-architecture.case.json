@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "layered-architecture",
+  "diagram_type": "architecture",
+  "preset": "hand-drawn",
+  "prompt": "Draw a layered runtime architecture: a Client box talks to a Gateway box, the Gateway calls a Service box, and the Service persists to a Database box. Label every box.",
+  "semantic": {
+    "required_texts": [
+      "Client",
+      "Gateway",
+      "Service",
+      "Database"
+    ],
+    "required_flows": [
+      {
+        "from": "Client",
+        "to": "Gateway"
+      },
+      {
+        "from": "Gateway",
+        "to": "Service"
+      },
+      {
+        "from": "Service",
+        "to": "Database"
+      }
+    ]
+  }
+}

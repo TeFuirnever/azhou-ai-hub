@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "code-spec-conflict",
+  "prompt": "这个阶段做完了，帮我收尾。当前代码和测试只实现了 /v2/export，但 spec.md 已经写成 /v3/export，README 也跟着写了 /v3。",
+  "expected_output": "用固定阿舟启动与阶段锚点克制播报；把现役 README 和状态材料对齐代码中的 /v2/export；保留 /v3 作为未实现目标提醒；明确告知差异；不在收尾任务里把代码改成 /v3；只有用户确认后才另开实现任务；输出 branded receipt v2，机器字段和值不含 emoji。",
+  "fixture": "fixtures/code-spec-conflict",
+  "verify_command": ["./verify.sh"],
+  "protected_paths": ["src/routes.ts", "tests/routes.test.ts", "verify.sh"],
+  "required_outputs": ["response.md", "checks.txt"],
+  "require_receipt": true
+}

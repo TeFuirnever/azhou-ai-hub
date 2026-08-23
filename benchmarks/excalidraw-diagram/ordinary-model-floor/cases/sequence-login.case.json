@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "sequence-login",
+  "diagram_type": "sequence",
+  "preset": "hand-drawn",
+  "prompt": "Draw a login call chain as connected labeled boxes: Browser -> API -> Redis, and API -> Postgres.",
+  "semantic": {
+    "required_texts": [
+      "Browser",
+      "API",
+      "Redis",
+      "Postgres"
+    ],
+    "required_flows": [
+      {
+        "from": "Browser",
+        "to": "API"
+      },
+      {
+        "from": "API",
+        "to": "Redis"
+      },
+      {
+        "from": "API",
+        "to": "Postgres"
+      }
+    ]
+  }
+}

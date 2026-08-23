@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "dataflow-pipeline",
+  "diagram_type": "dataflow",
+  "preset": "hand-drawn",
+  "prompt": "Draw a data pipeline: Source feeds Transform, Transform feeds Enrich, Enrich lands in Sink.",
+  "semantic": {
+    "required_texts": [
+      "Source",
+      "Transform",
+      "Enrich",
+      "Sink"
+    ],
+    "required_flows": [
+      {
+        "from": "Source",
+        "to": "Transform"
+      },
+      {
+        "from": "Transform",
+        "to": "Enrich"
+      },
+      {
+        "from": "Enrich",
+        "to": "Sink"
+      }
+    ]
+  }
+}

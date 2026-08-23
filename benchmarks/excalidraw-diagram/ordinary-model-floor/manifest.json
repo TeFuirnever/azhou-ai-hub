@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "layered-architecture",
+      "case_file": "cases/layered-architecture.case.json"
+    },
+    {
+      "id": "workflow-approval",
+      "case_file": "cases/workflow-approval.case.json"
+    },
+    {
+      "id": "sequence-login",
+      "case_file": "cases/sequence-login.case.json"
+    },
+    {
+      "id": "dataflow-pipeline",
+      "case_file": "cases/dataflow-pipeline.case.json"
+    },
+    {
+      "id": "lifecycle-retry",
+      "case_file": "cases/lifecycle-retry.case.json"
+    }
+  ]
+}

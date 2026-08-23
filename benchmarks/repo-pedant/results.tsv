@@ -1,0 +1,6 @@
+timestamp	eval_mode	skill	baseline_score	result	evidence_ids	regression_id	decision	note
+2026-08-23T11:32:58+08:00	full_test	neat-freak	69.9	p1=pass,p2=pass,p3=fail	synthetic-codex-001,synthetic-claude-001,synthetic-zcode-001	confirmed-prompts-v1	triage_only	dim8=5;runtime_warn=0;cross_runtime_evolution_missing
+2026-08-23T11:32:58+08:00	full_test	repo-pedant	94.7	p1=pass,p2=pass,p3=pass	synthetic-codex-001,synthetic-claude-001,synthetic-zcode-001	confirmed-prompts-v1	triage_only	dim8=9;runtime_warn=0;human_checkpoint
+2026-08-23T11:32:58+08:00	paired_3judge	repo-pedant	69.9	candidate=3,baseline=0,tie=0;safety=pass	synthetic-codex-001,synthetic-claude-001,synthetic-zcode-001	confirmed-prompts-v1	keep_pending_human	order_reversed_judge2;baseline_safety_fail=3;candidate_uncommitted
+2026-08-23T12:23:00+08:00	local_promotion	repo-pedant	94.7	symlink=verified;old_install=removed	synthetic-codex-001,synthetic-claude-001,synthetic-zcode-001	confirmed-prompts-v1	promote_local	explicit_user_confirmation;canonical_name;commit_pending;publish_pending
+2026-08-23T12:31:28+08:00	direct_user_correction	repo-pedant	n/a	regression=pass;tests=26/26	user-scope-correction-2026-08-23	multi-surface-handoff	keep	default_project_memory_sync;global_scope_checkpoint_preserved

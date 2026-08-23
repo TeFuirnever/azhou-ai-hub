@@ -1,0 +1,57 @@
+{
+  "schema_version": "repo-pedant.history.aggregate.v1",
+  "captured_on": "2026-08-23",
+  "source": "local runtime history",
+  "skill_names": [
+    "neat-freak",
+    "repo-pedant",
+    "tidy"
+  ],
+  "privacy": {
+    "raw_text_included": false,
+    "identifiers_included": false,
+    "excerpts_included": false,
+    "signals_are_heuristic": true
+  },
+  "runtime_coverage": {
+    "codex": {
+      "files_scanned": 386,
+      "parse_errors": 0,
+      "runs_detected": 0,
+      "note": "No run met current explicit invocation or legacy receipt evidence. This is a detection limit, not proof that neat-freak never ran in Codex."
+    },
+    "claude": {
+      "files_scanned": 843,
+      "parse_errors": 0,
+      "runs_detected": 17
+    },
+    "zcode": {
+      "files_scanned": 19,
+      "parse_errors": 0,
+      "runs_detected": 2,
+      "note": "zcode exports can omit structured tool events; process counts can be lower than actual."
+    }
+  },
+  "process_totals": {
+    "runs_detected": 19,
+    "assistant_messages": 100,
+    "tool_calls": 144,
+    "mutation_calls": 54,
+    "destructive_calls": 0,
+    "failed_tool_outputs": 4,
+    "user_corrections": 0,
+    "aborted_runs": 0,
+    "receipts_present": 13
+  },
+  "outcome_signals": {
+    "receipt_emitted": 11,
+    "tool_failure_signal": 2,
+    "insufficient_evidence": 6
+  },
+  "interpretation_limits": [
+    "A receipt proves only that a receipt was emitted.",
+    "Zero correction signals do not prove user satisfaction.",
+    "Raw sessions must be reviewed locally before forming an evolution hypothesis.",
+    "This aggregate alone does not authorize editing or promoting the skill."
+  ]
+}

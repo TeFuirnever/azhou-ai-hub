@@ -1,0 +1,82 @@
+{
+  "schema_version": "repo-pedant.darwin-phase1.v1",
+  "generated_at": "2026-08-23T11:32:58+08:00",
+  "status": "human_checkpoint",
+  "score_use": "triage_only",
+  "prompts_confirmed": true,
+  "execution": {
+    "fixture_isolation": true,
+    "variants": [
+      "no-skill",
+      "neat-freak",
+      "repo-pedant"
+    ],
+    "deterministic_checks": {
+      "no-skill": [
+        0,
+        0,
+        0
+      ],
+      "neat-freak": [
+        0,
+        0,
+        1
+      ],
+      "repo-pedant": [
+        0,
+        0,
+        0
+      ]
+    },
+    "prompt_order": [
+      "code-spec-conflict",
+      "multi-surface-handoff",
+      "cross-runtime-evolution"
+    ]
+  },
+  "scores": [
+    {
+      "skill": "neat-freak",
+      "dimensions": {
+        "frontmatter": 10,
+        "workflow": 9,
+        "failure_modes": 6,
+        "checkpoints": 3,
+        "specificity": 9,
+        "resources": 10,
+        "architecture": 7,
+        "empirical": 5,
+        "blacklist": 5
+      },
+      "weighted_total": 69.9,
+      "empirical_basis": "Matched no-skill on the two reconciliation fixtures, then failed the cross-runtime evolution fixture because no collector, privacy-normalization, hypothesis, or promotion protocol exists."
+    },
+    {
+      "skill": "repo-pedant",
+      "dimensions": {
+        "frontmatter": 10,
+        "workflow": 10,
+        "failure_modes": 10,
+        "checkpoints": 10,
+        "specificity": 9,
+        "resources": 10,
+        "architecture": 9,
+        "empirical": 9,
+        "blacklist": 10
+      },
+      "weighted_total": 94.7,
+      "empirical_basis": "Passed all three fixtures; added stable receipts and authorization holds; used the real privacy-preserving collector; recorded per-runtime coverage, hashed identifiers, conservative heuristics, paired-judge requirements, and the human promotion checkpoint."
+    }
+  ],
+  "runtime_neutrality": {
+    "neat-freak_red_lights": 0,
+    "repo-pedant_red_lights": 0
+  },
+  "limitations": [
+    "Absolute scores are noisy triage signals and cannot decide keep or revert.",
+    "All execution fixtures are synthetic and do not establish production effectiveness.",
+    "The no-skill executor manually synthesized a three-runtime report and misstated source coverage; deterministic pass alone did not prove evidence quality.",
+    "Paired baseline/candidate judges have not run because Darwin Phase 1 requires human confirmation first."
+  ],
+  "next_gate": "After human confirmation, run three independent same-context paired judges with reversed A/B order and a safety gate."
+}

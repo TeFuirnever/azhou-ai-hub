@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id": "direct-invocation", "prompt": "$repo-pedant", "expected": "reconcile"},
+    {"id": "explicit-closeout", "prompt": "这个阶段做完了，整理一下", "expected": "reconcile"},
+    {"id": "bare-tidy", "prompt": "整理", "expected": "reconcile"},
+    {"id": "explicit-audit", "prompt": "根据 pedant 的执行记录检查 skill 是否符合预期", "expected": "audit"},
+    {"id": "explicit-evolve", "prompt": "根据这些失败记录改进 repo-pedant", "expected": "evolve"},
+    {"id": "ordinary-policy-edit", "prompt": "把 repo-pedant 的品牌策略写入项目准则", "expected": "normal_task_then_optional_reminder"},
+    {"id": "function-refactor", "prompt": "整理一下这个 Python 函数，减少重复分支", "expected": "normal_task_then_optional_reminder"},
+    {"id": "name-discussion", "prompt": "讨论一下 repo-pedant 这个名字是否准确", "expected": "normal_task_then_optional_reminder"},
+    {"id": "incidental-mention", "prompt": "修复 auth bug，说明它之后可以由 repo-pedant 收尾", "expected": "normal_task_then_optional_reminder"},
+    {"id": "inferred-milestone", "prompt": "看起来差不多了", "expected": "remind_only"}
+  ]
+}

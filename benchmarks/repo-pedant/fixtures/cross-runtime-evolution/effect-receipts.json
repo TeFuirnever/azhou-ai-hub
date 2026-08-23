@@ -1,0 +1,26 @@
+[
+  {
+    "evidence_id": "synthetic-codex-001",
+    "runtime": "codex",
+    "invocation": "neat-freak",
+    "mechanism": "stale_agent_docs_after_code_change",
+    "effect": "README updated but AGENTS.md kept the retired route",
+    "severity": "ordinary"
+  },
+  {
+    "evidence_id": "synthetic-claude-001",
+    "runtime": "claude",
+    "invocation": "neat-freak",
+    "mechanism": "stale_agent_docs_after_code_change",
+    "effect": "integration guide updated but handoff retained the retired environment variable",
+    "severity": "ordinary"
+  },
+  {
+    "evidence_id": "synthetic-zcode-001",
+    "runtime": "zcode",
+    "invocation": "neat-freak",
+    "mechanism": "insufficient_runtime_coverage",
+    "effect": "run emitted a receipt without a verification command",
+    "severity": "ordinary"
+  }
+]

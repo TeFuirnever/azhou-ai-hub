@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "multi-surface-handoff",
+  "prompt": "这个阶段做完了。我们在一个多服务仓库里改了 API 路由、环境变量和部署命令，spec、AGENTS.md、项目 agent memory、集成文档和 runbook 有些没跟上。跑一次 repo-pedant，给下一位 agent 可直接接手的状态。",
+  "expected_output": "用固定阿舟启动与阶段锚点克制播报；先从代码、配置和可复现结果锁定现役事实；建立受影响消费者清单；默认同步 spec 当前态、项目 agent 规则、项目绑定 memory、集成文档、runbook 和已有交接入口，不为这些项目知识面重复请求授权；检查上下游契约；验证路径、命令、测试和最终 diff；全局配置、整文件删除或无关跨仓写入单独确认；输出 branded receipt v2。",
+  "fixture": "fixtures/software-handoff",
+  "verify_command": ["./verify.sh"],
+  "protected_paths": ["src/routes.ts", "deploy.sh", ".env.example", "CHANGELOG.md", "verify.sh"],
+  "required_outputs": ["response.md", "checks.txt"],
+  "require_receipt": true
+}
