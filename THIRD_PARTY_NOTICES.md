@@ -2,6 +2,10 @@
 
 Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtime packages preserve or build on separately copyrighted open-source material. Their upstream notices remain effective.
 
+## Azhou brand assets
+
+`assets/github/social-preview.png` is an Azhou-maintained brand asset generated in-house on 2026-08-23 with Codex image generation and resized to 1280×640 for GitHub previews. This version intentionally contains no third-party logos or copied assets. When replacing it, repeat visual and rights review, keep the file below GitHub's 1 MB limit, and verify the separate GitHub Social Preview setting; the README reference is not that platform receipt.
+
 ## Repo Pedant baseline
 
 \`benchmarks/repo-pedant/upstream/neat-freak/\` is an exact regression snapshot of the \`neat-freak\` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [\`bab178311a65f93ffd073e4fdebc9911eae35791\`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791). Its entry file is named \`SKILL.snapshot.md\` so package discovery cannot install the legacy baseline.
