@@ -19,8 +19,8 @@ assert "synthetic-zcode-session" not in serialized
 assert "request_excerpt" not in serialized
 PY
 
-rg -q 'synthetic-codex-001' analysis/HYPOTHESIS.md
-rg -q 'synthetic-claude-001' analysis/HYPOTHESIS.md
-rg -q 'stale_agent_docs_after_code_change' analysis/HYPOTHESIS.md
-rg -qi 'three|3|三' analysis/DECISION.md
-rg -qi 'human|人类|用户确认|checkpoint' analysis/DECISION.md
+grep -Eq 'synthetic-codex-001' analysis/HYPOTHESIS.md
+grep -Eq 'synthetic-claude-001' analysis/HYPOTHESIS.md
+grep -Eq 'stale_agent_docs_after_code_change' analysis/HYPOTHESIS.md
+grep -Eiq 'three|3|三' analysis/DECISION.md
+grep -Eiq 'human|人类|用户确认|checkpoint' analysis/DECISION.md
