@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage and design discussion
+    url: https://github.com/TeFuirnever/azhou-ai-hub/discussions
+    about: Ask questions or discuss a proposal before filing an implementation issue.
+  - name: Private security report
+    url: https://github.com/TeFuirnever/azhou-ai-hub/security/advisories/new
+    about: Report vulnerabilities, secrets, unsafe deletion, or privacy exposure privately.

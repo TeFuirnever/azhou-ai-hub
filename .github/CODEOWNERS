@@ -1,0 +1,15 @@
+# Default maintainer
+* @TeFuirnever
+
+# High-risk contracts
+/.github/workflows/ @TeFuirnever
+/.github/dependabot.yml @TeFuirnever
+/SECURITY.md @TeFuirnever
+/THIRD_PARTY_NOTICES.md @TeFuirnever
+/LICENSES/ @TeFuirnever
+/docs/skill-standard.md @TeFuirnever
+
+# Runtime and evidence must move together
+/skills/ @TeFuirnever
+/benchmarks/ @TeFuirnever
+/tests/ @TeFuirnever
