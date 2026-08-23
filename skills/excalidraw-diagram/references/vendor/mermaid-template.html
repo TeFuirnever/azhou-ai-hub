@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script type="module">
+    import { parseMermaidToExcalidraw, convertToExcalidrawElements } from "./excalidraw-all.esm.js";
+
+    window.convertMermaid = async function (text) {
+      try {
+        const parsed = await parseMermaidToExcalidraw(text);
+        const elements = convertToExcalidrawElements(parsed.elements || [], { regenerateIds: false });
+        window.__done = true; window.__err = null;
+        return { ok: true, elements, files: parsed.files || {} };
+      } catch (err) {
+        window.__done = true; window.__err = String(err);
+        return { ok: false, error: String(err) };
+      }
+    };
+    window.__ready = true;
+  </script>
+</body>
+</html>
