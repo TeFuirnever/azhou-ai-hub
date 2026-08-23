@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Local .excalidraw persistence + hand-drawn SVG rendering for the excalidraw-diagram skill",
   "dependencies": {
-    "jsdom": "^24.0.0",
+    "jsdom": "^30.0.1",
     "roughjs": "^4.6.6"
   }
 }
