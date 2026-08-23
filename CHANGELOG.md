@@ -4,6 +4,14 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
+
+### Fixed
+
+- Corrected the Excalidraw official-export example to use its positional CLI, locked `uv` environment and post-export style gate.
+
 ### Security
 
 - Neutralized the upstream public Firebase client identifier in the offline Excalidraw bundle.

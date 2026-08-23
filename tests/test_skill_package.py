@@ -129,6 +129,16 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("exact diff", evolution)
         self.assertIn("不能写 live", evolution)
 
+    def test_excalidraw_export_example_matches_locked_runtime_and_cli(self) -> None:
+        package = ROOT / "skills" / "excalidraw-diagram"
+        skill = (package / "SKILL.md").read_text(encoding="utf-8")
+        exporter = (package / "scripts" / "export-official-svg.py").read_text(encoding="utf-8")
+        self.assertIn('cd "$SKILL_DIR/references"', skill)
+        self.assertIn('uv run python "$SKILL_DIR/scripts/export-official-svg.py"', skill)
+        self.assertIn('uv run python "$SKILL_DIR/scripts/visual-check.py"', skill)
+        self.assertNotRegex(skill, r"export-official-svg\.py[\s\\]+.*--output")
+        self.assertIn('ap.add_argument("dst", type=Path', exporter)
+
     def test_public_markdown_links_resolve(self) -> None:
         for document in (
             ROOT / "AGENTS.md",

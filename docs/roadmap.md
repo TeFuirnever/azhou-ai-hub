@@ -10,7 +10,6 @@ Roadmap items describe outcomes, not promises. Accepted work moves to a GitHub i
 
 ## Next
 
-- Add a 60-second input/output demonstration for each skill.
 - Produce and upload a 1280×640 Azhou social preview after visual and rights review.
 - Add public model-floor results only when all five Excalidraw cases have attempt-1 receipts and identified visual review.
 - Create <code>good first issue</code> tasks that each close one reproducible failure.

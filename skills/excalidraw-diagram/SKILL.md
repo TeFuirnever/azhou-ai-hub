@@ -148,7 +148,6 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 先运行结构检查，再渲染真实场景：
 
 ```bash
-python3 "$SKILL_DIR/scripts/check-handdrawn-style.py" /absolute/diagram.excalidraw
 python3 "$SKILL_DIR/scripts/check-scene-hygiene.py" /absolute/diagram.excalidraw
 python3 "$SKILL_DIR/scripts/audit-overlaps.py" /absolute/diagram.excalidraw
 
@@ -173,12 +172,16 @@ uv run python render_excalidraw.py /absolute/diagram.excalidraw --output /absolu
 需要 SVG/PNG 正式衍生物时使用官方引擎路径：
 
 ```bash
-python3 "$SKILL_DIR/scripts/export-official-svg.py" \
+cd "$SKILL_DIR/references"
+uv run python "$SKILL_DIR/scripts/export-official-svg.py" \
   /absolute/diagram.excalidraw \
-  --output /absolute/diagram.svg \
+  /absolute/diagram.svg \
   --png /absolute/diagram.official.png
 
-python3 "$SKILL_DIR/scripts/visual-check.py" \
+uv run python "$SKILL_DIR/scripts/check-handdrawn-style.py" \
+  /absolute/diagram.excalidraw
+
+uv run python "$SKILL_DIR/scripts/visual-check.py" \
   --scene /absolute/diagram.excalidraw \
   --artifact /absolute/diagram.svg
 ```
