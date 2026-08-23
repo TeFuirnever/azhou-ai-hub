@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azhou.ai/schemas/repo-pedant/evolution-signal.v1.json",
+  "title": "Repo-pedant digests-only evolution signal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "signal_id", "observed_at", "project_id", "runtime", "session_digest", "source", "provenance", "category", "mechanism", "severity", "outcome", "user_feedback", "evidence_digest", "privacy", "authorization"],
+  "properties": {
+    "schema_version": {"const": "repo-pedant.evolution-signal.v1"},
+    "signal_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "project_id": {"type": "string", "pattern": "^[a-f0-9]{24}$"},
+    "runtime": {"type": "string", "minLength": 1},
+    "session_digest": {"type": "string", "pattern": "^[a-f0-9]{24}$"},
+    "source": {"enum": ["user_feedback", "receipt", "check", "history", "hook", "synthetic", "manual_review"]},
+    "provenance": {"enum": ["curated", "learned", "imported", "unknown"]},
+    "category": {"enum": ["scope", "authority", "deletion", "stale_fact", "verification", "verbosity", "safety", "authorization", "privacy", "data_loss", "trigger", "inventory"]},
+    "mechanism": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
+    "outcome": {"enum": ["success", "partial", "failure", "unknown"]},
+    "user_feedback": {"enum": ["accepted", "corrected", "rejected", "none"]},
+    "evidence_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "privacy": {"const": "digests-only"},
+    "authorization": {"const": "observation-only"}
+  }
+}

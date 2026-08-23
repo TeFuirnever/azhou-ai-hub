@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azhou.ai/schemas/repo-pedant/execution-protocol.v1.json",
+  "title": "Repo Pedant execution protocol",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "scope", "result", "checks", "events"],
+  "properties": {
+    "schema_version": {"const": "repo-pedant.execution.v1"},
+    "mode": {"enum": ["audit", "reconcile", "handoff", "evolve"]},
+    "scope": {"type": "string", "minLength": 1},
+    "result": {"enum": ["passed", "failed"]},
+    "checks": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+          "status": {"enum": ["passed", "not_applicable", "failed"]},
+          "evidence": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "message"],
+        "properties": {
+          "stage": {"enum": ["start", "scope", "inventory", "impact", "sync", "verify_failure", "verify_success"]},
+          "message": {"type": "string", "minLength": 1},
+          "completed_checks": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"}
+          }
+        }
+      }
+    }
+  }
+}

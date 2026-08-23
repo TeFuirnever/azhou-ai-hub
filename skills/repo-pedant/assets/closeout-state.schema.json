@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azhou.ai/schemas/repo-pedant/closeout-state.v1.json",
+  "title": "Repo-pedant closeout lifecycle state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "repo_root", "session_id", "status", "progress", "unrecorded_progress"],
+  "properties": {
+    "schema_version": {"const": "repo-pedant.closeout-state.v1"},
+    "repo_root": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string"},
+    "status": {"enum": ["needs_closeout", "active", "complete", "held"]},
+    "progress": {"type": "integer", "minimum": 0},
+    "unrecorded_progress": {"type": "boolean"},
+    "receipt_digest": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+  }
+}
