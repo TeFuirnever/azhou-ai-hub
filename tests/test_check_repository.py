@@ -8,11 +8,24 @@ from scripts.check_repository import (
     check_action_pins,
     check_markdown_links,
     check_secret_patterns,
+    check_skill_discovery,
     relative_markdown_targets,
 )
 
 
 class RepositoryPolicyTest(unittest.TestCase):
+    def test_only_canonical_runtime_skills_are_discoverable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = [
+                root / "skills" / "excalidraw-diagram" / "SKILL.md",
+                root / "skills" / "repo-pedant" / "SKILL.md",
+            ]
+            self.assertEqual([], check_skill_discovery(expected, root))
+            legacy = root / "benchmarks" / "repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
+            errors = check_skill_discovery([*expected, legacy], root)
+            self.assertEqual(["unexpected installable skill: benchmarks/repo-pedant/upstream/neat-freak/SKILL.md"], errors)
+
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"
         self.assertEqual(["docs/run.md"], relative_markdown_targets(text))

@@ -11,6 +11,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Fixed
 
 - Corrected the Excalidraw official-export example to use its positional CLI, locked `uv` environment and post-export style gate.
+- Prevented package discovery from exposing the upstream `neat-freak` regression snapshot as a third installable skill.
 
 ### Security
 
