@@ -78,11 +78,19 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 
 [兼容合同](skills/repo-pedant/references/neat-freak-compatibility.md) · [执行协议](skills/repo-pedant/references/execution-protocol.md)
 
+![Repo Pedant 效果图](assets/skills/repo-pedant-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成。机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。
+
 ## Excalidraw Diagram
 
 > ✏️ 先让结构讲清关系，再让文字补充证据。
 
 JSON 可解析不等于完成。这个 skill 要求交付可编辑源图，用官方引擎渲染，实际查看图片，从源场景修复，再重跑 gate。离线字体、官方引擎、转换器和 231 个 MIT 许可的组件库随运行包提供。
+
+![Excalidraw Diagram 效果图](assets/skills/excalidraw-diagram-effect.png)
+
+> ✏️ 效果图由 Azhou Scenes skill 生成。机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。
 
 [运行包](skills/excalidraw-diagram/SKILL.md) · [依赖安装](skills/excalidraw-diagram/references/setup.md) · [来源说明](skills/excalidraw-diagram/references/provenance.md)
 

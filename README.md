@@ -78,11 +78,19 @@ An inferred milestone only produces one reminder; it does not silently edit the 
 
 [Read the compatibility contract](skills/repo-pedant/references/neat-freak-compatibility.md) · [Read the execution protocol](skills/repo-pedant/references/execution-protocol.md)
 
+![Repo Pedant effect preview](assets/skills/repo-pedant-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Machine colour gate passed; final identity, hand and text review remains a human checkpoint.
+
 ## Excalidraw Diagram
 
 > ✏️ Make the structure carry the argument; use text as evidence.
 
 The skill never calls JSON validity “done.” It requires an editable source scene, official-engine rendering, image inspection, source-level fixes and rerun gates. Offline fonts, the official engine, converters and 231 MIT-licensed component libraries ship with the runtime package.
+
+![Excalidraw Diagram effect preview](assets/skills/excalidraw-diagram-effect.png)
+
+> ✏️ Effect preview generated with the Azhou Scenes skill. Machine colour gate passed; final identity, hand and text review remains a human checkpoint.
 
 [Read the package](skills/excalidraw-diagram/SKILL.md) · [Read setup](skills/excalidraw-diagram/references/setup.md) · [Read provenance](skills/excalidraw-diagram/references/provenance.md)
 
