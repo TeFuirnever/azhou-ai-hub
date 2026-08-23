@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "workflow-approval",
+  "diagram_type": "workflow",
+  "preset": "hand-drawn",
+  "prompt": "Draw an approval workflow: Start -> Review; Review branches to Approved or Rejected; both Approved and Rejected reach End.",
+  "semantic": {
+    "required_texts": [
+      "Start",
+      "Review",
+      "Approved",
+      "Rejected",
+      "End"
+    ],
+    "required_flows": [
+      {
+        "from": "Start",
+        "to": "Review"
+      },
+      {
+        "from": "Review",
+        "to": "Approved"
+      },
+      {
+        "from": "Review",
+        "to": "Rejected"
+      },
+      {
+        "from": "Approved",
+        "to": "End"
+      },
+      {
+        "from": "Rejected",
+        "to": "End"
+      }
+    ]
+  }
+}

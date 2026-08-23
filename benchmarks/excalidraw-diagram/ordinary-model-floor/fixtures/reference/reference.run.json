@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "case_id": "layered-architecture",
+  "agent": "reference-fixture",
+  "model": "none",
+  "attempt": 1,
+  "visual_review": {
+    "status": "passed",
+    "reviewer": "reference-fixture",
+    "defects": []
+  }
+}

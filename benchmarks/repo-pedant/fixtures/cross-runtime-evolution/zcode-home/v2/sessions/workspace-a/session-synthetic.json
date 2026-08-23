@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "taskId": "synthetic-zcode-session",
+    "createdAt": 1787443200000,
+    "migrationSource": "zcode"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "timestamp": 1787443200000,
+      "content": "整理完成的改动 /neat-freak"
+    },
+    {
+      "role": "assistant",
+      "timestamp": 1787443201000,
+      "content": "## 同步完成\n文档已对齐；未记录验证命令。"
+    }
+  ]
+}

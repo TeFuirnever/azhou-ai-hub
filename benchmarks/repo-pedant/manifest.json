@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "cases": [
+    "cases/code-spec-conflict.case.json",
+    "cases/multi-surface-handoff.case.json",
+    "cases/cross-runtime-evolution.case.json"
+  ]
+}
