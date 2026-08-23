@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/repo-pedant/scripts/closeout_hook.py event --event precompact --workspace-from-input --format claude --mode advisory || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/repo-pedant/scripts/closeout_hook.py event --event stop --workspace-from-input --format claude --mode advisory || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

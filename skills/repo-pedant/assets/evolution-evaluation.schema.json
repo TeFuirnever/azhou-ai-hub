@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://azhou.ai/schemas/repo-pedant/evolution-evaluation.v1.json",
+  "title": "Repo-pedant paired evolution evaluation",
+  "type": "object",
+  "required": ["schema_version", "candidate_id", "diff_sha256", "deterministic_checks", "paired_votes", "safety_review", "human_approval"],
+  "properties": {
+    "schema_version": {"const": "repo-pedant.evolution-evaluation.v1"},
+    "candidate_id": {"type": "string", "pattern": "^[a-f0-9]{24}$"},
+    "diff_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "deterministic_checks": {"type": "array", "minItems": 5, "items": {"type": "object"}},
+    "paired_votes": {"type": "array", "minItems": 3, "items": {"type": "object"}},
+    "safety_review": {"type": "object"},
+    "human_approval": {"type": "object"}
+  }
+}
