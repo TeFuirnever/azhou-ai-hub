@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local Excalidraw renderer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #fff;
+      }
+
+      #canvas {
+        display: inline-flex;
+        align-items: flex-start;
+      }
+
+      #canvas > svg {
+        display: block;
+      }
+    </style>
+    <script>
+      window.EXCALIDRAW_ASSET_PATH = "./";
+      window.rendererReady = false;
+    </script>
+  </head>
+  <body>
+    <main id="canvas" aria-label="Rendered Excalidraw scene"></main>
+    <script type="module">
+      import { exportToSvg } from "./vendor/excalidraw-all.esm.js";
+
+      const mount = document.querySelector("#canvas");
+
+      window.drawScene = async (scene) => {
+        try {
+          const state = {
+            ...(scene.appState ?? {}),
+            exportBackground: true,
+            exportWithDarkMode: false,
+            viewBackgroundColor: scene.appState?.viewBackgroundColor ?? "#ffffff",
+          };
+          const svg = await exportToSvg({
+            elements: scene.elements ?? [],
+            appState: state,
+            files: scene.files ?? {},
+          });
+          mount.replaceChildren(svg);
+          await document.fonts.ready;
+          return {
+            ok: true,
+            width: svg.getAttribute("width"),
+            height: svg.getAttribute("height"),
+          };
+        } catch (error) {
+          mount.replaceChildren();
+          return {ok: false, message: error instanceof Error ? error.message : String(error)};
+        }
+      };
+
+      window.rendererReady = true;
+    </script>
+  </body>
+</html>

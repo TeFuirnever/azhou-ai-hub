@@ -1,0 +1,10 @@
+{
+  "name": "excalidraw-diagram-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Local .excalidraw persistence + hand-drawn SVG rendering for the excalidraw-diagram skill",
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "roughjs": "^4.6.6"
+  }
+}

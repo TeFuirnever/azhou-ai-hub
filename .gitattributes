@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+skills/excalidraw-diagram/references/vendor/** linguist-vendored -whitespace
+skills/excalidraw-diagram/references/fonts/** linguist-vendored
+skills/excalidraw-diagram/references/libraries/** linguist-vendored
+skills/excalidraw-diagram/references/uv.lock linguist-generated
+skills/excalidraw-diagram/scripts/package-lock.json linguist-generated
+benchmarks/**/fixtures/** linguist-generated
+*.woff2 binary
+*.png binary
+*.gz binary
