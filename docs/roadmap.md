@@ -4,8 +4,7 @@ Roadmap items describe outcomes, not promises. Accepted work moves to a GitHub i
 
 ## Now
 
-- Publish the first verified repository snapshot and enable required CI checks.
-- Prove clean installation for Repo Pedant and Excalidraw Diagram from the public GitHub repository.
+- Publish the first aligned `v0.1.0` release after explicit authorization; keep the tag, release notes, changelog and verified commit identical.
 - Capture one redacted real-task receipt per supported harness without upgrading missing evidence to pass.
 
 ## Next
