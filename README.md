@@ -38,6 +38,17 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 
 Choose one installation method. Do not stack a managed install, a copied package, and a development symlink under the same canonical skill name. See the [installation guide](docs/installation.md) for manual and contributor paths.
 
+## Diagnose or set up a checkout
+
+The zero-dependency foundation CLI exposes repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, and the canonical `verify` gate:
+
+~~~bash
+python3 scripts/azhou_hub.py doctor --json
+python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+~~~
+
+`setup` changes nothing until `--apply` is present, is idempotent, and refuses to overwrite a different installation. It does not install hooks, rewrite harness configuration, contact a registry, update itself or remove packages. See the [foundation CLI contract](docs/foundations.md).
+
 ## Skills
 
 | Skill | Real job | Evidence today |
@@ -124,6 +135,7 @@ The same command checks repository policy, all unit tests, both benchmark-integr
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Support](SUPPORT.md)
+- [Foundation CLI](docs/foundations.md)
 - [Treehouse worktree policy](docs/worktree-policy.md)
 - [Research behind this open-source surface](docs/research/2026-08-23-open-source-benchmark.md)
 

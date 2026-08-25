@@ -38,6 +38,17 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 
 只选一种安装方式。同一 canonical name 下，不要叠加托管安装、手工复制和开发软链接。手工安装与贡献者软链接见[安装指南](docs/installation.md)。
 
+## 诊断或配置当前 checkout
+
+零依赖基础 CLI 统一提供仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup` 和 canonical `verify`：
+
+~~~bash
+python3 scripts/azhou_hub.py doctor --json
+python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+~~~
+
+`setup` 只有出现 `--apply` 才修改文件；重复执行可收敛；遇到不同安装会拒绝覆盖。它不会安装 hook、重写宿主配置、访问 registry、自更新或删除包。完整边界见[基础 CLI 合同](docs/foundations.md)。
+
 ## Skills
 
 | Skill | 解决的真实任务 | 当前证据 |
@@ -124,6 +135,7 @@ python3 scripts/verify.py
 - [变更记录](CHANGELOG.md)
 - [安全政策](SECURITY.md)
 - [支持方式](SUPPORT.md)
+- [基础 CLI](docs/foundations.md)
 - [Treehouse worktree 规范](docs/worktree-policy.md)
 - [本次开源化对标研究](docs/research/2026-08-23-open-source-benchmark.md)
 

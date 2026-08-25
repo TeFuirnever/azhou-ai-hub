@@ -3,6 +3,7 @@
 | Need | Maintained source |
 |---|---|
 | Install a skill | [Installation](installation.md) |
+| Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try Repo Pedant in 60 seconds | [Repo Pedant demo](demos/repo-pedant.md) |
 | Try Excalidraw Diagram in 60 seconds | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
