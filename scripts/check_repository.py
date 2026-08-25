@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tomllib
 from urllib.parse import unquote, urlsplit
 
 
@@ -50,6 +51,8 @@ REQUIRED_PATHS = (
     "SECURITY.md",
     "SUPPORT.md",
     "THIRD_PARTY_NOTICES.md",
+    "treehouse.toml",
+    "docs/worktree-policy.md",
     "docs/skill-standard.md",
     "skills/excalidraw-diagram/SKILL.md",
     "skills/repo-pedant/SKILL.md",
@@ -81,6 +84,28 @@ def public_files(root: Path = ROOT) -> list[Path]:
 
 def check_required(root: Path) -> list[str]:
     return [f"required public file missing: {name}" for name in REQUIRED_PATHS if not (root / name).is_file()]
+
+
+def check_treehouse_config(root: Path) -> list[str]:
+    path = root / "treehouse.toml"
+    if not path.is_file():
+        return []
+    try:
+        config = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        return [f"treehouse config is invalid TOML: {exc}"]
+
+    errors: list[str] = []
+    max_trees = config.get("max_trees")
+    if isinstance(max_trees, bool) or not isinstance(max_trees, int) or not 1 <= max_trees <= 4:
+        errors.append("treehouse max_trees must be an integer from 1 through 4")
+    if config.get("vcs") != "git":
+        errors.append("treehouse vcs must be git")
+    if "hooks" in config:
+        errors.append("treehouse repo config must not define hooks; use reviewed user-level hooks")
+    if config.get("root") not in (None, ""):
+        errors.append("treehouse repo config must not pin a machine-specific pool root")
+    return errors
 
 
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
@@ -220,6 +245,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     files = public_files(root)
     errors: list[str] = []
     errors.extend(check_required(root))
+    errors.extend(check_treehouse_config(root))
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))

@@ -124,6 +124,7 @@ python3 scripts/verify.py
 - [变更记录](CHANGELOG.md)
 - [安全政策](SECURITY.md)
 - [支持方式](SUPPORT.md)
+- [Treehouse worktree 规范](docs/worktree-policy.md)
 - [本次开源化对标研究](docs/research/2026-08-23-open-source-benchmark.md)
 
 贡献应从真实失败或真实任务开始，以可复现证据结束。先读 [CONTRIBUTING.md](CONTRIBUTING.md)。
