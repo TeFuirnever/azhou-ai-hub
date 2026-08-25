@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | Load canonical <code>SKILL.md</code> package | supported by a configured skill root | supported by a configured skill root | host-dependent; verify installation | host-dependent |
 | Foundation `info` / `version` / `doctor` / `setup` / `verify` CLI | supported from a checkout with Python 3.11+ and an explicit skill root for setup | same neutral checkout CLI | same neutral checkout CLI when Python and a writable skill root exist | Python 3.11+; harness skill root must be supplied explicitly |
+| Managed checkout `repair` / same-target `migrate` / `uninstall` | supported only for a single artifact installed with an explicit Foundation receipt | same neutral checkout lifecycle | same when Python and the explicit target are available | harness-neutral filesystem contract; activation is not claimed |
 | Repo Pedant manual invocation | supported | supported | supported when the host loads the package | expected when Agent Skills are supported |
 | Repo Pedant history collection | Codex JSONL parser implemented | Claude session parser implemented | zcode session parser implemented | not claimed |
 | Stop/PreCompact integration | advisory only; no hard-block claim | optional explicit gate with recursion/progress caps | no proven hook contract | no claim without a tested adapter |

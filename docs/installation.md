@@ -23,7 +23,23 @@ python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" -
 python3 scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
 ~~~
 
-Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a managed installer and never updates, removes, or rewrites harness configuration. See the [foundation CLI contract](foundations.md).
+Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a package-manager installation or rewrites harness configuration.
+
+To let this checkout later repair, switch or remove exactly what it installed, opt into a single-skill managed receipt:
+
+~~~bash
+RECEIPT="$SKILLS_HOME/.azhou-ai-hub/receipts/repo-pedant.json"
+
+python3 scripts/azhou_hub.py setup \
+  --managed --receipt "$RECEIPT" \
+  --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
+
+python3 scripts/azhou_hub.py setup \
+  --managed --receipt "$RECEIPT" \
+  --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --json
+~~~
+
+The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).
 
 ## Manual install
 
@@ -71,6 +87,16 @@ Neither package requires <code>agents/openai.yaml</code> or a model-specific run
 
 ## Upgrade or uninstall
 
-Managed installations follow the package manager's update/remove commands. For manual copies, replace the whole skill directory only after reviewing local changes. For symlinks, pull the repository and rerun verification.
+Package-manager installations follow the package manager's update/remove commands. For unmanaged manual copies, replace the whole skill directory only after reviewing local changes. For unmanaged symlinks, pull the repository and rerun verification.
+
+For a checkout-managed artifact, inspect before applying:
+
+~~~bash
+python3 scripts/azhou_hub.py repair --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
+python3 scripts/azhou_hub.py migrate --receipt "$RECEIPT" --target "$SKILLS_HOME" --mode copy --json
+python3 scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
+~~~
+
+Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
 
 Remove the legacy <code>neat-freak</code> name only after confirming <code>repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.

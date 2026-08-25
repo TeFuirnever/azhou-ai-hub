@@ -40,14 +40,15 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 
 ## 诊断或配置当前 checkout
 
-零依赖基础 CLI 统一提供仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup` 和 canonical `verify`：
+零依赖基础 CLI 统一提供仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup` 和 canonical `verify`。显式选择单 skill managed receipt 后，还可使用有边界的 `repair`、同 target `migrate` 和 `uninstall`：
 
 ~~~bash
 python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt.json --skill repo-pedant --target /absolute/path/to/harness/skills --json
 ~~~
 
-`setup` 只有出现 `--apply` 才修改文件；重复执行可收敛；遇到不同安装会拒绝覆盖。它不会安装 hook、重写宿主配置、访问 registry、自更新或删除包。完整边界见[基础 CLI 合同](docs/foundations.md)。
+只有出现 `--apply` 才会修改文件；重复执行可收敛；遇到不同安装会拒绝覆盖。Managed 生命周期命令要求再次提供同一 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。完整边界见[基础 CLI 合同](docs/foundations.md)。
 
 ## Skills
 

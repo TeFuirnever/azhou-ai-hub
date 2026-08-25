@@ -56,4 +56,6 @@ English and Chinese READMEs are reader mirrors. A material product, install, evi
 
 ## Foundation control plane
 
-`scripts/azhou_hub.py` composes repository-level information, read-only diagnostics, explicit skill-root setup and the authoritative verifier. It does not enter an installed skill package and does not become a second package manager. Setup owns only an absent destination created by the explicit operation; existing different content is a conflict, not an overwrite target.
+`scripts/azhou_hub.py` composes repository-level information, read-only diagnostics, explicit skill-root setup and the authoritative verifier. It does not enter an installed skill package and does not become a second package manager. Normal setup owns only an absent destination created by the explicit operation; existing different content is a conflict, not an overwrite target.
+
+Checkout lifecycle ownership is a separate, explicit single-skill mode. A persisted receipt records the source and installed fingerprints, but its self-digest is only an accidental-corruption check. Every repair, same-target mode migration or uninstall also requires the explicit target and recomputes the canonical source and destination before mutation. No receipt authorizes hook cleanup, harness configuration changes, cross-root movement, forced overwrite or package-manager removal.
