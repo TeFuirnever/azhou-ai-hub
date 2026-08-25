@@ -11,6 +11,20 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 
 Run one command per desired skill. The package manager chooses the harness destination.
 
+## Checkout-assisted setup
+
+For a local checkout, the foundation CLI can plan and reconcile a manual copy or contributor symlink. It requires the exact harness skill root and defaults to a read-only dry-run:
+
+~~~bash
+SKILLS_HOME=/absolute/path/to/harness/skills
+
+python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
+python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --json
+python3 scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
+~~~
+
+Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a managed installer and never updates, removes, or rewrites harness configuration. See the [foundation CLI contract](foundations.md).
+
 ## Manual install
 
 Copy the complete runtime directory into a skill root supported by the active harness:

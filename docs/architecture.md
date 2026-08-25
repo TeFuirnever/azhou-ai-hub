@@ -53,3 +53,7 @@ History collectors and lifecycle hooks never write a live skill. Promotion requi
 | Released behavior | [CHANGELOG.md](../CHANGELOG.md) plus the matching Git tag |
 
 English and Chinese READMEs are reader mirrors. A material product, install, evidence or boundary change updates both in the same commit.
+
+## Foundation control plane
+
+`scripts/azhou_hub.py` composes repository-level information, read-only diagnostics, explicit skill-root setup and the authoritative verifier. It does not enter an installed skill package and does not become a second package manager. Setup owns only an absent destination created by the explicit operation; existing different content is a conflict, not an overwrite target.

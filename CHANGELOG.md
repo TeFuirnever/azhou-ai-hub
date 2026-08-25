@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Added a zero-dependency foundation CLI with `info`, `version`, read-only `doctor`, dry-run-first scoped `setup`, stable JSON/exit codes and delegation to the canonical repository verifier.
 - Added a repository-enforced Treehouse worktree policy with durable task leases, identity-conditioned return, dry-run-first cleanup, a bounded Git pool and a documented migration/recovery path.
 - Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
 - Added a redacted public-source discovery and clean-install receipt for both canonical skills.

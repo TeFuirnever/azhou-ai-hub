@@ -54,6 +54,8 @@ REQUIRED_PATHS = (
     "treehouse.toml",
     "docs/worktree-policy.md",
     "docs/skill-standard.md",
+    "docs/foundations.md",
+    "scripts/azhou_hub.py",
     "skills/excalidraw-diagram/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 )
