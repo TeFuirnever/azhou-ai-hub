@@ -124,6 +124,7 @@ The same command checks repository policy, all unit tests, both benchmark-integr
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Support](SUPPORT.md)
+- [Treehouse worktree policy](docs/worktree-policy.md)
 - [Research behind this open-source surface](docs/research/2026-08-23-open-source-benchmark.md)
 
 Contributions are welcome when they begin with a real failure or task and end with reproducible evidence. Read [CONTRIBUTING.md](CONTRIBUTING.md).

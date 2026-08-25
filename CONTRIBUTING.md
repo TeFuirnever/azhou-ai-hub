@@ -17,6 +17,8 @@ python3 scripts/verify.py
 
 The repository gate requires Python 3.11+. Excalidraw render/export work also follows its [locked dependency setup](skills/excalidraw-diagram/references/setup.md).
 
+Maintainer and coding-agent workflows that need parallel local checkouts follow the [Treehouse worktree policy](docs/worktree-policy.md). Ordinary contributors can continue to use a normal fork and focused task branch.
+
 ## Choose the change type
 
 ### Add a skill
