@@ -42,6 +42,12 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 ~~~
 
+或者：
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
+~~~
+
 只选一种安装方式。同一 canonical name 下，不要叠加托管安装、手工复制和开发软链接。手工安装与贡献者软链接见[安装指南](docs/installation.md)。
 
 ## 诊断或配置当前 checkout
@@ -66,22 +72,24 @@ python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行并报告唯一权威的全仓验证 gate。 | 委派给已注册的仓库策略、单元测试、benchmark integrity 和空白检查。 |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
+| [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
 
-六个包都可独立安装。Azhou Skills 需要显式本地 checkout，因为它们编排仓库级 CLI，不在 prompt 中复制执行逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+七个包都可独立安装。Azhou Skills 需要显式本地 checkout，因为它们编排仓库级 CLI，不在 prompt 中复制执行逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
-## 60 秒试用两个任务型 Skill
+## 60 秒试用三个任务型 Skill
 
 | Skill | 复制给 Agent | 必须返回什么 |
 |---|---|---|
 | Repo Pedant | <code>这个阶段做完了，跑一次 repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/repo-pedant.md)。 |
 | Excalidraw Diagram | <code>用 excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/excalidraw-diagram.md)。 |
+| Super Caveman | <code>使用 /super-caveman full，再为这份 diff 写 commit message。</code> | 行动优先精简模式和可直接粘贴的 Conventional Commit；不暂存、不提交。 |
 
 Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合同和 verifier 接线，只有冻结的 attempt-1 运行才算模型证据。
 
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库执行 121 项确定性测试、3-case Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
+- **主张必须有 gate。** 仓库执行当前确定性测试套件、3-case Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
@@ -116,6 +124,14 @@ JSON 可解析不等于完成。这个 skill 要求交付可编辑源图，用�
 
 [运行包](skills/excalidraw-diagram/SKILL.md) · [依赖安装](skills/excalidraw-diagram/references/setup.md) · [来源说明](skills/excalidraw-diagram/references/provenance.md)
 
+## Super Caveman
+
+> 🪨 少说话，技术信号不丢。
+
+Super Caveman 保留原版 Caveman 的持续精简模式作为核心，把六个伴生 Skill 吸纳为紧凑委派、commit message、review、受保护文本压缩、帮助和证据约束统计路线，并完整采用锁定版 `i-have-adhd` 的输出行为合同。全部能力只通过一个 canonical `super-caveman` 包交付。安全与显式输出合同优先，完整 ADHD-friendly 行为合同其次，Caveman 压缩最后。插件安装、hook、全局配置、诊断主张和未经验证的跨会话持久化不进入这个中立包。文件压缩不会启动第二个模型，也不会静默外传内容；标准库门禁会检查源文件、验证受保护结构、写入仓库外备份、使用检查点式不覆盖安装，并拒绝覆盖更新后的文件。受保护 apply/restore 要求文件系统支持同目录 hard link；不支持时会在移动源文件前阻断。关键操作每个已验证阶段只使用一个克制的阿舟锚点；普通精简回复不添加生命周期 emoji。宿主没有可审计计数器时，精确统计明确返回不可用。
+
+[运行包](skills/super-caveman/SKILL.md) · [依赖安装](skills/super-caveman/references/setup.md) · [来源说明](skills/super-caveman/references/provenance.md) · [压缩安全流程](skills/super-caveman/references/compression.md)
+
 ## 一套架构
 
 ~~~text
@@ -138,7 +154,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 python3 scripts/verify.py
 ~~~
 
-同一条命令检查仓库策略、全部单元测试、两套 benchmark 完整性和 Git 空白。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
+同一条命令检查仓库策略、全部单元测试、三套 benchmark 完整性和 Git 空白。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
 
 ## 项目入口
 

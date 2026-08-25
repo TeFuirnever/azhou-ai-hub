@@ -1,0 +1,91 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "pass",
+  "runtime": "frozen Super Caveman skill runtime",
+  "harness": "Codex desktop isolated producer with independent paired review agents",
+  "model": "GPT-5 family",
+  "model_limitation": "Exact serving snapshots were not exposed; producer, reviewer, and paired-judge identities are retained in Git-external records.",
+  "skill_tree_sha256": "c5366b95b57e30f0f2abcb16e1afc53dbcd71dbdf41749801c0d4a0a04d7593b",
+  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+  "tool_permissions": {
+    "network": false,
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "fixture verification only",
+    "external_apps": false
+  },
+  "attempt": 1,
+  "output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; current tree matched evaluated runtime",
+    "case_count": "19/19",
+    "criteria_count": "44/44",
+    "unique_case_ids": "19/19",
+    "maximum_observed_concurrency": 1,
+    "fixture_side_effect": "pass; disposable README typo corrected to exact required bytes and one-line diff verified",
+    "plan_tool_state": "pass; exactly three items with one in progress",
+    "repository_scope": "pass; only disposable Git-external fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/reviewer_fresh_c5366b95",
+    "review_sha256": "01490717a8076114567271a266eb8803dae06d259057c171e4c5827c92436f32"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "independent_paired_judges": 3,
+    "presentation_orders": ["candidate-baseline", "baseline-candidate", "candidate-baseline"],
+    "candidate_majority_required": 2,
+    "candidate_raw_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+    "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
+    "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+    "high_risk_regressions": 0,
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v1",
+      "status": "approved",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
+      "path_set_sha256": "473cd8107b8543ebe8af8403a7c4dbc035d49d781872d33453caae76fcffb86a",
+      "staged_patch_sha256": "b0d71832449030f3a4abf62c1abca0a23a7a2d630f01ece96ccce296a216fc41",
+      "approver": "workspace-owner",
+      "approved_at": "2026-08-25T13:24:38+08:00",
+      "record_path": "results/revision-c5366b95-exact-diff-approval.json",
+      "record_sha256": "1777876080b696f40e6c264be27de7618497360d8fed3c3c743115b78fc64bdb",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    },
+    "judges": [
+      {"identity": "/root/judge_fresh_pair_1", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"},
+      {"identity": "/root/judge_fresh_pair_2", "order": "baseline-candidate", "vote": "candidate", "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"},
+      {"identity": "/root/judge_fresh_pair_3", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"}
+    ]
+  },
+  "passed": 19,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"},
+    {"id": "under-two-minute-next-action", "status": "pass"},
+    {"id": "host-plan-tool-state", "status": "pass"},
+    {"id": "task-wins-options", "status": "pass"},
+    {"id": "stop-mode-default-style", "status": "pass"},
+    {"id": "uncertainty-and-idiom", "status": "pass"}
+  ],
+  "limitations": [
+    "Single bounded attempt in the recorded Codex desktop model family; cross-harness claims are not made.",
+    "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
+  ]
+}

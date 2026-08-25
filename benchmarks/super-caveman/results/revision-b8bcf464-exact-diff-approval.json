@@ -1,0 +1,12 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v1",
+  "decision": "pending",
+  "approver": null,
+  "approved_at": null,
+  "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "3bde3cd2d84c1234cc667679e146dad1d8781b32ec53e41686c31f0a96857a8d",
+  "staged_patch_sha256": "87f7397f801861c3eb15f7bf1b66e4a809cd721c7ae981fcc5fe81dffe0c6e92",
+  "raw_approval_record_sha256": null,
+  "raw_approval_storage": "Git-external"
+}

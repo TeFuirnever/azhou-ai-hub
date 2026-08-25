@@ -18,6 +18,7 @@ def commands(python: str) -> list[tuple[str, list[str]]]:
         ("repository policy", [python, "scripts/check_repository.py"]),
         ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests"]),
         ("repo-pedant benchmark", [python, "benchmarks/repo-pedant/benchmark.py", "check"]),
+        ("super-caveman benchmark", [python, "benchmarks/super-caveman/benchmark.py", "check"]),
         (
             "excalidraw benchmark wiring",
             [python, "benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],

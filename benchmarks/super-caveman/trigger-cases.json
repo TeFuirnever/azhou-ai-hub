@@ -1,0 +1,13 @@
+{
+  "schema": "super-caveman-trigger-cases.v1",
+  "cases": [
+    {"input": "/super-caveman full", "aliases": ["caveman mode", "/caveman full"], "route": "mode", "reference": "references/modes.md"},
+    {"input": "/super-caveman delegate find callers of parseToken", "aliases": ["/cavecrew find callers of parseToken"], "route": "delegate", "reference": "references/delegation.md"},
+    {"input": "/super-caveman commit", "aliases": ["/caveman-commit"], "route": "commit", "reference": "references/commit-review.md"},
+    {"input": "/super-caveman review this diff", "aliases": ["/caveman-review this diff"], "route": "review", "reference": "references/commit-review.md"},
+    {"input": "/super-caveman compress notes.md", "aliases": ["/caveman-compress notes.md"], "route": "compress", "reference": "references/compression.md"},
+    {"input": "/super-caveman help", "aliases": ["/caveman-help"], "route": "help", "reference": "references/modes.md"},
+    {"input": "/super-caveman stats", "aliases": ["/caveman-stats"], "route": "stats", "reference": "references/statistics.md"},
+    {"input": "normal mode", "aliases": ["stop super-caveman", "stop caveman", "stop adhd mode"], "route": "mode-off", "reference": "references/modes.md"}
+  ]
+}

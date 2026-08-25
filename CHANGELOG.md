@@ -13,6 +13,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
 - Added a redacted public-source discovery and clean-install receipt for both canonical skills.
 - Added Azhou Scenes effect previews for both canonical skills; the Excalidraw preview was regenerated after a P0 eye-identity review.
+- Added `super-caveman`: the original Caveman terse-mode core enhanced with six companion routes, the complete pinned `i-have-adhd` output-behavior contract, guarded compression, and a restrained evidence-bound Azhou stage protocol, including 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion bounded behavior run, and a 3/3 independent paired-judge candidate result with zero high-risk regressions.
 
 ### Fixed
 
