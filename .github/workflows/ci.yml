@@ -35,33 +35,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Materialize Super Caveman approval evidence
-        env:
-          APPROVAL_RECORD_B64: ${{ secrets.SUPER_CAVEMAN_APPROVAL_RECORD_B64 }}
-          REVIEW_RECORD_B64: ${{ secrets.SUPER_CAVEMAN_REVIEW_RECORD_B64 }}
-        run: |
-          python - <<'PY'
-          import base64
-          import os
-          from pathlib import Path
-
-          target = Path(os.environ["RUNNER_TEMP"])
-          records = {
-              "super-caveman-approval.json": os.environ.get("APPROVAL_RECORD_B64", ""),
-              "super-caveman-review.json": os.environ.get("REVIEW_RECORD_B64", ""),
-          }
-          for name, encoded in records.items():
-              if not encoded:
-                  raise SystemExit(f"required Git-external evidence is unavailable: {name}")
-              path = target / name
-              path.write_bytes(base64.b64decode(encoded, validate=True))
-              path.chmod(0o600)
-          PY
       - name: Unit tests
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-          SUPER_CAVEMAN_APPROVAL_RECORD: ${{ runner.temp }}/super-caveman-approval.json
-          SUPER_CAVEMAN_REVIEW_RECORD: ${{ runner.temp }}/super-caveman-review.json
         run: python -m unittest discover -s tests
 
   benchmarks:
@@ -79,6 +55,8 @@ jobs:
           python-version: "3.11"
       - name: Repo Pedant
         run: python benchmarks/repo-pedant/benchmark.py check
+      - name: Super Caveman public integrity
+        run: python benchmarks/super-caveman/benchmark.py check
       - name: Excalidraw Diagram
         run: python benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py check
 

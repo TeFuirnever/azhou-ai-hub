@@ -49,7 +49,7 @@ Four portable Azhou Agent Skills expose the checkout workflow without duplicatin
 | `azhou-info` | `info`, `version` | Read-only project, runtime, Git revision and dirty-state facts. |
 | `azhou-doctor` | `doctor` | Read-only repository, explicit install-target and optional Treehouse lease diagnostics. |
 | `azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first; only an exact reviewed plan with `--apply` may mutate its explicit target. |
-| `azhou-verify` | `verify` | Runs the authoritative full-repository gate and preserves its exit code. |
+| `azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate; maintainers can explicitly add promotion-evidence replay. |
 
 ~~~bash
 python3 scripts/azhou_hub.py info --json
@@ -68,7 +68,7 @@ python3 scripts/azhou_hub.py verify
 | [Azhou Info](skills/azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
 | [Azhou Doctor](skills/azhou-doctor/SKILL.md) | Diagnose repository, explicit install target and optional Treehouse lease health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke and fail-closed target checks. |
 | [Azhou Setup](skills/azhou-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
-| [Azhou Verify](skills/azhou-verify/SKILL.md) | Run and report the one authoritative full-repository verification gate. | Delegates to the registered repository policy, unit, benchmark-integrity and whitespace gates. |
+| [Azhou Verify](skills/azhou-verify/SKILL.md) | Run the public full-repository integrity gate or an explicit maintainer promotion replay. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates; promotion mode additionally requires Git-external evidence. |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
@@ -153,7 +153,7 @@ Python 3.11+ is enough for the repository gate:
 python3 scripts/verify.py
 ~~~
 
-The same command checks repository policy, all unit tests, three benchmark-integrity suites and Git whitespace. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
+The same command checks repository policy, all unit tests, three public benchmark-integrity suites and Git whitespace without private inputs. Super Caveman's public integrity check still recomputes the approved exact diff against the current staged or committed tree, so a changed approved path requires fresh promotion evidence instead of silently passing. Release maintainers additionally run `python3 scripts/verify.py --promotion-evidence` after materializing the Git-external Super Caveman approval and review records. That second mode authenticates the raw promotion evidence; the default public gate validates the checked-in receipt and exact diff but does not claim external authentication. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
 
 ## Project
 

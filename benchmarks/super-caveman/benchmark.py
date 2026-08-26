@@ -374,7 +374,12 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
     }
 
 
-def is_approved_exact_diff(value: object, result_path: Path) -> bool:
+def is_approved_exact_diff(
+    value: object,
+    result_path: Path,
+    *,
+    require_external_evidence: bool = True,
+) -> bool:
     required = {
         "schema",
         "status",
@@ -459,6 +464,26 @@ def is_approved_exact_diff(value: object, result_path: Path) -> bool:
     ):
         return False
 
+    try:
+        result_relative = result_path.relative_to(BENCHMARK).as_posix()
+    except ValueError:
+        return False
+    try:
+        reviewed = staged_review_digests({result_relative, record_relative})
+        reviewed = reviewed or committed_review_digests(
+            {result_relative, record_relative}, value["base_commit"]
+        )
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return False
+    if reviewed is None or not all(
+        reviewed[key] == value[key]
+        for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
+    ):
+        return False
+
+    if not require_external_evidence:
+        return True
+
     # A Git aggregate receipt is not an authentication mechanism. Require the
     # original Git-external approval and review records on every replay so a
     # repository-only copy cannot promote itself after ingest.
@@ -541,17 +566,7 @@ def is_approved_exact_diff(value: object, result_path: Path) -> bool:
         or review_record.get("cases_sha256") != result_record.get("cases_sha256")
     ):
         return False
-    try:
-        result_relative = result_path.relative_to(BENCHMARK).as_posix()
-    except ValueError:
-        return False
-    staged = staged_review_digests({result_relative, record_relative})
-    reviewed = staged or committed_review_digests(
-        {result_relative, record_relative}, value["base_commit"]
-    )
-    if reviewed is None:
-        return False
-    return all(reviewed[key] == value[key] for key in ("base_commit", "path_set_sha256", "staged_patch_sha256"))
+    return True
 
 
 def sha256_skill_tree() -> str:
@@ -574,7 +589,7 @@ def sha256_skill_tree() -> str:
     return digest.hexdigest()
 
 
-def check() -> list[str]:
+def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
@@ -914,7 +929,11 @@ def check() -> list[str]:
                 or not judge_digests_valid
                 or not isinstance(approval, dict)
                 or approval.get("record_path") not in manifest_inputs
-                or not is_approved_exact_diff(approval, result_path)
+                or not is_approved_exact_diff(
+                    approval,
+                    result_path,
+                    require_external_evidence=require_promotion_evidence,
+                )
             ):
                 errors.append(f"passing evaluation result lacks valid paired promotion evidence: {result_path.name}")
 
@@ -935,13 +954,19 @@ def check() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["check"])
-    parser.parse_args()
-    errors = check()
+    parser.add_argument(
+        "--promotion-evidence",
+        action="store_true",
+        help="Require the Git-external approval and review records used for maintainer promotion",
+    )
+    args = parser.parse_args()
+    errors = check(require_promotion_evidence=args.promotion_evidence)
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("super-caveman benchmark integrity passed: 1 core + 6 companions, 1 package, 8 routes, 19 response cases")
+    mode = "promotion evidence" if args.promotion_evidence else "public integrity"
+    print(f"super-caveman benchmark {mode} passed: 1 core + 6 companions, 1 package, 8 routes, 19 response cases")
     return 0
 
 

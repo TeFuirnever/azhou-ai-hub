@@ -21,7 +21,8 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 MIN_PYTHON = (3, 11)
 COMMANDS = ["doctor", "info", "setup", "verify", "version"]
-RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
+RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v2"
+LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
 IGNORED_PACKAGE_PARTS = {".git", ".omc", ".omx", ".venv", "__pycache__", "node_modules"}
 
 
@@ -78,7 +79,7 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return None, f"cannot read receipt: {exc}"
-    if not isinstance(payload, dict) or payload.get("schema") != RECEIPT_SCHEMA:
+    if not isinstance(payload, dict) or payload.get("schema") not in {LEGACY_RECEIPT_SCHEMA, RECEIPT_SCHEMA}:
         return None, "receipt_invalid: unsupported receipt schema"
     if payload.get("integrity_digest") != _receipt_digest(payload):
         return None, "receipt_invalid: integrity digest mismatch"
@@ -90,8 +91,13 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     if payload["mode"] not in {"link", "copy"} or not isinstance(payload["skills"], list) or len(payload["skills"]) != 1:
         return None, "receipt_invalid: malformed fields"
     item = payload["skills"][0]
-    if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item.get(key) for key in ("name", "source", "source_root", "source_digest", "destination", "installed_identity", "installed_digest")):
+    if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item.get(key) for key in ("name", "source", "source_root", "source_digest", "destination", "installed_digest")):
         return None, "receipt_invalid: malformed skill item"
+    if payload["schema"] == RECEIPT_SCHEMA:
+        if _receipt_identity(item.get("installed_identity")) is None:
+            return None, "receipt_invalid: malformed installed identity"
+    elif item.get("installed_identity") != payload["mode"]:
+        return None, "receipt_invalid: malformed legacy installed identity"
     return payload, None
 
 
@@ -150,7 +156,7 @@ def _new_receipt(root: Path, target: Path, mode: str, rows: list[dict[str, str]]
                 "source_root": str((root / "skills").resolve()),
                 "source_digest": row.get("source_digest", ""),
                 "destination": row["destination"],
-                "installed_identity": mode,
+                "installed_identity": _identity_payload(_path_identity(Path(row["destination"]))),
                 "installed_digest": row.get("installed_digest", row.get("source_digest", "")),
             }
             for row in rows
@@ -247,15 +253,27 @@ def _package_files(source: Path) -> list[Path]:
     return sorted(files, key=lambda path: path.relative_to(source).as_posix())
 
 
-def package_digest(source: Path) -> str:
+def _package_digest(source: Path, *, executable_aware: bool) -> str:
     digest = hashlib.sha256()
     for path in _package_files(source):
         relative = path.relative_to(source).as_posix()
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
+        if executable_aware:
+            digest.update(b"executable" if path.stat().st_mode & 0o111 else b"regular")
+            digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def package_digest(source: Path) -> str:
+    return _package_digest(source, executable_aware=True)
+
+
+def _legacy_package_digest(source: Path) -> str:
+    """Reproduce the v1 receipt digest for an explicit one-way upgrade."""
+    return _package_digest(source, executable_aware=False)
 
 
 def _same_resolved_path(left: Path, right: Path) -> bool:
@@ -314,6 +332,24 @@ def _path_identity(path: Path) -> tuple[int, int, int] | None:
     except OSError:
         return None
     return stat.st_dev, stat.st_ino, stat.st_mode
+
+
+def _identity_payload(identity: tuple[int, int, int] | None) -> dict[str, int] | None:
+    if identity is None:
+        return None
+    return {"device": identity[0], "inode": identity[1], "mode": identity[2]}
+
+
+def _receipt_identity(value: object) -> tuple[int, int, int] | None:
+    if not isinstance(value, dict):
+        return None
+    fields = value.get("device"), value.get("inode"), value.get("mode")
+    if any(not isinstance(field, int) or isinstance(field, bool) for field in fields):
+        return None
+    device, inode, mode = fields
+    if device < 0 or inode <= 0 or mode <= 0:
+        return None
+    return device, inode, mode
 
 
 def _remove_exact_installation(
@@ -541,7 +577,14 @@ def _check(name: str, status: str, details: str) -> dict[str, str]:
     return {"name": name, "status": status, "details": details}
 
 
-def _receipt_item_state(item: dict[str, Any], mode: str, target: Path, root: Path) -> tuple[str, str]:
+def _receipt_item_state(
+    item: dict[str, Any],
+    mode: str,
+    target: Path,
+    root: Path,
+    *,
+    legacy_receipt: bool = False,
+) -> tuple[str, str]:
     try:
         name = item["name"]
         if name not in canonical_skills(root):
@@ -553,16 +596,22 @@ def _receipt_item_state(item: dict[str, Any], mode: str, target: Path, root: Pat
             return "conflict", "receipt source or destination does not match canonical identity"
     except (KeyError, OSError, ValueError) as exc:
         return "conflict", f"receipt_invalid: {exc}"
-    if not source.is_dir() or package_digest(source) != item.get("source_digest"):
+    digest_package = _legacy_package_digest if legacy_receipt else package_digest
+    if not source.is_dir() or digest_package(source) != item.get("source_digest"):
         return "conflict", "source digest or path no longer matches receipt"
     raw = Path(item["destination"])
     if not raw.exists() and not raw.is_symlink():
         return "missing", "managed artifact is absent"
+    installed_identity = _receipt_identity(item.get("installed_identity"))
+    if installed_identity is None and not legacy_receipt:
+        return "conflict", "receipt lacks installed object identity; run repair --apply to upgrade it"
+    if installed_identity is not None and _path_identity(raw) != installed_identity:
+        return "conflict", "managed artifact identity differs from receipt"
     if mode == "link":
         return ("current", "exact managed symlink") if raw.is_symlink() and _same_resolved_path(source, raw) else ("conflict", "destination is not the exact managed symlink")
     if raw.is_symlink() or not raw.is_dir():
         return "conflict", "managed copy is not a directory"
-    return ("current", "managed copy matches receipt") if package_digest(raw) == item.get("installed_digest", item.get("source_digest")) else ("conflict", "managed copy digest differs")
+    return ("current", "managed copy matches receipt") if digest_package(raw) == item.get("installed_digest", item.get("source_digest")) else ("conflict", "managed copy digest differs")
 
 
 def _lifecycle_report(status: str, rows: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
@@ -583,15 +632,50 @@ def repair_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bool)
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
     if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
         return _lifecycle_report("fail", [], error="receipt_invalid: source root mismatch")
+    legacy_receipt = receipt["schema"] == LEGACY_RECEIPT_SCHEMA
     rows = []
     for item in receipt["skills"]:
-        state, details = _receipt_item_state(item, receipt["mode"], target, root)
-        rows.append({"name": item.get("name", ""), "status": "planned" if state == "missing" else state, "details": details, "destination": str(target / item.get("name", ""))})
+        state, details = _receipt_item_state(
+            item,
+            receipt["mode"],
+            target,
+            root,
+            legacy_receipt=legacy_receipt,
+        )
+        if legacy_receipt and state == "current":
+            state, details = "upgrade_planned", "will record the current exact artifact identity in a v2 receipt"
+        elif state == "missing":
+            state = "planned"
+        rows.append({"name": item.get("name", ""), "status": state, "details": details, "destination": str(target / item.get("name", ""))})
     if any(row["status"] == "conflict" for row in rows):
         return _lifecycle_report("fail", rows)
     if not apply:
         return _lifecycle_report("dry_run", rows)
     for row, item in zip(rows, receipt["skills"]):
+        if row["status"] == "upgrade_planned":
+            try:
+                source = canonical_source(root, item["name"])
+                destination = Path(row["destination"])
+                identity = _path_identity(destination)
+                if identity is None:
+                    raise PackageError("managed artifact identity cannot be proven")
+                item["source_digest"] = package_digest(source)
+                item["installed_digest"] = (
+                    item["source_digest"]
+                    if receipt["mode"] == "link"
+                    else package_digest(destination)
+                )
+                item["installed_identity"] = _identity_payload(identity)
+                receipt["schema"] = RECEIPT_SCHEMA
+                state, details = _receipt_item_state(item, receipt["mode"], target, root)
+                if state != "current":
+                    raise PackageError(f"receipt upgrade verification failed: {details}")
+                _write_receipt(receipt_path, receipt)
+            except (OSError, PackageError) as exc:
+                row["status"], row["details"] = "fail", str(exc)
+                return _lifecycle_report("fail", rows, error="receipt upgrade failed")
+            row["status"] = "upgraded"
+            continue
         if row["status"] != "planned":
             continue
         source, destination = canonical_source(root, item["name"]), target / item["name"]
@@ -602,9 +686,14 @@ def repair_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bool)
             identity = _path_identity(destination)
             if identity is None:
                 raise PackageError("repaired artifact identity cannot be proven")
+            item["installed_identity"] = _identity_payload(identity)
+            item["source_digest"] = package_digest(source)
+            item["installed_digest"] = item["source_digest"] if receipt["mode"] == "link" else package_digest(destination)
+            receipt["schema"] = RECEIPT_SCHEMA
             state, details = _receipt_item_state(item, receipt["mode"], target, root)
             if state != "current":
                 raise PackageError(f"repair verification failed: {details}")
+            _write_receipt(receipt_path, receipt)
             row["status"] = "repaired"
         except (OSError, PackageError) as exc:
             restored = _remove_exact_installation(
@@ -635,7 +724,7 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     for item in receipt["skills"]:
         state, details = _receipt_item_state(item, receipt["mode"], target, root)
         if state == "current":
-            identity = _path_identity(target / item["name"])
+            identity = _receipt_identity(item.get("installed_identity"))
             if identity is None:
                 state, details = "conflict", "managed artifact identity cannot be proven"
             else:
@@ -672,7 +761,13 @@ def migrate_receipt(*, receipt_path: Path, target: Path, root: Path, mode: str, 
     if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
         return _lifecycle_report("fail", [], error="receipt_invalid: source root mismatch")
     if receipt["mode"] == mode:
-        return _lifecycle_report("dry_run" if not apply else "pass", [], details="already in requested mode")
+        rows = []
+        for item in receipt["skills"]:
+            state, details = _receipt_item_state(item, receipt["mode"], target, root)
+            rows.append({"name": item["name"], "status": state, "details": details})
+        if any(row["status"] != "current" for row in rows):
+            return _lifecycle_report("fail", rows, error="installation is not exact and current")
+        return _lifecycle_report("dry_run" if not apply else "pass", rows, details="already in requested mode")
     if len(receipt["skills"]) != 1:
         return _lifecycle_report("fail", [], error="migrate supports exactly one skill")
     old_target = Path(receipt["target"]).resolve()
@@ -718,19 +813,37 @@ def migrate_receipt(*, receipt_path: Path, target: Path, root: Path, mode: str, 
             backups.append((backup, destination, old_identity))
             os.replace(stage, destination)
             installed_identities[destination] = stage_identity
-            current, current_details = _receipt_item_state({**item, "source": item["source"], "destination": str(destination), "name": item["name"], "source_digest": item["source_digest"]}, mode, target, root)
+            current, current_details = _receipt_item_state(
+                {
+                    **item,
+                    "source": item["source"],
+                    "destination": str(destination),
+                    "name": item["name"],
+                    "source_digest": item["source_digest"],
+                    "installed_identity": _identity_payload(stage_identity),
+                    "installed_digest": item["source_digest"],
+                },
+                mode,
+                target,
+                root,
+            )
             if current != "current":
                 raise PackageError(f"new installation verification failed: {current_details}")
         updated = dict(receipt)
         updated["mode"] = mode
-        updated["skills"] = [
-            {
-                **item,
-                "installed_identity": mode,
-                "installed_digest": item["source_digest"],
-            }
-            for item in receipt["skills"]
-        ]
+        updated["skills"] = []
+        for item in receipt["skills"]:
+            destination = target / item["name"]
+            installed_identity = installed_identities.get(destination)
+            if installed_identity is None:
+                raise PackageError("new installed artifact identity cannot be proven")
+            updated["skills"].append(
+                {
+                    **item,
+                    "installed_identity": _identity_payload(installed_identity),
+                    "installed_digest": item["source_digest"],
+                }
+            )
         _write_receipt(receipt_path, updated)
     except Exception as exc:
         for item, identity in reversed(created):
@@ -986,10 +1099,13 @@ def _print_setup(payload: dict[str, Any]) -> None:
         print("No files changed. Re-run with --apply to execute this plan.")
 
 
-def run_verifier(root: Path, python: str) -> int:
+def run_verifier(root: Path, python: str, *, promotion_evidence: bool = False) -> int:
+    command = [python, str(root / "scripts/verify.py"), "--python", python]
+    if promotion_evidence:
+        command.append("--promotion-evidence")
     try:
         result = subprocess.run(
-            [python, str(root / "scripts/verify.py"), "--python", python],
+            command,
             cwd=root,
             check=False,
         )
@@ -1045,6 +1161,11 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
 
     verify = subcommands.add_parser("verify", help="Run the authoritative repository verification gate")
     verify.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
+    verify.add_argument(
+        "--promotion-evidence",
+        action="store_true",
+        help="Also require Git-external maintainer promotion evidence",
+    )
     return parser
 
 
@@ -1178,7 +1299,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "verify":
-        return run_verifier(root, args.python)
+        return run_verifier(root, args.python, promotion_evidence=args.promotion_evidence)
 
     raise AssertionError(f"unhandled command: {args.command}")
 

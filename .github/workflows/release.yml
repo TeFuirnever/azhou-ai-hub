@@ -52,7 +52,7 @@ jobs:
         env:
           SUPER_CAVEMAN_APPROVAL_RECORD: ${{ runner.temp }}/super-caveman-approval.json
           SUPER_CAVEMAN_REVIEW_RECORD: ${{ runner.temp }}/super-caveman-review.json
-        run: python scripts/verify.py
+        run: python scripts/verify.py --promotion-evidence
 
   draft:
     name: Create draft
