@@ -36,11 +36,17 @@ npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 ~~~
 
+如需通过 Agent Skill 诊断 checkout：
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
+~~~
+
 只选一种安装方式。同一 canonical name 下，不要叠加托管安装、手工复制和开发软链接。手工安装与贡献者软链接见[安装指南](docs/installation.md)。
 
 ## 诊断或配置当前 checkout
 
-零依赖基础 CLI 统一提供仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup` 和 canonical `verify`。显式选择单 skill managed receipt 后，还可使用有边界的 `repair`、同 target `migrate` 和 `uninstall`：
+四个可移植阿舟 Agent Skills 提供 checkout 工作流入口，但不复制执行逻辑：`azhou-info`、`azhou-doctor`、`azhou-setup` 和 `azhou-verify`。它们先定位显式的 Azhou AI Hub checkout，再委派给零依赖基础 CLI。CLI 继续作为仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup`、canonical `verify` 以及 receipt-owned `repair`、同 target `migrate` 和 `uninstall` 的唯一权威：
 
 ~~~bash
 python3 scripts/azhou_hub.py doctor --json
@@ -54,12 +60,16 @@ python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt
 
 | Skill | 解决的真实任务 | 当前证据 |
 |---|---|---|
+| [Azhou Info](skills/azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
+| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke 和 fail-closed target 检查。 |
+| [Azhou Setup](skills/azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
+| [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行并报告唯一权威的全仓验证 gate。 | 委派给已注册的仓库策略、单元测试、benchmark integrity 和空白检查。 |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
 
-两个包都可独立安装。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+六个包都可独立安装。Azhou Skills 需要显式本地 checkout，因为它们编排仓库级 CLI，不在 prompt 中复制执行逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
-## 60 秒试用两个 Skill
+## 60 秒试用两个任务型 Skill
 
 | Skill | 复制给 Agent | 必须返回什么 |
 |---|---|---|
@@ -71,7 +81,7 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库执行 82 项确定性测试、3-case Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
+- **主张必须有 gate。** 仓库执行 121 项确定性测试、3-case Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。

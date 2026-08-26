@@ -20,6 +20,10 @@ class RepositoryPolicyTest(unittest.TestCase):
             root = Path(directory)
             expected = [
                 root / "skills" / "excalidraw-diagram" / "SKILL.md",
+                root / "skills" / "azhou-doctor" / "SKILL.md",
+                root / "skills" / "azhou-info" / "SKILL.md",
+                root / "skills" / "azhou-setup" / "SKILL.md",
+                root / "skills" / "azhou-verify" / "SKILL.md",
                 root / "skills" / "repo-pedant" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
