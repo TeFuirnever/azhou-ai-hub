@@ -40,14 +40,15 @@ Choose one installation method. Do not stack a managed install, a copied package
 
 ## Diagnose or set up a checkout
 
-The zero-dependency foundation CLI exposes repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, and the canonical `verify` gate:
+The zero-dependency foundation CLI exposes repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, and the canonical `verify` gate. An explicit single-skill managed receipt additionally enables bounded `repair`, same-target `migrate`, and `uninstall`:
 
 ~~~bash
 python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt.json --skill repo-pedant --target /absolute/path/to/harness/skills --json
 ~~~
 
-`setup` changes nothing until `--apply` is present, is idempotent, and refuses to overwrite a different installation. It does not install hooks, rewrite harness configuration, contact a registry, update itself or remove packages. See the [foundation CLI contract](docs/foundations.md).
+Nothing changes until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Managed lifecycle commands require the same explicit target and independently verify the canonical source and exact installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. See the [foundation CLI contract](docs/foundations.md).
 
 ## Skills
 

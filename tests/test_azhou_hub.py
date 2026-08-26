@@ -15,6 +15,38 @@ from scripts import azhou_hub
 
 
 class AzhouHubCliTest(unittest.TestCase):
+    def _json_main(self, argv: list[str], *, root: Path | None = None) -> tuple[int, dict]:
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            result = azhou_hub.main(argv, root=root or azhou_hub.ROOT)
+        return result, json.loads(stream.getvalue())
+
+    def _fixture_repo(self, directory: str) -> tuple[Path, Path, Path]:
+        root = Path(directory) / "repo"
+        source = root / "skills" / "sample"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text("sample\n", encoding="utf-8")
+        (root / "README.md").write_text("fixture\n", encoding="utf-8")
+        (root / "docs").mkdir()
+        (root / "docs" / "skill-standard.md").write_text("fixture\n", encoding="utf-8")
+        (root / "scripts").mkdir()
+        (root / "scripts" / "verify.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+        return root, source, Path(directory) / "installed"
+
+    def _managed_fixture(self, directory: str, mode: str = "link") -> tuple[Path, Path, Path]:
+        root, source, target = self._fixture_repo(directory)
+        receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+        result, payload = self._json_main(
+            [
+                "setup", "--managed", "--receipt", str(receipt), "--skill", "sample",
+                "--target", str(target), "--mode", mode, "--apply", "--json",
+            ],
+            root=root,
+        )
+        self.assertEqual(0, result, payload)
+        self.assertEqual("pass", payload["status"])
+        return root, target, receipt
+
     def test_info_json_exposes_stable_commands_and_installable_skills(self) -> None:
         stream = io.StringIO()
         with redirect_stdout(stream):
@@ -331,6 +363,365 @@ class AzhouHubCliTest(unittest.TestCase):
 
             self.assertEqual(6, result.returncode, result.stdout + result.stderr)
             self.assertNotIn("ModuleNotFoundError", result.stderr)
+
+    def _treehouse_run(self, root: Path, *, version: str = "treehouse version 2.3.0", status: object | None = None,
+                       version_error: BaseException | None = None, status_error: BaseException | None = None):
+        treehouse_path = str(root.expanduser().resolve())
+        if status is None:
+            status = [{"path": str(root), "status": "leased", "lease_id": "lease-1", "lease_holder": "tester"}]
+
+        def run(command, **kwargs):
+            if command[:2] == ["treehouse", "--version"]:
+                if version_error:
+                    raise version_error
+                return mock.Mock(returncode=0, stdout=version, stderr="")
+            if command == ["treehouse", "status", "--json"]:
+                if status_error:
+                    raise status_error
+                return mock.Mock(returncode=0, stdout=json.dumps(status), stderr="")
+            if command and command[0] == "git":
+                return mock.Mock(returncode=0, stdout="ok\n", stderr="")
+            raise AssertionError(command)
+
+        return run
+
+    def test_doctor_treehouse_healthy_requires_exact_leased_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "repo"
+            root.mkdir()
+            (root / "README.md").write_text("fixture\n", encoding="utf-8")
+            (root / "docs").mkdir()
+            (root / "docs" / "skill-standard.md").write_text("fixture\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            (root / "scripts" / "verify.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+            with mock.patch("scripts.azhou_hub.subprocess.run", side_effect=self._treehouse_run(root)):
+                report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, treehouse_root=root)
+            check = next(item for item in report["checks"] if item["name"] == "treehouse")
+            self.assertEqual("pass", check["status"])
+            self.assertTrue(report["valid"])
+
+    def test_doctor_treehouse_unavailable_malformed_and_timeout_fail(self) -> None:
+        cases = [
+            (FileNotFoundError("treehouse"), None),
+            (None, "not-json"),
+            (TimeoutError("timed out"), None),
+        ]
+        for version_error, malformed in cases:
+            with self.subTest(error=version_error or malformed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "repo"
+                root.mkdir()
+                (root / "README.md").write_text("fixture\n", encoding="utf-8")
+                (root / "docs").mkdir()
+                (root / "docs" / "skill-standard.md").write_text("fixture\n", encoding="utf-8")
+                (root / "scripts").mkdir()
+                (root / "scripts" / "verify.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+                if malformed is not None:
+                    runner = self._treehouse_run(root, status=malformed)
+                else:
+                    runner = self._treehouse_run(root, version_error=version_error)
+                with mock.patch("scripts.azhou_hub.subprocess.run", side_effect=runner):
+                    report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, treehouse_root=root)
+                check = next(item for item in report["checks"] if item["name"] == "treehouse")
+                self.assertEqual("fail", check["status"])
+                self.assertFalse(report["valid"])
+
+    def test_doctor_treehouse_rejects_nonmember_and_unleased_rows(self) -> None:
+        for row in (
+            {"path": "/elsewhere", "status": "leased", "lease_id": "x", "lease_holder": "y"},
+            {"path": "PLACEHOLDER", "status": "available", "lease_id": "", "lease_holder": ""},
+            {"path": 42, "status": "leased", "lease_id": "x", "lease_holder": "y"},
+        ):
+            with self.subTest(row=row), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "repo"
+                root.mkdir()
+                if row["path"] == "PLACEHOLDER":
+                    row["path"] = str(root)
+                runner = self._treehouse_run(root, status=[row])
+                with mock.patch("scripts.azhou_hub.subprocess.run", side_effect=runner):
+                    report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, treehouse_root=root)
+                check = next(item for item in report["checks"] if item["name"] == "treehouse")
+                self.assertEqual("fail", check["status"])
+
+    def test_managed_dry_run_writes_no_target_or_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("dry_run", payload["status"])
+            self.assertFalse(target.exists())
+            self.assertFalse(receipt.exists())
+
+    def test_managed_apply_writes_atomic_receipt_and_requires_pairing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertTrue(receipt.is_file())
+            self.assertEqual("azhou-ai-hub.install-receipt.v1", json.loads(receipt.read_text())["schema"])
+            result, payload = self._json_main(["setup", "--managed", "--skill", "sample", "--target", str(Path(directory) / "other"), "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            result, payload = self._json_main(["setup", "--receipt", str(receipt), "--skill", "sample", "--target", str(Path(directory) / "other"), "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+
+    def test_receipt_write_failure_rolls_back_managed_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            with mock.patch("scripts.azhou_hub._write_receipt", side_effect=OSError("disk full")):
+                result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("rolled_back", payload["status"])
+            self.assertFalse((target / "sample").exists() or (target / "sample").is_symlink())
+
+    def test_managed_setup_refuses_receiptless_adoption_and_preserves_valid_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            target.mkdir()
+            (target / "sample").symlink_to(source, target_is_directory=True)
+            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+
+            result, payload = self._json_main(
+                ["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"],
+                root=root,
+            )
+            self.assertEqual(1, result)
+            self.assertIn("cannot adopt", payload["skills"][0]["details"])
+            self.assertFalse(receipt.exists())
+
+            (target / "sample").unlink()
+            result, payload = self._json_main(
+                ["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"],
+                root=root,
+            )
+            self.assertEqual(0, result, payload)
+            original_receipt = receipt.read_bytes()
+            result, payload = self._json_main(
+                ["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"],
+                root=root,
+            )
+            self.assertEqual(0, result, payload)
+            self.assertEqual("current", payload["skills"][0]["status"])
+            self.assertFalse(payload["applied"])
+            self.assertEqual(original_receipt, receipt.read_bytes())
+
+    def test_managed_receipt_must_be_target_owned_and_dry_run_creates_no_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            outside = Path(directory) / "outside" / "receipt.json"
+            result, payload = self._json_main(["setup", "--managed", "--receipt", str(outside), "--skill", "sample", "--target", str(target), "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            self.assertFalse(target.exists())
+            self.assertFalse(outside.parent.exists())
+
+    def test_managed_receipt_rejects_azhou_or_receipts_symlink(self) -> None:
+        for link_part in (".azhou-ai-hub", "receipts"):
+            with self.subTest(link_part=link_part), tempfile.TemporaryDirectory() as directory:
+                root, _, target = self._fixture_repo(directory)
+                target.mkdir()
+                anchor = Path(directory) / "anchor"
+                anchor.mkdir()
+                if link_part == ".azhou-ai-hub":
+                    (target / link_part).symlink_to(anchor, target_is_directory=True)
+                else:
+                    metadata = target / ".azhou-ai-hub"
+                    metadata.mkdir()
+                    (metadata / link_part).symlink_to(anchor, target_is_directory=True)
+                receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+                result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--json"], root=root)
+                self.assertEqual(1, result)
+                self.assertEqual("fail", payload["status"])
+                self.assertFalse((anchor / "sample.json").exists())
+
+    def test_existing_mutation_lock_blocks_managed_setup_and_lifecycle_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            target.mkdir()
+            lock = target / ".azhou-ai-hub" / "mutation.lock"
+            lock.mkdir(parents=True)
+            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertFalse((target / "sample").exists() or (target / "sample").is_symlink())
+
+            result, payload = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertFalse((target / "sample").exists() or (target / "sample").is_symlink())
+
+            lock.rmdir()
+            managed_directory = Path(directory) / "managed"
+            managed_directory.mkdir()
+            root, target, receipt = self._managed_fixture(str(managed_directory), mode="copy")
+            shutil.rmtree(target / "sample")
+            lock = target / ".azhou-ai-hub" / "mutation.lock"
+            lock.mkdir(parents=True)
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertFalse((target / "sample").exists())
+
+    def test_invalid_empty_or_multi_skill_receipt_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            valid = json.loads(receipt.read_text(encoding="utf-8"))
+            for skills in ([], [valid["skills"][0], dict(valid["skills"][0])]):
+                with self.subTest(skill_count=len(skills)):
+                    forged = dict(valid)
+                    forged["skills"] = skills
+                    forged["integrity_digest"] = azhou_hub._receipt_digest(forged)
+                    receipt.write_text(json.dumps(forged), encoding="utf-8")
+                    result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--json"], root=root)
+                    self.assertEqual(1, result)
+                    self.assertIn("receipt_invalid", payload["error"])
+            receipt.write_text(json.dumps(valid), encoding="utf-8")
+
+            for key in ("target", "source_root"):
+                with self.subTest(field=key):
+                    forged = dict(valid)
+                    forged[key] = 42
+                    forged["integrity_digest"] = azhou_hub._receipt_digest(forged)
+                    receipt.write_text(json.dumps(forged), encoding="utf-8")
+                    result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--json"], root=root)
+                    self.assertEqual(1, result)
+                    self.assertIn("receipt_invalid", payload["error"])
+
+    def test_copy_receipt_rejects_symlinked_destination_even_when_digest_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            installed = target / "sample"
+            shadow = Path(directory) / "shadow"
+            shutil.copytree(installed, shadow)
+            shutil.rmtree(installed)
+            installed.symlink_to(shadow, target_is_directory=True)
+
+            result, payload = self._json_main(
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"],
+                root=root,
+            )
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            self.assertTrue(installed.is_symlink())
+            self.assertTrue((shadow / "SKILL.md").is_file())
+
+    def test_setup_rollback_failure_reports_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            second = root / "skills" / "second"
+            second.mkdir()
+            (second / "SKILL.md").write_text("second\n", encoding="utf-8")
+            original_copy = azhou_hub._copy_package
+            calls = 0
+
+            def copy_then_fail(source: Path, destination: Path) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    original_copy(source, destination)
+                    return
+                raise OSError("injected install failure")
+
+            with mock.patch("scripts.azhou_hub._copy_package", side_effect=copy_then_fail), mock.patch("scripts.azhou_hub.shutil.rmtree", side_effect=OSError("injected rollback failure")):
+                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample", "second"], mode="copy", dry_run=False)
+            self.assertEqual("partial", payload["status"])
+            self.assertTrue((target / "sample").exists())
+
+    def test_repair_missing_current_drift_and_forged_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            shutil.rmtree(target / "sample")
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("dry_run", payload["status"])
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertTrue((target / "sample" / "SKILL.md").is_file())
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("current", payload["skills"][0]["status"])
+            (target / "sample" / "SKILL.md").write_text("drift\n", encoding="utf-8")
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            forged = json.loads(receipt.read_text(encoding="utf-8"))
+            forged["skills"][0]["source"] = str(Path(directory) / "forged")
+            receipt.write_text(json.dumps(forged), encoding="utf-8")
+            result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertIn("receipt_invalid", payload["error"])
+
+    def test_uninstall_exact_drift_and_idempotent_missing_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="link")
+            result, payload = self._json_main(["uninstall", "--receipt", str(receipt), "--target", str(target), "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("dry_run", payload["status"])
+            self.assertTrue((target / "sample").is_symlink())
+            result, payload = self._json_main(["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertFalse((target / "sample").exists() or (target / "sample").is_symlink())
+            result, payload = self._json_main(["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("already_absent", payload["skills"][0]["status"])
+
+    def test_uninstall_refuses_drifted_managed_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            (target / "sample" / "SKILL.md").write_text("owned by user\n", encoding="utf-8")
+            result, payload = self._json_main(["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            self.assertTrue((target / "sample").is_dir())
+
+    def test_uninstall_refuses_identity_swap_after_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            installed = target / "sample"
+            original_identity = azhou_hub._path_identity(installed)
+            self.assertIsNotNone(original_identity)
+            calls = 0
+
+            def swapped_identity(path: Path):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return original_identity
+                return original_identity[0], original_identity[1] + 1, original_identity[2]
+
+            with mock.patch("scripts.azhou_hub._path_identity", side_effect=swapped_identity):
+                result, payload = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"],
+                    root=root,
+                )
+
+            self.assertEqual(1, result)
+            self.assertEqual("partial", payload["status"])
+            self.assertTrue((installed / "SKILL.md").is_file())
+
+    def test_migrate_same_target_dry_run_and_success(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="link")
+            result, payload = self._json_main(["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "copy", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual("dry_run", payload["status"])
+            self.assertTrue((target / "sample").is_symlink())
+            result, payload = self._json_main(["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "copy", "--apply", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertTrue((target / "sample").is_dir())
+            self.assertFalse((target / "sample").is_symlink())
+            self.assertEqual("copy", json.loads(receipt.read_text(encoding="utf-8"))["mode"])
+
+    def test_migrate_failure_keeps_old_installation_or_reports_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="link")
+            with mock.patch("scripts.azhou_hub._write_receipt", side_effect=OSError("receipt unavailable")):
+                result, payload = self._json_main(["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "copy", "--apply", "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertIn(payload["status"], {"partial", "rolled_back"})
+            self.assertTrue((target / "sample").is_symlink())
+            self.assertEqual("link", json.loads(receipt.read_text(encoding="utf-8"))["mode"])
 
 
 if __name__ == "__main__":
