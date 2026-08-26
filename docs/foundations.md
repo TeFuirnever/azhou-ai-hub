@@ -4,7 +4,7 @@
 
 ## Agent Skill UX layer
 
-Four independently installable, open-format Agent Skills expose this control surface without duplicating its implementation:
+Four independently installable, open-format adapter packages expose this control surface without duplicating its implementation. Independent installation makes each `SKILL.md` discoverable on its own; it does not bundle a standalone copy of the repository CLI:
 
 - [`azhou-info`](../skills/azhou-info/SKILL.md) selects the read-only `info` or `version` contract.
 - [`azhou-doctor`](../skills/azhou-doctor/SKILL.md) builds a read-only diagnostic request and never auto-fixes it.
@@ -22,7 +22,7 @@ python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py verify
 ~~~
 
-- `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command.
+- `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. In `azhou-ai-hub.info.v2`, `primary_commands` is the canonical five-command field; `commands` remains the backward-compatible `info.v1` alias until an explicitly approved schema migration removes it.
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical packages, an optional install target and, with `--verify`, the complete deterministic gate.
 - `verify` delegates to `python3 scripts/verify.py` and preserves its exit code.

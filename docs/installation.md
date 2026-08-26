@@ -1,6 +1,6 @@
 # Installation
 
-## Recommended: managed install
+## Package-manager install
 
 Install only the skill you need:
 
@@ -14,7 +14,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
-Run one command per desired skill. The package manager chooses the harness destination.
+Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
 
 The four Foundation Skills are portable UX wrappers around a local checkout. They do not bundle the repository CLI or infer a harness home. Invoke them while working in an Azhou AI Hub checkout or provide that checkout path explicitly; the Skill then runs the checkout's `scripts/azhou_hub.py`.
 
@@ -48,7 +48,7 @@ python3 scripts/azhou_hub.py setup \
 
 The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).
 
-## Manual install
+## Manual copy
 
 Copy the complete runtime directory into a skill root supported by the active harness:
 
@@ -62,7 +62,7 @@ cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 
 Keep every runtime subdirectory: <code>references/</code>, <code>scripts/</code>, <code>assets/</code>, <code>templates/</code> and vendored runtime data. Do not copy repository-level <code>benchmarks/</code>.
 
-## Contributor install
+## Development symlink
 
 A symlink makes edits visible immediately:
 
@@ -79,11 +79,12 @@ If a harness cached its skill catalog before the symlink existed, reload the har
 
 ## One-path rule
 
-For one canonical name, choose exactly one of:
+For one canonical name, choose exactly one ownership mode and target root. Do not mix modes in one target root:
 
-1. managed install;
-2. manual copy;
-3. development symlink.
+1. package-manager install;
+2. checkout-managed install (the Foundation CLI and optional receipt);
+3. manual copy;
+4. development symlink.
 
 Multiple copies cause stale selection, ambiguous provenance and updates landing in the wrong package.
 

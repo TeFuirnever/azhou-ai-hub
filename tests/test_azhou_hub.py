@@ -62,8 +62,9 @@ class AzhouHubCliTest(unittest.TestCase):
 
         self.assertEqual(0, result)
         payload = json.loads(stream.getvalue())
-        self.assertEqual("azhou-ai-hub.info.v1", payload["schema_version"])
-        self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["commands"])
+        self.assertEqual("azhou-ai-hub.info.v2", payload["schema_version"])
+        self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
+        self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
             [
                 *AZHOU_SKILL_NAMES,
@@ -195,6 +196,23 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("dry_run", receipt["status"])
             self.assertEqual("planned", receipt["skills"][0]["status"])
             self.assertFalse(target.exists())
+
+    def test_setup_cli_rejects_relative_target(self) -> None:
+        result, payload = self._json_main(["setup", "--skill", "repo-pedant", "--target", "relative", "--json"])
+        self.assertEqual(1, result)
+        self.assertEqual("fail", payload["status"])
+        self.assertIn("absolute path", payload["error"])
+
+    def test_managed_lifecycle_cli_rejects_relative_target(self) -> None:
+        for command in ("repair", "migrate", "uninstall"):
+            with self.subTest(command=command):
+                argv = [command, "--receipt", "receipt.json", "--target", "relative"]
+                if command == "migrate":
+                    argv.extend(["--mode", "copy"])
+                result, payload = self._json_main([*argv, "--json"])
+                self.assertEqual(1, result)
+                self.assertEqual("fail", payload["status"])
+                self.assertIn("absolute path", payload["error"])
 
     def test_setup_collision_is_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

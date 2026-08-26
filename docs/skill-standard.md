@@ -13,6 +13,8 @@
 
 每个 skill 独立安装在 `skills/<canonical-name>/`，只带运行时需要的内容。
 
+“独立安装”表示完整复制单个 canonical package 后，harness 能单独发现并加载它；不表示 package 必须内置所有外部运行时。Package 不得依赖兄弟 skill 目录，但可以声明 Python、Node、浏览器或显式 repository checkout 等外部依赖。此类依赖必须在 package-local setup 中写明最低版本、定位方式、失败边界和验证命令；缺失时 fail closed，不能扫描无关目录或静默复制第二份权威实现。
+
 | Surface | 何时需要 | 约束 |
 |---|---|---|
 | `SKILL.md` | 必须 | 入口、触发、顺序、边界；保持可扫描 |

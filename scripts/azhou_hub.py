@@ -194,7 +194,7 @@ def revision_info(root: Path = ROOT) -> dict[str, Any]:
 
 def info_payload(root: Path = ROOT) -> dict[str, Any]:
     return {
-        "schema_version": "azhou-ai-hub.info.v1",
+        "schema_version": "azhou-ai-hub.info.v2",
         "project": "azhou-ai-hub",
         "repository": str(root.resolve()),
         "revision": revision_info(root),
@@ -204,6 +204,11 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
             "minimum": ".".join(str(part) for part in MIN_PYTHON),
         },
         "installable_skills": canonical_skills(root),
+        # Keep this list limited to the five portable foundation commands. The
+        # receipt-owned lifecycle verbs are intentionally a separate contract.
+        "primary_commands": COMMANDS,
+        # Backward-compatible v1 alias. Remove only through an explicitly
+        # approved schema migration.
         "commands": COMMANDS,
         "verification_command": "python3 scripts/verify.py",
         "support_matrix": "docs/support-matrix.md",
@@ -1020,7 +1025,7 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     setup.add_argument("--skill", action="append", choices=skill_names, help="Install one skill; repeatable")
     setup.add_argument("--mode", choices=["link", "copy"], default="link", help="Installation mode")
     setup.add_argument("--apply", action="store_true", help="Apply the plan; default is read-only dry-run")
-    setup.add_argument("--receipt", type=Path, help="Write a managed installation receipt (requires --managed --apply)")
+    setup.add_argument("--receipt", type=Path, help="Use a managed installation receipt; writes it only with --apply")
     setup.add_argument("--managed", action="store_true", help="Opt into receipt-owned lifecycle management")
     setup.add_argument("--json", action="store_true", help="Emit stable JSON receipt")
 
@@ -1077,7 +1082,19 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             _print_doctor(payload)
         return 0 if payload["valid"] else 1
 
+    if args.command in {"repair", "migrate", "uninstall"} and not args.target.is_absolute():
+        payload = _lifecycle_report("fail", [], error="--target must be an absolute path")
+        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        return 1
+
     if args.command == "setup":
+        if not args.target.is_absolute():
+            payload = _setup_failure(args.target.expanduser().resolve(), args.mode, "--target must be an absolute path")
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                _print_setup(payload)
+            return 1
         if args.receipt and not args.managed:
             payload = _setup_failure(args.target.expanduser().resolve(), args.mode, "--receipt requires explicit --managed")
             if args.json:

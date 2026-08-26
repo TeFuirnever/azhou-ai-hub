@@ -25,7 +25,7 @@ Azhou AI Hub has one maintained runtime per skill and separate development evide
 
 ## Runtime boundary
 
-Each <code>skills/&lt;canonical-name&gt;/</code> directory must work when copied alone. It may contain instructions, references, deterministic scripts, schemas, templates and licensed offline assets. It must not depend on benchmark answers or vendor-specific identity metadata.
+Each <code>skills/&lt;canonical-name&gt;/</code> directory must remain independently installable and discoverable when copied as a complete package. That does not make every package a standalone implementation: declared external runtimes or an explicit repository checkout may still be required. A package must not depend on sibling skill directories, benchmark answers or vendor-specific identity metadata; every external requirement must be documented package-locally and fail closed when unavailable.
 
 ## Evaluation boundary
 
