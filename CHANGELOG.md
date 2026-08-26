@@ -18,7 +18,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Fixed
 
 - Clarified that the four Foundation Skills are independently installable adapters, not standalone CLI copies, and added a bilingual install/command map guarded by a regression test.
-- Kept the `info.v1` `commands` field as a compatibility alias in `info.v2`; new consumers should use `primary_commands`.
+- Extended `info.v1` additively with the preferred `primary_commands` field while keeping the original `commands` field and schema discriminator stable.
 - Corrected the Excalidraw official-export example to use its positional CLI, locked `uv` environment and post-export style gate.
 - Prevented package discovery from exposing the upstream `neat-freak` regression snapshot as a third installable skill.
 

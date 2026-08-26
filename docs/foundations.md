@@ -22,7 +22,7 @@ python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py verify
 ~~~
 
-- `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. In `azhou-ai-hub.info.v2`, `primary_commands` is the canonical five-command field; `commands` remains the backward-compatible `info.v1` alias until an explicitly approved schema migration removes it.
+- `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. The `azhou-ai-hub.info.v1` schema adds `primary_commands` as the preferred five-command field while retaining the original `commands` field with the same value; changing the schema discriminator requires an explicitly approved incompatible migration.
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical packages, an optional install target and, with `--verify`, the complete deterministic gate.
 - `verify` delegates to `python3 scripts/verify.py` and preserves its exit code.

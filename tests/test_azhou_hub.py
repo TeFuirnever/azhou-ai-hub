@@ -62,7 +62,7 @@ class AzhouHubCliTest(unittest.TestCase):
 
         self.assertEqual(0, result)
         payload = json.loads(stream.getvalue())
-        self.assertEqual("azhou-ai-hub.info.v2", payload["schema_version"])
+        self.assertEqual("azhou-ai-hub.info.v1", payload["schema_version"])
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
@@ -104,6 +104,61 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual("healthy", doctor["status"])
                 checks = {check["name"]: check for check in doctor["checks"]}
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
+
+    def test_super_caveman_real_package_completes_managed_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "skills"
+            receipt = target / ".azhou-ai-hub" / "receipts" / "super-caveman.json"
+            destination = target / "super-caveman"
+
+            result, setup = self._json_main(
+                [
+                    "setup", "--managed", "--receipt", str(receipt),
+                    "--skill", "super-caveman", "--target", str(target),
+                    "--mode", "copy", "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, setup)
+            self.assertEqual("pass", setup["status"])
+            self.assertTrue(destination.is_dir())
+            self.assertFalse(destination.is_symlink())
+
+            result, migrated = self._json_main(
+                [
+                    "migrate", "--receipt", str(receipt), "--target", str(target),
+                    "--mode", "link", "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, migrated)
+            self.assertEqual("pass", migrated["status"])
+            self.assertTrue(destination.is_symlink())
+
+            destination.unlink()
+            result, repaired = self._json_main(
+                [
+                    "repair", "--receipt", str(receipt), "--target", str(target),
+                    "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, repaired)
+            self.assertEqual("pass", repaired["status"])
+            self.assertTrue(destination.is_symlink())
+
+            result, doctor = self._json_main(
+                ["doctor", "--skill", "super-caveman", "--target", str(target), "--json"]
+            )
+            self.assertEqual(0, result, doctor)
+            self.assertEqual("healthy", doctor["status"])
+
+            result, uninstalled = self._json_main(
+                [
+                    "uninstall", "--receipt", str(receipt), "--target", str(target),
+                    "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, uninstalled)
+            self.assertEqual("pass", uninstalled["status"])
+            self.assertFalse(destination.exists() or destination.is_symlink())
 
     def test_version_json_never_manufactures_a_release_version(self) -> None:
         stream = io.StringIO()

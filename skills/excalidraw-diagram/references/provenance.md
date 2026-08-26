@@ -13,7 +13,7 @@ The following are Azhou-maintained implementations: `SKILL.md`, the brand lifecy
 | Component | Upstream | Version / boundary |
 |---|---|---|
 | library merge helper and layout prior art | `Agents365-ai/excalidraw-skill` | selected comparison baseline `00606e9fcb072e9644cbfbb3d49a9dafe8b98c25`; exact historical import commit was not recorded; local helper adds offline-catalog behavior |
-| diagram types and schema prior art | `github/awesome-copilot`, `skills/excalidraw-diagram-generator` | selected comparison baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6`; exact historical import commit was not recorded; local references are maintained independently |
+| diagram types and schema prior art | `github/awesome-copilot`, `skills/excalidraw-diagram-generator` | selected comparison baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6`; exact historical import commit was not recorded; local references are maintained independently under the retained [MIT notice](../../../LICENSES/GitHub-Awesome-Copilot-MIT.txt) |
 | official engine | `@excalidraw/excalidraw` | `0.18.1`, tag commit `a2ec2889babf7d2295469c6d90ebe77fae57df84`; `references/vendor/excalidraw-all.esm.js` and mirrored fonts |
 | Mermaid converter | `@excalidraw/mermaid-to-excalidraw` | `2.2.2`, npm `gitHead` `167be14d2f6f5915af4d157bfc66e341ceb58c35`; bundled into the consolidated engine |
 | SVG converter | `svg-to-excalidraw` | `0.0.2`, npm `gitHead` `b862bb78c8d677729996417640c4061af8060ee5`; bundled into the consolidated engine |

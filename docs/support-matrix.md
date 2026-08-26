@@ -4,7 +4,7 @@
 
 | Capability | Codex | Claude Code | zcode | Other compatible harnesses |
 |---|---|---|---|---|
-| Neutral package availability (repository surface) | six canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
+| Neutral package availability (repository surface) | seven canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
 | Load canonical <code>SKILL.md</code> package | supported by a configured skill root | supported by a configured skill root | host-dependent; verify installation | host-dependent |
 | Azhou Info / Doctor / Setup / Verify Agent Skills | package available; Codex discovery/invocation is locally smoke-tested | package available; Claude discovery/invocation requires a fresh host receipt | package available; discovery/invocation not evidenced here | expected only for Agent Skills-compatible hosts with Python and checkout access; verify locally |
 | Foundation `info` / `version` / `doctor` / `setup` / `verify` CLI | supported from a checkout with Python 3.11+ and an explicit skill root for setup | same neutral checkout CLI | same neutral checkout CLI when Python and a writable skill root exist | Python 3.11+; harness skill root must be supplied explicitly |

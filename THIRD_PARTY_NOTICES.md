@@ -47,7 +47,7 @@ The package uses these licensed upstreams. Package versions and local digests ar
 | [excalidraw/excalidraw-libraries](https://github.com/excalidraw/excalidraw-libraries/commit/92e1979e8157da0ad9c2bd912c01ea9381d1733f) | selected baseline `92e1979e8157da0ad9c2bd912c01ea9381d1733f` | offline component-library snapshot; exact historical import commit remains unproved | [MIT](LICENSES/Excalidraw-MIT.txt) |
 | [excalidraw/mermaid-to-excalidraw](https://github.com/excalidraw/mermaid-to-excalidraw/commit/167be14d2f6f5915af4d157bfc66e341ceb58c35) | `@excalidraw/mermaid-to-excalidraw@2.2.2`; npm `gitHead` `167be14d2f6f5915af4d157bfc66e341ceb58c35` | Mermaid conversion in the consolidated engine | [MIT](LICENSES/Excalidraw-MIT.txt) |
 | [excalidraw/svg-to-excalidraw](https://github.com/excalidraw/svg-to-excalidraw/commit/b862bb78c8d677729996417640c4061af8060ee5) | `svg-to-excalidraw@0.0.2`; npm `gitHead` `b862bb78c8d677729996417640c4061af8060ee5` | SVG conversion in the consolidated engine | [MIT](LICENSES/Excalidraw-MIT.txt) |
-| [github/awesome-copilot](https://github.com/github/awesome-copilot/commit/83561bd7d8a46fcda0581aedabdf8eac7cb196b6) | selected baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6` | diagram-type prior art and schema references | MIT; see upstream |
+| [github/awesome-copilot](https://github.com/github/awesome-copilot/commit/83561bd7d8a46fcda0581aedabdf8eac7cb196b6) | selected baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6` | diagram-type prior art and schema references | [MIT](LICENSES/GitHub-Awesome-Copilot-MIT.txt) |
 
 Font redistribution notices ship beside the fonts:
 

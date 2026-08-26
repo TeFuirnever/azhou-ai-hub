@@ -223,6 +223,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
+        self.assertEqual(7, len(SKILL_DIRS))
+        self.assertIn("seven canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
@@ -232,11 +234,21 @@ class SkillPackageTest(unittest.TestCase):
         provenance = (
             ROOT / "skills" / "excalidraw-diagram" / "references" / "provenance.md"
         ).read_text(encoding="utf-8")
+        diagram_types = (
+            ROOT / "skills" / "excalidraw-diagram" / "references" / "diagram-types.md"
+        ).read_text(encoding="utf-8")
+        github_license_path = ROOT / "LICENSES" / "GitHub-Awesome-Copilot-MIT.txt"
 
         self.assertNotIn("\\`", notices)
         self.assertNotIn("\\`", provenance)
         self.assertIn("selected comparison baseline", provenance)
         self.assertIn("exact historical import commit was not recorded", provenance)
+        self.assertIn("github/awesome-copilot", diagram_types)
+        self.assertTrue(github_license_path.is_file())
+        github_license = github_license_path.read_text(encoding="utf-8")
+        self.assertIn("Copyright GitHub, Inc.", github_license)
+        self.assertIn("GitHub-Awesome-Copilot-MIT.txt", notices)
+        self.assertIn("GitHub-Awesome-Copilot-MIT.txt", provenance)
 
     def test_research_notes_use_portable_source_coordinates(self) -> None:
         for path in (

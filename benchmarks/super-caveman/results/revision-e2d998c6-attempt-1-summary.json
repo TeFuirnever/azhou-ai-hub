@@ -46,12 +46,12 @@
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
       "base_commit": "8b497e8631d29a03ffa7cea49dee561da9036951",
-      "path_set_sha256": "c7c862bc9663dce6bcff7836b35096f68a7d7b440568f5a4c85516575d0ba210",
-      "staged_patch_sha256": "158ee215535078aa2d879564f293e279b1f91bc0db62cf25c00a3dfff03f09b8",
+      "path_set_sha256": "feff79acb83c805676f211eeb0104f5c06117eda249a67e819e221eb65b1004c",
+      "staged_patch_sha256": "25da352a71ae036db7b9b0ca2c62e3a8226eab402839038a734376c39494ca8d",
       "approver": "workspace-owner",
-      "approved_at": "2026-08-26T05:29:52Z",
+      "approved_at": "2026-08-26T13:27:33Z",
       "record_path": "results/revision-e2d998c6-exact-diff-approval.json",
-      "record_sha256": "cf65645431b0f63466cae4c3f67bd2b96fe72a551fb12023f201c0d667d08587",
+      "record_sha256": "70b0bd88733061e3f5022fe39fe21c82cf919fbe5ccd4a3f83ab03c23c6cbeaf",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     },
     "judges": [
@@ -90,7 +90,7 @@
     "The current-tree delta is limited to the optional off-by-default Codex lifecycle adapter, package-local immutable upstream source-data snapshots, and provenance/setup documentation; modes.md, route behavior, and maintained response rules are unchanged.",
     "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
     "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
-    "The exact-diff approval is rebound to the 20-path Foundation reconciliation diff from 8b497e8631d29a03ffa7cea49dee561da9036951; the aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+    "The exact-diff approval is rebound to the 21-path Foundation reconciliation and PR review-fix diff from 8b497e8631d29a03ffa7cea49dee561da9036951; the aggregate result and aggregate approval record remain excluded from the approved subject paths.",
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ]
 }

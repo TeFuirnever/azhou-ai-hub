@@ -194,7 +194,7 @@ def revision_info(root: Path = ROOT) -> dict[str, Any]:
 
 def info_payload(root: Path = ROOT) -> dict[str, Any]:
     return {
-        "schema_version": "azhou-ai-hub.info.v2",
+        "schema_version": "azhou-ai-hub.info.v1",
         "project": "azhou-ai-hub",
         "repository": str(root.resolve()),
         "revision": revision_info(root),
