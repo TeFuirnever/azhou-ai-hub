@@ -1,0 +1,12 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v1",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-08-25T13:24:38+08:00",
+  "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "473cd8107b8543ebe8af8403a7c4dbc035d49d781872d33453caae76fcffb86a",
+  "staged_patch_sha256": "b0d71832449030f3a4abf62c1abca0a23a7a2d630f01ece96ccce296a216fc41",
+  "raw_approval_record_sha256": "dc909ca9c8672607b0b946f45603f8c674573e460f13c061765d2555c6798aaf",
+  "raw_approval_storage": "Git-external"
+}

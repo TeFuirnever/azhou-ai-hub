@@ -11,6 +11,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination.
@@ -56,6 +57,7 @@ REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 cp -R "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
+cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ~~~
 
 Keep every runtime subdirectory: <code>references/</code>, <code>scripts/</code>, <code>assets/</code>, <code>templates/</code> and vendored runtime data. Do not copy repository-level <code>benchmarks/</code>.
@@ -70,6 +72,7 @@ SKILLS_HOME=/absolute/path/to/harness/skills
 
 ln -s "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
 ln -s "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
+ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ~~~
 
 If a harness cached its skill catalog before the symlink existed, reload the harness or start a new task. Do not create duplicate copies to force refresh.
@@ -89,6 +92,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [repo-pedant setup](../skills/repo-pedant/references/setup.md).
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Inspect dry-runs before installing: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
+- Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 

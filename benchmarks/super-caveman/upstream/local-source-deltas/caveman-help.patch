@@ -1,0 +1,7 @@
+diff --git a/skills/caveman-help/SKILL.md b/skills/caveman-help/SKILL.md
+index 346579d..ce1156f 100644
+--- a/skills/caveman-help/SKILL.md
++++ b/skills/caveman-help/SKILL.md
+@@ -52 +52 @@ export CAVEMAN_DEFAULT_MODE=ultra
+-**Config file** (`~/.config/caveman/config.json` macOS/Linux, `%APPDATA%\caveman\config.json` Windows):
++**Config file** (`~/.config/caveman/config.json`):

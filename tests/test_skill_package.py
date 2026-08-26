@@ -15,9 +15,11 @@ AZHOU_SKILL_NAMES = (
     "azhou-setup",
     "azhou-verify",
 )
+SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
 SKILL_DIRS = (
     SKILL_DIR,
     ROOT / "skills" / "excalidraw-diagram",
+    SUPER_CAVEMAN_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
 )
 
@@ -81,6 +83,101 @@ class SkillPackageTest(unittest.TestCase):
             package = ROOT / "skills" / name
             self.assertTrue((package / "SKILL.md").is_file(), name)
             self.assertTrue((package / "references" / "setup.md").is_file(), name)
+
+    def test_super_caveman_extends_core_with_six_companions(self) -> None:
+        skill = (SUPER_CAVEMAN_DIR / "SKILL.md").read_text(encoding="utf-8")
+        modes = (SUPER_CAVEMAN_DIR / "references" / "modes.md").read_text(encoding="utf-8")
+        provenance = (SUPER_CAVEMAN_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+        capability_map = json.loads(
+            (ROOT / "benchmarks" / "super-caveman" / "capability-map.json").read_text(encoding="utf-8")
+        )
+        source_names = {item["name"] for item in capability_map["sources"]}
+        self.assertEqual("super-caveman", capability_map["canonical_skill"])
+        self.assertEqual("original-caveman-enhanced", capability_map["positioning"])
+        self.assertEqual("caveman", capability_map["core_source"])
+        self.assertEqual(6, capability_map["absorbed_companions"])
+        self.assertIn("# Super Caveman", skill)
+        self.assertIn("/super-caveman", skill)
+        self.assertEqual(
+            {
+                "cavecrew",
+                "caveman",
+                "caveman-commit",
+                "caveman-compress",
+                "caveman-help",
+                "caveman-review",
+                "caveman-stats",
+            },
+            source_names,
+        )
+        self.assertIn("one independently installable package", provenance)
+        self.assertIn("b42a45a068e080294924bfba19a7a2e8944c48ff", provenance)
+        self.assertIn("938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e", provenance)
+        for alias in source_names:
+            self.assertFalse((ROOT / "skills" / alias / "SKILL.md").exists())
+        for route in (
+            "/cavecrew",
+            "/caveman-commit",
+            "/caveman-review",
+            "/caveman-compress",
+            "/caveman-help",
+            "/caveman-stats",
+        ):
+            self.assertIn(route, skill)
+        for rule in (
+            "Lead with the next action",
+            "Number multi-step tasks",
+            "End with one concrete next action",
+            "Restate state every turn",
+            "Cap lists at five items",
+            "A future-tense plan to edit, test, or inspect is not completion",
+            "Casual acknowledgement",
+            "one verb phrase",
+            "approved deployment mechanism",
+        ):
+            self.assertIn(rule, modes)
+        self.assertIn("not a diagnosis or medical claim", modes)
+
+    def test_super_caveman_runtime_is_neutral_and_recoverable(self) -> None:
+        guard = (SUPER_CAVEMAN_DIR / "scripts" / "compression_guard.py").read_text(encoding="utf-8")
+        setup = (SUPER_CAVEMAN_DIR / "references" / "setup.md").read_text(encoding="utf-8")
+        stats = (SUPER_CAVEMAN_DIR / "references" / "statistics.md").read_text(encoding="utf-8")
+        brand = (SUPER_CAVEMAN_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        self.assertNotIn("ANTHROPIC_API_KEY", guard)
+        self.assertNotIn("claude --print", guard)
+        self.assertNotIn("subprocess", guard)
+        self.assertIn("Python standard library only", setup)
+        self.assertIn("install_text_if_unchanged", guard)
+        self.assertIn("finalize_state", guard)
+        self.assertIn('"handoffs"', guard)
+        self.assertIn("current source changed after compression; restore refused", guard)
+        self.assertIn("unavailable: host exposes no audited current-session counters.", stats)
+        self.assertIn("super-caveman.receipt.v1", brand)
+        self.assertIn("learning_signal:", brand)
+        self.assertIn("少说话，技术信号不丢。", brand)
+        for event in (
+            "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
+            "🧭 范围锁定｜source=<target>｜holds=<n>",
+            "🪨 候选完成｜artifact=<path-or-description>",
+            "✅ 验证通过｜checks=<comma-separated ids>",
+            "❌ 验证失败｜check=<id>｜impact=<fact>",
+            "🔒 阿舟暂停这一项｜hold=<fact>",
+        ):
+            self.assertIn(event, brand)
+        self.assertIn("at most one leading emoji per event", brand)
+        self.assertIn("success appears once and is the final stage event", brand)
+        self.assertIn("schema keys, enum values, digests, paths, commands, test names, and raw evidence emoji-free", brand)
+
+    def test_super_caveman_licenses_and_notices_are_retained(self) -> None:
+        caveman_license = (ROOT / "LICENSES" / "Caveman-MIT.txt").read_text(encoding="utf-8")
+        adhd_license = (ROOT / "LICENSES" / "i-have-adhd-MIT.txt").read_text(encoding="utf-8")
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2026 Julius Brussee", caveman_license)
+        self.assertIn("Copyright (c) 2026 Ayoub Ghriss", adhd_license)
+        self.assertIn("Caveman", notices)
+        self.assertIn("Caveman-MIT.txt", notices)
+        self.assertIn("i-have-adhd", notices)
+        self.assertIn("i-have-adhd-MIT.txt", notices)
 
     def test_repo_pedant_brand_layer_covers_the_interactive_lifecycle(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
@@ -193,6 +290,16 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "benchmarks" / "repo-pedant" / "history" / "baseline-2026-08-23.json",
             ROOT / "benchmarks" / "repo-pedant" / "protocol" / "valid.execution.json",
             ROOT / "benchmarks" / "repo-pedant" / "protocol" / "prior-drift.execution.json",
+            ROOT / "benchmarks" / "super-caveman" / "manifest.json",
+            ROOT / "benchmarks" / "super-caveman" / "capability-map.json",
+            ROOT / "benchmarks" / "super-caveman" / "trigger-cases.json",
+            ROOT / "benchmarks" / "super-caveman" / "response-cases.json",
+            ROOT / "benchmarks" / "super-caveman" / "evaluation-contract.json",
+            ROOT / "benchmarks" / "super-caveman" / "results" / "revision-a6cfc850-attempt-1-summary.json",
+            ROOT / "benchmarks" / "super-caveman" / "results" / "revision-dfe45d69-attempt-1-summary.json",
+            ROOT / "benchmarks" / "super-caveman" / "results" / "revision-de6b836a-attempt-1-summary.json",
+            ROOT / "benchmarks" / "super-caveman" / "results" / "revision-e1eef218-attempt-1-summary.json",
+            ROOT / "benchmarks" / "super-caveman" / "results" / "revision-f3ab4d37-attempt-1-summary.json",
             *(ROOT / "benchmarks" / "repo-pedant" / "cases").glob("*.case.json"),
             ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "manifest.json",
             *(ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "cases").glob("*.case.json"),

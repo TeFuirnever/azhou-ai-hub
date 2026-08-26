@@ -1,0 +1,163 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "superseded",
+  "runtime": "frozen Super Caveman skill runtime",
+  "harness": "Codex desktop multi-agent",
+  "model": "GPT-5 family",
+  "model_limitation": "Exact serving snapshots were not exposed; producer identity strings are retained in the Git-external raw record.",
+  "skill_tree_sha256": "39b778815189a8a656e422705158f98023fc577212a8ce3adac71bfb6e4fd1c0",
+  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+  "tool_permissions": {
+    "network": "available in harness, denied by case contract, unused",
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "fixture verification only",
+    "external_apps": "available in harness, denied by case contract, unused"
+  },
+  "attempt": 1,
+  "output_set_sha256": "439b38e6ed7f8ff4d9cbac6c9dbbb900fbb0f1d038653f3c564c55f25120be61",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; frozen tree matched the evaluated runtime",
+    "case_count": "19/19",
+    "criteria_count": "44/44",
+    "unique_case_ids": "19/19",
+    "maximum_observed_concurrency": 1,
+    "fixture_side_effect": "pass; one affected response regenerated; eighteen byte-reused cases, exact fixture edit, host plan call, and two-turn mode transition independently rechecked",
+    "repository_scope": "pass; only disposable Git-external fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/review_39b77881_attempt_1",
+    "review_sha256": "ba52d8afb78d9ec11bc3fbdb1478b9cd40034b14b5afe8608af62398f11c68d2"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "candidate_raw_sha256": "439b38e6ed7f8ff4d9cbac6c9dbbb900fbb0f1d038653f3c564c55f25120be61",
+    "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
+    "candidate_output_set_sha256": "439b38e6ed7f8ff4d9cbac6c9dbbb900fbb0f1d038653f3c564c55f25120be61",
+    "high_risk_regressions": 0,
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v1",
+      "status": "superseded",
+      "reason": "review hardening changed the runtime tree; fresh evaluation and exact-diff approval are required",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
+      "path_set_sha256": "abfbad3be9d376a7f7e87964ecbfdc8bf6c3e786dad599fd4d719ae427ef59fd",
+      "staged_patch_sha256": "56efd99efdc21e82b6a66efebe1df3a9215e11349554b4be428e095c269e3641",
+      "approver": "workspace-owner",
+      "approved_at": "2026-08-25T07:03:35+08:00",
+      "record_path": "results/revision-39b77881-exact-diff-approval.json",
+      "record_sha256": "2dbfacf0009df3810c6ae0eecf650672781c9ba3f0ac57c6537880f9c5f179ed",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    },
+    "judges": [
+      {
+        "identity": "/root/judge_39b77881_pair_1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "ace015e10e900aadf234669bee094ec629047ee1719148d41f3a5b84f37e8dd2"
+      },
+      {
+        "identity": "/root/judge_39b77881_pair_2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "45ca5b117091127d9021787085c3ee40af126c8ace8bc2ed257c6ea6fab1b340"
+      },
+      {
+        "identity": "/root/judge_39b77881_pair_3",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "e8af8eb1f08792227b1e38ac95bb435b8f66e759d7cb21b1f9ab8246e383567f"
+      }
+    ]
+  },
+  "passed": 19,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {
+      "id": "direct-answer",
+      "status": "pass"
+    },
+    {
+      "id": "agent-owned-edit",
+      "status": "pass"
+    },
+    {
+      "id": "debugging-cause",
+      "status": "pass"
+    },
+    {
+      "id": "concept-explanation",
+      "status": "pass"
+    },
+    {
+      "id": "destructive-action",
+      "status": "pass"
+    },
+    {
+      "id": "real-ambiguity",
+      "status": "pass"
+    },
+    {
+      "id": "multi-step-progress",
+      "status": "pass"
+    },
+    {
+      "id": "long-form-request",
+      "status": "pass"
+    },
+    {
+      "id": "error-report",
+      "status": "pass"
+    },
+    {
+      "id": "casual-message",
+      "status": "pass"
+    },
+    {
+      "id": "code-answer",
+      "status": "pass"
+    },
+    {
+      "id": "complex-plan",
+      "status": "pass"
+    },
+    {
+      "id": "partial-success",
+      "status": "pass"
+    },
+    {
+      "id": "medical-boundary",
+      "status": "pass"
+    },
+    {
+      "id": "under-two-minute-next-action",
+      "status": "pass"
+    },
+    {
+      "id": "host-plan-tool-state",
+      "status": "pass"
+    },
+    {
+      "id": "task-wins-options",
+      "status": "pass"
+    },
+    {
+      "id": "stop-mode-default-style",
+      "status": "pass"
+    },
+    {
+      "id": "uncertainty-and-idiom",
+      "status": "pass"
+    }
+  ],
+  "limitations": [
+    "One bounded attempt in one Codex desktop multi-agent harness/model family only; no cross-harness or cross-model claim.",
+    "The exact serving snapshot and per-case wall time were unavailable.",
+    "One response affected by the final rule delta was generated by one isolated no-tool producer; eighteen unaffected cases and receipts were byte-reused and independently rechecked.",
+    "Raw outputs, the full reviewer record and paired judge records remain Git-external.",
+    "Behavior and paired gates passed for the approved historical runtime; review hardening changed the runtime tree, so fresh evaluation and exact-diff approval are required for the current runtime."
+  ]
+}

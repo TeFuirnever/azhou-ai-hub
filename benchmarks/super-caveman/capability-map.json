@@ -1,0 +1,107 @@
+{
+  "schema": "super-caveman-capability-map.v1",
+  "canonical_skill": "super-caveman",
+  "positioning": "original-caveman-enhanced",
+  "core_source": "caveman",
+  "absorbed_companions": 6,
+  "upstreams": {
+    "caveman": {
+      "repository": "https://github.com/JuliusBrussee/caveman",
+      "commit": "11ddc0c9813c8f75365cd5be2f753df08712f154",
+      "import_basis": "user-provided local entry-file snapshots traced against the pinned upstream commit",
+      "byte_identical_entries": ["cavecrew", "caveman-commit", "caveman-review"],
+      "local_derivative_entries": ["caveman", "caveman-compress", "caveman-help", "caveman-stats"],
+      "license": "MIT"
+    },
+    "i_have_adhd": {
+      "repository": "https://github.com/ayghri/i-have-adhd",
+      "commit": "b42a45a068e080294924bfba19a7a2e8944c48ff",
+      "skill_sha256": "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e",
+      "license": "MIT"
+    }
+  },
+  "response_style": {
+    "source": "i_have_adhd",
+    "capability": "complete pinned i-have-adhd output-behavior contract: persistence and stop semantics, ten response rules, task and safety exceptions, and pre-send checks",
+    "status": "fully-adopted",
+    "surface": "references/modes.md",
+    "reason": "fully adopt output behavior while excluding plugin installation, hooks, global configuration, persistence files, diagnostic claims, and unverified cross-session persistence"
+  },
+  "sources": [
+    {
+      "name": "cavecrew",
+      "local_snapshot_sha256": "b74f374f6aae6e9a31e78e7d876860406fe5833378e9298536edf176c12f379b",
+      "upstream_sha256": "b74f374f6aae6e9a31e78e7d876860406fe5833378e9298536edf176c12f379b",
+      "lineage": "upstream-identical",
+      "capability": "compact delegation routing and output contracts",
+      "status": "adapted",
+      "surface": "references/delegation.md",
+      "reason": "route by available host capability instead of assuming Claude-only presets"
+    },
+    {
+      "name": "caveman",
+      "local_snapshot_sha256": "5e30bb56afbd0b01bd736f2da84180e76f18db4a64de8e124525d5c8dc2e8605",
+      "upstream_sha256": "daf9cec496ebd039809d8236f99f17fa1b4beaadf8ce4e2d532d0da51d70afce",
+      "lineage": "local-derivative-snapshot",
+      "delta_path": "upstream/local-source-deltas/caveman.patch",
+      "delta_sha256": "1b7871a5cbb5fd08223c546020b599ed817286bc7b5a3710fbfb122dd23dfa36",
+      "capability": "persistent terse response modes and auto-clarity",
+      "status": "enhanced",
+      "surface": "references/modes.md",
+      "reason": "run original Caveman intensity after the action-first response skeleton"
+    },
+    {
+      "name": "caveman-commit",
+      "local_snapshot_sha256": "58db7b8efab911a629c26e7132517d9076e4e3645009eb604cb8c25663477841",
+      "upstream_sha256": "58db7b8efab911a629c26e7132517d9076e4e3645009eb604cb8c25663477841",
+      "lineage": "upstream-identical",
+      "capability": "terse Conventional Commit generation",
+      "status": "preserved",
+      "surface": "references/commit-review.md"
+    },
+    {
+      "name": "caveman-compress",
+      "local_snapshot_sha256": "8b0d64c622d8a70411bbd86e736ac23cc0465fca1943a37f081e58e9d3afd210",
+      "upstream_sha256": "3167d62440eee99c0e5b224d7f8b8ebcfe37efba38bc5bbee24f0d00da72a688",
+      "lineage": "local-derivative-snapshot",
+      "delta_path": "upstream/local-source-deltas/caveman-compress.patch",
+      "delta_sha256": "62a6d7e2fd39d4d881bed484006847c4905252e9ab633e4d6f9d0d36616b09be",
+      "capability": "recoverable natural-language file compression",
+      "status": "safety-replaced",
+      "surface": "references/compression.md and scripts/compression_guard.py",
+      "reason": "remove model-specific subprocess and API calls; add deterministic local gates, retained handoff evidence, verified restore, and explicit finalization"
+    },
+    {
+      "name": "caveman-help",
+      "local_snapshot_sha256": "590d6c6c17254bda56d18da7cc9d0bf252aeec5d1c78b77dd7ae4cabb8404f89",
+      "upstream_sha256": "ae18884d30b7ddccaefc9612cf73645d9e1eaf18b44d3c36e398b9706f183c1e",
+      "lineage": "local-derivative-snapshot",
+      "delta_path": "upstream/local-source-deltas/caveman-help.patch",
+      "delta_sha256": "ca110caaa9c19e2a7c62138fbfb685ce6270539793e6e3c8c117b96e48d209b8",
+      "capability": "one-shot command reference",
+      "status": "preserved",
+      "surface": "references/modes.md"
+    },
+    {
+      "name": "caveman-review",
+      "local_snapshot_sha256": "9ef09065f26b9781275b5a4775e14870e331fab833efb2a2aa33f3205a2b83c3",
+      "upstream_sha256": "9ef09065f26b9781275b5a4775e14870e331fab833efb2a2aa33f3205a2b83c3",
+      "lineage": "upstream-identical",
+      "capability": "terse actionable code review",
+      "status": "preserved",
+      "surface": "references/commit-review.md"
+    },
+    {
+      "name": "caveman-stats",
+      "local_snapshot_sha256": "b9e49e46ede956e0c1633eae82a695c996f728bc48f3903f001d301068a2b0ea",
+      "upstream_sha256": "b78227f62898b0360d21f2a94d48e9d7a80629cb879cc7b7f9b45b4a241eba90",
+      "lineage": "local-derivative-snapshot",
+      "delta_path": "upstream/local-source-deltas/caveman-stats.patch",
+      "delta_sha256": "645ac78a2d889856153e643cc900b1554e20e71b7671ea06177f01051dfd553d",
+      "capability": "exact usage statistics",
+      "status": "host-bounded",
+      "surface": "references/statistics.md",
+      "reason": "report only audited host counters or explicitly authorized compatible logs; do not fabricate savings"
+    }
+  ]
+}

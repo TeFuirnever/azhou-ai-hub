@@ -56,6 +56,6 @@ Run before handoff:
 python3 scripts/verify.py
 ```
 
-This runs repository policy, all unit tests, both benchmark-integrity suites, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/excalidraw-diagram/references/setup.md`.
+This runs repository policy, all unit tests, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/excalidraw-diagram/references/setup.md`.
 
 Use `uv run --with pyyaml python <skill-creator>/scripts/quick_validate.py skills/<skill>` only for development validation; PyYAML is not a runtime dependency of these skills.

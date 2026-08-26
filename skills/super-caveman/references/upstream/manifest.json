@@ -1,0 +1,71 @@
+{
+  "schema": "super-caveman.upstream-snapshots.v1",
+  "instruction_status": "source-data-only",
+  "runtime_behavior": false,
+  "sources": [
+    {
+      "name": "caveman",
+      "repository": "https://github.com/JuliusBrussee/caveman",
+      "commit": "11ddc0c9813c8f75365cd5be2f753df08712f154",
+      "license": {
+        "spdx": "MIT",
+        "path": "references/upstream/caveman/LICENSE.txt",
+        "sha256": "5eb826cd03151bcc7cce3f80d40e87733237fedfc6c36d6908aca5fd650a0bdb"
+      },
+      "files": [
+        {
+          "source_path": "skills/cavecrew/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/cavecrew.SKILL.snapshot.txt",
+          "sha256": "b74f374f6aae6e9a31e78e7d876860406fe5833378e9298536edf176c12f379b"
+        },
+        {
+          "source_path": "skills/caveman/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman.SKILL.snapshot.txt",
+          "sha256": "daf9cec496ebd039809d8236f99f17fa1b4beaadf8ce4e2d532d0da51d70afce"
+        },
+        {
+          "source_path": "skills/caveman-commit/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman-commit.SKILL.snapshot.txt",
+          "sha256": "58db7b8efab911a629c26e7132517d9076e4e3645009eb604cb8c25663477841"
+        },
+        {
+          "source_path": "skills/caveman-compress/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman-compress.SKILL.snapshot.txt",
+          "sha256": "3167d62440eee99c0e5b224d7f8b8ebcfe37efba38bc5bbee24f0d00da72a688"
+        },
+        {
+          "source_path": "skills/caveman-help/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman-help.SKILL.snapshot.txt",
+          "sha256": "ae18884d30b7ddccaefc9612cf73645d9e1eaf18b44d3c36e398b9706f183c1e"
+        },
+        {
+          "source_path": "skills/caveman-review/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman-review.SKILL.snapshot.txt",
+          "sha256": "9ef09065f26b9781275b5a4775e14870e331fab833efb2a2aa33f3205a2b83c3"
+        },
+        {
+          "source_path": "skills/caveman-stats/SKILL.md",
+          "snapshot_path": "references/upstream/caveman/caveman-stats.SKILL.snapshot.txt",
+          "sha256": "b78227f62898b0360d21f2a94d48e9d7a80629cb879cc7b7f9b45b4a241eba90"
+        }
+      ]
+    },
+    {
+      "name": "i-have-adhd",
+      "repository": "https://github.com/ayghri/i-have-adhd",
+      "commit": "b42a45a068e080294924bfba19a7a2e8944c48ff",
+      "license": {
+        "spdx": "MIT",
+        "path": "references/upstream/i-have-adhd/LICENSE.txt",
+        "sha256": "8acbb618089b738404f76ac60fca1aaa995d9a87995eddf95f0b777acd7f7d2c"
+      },
+      "files": [
+        {
+          "source_path": "skills/i-have-adhd/SKILL.md",
+          "snapshot_path": "references/upstream/i-have-adhd/SKILL.snapshot.txt",
+          "sha256": "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e"
+        }
+      ]
+    }
+  ]
+}

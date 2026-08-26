@@ -19,6 +19,7 @@ class RepositoryPolicyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             expected = [
+                root / "skills" / "super-caveman" / "SKILL.md",
                 root / "skills" / "excalidraw-diagram" / "SKILL.md",
                 root / "skills" / "azhou-doctor" / "SKILL.md",
                 root / "skills" / "azhou-info" / "SKILL.md",

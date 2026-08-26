@@ -1,0 +1,61 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "failed",
+  "runtime": "Codex agent runtime",
+  "harness": "Codex Desktop collaboration agent",
+  "model": "GPT-5",
+  "model_limitation": "Exact deployment variant was not exposed to the producer.",
+  "skill_tree_sha256": "dfe45d690f623428f0ca00e5b230a78055b9e90ef412b9543f3452ef63d93cd9",
+  "cases_sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
+  "tool_permissions": {
+    "network": "available in harness, denied by case contract, unused",
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "skill readback, fixture edit verification, and evidence hashing only",
+    "external_apps": "available in harness, denied by case contract, unused"
+  },
+  "attempt": 1,
+  "output_set_sha256": "03b872364e588dd20d3093a83f95c4a7349b160c71f6cfb86333a3f7a3773973",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "case_count": "14/14",
+    "unique_case_ids": "14/14",
+    "fixture_side_effect": "pass; README before and after hashes verified",
+    "repository_scope": "pass; only disposable fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/super_caveman_spec_review",
+    "review_sha256": "26aa76c821e76561a4c17e4d11f148d713eb669fb47425ba6a425fe8c4598206"
+  },
+  "promotion_review": {
+    "paired_status": "not_run",
+    "reason": "behavior gate failed"
+  },
+  "passed": 12,
+  "failed": 2,
+  "high_risk_failed": 1,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "fail", "failure_mechanism": "blocking question omitted deployment mechanism and approved procedure"},
+    {"id": "multi-step-progress", "status": "fail", "failure_mechanism": "next action chained execution and verification"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"}
+  ],
+  "limitations": [
+    "One Codex Desktop collaboration-agent run only; no cross-harness or cross-model claim.",
+    "The exact model deployment variant and per-case wall time were unavailable.",
+    "Harness capabilities exceeded the case contract; denied network and external-app tools were not used.",
+    "Raw outputs and full reviewer record remain Git-external.",
+    "Historical skill-tree digest used the superseded generated-file-inclusive algorithm; it is retained only as failure history."
+  ]
+}

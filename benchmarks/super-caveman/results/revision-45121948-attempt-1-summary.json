@@ -1,0 +1,68 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "failed",
+  "runtime": "frozen Super Caveman skill runtime",
+  "harness": "Codex desktop multi-agent",
+  "model": "GPT-5 family",
+  "model_limitation": "Exact serving snapshots were not exposed; producer identity strings are retained in the Git-external raw record.",
+  "skill_tree_sha256": "451219483ce58842588e0b82a512ed3e4a1495aa8e05c4aa1b6d6b340825b7a3",
+  "cases_sha256": "3136808262609cf5bc9083b379b7f1cf15bb79b788127f012ff294142da09290",
+  "tool_permissions": {
+    "network": "available in harness, denied by case contract, unused",
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "fixture verification only",
+    "external_apps": "available in harness, denied by case contract, unused"
+  },
+  "attempt": 1,
+  "output_set_sha256": "1a25395b7bc1aeb924682f6acc8a0669ec580745429b548b4ca232569a6a6bae",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; frozen tree matched the current runtime before revision",
+    "case_count": "19/19",
+    "unique_case_ids": "19/19",
+    "maximum_observed_concurrency": 2,
+    "fixture_side_effect": "pass; exact agent-owned-edit bytes, host plan call, and two-turn mode transition verified",
+    "repository_scope": "pass; only disposable Git-external fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/review_45121948_19",
+    "review_sha256": "5c59ffde16af30c0338adb60d9b7ac080edda6d3efd61d438e89eff30e4fdffd"
+  },
+  "promotion_review": {
+    "paired_status": "not-eligible",
+    "reason": "behavior gate failed: under-two-minute-next-action did not name the active step's concrete work"
+  },
+  "passed": 18,
+  "failed": 1,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"},
+    {"id": "under-two-minute-next-action", "status": "fail"},
+    {"id": "host-plan-tool-state", "status": "pass"},
+    {"id": "task-wins-options", "status": "pass"},
+    {"id": "stop-mode-default-style", "status": "pass"},
+    {"id": "uncertainty-and-idiom", "status": "pass"}
+  ],
+  "limitations": [
+    "One bounded attempt in one Codex desktop multi-agent harness/model family only; no cross-harness or cross-model claim.",
+    "The exact serving snapshot and per-case wall time were unavailable.",
+    "The coordinator generated no response and every producer was forked without criteria, reference answers, prior outputs, or reviewer decisions.",
+    "Raw outputs and the full reviewer record remain Git-external.",
+    "This failed revision is retained as evidence and is not eligible for promotion."
+  ]
+}

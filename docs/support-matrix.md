@@ -15,6 +15,10 @@
 | Excalidraw local file generation | supported with filesystem tools | supported with filesystem tools | supported with filesystem tools | requires local file access |
 | Excalidraw offline render/export | supported after package dependencies | supported after package dependencies | supported after package dependencies | Python/Node/Chromium required |
 | Interactive MCP preview | optional, host/tool-specific | optional, host/tool-specific | not claimed | not claimed |
+| Super Caveman complete pinned ADHD-friendly response behavior, commit, review and help routes | current 19/19-case and 44/44-criterion behavior run plus 3/3 independent paired-judge candidate result and zero high-risk regressions; harness/model-specific | contract defined; equivalent behavior and promotion evidence required | host-dependent; no behavior evidence | host-dependent; no behavior evidence |
+| Super Caveman compact delegation | supported through available collaboration tools | supported through available subagents | host-dependent; named presets not claimed | host-dependent |
+| Super Caveman guarded file compression | supported with Python 3.10+ and local file access | supported with Python 3.10+ and local file access | same neutral core | Python 3.10+ and local file access required |
+| Super Caveman exact session statistics | host counters only; no bundled log scanner | host counters or separately reviewed compatible adapter | not claimed | unavailable without audited counters or parser |
 
 ## Meaning of “supported”
 

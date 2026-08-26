@@ -16,6 +16,26 @@ Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtim
 
 \`skills/repo-pedant/\` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
 
+## Super Caveman
+
+`skills/super-caveman/` enhances the original Caveman Agent Skill with six companion skills from [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) at immutable commit [`11ddc0c9813c8f75365cd5be2f753df08712f154`](https://github.com/JuliusBrussee/caveman/commit/11ddc0c9813c8f75365cd5be2f753df08712f154).
+
+The requested local import set is not described as byte-identical wholesale: `cavecrew`, `caveman-commit`, and `caveman-review` match the pinned commit, while `caveman`, `caveman-compress`, `caveman-help`, and `caveman-stats` are separately hashed local derivative snapshots. Both trusted hash sets and lineage labels are retained in `benchmarks/super-caveman/capability-map.json`; retained non-installable patches reconstruct the four derivative snapshots from the pinned commit.
+
+- Copyright: Julius Brussee, 2026
+- License: [MIT](LICENSES/Caveman-MIT.txt)
+- Imported boundary: response modes, delegation router, commit and review formats, help, safe prose compression, and exact-statistics semantics
+- Local changes: original Caveman remains the core while six companion entries become routes in one canonical package; Claude-only presets, model subprocesses, automatic hooks and unverified savings claims are replaced by neutral capability routing and deterministic local gates
+
+The complete pinned output-behavior contract and its original fourteen response fixtures are adopted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) at immutable commit [`b42a45a068e080294924bfba19a7a2e8944c48ff`](https://github.com/ayghri/i-have-adhd/commit/b42a45a068e080294924bfba19a7a2e8944c48ff). Five local closure fixtures cover previously implicit behavior without importing plugin installation, hooks, global configuration or persistence files.
+
+- Copyright: Ayoub Ghriss, 2026
+- License: [MIT](LICENSES/i-have-adhd-MIT.txt)
+- Imported boundary: ten response-shaping rules, explicit exceptions, and fourteen evaluation cases
+- Local changes: response rules run before Caveman compression; upstream hooks, global configuration, adapters and diagnostic claims are omitted
+
+Upstream README files, installers, status-line integration and separate alias packages are not redistributed. Source hashes, adaptation mapping and integrity fixtures live under `benchmarks/super-caveman/`.
+
 ## Excalidraw Diagram
 
 The package uses these licensed upstreams:

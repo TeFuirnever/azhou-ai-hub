@@ -56,11 +56,13 @@ REQUIRED_PATHS = (
     "docs/skill-standard.md",
     "docs/foundations.md",
     "scripts/azhou_hub.py",
+    "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
+    "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
     "skills/azhou-doctor/SKILL.md",
     "skills/azhou-info/SKILL.md",
