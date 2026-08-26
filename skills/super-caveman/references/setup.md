@@ -15,7 +15,7 @@ python3 "$SKILL_DIR/scripts/compression_guard.py" preflight /absolute/path/to/fi
 python3 "$SKILL_DIR/scripts/compression_guard.py" finalize --help
 ```
 
-No global install, API key, Node.js package, hook, background service, or model-specific package identity is required.
+No global install, API key, Node.js package, hook, background service, or model-specific package identity is required for the neutral core.
 
 ## Installation boundary
 
@@ -23,4 +23,56 @@ Install the complete `skills/super-caveman/` directory under one configured skil
 
 Canonical package name: `super-caveman`. `/caveman` and the six companion commands are compatibility triggers routed through this package, not separate packages.
 
-Do not modify global harness settings or session-log locations as part of setup. Optional host adapters require a separate explicit review and authorization.
+Do not modify global harness settings or session-log locations as part of ordinary setup. Optional host adapters require a separate explicit review and authorization.
+
+## Optional Codex lifecycle adapter
+
+The bundled adapter is the current lifecycle integration. It is off by default and does not read transcripts, session logs, or network resources. It registers one five-second Codex `SessionStart` handler for `startup`, `resume`, `clear`, and `compact`. Every invocation supplies a bounded, full-mode capsule with a schema version and rules digest.
+
+The one owned registration is intentionally not merged with unrelated `SessionStart` handlers. Sharing an event does not imply shared ownership: grouping other tools into this adapter would not reduce their invocations and would break scoped upgrade, uninstall, and rollback. Super Caveman owns one renderer, one Codex adapter, and at most one registration in each explicitly selected scope.
+
+Codex merges matching hooks across user, project, and plugin layers. If this machine already injects the original Caveman or `i-have-adhd` hooks, adding Super Caveman without a switch would duplicate instructions. Reconcile the two direct legacy `SessionStart` handlers only after explicit review:
+
+```bash
+# Writes only ~/.codex/hooks.json; removes only the known legacy Caveman and ADHD commands.
+python3 "$SKILL_DIR/scripts/codex_adapter.py" reconcile-legacy --scope user
+
+# Required only when the old plugins are enabled on this machine; removes them from Codex's user plugin configuration.
+codex plugin remove caveman@caveman
+codex plugin remove i-have-adhd@i-have-adhd
+```
+
+Then choose one explicit adapter scope:
+
+```bash
+# Writes /absolute/path/to/project/.codex/hooks.json
+python3 "$SKILL_DIR/scripts/codex_adapter.py" setup --scope project --project-dir /absolute/path/to/project
+
+# Writes ~/.codex/hooks.json
+python3 "$SKILL_DIR/scripts/codex_adapter.py" setup --scope user
+```
+
+Setup accepts only the standard hooks file for the selected scope, preserves unrelated entries, and is idempotent. It uses an atomic local write and rejects symbolic-link paths. It never runs during skill installation. Codex requires review and trust for new or changed non-managed hooks; inspect and trust the installed handler with `/hooks` before treating setup as active.
+
+The adapter is a response-style convenience, not a security gate. Invalid hook input and internal rendering errors fail open; diagnostics go to stderr. Its one capsule preserves the core's `full` default and stop phrases. Commands such as `/super-caveman commit`, `/super-caveman review`, and `/super-caveman compress` remain canonical skill routes, not host hook state.
+
+Remove only the adapter-owned entry with the matching explicit scope:
+
+```bash
+python3 "$SKILL_DIR/scripts/codex_adapter.py" uninstall --scope project --project-dir /absolute/path/to/project
+python3 "$SKILL_DIR/scripts/codex_adapter.py" uninstall --scope user
+```
+
+Claude Code receives no shipped adapter in this release. A future adapter requires a separate host contract, deterministic tests, real-host smoke evidence, frozen evaluation, and fresh exact-diff approval.
+
+## Verification and rollback
+
+Run the deterministic adapter checks from the repository root:
+
+```bash
+python3 -m unittest tests.test_super_caveman_codex_adapter
+```
+
+Deterministic adapter checks prove only the local configuration and JSON protocol. A live Codex smoke also needs the host's trust receipt; it is not performance evidence or promotion approval.
+
+Rollback uses the scoped `uninstall` command above. It removes only this adapter's one hook entry and preserves unrelated Codex hooks.

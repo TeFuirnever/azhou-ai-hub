@@ -5,7 +5,7 @@ description: Enhanced Caveman skill that combines the original terse-mode core, 
 
 # Super Caveman
 
-Enhance the original Caveman core without replacing its identity: fully adopt the pinned `i-have-adhd` output-behavior contract, then apply Caveman compression as the final style layer. This adopts its response semantics, not its plugin installation, hooks, global configuration, or unverified cross-session persistence. Absorb six companion skills—`cavecrew`, `caveman-commit`, `caveman-compress`, `caveman-help`, `caveman-review`, and `caveman-stats`—as routes inside this one `super-caveman` package. Never create or invoke those sources as separate installable skills.
+Enhance the original Caveman core without replacing its identity: fully adopt the pinned `i-have-adhd` output-behavior contract, then apply Caveman compression as the final style layer. The core adopts response semantics, not upstream plugin installation, global configuration, or unverified cross-session persistence. An optional, explicit Codex lifecycle adapter is local to this canonical package; it is never registered by ordinary skill installation. Absorb six companion skills—`cavecrew`, `caveman-commit`, `caveman-compress`, `caveman-help`, `caveman-review`, and `caveman-stats`—as routes inside this one `super-caveman` package. Never create or invoke those sources as separate installable skills.
 
 ## Apply response precedence
 
@@ -39,7 +39,7 @@ When several routes match, honor the explicit command first. Commit, review, and
 
 ## Persistence
 
-Mode changes persist only within the active conversation. Stop on `stop super-caveman`, `stop caveman`, `stop adhd mode`, or `normal mode`. Do not claim cross-session persistence unless the host provides and verifies it. Do not announce the style except for help or mode-status requests.
+Mode changes persist only within the active conversation. Stop on `stop super-caveman`, `stop caveman`, `stop adhd mode`, or `normal mode`. Do not claim cross-session persistence unless the host provides and verifies it. The optional Codex adapter is the one documented exception: after explicit local setup it reinjects the bounded full-mode capsule at every supported `SessionStart` source; its ownership and removal boundary are in [setup.md](references/setup.md). Do not announce the style except for help or mode-status requests.
 
 ## Material-operation receipt
 
@@ -47,4 +47,4 @@ For compression or another multi-step operation, use [brand-layer.md](references
 
 ## Runtime boundary
 
-Core behavior is harness-neutral. Use available collaboration tools for delegation; do not assume named presets exist. Exact statistics require host counters or an explicitly supplied compatible log. Compression uses the active agent for prose transformation and the bundled standard-library guard for preflight, validation, backup, checkpointed no-clobber install, and restore. See [setup.md](references/setup.md) and [provenance.md](references/provenance.md).
+Core behavior is harness-neutral. Use available collaboration tools for delegation; do not assume named presets exist. Exact statistics require host counters or an explicitly supplied compatible log. Compression uses the active agent for prose transformation and the bundled standard-library guard for preflight, validation, backup, checkpointed no-clobber install, and restore. The optional Codex adapter adds one explicit `SessionStart` injection for `startup`, `resume`, `clear`, and `compact`. It defaults to full mode, does not inspect transcripts or contact the network, and fails open only for response-style injection. Its exact scope and removal boundary are in [setup.md](references/setup.md). Claude Code support is roadmap-only. For provenance or upstream-update work, read [provenance.md](references/provenance.md), then [upstream-sources.md](references/upstream-sources.md); never load source snapshots for ordinary responses.

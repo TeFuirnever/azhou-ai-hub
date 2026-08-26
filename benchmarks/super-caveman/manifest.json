@@ -38,7 +38,9 @@
     "results/revision-55d53933-exact-diff-approval.json",
     "results/revision-39b77881-exact-diff-approval.json",
     "results/revision-c5366b95-attempt-1-summary.json",
-    "results/revision-c5366b95-exact-diff-approval.json"
+    "results/revision-c5366b95-exact-diff-approval.json",
+    "results/revision-e2d998c6-attempt-1-summary.json",
+    "results/revision-e2d998c6-exact-diff-approval.json"
   ],
   "claims": {
     "mapped_source_skills": 7,
@@ -48,6 +50,6 @@
     "installable_packages": 1,
     "trigger_routes": 8,
     "response_cases": 19,
-    "model_quality": "Current revision-c5366b95 passed 19/19 cases and 44/44 criteria with three candidate paired-review votes and zero high-risk regressions; exact staged-diff approval is recorded with Git-external raw approval and reviewer records"
+    "model_quality": "Current revision-e2d998c6 retains the byte-identical 19-case candidate output set, passed a fresh 44/44 current-tree delta review, retains three candidate paired-review votes, and has zero high-risk regressions; promotion status is determined by the structured exact-diff approval record"
   }
 }

@@ -1,16 +1,16 @@
 {
   "schema": "super-caveman-evaluation-result.v1",
-  "status": "superseded",
+  "status": "pass",
   "runtime": "frozen Super Caveman skill runtime",
-  "harness": "Codex desktop isolated producer with independent paired review agents",
+  "harness": "Codex desktop byte-reuse review with independent current-tree delta reviewer",
   "model": "GPT-5 family",
-  "model_limitation": "Exact serving snapshots were not exposed; producer, reviewer, and paired-judge identities are retained in Git-external records.",
-  "skill_tree_sha256": "c5366b95b57e30f0f2abcb16e1afc53dbcd71dbdf41749801c0d4a0a04d7593b",
+  "model_limitation": "Exact serving snapshots were not exposed; the original producer, paired-judge, and current delta-review identities are retained in Git-external records.",
+  "skill_tree_sha256": "e2d998c67749438375185326baa392578fe0d4a41aea085a88cfee2649d1770e",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
-    "repository_write": "disposable agent-owned-edit fixture only",
-    "shell": "fixture verification only",
+    "repository_write": "disposable agent-owned-edit fixture only in the original byte-reused run",
+    "shell": "fixture verification only in the original byte-reused run",
     "external_apps": false
   },
   "attempt": 1,
@@ -18,18 +18,19 @@
   "automatic_checks": {
     "raw_schema": "pass",
     "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; current tree matched evaluated runtime",
+    "skill_tree_digest": "stable-v2; current tree matched revision-e2d998c6 and an independent delta review confirmed maintained response rules were unchanged",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
+    "byte_reuse": "19/19 candidate responses; exact raw bytes and ordering retained from revision-c5366b95",
     "maximum_observed_concurrency": 1,
-    "fixture_side_effect": "pass; disposable README typo corrected to exact required bytes and one-line diff verified",
+    "fixture_side_effect": "pass in original byte-reused run; disposable README typo corrected to exact required bytes and one-line diff verified",
     "plan_tool_state": "pass; exactly three items with one in progress",
-    "repository_scope": "pass; only disposable Git-external fixture changed"
+    "repository_scope": "pass; only the disposable Git-external fixture changed during the original run"
   },
   "reviewer": {
-    "identity": "/root/reviewer_fresh_c5366b95",
-    "review_sha256": "01490717a8076114567271a266eb8803dae06d259057c171e4c5827c92436f32"
+    "identity": "/root/reviewer_e2d998c6",
+    "review_sha256": "d02bc3b84ef58a9d170ac605d62904991ab6072fbd75c86a4d93c2769f997a6f"
   },
   "promotion_review": {
     "paired_status": "pass",
@@ -44,13 +45,13 @@
       "schema": "super-caveman-exact-diff-approval.v1",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
-      "path_set_sha256": "473cd8107b8543ebe8af8403a7c4dbc035d49d781872d33453caae76fcffb86a",
-      "staged_patch_sha256": "b0d71832449030f3a4abf62c1abca0a23a7a2d630f01ece96ccce296a216fc41",
+      "base_commit": "42c3e989f2b8a026b78587f311b2d7e43de8d3ba",
+      "path_set_sha256": "4bc09811078ff70e0f11b4afcd034fad65e1decfca2ebe4af6fc8e3166281268",
+      "staged_patch_sha256": "58cc9107a601f9c142f0139903ada068044197854a99dea8c06add1815b36743",
       "approver": "workspace-owner",
-      "approved_at": "2026-08-25T13:24:38+08:00",
-      "record_path": "results/revision-c5366b95-exact-diff-approval.json",
-      "record_sha256": "1777876080b696f40e6c264be27de7618497360d8fed3c3c743115b78fc64bdb",
+      "approved_at": "2026-08-26T11:47:00+08:00",
+      "record_path": "results/revision-e2d998c6-exact-diff-approval.json",
+      "record_sha256": "b30dd6e1c995419a3d889453926ad5bdb2f8768f3d1bdbed07bbff7af6a2f145",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     },
     "judges": [
@@ -85,8 +86,10 @@
     {"id": "uncertainty-and-idiom", "status": "pass"}
   ],
   "limitations": [
-    "Single bounded attempt in the recorded Codex desktop model family; cross-harness claims are not made.",
-    "Raw producer, reviewer, paired-judge, and human approval records remain Git-external.",
-    "Behavior and promotion gates passed for this historical runtime; the package-local upstream archive and Codex lifecycle adapter produced revision-e2d998c6, so this revision is superseded and not eligible for current promotion."
+    "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
+    "The current-tree delta is limited to the optional off-by-default Codex lifecycle adapter, package-local immutable upstream source-data snapshots, and provenance/setup documentation; modes.md, route behavior, and maintained response rules are unchanged.",
+    "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
+    "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
+    "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ]
 }

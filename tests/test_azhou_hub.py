@@ -69,6 +69,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 *AZHOU_SKILL_NAMES,
                 "excalidraw-diagram",
                 "repo-pedant",
+                "super-caveman",
             ],
             payload["installable_skills"],
         )
