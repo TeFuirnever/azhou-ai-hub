@@ -14,11 +14,11 @@ from unittest import mock
 from scripts import azhou_hub
 
 
-FOUNDATION_SKILL_NAMES = (
-    "foundation-doctor",
-    "foundation-info",
-    "foundation-setup",
-    "foundation-verify",
+AZHOU_SKILL_NAMES = (
+    "azhou-doctor",
+    "azhou-info",
+    "azhou-setup",
+    "azhou-verify",
 )
 
 
@@ -66,15 +66,15 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["commands"])
         self.assertEqual(
             [
+                *AZHOU_SKILL_NAMES,
                 "excalidraw-diagram",
-                *FOUNDATION_SKILL_NAMES,
                 "repo-pedant",
             ],
             payload["installable_skills"],
         )
 
-    def test_foundation_skill_packages_install_and_doctor_cleanly(self) -> None:
-        for name in FOUNDATION_SKILL_NAMES:
+    def test_azhou_skill_packages_install_and_doctor_cleanly(self) -> None:
+        for name in AZHOU_SKILL_NAMES:
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
                 target = Path(directory) / "skills"
                 args = [

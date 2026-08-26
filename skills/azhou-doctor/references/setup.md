@@ -1,4 +1,4 @@
-# Foundation Doctor setup and compatibility
+# Azhou Doctor setup and compatibility
 
 ## Requirements
 

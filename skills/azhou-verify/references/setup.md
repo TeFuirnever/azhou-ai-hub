@@ -1,4 +1,4 @@
-# Foundation Verify setup and compatibility
+# Azhou Verify setup and compatibility
 
 ## Requirements
 

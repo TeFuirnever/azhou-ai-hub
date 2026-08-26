@@ -62,10 +62,10 @@ REQUIRED_PATHS = (
 
 INSTALLABLE_SKILL_PATHS = {
     "skills/excalidraw-diagram/SKILL.md",
-    "skills/foundation-doctor/SKILL.md",
-    "skills/foundation-info/SKILL.md",
-    "skills/foundation-setup/SKILL.md",
-    "skills/foundation-verify/SKILL.md",
+    "skills/azhou-doctor/SKILL.md",
+    "skills/azhou-info/SKILL.md",
+    "skills/azhou-setup/SKILL.md",
+    "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 }
 

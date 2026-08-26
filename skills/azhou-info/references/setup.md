@@ -1,4 +1,4 @@
-# Foundation Info setup and compatibility
+# Azhou Info setup and compatibility
 
 ## Requirements
 

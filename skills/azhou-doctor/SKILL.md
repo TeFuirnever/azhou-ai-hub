@@ -1,15 +1,15 @@
 ---
-name: foundation-doctor
+name: azhou-doctor
 description: Diagnose Azhou AI Hub checkout, package, explicit install-target, or Treehouse lease health without mutation. Use for health checks, broken installs, environment diagnostics, or support verification.
 ---
 
-# Foundation Doctor
+# Azhou Doctor
 
 Run the repository Foundation CLI and keep diagnosis read-only. Never turn a doctor request into setup, repair, cleanup, cache removal, or configuration edits.
 
 ## Workflow
 
-1. Emit `🦊 阿舟 · Foundation Doctor 启动` with `mode=doctor` and the checkout scope.
+1. Emit `🦊 阿舟 · Azhou Doctor 启动` with `mode=doctor` and the checkout scope.
 2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 3. Build `python3 scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
    - `--target <skill-root>` for an exact install root.

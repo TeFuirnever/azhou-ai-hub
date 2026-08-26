@@ -39,14 +39,14 @@ npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 For checkout diagnostics through an Agent Skill:
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill foundation-doctor
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 ~~~
 
 Choose one installation method. Do not stack a managed install, a copied package, and a development symlink under the same canonical skill name. See the [installation guide](docs/installation.md) for manual and contributor paths.
 
 ## Diagnose or set up a checkout
 
-Four portable Agent Skills expose the checkout workflow without duplicating its mechanics: `foundation-info`, `foundation-doctor`, `foundation-setup`, and `foundation-verify`. They locate an explicit Azhou AI Hub checkout, then delegate to its zero-dependency Foundation CLI. The CLI remains the authority for repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, the canonical `verify` gate, and receipt-owned `repair`, same-target `migrate`, and `uninstall`:
+Four portable Azhou Agent Skills expose the checkout workflow without duplicating its mechanics: `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify`. They locate an explicit Azhou AI Hub checkout, then delegate to its zero-dependency Foundation CLI. The CLI remains the authority for repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, the canonical `verify` gate, and receipt-owned `repair`, same-target `migrate`, and `uninstall`:
 
 ~~~bash
 python3 scripts/azhou_hub.py doctor --json
@@ -60,14 +60,14 @@ Nothing changes until `--apply` is present. Setup is idempotent and refuses to o
 
 | Skill | Real job | Evidence today |
 |---|---|---|
-| [Foundation Info](skills/foundation-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
-| [Foundation Doctor](skills/foundation-doctor/SKILL.md) | Diagnose repository, explicit install target and optional Treehouse lease health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke and fail-closed target checks. |
-| [Foundation Setup](skills/foundation-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
-| [Foundation Verify](skills/foundation-verify/SKILL.md) | Run and report the one authoritative full-repository verification gate. | Delegates to the registered repository policy, unit, benchmark-integrity and whitespace gates. |
+| [Azhou Info](skills/azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
+| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | Diagnose repository, explicit install target and optional Treehouse lease health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke and fail-closed target checks. |
+| [Azhou Setup](skills/azhou-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
+| [Azhou Verify](skills/azhou-verify/SKILL.md) | Run and report the one authoritative full-repository verification gate. | Delegates to the registered repository policy, unit, benchmark-integrity and whitespace gates. |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 
-All six packages are independently installable. Foundation Skills require an explicit local checkout because they orchestrate the repository-level CLI rather than copying its behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All six packages are independently installable. Azhou Skills require an explicit local checkout because they orchestrate the repository-level CLI rather than copying its behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 ## Try two task skills in 60 seconds
 

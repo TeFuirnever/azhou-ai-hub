@@ -1,15 +1,15 @@
 ---
-name: foundation-info
+name: azhou-info
 description: Report provable Azhou AI Hub checkout information or revision facts. Use for project info, installed skill inventory, support facts, version, commit, branch, or dirty-state questions.
 ---
 
-# Foundation Info
+# Azhou Info
 
 Use the repository Foundation CLI as the only authority. Do not reconstruct version or package facts from memory.
 
 ## Workflow
 
-1. Emit `🦊 阿舟 · Foundation Info 启动` with `mode=info|version` and the checkout scope.
+1. Emit `🦊 阿舟 · Azhou Info 启动` with `mode=info|version` and the checkout scope.
 2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 3. Run one read-only command from that checkout:
    - General project/runtime/support facts: `python3 scripts/azhou_hub.py info --json`

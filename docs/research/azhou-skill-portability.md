@@ -1,4 +1,4 @@
-# Research: Foundation Skill portability
+# Research: Azhou Skill portability
 
 Retrieved 2026-08-26 (Asia/Shanghai). This note records the design evidence for the Foundation Agent Skill layer.
 
@@ -30,9 +30,9 @@ OMC's plugin manifest declares both Skills and commands, while `src/cli/index.ts
 ## Decision for Azhou AI Hub
 
 1. `scripts/azhou_hub.py` remains the correctness and mutation authority.
-2. Foundation Skills select a command, preserve approvals and interpret observed output; they never reimplement filesystem behavior.
+2. Azhou Skills select a command, preserve approvals and interpret observed output; they never reimplement filesystem behavior.
 3. The package is identical across harnesses. Only the configured discovery root and invocation syntax differ.
 4. CLI tests prove the shared contract. Each claimed harness still needs discovery, invocation, permission and optional-integration smoke evidence.
 5. Host-only hooks, MCP, configuration and identity metadata stay outside the canonical runtime package.
 
-The Foundation Skills require a local checkout. This is intentional: the CLI manages checkout packages and repository verification, so a copied prompt must not pretend it contains that authority.
+The Azhou Skills require a local checkout. This is intentional: the CLI manages checkout packages and repository verification, so a copied prompt must not pretend it contains that authority.

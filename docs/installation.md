@@ -7,10 +7,10 @@ Install only the skill you need:
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill foundation-info
-npx skills add TeFuirnever/azhou-ai-hub --skill foundation-doctor
-npx skills add TeFuirnever/azhou-ai-hub --skill foundation-setup
-npx skills add TeFuirnever/azhou-ai-hub --skill foundation-verify
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination.
@@ -88,7 +88,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [repo-pedant setup](../skills/repo-pedant/references/setup.md).
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Inspect dry-runs before installing: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
-- Foundation Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
+- Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
