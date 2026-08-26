@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Added harness-neutral `foundation-info`, `foundation-doctor`, `foundation-setup`, and `foundation-verify` Agent Skills that delegate to the repository Foundation CLI without host-specific runtime copies.
 - Added a zero-dependency foundation CLI with `info`, `version`, read-only `doctor`, dry-run-first scoped `setup`, stable JSON/exit codes and delegation to the canonical repository verifier.
 - Added opt-in, single-skill checkout lifecycle receipts with fail-closed `repair`, same-target `migrate`, `uninstall`, and read-only Treehouse lease diagnostics.
 - Added a repository-enforced Treehouse worktree policy with durable task leases, identity-conditioned return, dry-run-first cleanup, a bounded Git pool and a documented migration/recovery path.

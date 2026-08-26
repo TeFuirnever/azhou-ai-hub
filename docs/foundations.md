@@ -2,6 +2,17 @@
 
 `scripts/azhou_hub.py` is the repository-level, harness-neutral control surface for local information, diagnostics, explicit skill setup, opt-in checkout lifecycle operations and verification. It uses only Python 3.11+ standard library modules.
 
+## Agent Skill UX layer
+
+Four independently installable, open-format Agent Skills expose this control surface without duplicating its implementation:
+
+- [`foundation-info`](../skills/foundation-info/SKILL.md) selects the read-only `info` or `version` contract.
+- [`foundation-doctor`](../skills/foundation-doctor/SKILL.md) builds a read-only diagnostic request and never auto-fixes it.
+- [`foundation-setup`](../skills/foundation-setup/SKILL.md) requires a dry-run before any explicitly authorized setup or receipt-owned lifecycle mutation.
+- [`foundation-verify`](../skills/foundation-verify/SKILL.md) invokes the one authoritative full-repository gate.
+
+The same `SKILL.md` packages can be installed into any Agent Skills-compatible root. Discovery paths and explicit invocation syntax remain host concerns, but no host receives a separate implementation. These Skills require an explicit Azhou AI Hub checkout because the CLI and source packages remain repository-level authorities; they do not scan home directories, infer a harness root, or bundle a second copy of the lifecycle code.
+
 ## Commands
 
 ~~~bash
@@ -123,4 +134,4 @@ Doctor checks use `pass`, `warn`, `fail` and `skip`. Warnings produce `degraded`
 
 The foundation CLI does not contact registries, self-update, rewrite harness configuration, install hooks, clean caches or infer a harness home. Its lifecycle commands own only artifacts created by explicit managed checkout setup and proven by a valid receipt plus current filesystem identity. Package-manager installations still use their package manager for update and removal. Skill-specific lifecycle adapters remain explicit and keep their own setup/uninstall contracts.
 
-The design source and portability decisions are recorded in [the oh-my-claudecode foundation research](research/oh-my-claudecode-foundation-capabilities.md).
+The design source and portability decisions are recorded in [the oh-my-claudecode foundation research](research/oh-my-claudecode-foundation-capabilities.md) and [the Agent Skill portability follow-up](research/foundation-skill-portability.md).

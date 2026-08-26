@@ -9,7 +9,17 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "repo-pedant"
 SKILL = SKILL_DIR / "SKILL.md"
-SKILL_DIRS = (SKILL_DIR, ROOT / "skills" / "excalidraw-diagram")
+FOUNDATION_SKILL_NAMES = (
+    "foundation-doctor",
+    "foundation-info",
+    "foundation-setup",
+    "foundation-verify",
+)
+SKILL_DIRS = (
+    SKILL_DIR,
+    ROOT / "skills" / "excalidraw-diagram",
+    *(ROOT / "skills" / name for name in FOUNDATION_SKILL_NAMES),
+)
 
 
 class SkillPackageTest(unittest.TestCase):
@@ -65,6 +75,12 @@ class SkillPackageTest(unittest.TestCase):
         for package in SKILL_DIRS:
             self.assertFalse((package / "agents" / "openai.yaml").exists())
             self.assertFalse((package / "benchmarks").exists())
+
+    def test_foundation_skills_are_independently_installable_packages(self) -> None:
+        for name in FOUNDATION_SKILL_NAMES:
+            package = ROOT / "skills" / name
+            self.assertTrue((package / "SKILL.md").is_file(), name)
+            self.assertTrue((package / "references" / "setup.md").is_file(), name)
 
     def test_repo_pedant_brand_layer_covers_the_interactive_lifecycle(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")

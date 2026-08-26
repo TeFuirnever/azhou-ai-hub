@@ -14,6 +14,14 @@ from unittest import mock
 from scripts import azhou_hub
 
 
+FOUNDATION_SKILL_NAMES = (
+    "foundation-doctor",
+    "foundation-info",
+    "foundation-setup",
+    "foundation-verify",
+)
+
+
 class AzhouHubCliTest(unittest.TestCase):
     def _json_main(self, argv: list[str], *, root: Path | None = None) -> tuple[int, dict]:
         stream = io.StringIO()
@@ -56,8 +64,44 @@ class AzhouHubCliTest(unittest.TestCase):
         payload = json.loads(stream.getvalue())
         self.assertEqual("azhou-ai-hub.info.v1", payload["schema_version"])
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["commands"])
-        self.assertIn("repo-pedant", payload["installable_skills"])
-        self.assertEqual(sorted(payload["installable_skills"]), payload["installable_skills"])
+        self.assertEqual(
+            [
+                "excalidraw-diagram",
+                *FOUNDATION_SKILL_NAMES,
+                "repo-pedant",
+            ],
+            payload["installable_skills"],
+        )
+
+    def test_foundation_skill_packages_install_and_doctor_cleanly(self) -> None:
+        for name in FOUNDATION_SKILL_NAMES:
+            with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
+                target = Path(directory) / "skills"
+                args = [
+                    "setup", "--skill", name, "--target", str(target),
+                    "--mode", "copy", "--json",
+                ]
+
+                result, dry_run = self._json_main(args)
+
+                self.assertEqual(0, result, dry_run)
+                self.assertEqual("dry_run", dry_run["status"])
+                self.assertFalse(target.exists())
+
+                result, applied = self._json_main([*args[:-1], "--apply", "--json"])
+
+                self.assertEqual(0, result, applied)
+                self.assertEqual("pass", applied["status"])
+                self.assertEqual("installed", applied["skills"][0]["status"])
+
+                result, doctor = self._json_main(
+                    ["doctor", "--skill", name, "--target", str(target), "--json"]
+                )
+
+                self.assertEqual(0, result, doctor)
+                self.assertEqual("healthy", doctor["status"])
+                checks = {check["name"]: check for check in doctor["checks"]}
+                self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
     def test_version_json_never_manufactures_a_release_version(self) -> None:
         stream = io.StringIO()
