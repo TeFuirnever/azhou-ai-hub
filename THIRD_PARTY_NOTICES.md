@@ -8,13 +8,13 @@ Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtim
 
 ## Repo Pedant baseline
 
-\`benchmarks/repo-pedant/upstream/neat-freak/\` is an exact regression snapshot of the \`neat-freak\` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [\`bab178311a65f93ffd073e4fdebc9911eae35791\`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791). Its entry file is named \`SKILL.snapshot.md\` so package discovery cannot install the legacy baseline.
+`benchmarks/repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the legacy baseline.
 
 - Copyright: 数字生命卡兹克
 - License: [MIT](LICENSES/Khazix-Skills-MIT.txt)
 - Distribution purpose: provenance and parity regression only; it is not the installable current skill.
 
-\`skills/repo-pedant/\` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
+`skills/repo-pedant/` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
 
 ## Super Caveman
 
@@ -38,27 +38,29 @@ Upstream README files, installers, status-line integration and separate alias pa
 
 ## Excalidraw Diagram
 
-The package uses these licensed upstreams:
+The package uses these licensed upstreams. Package versions and local digests are current runtime evidence. The three commit rows marked “selected baseline” were chosen on 2026-08-26 as the latest public commits at or before the 2026-08-23 package build; they are immutable future comparison points, not proof of the exact historical import commit.
 
-| Upstream | Use | License |
-|---|---|---|
-| [Agents365-ai/excalidraw-skill](https://github.com/Agents365-ai/excalidraw-skill) | library helper and independently adapted layout/routing techniques | [MIT](LICENSES/Agents365-MIT.txt) |
-| [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) | official export engine, type facts, fonts and renderer assets | [MIT](LICENSES/Excalidraw-MIT.txt), plus font licenses below |
-| [excalidraw/excalidraw-libraries](https://github.com/excalidraw/excalidraw-libraries) | offline component-library snapshot | [MIT](LICENSES/Excalidraw-MIT.txt) |
-| [excalidraw/mermaid-to-excalidraw](https://github.com/excalidraw/mermaid-to-excalidraw) | Mermaid conversion | [MIT](LICENSES/Excalidraw-MIT.txt) |
-| [excalidraw/svg-to-excalidraw](https://github.com/excalidraw/svg-to-excalidraw) | SVG conversion | [MIT](LICENSES/Excalidraw-MIT.txt) |
-| [github/awesome-copilot](https://github.com/github/awesome-copilot) | diagram-type prior art and schema references | MIT; see upstream |
+| Upstream | Immutable lock | Use | License |
+|---|---|---|---|
+| [Agents365-ai/excalidraw-skill](https://github.com/Agents365-ai/excalidraw-skill/commit/00606e9fcb072e9644cbfbb3d49a9dafe8b98c25) | selected baseline `00606e9fcb072e9644cbfbb3d49a9dafe8b98c25` | library helper and independently adapted layout/routing techniques | [MIT](LICENSES/Agents365-MIT.txt) |
+| [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw/commit/a2ec2889babf7d2295469c6d90ebe77fae57df84) | `@excalidraw/excalidraw@0.18.1`; tag commit `a2ec2889babf7d2295469c6d90ebe77fae57df84` | official export engine, type facts, fonts and renderer assets | [MIT](LICENSES/Excalidraw-MIT.txt), plus font licenses below |
+| [excalidraw/excalidraw-libraries](https://github.com/excalidraw/excalidraw-libraries/commit/92e1979e8157da0ad9c2bd912c01ea9381d1733f) | selected baseline `92e1979e8157da0ad9c2bd912c01ea9381d1733f` | offline component-library snapshot; exact historical import commit remains unproved | [MIT](LICENSES/Excalidraw-MIT.txt) |
+| [excalidraw/mermaid-to-excalidraw](https://github.com/excalidraw/mermaid-to-excalidraw/commit/167be14d2f6f5915af4d157bfc66e341ceb58c35) | `@excalidraw/mermaid-to-excalidraw@2.2.2`; npm `gitHead` `167be14d2f6f5915af4d157bfc66e341ceb58c35` | Mermaid conversion in the consolidated engine | [MIT](LICENSES/Excalidraw-MIT.txt) |
+| [excalidraw/svg-to-excalidraw](https://github.com/excalidraw/svg-to-excalidraw/commit/b862bb78c8d677729996417640c4061af8060ee5) | `svg-to-excalidraw@0.0.2`; npm `gitHead` `b862bb78c8d677729996417640c4061af8060ee5` | SVG conversion in the consolidated engine | [MIT](LICENSES/Excalidraw-MIT.txt) |
+| [github/awesome-copilot](https://github.com/github/awesome-copilot/commit/83561bd7d8a46fcda0581aedabdf8eac7cb196b6) | selected baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6` | diagram-type prior art and schema references | [MIT](LICENSES/GitHub-Awesome-Copilot-MIT.txt) |
 
 Font redistribution notices ship beside the fonts:
 
 - [Virgil SIL Open Font License 1.1](skills/excalidraw-diagram/references/Virgil-LICENSE.md)
 - [Excalifont SIL Open Font License 1.1](skills/excalidraw-diagram/references/Excalifont-LICENSE.md)
 
-The vendored \`excalidraw-all.esm.js\` retains its generated bundled-license block, including notices for React, pako, fonteditor-core, harfbuzzjs, pica, DOMPurify, Mermaid and other bundled dependencies. Do not strip that block when rebuilding the file.
+The vendored `excalidraw-all.esm.js` retains its generated bundled-license block, including notices for React, pako, fonteditor-core, harfbuzzjs, pica, DOMPurify, Mermaid and other bundled dependencies. Do not strip that block when rebuilding the file.
+
+Refresh these sources only in an isolated checkout or package workspace at an approved immutable commit/version. Rebuild the engine and font set together. Before replacing libraries, compare the selected baseline to the checked-in snapshot; if it differs, record the verified source commit instead of assuming equivalence. Retain author paths, regenerate `skills/excalidraw-diagram/references/icon-catalog.md`, update both provenance surfaces and license copies, then run `python3 scripts/verify.py`. Never refresh from a moving default branch directly into the runtime package.
 
 ## Public prior art excluded from distribution
 
-[coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [\`8646fcc9f74f38539c6cdb4c969723336a96ddcd\`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
+[coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
 
 ## Contributor rule
 

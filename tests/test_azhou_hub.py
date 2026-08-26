@@ -63,7 +63,8 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(0, result)
         payload = json.loads(stream.getvalue())
         self.assertEqual("azhou-ai-hub.info.v1", payload["schema_version"])
-        self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["commands"])
+        self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
+        self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
             [
                 *AZHOU_SKILL_NAMES,
@@ -103,6 +104,61 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual("healthy", doctor["status"])
                 checks = {check["name"]: check for check in doctor["checks"]}
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
+
+    def test_super_caveman_real_package_completes_managed_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "skills"
+            receipt = target / ".azhou-ai-hub" / "receipts" / "super-caveman.json"
+            destination = target / "super-caveman"
+
+            result, setup = self._json_main(
+                [
+                    "setup", "--managed", "--receipt", str(receipt),
+                    "--skill", "super-caveman", "--target", str(target),
+                    "--mode", "copy", "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, setup)
+            self.assertEqual("pass", setup["status"])
+            self.assertTrue(destination.is_dir())
+            self.assertFalse(destination.is_symlink())
+
+            result, migrated = self._json_main(
+                [
+                    "migrate", "--receipt", str(receipt), "--target", str(target),
+                    "--mode", "link", "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, migrated)
+            self.assertEqual("pass", migrated["status"])
+            self.assertTrue(destination.is_symlink())
+
+            destination.unlink()
+            result, repaired = self._json_main(
+                [
+                    "repair", "--receipt", str(receipt), "--target", str(target),
+                    "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, repaired)
+            self.assertEqual("pass", repaired["status"])
+            self.assertTrue(destination.is_symlink())
+
+            result, doctor = self._json_main(
+                ["doctor", "--skill", "super-caveman", "--target", str(target), "--json"]
+            )
+            self.assertEqual(0, result, doctor)
+            self.assertEqual("healthy", doctor["status"])
+
+            result, uninstalled = self._json_main(
+                [
+                    "uninstall", "--receipt", str(receipt), "--target", str(target),
+                    "--apply", "--json",
+                ]
+            )
+            self.assertEqual(0, result, uninstalled)
+            self.assertEqual("pass", uninstalled["status"])
+            self.assertFalse(destination.exists() or destination.is_symlink())
 
     def test_version_json_never_manufactures_a_release_version(self) -> None:
         stream = io.StringIO()
@@ -195,6 +251,23 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("dry_run", receipt["status"])
             self.assertEqual("planned", receipt["skills"][0]["status"])
             self.assertFalse(target.exists())
+
+    def test_setup_cli_rejects_relative_target(self) -> None:
+        result, payload = self._json_main(["setup", "--skill", "repo-pedant", "--target", "relative", "--json"])
+        self.assertEqual(1, result)
+        self.assertEqual("fail", payload["status"])
+        self.assertIn("absolute path", payload["error"])
+
+    def test_managed_lifecycle_cli_rejects_relative_target(self) -> None:
+        for command in ("repair", "migrate", "uninstall"):
+            with self.subTest(command=command):
+                argv = [command, "--receipt", "receipt.json", "--target", "relative"]
+                if command == "migrate":
+                    argv.extend(["--mode", "copy"])
+                result, payload = self._json_main([*argv, "--json"])
+                self.assertEqual(1, result)
+                self.assertEqual("fail", payload["status"])
+                self.assertIn("absolute path", payload["error"])
 
     def test_setup_collision_is_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

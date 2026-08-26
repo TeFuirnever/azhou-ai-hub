@@ -6,9 +6,9 @@ Retrieved 2026-08-26 (Asia/Shanghai). This note records the design evidence for 
 
 Agent Skills remove duplicated instructions and bundled workflow resources across compatible agents. They do not standardize discovery paths, explicit invocation syntax, plugin manifests, permissions, hooks, configuration ownership or tool availability. The correct architecture is therefore a neutral deterministic CLI plus standard `SKILL.md` UX packages and only thin, tested host installation surfaces.
 
-## Local OMC evidence
+## OMC evidence (as of 2026-08-25)
 
-Source lock: `/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/oh-my-claudecode` at commit `deee3a446dadc9bfea31cdc8b19b00b16718082e`, package version `4.14.6`.
+Source lock: OMC checkout at immutable commit `deee3a446dadc9bfea31cdc8b19b00b16718082e`, package version `4.14.6`. Source coordinates are intentionally omitted; file references below are relative to that locked checkout.
 
 | Capability | Agent Skill | Claude compatibility command | OMC CLI |
 |---|---:|---:|---:|

@@ -2,11 +2,11 @@
   "schema": "super-caveman-exact-diff-approval-record.v1",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-08-26T05:17:19Z",
-  "base_commit": "cec01405021037ba09d358978c015c81edda0f61",
+  "approved_at": "2026-08-26T13:27:33Z",
+  "base_commit": "8b497e8631d29a03ffa7cea49dee561da9036951",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "685a38209158c6a0259a136bb66b9b5dba4a3ac7c219df1a365f23ef95fdba16",
-  "staged_patch_sha256": "f5b0bc18d873a7fd283c0e99f26f3b163d8fb6aa92cc7bffdbfe38dc23a1bd84",
-  "raw_approval_record_sha256": "8dc0b25cf358cc0dbf5b1ae993a08e94f88a08c5dfaa5f9e181b2293e8a651e4",
+  "path_set_sha256": "feff79acb83c805676f211eeb0104f5c06117eda249a67e819e221eb65b1004c",
+  "staged_patch_sha256": "25da352a71ae036db7b9b0ca2c62e3a8226eab402839038a734376c39494ca8d",
+  "raw_approval_record_sha256": "fed22989126f987cc6a3eb292d47bd0c93595c683332644dd861122768232ed6",
   "raw_approval_storage": "Git-external"
 }
