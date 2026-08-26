@@ -10,13 +10,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Added a zero-dependency foundation CLI with `info`, `version`, read-only `doctor`, dry-run-first scoped `setup`, stable JSON/exit codes and delegation to the canonical repository verifier.
 - Added opt-in, single-skill checkout lifecycle receipts with fail-closed `repair`, same-target `migrate`, `uninstall`, and read-only Treehouse lease diagnostics.
 - Added a repository-enforced Treehouse worktree policy with durable task leases, identity-conditioned return, dry-run-first cleanup, a bounded Git pool and a documented migration/recovery path.
-- Added copyable 60-second input/output demos for both skills and a live OpenSSF Scorecard badge.
-- Added a redacted public-source discovery and clean-install receipt for both canonical skills.
-- Added Azhou Scenes effect previews for both canonical skills; the Excalidraw preview was regenerated after a P0 eye-identity review.
+- Added copyable input/output demos for the two task skills and a live OpenSSF Scorecard badge.
+- Added a redacted public-source discovery and clean-install receipt for the two original task skills; this is not six-package or cross-harness evidence.
+- Added Azhou Scenes effect previews for `repo-pedant` and `excalidraw-diagram`; the Excalidraw preview was regenerated after a P0 eye-identity review.
 - Added `super-caveman`: the original Caveman terse-mode core enhanced with six companion routes, the complete pinned `i-have-adhd` output-behavior contract, guarded compression, and a restrained evidence-bound Azhou stage protocol, including 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion bounded behavior run, and a 3/3 independent paired-judge candidate result with zero high-risk regressions.
 
 ### Fixed
 
+- Clarified that the four Foundation Skills are independently installable adapters, not standalone CLI copies, and added a bilingual install/command map guarded by a regression test.
+- Kept the `info.v1` `commands` field as a compatibility alias in `info.v2`; new consumers should use `primary_commands`.
 - Corrected the Excalidraw official-export example to use its positional CLI, locked `uv` environment and post-export style gate.
 - Prevented package discovery from exposing the upstream `neat-freak` regression snapshot as a third installable skill.
 
@@ -31,7 +33,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - First tagged release aligned to the verified public source after explicit publication authorization.
 - First complete cross-harness evidence set.
 
-## [0.1.0] - 2026-08-23
+## 0.1.0 draft content (unpublished)
 
 ### Added
 
@@ -47,6 +49,3 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Raw runtime histories and private evidence remain outside Git.
 - History observers and hooks cannot write live skills.
 - Secret scanning/push protection, dependency alerts and private vulnerability reporting are repository requirements.
-
-[Unreleased]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/TeFuirnever/azhou-ai-hub/releases/tag/v0.1.0

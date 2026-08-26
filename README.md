@@ -22,49 +22,48 @@ Most skill repositories stop at prompts. Azhou AI Hub treats each skill as a pro
 
 No universal framework. No model-specific copy of the same skill. No benchmark answer hidden inside the runtime package.
 
-## Install in 30 seconds
+## Installation paths
 
-Install one skill:
+Install one package per command:
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
-~~~
-
-Or:
-
-~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
-~~~
-
-For checkout diagnostics through an Agent Skill:
-
-~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
-~~~
-
-Or:
-
-~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
-Choose one installation method. Do not stack a managed install, a copied package, and a development symlink under the same canonical skill name. See the [installation guide](docs/installation.md) for manual and contributor paths.
+These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
 
-## Diagnose or set up a checkout
+Choose one installation method. Do not stack a package-manager install, a checkout-managed install, a manual copy, and a development symlink under the same canonical skill name. The four `azhou-*` packages make their `SKILL.md` workflow discoverable; they do not bundle the Foundation CLI and still require an explicit local checkout. See the [installation guide](docs/installation.md) for the complete paths and dependencies.
 
-Four portable Azhou Agent Skills expose the checkout workflow without duplicating its mechanics: `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify`. They locate an explicit Azhou AI Hub checkout, then delegate to its zero-dependency Foundation CLI. The CLI remains the authority for repository-wide `info`, `version`, read-only `doctor`, dry-run-first `setup`, the canonical `verify` gate, and receipt-owned `repair`, same-target `migrate`, and `uninstall`:
+## Inspect, set up, or verify a checkout
+
+Four portable Azhou Agent Skills expose the checkout workflow without duplicating its mechanics. Invoke them through the active harness's native Skill surface while working in an Azhou AI Hub checkout, or provide that checkout path explicitly. Each adapter delegates to the checkout's zero-dependency Foundation CLI:
+
+| Agent Skill | CLI authority | Change boundary |
+|---|---|---|
+| `azhou-info` | `info`, `version` | Read-only project, runtime, Git revision and dirty-state facts. |
+| `azhou-doctor` | `doctor` | Read-only repository, explicit install-target and optional Treehouse lease diagnostics. |
+| `azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first; only an exact reviewed plan with `--apply` may mutate its explicit target. |
+| `azhou-verify` | `verify` | Runs the authoritative full-repository gate and preserves its exit code. |
 
 ~~~bash
+python3 scripts/azhou_hub.py info --json
+python3 scripts/azhou_hub.py version --json
 python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
-python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt.json --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python3 scripts/azhou_hub.py verify
 ~~~
 
-Nothing changes until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Managed lifecycle commands require the same explicit target and independently verify the canonical source and exact installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. See the [foundation CLI contract](docs/foundations.md).
+`setup`, `repair`, `migrate`, and `uninstall` stay read-only until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Receipt-owned lifecycle commands require the same explicit target and independently verify the canonical source and installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. The packages are shared across harnesses, but discovery, invocation, permissions and optional integrations remain host-specific; see the [support matrix](docs/support-matrix.md) and [Foundation CLI contract](docs/foundations.md).
 
 ## Skills
 
-| Skill | Real job | Evidence today |
+| Skill | Real job | Verification basis |
 |---|---|---|
 | [Azhou Info](skills/azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
 | [Azhou Doctor](skills/azhou-doctor/SKILL.md) | Diagnose repository, explicit install target and optional Treehouse lease health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke and fail-closed target checks. |
@@ -74,9 +73,9 @@ Nothing changes until `--apply` is present. Setup is idempotent and refuses to o
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
 
-All seven packages are independently installable. Azhou Skills require an explicit local checkout because they orchestrate the repository-level CLI rather than copying its behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All seven packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
-## Try three task skills in 60 seconds
+## Try three task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
@@ -89,7 +88,7 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 ## Why trust it?
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
-- **Claims have gates.** The repository runs the current deterministic test suite, a 3-case Repo Pedant suite, an 8-route and 19-response-case Super Caveman integrity suite, a 5-case Excalidraw benchmark integrity check, JSON/link/provenance/credential policy and whitespace checks.
+- **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 3-case Repo Pedant suite, an 8-route and 19-response-case Super Caveman integrity suite, a 5-case Excalidraw benchmark integrity check, JSON/link/provenance/credential policy and whitespace checks.
 - **Harness differences stay visible.** Codex, Claude Code and zcode share the same runtime packages, but hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md).
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).

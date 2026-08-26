@@ -178,7 +178,105 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("Caveman-MIT.txt", notices)
         self.assertIn("i-have-adhd", notices)
         self.assertIn("i-have-adhd-MIT.txt", notices)
+    def test_public_readmes_expose_the_foundation_skill_contract(self) -> None:
+        command_map = {
+            "azhou-info": ("info", "version"),
+            "azhou-doctor": ("doctor",),
+            "azhou-setup": ("setup", "repair", "migrate", "uninstall"),
+            "azhou-verify": ("verify",),
+        }
+        readmes = {
+            "English": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "Chinese": (ROOT / "README.zh-CN.md").read_text(encoding="utf-8"),
+        }
 
+        for language, text in readmes.items():
+            lines = text.splitlines()
+            for skill, commands in command_map.items():
+                install = f"npx skills add TeFuirnever/azhou-ai-hub --skill {skill}"
+                self.assertIn(install, text, f"{language}: {skill} install command")
+                mapping = next((line for line in lines if line.startswith(f"| `{skill}` |")), "")
+                self.assertTrue(mapping, f"{language}: {skill} CLI mapping")
+                for command in commands:
+                    self.assertIn(f"`{command}`", mapping, f"{language}: {skill} -> {command}")
+
+        self.assertNotRegex(readmes["English"], r"\b\d+ deterministic tests\b")
+        self.assertIn("complete deterministic test suite", readmes["English"])
+        self.assertNotIn("Evidence today", readmes["English"])
+        self.assertIn("Verification basis", readmes["English"])
+        self.assertNotRegex(readmes["Chinese"], r"\b\d+ 项确定性测试\b")
+        self.assertIn("完整确定性测试套件", readmes["Chinese"])
+        self.assertNotIn("当前证据", readmes["Chinese"])
+        self.assertIn("验证依据", readmes["Chinese"])
+
+    def test_public_release_contract_stays_unpublished(self) -> None:
+        english = (ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("## Install in 30 seconds", english)
+        self.assertNotIn("## 30 秒安装", chinese)
+        self.assertNotIn("compare/v0.1.0...HEAD", changelog)
+        self.assertNotIn("releases/tag/v0.1.0", changelog)
+        self.assertRegex(changelog.lower(), r"draft|unpublished")
+
+    def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
+        support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
+
+        self.assertIn("package availability", support)
+        self.assertIn("host integration", support)
+        self.assertIn("discovery/invocation", support)
+
+    def test_public_provenance_contract_stays_reproducible(self) -> None:
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        provenance = (
+            ROOT / "skills" / "excalidraw-diagram" / "references" / "provenance.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("\\`", notices)
+        self.assertNotIn("\\`", provenance)
+        self.assertIn("selected comparison baseline", provenance)
+        self.assertIn("exact historical import commit was not recorded", provenance)
+
+    def test_research_notes_use_portable_source_coordinates(self) -> None:
+        for path in (
+            ROOT / "docs" / "research" / "azhou-skill-portability.md",
+            ROOT / "docs" / "research" / "oh-my-claudecode-foundation-capabilities.md",
+        ):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("/Users/", text, str(path))
+
+    def test_active_entry_docs_do_not_make_unverified_duration_claims(self) -> None:
+        for path in (
+            ROOT / "README.md",
+            ROOT / "README.zh-CN.md",
+            ROOT / "docs" / "README.md",
+        ):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"\b(?:30|60) seconds\b|(?:30|60) 秒", str(path))
+
+    def test_azhou_setup_optional_support_is_link_only_and_bounded(self) -> None:
+        skill = (ROOT / "skills" / "azhou-setup" / "SKILL.md").read_text(encoding="utf-8")
+        cli = (ROOT / "scripts" / "azhou_hub.py").read_text(encoding="utf-8")
+
+        self.assertIn("optional_support", skill)
+        self.assertIn("https://github.com/TeFuirnever/azhou-ai-hub", skill)
+        for boundary in (
+            "mode is `setup`",
+            "`--apply` succeeded",
+            "at least one skill was newly installed",
+            "dry-run",
+            "repair",
+            "migrate",
+            "uninstall",
+            "non-interactive",
+        ):
+            self.assertIn(boundary, skill)
+        self.assertIn("must not replace `next_action`", skill)
+        self.assertIn("Do not probe GitHub authentication", skill)
+        self.assertNotIn("/user/starred/", skill)
+        self.assertNotIn("github.com/TeFuirnever/azhou-ai-hub", cli)
+        self.assertNotIn("/user/starred/", cli)
     def test_repo_pedant_brand_layer_covers_the_interactive_lifecycle(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         brand = (SKILL_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")

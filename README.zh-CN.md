@@ -4,7 +4,7 @@
 
 **不止能演示，更要经得起真实任务。**
 
-足够小，可以改；足够严，可以验；足够中立，可以跨 Agent Core 运行。
+足够小，可以改；足够严，可以验；足够中立，可以跨 Agent harness 使用。
 
 [English](README.md) · [安装](docs/installation.md) · [支持矩阵](docs/support-matrix.md) · [参与贡献](CONTRIBUTING.md)
 
@@ -22,49 +22,48 @@
 
 这里不做接管一切的通用框架，不为每个模型复制一份 skill，也不把 benchmark 答案藏进运行包。
 
-## 30 秒安装
+## 安装路径
 
-安装一个 skill：
+每条命令安装一个包：
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
-~~~
-
-或者：
-
-~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
-~~~
-
-如需通过 Agent Skill 诊断 checkout：
-
-~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
-~~~
-
-或者：
-
-~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
+npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
-只选一种安装方式。同一 canonical name 下，不要叠加托管安装、手工复制和开发软链接。手工安装与贡献者软链接见[安装指南](docs/installation.md)。
+以上是文档化的包管理器路径；完成时间和 harness 发现能力取决于宿主，这里不承诺固定秒数。
 
-## 诊断或配置当前 checkout
+只选一种安装方式。同一 canonical name 下，不要叠加包管理器安装、checkout 托管安装、手工复制和开发软链接。四个 `azhou-*` 包负责让 harness 发现对应的 `SKILL.md` 工作流；它们不内置 Foundation CLI，仍需要显式本地 checkout。完整安装路径和依赖见[安装指南](docs/installation.md)。
 
-四个可移植阿舟 Agent Skills 提供 checkout 工作流入口，但不复制执行逻辑：`azhou-info`、`azhou-doctor`、`azhou-setup` 和 `azhou-verify`。它们先定位显式的 Azhou AI Hub checkout，再委派给零依赖基础 CLI。CLI 继续作为仓库级 `info`、`version`、只读 `doctor`、先 dry-run 的 `setup`、canonical `verify` 以及 receipt-owned `repair`、同 target `migrate` 和 `uninstall` 的唯一权威：
+## 检查、配置或验证当前 checkout
+
+四个可移植阿舟 Agent Skills 提供 checkout 工作流入口，但不复制执行逻辑。通过当前 harness 原生的 Skill 入口调用它们，并在 Azhou AI Hub checkout 中运行，或显式提供 checkout 路径。每个适配器都委派给该 checkout 的零依赖 Foundation CLI：
+
+| Agent Skill | CLI 权威命令 | 修改边界 |
+|---|---|---|
+| `azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
+| `azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 |
+| `azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
+| `azhou-verify` | `verify` | 运行唯一权威的全仓 gate，并保留其退出码。 |
 
 ~~~bash
+python3 scripts/azhou_hub.py info --json
+python3 scripts/azhou_hub.py version --json
 python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
-python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt.json --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python3 scripts/azhou_hub.py verify
 ~~~
 
-只有出现 `--apply` 才会修改文件；重复执行可收敛；遇到不同安装会拒绝覆盖。Managed 生命周期命令要求再次提供同一 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。完整边界见[基础 CLI 合同](docs/foundations.md)。
+`setup`、`repair`、`migrate` 和 `uninstall` 在出现 `--apply` 前保持只读。Setup 可重复收敛，遇到不同安装会拒绝覆盖。Receipt-owned 生命周期命令要求再次提供同一显式 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。各 harness 共用同一批包，但发现、调用、权限和可选集成仍由宿主负责；完整边界见[支持矩阵](docs/support-matrix.md)与[基础 CLI 合同](docs/foundations.md)。
 
 ## Skills
 
-| Skill | 解决的真实任务 | 当前证据 |
+| Skill | 解决的真实任务 | 验证依据 |
 |---|---|---|
 | [Azhou Info](skills/azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
 | [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke 和 fail-closed target 检查。 |
@@ -74,9 +73,9 @@ python3 scripts/azhou_hub.py setup --managed --receipt /absolute/path/to/receipt
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
 
-七个包都可独立安装。Azhou Skills 需要显式本地 checkout，因为它们编排仓库级 CLI，不在 prompt 中复制执行逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+七个包都能作为独立 package surface 安装和发现，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
-## 60 秒试用三个任务型 Skill
+## 试用三个任务型 Skill
 
 | Skill | 复制给 Agent | 必须返回什么 |
 |---|---|---|
@@ -89,7 +88,7 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库执行当前确定性测试套件、3-case Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
+- **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、3-case Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
