@@ -67,13 +67,26 @@ jobs:
     steps:
       - name: Validate tag and create draft
         run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "draft releases may only be created from main (got $GITHUB_REF)" >&2
+            exit 2
+          fi
           if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "tag must match vMAJOR.MINOR.PATCH" >&2
             exit 2
           fi
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          release_view_out="$RUNNER_TEMP/azhou-release-view.out"
+          release_view_err="$RUNNER_TEMP/azhou-release-view.err"
+          if gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" >"$release_view_out" 2>"$release_view_err"; then
             echo "release already exists: $RELEASE_TAG" >&2
             exit 1
+          else
+            release_status=$?
+            if ! grep -Eiq 'HTTP/.* 404' "$release_view_out"; then
+              cat "$release_view_out" "$release_view_err" >&2
+              echo "unable to determine whether release exists (gh exit $release_status)" >&2
+              exit 1
+            fi
           fi
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -12,6 +14,21 @@ from scripts.check_repository import (
     check_treehouse_config,
     relative_markdown_targets,
 )
+
+
+ROOT = Path(__file__).parents[1]
+
+
+def release_workflow_script() -> str:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    marker = "      - name: Validate tag and create draft\n        run: |\n"
+    _, body = workflow.split(marker, 1)
+    script: list[str] = []
+    for line in body.splitlines():
+        if line and not line.startswith("          "):
+            break
+        script.append(line[10:] if line else "")
+    return "\n".join(script) + "\n"
 
 
 class RepositoryPolicyTest(unittest.TestCase):
@@ -59,6 +76,63 @@ class RepositoryPolicyTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], check_action_pins([workflow], root))
+
+    def test_release_workflow_enforces_ref_and_api_outcomes(self) -> None:
+        cases = (
+            ("outside-main", "refs/heads/feature", 2, False),
+            ("exists", "refs/heads/main", 1, False),
+            ("not-found", "refs/heads/main", 0, True),
+            ("api-error", "refs/heads/main", 1, False),
+        )
+        for scenario, git_ref, expected_code, creates_release in cases:
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                temp = Path(directory)
+                calls = temp / "gh-calls.log"
+                gh = temp / "gh"
+                gh.write_text(
+                    """#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "$MOCK_GH_CALLS"
+if [ "$1" = "api" ]; then
+  case "$MOCK_GH_SCENARIO" in
+    exists) printf 'HTTP/2.0 200 OK\\n'; exit 0 ;;
+    not-found) printf 'HTTP/2.0 404 Not Found\\n'; exit 1 ;;
+    api-error) printf 'HTTP/2.0 403 Forbidden\\n'; printf 'denied\\n' >&2; exit 1 ;;
+  esac
+fi
+exit 0
+""",
+                    encoding="utf-8",
+                )
+                gh.chmod(0o755)
+                env = os.environ.copy()
+                env.update(
+                    {
+                        "PATH": f"{temp}{os.pathsep}{env['PATH']}",
+                        "MOCK_GH_CALLS": str(calls),
+                        "MOCK_GH_SCENARIO": scenario,
+                        "GITHUB_REF": git_ref,
+                        "GITHUB_REPOSITORY": "TeFuirnever/azhou-ai-hub",
+                        "GITHUB_SHA": "a" * 40,
+                        "RELEASE_TAG": "v0.1.0",
+                        "RUNNER_TEMP": str(temp),
+                    }
+                )
+
+                result = subprocess.run(
+                    ["bash", "-eu", "-c", release_workflow_script()],
+                    cwd=ROOT,
+                    env=env,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertEqual(expected_code, result.returncode, result.stderr)
+                observed_calls = calls.read_text(encoding="utf-8") if calls.exists() else ""
+                self.assertEqual(creates_release, "release create" in observed_calls)
+                if scenario == "api-error":
+                    self.assertIn("unable to determine whether release exists", result.stderr)
 
     def test_secret_shapes_are_reported_without_echoing_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
