@@ -77,6 +77,13 @@ class RepositoryPolicyTest(unittest.TestCase):
             )
             self.assertEqual([], check_action_pins([workflow], root))
 
+    def test_benchmark_workflow_fetches_full_history(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        _, benchmark_tail = workflow.split("  benchmarks:\n", 1)
+        benchmark_job, _ = benchmark_tail.split("\n  policy:\n", 1)
+
+        self.assertIn("fetch-depth: 0", benchmark_job)
+
     def test_release_workflow_enforces_ref_and_api_outcomes(self) -> None:
         cases = (
             ("outside-main", "refs/heads/feature", 2, False),
