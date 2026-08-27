@@ -15,9 +15,18 @@
 | Excalidraw local file generation | supported with filesystem tools | supported with filesystem tools | supported with filesystem tools | requires local file access |
 | Excalidraw offline render/export | supported after package dependencies | supported after package dependencies | supported after package dependencies | Python/Node/Chromium required |
 | Interactive MCP preview | optional, host/tool-specific | optional, host/tool-specific | not claimed | not claimed |
+| Lavish local HTML generation | supported with filesystem tools | supported with filesystem tools | supported with filesystem tools | requires local file access |
+| Lavish browser review and foreground polling | supported with Node.js 22+, a local browser and attached command execution | supported with Node.js 22+, a local browser and attached command execution | host-dependent; verify browser and foreground command lifecycle | host-dependent |
+| Lavish standalone export | supported through locked CLI after dependency resolution | supported through locked CLI after dependency resolution | host-dependent | Node.js 22+ and local file access required |
+| Lavish third-party share | available only after explicit publication authorization and network verification | same boundary | same boundary | no claim without tested network and receipt |
+| LLM Wiki manual operations | supported with Python 3.11+ and local file access | supported with Python 3.11+ and local file access | supported when the host loads the skill and permits local execution | Python 3.11+ and local file access required |
+| LLM Wiki legacy <code>.omc/wiki/</code> store | supported through explicit <code>--store</code> selection | supported through explicit <code>--store</code> selection | same neutral core; host lifecycle not implied | same neutral core |
+| LLM Wiki lifecycle adapter | neutral stdin/stdout adapter implemented; host wiring not claimed | neutral adapter implemented; hook configuration remains explicit | no proven hook contract | no claim without a tested adapter |
+| LLM Wiki session metadata capture | opt-in; disabled by default | opt-in; disabled by default | host-dependent | no transcript capture claim |
 | Super Caveman complete pinned ADHD-friendly response behavior, commit, review and help routes | current 19/19-case and 44/44-criterion behavior run plus 3/3 independent paired-judge candidate result and zero high-risk regressions; harness/model-specific | contract defined; equivalent behavior and promotion evidence required | host-dependent; no behavior evidence | host-dependent; no behavior evidence |
 | Super Caveman compact delegation | supported through available collaboration tools | supported through available subagents | host-dependent; named presets not claimed | host-dependent |
 | Super Caveman guarded file compression | supported with Python 3.10+ and local file access | supported with Python 3.10+ and local file access | same neutral core | Python 3.10+ and local file access required |
+| Super Caveman lifecycle adapter | explicit local setup required. One bounded full-mode `SessionStart` adapter has deterministic configuration and JSON-protocol coverage; Codex trust review and real-host smoke remain separate gates | roadmap only; no shipped adapter | not claimed | no claim without a tested adapter |
 | Super Caveman exact session statistics | host counters only; no bundled log scanner | host counters or separately reviewed compatible adapter | not claimed | unavailable without audited counters or parser |
 
 ## Meaning of “supported”

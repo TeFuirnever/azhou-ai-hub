@@ -11,6 +11,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
+npx skills add TeFuirnever/azhou-ai-hub --skill lavish
+npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
@@ -57,6 +59,9 @@ REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 cp -R "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
+cp -R "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
+cp -R "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
+cp -R "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
 cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ~~~
 
@@ -72,6 +77,8 @@ SKILLS_HOME=/absolute/path/to/harness/skills
 
 ln -s "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
 ln -s "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
+ln -s "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
+ln -s "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
 ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ~~~
 
@@ -92,7 +99,9 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [repo-pedant setup](../skills/repo-pedant/references/setup.md).
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Inspect dry-runs before installing: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
-- Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
+- Lavish needs Node.js 22+ and resolves the locked `lavish-axi@0.1.47` npm package on demand. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [lavish setup](../skills/lavish/references/setup.md).
+- LLM Wiki uses Python 3.11+ standard library only. Stores remain private by default; lifecycle hooks and session metadata capture are opt-in: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).
+- Super Caveman uses Python 3.10+ standard library only for guarded file compression and its optional Codex lifecycle adapter. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic. The adapter requires an explicit `project` or `user` setup command, then provides bounded full-mode `SessionStart` injection. Claude Code support is roadmap-only: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
@@ -111,3 +120,5 @@ python3 scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HO
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
 
 Remove the legacy <code>neat-freak</code> name only after confirming <code>repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.
+
+LLM Wiki can operate on an existing <code>.omc/wiki/</code> store with <code>--store .omc/wiki</code>. Installing or removing the skill never deletes that data; contract the legacy path only as a separately authorized migration.

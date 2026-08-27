@@ -45,6 +45,18 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 Or:
 
 ~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill lavish
+~~~
+
+Or:
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
+~~~
+
+Or:
+
+~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 ~~~
 
@@ -72,9 +84,11 @@ Nothing changes until `--apply` is present. Setup is idempotent and refuses to o
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | Run and report the one authoritative full-repository verification gate. | Delegates to the registered repository policy, unit, benchmark-integrity and whitespace gates. |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
-| [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
+| [Lavish](skills/lavish/SKILL.md) | Turn a plan, comparison, diagram, table, code view or report into a browser review surface with annotations and a feedback loop. | Imported skill is byte-matched to immutable upstream commit <code>232972b</code>; CLI <code>0.1.47</code>, capability map, authorization boundaries and license are checked. No hosted-share receipt is claimed. |
+| [LLM Wiki](skills/llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | All 7 upstream operations mapped; 10 deterministic runtime tests; immutable MIT source, legacy-store path and opt-in lifecycle boundary recorded. |
+| [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, historical 14-case evidence, a byte-identical current 19/19-case and 44/44-criterion review, three paired judges voting 3/3 for the candidate, zero high-risk regressions, and exact-diff approval bound to the current staged tree. Evidence remains limited to the recorded Codex Desktop harness/model. |
 
-All seven packages are independently installable. Azhou Skills require an explicit local checkout because they orchestrate the repository-level CLI rather than copying its behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All nine packages are independently installable. Azhou Skills require an explicit local checkout because they orchestrate the repository-level CLI rather than copying its behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 ## Try three task skills in 60 seconds
 
@@ -82,6 +96,8 @@ All seven packages are independently installable. Azhou Skills require an explic
 |---|---|---|
 | Repo Pedant | <code>This phase is done. Run repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/repo-pedant.md). |
 | Excalidraw Diagram | <code>Use excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/excalidraw-diagram.md). |
+| Lavish | <code>Use lavish to turn this plan into a reviewable comparison.</code> | Local HTML artifact, selected design source and playbooks, attached review state, explicit publication status and a stable receipt. |
+| LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and a stable receipt. |
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
@@ -124,11 +140,27 @@ The skill never calls JSON validity “done.” It requires an editable source s
 
 [Read the package](skills/excalidraw-diagram/SKILL.md) · [Read setup](skills/excalidraw-diagram/references/setup.md) · [Read provenance](skills/excalidraw-diagram/references/provenance.md)
 
+## Lavish
+
+> 🪄 Make complex work inspectable, annotatable and easy to revise.
+
+Lavish writes a local HTML artifact, opens it in a browser review surface and keeps human feedback connected to the same task. The imported upstream behavior includes focused playbooks, Mermaid-to-editable-Excalidraw review, portable export and optional third-party sharing. Azhou pins the CLI baseline and adds explicit checkpoints: local review is not publication, and <code>share</code> never runs without separate authorization.
+
+[Read the package](skills/lavish/SKILL.md) · [Read setup](skills/lavish/references/setup.md) · [Read provenance](skills/lavish/references/provenance.md) · [Read compatibility](skills/lavish/references/upstream-compatibility.md)
+
+## LLM Wiki
+
+> 📚 Durable project knowledge stays local, sourced and inspectable.
+
+LLM Wiki stores Markdown pages under a private-by-default project directory, keeps a generated catalog and operation log, and offers deterministic keyword/tag/CJK search plus health checks. The neutral Python core preserves all seven upstream operations. Existing oh-my-claudecode stores remain usable in place; lifecycle hooks and session metadata capture are never installed or enabled implicitly.
+
+[Read the package](skills/llm-wiki/SKILL.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md) · [Read compatibility](skills/llm-wiki/references/upstream-compatibility.md)
+
 ## Super Caveman
 
 > 🪨 Less prose. Same technical signal.
 
-Super Caveman keeps original Caveman's persistent terse modes as its core, absorbs six companion skills as compact delegation, commit-message, review, guarded compression, help and evidence-bound statistics routes, and fully adopts the pinned `i-have-adhd` output-behavior contract. Everything ships as one canonical `super-caveman` package. Safety and explicit output contracts run first, the complete ADHD-friendly behavior contract runs second, and Caveman compression runs last. Plugin installation, hooks, global configuration, diagnostic claims and unverified cross-session persistence are outside this neutral package. File compression never launches a second model or silently transmits content; a standard-library guard checks the source, validates protected structure, writes an out-of-tree backup, uses a checkpointed no-clobber install, and refuses restore over newer work. Guarded apply and restore require same-directory hard-link support and fail before moving the source when the filesystem denies it. Material operations use one restrained Azhou anchor per verified stage; ordinary terse replies do not add lifecycle emoji. Exact statistics remain unavailable when the host exposes no audited counters.
+Super Caveman keeps original Caveman's persistent terse modes as its core, absorbs six companion skills as compact delegation, commit-message, review, guarded compression, help and evidence-bound statistics routes, and fully adopts the pinned `i-have-adhd` output-behavior contract. Everything ships as one canonical `super-caveman` package. Safety and explicit output contracts run first, the complete ADHD-friendly behavior contract runs second, and Caveman compression runs last. The neutral core never installs a hook or edits global configuration. Its optional Codex adapter is separately enabled with an explicit `project` or `user` command and registers one bounded full-mode `SessionStart` hook; it does not read private history or contact the network. Existing global Caveman and ADHD hooks must be explicitly reconciled because Codex merges matching hooks across layers. Claude Code lifecycle support is roadmap-only. File compression never launches a second model or silently transmits content; a standard-library guard checks the source, validates protected structure, writes an out-of-tree backup, uses a checkpointed no-clobber install, and refuses restore over newer work. Guarded apply and restore require same-directory hard-link support and fail before moving the source when the filesystem denies it. Material operations use one restrained Azhou anchor per verified stage; ordinary terse replies do not add lifecycle emoji. Exact statistics remain unavailable when the host exposes no audited counters.
 
 [Read the package](skills/super-caveman/SKILL.md) · [Read setup](skills/super-caveman/references/setup.md) · [Read provenance](skills/super-caveman/references/provenance.md) · [Read compression safety](skills/super-caveman/references/compression.md)
 
@@ -154,7 +186,7 @@ Python 3.11+ is enough for the repository gate:
 python3 scripts/verify.py
 ~~~
 
-The same command checks repository policy, all unit tests, three benchmark-integrity suites and Git whitespace. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
+The same command checks repository policy, all unit tests, three benchmark-integrity suites and Git whitespace. Excalidraw rendering has additional locked Python/Node dependencies; Lavish needs Node.js 22+ and downloads its pinned CLI on demand. Each package documents its own setup.
 
 ## Project
 

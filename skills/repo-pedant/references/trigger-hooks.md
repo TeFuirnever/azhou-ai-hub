@@ -85,6 +85,10 @@ python3 <skill-dir>/scripts/closeout_hook.py event \
 
 `REPO_PEDANT_DISABLED=1` suppresses one invocation. Input is capped at 64KB by default and never echoed.
 
+Codex dispatches once per event. A Stop continuation is event re-entry, not retry;
+the advisory core has no retry counter or backoff semantics. The 64KiB input cap is
+applied before parsing and is fail-open on malformed input.
+
 ## Host installation
 
 - Codex: merge `assets/hooks/codex-hooks.fragment.json` into the supported workspace/global hook configuration. Keep `--mode advisory`; the audited adapter is non-blocking.

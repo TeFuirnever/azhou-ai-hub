@@ -8,7 +8,8 @@
             "type": "command",
             "command": "python3 /absolute/path/to/repo-pedant/scripts/closeout_hook.py event --event precompact --workspace-from-input --format codex --mode advisory || true",
             "commandWindows": "py C:\\absolute\\path\\to\\repo-pedant\\scripts\\closeout_hook.py event --event precompact --workspace-from-input --format codex --mode advisory",
-            "statusMessage": "🟡 阿舟 · Repo Pedant 正在检查收尾状态"
+            "statusMessage": "🟡 阿舟 · Repo Pedant 正在检查收尾状态",
+            "timeout": 5
           }
         ]
       }
@@ -20,7 +21,7 @@
             "type": "command",
             "command": "python3 /absolute/path/to/repo-pedant/scripts/closeout_hook.py event --event stop --workspace-from-input --format codex --mode advisory || true",
             "commandWindows": "py C:\\absolute\\path\\to\\repo-pedant\\scripts\\closeout_hook.py event --event stop --workspace-from-input --format codex --mode advisory",
-            "timeout": 30
+            "timeout": 5
           }
         ]
       }

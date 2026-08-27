@@ -151,6 +151,9 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 python3 "$SKILL_DIR/scripts/check-scene-hygiene.py" /absolute/diagram.excalidraw
 python3 "$SKILL_DIR/scripts/audit-overlaps.py" /absolute/diagram.excalidraw
 
+# Machine audit evidence (detached sidecar; safe to copy with the package)
+python3 "$SKILL_DIR/scripts/audit-overlaps.py" /absolute/diagram.excalidraw detect --output /absolute/audit.json
+
 cd "$SKILL_DIR/references"
 uv run python render_excalidraw.py /absolute/diagram.excalidraw --output /absolute/diagram.png
 ```
@@ -189,6 +192,32 @@ uv run python "$SKILL_DIR/scripts/visual-check.py" \
 导出接口、字体与 same-DOM gate 见 [export-api.md](references/export-api.md)。`scripts/render-svg.mjs` 是快速预览路径；正式 SVG 仍以上面的官方引擎导出为准。
 
 ## 7. 交付
+
+机器审核记录使用 `excalidraw.overlap-audit.v1`，并以紧邻的 `.json.sha256` 保存当前字节校验。修复决策最多 4 轮、3 次编辑；决策只依据记录内的几何问题和 Pareto 关系。链式收据验证的是当前字节、嵌入 digest 和链内语义重放，不代表来源真实性、不可抵赖、不可篡改或不可变历史。外部签名、透明日志和可信时间戳属于 roadmap。
+
+完整命令顺序（所有 JSON 都必须有同名 `.json.sha256`）：
+
+```bash
+python3 "$SKILL_DIR/scripts/audit-overlaps.py" detect --scene scene.excalidraw --output run1.overlap-detector.json
+python3 "$SKILL_DIR/scripts/overlap_repair_decision.py" decide --current run1.overlap-detector.json --audit-round 1 --repair-attempt 0 --edit-applied false --output run1.overlap-decision.json
+python3 "$SKILL_DIR/scripts/overlap_contract.py" seal --kind gates --record gates.json --output sealed.gates.json
+python3 "$SKILL_DIR/scripts/overlap_contract.py" seal --kind visual_review --record visual.json --output sealed.visual.json
+python3 "$SKILL_DIR/scripts/overlap_contract.py" seal --kind dispositions --record dispositions.json --output sealed.dispositions.json
+python3 "$SKILL_DIR/scripts/overlap_contract.py" seal --kind chain_manifest --record chain.json --output sealed.chain.json
+python3 "$SKILL_DIR/scripts/overlap_receipt.py" build --chain-manifest sealed.chain.json --gates sealed.gates.json --visual-review sealed.visual.json --dispositions sealed.dispositions.json --output run.overlap-receipt.json
+python3 "$SKILL_DIR/scripts/overlap_receipt.py" validate --receipt run.overlap-receipt.json
+python3 "$SKILL_DIR/scripts/overlap_receipt.py" validate-markdown --markdown receipt.md --receipt run.overlap-receipt.json
+```
+
+All machine records are closed schemas. Records must use a `.json` filename and
+the exact adjacent `.json.sha256` sidecar; malformed JSON is a contract error
+(exit 2), while a missing input file is an I/O error (exit 3). Validation
+replays every detector and decision round, including issue evidence, prior
+references, attempts, edits, scene digests, and Pareto relation. This proves
+current-byte agreement and internal semantic consistency only; it does not
+prove authenticity, provenance, trusted origin, non-repudiation, or immutable
+history. External signatures, transparency logs, and trusted timestamps remain
+roadmap items.
 
 先确认所有文件存在且可读，再发送 `📦 交付完成`。最终收据使用 [brand-layer.md](references/brand-layer.md) 定义的 `excalidraw-diagram.receipt.v1`，至少写清：
 

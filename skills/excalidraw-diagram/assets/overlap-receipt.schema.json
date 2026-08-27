@@ -1,0 +1,21 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,
+  "required":["record_type","schema_version","status","audit_chain","final_detector_digest","final_decision_digest","gates","visual_review","dispositions","holds","mapping_reason"],
+  "properties":{"record_type":{"const":"receipt"},"schema_version":{"const":"excalidraw.overlap-receipt.v1"},"status":{"enum":["complete","complete_with_holds","failed"]},"audit_chain":{"type":"array","minItems":1,"maxItems":4,"items":{"$ref":"#/$defs/chain_entry"}},"final_detector_digest":{"$ref":"#/$defs/hex"},"final_decision_digest":{"$ref":"#/$defs/hex"},"gates":{"$ref":"#/$defs/gates_ref"},"visual_review":{"$ref":"#/$defs/visual_review_ref"},"dispositions":{"$ref":"#/$defs/dispositions_ref"},"holds":{"type":"array","items":{"type":"string"}},"mapping_reason":{"anyOf":[{"type":"null"},{"const":"nonterminal_chain_closed_as_failed"}]}},
+  "$defs":{
+    "hex":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "digest_ref":{"type":"object","additionalProperties":false,"required":["projection","digest"],"properties":{"projection":{},"digest":{"$ref":"#/$defs/hex"}}},
+    "detector_ref":{"allOf":[{"$ref":"#/$defs/digest_ref"},{"type":"object","properties":{"projection":{"$ref":"overlap-audit.schema.json#/$defs/detector"}}}]},
+    "decision_ref":{"allOf":[{"$ref":"#/$defs/digest_ref"},{"type":"object","properties":{"projection":{"$ref":"overlap-audit.schema.json#/$defs/decision"}}}]},
+    "chain_entry":{"type":"object","additionalProperties":false,"required":["round","detector","decision"],"properties":{"round":{"type":"integer","minimum":1,"maximum":4},"detector":{"$ref":"#/$defs/detector_ref"},"decision":{"$ref":"#/$defs/decision_ref"}}},
+    "gate":{"type":"object","additionalProperties":false,"required":["name","status","applicable"],"properties":{"name":{"type":"string"},"status":{"enum":["PASS","FAIL","NOT_RUN"]},"applicable":{"type":"boolean"}}},
+    "gates":{"type":"object","additionalProperties":false,"required":["record_type","schema_version","gates","holds"],"properties":{"record_type":{"const":"gates"},"schema_version":{"const":"excalidraw.overlap-gates.v1"},"gates":{"type":"array","items":{"$ref":"#/$defs/gate"}},"holds":{"type":"array","items":{"type":"string"}}}},
+    "gates_ref":{"allOf":[{"$ref":"#/$defs/digest_ref"},{"type":"object","properties":{"projection":{"$ref":"#/$defs/gates"}}}]},
+    "visual_review":{"type":"object","additionalProperties":false,"required":["record_type","schema_version","status","reviewer"],"properties":{"record_type":{"const":"visual_review"},"schema_version":{"const":"excalidraw.overlap-visual-review.v1"},"status":{"enum":["pass","fail","not_run"]},"reviewer":{"type":"string","minLength":1}}},
+    "visual_review_ref":{"allOf":[{"$ref":"#/$defs/digest_ref"},{"type":"object","properties":{"projection":{"$ref":"#/$defs/visual_review"}}}]},
+    "disposition":{"type":"object","additionalProperties":false,"required":["issue_key","impact","name","reason","evidence"],"properties":{"issue_key":{"type":"string"},"impact":{"enum":["non_blocking","blocking"]},"name":{"type":"string","minLength":1},"reason":{"type":"string","minLength":1},"evidence":{"type":"string","minLength":1}}},
+    "dispositions":{"type":"object","additionalProperties":false,"required":["record_type","schema_version","dispositions"],"properties":{"record_type":{"const":"dispositions"},"schema_version":{"const":"excalidraw.overlap-dispositions.v1"},"dispositions":{"type":"array","items":{"$ref":"#/$defs/disposition"}}}},
+    "dispositions_ref":{"allOf":[{"$ref":"#/$defs/digest_ref"},{"type":"object","properties":{"projection":{"$ref":"#/$defs/dispositions"}}}]}
+  }
+}

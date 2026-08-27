@@ -1,0 +1,1 @@
+{"schema_version":"owned-hook-surfaces.v1","surfaces":[{"id":"repo-pedant-codex-fragment","path":"skills/repo-pedant/assets/hooks/codex-hooks.fragment.json","mode":"managed"},{"id":"super-caveman-codex-adapter","path":"skills/super-caveman/scripts/codex_adapter.py","mode":"read_only_precondition"}]}

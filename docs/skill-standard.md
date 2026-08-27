@@ -69,3 +69,19 @@ Skill 变更完成前必须：
 5. `repo-pedant` closeout 为每个受影响项目记录 memory inventory：绑定路径、已检查但未发现的具体 surface，或带原因的 hold；`unresolved` 不能完成。
 
 未通过的外部或既存限制可以成为具名 hold；本次修改制造的失败不能包装成完成。
+
+## 7. v10 resilience contracts (machine-testable)
+
+The following contracts are mandatory and are validated from Markdown by executable
+tests. Phase0P raw pre-write binding is captured outside the repository before any
+bootstrap write. Bootstrap and later evidence are bound to a trusted bootstrap/Python
+identity, and the repository-root `.gitignore` source is the only valid ignore proof.
+The root evidence owner and each skill owner remain split; in particular the root/skill
+owner split is preserved and detector/decision/audit-chain separation is required.
+
+Receipt hashes prove embedded integrity and internal consistency only. They do not prove
+origin/authenticity/immutable history. Completion supports complete-with-holds, but a
+visual gate remains required wherever the contract declares one. Super identity uses
+deterministic read-only Super classification/freeze; no hook may execute discovered
+commands. Markdown-to-machine executable validation keeps this contract synchronized
+with tests rather than relying on prose-only claims.

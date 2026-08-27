@@ -15,10 +15,14 @@ AZHOU_SKILL_NAMES = (
     "azhou-setup",
     "azhou-verify",
 )
+LAVISH_DIR = ROOT / "skills" / "lavish"
+LLM_WIKI_DIR = ROOT / "skills" / "llm-wiki"
 SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
 SKILL_DIRS = (
     SKILL_DIR,
     ROOT / "skills" / "excalidraw-diagram",
+    LAVISH_DIR,
+    LLM_WIKI_DIR,
     SUPER_CAVEMAN_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
 )
@@ -83,6 +87,59 @@ class SkillPackageTest(unittest.TestCase):
             package = ROOT / "skills" / name
             self.assertTrue((package / "SKILL.md").is_file(), name)
             self.assertTrue((package / "references" / "setup.md").is_file(), name)
+
+    def test_lavish_import_is_locked_and_capability_mapped(self) -> None:
+        skill = (LAVISH_DIR / "SKILL.md").read_text(encoding="utf-8")
+        setup = (LAVISH_DIR / "references" / "setup.md").read_text(encoding="utf-8")
+        provenance = (LAVISH_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+        compatibility = (LAVISH_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
+        brand = (LAVISH_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
+
+        self.assertIn("lavish-axi@0.1.47", skill)
+        self.assertNotIn("npx -y lavish-axi ", skill)
+        self.assertIn("Node 22+", setup)
+        self.assertIn("232972beba9e0e4e75682c98f2aeb2cf01532122", provenance)
+        self.assertIn("7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857", provenance)
+        self.assertIn("sha512-zB1kEUSgyvi6sC3I/nBPCGZwO8Z5pt8I2/ltFcovC8R+PuzRwJUb5V4BWMWnaPdXVBPH07B7XoBKKBf28733kg==", provenance)
+        for capability in (
+            "Foreground long-poll",
+            "Mermaid-to-editable-Excalidraw",
+            "Portable standalone export",
+            "ht-ml.app",
+            "design-source priority",
+        ):
+            self.assertIn(capability, compatibility)
+        self.assertIn("lavish.receipt.v1", brand)
+        self.assertIn("Do not run `share` without explicit publication authorization", skill)
+
+    def test_lavish_license_and_notice_are_retained(self) -> None:
+        license_text = (ROOT / "LICENSES" / "Lavish-AXI-MIT.txt").read_text(encoding="utf-8")
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2026 Kun Chen", license_text)
+        self.assertIn("Lavish Editor", notices)
+        self.assertIn("Lavish-AXI-MIT.txt", notices)
+
+    def test_llm_wiki_import_is_mapped_and_harness_neutral(self) -> None:
+        skill = (LLM_WIKI_DIR / "SKILL.md").read_text(encoding="utf-8")
+        compatibility = (LLM_WIKI_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
+        provenance = (LLM_WIKI_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+        brand = (LLM_WIKI_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        script = (LLM_WIKI_DIR / "scripts" / "llm_wiki.py").read_text(encoding="utf-8")
+
+        for operation in ("wiki_ingest", "wiki_query", "wiki_lint", "wiki_add", "wiki_list", "wiki_read", "wiki_delete"):
+            self.assertIn(operation, compatibility)
+        self.assertIn("deee3a446dadc9bfea31cdc8b19b00b16718082e", provenance)
+        self.assertIn("llm-wiki.receipt.v1", brand)
+        self.assertIn("autoCapture` defaults to false", skill)
+        self.assertIn('DEFAULT_STORE = ".llm-wiki"', script)
+        self.assertNotIn("@anthropic-ai", script)
+
+    def test_llm_wiki_license_and_notice_are_retained(self) -> None:
+        license_text = (ROOT / "LICENSES" / "oh-my-claudecode-MIT.txt").read_text(encoding="utf-8")
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2025 Yeachan Heo", license_text)
+        self.assertIn("oh-my-claudecode", notices)
+        self.assertIn("oh-my-claudecode-MIT.txt", notices)
 
     def test_super_caveman_extends_core_with_six_companions(self) -> None:
         skill = (SUPER_CAVEMAN_DIR / "SKILL.md").read_text(encoding="utf-8")

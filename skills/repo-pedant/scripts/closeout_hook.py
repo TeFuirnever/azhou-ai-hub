@@ -18,6 +18,7 @@ REMINDER = "🟡 阿舟提醒｜Repo Pedant 收尾尚未完成。完成当前收
 PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜存在未记录的 Repo Pedant 进展。压缩前写入 inventory 或 receipt。"
 VALID_STATUSES = {"needs_closeout", "active", "complete", "held"}
 STATE_FIELDS = {"schema_version", "repo_root", "session_id", "status", "progress", "unrecorded_progress", "receipt_digest"}
+MAX_CONTROL_OUTPUT_BYTES = 512
 
 
 class HookError(ValueError):
@@ -130,6 +131,17 @@ def fixed_output(message: str, output_format: str, *, block: bool = False) -> st
     return json.dumps({"systemMessage": message}, separators=(",", ":"))
 
 
+def bounded_output(value: object) -> bytes:
+    """Return one complete UTF-8 line, or no bytes when it cannot fit safely."""
+    if not isinstance(value, str) or not value:
+        return b""
+    try:
+        payload = value.encode("utf-8") + b"\n"
+    except (UnicodeError, TypeError):
+        return b""
+    return payload if len(payload) <= MAX_CONTROL_OUTPUT_BYTES else b""
+
+
 def evaluate_event(args: argparse.Namespace, hook_input: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     workspace = args.workspace.expanduser().resolve()
     state, state_errors = load_closeout_state(workspace, args.state)
@@ -191,8 +203,13 @@ def cmd_event(args: argparse.Namespace) -> int:
     except (HookError, OSError, ValueError):
         return 0
     diagnostic["truncated_input"] = truncated
-    if output:
-        print(output)
+    payload = bounded_output(output)
+    if payload:
+        try:
+            sys.stdout.buffer.write(payload)
+            sys.stdout.buffer.flush()
+        except (OSError, AttributeError):
+            return 0
     if args.diagnostic:
         print(json.dumps(diagnostic, ensure_ascii=False, separators=(",", ":")), file=sys.stderr)
     return 0

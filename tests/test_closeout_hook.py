@@ -131,6 +131,30 @@ class CloseoutHookTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"REPO_PEDANT_DISABLED": "1"}):
             self.assertEqual(0, MODULE.cmd_event(args))
 
+    def test_bounded_output_includes_newline_and_rejects_oversize_without_truncation(self) -> None:
+        self.assertEqual(512, MODULE.MAX_CONTROL_OUTPUT_BYTES)
+        self.assertEqual(512, len(("x" * 511 + "\n").encode("utf-8")))
+        self.assertEqual(512, len(MODULE.bounded_output("x" * 511)))
+        self.assertEqual(b"", MODULE.bounded_output("x" * 512))
+        self.assertEqual(b"", MODULE.bounded_output(""))
+
+    def test_bounded_output_counts_multibyte_utf8(self) -> None:
+        value = "🦊" * 127 + "x"  # 509 bytes; newline makes 510.
+        payload = MODULE.bounded_output(value)
+        self.assertEqual(value.encode("utf-8") + b"\n", payload)
+        self.assertEqual(b"", MODULE.bounded_output(value + "🦊"))
+
+    def test_codex_stop_is_advisory_reentry_not_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            self.write_state(workspace)
+            args = self.args(workspace, workspace / "cache", mode="gate", format="codex")
+            first, first_diagnostic = MODULE.evaluate_event(args, {})
+            second, second_diagnostic = MODULE.evaluate_event(args, {})
+            self.assertEqual("advisory", first_diagnostic["action"])
+            self.assertEqual("advisory", second_diagnostic["action"])
+            self.assertEqual(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()

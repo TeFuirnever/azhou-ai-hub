@@ -16,6 +16,16 @@ Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtim
 
 \`skills/repo-pedant/\` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
 
+## LLM Wiki
+
+`skills/llm-wiki/` is a Python standard-library adaptation of the LLM Wiki implementation in [Yeachan-Heo/oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) at commit [`deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/commit/deee3a446dadc9bfea31cdc8b19b00b16718082e), audited as package version `4.14.6`.
+
+- Copyright: Yeachan Heo
+- License: [MIT](LICENSES/oh-my-claudecode-MIT.txt)
+- Adaptation boundary: Markdown page schema, seven wiki operations, keyword/CJK search, append merge, lint, catalog, operation log, locking and lifecycle concepts. Claude- and oh-my-claudecode-specific integration is replaced by a neutral CLI and optional adapter.
+
+The upstream comments credit the persistent self-maintained wiki concept to Andrej Karpathy. This repository does not redistribute Karpathy-authored code or text.
+
 ## Super Caveman
 
 `skills/super-caveman/` enhances the original Caveman Agent Skill with six companion skills from [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) at immutable commit [`11ddc0c9813c8f75365cd5be2f753df08712f154`](https://github.com/JuliusBrussee/caveman/commit/11ddc0c9813c8f75365cd5be2f753df08712f154).
@@ -55,6 +65,17 @@ Font redistribution notices ship beside the fonts:
 - [Excalifont SIL Open Font License 1.1](skills/excalidraw-diagram/references/Excalifont-LICENSE.md)
 
 The vendored \`excalidraw-all.esm.js\` retains its generated bundled-license block, including notices for React, pako, fonteditor-core, harfbuzzjs, pica, DOMPurify, Mermaid and other bundled dependencies. Do not strip that block when rebuilding the file.
+
+## Lavish Editor
+
+`skills/lavish/` adapts the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`232972beba9e0e4e75682c98f2aeb2cf01532122`](https://github.com/kunchenguid/lavish-axi/commit/232972beba9e0e4e75682c98f2aeb2cf01532122). The imported local file is byte-identical to that upstream source before Azhou adaptation.
+
+- Copyright: Kun Chen, 2026
+- License: [MIT](LICENSES/Lavish-AXI-MIT.txt)
+- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored
+- Local changes: neutral frontmatter, locked CLI baseline, setup/provenance/compatibility records, explicit authorization checkpoints and an Azhou receipt
+
+`lavish-axi` remains an external npm runtime dependency. `ht-ml.app` sharing is a third-party publication action, not a bundled or repository-operated service.
 
 ## Public prior art excluded from distribution
 

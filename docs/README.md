@@ -7,6 +7,8 @@
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try Repo Pedant in 60 seconds | [Repo Pedant demo](demos/repo-pedant.md) |
 | Try Excalidraw Diagram in 60 seconds | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
+| Understand the Lavish runtime and review loop | [Lavish package](../skills/lavish/SKILL.md) |
+| Build or inspect persistent project knowledge | [LLM Wiki package](../skills/llm-wiki/SKILL.md) |
 | Use action-first terse response, commit, review or compression workflows | [Super Caveman package](../skills/super-caveman/SKILL.md) |
 | Know what each harness really supports | [Support matrix](support-matrix.md) |
 | Understand repository boundaries | [Architecture](architecture.md) |

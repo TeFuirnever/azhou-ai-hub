@@ -1,5 +1,22 @@
 # Detailed design system
 
+## Deterministic overlap evidence
+
+The detector and receipt schemas are closed: unknown fields, duplicate issue
+identities, malformed roles/evidence, invalid sidecar suffixes, and illegal
+round transitions fail before state handling. `validate-markdown` validates the
+machine receipt first, then resolves relative paths against the Markdown file's
+directory and checks the unique marker, sidecar digest, and status.
+
+The overlap detector emits `excalidraw.overlap-audit.v1` records. Canonical
+UTF-8 JSON is sorted and compact, and the only permitted detached companion is
+`<record>.json.sha256`. The repair loop is bounded to four rounds and three
+edits; its decision relation is Pareto-based over issue identity and severity.
+Receipts prove byte/sidecar agreement and internal replay only. They do not
+establish authenticity, provenance, non-repudiation, trusted origin, tamper
+proofness, or immutable history. External signatures, logs, anchors, and
+trusted timestamps remain out of scope.
+
 ## Large / Comprehensive Diagram Strategy
 
 **For comprehensive or technical diagrams, you MUST build the JSON one section at a time.** Do NOT attempt to generate the entire file in a single pass. This is a hard constraint: comprehensive diagrams can exceed common agent response budgets, and one-pass generation leads to worse quality. Section-by-section is better in every way.

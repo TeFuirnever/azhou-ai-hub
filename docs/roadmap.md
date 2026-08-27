@@ -15,6 +15,7 @@ Roadmap items describe outcomes, not promises. Accepted work moves to a GitHub i
 
 ## Later
 
+- Add a Claude Code lifecycle adapter only after a separate host contract, deterministic adapter checks, a real-host smoke, frozen behavior evaluation, and fresh exact-diff approval.
 - Add more independently installable skills under the same standard.
 - Generate SBOM/provenance artifacts when the project ships downloadable release artifacts, not before.
 - Add a documentation site only when repository Markdown is no longer sufficient; the repository remains the authority.

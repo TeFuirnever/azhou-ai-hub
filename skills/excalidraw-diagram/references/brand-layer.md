@@ -1,5 +1,10 @@
 # 阿舟品牌层
 
+Machine overlap receipts retain the existing `excalidraw-diagram.receipt.v1`
+marker. The machine receipt is evidence of current bytes, detached sidecar
+agreement, and internal chain replay; it is not a provenance or authenticity
+claim. External signatures and append-only anchors are roadmap items.
+
 Excalidraw Diagram 的品牌感来自清楚、克制、可验证的作图过程。品牌层只标注阶段、判断和边界；不替代设计方法、产物或验证证据。
 
 ## 固定锚点

@@ -58,6 +58,8 @@ REQUIRED_PATHS = (
     "scripts/azhou_hub.py",
     "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
+    "skills/lavish/SKILL.md",
+    "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 )
 
@@ -68,6 +70,8 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-info/SKILL.md",
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
+    "skills/lavish/SKILL.md",
+    "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 }
 

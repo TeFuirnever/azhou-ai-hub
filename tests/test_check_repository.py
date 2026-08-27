@@ -25,6 +25,8 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "azhou-info" / "SKILL.md",
                 root / "skills" / "azhou-setup" / "SKILL.md",
                 root / "skills" / "azhou-verify" / "SKILL.md",
+                root / "skills" / "lavish" / "SKILL.md",
+                root / "skills" / "llm-wiki" / "SKILL.md",
                 root / "skills" / "repo-pedant" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
