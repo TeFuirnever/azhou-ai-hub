@@ -1,0 +1,378 @@
+from __future__ import annotations
+
+import io
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL = ROOT / "skills" / "llm-wiki"
+SCRIPTS = SKILL / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import llm_wiki  # noqa: E402
+import llm_wiki_adapter  # noqa: E402
+import llm_wiki_mcp  # noqa: E402
+
+
+FORBIDDEN_PRODUCT_TERMS = re.compile(
+    r"(?:\bo[m]c\b|\.o[m]c(?:/|\b)|oh-my-clau[d]ecode|clau[d]e|co[d]ex|upstrea[m]|lega[c]y)",
+    re.IGNORECASE,
+)
+
+
+def llm_wiki_public_fragments(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    if path.name.startswith("README"):
+        parts = [line for line in text.splitlines() if "LLM Wiki" in line]
+        marker = "## LLM Wiki"
+        if marker in text:
+            section = text.split(marker, 1)[1].split("\n## ", 1)[0]
+            parts.append(section)
+        return "\n".join(parts)
+    if path.name == "support-matrix.md":
+        return "\n".join(line for line in text.splitlines() if line.startswith("| LLM Wiki"))
+    if path.name == "installation.md":
+        lines = text.splitlines()
+        return "\n".join(
+            "\n".join(lines[index : index + 2])
+            for index, line in enumerate(lines)
+            if "LLM Wiki" in line
+        )
+    return "\n".join(line for line in text.splitlines() if "llm-wiki" in line.lower())
+
+
+class LLMWikiProductionTests(unittest.TestCase):
+    def test_product_surface_has_no_host_or_historical_terms(self) -> None:
+        violations: list[str] = []
+        for path in sorted(SKILL.rglob("*")):
+            if not path.is_file() or path.suffix not in {".md", ".py"}:
+                continue
+            if path == SKILL / "references" / "provenance.md":
+                continue
+            relative = path.relative_to(ROOT).as_posix()
+            if FORBIDDEN_PRODUCT_TERMS.search(relative):
+                violations.append(f"path:{relative}")
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if FORBIDDEN_PRODUCT_TERMS.search(line):
+                    violations.append(f"{relative}:{line_number}")
+
+        for path in sorted(ROOT.glob("tests/test_llm_wiki*.py")):
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "FORBIDDEN_PRODUCT_TERMS" in line or line.lstrip().startswith("r\""):
+                    continue
+                if FORBIDDEN_PRODUCT_TERMS.search(line):
+                    violations.append(f"{path.relative_to(ROOT)}:{line_number}")
+
+        for relative in (
+            "README.md",
+            "README.zh-CN.md",
+            "docs/installation.md",
+            "docs/support-matrix.md",
+            "CHANGELOG.md",
+        ):
+            path = ROOT / relative
+            fragment = llm_wiki_public_fragments(path)
+            if FORBIDDEN_PRODUCT_TERMS.search(fragment):
+                violations.append(relative)
+
+        self.assertEqual([], violations)
+
+    def test_all_runtime_entrypoints_use_one_canonical_store(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.init()
+            result = llm_wiki_mcp.call_tool(
+                "wiki_add",
+                {
+                    "workingDirectory": str(root),
+                    "title": "Canonical Store",
+                    "content": "One path for every entrypoint.",
+                },
+            )
+            self.assertNotIn("isError", result)
+            event = json.dumps({"cwd": str(root)})
+            started = llm_wiki_adapter.run_host_hook("session-start", event)
+            self.assertEqual("SessionStart", started["hookSpecificOutput"]["hookEventName"])
+            self.assertEqual(".llm-wiki", llm_wiki.DEFAULT_STORE)
+            self.assertTrue((root / ".llm-wiki" / "canonical-store.md").is_file())
+            self.assertEqual([root / ".llm-wiki"], [path for path in root.iterdir() if path.is_dir()])
+
+    def test_lifecycle_refreshes_project_context_and_capture_is_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.add(
+                title="Lifecycle",
+                content="Hooks use the canonical store.",
+                tags=[],
+                category="architecture",
+                sources=[],
+                confidence="high",
+            )
+            (store.directory / "project-context.json").write_text(
+                json.dumps(
+                    {
+                        "lastScanned": "2030-01-01T00:00:00Z",
+                        "techStack": {"languages": [{"name": "Python"}], "frameworks": ["unittest"]},
+                        "build": {"test": "python3 scripts/verify.py"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (store.directory / "index.md").unlink()
+            event = json.dumps({"cwd": str(root), "session_id": "session-12345678"})
+            llm_wiki_adapter.run_host_hook("session-start", event)
+            self.assertTrue((store.directory / "index.md").is_file())
+            self.assertIn("Python", (store.directory / "environment.md").read_text(encoding="utf-8"))
+
+            llm_wiki_adapter.run_host_hook("session-end", event)
+            self.assertEqual([], list(store.directory.glob("session-log-*.md")))
+            store.set_auto_capture(True)
+            llm_wiki_adapter.run_host_hook("session-end", event)
+            self.assertEqual(1, len(list(store.directory.glob("session-log-*.md"))))
+
+    def test_generic_migration_is_dry_run_atomic_idempotent_and_preserves_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = llm_wiki.WikiStore(root, ".previous-wiki")
+            source.add(
+                title="Migrated Decision",
+                content="Preserve verified data.",
+                tags=["migration"],
+                category="decision",
+                sources=["e2e"],
+                confidence="high",
+            )
+            source.set_auto_capture(True)
+
+            planned = llm_wiki.migrate_store(root, ".previous-wiki", apply=False)
+            self.assertEqual("planned", planned["status"])
+            self.assertFalse((root / ".llm-wiki").exists())
+
+            migrated = llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+            self.assertEqual("migrated", migrated["status"])
+            self.assertTrue((source.directory / "migrated-decision.md").is_file())
+            target = llm_wiki.WikiStore(root)
+            self.assertTrue((target.directory / "migrated-decision.md").is_file())
+            self.assertFalse(target.config()["autoCapture"])
+
+            repeated = llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+            self.assertEqual("already-current", repeated["status"])
+
+            (target.directory / "migrated-decision.md").write_text("conflict", encoding="utf-8")
+            with self.assertRaises(llm_wiki.WikiError):
+                llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+
+    def test_migration_rejects_unsafe_sources_and_cleans_failed_staging(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            for case, entry in (("unknown", "payload.bin"), ("active", ".wiki-lock")):
+                root = parent / case
+                root.mkdir()
+                source = llm_wiki.WikiStore(root, ".source")
+                source.add(
+                    title="Safe Page",
+                    content="Verified source.",
+                    tags=[],
+                    category="reference",
+                    sources=[],
+                    confidence="high",
+                )
+                (source.directory / entry).write_text("blocked\n", encoding="utf-8")
+                with self.assertRaises(llm_wiki.WikiError):
+                    llm_wiki.migrate_store(root, ".source", apply=True)
+                self.assertFalse((root / ".llm-wiki").exists())
+
+            root = parent / "interrupted"
+            root.mkdir()
+            source = llm_wiki.WikiStore(root, ".source")
+            source.add(
+                title="Atomic Page",
+                content="Publish as one directory.",
+                tags=[],
+                category="reference",
+                sources=[],
+                confidence="high",
+            )
+            target = root.resolve() / ".llm-wiki"
+            real_replace = llm_wiki.os.replace
+
+            def fail_publish(source_path: Path | str, target_path: Path | str) -> None:
+                if Path(target_path) == target:
+                    raise OSError("simulated publish interruption")
+                real_replace(source_path, target_path)
+
+            with mock.patch.object(llm_wiki.os, "replace", side_effect=fail_publish):
+                with self.assertRaises(OSError):
+                    llm_wiki.migrate_store(root, ".source", apply=True)
+            self.assertFalse(target.exists())
+            self.assertEqual([], list(root.glob(".llm-wiki-migration-*")))
+            self.assertTrue((source.directory / "atomic-page.md").is_file())
+
+    def test_generic_adapter_cli_and_assets_are_host_neutral(self) -> None:
+        hooks = llm_wiki_adapter.render_hooks(SKILL, Path(sys.executable))
+        self.assertEqual({"SessionStart", "PreCompact", "SessionEnd"}, set(hooks["hooks"]))
+        mcp = llm_wiki_adapter.render_mcp_config(SKILL, Path(sys.executable))
+        self.assertEqual(str(SCRIPTS / "llm_wiki_mcp.py"), mcp["mcpServers"]["llm-wiki"]["args"][0])
+        command = (SKILL / "assets" / "host" / "commands" / "wiki.md").read_text(encoding="utf-8")
+        self.assertIn("/llm-wiki", command)
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = llm_wiki_adapter.main(["trigger", "wiki query"])
+        self.assertEqual(0, code)
+        self.assertTrue(json.loads(output.getvalue())["matched"])
+
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "llm_wiki_adapter.py"), "host-hook", "session-start"],
+            input=json.dumps({"cwd": str(ROOT)}),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(True, json.loads(completed.stdout)["continue"])
+
+    def test_real_process_e2e_covers_cli_mcp_and_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            common = {"workingDirectory": str(root)}
+            calls = [
+                ("wiki_add", {**common, "title": "Process Page", "content": "Initial fact."}),
+                (
+                    "wiki_ingest",
+                    {
+                        **common,
+                        "title": "Process Page",
+                        "content": "Verified update.",
+                        "tags": ["e2e"],
+                        "category": "reference",
+                    },
+                ),
+                ("wiki_query", {**common, "query": "verified"}),
+                ("wiki_lint", common),
+                ("wiki_list", common),
+                ("wiki_read", {**common, "page": "process-page"}),
+                ("wiki_delete", {**common, "page": "process-page", "confirm": True}),
+            ]
+            requests = [
+                {
+                    "jsonrpc": "2.0",
+                    "id": index,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments},
+                }
+                for index, (name, arguments) in enumerate(calls, 1)
+            ]
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
+                input="\n".join(json.dumps(request) for request in requests) + "\n",
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            responses = [json.loads(line) for line in completed.stdout.splitlines()]
+            self.assertEqual(7, len(responses))
+            self.assertTrue(all("isError" not in response["result"] for response in responses))
+            self.assertFalse((root / ".llm-wiki" / "process-page.md").exists())
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "llm_wiki.py"),
+                    "--root",
+                    str(root),
+                    "add",
+                    "--title",
+                    "Lifecycle Page",
+                    "--content",
+                    "Lifecycle context.",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            event = json.dumps({"cwd": str(root), "session_id": "private-process-id"})
+
+            def run_event(name: str) -> dict[str, object]:
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPTS / "llm_wiki_adapter.py"), "host-hook", name],
+                    input=event,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                )
+                return json.loads(result.stdout)
+
+            self.assertIn("hookSpecificOutput", run_event("session-start"))
+            self.assertIn("systemMessage", run_event("pre-compact"))
+            self.assertEqual({"continue": True}, run_event("session-end"))
+            self.assertEqual([], list((root / ".llm-wiki").glob("session-log-*.md")))
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "llm_wiki.py"),
+                    "--root",
+                    str(root),
+                    "config",
+                    "--auto-capture",
+                    "true",
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual({"continue": True}, run_event("session-end"))
+            session_page = next((root / ".llm-wiki").glob("session-log-*.md"))
+            self.assertNotIn("private-process-id", session_page.read_text(encoding="utf-8"))
+            self.assertEqual([root / ".llm-wiki"], [path for path in root.iterdir() if path.is_dir()])
+
+    def test_machine_receipt_is_complete_and_emoji_free(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commands = (
+                (["init"], 0, "pass", "none"),
+                (["delete", "missing-page"], 3, "hold", "deletion"),
+                (["context"], 0, "skipped", "retrieval"),
+                (["read", "missing-page"], 2, "fail", "scope"),
+            )
+            emoji = ("🦊", "🧭", "🔎", "📝", "📦", "🧪", "✅", "❌", "🔒")
+            for arguments, returncode, status, learning_signal in commands:
+                completed = subprocess.run(
+                    [sys.executable, str(SCRIPTS / "llm_wiki.py"), "--root", str(root), *arguments],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(returncode, completed.returncode)
+                receipt = json.loads(completed.stdout)
+                self.assertEqual("llm-wiki.receipt.v2", receipt["schema"])
+                self.assertEqual(status, receipt["status"])
+                self.assertTrue(receipt["currentTruth"])
+                self.assertEqual(learning_signal, receipt["learningSignal"])
+                self.assertTrue(all(marker not in completed.stdout for marker in emoji))
+
+    def test_design_document_covers_production_boundaries(self) -> None:
+        design = (SKILL / "references" / "design.md").read_text(encoding="utf-8")
+        for requirement in (
+            "Canonical store",
+            "Trust boundaries",
+            "Failure modes",
+            "Migration and rollback",
+            "Production gates",
+        ):
+            self.assertIn(requirement, design)
+
+
+if __name__ == "__main__":
+    unittest.main()

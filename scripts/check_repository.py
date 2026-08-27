@@ -58,6 +58,7 @@ REQUIRED_PATHS = (
     "scripts/azhou_hub.py",
     "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
+    "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 )
 
@@ -69,6 +70,9 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
+}
+REPOSITORY_EXTENSION_SKILL_PATHS = {
+    "skills/llm-wiki/SKILL.md",
 }
 
 BASELINE_HASHES = {
@@ -87,7 +91,8 @@ def public_files(root: Path = ROOT) -> list[Path]:
         capture_output=True,
     )
     names = [item for item in result.stdout.decode().split("\0") if item]
-    return [root / name for name in sorted(set(names))]
+    paths = [root / name for name in sorted(set(names))]
+    return [path for path in paths if path.exists() or path.is_symlink()]
 
 
 def check_required(root: Path) -> list[str]:
@@ -118,8 +123,12 @@ def check_treehouse_config(root: Path) -> list[str]:
 
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"}
-    errors = [f"installable skill missing: {path}" for path in sorted(INSTALLABLE_SKILL_PATHS - actual)]
-    errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - INSTALLABLE_SKILL_PATHS))
+    repository_extensions = {
+        path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
+    }
+    expected = INSTALLABLE_SKILL_PATHS | repository_extensions
+    errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
+    errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
     return errors
 
 

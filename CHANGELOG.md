@@ -6,6 +6,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Added `llm-wiki`, a neutral private Markdown knowledge base with one canonical store, seven-tool stdio MCP, explicit lifecycle/trigger/command adapters, reviewed project context, atomic source-preserving migration, Azhou stage anchors, receipt v2 and deterministic production gates.
 - Added harness-neutral `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify` Agent Skills that delegate to the repository Foundation CLI without host-specific runtime copies.
 - Added a zero-dependency foundation CLI with `info`, `version`, read-only `doctor`, dry-run-first scoped `setup`, stable JSON/exit codes and delegation to the canonical repository verifier.
 - Added opt-in, single-skill checkout lifecycle receipts with fail-closed `repair`, same-target `migrate`, `uninstall`, and read-only Treehouse lease diagnostics.

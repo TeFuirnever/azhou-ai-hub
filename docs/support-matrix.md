@@ -4,7 +4,7 @@
 
 | Capability | Codex | Claude Code | zcode | Other compatible harnesses |
 |---|---|---|---|---|
-| Neutral package availability (repository surface) | seven canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
+| Neutral package availability (repository surface) | eight canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
 | Load canonical <code>SKILL.md</code> package | supported by a configured skill root | supported by a configured skill root | host-dependent; verify installation | host-dependent |
 | Azhou Info / Doctor / Setup / Verify Agent Skills | package available; Codex discovery/invocation is locally smoke-tested | package available; Claude discovery/invocation requires a fresh host receipt | package available; discovery/invocation not evidenced here | expected only for Agent Skills-compatible hosts with Python and checkout access; verify locally |
 | Foundation `info` / `version` / `doctor` / `setup` / public `verify` CLI | supported from a checkout with Python 3.11+ and an explicit skill root for setup | same neutral checkout CLI | same neutral checkout CLI when Python and a writable skill root exist | public verify needs no private evidence but still replays the approved exact diff; `--promotion-evidence` additionally authenticates two Git-external records |
@@ -16,6 +16,14 @@
 | Excalidraw local file generation | supported with filesystem tools | supported with filesystem tools | supported with filesystem tools | requires local file access |
 | Excalidraw offline render/export | supported after package dependencies | supported after package dependencies | supported after package dependencies | Python/Node/Chromium required |
 | Interactive MCP preview | optional, host/tool-specific | optional, host/tool-specific | not claimed | not claimed |
+| LLM Wiki manual operations | supported with Python 3.11+ and local file access | supported with Python 3.11+ and local file access | supported when the host loads the skill and permits local execution | Python 3.11+ and local file access required |
+| LLM Wiki canonical <code>.llm-wiki/</code> store | supported | supported | supported when local execution is permitted | Python 3.11+ and local file access required |
+| LLM Wiki stdio MCP | bundled server; explicit host configuration required | bundled server; explicit host configuration required | MCP transport must be verified | compatible MCP host and local Python execution required |
+| LLM Wiki lifecycle adapter | three-event adapter implemented; explicit wiring required | three-event adapter implemented; explicit wiring required | event contract must be verified | no claim without a tested adapter |
+| LLM Wiki project context refresh | reviewed local context file supported | reviewed local context file supported | host-independent filesystem behavior | no implicit host-memory claim |
+| LLM Wiki session metadata capture | opt-in; disabled by default | opt-in; disabled by default | host-dependent | no transcript capture claim |
+| LLM Wiki store migration | dry-run, atomic publish, source preservation and conflict rejection | same neutral core | same neutral core | local filesystem required |
+| LLM Wiki branded interaction | fixed Azhou anchors and receipt v2; machine output stays emoji-free | same portable contract | same portable contract | Unicode hosts may remove emoji without changing fields |
 | Super Caveman complete pinned ADHD-friendly response behavior, commit, review and help routes | current 19/19-case and 44/44-criterion behavior run plus 3/3 independent paired-judge candidate result and zero high-risk regressions; harness/model-specific | contract defined; equivalent behavior and promotion evidence required | host-dependent; no behavior evidence | host-dependent; no behavior evidence |
 | Super Caveman compact delegation | supported through available collaboration tools | supported through available subagents | host-dependent; named presets not claimed | host-dependent |
 | Super Caveman guarded file compression | supported with Python 3.10+ and local file access | supported with Python 3.10+ and local file access | same neutral core | Python 3.10+ and local file access required |
