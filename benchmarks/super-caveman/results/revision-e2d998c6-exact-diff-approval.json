@@ -1,5 +1,5 @@
 {
-  "schema": "super-caveman-exact-diff-approval-record.v1",
+  "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
   "approved_at": "2026-08-27T15:09:33Z",
@@ -7,6 +7,18 @@
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "04f3d873d278889534031225231245bf751b963be1733a3029b266d128df2163",
   "staged_patch_sha256": "7f1c3cefbc01795533a8d1d81359964f46826c0f2e47821dd6ab6e3e73201159",
+  "reviewed_blobs": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "old_oid": "f0921b6559198f6e958a0d14cf4bd733c7e76094",
+      "new_oid": "ccb0fe2f9be918efb5581ee7bd09e8aee221e4e8"
+    },
+    {
+      "path": "tests/test_check_repository.py",
+      "old_oid": "fcff5014290a943d5ff68430fac0c6e7fc2c3f88",
+      "new_oid": "77106e31274da179070c881271eece1ea48cb99a"
+    }
+  ],
   "raw_approval_record_sha256": "e8365b7bc9bf8846c3021bed4073529fe7de71d5cfd8dbfe6b7166acac4fe50e",
   "raw_approval_storage": "Git-external"
 }
