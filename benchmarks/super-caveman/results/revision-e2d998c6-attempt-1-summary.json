@@ -42,7 +42,7 @@
     "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
     "high_risk_regressions": 0,
     "exact_diff_human_approval": {
-      "schema": "super-caveman-exact-diff-approval.v1",
+      "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
       "base_commit": "62347fecb9789ac8f7159d1034b73b0dd5298881",
@@ -51,7 +51,7 @@
       "approver": "workspace-owner",
       "approved_at": "2026-08-27T15:09:33Z",
       "record_path": "results/revision-e2d998c6-exact-diff-approval.json",
-      "record_sha256": "1c264811f96546356f9eb87143d637c7bd5f407857ce46cb054f34b4417ad80f",
+      "record_sha256": "e408b8056063fe79072b97e56a8ff3268eac4ec0140abcfd63dd08f202120f54",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     },
     "judges": [
@@ -91,6 +91,7 @@
     "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
     "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
     "The exact-diff approval is rebound to the two-path CI history-fetch repair from 62347fecb9789ac8f7159d1034b73b0dd5298881; the aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+    "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ]
 }
