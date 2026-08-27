@@ -49,7 +49,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 | `azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
 | `azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 |
 | `azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
-| `azhou-verify` | `verify` | 运行唯一权威的全仓 gate，并保留其退出码。 |
+| `azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate；维护者可显式追加 promotion evidence 回放。 |
 
 ~~~bash
 python3 scripts/azhou_hub.py info --json
@@ -68,7 +68,7 @@ python3 scripts/azhou_hub.py verify
 | [Azhou Info](skills/azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
 | [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke 和 fail-closed target 检查。 |
 | [Azhou Setup](skills/azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
-| [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行并报告唯一权威的全仓验证 gate。 | 委派给已注册的仓库策略、单元测试、benchmark integrity 和空白检查。 |
+| [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行公开全仓完整性 gate，或显式执行维护者 promotion 回放。 | 委派给仓库策略、单元测试、benchmark integrity 和空白检查；promotion 模式额外要求 Git-external 证据。 |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
@@ -153,7 +153,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 python3 scripts/verify.py
 ~~~
 
-同一条命令检查仓库策略、全部单元测试、三套 benchmark 完整性和 Git 空白。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
+同一条命令不依赖私有输入，检查仓库策略、全部单元测试、三套公开 benchmark 完整性和 Git 空白。Super Caveman 的公开完整性检查仍会针对当前 staged 或 committed tree 重算已批准的 exact diff，因此已批准路径一旦变化，就必须取得新的 promotion evidence，不能静默通过。发布维护者在物化 Git-external 的 Super Caveman approval/review 记录后，额外运行 `python3 scripts/verify.py --promotion-evidence`；该模式验证原始 promotion evidence 的真实性，默认公开 gate 只验证仓内 receipt 和 exact diff，不声称完成外部认证。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
 
 ## 项目入口
 

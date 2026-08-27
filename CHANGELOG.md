@@ -17,6 +17,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- Split reproducible public repository verification from explicit maintainer promotion-evidence authentication, while keeping exact-diff replay mandatory in both modes and the Git-external Super Caveman approval gate fail-closed for releases.
+- Upgraded managed lifecycle receipts to v2 filesystem identities, added a genuine v1 byte-digest upgrade path for link and copy installs, rejected same-mode migration of drifted artifacts, prevented byte-identical replacement deletion, and made package digests executable-aware.
+- Added real managed lifecycle regression coverage for `repo-pedant`, `super-caveman`, and `excalidraw-diagram`.
 - Clarified that the four Foundation Skills are independently installable adapters, not standalone CLI copies, and added a bilingual install/command map guarded by a regression test.
 - Extended `info.v1` additively with the preferred `primary_commands` field while keeping the original `commands` field and schema discriminator stable.
 - Corrected the Excalidraw official-export example to use its positional CLI, locked `uv` environment and post-export style gate.

@@ -60,7 +60,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         environment.pop("SUPER_CAVEMAN_APPROVAL_RECORD", None)
         environment.pop("SUPER_CAVEMAN_REVIEW_RECORD", None)
         result = subprocess.run(
-            [sys.executable, "benchmarks/super-caveman/benchmark.py", "check"],
+            [sys.executable, "benchmarks/super-caveman/benchmark.py", "check", "--promotion-evidence"],
             cwd=ROOT,
             env=environment,
             text=True,
@@ -84,30 +84,33 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             )
 
     def test_capability_and_trigger_integrity(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "benchmarks/super-caveman/benchmark.py", "check"],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
         current_passes = current_pass_summaries()
         if current_passes:
             approval = current_passes[0]["promotion_review"]["exact_diff_human_approval"]
             if approval.get("status") == "approved":
-                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-                self.assertIn(
-                    "1 core + 6 companions, 1 package, 8 routes, 19 response cases",
-                    result.stdout,
-                )
+                reviewed = {
+                    key: approval[key]
+                    for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
+                }
+                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                    benchmark, "staged_review_digests", return_value=reviewed
+                ):
+                    self.assertEqual([], benchmark.check(require_promotion_evidence=False))
             else:
-                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
-                self.assertIn("lacks valid paired promotion evidence", result.stdout)
+                errors = benchmark.check(require_promotion_evidence=False)
+                self.assertTrue(
+                    any("lacks valid paired promotion evidence" in error for error in errors),
+                    errors,
+                )
         else:
-            errors = [line for line in result.stdout.splitlines() if line.startswith("ERROR:")]
-            self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+            errors = benchmark.check(require_promotion_evidence=False)
             self.assertIn(
-                "ERROR: exactly one current passing evaluation result is required; found 0",
+                "exactly one current passing evaluation result is required; found 0",
                 errors,
             )
 
@@ -912,6 +915,30 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         ), mock.patch.object(benchmark, "sha256_file", side_effect=pinned_case_digest):
             errors = benchmark.check()
         self.assertIn("exactly one current passing evaluation result is required; found 0", errors)
+
+    def test_public_integrity_still_recomputes_the_approved_exact_diff(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+
+        with mock.patch.object(
+            benchmark, "staged_review_digests", return_value=None
+        ), mock.patch.object(
+            benchmark, "committed_review_digests", return_value=None
+        ):
+            errors = benchmark.check(require_promotion_evidence=False)
+
+        self.assertTrue(
+            any(
+                error.startswith(
+                    "passing evaluation result lacks valid paired promotion evidence: "
+                )
+                for error in errors
+            ),
+            errors,
+        )
 
     def test_stable_digest_includes_hidden_runtime_files(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))

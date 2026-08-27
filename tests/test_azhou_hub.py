@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -12,6 +13,7 @@ import unittest
 from unittest import mock
 
 from scripts import azhou_hub
+from scripts import verify as verify_script
 
 
 AZHOU_SKILL_NAMES = (
@@ -54,6 +56,42 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(0, result, payload)
         self.assertEqual("pass", payload["status"])
         return root, target, receipt
+
+    def _legacy_package_digest(self, package: Path) -> str:
+        digest = hashlib.sha256()
+        for path in sorted(
+            (candidate for candidate in package.rglob("*") if candidate.is_file()),
+            key=lambda candidate: candidate.relative_to(package).as_posix(),
+        ):
+            digest.update(path.relative_to(package).as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+        return digest.hexdigest()
+
+    def _write_legacy_receipt(
+        self, receipt: Path, *, mode: str, source: Path, destination: Path
+    ) -> None:
+        legacy = json.loads(receipt.read_text(encoding="utf-8"))
+        source_digest = self._legacy_package_digest(source)
+        legacy["schema"] = "azhou-ai-hub.install-receipt.v1"
+        legacy["skills"][0].update(
+            {
+                "installed_identity": mode,
+                "source_digest": source_digest,
+                "installed_digest": (
+                    source_digest
+                    if mode == "link"
+                    else self._legacy_package_digest(destination)
+                ),
+            }
+        )
+        legacy.pop("integrity_digest")
+        canonical = json.dumps(
+            legacy, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        legacy["integrity_digest"] = hashlib.sha256(canonical).hexdigest()
+        receipt.write_text(json.dumps(legacy), encoding="utf-8")
 
     def test_info_json_exposes_stable_commands_and_installable_skills(self) -> None:
         stream = io.StringIO()
@@ -105,60 +143,72 @@ class AzhouHubCliTest(unittest.TestCase):
                 checks = {check["name"]: check for check in doctor["checks"]}
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
-    def test_super_caveman_real_package_completes_managed_lifecycle(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "skills"
-            receipt = target / ".azhou-ai-hub" / "receipts" / "super-caveman.json"
-            destination = target / "super-caveman"
+    def test_task_skill_real_packages_complete_managed_lifecycle(self) -> None:
+        for name in ("repo-pedant", "super-caveman", "excalidraw-diagram"):
+            with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
+                target = Path(directory) / "skills"
+                receipt = target / ".azhou-ai-hub" / "receipts" / f"{name}.json"
+                destination = target / name
 
-            result, setup = self._json_main(
-                [
-                    "setup", "--managed", "--receipt", str(receipt),
-                    "--skill", "super-caveman", "--target", str(target),
-                    "--mode", "copy", "--apply", "--json",
-                ]
-            )
-            self.assertEqual(0, result, setup)
-            self.assertEqual("pass", setup["status"])
-            self.assertTrue(destination.is_dir())
-            self.assertFalse(destination.is_symlink())
+                result, setup = self._json_main(
+                    [
+                        "setup", "--managed", "--receipt", str(receipt),
+                        "--skill", name, "--target", str(target),
+                        "--mode", "copy", "--apply", "--json",
+                    ]
+                )
+                self.assertEqual(0, result, setup)
+                self.assertEqual("pass", setup["status"])
+                self.assertTrue(destination.is_dir())
+                self.assertFalse(destination.is_symlink())
 
-            result, migrated = self._json_main(
-                [
-                    "migrate", "--receipt", str(receipt), "--target", str(target),
-                    "--mode", "link", "--apply", "--json",
-                ]
-            )
-            self.assertEqual(0, result, migrated)
-            self.assertEqual("pass", migrated["status"])
-            self.assertTrue(destination.is_symlink())
+                result, migrated = self._json_main(
+                    [
+                        "migrate", "--receipt", str(receipt), "--target", str(target),
+                        "--mode", "link", "--apply", "--json",
+                    ]
+                )
+                self.assertEqual(0, result, migrated)
+                self.assertEqual("pass", migrated["status"])
+                self.assertTrue(destination.is_symlink())
 
-            destination.unlink()
-            result, repaired = self._json_main(
-                [
-                    "repair", "--receipt", str(receipt), "--target", str(target),
-                    "--apply", "--json",
-                ]
-            )
-            self.assertEqual(0, result, repaired)
-            self.assertEqual("pass", repaired["status"])
-            self.assertTrue(destination.is_symlink())
+                destination.unlink()
+                result, repaired = self._json_main(
+                    [
+                        "repair", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ]
+                )
+                self.assertEqual(0, result, repaired)
+                self.assertEqual("pass", repaired["status"])
+                self.assertTrue(destination.is_symlink())
 
-            result, doctor = self._json_main(
-                ["doctor", "--skill", "super-caveman", "--target", str(target), "--json"]
-            )
-            self.assertEqual(0, result, doctor)
-            self.assertEqual("healthy", doctor["status"])
+                result, migrated = self._json_main(
+                    [
+                        "migrate", "--receipt", str(receipt), "--target", str(target),
+                        "--mode", "copy", "--apply", "--json",
+                    ]
+                )
+                self.assertEqual(0, result, migrated)
+                self.assertEqual("pass", migrated["status"])
+                self.assertTrue(destination.is_dir())
+                self.assertFalse(destination.is_symlink())
 
-            result, uninstalled = self._json_main(
-                [
-                    "uninstall", "--receipt", str(receipt), "--target", str(target),
-                    "--apply", "--json",
-                ]
-            )
-            self.assertEqual(0, result, uninstalled)
-            self.assertEqual("pass", uninstalled["status"])
-            self.assertFalse(destination.exists() or destination.is_symlink())
+                result, doctor = self._json_main(
+                    ["doctor", "--skill", name, "--target", str(target), "--json"]
+                )
+                self.assertEqual(0, result, doctor)
+                self.assertEqual("healthy", doctor["status"])
+
+                result, uninstalled = self._json_main(
+                    [
+                        "uninstall", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ]
+                )
+                self.assertEqual(0, result, uninstalled)
+                self.assertEqual("pass", uninstalled["status"])
+                self.assertFalse(destination.exists() or destination.is_symlink())
 
     def test_version_json_never_manufactures_a_release_version(self) -> None:
         stream = io.StringIO()
@@ -235,6 +285,29 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("fail", stale["status"])
             self.assertEqual("conflict", stale["skills"][0]["status"])
             self.assertEqual("version one\n", (target / "sample" / "SKILL.md").read_text(encoding="utf-8"))
+
+    def test_doctor_rejects_executable_permission_drift_in_a_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            executable = source / "run.sh"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            result, payload = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "copy", "--apply", "--json"],
+                root=root,
+            )
+            self.assertEqual(0, result, payload)
+            (target / "sample" / "run.sh").chmod(0o644)
+
+            result, payload = self._json_main(
+                ["doctor", "--skill", "sample", "--target", str(target), "--json"],
+                root=root,
+            )
+
+            self.assertEqual(1, result)
+            target_check = next(check for check in payload["checks"] if check["name"] == "target:sample")
+            self.assertEqual("fail", target_check["status"])
+            self.assertEqual("target contains different or unowned content", target_check["details"])
 
     def test_setup_dry_run_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -463,6 +536,49 @@ class AzhouHubCliTest(unittest.TestCase):
             check=False,
         )
 
+    def test_verify_promotion_flag_forwards_to_the_authoritative_gate(self) -> None:
+        completed = mock.Mock(returncode=0)
+        with mock.patch("scripts.azhou_hub.subprocess.run", return_value=completed) as run:
+            result = azhou_hub.main(
+                ["verify", "--python", "/custom/python", "--promotion-evidence"]
+            )
+
+        self.assertEqual(0, result)
+        run.assert_called_once_with(
+            [
+                "/custom/python",
+                str(azhou_hub.ROOT / "scripts/verify.py"),
+                "--python",
+                "/custom/python",
+                "--promotion-evidence",
+            ],
+            cwd=azhou_hub.ROOT,
+            check=False,
+        )
+
+    def test_authoritative_verify_scopes_promotion_evidence_to_the_promotion_gate(self) -> None:
+        completed = mock.Mock(returncode=0)
+        with mock.patch("scripts.verify.subprocess.run", return_value=completed) as run:
+            result = verify_script.main(
+                ["--python", "/custom/python", "--promotion-evidence"]
+            )
+
+        self.assertEqual(0, result)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertIn(
+            [
+                "/custom/python",
+                "benchmarks/super-caveman/benchmark.py",
+                "check",
+                "--promotion-evidence",
+            ],
+            commands,
+        )
+        self.assertIn(
+            ["/custom/python", "-m", "unittest", "discover", "-s", "tests"],
+            commands,
+        )
+
     def test_documented_direct_script_verify_invocation_does_not_require_package_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
@@ -577,7 +693,9 @@ class AzhouHubCliTest(unittest.TestCase):
             result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
             self.assertEqual(0, result)
             self.assertTrue(receipt.is_file())
-            self.assertEqual("azhou-ai-hub.install-receipt.v1", json.loads(receipt.read_text())["schema"])
+            receipt_payload = json.loads(receipt.read_text())
+            self.assertEqual("azhou-ai-hub.install-receipt.v2", receipt_payload["schema"])
+            self.assertEqual({"device", "inode", "mode"}, set(receipt_payload["skills"][0]["installed_identity"]))
             result, payload = self._json_main(["setup", "--managed", "--skill", "sample", "--target", str(Path(directory) / "other"), "--json"], root=root)
             self.assertEqual(1, result)
             self.assertEqual("fail", payload["status"])
@@ -793,6 +911,110 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("fail", payload["status"])
             self.assertTrue((target / "sample").is_dir())
 
+    def test_uninstall_refuses_a_byte_identical_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            installed = target / "sample"
+            shutil.rmtree(installed)
+            shutil.copytree(root / "skills" / "sample", installed)
+
+            result, payload = self._json_main(
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"],
+                root=root,
+            )
+
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            self.assertEqual("conflict", payload["skills"][0]["status"])
+            self.assertTrue((installed / "SKILL.md").is_file())
+
+    def test_repair_upgrades_genuine_legacy_receipt_digests_for_link_and_copy(self) -> None:
+        for mode in ("link", "copy"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root, target, receipt = self._managed_fixture(directory, mode=mode)
+                source = root / "skills" / "sample"
+                destination = target / "sample"
+                legacy_source_digest = self._legacy_package_digest(source)
+                self.assertNotEqual(legacy_source_digest, azhou_hub.package_digest(source))
+                self._write_legacy_receipt(
+                    receipt, mode=mode, source=source, destination=destination
+                )
+
+                result, payload = self._json_main(
+                    [
+                        "uninstall", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ],
+                    root=root,
+                )
+                self.assertEqual(1, result)
+                self.assertEqual("fail", payload["status"])
+
+                result, payload = self._json_main(
+                    [
+                        "repair", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ],
+                    root=root,
+                )
+                self.assertEqual(0, result, payload)
+                self.assertEqual("pass", payload["status"])
+                upgraded = json.loads(receipt.read_text(encoding="utf-8"))
+                item = upgraded["skills"][0]
+                self.assertEqual("azhou-ai-hub.install-receipt.v2", upgraded["schema"])
+                self.assertEqual({"device", "inode", "mode"}, set(item["installed_identity"]))
+                self.assertEqual(azhou_hub.package_digest(source), item["source_digest"])
+                expected_installed = (
+                    item["source_digest"] if mode == "link" else azhou_hub.package_digest(destination)
+                )
+                self.assertEqual(expected_installed, item["installed_digest"])
+
+                result, payload = self._json_main(
+                    [
+                        "uninstall", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ],
+                    root=root,
+                )
+                self.assertEqual(0, result, payload)
+                self.assertFalse(destination.exists() or destination.is_symlink())
+
+    def test_repair_recreates_a_missing_artifact_from_a_genuine_legacy_receipt(self) -> None:
+        for mode in ("link", "copy"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root, target, receipt = self._managed_fixture(directory, mode=mode)
+                source = root / "skills" / "sample"
+                destination = target / "sample"
+                self._write_legacy_receipt(
+                    receipt, mode=mode, source=source, destination=destination
+                )
+                if mode == "link":
+                    destination.unlink()
+                else:
+                    shutil.rmtree(destination)
+
+                result, payload = self._json_main(
+                    [
+                        "repair", "--receipt", str(receipt), "--target", str(target),
+                        "--apply", "--json",
+                    ],
+                    root=root,
+                )
+
+                self.assertEqual(0, result, payload)
+                self.assertEqual("pass", payload["status"])
+                self.assertTrue(destination.exists())
+                upgraded = json.loads(receipt.read_text(encoding="utf-8"))
+                item = upgraded["skills"][0]
+                self.assertEqual("azhou-ai-hub.install-receipt.v2", upgraded["schema"])
+                self.assertEqual(azhou_hub.package_digest(source), item["source_digest"])
+                expected_installed = (
+                    item["source_digest"]
+                    if mode == "link"
+                    else azhou_hub.package_digest(destination)
+                )
+                self.assertEqual(expected_installed, item["installed_digest"])
+
     def test_uninstall_refuses_identity_swap_after_preflight(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
@@ -830,6 +1052,24 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertTrue((target / "sample").is_dir())
             self.assertFalse((target / "sample").is_symlink())
             self.assertEqual("copy", json.loads(receipt.read_text(encoding="utf-8"))["mode"])
+
+    def test_migrate_same_mode_refuses_a_replaced_managed_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="link")
+            installed = target / "sample"
+            installed.unlink()
+            installed.mkdir()
+            (installed / "SKILL.md").write_text("owned by user\n", encoding="utf-8")
+
+            result, payload = self._json_main(
+                ["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "link", "--apply", "--json"],
+                root=root,
+            )
+
+            self.assertEqual(1, result)
+            self.assertEqual("fail", payload["status"])
+            self.assertEqual("conflict", payload["skills"][0]["status"])
+            self.assertEqual("owned by user\n", (installed / "SKILL.md").read_text(encoding="utf-8"))
 
     def test_migrate_failure_keeps_old_installation_or_reports_partial(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

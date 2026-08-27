@@ -20,12 +20,14 @@ python3 scripts/azhou_hub.py info --json
 python3 scripts/azhou_hub.py version --json
 python3 scripts/azhou_hub.py doctor --json
 python3 scripts/azhou_hub.py verify
+python3 scripts/azhou_hub.py verify --promotion-evidence
 ~~~
 
 - `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. The `azhou-ai-hub.info.v1` schema adds `primary_commands` as the preferred five-command field while retaining the original `commands` field with the same value; changing the schema discriminator requires an explicitly approved incompatible migration.
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
-- `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical packages, an optional install target and, with `--verify`, the complete deterministic gate.
-- `verify` delegates to `python3 scripts/verify.py` and preserves its exit code.
+- `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate.
+- `verify` delegates to `python3 scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, the current staged-or-committed Super Caveman exact diff, and Git whitespace without private evidence. Changes to approved paths fail closed until a fresh checked-in promotion receipt matches them.
+- `verify --promotion-evidence` is a maintainer/release gate. It additionally requires `SUPER_CAVEMAN_APPROVAL_RECORD` and `SUPER_CAVEMAN_REVIEW_RECORD` to name absolute, Git-external files and authenticates them against the same exact diff. Missing or invalid evidence fails closed.
 
 When a task is running inside a Treehouse pool, the doctor can also verify the explicit pool without changing its lease:
 
@@ -94,7 +96,9 @@ python3 scripts/azhou_hub.py setup \
   --json
 ~~~
 
-The receipt records the canonical source, source digest, explicit target, recomputed destination, installed identity and repository revision. Its integrity digest detects accidental corruption; it is not a signature and does not authenticate an untrusted file. Every later mutation also requires `--target` and independently revalidates the current canonical skill, source digest, destination boundary and installed artifact.
+The v2 receipt records the canonical source, source digest, explicit target, recomputed destination, repository revision, and the installed filesystem object's device, inode, and mode. Package digests include file bytes plus the normalized executable bit. Its integrity digest detects accidental corruption; it is not a signature and does not authenticate an untrusted file. Every later mutation also requires `--target` and independently revalidates the current canonical skill, source digest, destination boundary, executable intent, and installed object identity.
+
+Legacy `azhou-ai-hub.install-receipt.v1` files remain readable but cannot authorize migration or deletion because they did not record an object identity. Run `repair` without `--apply` to inspect the upgrade, then explicitly run `repair --apply`. The upgrade validates source and installed content with the original v1 byte digest, records the current object identity, and recomputes both executable-aware v2 digests before writing the receipt. Byte drift remains a conflict; v1 could not prove historical executable intent beyond the current canonical source.
 
 ~~~bash
 # Restore only a missing, receipt-owned artifact.
