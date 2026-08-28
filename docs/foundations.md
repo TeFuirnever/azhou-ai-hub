@@ -58,7 +58,7 @@ python3 scripts/azhou_hub.py setup \
   --skill repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
-  --apply \
+  --apply --plan-id '<reviewed-planId>' \
   --json
 
 python3 scripts/azhou_hub.py doctor \
@@ -93,6 +93,7 @@ python3 scripts/azhou_hub.py setup \
   --target "$SKILLS_HOME" \
   --mode link \
   --apply \
+  --plan-id '<reviewed-planId>' \
   --json
 ~~~
 
