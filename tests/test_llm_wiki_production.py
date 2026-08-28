@@ -160,6 +160,44 @@ class LLMWikiProductionTests(unittest.TestCase):
             llm_wiki_adapter.run_host_hook("session-end", event)
             self.assertEqual(1, len(list(store.directory.glob("session-log-*.md"))))
 
+    def test_config_type_matrix_and_host_fail_open_are_read_only(self) -> None:
+        invalid_values = {
+            "autoCapture": ["false", 1, None, [], {}],
+            "staleDays": ["30", 30.5, True, None, [], {}],
+            "maxPageSize": ["1024", 1024.5, True, None, [], {}],
+        }
+        for field, values in invalid_values.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    with tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        store = llm_wiki.WikiStore(root)
+                        store.add(title="Curated", content="keep", tags=[], category="reference", sources=[], confidence="medium")
+                        config = {"autoCapture": False, "staleDays": 30, "maxPageSize": 10240}
+                        config[field] = value
+                        (store.directory / "config.json").write_text(json.dumps(config), encoding="utf-8")
+                        before = {name: (store.directory / name).read_bytes() for name in ("index.md", "log.md")}
+                        result = llm_wiki_adapter.run_host_hook("session-end", json.dumps({"cwd": str(root), "session_id": "invalid-config"}))
+                        self.assertEqual({"continue": True, "suppressOutput": True}, result)
+                        self.assertEqual(before["index.md"], (store.directory / "index.md").read_bytes())
+                        self.assertEqual(before["log.md"], (store.directory / "log.md").read_bytes())
+                        self.assertEqual([], list(store.directory.glob("session-log-*.md")))
+
+    def test_valid_config_types_and_empty_or_curated_session_end(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.set_auto_capture(True)
+            (store.directory / "config.json").write_text(json.dumps({"autoCapture": True, "staleDays": 7, "maxPageSize": 2048}), encoding="utf-8")
+            self.assertEqual({"autoCapture": True, "staleDays": 7, "maxPageSize": 2048}, store.config())
+            _, receipt = llm_wiki.run_hook_event("session-end", store, {"cwd": str(root), "session_id": "empty"})
+            self.assertEqual("pass", receipt["status"])
+            self.assertTrue((store.directory / "index.md").is_file())
+            store.add(title="Curated", content="keep", tags=[], category="reference", sources=[], confidence="medium")
+            before_pages = len(store.pages())
+            llm_wiki.run_hook_event("session-end", store, {"cwd": str(root), "session_id": "curated"})
+            self.assertEqual(before_pages + 1, len(store.pages()))
+
     def test_generic_migration_is_dry_run_atomic_idempotent_and_preserves_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

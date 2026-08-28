@@ -70,6 +70,10 @@ class WikiError(Exception):
     """User-correctable wiki error."""
 
 
+class WikiConfigError(WikiError):
+    """The persisted wiki configuration has an invalid type or value."""
+
+
 class PermissionHold(WikiError):
     """Operation needs an explicit destructive-action acknowledgement."""
 
@@ -115,11 +119,30 @@ def js_string_hash(value: str) -> int:
 
 
 def title_to_slug(title: str) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:64]
+    stem = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    if len(stem) > 64:
+        return v2_title_slug(title, stem=stem)
+    base = stem
     if base:
         return f"{base}.md"
     hashed = abs(js_string_hash(title))
     return f"page-{hashed:08x}.md"
+
+
+def v2_title_slug(title: str, *, stem: str | None = None) -> str:
+    normalized = stem if stem is not None else re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    prefix = (normalized[:40] or "page")
+    digest = hashlib.sha256(title.encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}-v2-{digest}.md"
+
+
+def title_slug_candidates(title: str) -> list[str]:
+    stem = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    candidates = [title_to_slug(title)]
+    if stem:
+        candidates.append(f"{stem[:64]}.md")
+    candidates.append(v2_title_slug(title, stem=stem))
+    return unique(candidates)
 
 
 def tokenize(text: str) -> list[str]:
@@ -311,8 +334,29 @@ class WikiStore:
             return None
         try:
             return parse_frontmatter(path.read_text(encoding="utf-8"), filename)
-        except OSError:
+        except (OSError, UnicodeError):
             return None
+
+    def resolve_title(self, title: str) -> tuple[str, Page | None]:
+        """Resolve a title without renaming compatibility pages or merging collisions."""
+        candidates = title_slug_candidates(title)
+        existing: list[Page] = []
+        for filename in candidates:
+            page = self.read_page(filename)
+            if page is not None:
+                existing.append(page)
+        exact = [page for page in existing if page.title == title]
+        if len(exact) > 1:
+            raise WikiError(f"multiple wiki pages match title exactly: {title}")
+        if exact:
+            return exact[0].filename, exact[0]
+        if not existing:
+            return title_to_slug(title), None
+        v2 = v2_title_slug(title)
+        v2_page = next((page for page in existing if page.filename == v2), None)
+        if v2_page is not None and v2_page.title != title:
+            raise WikiError(f"v2 wiki slug belongs to another title: {v2}")
+        return v2, None
 
     def read_reserved_page(self, filename: str) -> Page | None:
         if filename not in RESERVED_FILES:
@@ -401,9 +445,11 @@ class WikiStore:
         confidence: str,
     ) -> Page:
         validate_input(title, category, confidence)
-        filename = title_to_slug(title)
         timestamp = now_iso()
         with self.lock():
+            filename, existing = self.resolve_title(title)
+            if existing is not None:
+                raise WikiError(f"page already exists: {filename}; use ingest to append")
             path = self.directory / filename
             if path.is_symlink():
                 raise WikiError(f"refusing symlinked wiki page: {path}")
@@ -416,7 +462,7 @@ class WikiStore:
                 created=timestamp,
                 updated=timestamp,
                 sources=unique(sources),
-                links=extract_links(content),
+                links=extract_links(content, self),
                 category=category,
                 confidence=confidence,
                 schema_version=SCHEMA_VERSION,
@@ -438,13 +484,12 @@ class WikiStore:
         confidence: str,
     ) -> tuple[Page, str]:
         validate_input(title, category, confidence)
-        filename = title_to_slug(title)
         timestamp = now_iso()
         with self.lock():
+            filename, existing = self.resolve_title(title)
             path = self.directory / filename
             if path.is_symlink():
                 raise WikiError(f"refusing symlinked wiki page: {path}")
-            existing = self.read_page(filename)
             if path.exists() and existing is None:
                 raise WikiError(f"refusing to overwrite invalid wiki page: {filename}")
             if existing is None:
@@ -455,7 +500,7 @@ class WikiStore:
                     created=timestamp,
                     updated=timestamp,
                     sources=unique(sources),
-                    links=extract_links(content),
+                    links=extract_links(content, self),
                     category=category,
                     confidence=confidence,
                     schema_version=SCHEMA_VERSION,
@@ -475,7 +520,7 @@ class WikiStore:
                     created=existing.created,
                     updated=timestamp,
                     sources=unique([*existing.sources, *sources]),
-                    links=unique([*existing.links, *extract_links(content)]),
+                    links=unique([*existing.links, *extract_links(content, self)]),
                     category=existing.category,
                     confidence=selected_confidence,
                     schema_version=existing.schema_version,
@@ -515,15 +560,9 @@ class WikiStore:
             return {"autoCapture": False, "staleDays": 30, "maxPageSize": 10_240}
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            raise WikiError(f"invalid wiki config: {path}") from exc
-        return {
-            "autoCapture": bool(value.get("autoCapture", False)),
-            "staleDays": int(value.get("staleDays", 30)),
-            "maxPageSize": int(value.get("maxPageSize", 10_240)),
-        }
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            raise WikiConfigError(f"invalid wiki config: {path}") from exc
+        return validate_config(value, source=str(path))
 
     def set_auto_capture(self, enabled: bool) -> dict[str, Any]:
         with self.lock():
@@ -542,8 +581,34 @@ def validate_input(title: str, category: str, confidence: str) -> None:
         raise WikiError(f"unsupported confidence: {confidence}")
 
 
-def extract_links(content: str) -> list[str]:
-    return unique(title_to_slug(match.strip()) for match in WIKI_LINK_RE.findall(content) if match.strip())
+def validate_config(value: Any, *, source: str = "wiki config") -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise WikiConfigError(f"invalid wiki config: {source} must contain an object")
+    auto_capture = value.get("autoCapture", False)
+    stale_days = value.get("staleDays", 30)
+    max_page_size = value.get("maxPageSize", 10_240)
+    if not isinstance(auto_capture, bool):
+        raise WikiConfigError(f"invalid wiki config: {source} autoCapture must be a boolean")
+    if any(not isinstance(item, int) or isinstance(item, bool) for item in (stale_days, max_page_size)):
+        raise WikiConfigError(f"invalid wiki config: {source} staleDays and maxPageSize must be integers")
+    if stale_days < 0:
+        raise WikiConfigError(f"invalid wiki config: {source} staleDays must be non-negative")
+    if max_page_size <= 0:
+        raise WikiConfigError(f"invalid wiki config: {source} maxPageSize must be positive")
+    return {"autoCapture": auto_capture, "staleDays": stale_days, "maxPageSize": max_page_size}
+
+
+def extract_links(content: str, store: WikiStore | None = None) -> list[str]:
+    links: list[str] = []
+    for match in WIKI_LINK_RE.findall(content):
+        title = match.strip()
+        if not title:
+            continue
+        if store is None:
+            links.append(title_to_slug(title))
+        else:
+            links.append(store.resolve_title(title)[0])
+    return unique(links)
 
 
 def query_pages(
@@ -931,13 +996,14 @@ def run_hook_event(
     )
     with store.lock(timeout=3.0):
         store.write_page_unsafe(page)
+        store.update_index_unsafe()
         store.append_log_unsafe("ingest", [filename], f"Auto-captured session log for {session_reference}")
     action = "created"
     return store, {
         "status": "pass",
         "result": {"event": event, "page": page.filename, "action": action},
-        "changes": [page.filename],
-        "verification": ["autoCapture=true"],
+        "changes": [page.filename, INDEX_FILE, LOG_FILE],
+        "verification": ["autoCapture=true", "page written", "index rebuilt", "operation logged"],
         "holds": [],
         "nextAction": "Review and promote durable findings with ingest.",
     }
@@ -972,20 +1038,10 @@ def migration_payload(root: Path, source_store: str) -> tuple[Path, dict[str, st
         if path.name == CONFIG_FILE:
             try:
                 config = json.loads(content)
-            except json.JSONDecodeError as exc:
-                raise WikiError("migration source has invalid config.json") from exc
-            if not isinstance(config, dict):
-                raise WikiError("migration source config.json must contain an object")
-            if "autoCapture" in config and not isinstance(config["autoCapture"], bool):
-                raise WikiError("migration source autoCapture must be a boolean")
-            try:
-                stale_days = int(config.get("staleDays", 30))
-                max_page_size = int(config.get("maxPageSize", 10_240))
-            except (TypeError, ValueError) as exc:
-                raise WikiError("migration source has invalid numeric config") from exc
-            if stale_days < 0 or max_page_size <= 0:
-                raise WikiError("migration source has unsafe numeric config")
-            auto_capture_reset = bool(config.get("autoCapture", False))
+            except (UnicodeError, ValueError, json.JSONDecodeError) as exc:
+                raise WikiConfigError("migration source has invalid config.json") from exc
+            validated = validate_config(config, source="migration source config.json")
+            auto_capture_reset = validated["autoCapture"]
             config["autoCapture"] = False
             content = json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         elif path.name == PROJECT_CONTEXT_FILE:
@@ -1349,7 +1405,13 @@ def run(args: argparse.Namespace) -> int:
             learning_signal="retrieval",
         )
     elif command == "read":
-        page = store.read_page(args.page)
+        if args.page.endswith(".md"):
+            page = store.read_page(args.page)
+        else:
+            filename, page = store.resolve_title(args.page)
+            if page is None:
+                filename = f"{args.page}.md"
+                page = store.read_page(filename)
         if page is None:
             raise WikiError(f"page not found or invalid: {args.page}")
         emit(
@@ -1513,6 +1575,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             learning_signal="deletion",
         )
         return 3
+    except WikiConfigError as exc:
+        store = None
+        try:
+            store = WikiStore(args.root)
+        except WikiError:
+            pass
+        emit(
+            args.command,
+            status="fail",
+            store=store,
+            current_truth="The requested operation did not complete because wiki configuration is invalid.",
+            holds=[str(exc)],
+            next_action="Correct config.json and retry.",
+            learning_signal="config",
+        )
+        return 2
     except WikiError as exc:
         store = None
         try:

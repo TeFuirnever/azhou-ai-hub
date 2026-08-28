@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import subprocess
 import sys
@@ -67,7 +68,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
             self.assertNotIn("isError", added)
             self.assertTrue((root / ".azhou" / "llm-wiki" / "mcp-page.md").is_file())
             self.assertIn(
-                "] ingest",
+                "] add",
                 (root / ".azhou" / "llm-wiki" / "log.md").read_text(encoding="utf-8"),
             )
 
@@ -119,6 +120,65 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 "wiki_list", {"workingDirectory": str(root / "missing")}
             )
             self.assertTrue(result["isError"])
+
+    def test_session_end_rebuilds_index_and_mcp_list_sees_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.set_auto_capture(True)
+            _, receipt = llm_wiki.run_hook_event(
+                "session-end", store, {"cwd": str(root), "session_id": "captured"}
+            )
+            self.assertIn(llm_wiki.INDEX_FILE, receipt["changes"])
+            self.assertIn("index rebuilt", receipt["verification"])
+            listing = llm_wiki_mcp.call_tool("wiki_list", {"workingDirectory": str(root)})
+            self.assertNotIn("isError", listing)
+            self.assertIn("Session Log", listing["content"][0]["text"])
+
+    def test_mcp_add_keeps_colliding_titles_and_uses_exact_v2_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            common = {"workingDirectory": str(root), "content": "body"}
+            first = llm_wiki_mcp.call_tool("wiki_add", {**common, "title": "A B"})
+            second = llm_wiki_mcp.call_tool("wiki_add", {**common, "title": "a-b"})
+            self.assertNotIn("isError", first)
+            self.assertNotIn("isError", second)
+            expected = llm_wiki.v2_title_slug("a-b")
+            self.assertIn(expected, second["content"][0]["text"])
+            self.assertEqual(2, len(llm_wiki.WikiStore(root).pages()))
+            self.assertEqual(
+                expected,
+                f"a-b-v2-{hashlib.sha256('a-b'.encode()).hexdigest()[:16]}.md",
+            )
+            exact_read = llm_wiki_mcp.call_tool("wiki_read", {"workingDirectory": str(root), "page": "a-b"})
+            filename_read = llm_wiki_mcp.call_tool("wiki_read", {"workingDirectory": str(root), "page": "a-b.md"})
+            self.assertIn("## a-b", exact_read["content"][0]["text"])
+            self.assertIn("## A B", filename_read["content"][0]["text"])
+
+    def test_invalid_lint_config_is_stable_and_read_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.add(title="Lint Page", content="fact", tags=[], category="reference", sources=[], confidence="medium")
+            before = {name: (store.directory / name).read_bytes() for name in ("index.md", "log.md")}
+            (store.directory / "config.json").write_text('{"staleDays":"30","maxPageSize":1024}\n', encoding="utf-8")
+            result = llm_wiki_mcp.call_tool("wiki_lint", {"workingDirectory": str(root)})
+            self.assertTrue(result["isError"])
+            self.assertIn("integer", result["content"][0]["text"])
+            self.assertEqual(before["index.md"], (store.directory / "index.md").read_bytes())
+            self.assertEqual(before["log.md"], (store.directory / "log.md").read_bytes())
+
+    def test_migration_rejects_typed_invalid_config_without_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = llm_wiki.WikiStore(root, ".llm-wiki")
+            source.add(title="Source", content="preserve", tags=[], category="reference", sources=[], confidence="medium")
+            source_before = (source.directory / "source.md").read_bytes()
+            (source.directory / "config.json").write_text('{"autoCapture":false,"maxPageSize":true}\n', encoding="utf-8")
+            with self.assertRaises(llm_wiki.WikiConfigError):
+                llm_wiki.migrate_store(root, ".llm-wiki", apply=False)
+            self.assertFalse(llm_wiki.WikiStore(root).directory.exists())
+            self.assertEqual(source_before, (source.directory / "source.md").read_bytes())
 
     def test_mcp_stdio_initialize_list_and_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
