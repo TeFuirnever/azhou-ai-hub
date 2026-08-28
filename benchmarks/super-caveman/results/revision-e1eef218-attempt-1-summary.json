@@ -1,0 +1,89 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "superseded",
+  "runtime": "Codex agent runtime",
+  "harness": "Codex Desktop collaboration agent",
+  "model": "GPT-5 (Codex)",
+  "model_limitation": "Exact serving snapshot and version were not exposed to the producer.",
+  "skill_tree_sha256": "e1eef218f03c6fd679148042e8811617c4f3a769387b31b37777acb437ed6c5e",
+  "cases_sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
+  "tool_permissions": {
+    "network": "available in harness, denied by case contract, unused",
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "skill readback, fixture edit verification, and evidence hashing only",
+    "external_apps": "available in harness, denied by case contract, unused"
+  },
+  "attempt": 1,
+  "output_set_sha256": "e46a649f6c311eef475b02b620fdf14531d7bb0f77b5cb0855eb431e102db16b",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; every runtime path included except generated Python cache",
+    "case_count": "14/14",
+    "unique_case_ids": "14/14",
+    "fixture_side_effect": "pass; README before and after hashes verified against actual bytes",
+    "repository_scope": "pass; only disposable fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/super_caveman_final_spec_reviewer",
+    "review_sha256": "8324495ee7f9db2a25f37c0e7eab9581bca01cd7f26254c84a6a18d73dda33d7"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "baseline_output_set_sha256": "9764244b67f63a14c2b4ca926737cf1e79b086edd058f44ef8846242b65fe049",
+    "candidate_output_set_sha256": "e46a649f6c311eef475b02b620fdf14531d7bb0f77b5cb0855eb431e102db16b",
+    "high_risk_regressions": 0,
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v1",
+      "status": "superseded",
+      "reason": "runtime provenance changed before human approval"
+    },
+    "judges": [
+      {
+        "identity": "/root/super_caveman_paired_judge_1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "ec8aa44e481367823329a3b360c441455493afa464aab4ef56a0c8c10a1014e7"
+      },
+      {
+        "identity": "/root/super_caveman_paired_judge_2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "e4091865c9239e7ac3e8a084d915183d0e5328ef31dfc3fbee7416b46bbbae25"
+      },
+      {
+        "identity": "/root/super_caveman_paired_judge_3",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "fcffe8db7afeb04397cdfe8bcaa0abb25a064096f928a7f765c075861a6c493f"
+      }
+    ]
+  },
+  "passed": 14,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"}
+  ],
+  "limitations": [
+    "One Codex Desktop collaboration-agent run only; no cross-harness or cross-model claim.",
+    "The exact model deployment variant and per-case wall time were unavailable.",
+    "Harness capabilities exceeded the case contract; denied network and external-app tools were not used.",
+    "Raw outputs, full reviewer record, and paired judge records remain Git-external.",
+    "Behavior and paired gates passed, but the runtime provenance changed before human approval; this result is superseded."
+  ]
+}

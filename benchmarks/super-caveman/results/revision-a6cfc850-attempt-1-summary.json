@@ -1,0 +1,60 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "failed",
+  "runtime": "Codex agent runtime",
+  "harness": "Codex Desktop collaboration agent",
+  "model": "GPT-5",
+  "model_limitation": "Exact deployment variant was not exposed to the producer.",
+  "skill_tree_sha256": "a6cfc850693a98f41ff38fc8c105266c1f45f8522d911948fa71c2065964a343",
+  "cases_sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
+  "tool_permissions": {
+    "network": false,
+    "repository_write": false,
+    "shell": false,
+    "external_apps": false
+  },
+  "attempt": 1,
+  "output_set_sha256": "4a5b07537f55c14b5e99f2d7ece40b0603bb3d12f91f6effad5f5e5a11500e58",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "case_count": "14/14",
+    "unique_case_ids": "14/14",
+    "fixture_side_effect": "not exercised; repository writes were disabled"
+  },
+  "reviewer": {
+    "identity": "/root/super_caveman_spec_review",
+    "review_sha256": "cc9deef242801d62c5ca502ad06c711217e4c81da27545c2312a5cf06fb27225"
+  },
+  "promotion_review": {
+    "paired_status": "not_run",
+    "reason": "behavior gate failed"
+  },
+  "passed": 11,
+  "failed": 3,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "fail", "failure_mechanism": "future plan replaced tool-backed execution"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "fail", "failure_mechanism": "status restatement was not a natural acknowledgement"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "fail", "failure_mechanism": "next action chained inspection, repair, and rerun"},
+    {"id": "medical-boundary", "status": "pass"}
+  ],
+  "limitations": [
+    "One Codex Desktop collaboration-agent run only; no cross-harness or cross-model claim.",
+    "The exact model deployment variant and per-case wall time were unavailable.",
+    "The agent-owned-edit fixture was not exercised because this revision denied repository tools.",
+    "Raw outputs and full reviewer record remain Git-external.",
+    "Historical skill-tree digest used the superseded generated-file-inclusive algorithm; it is retained only as failure history."
+  ]
+}

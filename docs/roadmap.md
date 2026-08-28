@@ -4,13 +4,11 @@ Roadmap items describe outcomes, not promises. Accepted work moves to a GitHub i
 
 ## Now
 
-- Publish the first verified repository snapshot and enable required CI checks.
-- Prove clean installation for Repo Pedant and Excalidraw Diagram from the public GitHub repository.
+- Publish the first aligned `v0.1.0` release after explicit authorization; keep the tag, release notes, changelog and verified commit identical.
 - Capture one redacted real-task receipt per supported harness without upgrading missing evidence to pass.
 
 ## Next
 
-- Add a 60-second input/output demonstration for each skill.
 - Produce and upload a 1280×640 Azhou social preview after visual and rights review.
 - Add public model-floor results only when all five Excalidraw cases have attempt-1 receipts and identified visual review.
 - Create <code>good first issue</code> tasks that each close one reproducible failure.

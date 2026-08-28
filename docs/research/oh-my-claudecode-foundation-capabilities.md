@@ -1,0 +1,79 @@
+# Research: ecosystem foundation capabilities adapted from oh-my-claudecode
+
+## Request Type
+
+Historical implementation-reference lookup. This report records the pre-implementation design input from 2026-08-25; it is not the current runtime contract.
+
+> Current status (2026-08-26): the repository now implements the five primary Foundation commands plus receipt-owned `repair`, `migrate`, and `uninstall`. Use [the Foundation CLI contract](../foundations.md) for current behavior; keep the gaps below in their historical context.
+
+## Scope and source lock
+
+- Retrieval date: 2026-08-25 (Asia/Shanghai).
+- Primary reference: [Yeachan-Heo/oh-my-claudecode at `deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/tree/deee3a446dadc9bfea31cdc8b19b00b16718082e), whose `package.json` declares version `4.14.6`.
+- Azhou comparison snapshot: [TeFuirnever/azhou-ai-hub at `662dd14ba1a5a9096528351322e39dc8dc5bda96`](https://github.com/TeFuirnever/azhou-ai-hub/tree/662dd14ba1a5a9096528351322e39dc8dc5bda96).
+- Inline `OMC:` and `Azhou:` coordinates below are repository-relative paths at those immutable commits.
+- Evidence is local primary source only. “Gap” means no equivalent was found in the bounded current surfaces named in the table, not a claim that no implementation exists anywhere.
+
+## Historical recommendation
+
+Build a small, harness-neutral **foundation control plane**, not an OMC clone: one discoverable root command (or equivalent script entry point) with `help`, `doctor`, `setup --dry-run`, `verify`, `info`, and stable JSON/exit-code contracts. Make every mutation explicit, scoped, idempotent, and receipt-producing. Keep individual skills independently installable; do not auto-install hooks, rewrite global configuration, clean caches, or perform network updates.
+
+The most valuable adaptation is OMC’s operational shape—inspect first, reconcile only owned artifacts, then report exact outcomes—not its Claude plugin/cache machinery. OMC separates diagnostics (`doctor conflicts`, `doctor team-routing`), setup synchronization, install metadata, post-update reconciliation, and user-facing help. [Reference: `OMC:src/cli/index.ts:1170-1339`]
+
+## Capability inventory and recommendation
+
+### A. Must-have at the time
+
+| Capability | Adapted behavior | Current evidence and gap | Source basis |
+| --- | --- | --- | --- |
+| Root `doctor` with stable `--json` and meaningful exit codes | Report repository/package health as `pass` / `warn` / `fail`; include install-path ambiguity, missing runtime prerequisites, broken links/package shape, duplicate owned hook registrations, support-matrix mismatch, and deterministic-gate availability. `warn` must not be indistinguishable from a failed gate. | Repo Pedant already has a narrow JSON doctor that checks workspace/state, config readability, duplicate hook installation, feature flags and returns `1` only on failure; no root cross-skill doctor exists. [Current: `Azhou:skills/repo-pedant/scripts/closeout_hook.py:210-249`] | OMC exposes `doctor conflicts --json` and `doctor team-routing --json`, forwards returned exit codes, and its team probe deliberately warns but returns `0` for a missing optional provider. [Reference: `OMC:src/cli/index.ts:1170-1224`; `OMC:src/cli/commands/doctor-team-routing.ts:72-117`] |
+| Root `setup` as an explicit reconciliation planner | Provide `setup --dry-run` first, then scoped execution such as `--skill <name>` and `--target <managed|copy|symlink|adapter-scope>`. Emit a machine-readable receipt naming only artifacts owned by the operation. Re-running the same request should converge without duplicating entries. | Installation is documented as three mutually exclusive paths and warns that duplicates create stale selection/provenance ambiguity. The Super Caveman adapter already offers explicit user/project scope, preserves unrelated entries, performs atomic writes and has a scoped uninstall; there is no common setup/reconciliation facade. [Current: `Azhou:docs/installation.md:17-59`; `Azhou:skills/super-caveman/references/setup.md:28-64`] | OMC setup is a named sync command with force/quiet/skip-hooks controls, reports installed components and conflict details, and delegates to an installer result object. [Reference: `OMC:src/cli/index.ts:1226-1339`; `OMC:src/installer/index.ts:262-293`] |
+| Unified verification command for humans and CI | Keep `python3 scripts/verify.py` as the canonical full gate, but expose it through the foundation interface and return the underlying non-zero code unchanged. The root doctor should say which sub-gate would fail before mutation; CI uses exactly the same command. | This already exists: the verifier executes policy, unit, benchmark-integrity and whitespace gates sequentially, stops at the first failure, and returns that exit code. It is the documented public command. [Current: `Azhou:scripts/verify.py:16-45`; `Azhou:README.md:164-167`] | OMC command handlers translate structured result failure into exit `1`, including setup/update reconciliation; its installer returns a typed outcome with artifact lists, conflicts and errors. [Reference: `OMC:src/cli/index.ts:789-807`; `OMC:src/installer/index.ts:262-293`] |
+| Root `info` / `version` / `help` contract | Add `info --json` and `version --json` to state the repository revision, skill list, declared support matrix, selected install mode when provable, and exact verification command. `help` must enumerate commands, mutation boundaries and examples. Do not manufacture an installed-version claim when a harness does not expose it. | The repository has a public support matrix that already distinguishes shared package support from host integrations, and a fixed set of installable skill paths is enforced. It lacks one runtime-readable aggregate status/info surface. [Current: `Azhou:docs/support-matrix.md:1-11`; `Azhou:scripts/check_repository.py:61-96`] | OMC `info` enumerates agents/features/MCP configuration, while `version` distinguishes package version from recorded install metadata and explicitly handles missing metadata. Commander supplies the root help/version convention. [Reference: `OMC:src/cli/index.ts:96-123`; `OMC:src/cli/index.ts:654-699`; `OMC:src/cli/index.ts:840-874`] |
+
+### B. Useful next at the time
+
+| Capability | Why / boundary | Current evidence and gap | Source basis |
+| --- | --- | --- | --- |
+| `repair` as a separate, reviewed action | Make `doctor` read-only; let `repair` consume an explicit doctor receipt and modify only verified, tool-owned state. Require `--dry-run`, exact paths, backup/atomic write where applicable, and post-repair doctor/verify. Start with adapters, not generic copied skill directories. | The Super Caveman adapter demonstrates the desired owned-entry boundary: explicit setup/uninstall commands, atomic write, unrelated-entry preservation, symlink rejection, and deterministic tests. [Current: `Azhou:skills/super-caveman/references/setup.md:43-76`] | OMC installer detects its own hooks by stable names/paths and preserves non-OMC status-line configuration; its update reconciliation is intended to be repeatable but makes plugin-specific changes. [Reference: `OMC:src/installer/index.ts:314-382`; `OMC:src/features/auto-update.ts:965-1058`] |
+| Version/state manifest with freshness diagnostics | Record a local, schema-versioned receipt only after a successful scoped setup: tool/repo revision, target, owned artifact digests, setup time and verification result. Doctor compares it to present artifacts and reports drift; it must not query the network by default. | Current scripts already use explicit schemas, JSON output, atomic replacement and scoped state. Repo Pedant’s evolution state remains project-contained and rejects symlink/out-of-project state roots. [Current: `Azhou:skills/repo-pedant/scripts/manage_evolution.py:87-100`; `Azhou:skills/repo-pedant/scripts/manage_evolution.py:188-228`] | OMC persists version/install metadata, displays both package and installed versions, and compares current vs latest release. [Reference: `OMC:src/features/auto-update.ts:755-811`; `OMC:src/cli/index.ts:840-874`] |
+| Targeted migration and uninstall | Provide a migration report before changes: identify old canonical names or an adapter’s exact owned registration, then require an explicit apply/approve step. `uninstall` must remove only receipt-owned files/entries and never delete user-created skills or broad directories. | Installation already requires one path per canonical skill and specifically requires proving `repo-pedant` resolution/smoke checks before retiring `neat-freak`. Super Caveman has a scoped uninstall model. [Current: `Azhou:docs/installation.md:51-59`; `Azhou:docs/installation.md:71-77`; `Azhou:skills/super-caveman/references/setup.md:57-64`] | OMC’s doctor distinguishes OMC-owned hooks from others and its skill guidance says only matching legacy names should be flagged, keeping user custom content outside cleanup scope. [Reference: `OMC:src/cli/commands/doctor-conflicts.ts:38-109`; `OMC:skills/omc-doctor/SKILL.md:105-125`] |
+| Per-skill health adapters | Standardize optional diagnostics as `<skill>/scripts/... doctor --json`; the root doctor can compose them only when the package declares the adapter. This fits the independent-package model better than a monolithic global runtime. | Repo Pedant offers `doctor`; `manage_evolution.py` also exposes `health` with investigation-only output and stable return codes. Other skills currently document their own setup and boundaries. [Current: `Azhou:skills/repo-pedant/scripts/closeout_hook.py:252-285`; `Azhou:skills/repo-pedant/scripts/manage_evolution.py:480-569`; `Azhou:docs/installation.md:61-69`] | OMC’s doctor subcommands isolate distinct diagnostic concerns and use JSON only where a consumer needs it. [Reference: `OMC:src/cli/index.ts:1170-1224`] |
+
+### C. Reference-only / not portable
+
+| OMC capability | Why it should not be copied as a foundation default |
+| --- | --- |
+| Global npm self-update and GitHub-release polling | OMC resolves latest releases over GitHub and runs global `npm install -g`; that assumes OMC’s package/distribution model and network authority. Azhou currently distributes independent skill directories via a manager, copy, or symlink, so default networked update would create a new authority and risk surface. [Reference: `OMC:src/features/auto-update.ts:879-914`; `OMC:src/features/auto-update.ts:1080-1153`] [Current: `Azhou:docs/installation.md:3-32`] |
+| Claude plugin-cache, marketplace-clone, `CLAUDE.md`, HUD and MCP reconciliation | These are tied to Claude-specific paths, plugin ownership and runtime semantics. The current support matrix explicitly says lifecycle hooks and memory APIs are not identical across harnesses; neutral core packages must not require model-specific runtime copies. [Reference: `OMC:src/features/auto-update.ts:235-325`; `OMC:src/features/auto-update.ts:971-1044`] [Current: `Azhou:docs/support-matrix.md:1-11`; `Azhou:docs/installation.md:69-69`] |
+| Automatic hook/config cleanup and broad directory removal | OMC’s interactive doctor documentation contains cache and legacy-content removal recipes; this is not suitable for a neutral automated baseline. Current Azhou packages require explicit authorization for lifecycle adapters and scope uninstall to one owned entry. [Reference: `OMC:skills/omc-doctor/SKILL.md:172-223`] [Current: `Azhou:skills/super-caveman/references/setup.md:20-26`; `Azhou:skills/super-caveman/references/setup.md:57-64`] |
+| Fixed Claude/Codex/Gemini/Grok provider probes | OMC has a configured team-role router and a documented fallback to Claude. Azhou should probe only adapters it actually ships and declares; probing vendors merely because binaries exist would imply support it does not claim. [Reference: `OMC:src/cli/commands/doctor-team-routing.ts:1-28`; `OMC:src/cli/commands/doctor-team-routing.ts:56-117`] [Current: `Azhou:docs/support-matrix.md:3-11`] |
+
+## Historical minimal command proposal
+
+This is a proposed portable surface, not an implementation prescription:
+
+```text
+azhou help [<command>]                 # no mutation
+azhou info --json                      # repo + package + support facts
+azhou version --json                   # revision and proven local receipts only
+azhou doctor [--skill <name>] --json   # no mutation; 0=healthy/warn, 1=failed, 2=invalid invocation
+azhou setup --skill <name> --target <...> --dry-run --json
+azhou setup --apply ... --json         # explicit scoped mutation + receipt
+azhou repair --receipt <path> --dry-run --json
+azhou verify [--skill <name>]          # delegates to authoritative deterministic gates
+azhou uninstall --receipt <path> --dry-run --json
+```
+
+This report does not select the executable, package, or distribution mechanism. The command shape mirrors OMC’s separation of commands and its structured installer outcomes, while retaining Azhou’s skill-local setup model. [Reference: `OMC:src/cli/index.ts:727-984`; `OMC:src/installer/index.ts:262-293`] [Current: `Azhou:scripts/verify.py:1-49`; `Azhou:docs/installation.md:61-69`]
+
+## Caveats / ambiguity flags
+
+- This is source-locked to the stated local OMC HEAD, not a claim about upstream’s current remote release after 2026-08-25.
+- The bounded inventory positively verified OMC’s `doctor`, `setup`, `install`, `info`, `update`, `version`, post-update reconciliation, JSON diagnostics and exit-code patterns. It does **not** present an OMC `uninstall` command as a verified reference capability; the Azhou uninstall recommendation is derived from Azhou’s already-scoped adapter boundary, not copied from OMC.
+- “Must-have now” means foundation design/contract priority, not authorization to alter global configuration, remove installations, contact a registry, or publish a package.
+- Before implementation, map the proposed root surface to the existing package-manager behavior and decide whether its executable belongs in-repo only, a packaged distribution, or an external harness adapter. That is a dependency/distribution and repository-integration decision outside this research report.
+
+## Reusable Takeaway
+
+Adopt OMC’s operational discipline—**diagnose → dry-run plan → explicit scoped reconcile → receipt → verify**—but keep Azhou’s neutral, per-skill, no-implicit-hook model. Build one JSON/exit-code grammar first; add repair, migration, manifests and uninstall only when ownership is provable.

@@ -61,7 +61,7 @@ python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
   --project /absolute/affected-project \
   --memory /absolute/project-memory \
   --global-instruction /absolute/global-instructions.md \
-  --output /absolute/affected-project/.repo-pedant/inventory.json
+  --output /absolute/affected-project/.azhou/repo-pedant/inventory.json
 ```
 
 每个项目必须留下 memory inventory 证明：发现候选时用 `--memory`；确认没有项目 memory 时用 `--memory-decision 'none_discovered::<查过的具体 surface>'`；无法确认时用 `hold`。多项目运行使用 `PROJECT_ROOT::PATH` 和 `PROJECT_ROOT::STATUS::EVIDENCE`。`unresolved` 会阻止 closeout，不能手工把 `semantic_memory_links` 设真绕过。
@@ -127,16 +127,16 @@ python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
 
 ```bash
 python3 <skill-dir>/scripts/inventory_knowledge.py validate \
-  /absolute/affected-project/.repo-pedant/inventory.json
+  /absolute/affected-project/.azhou/repo-pedant/inventory.json
 ```
 
-随后完成 execution protocol 的六个固定检查：`inventory`、`readback`、`tests`、`links`、`diff`、`coverage`。不适用项也要在 `.repo-pedant/execution.json` 中用 `not_applicable` 记录 reason 与 evidence；不能省略。验证失败必须记录精确命令、原因、影响和负责人；由本次编辑制造的失败不能留作普通 hold。
+随后完成 execution protocol 的六个固定检查：`inventory`、`readback`、`tests`、`links`、`diff`、`coverage`。不适用项也要在 `.azhou/repo-pedant/execution.json` 中用 `not_applicable` 记录 reason 与 evidence；不能省略。验证失败必须记录精确命令、原因、影响和负责人；由本次编辑制造的失败不能留作普通 hold。
 
 全部检查结束后，把**准备发送**的最终 `verify_success` 事件写入 execution record，再执行：
 
 ```bash
 python3 <skill-dir>/scripts/validate_execution_protocol.py \
-  /absolute/affected-project/.repo-pedant/execution.json
+  /absolute/affected-project/.azhou/repo-pedant/execution.json
 ```
 
 只有退出码为 0 才能原样发送 record 中的 `✅ 验证通过｜checks=...`，发送后不能再运行检查或修改文件。若仍需动作，先移除 success 事件再继续。失败时使用 `❌ 验证失败｜check=<id>｜impact=<事实>`；修复后重跑受影响检查并重新验证整个 record。
@@ -146,7 +146,7 @@ python3 <skill-dir>/scripts/validate_execution_protocol.py \
 ### 🧾 5. 输出稳定收据
 
 ```markdown
-## 🦊 阿舟 · Repo-pedant receipt
+## 🦊 阿舟 · Repo Pedant receipt
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 

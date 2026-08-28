@@ -11,6 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+import azhou_runtime_state
+
 
 SCHEMA_VERSION = "repo-pedant.inventory.v2"
 CLASSIFICATIONS = {
@@ -45,6 +50,7 @@ INSTRUCTION_NAMES = {
 MEMORY_DECISION_STATUSES = {"none_discovered", "hold"}
 MEMORY_STATUSES = {"unresolved", "bound", *MEMORY_DECISION_STATUSES}
 SKIP_DIRS = {
+    ".azhou",
     ".git",
     ".hg",
     ".omc",
@@ -472,11 +478,18 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
             [Path(value) for value in args.global_instruction],
             memory_decisions,
         )
-        write_json(args.output, data)
-    except InventoryError as exc:
+        if args.output is None:
+            if len(projects) != 1:
+                raise InventoryError("multi-project snapshots require an explicit --output")
+            output = azhou_runtime_state.state_path(projects[0], "repo-pedant", "inventory.json")
+            azhou_runtime_state.ensure_private_directory(output.parent, root=projects[0])
+        else:
+            output = args.output
+        write_json(output, data)
+    except (InventoryError, azhou_runtime_state.StateError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps({"schema_version": SCHEMA_VERSION, "projects": len(data["projects"]), "files": len(data["files"]), "output": str(args.output)}, ensure_ascii=False))
+    print(json.dumps({"schema_version": SCHEMA_VERSION, "projects": len(data["projects"]), "files": len(data["files"]), "output": str(output)}, ensure_ascii=False))
     return 0
 
 
@@ -503,7 +516,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="when no bound memory exists: STATUS::EVIDENCE for one project or PROJECT_ROOT::STATUS::EVIDENCE; status is none_discovered or hold",
     )
     snapshot.add_argument("--global-instruction", action="append", default=[], help="read-only global instruction candidate")
-    snapshot.add_argument("--output", required=True, type=Path)
+    snapshot.add_argument("--output", type=Path)
     snapshot.set_defaults(func=cmd_snapshot)
     validate = subparsers.add_parser("validate", help="validate classifications, bloat gates, and semantic closeout checks")
     validate.add_argument("inventory", type=Path)

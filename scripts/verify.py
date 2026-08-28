@@ -13,11 +13,15 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def commands(python: str) -> list[tuple[str, list[str]]]:
+def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str, list[str]]]:
+    super_caveman = [python, "benchmarks/super-caveman/benchmark.py", "check"]
+    if promotion_evidence:
+        super_caveman.append("--promotion-evidence")
     return [
         ("repository policy", [python, "scripts/check_repository.py"]),
         ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests"]),
         ("repo-pedant benchmark", [python, "benchmarks/repo-pedant/benchmark.py", "check"]),
+        ("super-caveman benchmark", super_caveman),
         (
             "excalidraw benchmark wiring",
             [python, "benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],
@@ -30,11 +34,19 @@ def commands(python: str) -> list[tuple[str, list[str]]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify the complete Azhou AI Hub repository")
     parser.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
+    parser.add_argument(
+        "--promotion-evidence",
+        action="store_true",
+        help="Also require Git-external maintainer promotion evidence",
+    )
     args = parser.parse_args(argv)
 
     environment = os.environ.copy()
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    for label, command in commands(args.python):
+    for label, command in commands(
+        args.python,
+        promotion_evidence=args.promotion_evidence,
+    ):
         print(f"==> {label}", flush=True)
         result = subprocess.run(command, cwd=ROOT, env=environment, check=False)
         if result.returncode:

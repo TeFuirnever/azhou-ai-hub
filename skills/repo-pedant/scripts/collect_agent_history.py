@@ -53,6 +53,7 @@ SECRET_RE = re.compile(
     re.IGNORECASE,
 )
 RECEIPT_MARKERS = (
+    "## 🦊 阿舟 · Repo Pedant receipt",
     "## 🦊 阿舟 · Repo-pedant receipt",
     "## Repo-pedant receipt",
     "## Repo Pedant receipt",

@@ -95,7 +95,7 @@ class ManageEvolutionTest(unittest.TestCase):
             payload = json.loads(result.stdout)
             candidate = Path(payload["candidate"])
             self.assertTrue(candidate.is_file())
-            self.assertIn(".repo-pedant/evolution/candidates", candidate.as_posix())
+            self.assertIn(".azhou/repo-pedant/evolution/candidates", candidate.as_posix())
             self.assertFalse(payload["live_skill_modified"])
             self.assertEqual(2, payload["independent_sessions"])
 
@@ -112,7 +112,7 @@ class ManageEvolutionTest(unittest.TestCase):
             project = Path(directory)
             self.add_signal(project, session="one")
             self.add_signal(project, session="two")
-            signals = project / ".repo-pedant" / "evolution" / "signals.jsonl"
+            signals = project / ".azhou" / "repo-pedant" / "evolution" / "signals.jsonl"
             before = signals.read_text(encoding="utf-8")
             invalid = project / "invalid.json"
             invalid.write_text("{}", encoding="utf-8")
@@ -134,7 +134,7 @@ class ManageEvolutionTest(unittest.TestCase):
             self.add_signal(project, session="one")
             self.add_signal(project, session="two")
             proposal = json.loads(self.propose(project).stdout)
-            link = project / ".repo-pedant" / "evolution" / "candidates" / "linked.json"
+            link = project / ".azhou" / "repo-pedant" / "evolution" / "candidates" / "linked.json"
             link.symlink_to(Path(proposal["candidate"]))
             result = self.run_cli("archive", "--project", str(project), "--candidate", str(link))
             self.assertEqual(2, result.returncode)
@@ -152,7 +152,7 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(2, one_project.returncode)
 
             self.add_signal(second, session="two", category="safety", severity="critical")
-            second_signals = second / ".repo-pedant" / "evolution" / "signals.jsonl"
+            second_signals = second / ".azhou" / "repo-pedant" / "evolution" / "signals.jsonl"
             two_projects = self.propose(first, "--scope", "global", "--include-signal-file", str(second_signals))
             self.assertEqual(0, two_projects.returncode, two_projects.stdout + two_projects.stderr)
             self.assertEqual(2, json.loads(two_projects.stdout)["projects"])

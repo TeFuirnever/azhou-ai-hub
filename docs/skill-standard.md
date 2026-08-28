@@ -13,6 +13,8 @@
 
 每个 skill 独立安装在 `skills/<canonical-name>/`，只带运行时需要的内容。
 
+“独立安装”表示完整复制单个 canonical package 后，harness 能单独发现并加载它；不表示 package 必须内置所有外部运行时。Package 不得依赖兄弟 skill 目录，但可以声明 Python、Node、浏览器或显式 repository checkout 等外部依赖。此类依赖必须在 package-local setup 中写明最低版本、定位方式、失败边界和验证命令；缺失时 fail closed，不能扫描无关目录或静默复制第二份权威实现。
+
 | Surface | 何时需要 | 约束 |
 |---|---|---|
 | `SKILL.md` | 必须 | 入口、触发、顺序、边界；保持可扫描 |
@@ -25,17 +27,29 @@
 
 开发期 prompts、expected outputs、fixtures、judge records、真实运行聚合和 benchmark runner 统一放在仓库级 `benchmarks/<skill>/`。运行时包不包含 `benchmarks/`、`agents/openai.yaml` 或其他模型专用身份；Codex、Claude、zcode 和其他 harness 共享同一个 neutral core。
 
+### 2.1 运行状态命名空间
+
+- 可安装包继续位于 `skills/<canonical-name>/`；Azhou 自有的项目内运行状态统一位于 `<authorized-root>/.azhou/<canonical-name>/`。
+- `hub` 是保留命名空间：跨 Skill 安装与生命周期 receipt 只能位于显式安装目标的 `.azhou/hub/`。Skill 不得占用它。
+- `.git`、`.codex`、`.claude`、`.agents`、`.omx`、`.treehouse` 等宿主或工具自有目录保持在 `.azhou/` 外；用户选择的文档、图片和交付物也不因运行状态规则而搬迁。
+- 旧状态根只能作为具名 compatibility source。迁移必须先生成稳定 dry-run plan，再以同一 `planId` 原子应用并验证；源目录保留。禁止 fallback read、dual-write、静默清理和扫描无关隐藏目录。
+- 路径解析必须从显式项目或安装目标出发，拒绝绝对覆盖、遍历、symlink、文件祖先和越界。目录默认 `0700`，文件默认 `0600`；Skill 不得在未获授权时修改另一个项目的 ignore 文件。
+- 共享路径与迁移逻辑的项目权威是 `scripts/azhou_runtime_state.py`。为保持单个 Skill 独立安装，确有使用者可携带 byte-identical runtime copy；仓库测试必须证明副本与权威一致。
+
 ## 3. 阿舟交互层
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
 
-1. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带 mode 与 scope。
-2. 多阶段 skill 将顺序、固定前缀、字段和分隔符写成协议；脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
-3. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
-4. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
-5. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。
+1. 每个 canonical package 在 `SKILL.md` 或其品牌层公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。像 Super Caveman 这样明确禁止普通回复生命周期播报的模式 skill，可把身份与启动协议只保留在关键操作的品牌层。
+2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。
+3. 多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
+4. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
+5. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
+6. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。
 
 Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名和原始证据保持稳定纯文本；不支持 Unicode 的 host 可移除 emoji，不能改机器字段和值。
+
+`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：身份、精确启动格式、成功/失败/hold、原始证据边界和 Unicode 降级缺一不可。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
 
 ## 4. 证据与评测
 

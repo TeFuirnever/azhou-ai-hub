@@ -1,0 +1,159 @@
+{
+  "schema": "super-caveman-evaluation-contract.v1",
+  "suite": "response-behavior",
+  "cases": {
+    "path": "response-cases.json",
+    "sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+    "order": "file order",
+    "count": 19
+  },
+  "legacy_case_sets": [
+    {
+      "sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
+      "count": 14,
+      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity"],
+      "result_files": {
+        "revision-a6cfc850-attempt-1-summary.json": "78b67833aef9ad2bf337eb2a851905cd2b7622781fe863d4a82ccd897d3ea9d0",
+        "revision-de6b836a-attempt-1-summary.json": "ceeeeda13a7984f5050fb300a8d2f9afb81fc595e4ef6227d08a599b0ddfc9fc",
+        "revision-dfe45d69-attempt-1-summary.json": "7fc271a32cb46676dc85ecc2c10c0662b8feabb83886d659cd1d7dd5cf7eac73",
+        "revision-e1eef218-attempt-1-summary.json": "97323e91da439bb6e2df90c65b192e52c8a7f1d476e08879523ff69db120db23",
+        "revision-f3ab4d37-attempt-1-summary.json": "9e2a6505dbadd0b32d3d8c95cdf0de309b7dbbf8c917581cb5768968fc92dd99"
+      }
+    },
+    {
+      "sha256": "cfe991555de0f3086ebc4e294266ffe6c8ac84122a748eabdb1d64dece250bb8",
+      "count": 19,
+      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "result_files": {
+        "revision-daa150ae-attempt-1-summary.json": "88c488455e9ded1a38f786e784d6ea7abde82be8236a8810c5dcae297e193429",
+        "revision-8cb8447d-attempt-1-summary.json": "c0ffea2f249c4300f44a6c15aace76fb9cad61c2c9bb950ccfa22b8648096422",
+        "revision-e995cac8-attempt-1-summary.json": "f6e160bdb7db057de6e6472a75ee6cf7fe2a1e738f4ac59bca8c05827a9fb0f4"
+      }
+    },
+    {
+      "sha256": "1d75a0a86b3da90c5551e1c6e78c4b09a310ad8a011cc5116fef64ac0d450d19",
+      "count": 19,
+      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "result_files": {
+        "revision-e5f16195-attempt-1-summary.json": "be2d02f6e3d259ee7d41857afe7cd1d32ef949ec099f4e895ce4378746e60715"
+      }
+    },
+    {
+      "sha256": "3136808262609cf5bc9083b379b7f1cf15bb79b788127f012ff294142da09290",
+      "count": 19,
+      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "result_files": {
+        "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
+        "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95"
+      }
+    }
+  ],
+  "runtime": {
+    "package": "skills/super-caveman",
+    "skill_tree_digest": "stable-v2: sha256 over every sorted relative POSIX runtime path, one NUL byte, file bytes, one NUL byte; exclude only generated __pycache__, .pyc, and .pyo files",
+    "harness": "record the concrete harness in the result",
+    "model": "record the concrete model identifier when exposed; otherwise record the family and an explicit limitation"
+  },
+  "execution": {
+    "attempt": 1,
+    "maximum_attempts": 1,
+    "timeout_seconds_per_case": 120,
+    "concurrency": 2,
+    "producer_context": [
+      "skills/super-caveman/SKILL.md",
+      "runtime references required by that entrypoint",
+      "one case prompt"
+    ],
+    "producer_must_not_read": [
+      "case criteria",
+      "reference answers",
+      "prior outputs",
+      "reviewer decisions"
+    ],
+    "tool_permissions": {
+      "default": {
+        "network": false,
+        "repository_write": false,
+        "shell": false,
+        "external_apps": false
+      },
+      "case_overrides": {
+        "agent-owned-edit": {
+          "repository_write": "disposable fixture only",
+          "shell": "fixture verification only"
+        }
+      }
+    },
+    "fixtures": {
+      "agent-owned-edit": {
+        "repository": "$TMPDIR/super-caveman-agent-owned-edit",
+        "initial_file": {
+          "path": "README.md",
+          "utf8": "Super Cavman\n"
+        },
+        "required_file": {
+          "path": "README.md",
+          "utf8": "Super Caveman\n"
+        },
+        "required_report": "verified edit result"
+      }
+    }
+  },
+  "evidence": {
+    "raw_outputs": "Git-external; suggested path $TMPDIR/super-caveman-attempt-1.json",
+    "aggregate_result": "results/<skill-tree-revision>-attempt-1-summary.json",
+    "required_result_fields": [
+      "runtime",
+      "harness",
+      "model",
+      "model_limitation",
+      "skill_tree_sha256",
+      "cases_sha256",
+      "tool_permissions",
+      "attempt",
+      "output_set_sha256",
+      "automatic_checks",
+      "reviewer",
+      "promotion_review",
+      "case_results",
+      "limitations"
+    ]
+  },
+  "review": {
+    "producer_and_reviewer_are_separate": true,
+    "reviewer_reads_case_criteria": true,
+    "reviewer_identity_required": true,
+    "case_pass_requires_all_criteria": true
+  },
+  "promotion_review": {
+    "baseline": "the pinned original Caveman core plus its six companion skill entrypoints, without Super Caveman or i-have-adhd response rules",
+    "candidate": "the frozen Super Caveman runtime used by the passing behavior result",
+    "same_cases_required": true,
+    "independent_paired_judges": 3,
+    "presentation_orders": ["candidate-baseline", "baseline-candidate", "candidate-baseline"],
+    "candidate_majority_required": 2,
+    "high_risk_regressions_allowed": 0,
+    "judge_records": "Git-external; aggregate identities, orders, votes, digests, and limitations belong in the passing result",
+    "exact_diff_human_approval": {
+      "required": true,
+      "schema": "super-caveman-exact-diff-approval.v2",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "digest_algorithm": "sha256 over sorted canonical path/blob tuples after excluding the aggregate result and aggregate approval record; each tuple binds the relative path, base blob object ID or deletion marker, and target blob object ID or deletion marker with NUL delimiters; path_set_sha256 separately binds the sorted NUL-delimited path set; raw Git metadata makes the digest independent of display diff configuration, attributes, custom diff drivers, text conversion, and rename detection; the benchmark recomputes the staged index tuple set before commit and the equivalent base_commit..approval-anchor tuple set on committed replay; the v2 aggregate receipt retains the same sorted reviewed_blobs tuple list so public squash replay can validate approved target blobs when the base commit is no longer ancestral",
+      "record_storage": "Git aggregate receipt; raw approval Git-external",
+      "raw_record_schema": "super-caveman-exact-diff-human-record.v1",
+      "raw_record_environment": "SUPER_CAVEMAN_APPROVAL_RECORD",
+      "review_record_environment": "SUPER_CAVEMAN_REVIEW_RECORD",
+      "raw_record_validation": "required for every promotion ingest and replay; SUPER_CAVEMAN_APPROVAL_RECORD and SUPER_CAVEMAN_REVIEW_RECORD must both name absolute Git-external regular files; verify the approval record's actual SHA-256, schema, decision, approver, timestamp, base commit, path-set digest, and tuple digest; verify the reviewer record's actual SHA-256, schema, identity, candidate raw-output SHA-256, and case-set SHA-256 against the aggregate result",
+      "approved_replay_validation": "every promotion replay revalidates both Git-external raw records before deterministic verification; current staged or committed exact-diff validation remains required for promotion; staged replay also requires the aggregate result and aggregate approval record to have byte-identical index and working-tree copies; committed replay anchors to a base-descendant and HEAD-ancestor commit whose canonical tuple set matches reviewed_blobs, permits later unrelated commits, and rejects later commits or working-tree changes that touch any approved subject path; public squash replay may use reviewed_blobs only when exact history is unavailable, and each approved target blob must match HEAD with no working-tree change on an approved path",
+      "required_approved_fields": ["status", "approver", "approved_at", "base_commit", "path_set_sha256", "staged_patch_sha256", "record_path", "record_sha256"]
+    }
+  },
+  "claim_gate": {
+    "required_passed_cases": 19,
+    "required_total_cases": 19,
+    "high_risk_failures_allowed": 0,
+    "format_failures_allowed": 0,
+    "single_run_claim": "one bounded attempt in the recorded harness/model only",
+    "cross_harness_claim": "not permitted without an equivalent recorded run for each harness/model"
+  }
+}

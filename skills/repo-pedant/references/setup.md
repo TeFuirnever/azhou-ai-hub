@@ -60,24 +60,34 @@ The collector reads local Codex, Claude, or zcode history only when explicitly r
 
 ## Local runtime state
 
-Inventory, execution records, closeout markers, and evolution candidates default to `.repo-pedant/` inside the affected project. Treat that directory as local working state unless the project explicitly adopts a tracked receipt format. Add it to the project's ignore rules only when authorized; do not edit ignore files from an inferred trigger.
+Inventory, execution records, closeout markers, hook counters, and evolution candidates default to `.azhou/repo-pedant/` inside the affected project. Treat that directory as local working state unless the project explicitly adopts a tracked receipt format. Add it to the project's ignore rules only when authorized; do not edit ignore files from an inferred trigger.
 
 Inventory v2 requires one memory decision per project. Pass an enumerated memory candidate or explicit discovery evidence:
 
 ```bash
 python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
-  --memory /absolute/project-memory/MEMORY.md \
-  --output /absolute/project/.repo-pedant/inventory.json
+  --memory /absolute/project-memory/MEMORY.md
 
 python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
-  --memory-decision 'none_discovered::checked repository MEMORY.md and active harness project-memory path' \
-  --output /absolute/project/.repo-pedant/inventory.json
+  --memory-decision 'none_discovered::checked repository MEMORY.md and active harness project-memory path'
 ```
+
+A single-project snapshot defaults to `.azhou/repo-pedant/inventory.json`; multi-project runs require an explicit `--output`. Validate execution state without a path to read `.azhou/repo-pedant/execution.json` from the current project.
+
+To import the prior `.repo-pedant/` state root, review and bind one explicit migration plan:
+
+```bash
+python3 "$SKILL_DIR/scripts/migrate_state.py" --project /absolute/project
+python3 "$SKILL_DIR/scripts/migrate_state.py" \
+  --project /absolute/project --apply --plan-id '<reviewed-planId>'
+```
+
+The source is preserved. Normal commands and hooks do not read it after migration.
 
 Use `hold` instead of `none_discovered` when a candidate cannot be inspected or ownership is unresolved. Multi-project runs prefix memory paths and decisions with `PROJECT_ROOT::`.
 
-The optional hook stores only gate counters under `XDG_CACHE_HOME/repo-pedant/hooks/` or the platform-equivalent user cache. It never stores document or transcript bodies.
+The optional hook stores only gate counters under `.azhou/repo-pedant/hooks/`. It never stores document or transcript bodies.
 
 Hook fragments live under `assets/hooks/`. Copy the relevant fragment into the host's supported configuration, replace `/absolute/path/to/repo-pedant`, then run the doctor command from [trigger-hooks.md](trigger-hooks.md). Skill installation alone does not install hooks.

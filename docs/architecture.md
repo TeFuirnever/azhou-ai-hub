@@ -25,7 +25,9 @@ Azhou AI Hub has one maintained runtime per skill and separate development evide
 
 ## Runtime boundary
 
-Each <code>skills/&lt;canonical-name&gt;/</code> directory must work when copied alone. It may contain instructions, references, deterministic scripts, schemas, templates and licensed offline assets. It must not depend on benchmark answers or vendor-specific identity metadata.
+Each <code>skills/&lt;canonical-name&gt;/</code> directory must remain independently installable and discoverable when copied as a complete package. That does not make every package a standalone implementation: declared external runtimes or an explicit repository checkout may still be required. A package must not depend on sibling skill directories, benchmark answers or vendor-specific identity metadata; every external requirement must be documented package-locally and fail closed when unavailable.
+
+Installable packages and mutable project state have separate roots. Packages remain under <code>skills/&lt;canonical-name&gt;/</code>; Azhou-owned project state uses <code>.azhou/&lt;canonical-name&gt;/</code>, while <code>.azhou/hub/</code> is reserved for cross-skill lifecycle state such as checkout receipts. Host-owned configuration and caches, repository infrastructure and user-selected deliverables remain outside <code>.azhou/</code>. Recognized prior roots are migration inputs only: apply is bound to a reviewed plan, preserves the source, publishes atomically and never enables fallback reads or dual writes.
 
 ## Evaluation boundary
 
@@ -53,3 +55,13 @@ History collectors and lifecycle hooks never write a live skill. Promotion requi
 | Released behavior | [CHANGELOG.md](../CHANGELOG.md) plus the matching Git tag |
 
 English and Chinese READMEs are reader mirrors. A material product, install, evidence or boundary change updates both in the same commit.
+
+## Foundation control plane
+
+`scripts/azhou_hub.py` composes repository-level information, read-only package-integrity diagnostics, explicit skill-root setup and the authoritative verifier. It does not enter an installed skill package and does not become a second package manager. Doctor's package-integrity result is distinct from package-specific runtime readiness and host activation. Normal setup owns only an absent destination created by the explicit operation; existing different content is a conflict, not an overwrite target.
+
+`azhou-info`, `azhou-doctor`, `azhou-setup` and `azhou-verify` are portable instruction/UX adapters above that CLI. They contain no host identity metadata and no second implementation of the control plane. A configured harness discovers the same package; the Skill verifies an explicit checkout and delegates to its CLI. Host discovery paths, invocation syntax, permissions and optional integrations remain outside the neutral package.
+
+Checkout lifecycle ownership is a separate, explicit single-skill mode. Its receipts live only under the explicit target's `.azhou/hub/receipts/` namespace. A v2 receipt records the source digest, executable intent, and installed filesystem identity; its self-digest is only an accidental-corruption check. Every repair, same-target mode migration or uninstall also requires the explicit target and recomputes the canonical source and destination before mutation. A legacy v1 receipt must be explicitly upgraded with `repair --apply` before destructive lifecycle commands; the upgrader validates the v1 byte digests, then recomputes both executable-aware v2 digests and records the current object identity. No receipt authorizes hook cleanup, harness configuration changes, cross-root movement, forced overwrite or package-manager removal.
+
+Verification has two evidence layers. The default public gate validates repository and checked-in benchmark integrity without secrets, including replay of the approved Super Caveman exact diff against the current staged or committed tree. The explicit maintainer promotion gate additionally authenticates the Git-external approval/review pair against that same diff; CI or release success in that mode does not turn those private records into public repository content.

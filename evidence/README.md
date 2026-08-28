@@ -2,6 +2,10 @@
 
 这里定义 `repo-pedant` 的演化材料边界。
 
+## 公开收据
+
+- [2026-08-23 public install smoke](public-install-smoke-2026-08-23.md)：从公开 GitHub 默认分支发现并隔离安装两个 canonical skill；不升级为发布、跨 harness 或模型质量证明。
+
 ## 可进入 Git
 
 - 脱敏 synthetic fixtures；

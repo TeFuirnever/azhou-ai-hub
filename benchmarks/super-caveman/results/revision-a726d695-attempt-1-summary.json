@@ -1,0 +1,97 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "pass",
+  "runtime": "frozen Super Caveman skill runtime",
+  "harness": "Codex desktop byte-reuse review with independent current-tree adapter delta reviewer",
+  "model": "GPT-5 family",
+  "model_limitation": "Exact serving snapshots were not exposed; the original producer, paired-judge, and current delta-review identities are retained in Git-external records.",
+  "skill_tree_sha256": "a726d6956a7d17226ab17ba1b7bd8942b424ca233335e9979283cec3fe4cd22b",
+  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+  "tool_permissions": {
+    "network": false,
+    "repository_write": "disposable agent-owned-edit fixture only in the original byte-reused run",
+    "shell": "fixture verification only in the original byte-reused run",
+    "external_apps": false
+  },
+  "attempt": 1,
+  "output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; current tree matched revision-a726d695 and an independent delta review confirmed maintained response rules were unchanged",
+    "case_count": "19/19",
+    "criteria_count": "44/44",
+    "unique_case_ids": "19/19",
+    "byte_reuse": "19/19 candidate responses; exact raw bytes and ordering retained from revision-c5366b95",
+    "maximum_observed_concurrency": 1,
+    "fixture_side_effect": "pass in original byte-reused run; disposable README typo corrected to exact required bytes and one-line diff verified",
+    "plan_tool_state": "pass; exactly three items with one in progress",
+    "repository_scope": "pass; only the disposable Git-external fixture changed during the original run"
+  },
+  "reviewer": {
+    "identity": "/root/integration_review",
+    "review_sha256": "7679edb08294197b046b27581b510f25646dfab524c1ee320f2a3000ccd744df"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "independent_paired_judges": 3,
+    "presentation_orders": ["candidate-baseline", "baseline-candidate", "candidate-baseline"],
+    "candidate_majority_required": 2,
+    "candidate_raw_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+    "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
+    "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+    "high_risk_regressions": 0,
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v2",
+      "status": "approved",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "9c7e5f7c4a0de6fe6af2517942285d9290d96c8d",
+      "path_set_sha256": "95a077b8eeb677e35ff0a4e9e9b10d4ebd10c84632b66922f738faf74304351c",
+      "staged_patch_sha256": "feca4efdf37c60d355bd24b7de37a476cec3b2627233ddd7654017c38e45bab1",
+      "approver": "workspace-owner",
+      "approved_at": "2026-08-28T07:23:48Z",
+      "record_path": "results/revision-a726d695-exact-diff-approval.json",
+      "record_sha256": "510fc3d342c7251acd502f7cbf95ebc5784b9d011c80883aac00357b540acf83",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    },
+    "judges": [
+      {"identity": "/root/judge_fresh_pair_1", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"},
+      {"identity": "/root/judge_fresh_pair_2", "order": "baseline-candidate", "vote": "candidate", "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"},
+      {"identity": "/root/judge_fresh_pair_3", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"}
+    ]
+  },
+  "passed": 19,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"},
+    {"id": "under-two-minute-next-action", "status": "pass"},
+    {"id": "host-plan-tool-state", "status": "pass"},
+    {"id": "task-wins-options", "status": "pass"},
+    {"id": "stop-mode-default-style", "status": "pass"},
+    {"id": "uncertainty-and-idiom", "status": "pass"}
+  ],
+  "limitations": [
+    "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
+    "The current-tree runtime delta is limited to the optional off-by-default Codex lifecycle adapter; its deterministic regression tests are outside the runtime tree. SKILL.md, references/modes.md, the response cases, and maintained response rules are unchanged.",
+    "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
+    "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
+    "The exact-diff approval is bound to the four-path adapter hardening, benchmark-manifest registration, and prior-result supersession delta from 9c7e5f7c4a0de6fe6af2517942285d9290d96c8d; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+    "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
+    "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
+  ]
+}

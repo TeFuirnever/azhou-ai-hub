@@ -1,0 +1,97 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "status": "pass",
+  "runtime": "Codex agent runtime",
+  "harness": "Codex Desktop collaboration agent",
+  "model": "GPT-5 (Codex)",
+  "model_limitation": "Exact serving snapshot and version were not exposed to the producer.",
+  "skill_tree_sha256": "f3ab4d370e2162d37abb1b81015132b7bcaecba5f91d2beb2dd10dd15ae7cf76",
+  "cases_sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
+  "tool_permissions": {
+    "network": "available in harness, denied by case contract, unused",
+    "repository_write": "disposable agent-owned-edit fixture only",
+    "shell": "skill readback, fixture edit verification, and evidence hashing only",
+    "external_apps": "available in harness, denied by case contract, unused"
+  },
+  "attempt": 1,
+  "output_set_sha256": "7a6bc93b8ec44ed811d3717936f9c39a8e294398d8f3f87dc9b0ec963ea1924c",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; every runtime path included except generated Python cache",
+    "case_count": "14/14",
+    "unique_case_ids": "14/14",
+    "fixture_side_effect": "pass; README before and after hashes verified against actual bytes",
+    "repository_scope": "pass; only disposable fixture changed"
+  },
+  "reviewer": {
+    "identity": "/root/super_caveman_f3ab4d37_spec_reviewer",
+    "review_sha256": "4124f94555592ebda7e8600161a27651b91f7b826ca92e7e9125ef6839c03a6d"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "baseline_output_set_sha256": "9764244b67f63a14c2b4ca926737cf1e79b086edd058f44ef8846242b65fe049",
+    "candidate_output_set_sha256": "7a6bc93b8ec44ed811d3717936f9c39a8e294398d8f3f87dc9b0ec963ea1924c",
+    "high_risk_regressions": 0,
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v1",
+      "status": "approved",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "11d14fd82693c4250dd242a689c02c17a144f2bc",
+      "path_set_sha256": "43a8b0f3f0ceeedcd890eb98d32ca10d9ddfa68965e46131dddbad4864a48112",
+      "staged_patch_sha256": "3e0f93998f53260638c1cdfeffb3c9a7f8ec19456818e8372cdd27c330d1defd",
+      "approver": "workspace-owner",
+      "approved_at": "2026-08-24T20:22:30+08:00",
+      "record_path": "results/revision-f3ab4d37-exact-diff-approval.json",
+      "record_sha256": "6532408645b924ae36355e2c225678201b0132c12c207856bc1eb83dc000d8d0",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    },
+    "judges": [
+      {
+        "identity": "/root/super_caveman_f3ab4d37_judge_1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "17abf103c0f78dcb9e313f21ba43b2fe75d3171be0e398bea3badbcae774f19d"
+      },
+      {
+        "identity": "/root/super_caveman_f3ab4d37_judge_2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "2392c1145fb475f18729302959d0f758cbcfde8cc9c523da9879d610600fc061"
+      },
+      {
+        "identity": "/root/super_caveman_f3ab4d37_judge_3",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "c0888f218ca2aa043442b58ce0472df6a4ea697f2c8fe13f0f4655f250a98ec5"
+      }
+    ]
+  },
+  "passed": 14,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "case_results": [
+    {"id": "direct-answer", "status": "pass"},
+    {"id": "agent-owned-edit", "status": "pass"},
+    {"id": "debugging-cause", "status": "pass"},
+    {"id": "concept-explanation", "status": "pass"},
+    {"id": "destructive-action", "status": "pass"},
+    {"id": "real-ambiguity", "status": "pass"},
+    {"id": "multi-step-progress", "status": "pass"},
+    {"id": "long-form-request", "status": "pass"},
+    {"id": "error-report", "status": "pass"},
+    {"id": "casual-message", "status": "pass"},
+    {"id": "code-answer", "status": "pass"},
+    {"id": "complex-plan", "status": "pass"},
+    {"id": "partial-success", "status": "pass"},
+    {"id": "medical-boundary", "status": "pass"}
+  ],
+  "limitations": [
+    "One Codex Desktop collaboration-agent run only; no cross-harness or cross-model claim.",
+    "The exact model deployment variant and per-case wall time were unavailable.",
+    "Harness capabilities exceeded the case contract; denied network and external-app tools were not used.",
+    "Raw outputs, full reviewer record, paired judge records, and the raw human approval record remain Git-external; the aggregate approval receipt is retained in Git.",
+    "This historical revision received its own structured exact-diff approval; the current revision requires a separate approval."
+  ]
+}

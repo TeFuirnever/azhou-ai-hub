@@ -42,7 +42,7 @@ Read [evidence-contract.md](evidence-contract.md) before interpreting zero resul
 
 Prefer evidence in this order:
 
-1. direct user corrections and `Repo-pedant receipt` fields;
+1. direct user corrections and `Repo Pedant receipt` fields;
 2. failed checks, reverted edits, scope violations, or unsafe actions;
 3. runtime history with an explicit coverage limit;
 4. supplied exports and synthetic fixtures.
@@ -95,7 +95,7 @@ After reading and validating the candidate JSON, archive only the converted live
 ```bash
 python3 skills/repo-pedant/scripts/manage_evolution.py archive \
   --project /absolute/repository \
-  --candidate .repo-pedant/evolution/candidates/<candidate-id>.json
+  --candidate .azhou/repo-pedant/evolution/candidates/<candidate-id>.json
 ```
 
 Invalid/failed processing retains the live signals. A successful archive is immutable and one-shot; health analysis reads both live and archived signals.
@@ -122,7 +122,7 @@ Represent the decision with `assets/evolution-evaluation.schema.json`, then vali
 
 ```bash
 python3 skills/repo-pedant/scripts/manage_evolution.py gate \
-  --candidate .repo-pedant/evolution/candidates/<candidate-id>.json \
+  --candidate .azhou/repo-pedant/evolution/candidates/<candidate-id>.json \
   --evaluation /absolute/local/evaluation.json
 ```
 

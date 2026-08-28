@@ -12,6 +12,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+import azhou_runtime_state
+
 
 SCHEMA_VERSION = "repo-pedant.closeout-state.v1"
 REMINDER = "🟡 阿舟提醒｜Repo Pedant 收尾尚未完成。完成当前收尾，或记录 hold 与 receipt。"
@@ -86,11 +91,18 @@ def load_closeout_state(workspace: Path, relative_state: str) -> tuple[dict[str,
     return (None if errors else value), errors
 
 
-def runtime_state_directory(value: Path | None) -> Path:
-    if value is not None:
-        return value.expanduser().resolve()
-    base = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))).expanduser()
-    return (base / "repo-pedant" / "hooks").resolve()
+def runtime_state_directory(value: Path | None, workspace: Path) -> Path:
+    try:
+        namespace = azhou_runtime_state.state_path(workspace, "repo-pedant")
+        if value is None:
+            return azhou_runtime_state.state_path(workspace, "repo-pedant", "hooks")
+        raw = value.expanduser()
+        relative = raw.resolve(strict=False).relative_to(workspace) if raw.is_absolute() else raw
+        candidate = azhou_runtime_state.relative_path(workspace, relative)
+        candidate.relative_to(namespace)
+        return candidate
+    except (ValueError, azhou_runtime_state.StateError) as exc:
+        raise HookError("hook runtime state must stay inside .azhou/repo-pedant") from exc
 
 
 def counter_path(directory: Path, workspace: Path, session_id: str) -> Path:
@@ -161,7 +173,7 @@ def evaluate_event(args: argparse.Namespace, hook_input: dict[str, Any]) -> tupl
     recursive = bool(hook_input.get("stop_hook_active") or hook_input.get("stopHookActive"))
     if wants_gate and not recursive:
         session_id = state_session or input_session or "unknown"
-        private_dir = runtime_state_directory(args.runtime_state_dir)
+        private_dir = runtime_state_directory(args.runtime_state_dir, workspace)
         counters_file = counter_path(private_dir, workspace, session_id)
         counters = read_counter(counters_file)
         progress = int(state["progress"])
@@ -256,7 +268,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     event.add_argument("--event", choices=("stop", "precompact"), required=True)
     event.add_argument("--workspace", default=Path("."), type=Path)
     event.add_argument("--workspace-from-input", action="store_true", help="resolve workspace from bounded hook JSON cwd/workspace fields")
-    event.add_argument("--state", default=".repo-pedant/closeout-state.json")
+    event.add_argument("--state", default=".azhou/repo-pedant/closeout-state.json")
     event.add_argument("--mode", choices=("advisory", "gate"), default="advisory")
     event.add_argument("--format", choices=("plain", "claude", "codex", "json"), default="plain")
     event.add_argument("--block-cap", type=int, default=3)
@@ -266,7 +278,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     event.set_defaults(func=cmd_event)
     doctor = subparsers.add_parser("doctor", help="diagnose state, feature flags, and duplicate hook installs")
     doctor.add_argument("--workspace", required=True, type=Path)
-    doctor.add_argument("--state", default=".repo-pedant/closeout-state.json")
+    doctor.add_argument("--state", default=".azhou/repo-pedant/closeout-state.json")
     doctor.add_argument("--config", action="append", default=[], type=Path)
     doctor.add_argument("--require-env", action="append", default=[])
     doctor.set_defaults(func=cmd_doctor)
