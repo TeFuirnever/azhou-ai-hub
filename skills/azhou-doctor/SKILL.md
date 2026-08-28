@@ -5,11 +5,25 @@ description: Diagnose Azhou AI Hub checkout, package, explicit install-target, o
 
 # Azhou Doctor
 
+**🦊 阿舟 · Azhou Doctor**
+
+> 🩺 先诊断，不越权修复。
+
 Run the repository Foundation CLI and keep diagnosis read-only. Never turn a doctor request into setup, repair, cleanup, cache removal, or configuration edits.
+
+## Brand protocol
+
+Emit this exact display event once:
+
+```text
+🦊 阿舟 · Azhou Doctor 启动｜mode=doctor｜scope=<checkout>
+```
+
+Use `✅ 验证通过` only after the diagnostic command completes and its results are read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
 
 ## Workflow
 
-1. Emit `🦊 阿舟 · Azhou Doctor 启动` with `mode=doctor` and the checkout scope.
+1. Emit the startup protocol once with the resolved checkout scope.
 2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 3. Build `python3 scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
    - `--target <skill-root>` for an exact install root.

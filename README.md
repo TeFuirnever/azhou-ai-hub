@@ -142,6 +142,10 @@ Super Caveman keeps original Caveman's persistent terse modes as its core, absor
 
 LLM Wiki stores Markdown pages only under `<project>/.azhou/llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, seven-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
 
+![LLM Wiki end-to-end evidence preview](assets/skills/llm-wiki-effect.png)
+
+> 🦊 Evidence preview built from one real isolated CLI, MCP `tools/list`, and `SessionStart` run. Bundle, render, and visual inspection passed; final public visual approval remains a human checkpoint.
+
 [Run the demo](docs/demos/llm-wiki.md) · [Read the package](skills/llm-wiki/SKILL.md) · [Read brand contract](skills/llm-wiki/references/brand-layer.md) · [Read design](skills/llm-wiki/references/design.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md)
 
 ## One architecture

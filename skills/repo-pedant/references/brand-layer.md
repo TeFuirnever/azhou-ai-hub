@@ -15,7 +15,7 @@ Repo-pedant 的品牌感来自稳定、克制、可辨认的过程语言。品�
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · Repo Pedant 启动｜mode=<mode>｜scope=<scope>` | mode + repo scope |
+| 启动 | `🦊 阿舟 · Repo Pedant 启动｜mode=<mode>｜scope=<repo>` | mode + repo scope |
 | 范围锁定 | `🧭 范围锁定｜authority=<source>｜projects=<n>` | authority + affected projects |
 | 清单完成 | `🗂️ 清单完成｜files=<n>｜holds=<n>｜out_of_scope=<n>` | files + holds/out-of-scope counts |
 | 影响确认 | `🕸️ 影响确认｜surfaces=<n>｜consumers=<n>` | consumer/surface count |
@@ -29,6 +29,7 @@ Repo-pedant 的品牌感来自稳定、克制、可辨认的过程语言。品�
 启动示例：
 
 ```text
+🦊 阿舟 · Repo Pedant 启动｜mode=<mode>｜scope=<repo>
 🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/absolute/repo
 ```
 
