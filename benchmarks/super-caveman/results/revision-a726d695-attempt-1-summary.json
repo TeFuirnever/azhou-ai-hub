@@ -1,11 +1,11 @@
 {
   "schema": "super-caveman-evaluation-result.v1",
-  "status": "superseded",
+  "status": "pass",
   "runtime": "frozen Super Caveman skill runtime",
-  "harness": "Codex desktop byte-reuse review with independent current-tree delta reviewer",
+  "harness": "Codex desktop byte-reuse review with independent current-tree adapter delta reviewer",
   "model": "GPT-5 family",
   "model_limitation": "Exact serving snapshots were not exposed; the original producer, paired-judge, and current delta-review identities are retained in Git-external records.",
-  "skill_tree_sha256": "e2d998c67749438375185326baa392578fe0d4a41aea085a88cfee2649d1770e",
+  "skill_tree_sha256": "a726d6956a7d17226ab17ba1b7bd8942b424ca233335e9979283cec3fe4cd22b",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
@@ -18,7 +18,7 @@
   "automatic_checks": {
     "raw_schema": "pass",
     "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; current tree matched revision-e2d998c6 and an independent delta review confirmed maintained response rules were unchanged",
+    "skill_tree_digest": "stable-v2; current tree matched revision-a726d695 and an independent delta review confirmed maintained response rules were unchanged",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
@@ -29,8 +29,8 @@
     "repository_scope": "pass; only the disposable Git-external fixture changed during the original run"
   },
   "reviewer": {
-    "identity": "/root/foundation_tdd_fix_review",
-    "review_sha256": "5b4a68094aa65fd59af18e959fe0e32895c92dbf7b684a5f5e328ccaec76b687"
+    "identity": "/root/integration_review",
+    "review_sha256": "7679edb08294197b046b27581b510f25646dfab524c1ee320f2a3000ccd744df"
   },
   "promotion_review": {
     "paired_status": "pass",
@@ -45,13 +45,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "62347fecb9789ac8f7159d1034b73b0dd5298881",
-      "path_set_sha256": "04f3d873d278889534031225231245bf751b963be1733a3029b266d128df2163",
-      "staged_patch_sha256": "7f1c3cefbc01795533a8d1d81359964f46826c0f2e47821dd6ab6e3e73201159",
+      "base_commit": "9c7e5f7c4a0de6fe6af2517942285d9290d96c8d",
+      "path_set_sha256": "95a077b8eeb677e35ff0a4e9e9b10d4ebd10c84632b66922f738faf74304351c",
+      "staged_patch_sha256": "feca4efdf37c60d355bd24b7de37a476cec3b2627233ddd7654017c38e45bab1",
       "approver": "workspace-owner",
-      "approved_at": "2026-08-27T15:09:33Z",
-      "record_path": "results/revision-e2d998c6-exact-diff-approval.json",
-      "record_sha256": "e408b8056063fe79072b97e56a8ff3268eac4ec0140abcfd63dd08f202120f54",
+      "approved_at": "2026-08-28T07:23:48Z",
+      "record_path": "results/revision-a726d695-exact-diff-approval.json",
+      "record_sha256": "510fc3d342c7251acd502f7cbf95ebc5784b9d011c80883aac00357b540acf83",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     },
     "judges": [
@@ -87,10 +87,10 @@
   ],
   "limitations": [
     "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
-    "The current-tree delta is limited to the optional off-by-default Codex lifecycle adapter, package-local immutable upstream source-data snapshots, and provenance/setup documentation; modes.md, route behavior, and maintained response rules are unchanged.",
+    "The current-tree runtime delta is limited to the optional off-by-default Codex lifecycle adapter; its deterministic regression tests are outside the runtime tree. SKILL.md, references/modes.md, the response cases, and maintained response rules are unchanged.",
     "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
     "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
-    "The exact-diff approval is rebound to the two-path CI history-fetch repair from 62347fecb9789ac8f7159d1034b73b0dd5298881; the aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+    "The exact-diff approval is bound to the four-path adapter hardening, benchmark-manifest registration, and prior-result supersession delta from 9c7e5f7c4a0de6fe6af2517942285d9290d96c8d; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
     "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ]
