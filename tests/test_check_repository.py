@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 from scripts.check_repository import (
+    SKILL_BRAND_CONTRACTS,
     check_action_pins,
     check_markdown_links,
     check_secret_patterns,
+    check_skill_brand_contract,
     check_skill_discovery,
     check_treehouse_config,
     relative_markdown_targets,
@@ -32,6 +35,40 @@ def release_workflow_script() -> str:
 
 
 class RepositoryPolicyTest(unittest.TestCase):
+    def test_all_canonical_skills_follow_the_shared_brand_contract(self) -> None:
+        self.assertEqual([], check_skill_brand_contract(ROOT))
+
+    def test_skill_brand_contract_rejects_a_drifted_startup_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative, contract in SKILL_BRAND_CONTRACTS.items():
+                source = ROOT / relative
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+                brand_path = contract.get("brand_path")
+                if brand_path:
+                    brand_source = ROOT / brand_path
+                    brand_target = root / brand_path
+                    brand_target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(brand_source, brand_target)
+
+            skill = root / "skills" / "azhou-info" / "SKILL.md"
+            skill.write_text(
+                skill.read_text(encoding="utf-8").replace(
+                    "🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>",
+                    "🦊 阿舟 · Azhou Info 启动: mode=<info|version>, scope=<checkout>",
+                ),
+                encoding="utf-8",
+            )
+
+            errors = check_skill_brand_contract(root)
+
+            self.assertIn(
+                "skill brand startup drift: skills/azhou-info/SKILL.md",
+                errors,
+            )
+
     def test_only_canonical_runtime_skills_are_discoverable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

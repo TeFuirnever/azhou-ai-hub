@@ -40,13 +40,16 @@
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
 
-1. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带 mode 与 scope。
-2. 多阶段 skill 将顺序、固定前缀、字段和分隔符写成协议；脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
-3. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
-4. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
-5. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。
+1. 每个 canonical package 在 `SKILL.md` 或其品牌层公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。像 Super Caveman 这样明确禁止普通回复生命周期播报的模式 skill，可把身份与启动协议只保留在关键操作的品牌层。
+2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。
+3. 多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
+4. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
+5. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
+6. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。
 
 Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名和原始证据保持稳定纯文本；不支持 Unicode 的 host 可移除 emoji，不能改机器字段和值。
+
+`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：身份、精确启动格式、成功/失败/hold、原始证据边界和 Unicode 降级缺一不可。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
 
 ## 4. 证据与评测
 
