@@ -134,6 +134,10 @@ JSON 可解析不等于完成。这个 skill 要求交付可编辑源图，用�
 
 Super Caveman 保留原版 Caveman 的持续精简模式作为核心，把六个伴生 Skill 吸纳为紧凑委派、commit message、review、受保护文本压缩、帮助和证据约束统计路线，并完整采用锁定版 `i-have-adhd` 的输出行为合同。全部能力只通过一个 canonical `super-caveman` 包交付。安全与显式输出合同优先，完整 ADHD-friendly 行为合同其次，Caveman 压缩最后。插件安装、hook、全局配置、诊断主张和未经验证的跨会话持久化不进入这个中立包。文件压缩不会启动第二个模型，也不会静默外传内容；标准库门禁会检查源文件、验证受保护结构、写入仓库外备份、使用检查点式不覆盖安装，并拒绝覆盖更新后的文件。受保护 apply/restore 要求文件系统支持同目录 hard link；不支持时会在移动源文件前阻断。关键操作每个已验证阶段只使用一个克制的阿舟锚点；普通精简回复不添加生命周期 emoji。宿主没有可审计计数器时，精确统计明确返回不可用。
 
+![Super Caveman 受保护压缩效果图](assets/skills/super-caveman-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成。构图、文字和运行绑定已检查；正式 v1.9 色彩转正与最终身份/手部批准仍保留 checkpoint。
+
 [运行包](skills/super-caveman/SKILL.md) · [依赖安装](skills/super-caveman/references/setup.md) · [来源说明](skills/super-caveman/references/provenance.md) · [压缩安全流程](skills/super-caveman/references/compression.md)
 
 ## LLM Wiki
