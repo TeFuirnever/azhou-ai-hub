@@ -53,6 +53,7 @@ REQUIRED_PATHS = (
     "README.md",
     "README.zh-CN.md",
     "assets/skills/llm-wiki-effect.png",
+    "assets/skills/super-caveman-effect.png",
     "SECURITY.md",
     "SUPPORT.md",
     "THIRD_PARTY_NOTICES.md",
