@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import io
 import json
 import re
@@ -50,6 +51,20 @@ def llm_wiki_public_fragments(path: Path) -> str:
 
 
 class LLMWikiProductionTests(unittest.TestCase):
+    def test_runtime_scripts_parse_with_python_311_grammar(self) -> None:
+        for name in (
+            "azhou_runtime_state.py",
+            "llm_wiki.py",
+            "llm_wiki_adapter.py",
+            "llm_wiki_mcp.py",
+        ):
+            path = SCRIPTS / name
+            ast.parse(
+                path.read_text(encoding="utf-8"),
+                filename=path.as_posix(),
+                feature_version=(3, 11),
+            )
+
     def test_product_surface_has_no_host_or_historical_terms(self) -> None:
         violations: list[str] = []
         for path in sorted(SKILL.rglob("*")):

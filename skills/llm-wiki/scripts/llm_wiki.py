@@ -220,7 +220,8 @@ def serialize_page(page: Page) -> str:
         f"confidence: {page.confidence}",
         f"schemaVersion: {page.schema_version}",
     ]
-    return f"---\n{'\n'.join(lines)}\n---\n{page.content}"
+    frontmatter = "\n".join(lines)
+    return f"---\n{frontmatter}\n---\n{page.content}"
 
 
 def atomic_write(path: Path, content: str) -> None:
