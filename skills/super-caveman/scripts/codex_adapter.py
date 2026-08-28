@@ -91,8 +91,31 @@ def _hook_command() -> str:
     return f"{shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).resolve()))} render"
 
 
-def _is_ours(handler: Any) -> bool:
-    return isinstance(handler, dict) and handler.get("type") == "command" and handler.get("command") == _hook_command()
+def _is_adapter_command(command: Any) -> bool:
+    """Recognize the adapter by its lexical command shape, not its checkout."""
+    if not isinstance(command, str):
+        return False
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False
+    if len(tokens) != 3 or not tokens[0] or tokens[2] != "render":
+        return False
+    return Path(tokens[1]).parts[-3:] == ("super-caveman", "scripts", "codex_adapter.py")
+
+
+def _is_ours(registration: Any, handler: Any) -> bool:
+    """Require every stable registration and handler field to match."""
+    if not isinstance(registration, dict) or registration.get("matcher") != OWN_MATCHER:
+        return False
+    return (
+        isinstance(handler, dict)
+        and handler.get("type") == "command"
+        and handler.get("timeout") == HOOK_TIMEOUT_SECONDS
+        and handler.get("additionalContextLimit") == 1024
+        and handler.get("statusMessage") == "Loading Super Caveman"
+        and _is_adapter_command(handler.get("command"))
+    )
 
 
 def _is_replaced_legacy_handler(handler: Any) -> bool:
@@ -139,6 +162,7 @@ def _owned_registration() -> dict[str, Any]:
 
 def _replace_owned(registrations: list[Any], replacement: dict[str, Any] | None) -> list[Any]:
     result: list[Any] = []
+    replacement_added = False
     for registration in registrations:
         if not isinstance(registration, dict) or registration.get("matcher") != OWN_MATCHER:
             result.append(registration)
@@ -147,13 +171,21 @@ def _replace_owned(registrations: list[Any], replacement: dict[str, Any] | None)
         if not isinstance(handlers, list):
             result.append(registration)
             continue
-        kept = [handler for handler in handlers if not _is_ours(handler)]
+        owned = [_is_ours(registration, handler) for handler in handlers]
+        if not any(owned):
+            result.append(registration)
+            continue
+        if replacement is not None and any(owned) and not replacement_added:
+            result.append(replacement)
+            replacement_added = True
+        kept = [handler for handler, is_owned in zip(handlers, owned) if not is_owned]
         if kept:
             updated = dict(registration)
             updated["hooks"] = kept
             result.append(updated)
     if replacement is not None:
-        result.append(replacement)
+        if not replacement_added:
+            result.append(replacement)
     return result
 
 

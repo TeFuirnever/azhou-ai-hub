@@ -27,7 +27,7 @@ For a local checkout, the foundation CLI can plan and reconcile a manual copy or
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
-python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --json
+python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
 python3 scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
 ~~~
 
@@ -44,7 +44,7 @@ python3 scripts/azhou_hub.py setup \
 
 python3 scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
-  --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --json
+  --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
 ~~~
 
 The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).

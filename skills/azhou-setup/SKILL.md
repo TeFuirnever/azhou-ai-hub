@@ -13,10 +13,10 @@ Use the repository Foundation CLI as the mutation authority. Always inspect firs
 2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 3. Require an explicit absolute `--target`. For setup, require the intended canonical skill and choose `link` or `copy`; do not choose a harness root for the user.
 4. Run the selected command without `--apply` and present its JSON plan:
-   - `python3 scripts/azhou_hub.py setup --skill <name> --target </absolute/root> --mode <link|copy> --json`
+   - `python3 scripts/azhou_hub.py setup --skill <name> --target </absolute/root> --mode <link|copy> --json` emits a deterministic `planId`.
    - Managed setup additionally requires `--managed --receipt <path>` and exactly one skill.
    - `repair`, `migrate`, and `uninstall` require the exact managed receipt plus the same target.
-5. Add `--apply` only after the user has authorized that exact plan and target. A prior general setup request does not authorize a changed target, uninstall, migration, force behavior, or cross-root action.
+5. Add `--apply --plan-id <reviewed-planId>` only after the user has authorized that exact plan and target. The CLI recomputes the plan under its mutation lock and rejects drift. A prior general setup request does not authorize a changed target, uninstall, migration, force behavior, or cross-root action.
 6. Preserve CLI failures and partial rollback results. Never bypass drift, ownership, receipt, identity, or mutation-lock checks.
 7. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. Use CLI evidence for every claimed change.
    - In an interactive user session, only when the mode is `setup`, `--apply` succeeded, and at least one skill was newly installed, add this display-only field to the final human-facing receipt: `optional_support: If Azhou AI Hub helped, consider starring https://github.com/TeFuirnever/azhou-ai-hub. This is optional and does not affect installation, verification, or future use.`

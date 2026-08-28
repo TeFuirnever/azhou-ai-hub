@@ -274,14 +274,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             category = values.get("category", "reference")
             if category not in llm_wiki.CATEGORIES:
                 raise llm_wiki.WikiError(f"unsupported category: {category}")
-            filename = llm_wiki.title_to_slug(title)
-            if store.read_page(filename) is not None:
-                return text_result(
-                    f'Page "{filename}" already exists. Use wiki_ingest to merge content into it, '
-                    "or wiki_delete to remove it first.",
-                    error=True,
-                )
-            page, _ = store.ingest(
+            page = store.add(
                 title=title,
                 content=content,
                 tags=tags,
@@ -303,8 +296,15 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             return text_result(f"Wiki has {len(pages)} pages but no index. Pages:\n" + "\n".join(f"- {page}" for page in pages))
 
         if name == "wiki_read":
-            filename = page_argument(values)
-            page = store.read_page(filename)
+            raw_page = require_string(values, "page")
+            if raw_page.endswith(".md"):
+                filename = raw_page
+                page = store.read_page(filename)
+            else:
+                filename, page = store.resolve_title(raw_page)
+                if page is None:
+                    filename = f"{raw_page}.md"
+                    page = store.read_page(filename)
             if page is None:
                 return text_result(f"Wiki page not found: {filename}", error=True)
             header = [

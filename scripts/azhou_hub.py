@@ -472,6 +472,30 @@ def _remove_exact_installation(
     return True
 
 
+def _remove_created_installation(
+    destination: Path,
+    mode: str,
+    expected_identity: tuple[int, int, int],
+    expected_digest: str,
+) -> bool:
+    """Remove only the artifact proven to have been created by this operation."""
+    try:
+        if _path_identity(destination) != expected_identity:
+            return False
+        if mode == "link":
+            if not destination.is_symlink() or os.readlink(destination) != expected_digest:
+                return False
+        elif not destination.is_dir() or package_digest(destination) != expected_digest:
+            return False
+        if destination.is_symlink() or destination.is_file():
+            destination.unlink()
+        else:
+            shutil.rmtree(destination)
+    except (OSError, PackageError):
+        return False
+    return True
+
+
 def _copy_package(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=f".{destination.name}.stage-", dir=destination.parent))
@@ -495,6 +519,7 @@ def setup_skills(
     mode: str,
     dry_run: bool,
     receipt_path: Path | None = None,
+    plan_id: str | None = None,
 ) -> dict[str, Any]:
     if mode not in {"copy", "link"}:
         raise ValueError(f"unsupported setup mode: {mode}")
@@ -569,8 +594,31 @@ def setup_skills(
                 else:
                     receipt_current = True
 
+    plan = {
+        "schema": "azhou-ai-hub.setup-plan.v1",
+        "mode": mode,
+        "target": str(target),
+        "managed": receipt_path is not None,
+        "receipt": str(receipt_path.expanduser().resolve()) if receipt_path is not None else None,
+        "skills": [
+            {
+                "name": row["name"],
+                "status": row["status"],
+                "source": row["source"],
+                "destination": row["destination"],
+                "source_digest": row.get("source_digest", ""),
+            }
+            for row in rows
+        ],
+    }
+    computed_plan_id = hashlib.sha256(_canonical_json(plan)).hexdigest()
+    if not dry_run and plan_id is None:
+        return _setup_failure(target, mode, "setup apply requires the reviewed --plan-id") | {"planId": computed_plan_id}
+    if not dry_run and plan_id is not None and plan_id != computed_plan_id:
+        return _setup_failure(target, mode, "setup plan changed; run dry-run again") | {"planId": computed_plan_id}
+
     if any(row["status"] == "conflict" for row in rows):
-        return {
+        payload = {
             "schema_version": "azhou-ai-hub.setup.v1",
             "status": "fail",
             "mode": mode,
@@ -578,6 +626,9 @@ def setup_skills(
             "applied": False,
             "skills": rows,
         }
+        payload["planId"] = computed_plan_id
+        return payload
+
 
     if dry_run:
         return {
@@ -587,6 +638,7 @@ def setup_skills(
             "target": str(target),
             "applied": False,
             "skills": rows,
+            "planId": computed_plan_id,
         }
 
     if receipt_current:
@@ -598,13 +650,14 @@ def setup_skills(
             "applied": False,
             "receipt": str(receipt_path.expanduser().resolve()),
             "skills": rows,
+            "planId": computed_plan_id,
         }
 
     try:
         target.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        return _setup_failure(target, mode, f"cannot create target root: {exc}")
-    created: list[tuple[Path, tuple[int, int, int]]] = []
+        return _setup_failure(target, mode, f"cannot create target root: {exc}") | {"planId": computed_plan_id}
+    created: list[tuple[Path, tuple[int, int, int], str]] = []
     rollback_failed = False
     for row in rows:
         if row["status"] != "planned":
@@ -619,17 +672,49 @@ def setup_skills(
             identity = _path_identity(destination)
             if identity is None:
                 raise PackageError("installed artifact identity cannot be proven")
-            created.append((destination, identity))
+            proof = os.readlink(destination) if mode == "link" else package_digest(destination)
+            created.append((destination, identity, proof))
+            if mode == "copy" and proof != row["source_digest"]:
+                raise PackageError("installed copy does not match the reviewed source digest")
+            if package_digest(source) != row["source_digest"]:
+                raise PackageError("canonical source changed during setup")
         except (OSError, PackageError) as exc:
             row["status"] = "error"
             row["details"] = str(exc)
-            for created_path, identity in reversed(created):
+            for created_path, identity, proof in reversed(created):
                 created_row = next(item for item in rows if Path(item["destination"]) == created_path)
-                if not _remove_exact_installation(Path(created_row["source"]), created_path, mode, identity):
+                if not _remove_created_installation(created_path, mode, identity, proof):
                     rollback_failed = True
             break
         row["status"] = "installed"
         row["details"] = f"canonical package {mode} installed"
+
+    final_verification_failed = False
+    if not any(row["status"] == "error" for row in rows):
+        for row in rows:
+            if row["status"] != "installed":
+                continue
+            source = Path(row["source"])
+            destination = Path(row["destination"])
+            proof = next(((identity, proof) for path, identity, proof in created if path == destination), None)
+            try:
+                if proof is None or package_digest(source) != row["source_digest"]:
+                    raise PackageError("canonical source changed during final setup verification")
+                if mode == "copy":
+                    if package_digest(destination) != row["source_digest"] or proof[1] != row["source_digest"]:
+                        raise PackageError("installed copy changed during final setup verification")
+                elif _path_identity(destination) != proof[0] or not destination.is_symlink() or os.readlink(destination) != proof[1]:
+                    raise PackageError("installed link changed during final setup verification")
+            except (OSError, PackageError) as exc:
+                row["status"] = "error"
+                row["details"] = str(exc)
+                final_verification_failed = True
+                break
+
+    if final_verification_failed:
+        for created_path, identity, proof in reversed(created):
+            if not _remove_created_installation(created_path, mode, identity, proof):
+                rollback_failed = True
 
     failed = any(row["status"] in {"conflict", "error"} for row in rows)
     payload = {
@@ -643,11 +728,14 @@ def setup_skills(
     if failed:
         payload["status"] = "partial" if rollback_failed else "rolled_back"
         payload["applied"] = False
+        payload["planId"] = computed_plan_id
         return payload
     if receipt_path is not None:
         try:
             receipt = _new_receipt(root, target, mode, rows)
             for item in receipt["skills"]:
+                if package_digest(Path(item["source"])) != item["source_digest"]:
+                    raise PackageError("canonical source changed before receipt finalization")
                 state, details = _receipt_item_state(item, mode, target, root)
                 if state != "current":
                     raise PackageError(f"installed artifact verification failed: {details}")
@@ -660,12 +748,13 @@ def setup_skills(
                 if row["status"] != "installed":
                     continue
                 item = Path(row["destination"])
-                identity = next((value for path, value in created if path == item), None)
-                if not _remove_exact_installation(Path(row["source"]), item, mode, identity):
+                proof = next(((identity, proof) for path, identity, proof in created if path == item), None)
+                if proof is None or not _remove_created_installation(item, mode, proof[0], proof[1]):
                     rollback_failed = True
             payload["status"] = "partial" if rollback_failed else "rolled_back"
             payload["applied"] = False
             payload["error"] = f"managed receipt finalization failed: {exc}"
+    payload["planId"] = computed_plan_id
     return payload
 
 
@@ -1189,12 +1278,14 @@ def _print_doctor(payload: dict[str, Any]) -> None:
 
 def _print_setup(payload: dict[str, Any]) -> None:
     print(f"Azhou AI Hub setup: {payload['status']} ({payload['mode']} -> {payload['target']})")
+    if payload.get("planId"):
+        print(f"Plan ID: {payload['planId']}")
     if payload.get("error"):
         print(f"[FAIL] target: {payload['error']}")
     for row in payload["skills"]:
         print(f"[{row['status'].upper()}] {row['name']}: {row['details']}")
     if payload["status"] == "dry_run":
-        print("No files changed. Re-run with --apply to execute this plan.")
+        print("No files changed. Re-run with --apply --plan-id <reviewed-planId> to execute this plan.")
 
 
 def run_verifier(root: Path, python: str, *, promotion_evidence: bool = False) -> int:
@@ -1239,6 +1330,7 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     setup.add_argument("--skill", action="append", choices=skill_names, help="Install one skill; repeatable")
     setup.add_argument("--mode", choices=["link", "copy"], default="link", help="Installation mode")
     setup.add_argument("--apply", action="store_true", help="Apply the plan; default is read-only dry-run")
+    setup.add_argument("--plan-id", help="Reviewed planId emitted by setup dry-run (required with --apply)")
     setup.add_argument("--receipt", type=Path, help="Use a managed installation receipt; writes it only with --apply")
     setup.add_argument("--managed", action="store_true", help="Opt into receipt-owned lifecycle management")
     setup.add_argument("--json", action="store_true", help="Emit stable JSON receipt")
@@ -1361,10 +1453,17 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             else:
                 _print_setup(payload)
             return 1
+        if args.apply and not args.plan_id:
+            payload = _setup_failure(args.target.expanduser().resolve(), args.mode, "--apply requires the reviewed --plan-id")
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                _print_setup(payload)
+            return 1
         try:
             context = _mutation_lock(args.target) if args.apply else nullcontext()
             with context:
-                payload = setup_skills(root=root, target=args.target, skills=skills, mode=args.mode, dry_run=not args.apply, receipt_path=args.receipt if args.managed and args.apply else args.receipt)
+                payload = setup_skills(root=root, target=args.target, skills=skills, mode=args.mode, dry_run=not args.apply, receipt_path=args.receipt if args.managed and args.apply else args.receipt, plan_id=args.plan_id)
         except PackageError as exc:
             payload = _setup_failure(args.target.expanduser().resolve(), args.mode, str(exc))
         if args.json:

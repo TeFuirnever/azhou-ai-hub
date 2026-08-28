@@ -25,7 +25,12 @@ AZHOU_SKILL_NAMES = (
 
 
 class AzhouHubCliTest(unittest.TestCase):
-    def _json_main(self, argv: list[str], *, root: Path | None = None) -> tuple[int, dict]:
+    def _json_main(self, argv: list[str], *, root: Path | None = None, auto_plan: bool = True) -> tuple[int, dict]:
+        if auto_plan and "setup" in argv and "--apply" in argv and "--plan-id" not in argv:
+            dry_argv = [item for item in argv if item not in {"--apply"}]
+            dry_result, dry_payload = self._json_main(dry_argv, root=root, auto_plan=False)
+            if dry_payload.get("planId"):
+                argv = [*argv, "--plan-id", dry_payload["planId"]]
         stream = io.StringIO()
         with redirect_stdout(stream):
             result = azhou_hub.main(argv, root=root or azhou_hub.ROOT)
@@ -56,6 +61,14 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(0, result, payload)
         self.assertEqual("pass", payload["status"])
         return root, target, receipt
+
+    def _setup_skills(self, **kwargs):
+        if kwargs.get("dry_run"):
+            return azhou_hub.setup_skills(**kwargs)
+        preview = azhou_hub.setup_skills(**{**kwargs, "dry_run": True})
+        if "planId" not in preview:
+            return azhou_hub.setup_skills(**kwargs)
+        return azhou_hub.setup_skills(**kwargs, plan_id=preview["planId"])
 
     def _legacy_package_digest(self, package: Path) -> str:
         digest = hashlib.sha256()
@@ -237,14 +250,14 @@ class AzhouHubCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
 
-            first = azhou_hub.setup_skills(
+            first = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["repo-pedant"],
                 mode="link",
                 dry_run=False,
             )
-            second = azhou_hub.setup_skills(
+            second = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["repo-pedant"],
@@ -268,14 +281,14 @@ class AzhouHubCliTest(unittest.TestCase):
             (source / "SKILL.md").write_text("version one\n", encoding="utf-8")
             target = Path(directory) / "installed"
 
-            first = azhou_hub.setup_skills(
+            first = self._setup_skills(
                 root=root,
                 target=target,
                 skills=["sample"],
                 mode="copy",
                 dry_run=False,
             )
-            current = azhou_hub.setup_skills(
+            current = self._setup_skills(
                 root=root,
                 target=target,
                 skills=["sample"],
@@ -283,7 +296,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 dry_run=False,
             )
             (source / "SKILL.md").write_text("version two\n", encoding="utf-8")
-            stale = azhou_hub.setup_skills(
+            stale = self._setup_skills(
                 root=root,
                 target=target,
                 skills=["sample"],
@@ -324,7 +337,7 @@ class AzhouHubCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
 
-            receipt = azhou_hub.setup_skills(
+            receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["repo-pedant"],
@@ -361,7 +374,7 @@ class AzhouHubCliTest(unittest.TestCase):
             marker = collision / "keep.txt"
             marker.write_text("user owned\n", encoding="utf-8")
 
-            receipt = azhou_hub.setup_skills(
+            receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["repo-pedant"],
@@ -385,7 +398,7 @@ class AzhouHubCliTest(unittest.TestCase):
             collision.mkdir(parents=True)
             (collision / "SKILL.md").write_text("user owned\n", encoding="utf-8")
 
-            receipt = azhou_hub.setup_skills(
+            receipt = self._setup_skills(
                 root=root,
                 target=target,
                 skills=["conflict", "planned"],
@@ -401,7 +414,7 @@ class AzhouHubCliTest(unittest.TestCase):
             target = Path(directory) / "skills"
             target.write_text("not a directory\n", encoding="utf-8")
 
-            receipt = azhou_hub.setup_skills(
+            receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["repo-pedant"],
@@ -446,7 +459,7 @@ class AzhouHubCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
 
-            receipt = azhou_hub.setup_skills(
+            receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
                 skills=["../outside"],
@@ -466,17 +479,19 @@ class AzhouHubCliTest(unittest.TestCase):
             (source / "SKILL.md").write_text("sample\n", encoding="utf-8")
             target = Path(directory) / "installed"
 
-            with redirect_stdout(io.StringIO()):
+            preview_stream = io.StringIO()
+            with redirect_stdout(preview_stream):
                 preview_result = azhou_hub.main(
                     ["setup", "--skill", "sample", "--target", str(target), "--json"],
                     root=root,
                 )
             self.assertEqual(0, preview_result)
             self.assertFalse(target.exists())
+            plan_id = json.loads(preview_stream.getvalue())["planId"]
 
             with redirect_stdout(io.StringIO()):
                 apply_result = azhou_hub.main(
-                    ["setup", "--skill", "sample", "--target", str(target), "--apply", "--json"],
+                    ["setup", "--skill", "sample", "--target", str(target), "--apply", "--plan-id", plan_id, "--json"],
                     root=root,
                 )
             self.assertEqual(0, apply_result)
@@ -696,6 +711,170 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("dry_run", payload["status"])
             self.assertFalse(target.exists())
             self.assertFalse(receipt.exists())
+
+    def test_setup_apply_requires_plan_id_without_side_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            result, payload = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--apply", "--json"],
+                root=root,
+                auto_plan=False,
+            )
+            self.assertEqual(1, result)
+            self.assertIn("plan-id", payload["error"])
+            self.assertFalse(target.exists())
+
+    def test_setup_rejects_source_drift_after_review(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            _, planned = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "copy", "--json"],
+                root=root,
+            )
+            source.joinpath("SKILL.md").write_text("changed\n", encoding="utf-8")
+            result, payload = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "copy", "--apply", "--plan-id", planned["planId"], "--json"],
+                root=root,
+            )
+            self.assertEqual(1, result)
+            self.assertIn("plan changed", payload["error"])
+            self.assertFalse((target / "sample").exists())
+
+    def test_setup_python_api_requires_plan_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=False)
+            self.assertEqual("fail", payload["status"])
+            self.assertIn("plan-id", payload["error"])
+            self.assertFalse(target.exists())
+
+    def test_setup_plan_id_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            first = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True)
+            second = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True)
+            self.assertEqual(first["planId"], second["planId"])
+
+    def test_setup_rolls_back_safely_when_source_drifts_during_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            preview = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True)
+            original_copy = azhou_hub._copy_package
+
+            def copy_then_drift(source_path: Path, destination: Path) -> None:
+                original_copy(source_path, destination)
+                source.joinpath("SKILL.md").write_text("drifted\n", encoding="utf-8")
+
+            with mock.patch("scripts.azhou_hub._copy_package", side_effect=copy_then_drift):
+                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=False, plan_id=preview["planId"])
+            self.assertEqual("rolled_back", payload["status"])
+            self.assertFalse((target / "sample").exists())
+
+    def test_setup_preserves_target_when_copy_proof_seam_is_mutated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            preview = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True)
+            original_digest = azhou_hub.package_digest
+            calls = 0
+
+            def digest_then_mutate(path: Path) -> str:
+                nonlocal calls
+                calls += 1
+                value = original_digest(path)
+                if calls == 2:
+                    installed = target / "sample"
+                    installed.joinpath("SKILL.md").write_text("user-owned\n", encoding="utf-8")
+                    source.joinpath("SKILL.md").write_text("drifted\n", encoding="utf-8")
+                return value
+
+            with mock.patch("scripts.azhou_hub.package_digest", side_effect=digest_then_mutate):
+                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=False, plan_id=preview["planId"])
+            self.assertEqual("partial", payload["status"])
+            self.assertEqual("user-owned\n", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
+
+    def test_setup_multiskill_source_drift_cannot_return_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            second = root / "skills" / "second"
+            second.mkdir()
+            second.joinpath("SKILL.md").write_text("second\n", encoding="utf-8")
+            preview = azhou_hub.setup_skills(root=root, target=target, skills=["sample", "second"], mode="copy", dry_run=True)
+            original_copy = azhou_hub._copy_package
+            calls = 0
+
+            def copy_then_drift(source_path: Path, destination: Path) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    source.joinpath("SKILL.md").write_text("drifted\n", encoding="utf-8")
+                original_copy(source_path, destination)
+
+            with mock.patch("scripts.azhou_hub._copy_package", side_effect=copy_then_drift):
+                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample", "second"], mode="copy", dry_run=False, plan_id=preview["planId"])
+            self.assertEqual("rolled_back", payload["status"])
+            self.assertFalse((target / "sample").exists())
+            self.assertFalse((target / "second").exists())
+            self.assertEqual(preview["planId"], payload["planId"])
+
+    def test_setup_preserves_target_when_receipt_failure_mutates_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            receipt = target / ".azhou/hub/receipts/sample.json"
+            preview = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True, receipt_path=receipt)
+
+            def write_and_mutate(_path: Path, _receipt: dict) -> None:
+                installed = target / "sample"
+                shutil.rmtree(installed)
+                installed.mkdir()
+                installed.joinpath("SKILL.md").write_text("user-owned\n", encoding="utf-8")
+                raise OSError("injected receipt failure")
+
+            with mock.patch("scripts.azhou_hub._write_receipt", side_effect=write_and_mutate):
+                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=False, receipt_path=receipt, plan_id=preview["planId"])
+            self.assertEqual("partial", payload["status"])
+            self.assertEqual("user-owned\n", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
+
+    def test_setup_plan_binds_absolute_canonical_source_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, target = self._fixture_repo(directory)
+            alternate = Path(directory) / "alternate"
+            shutil.copytree(root / "skills", alternate / "skills")
+            _, first = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--json"], root=root)
+            _, second = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--json"], root=alternate)
+            self.assertEqual((source / "SKILL.md").read_bytes(), (alternate / "skills/sample/SKILL.md").read_bytes())
+            self.assertNotEqual(first["planId"], second["planId"])
+
+    def test_setup_rejects_reviewed_plan_from_alternate_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            alternate = Path(directory) / "alternate"
+            shutil.copytree(root / "skills", alternate / "skills")
+            _, planned = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--json"], root=root)
+            result, payload = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--apply", "--plan-id", planned["planId"], "--json"], root=alternate)
+            self.assertEqual(1, result)
+            self.assertIn("plan changed", payload["error"])
+            self.assertFalse((target / "sample").exists())
+
+    def test_setup_rejects_destination_change_after_review(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            _, planned = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--json"], root=root)
+            target.mkdir()
+            (target / "sample").mkdir()
+            (target / "sample/SKILL.md").write_text("user-owned\n", encoding="utf-8")
+            result, payload = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--apply", "--plan-id", planned["planId"], "--json"], root=root)
+            self.assertEqual(1, result)
+            self.assertIn("plan changed", payload["error"])
+            self.assertEqual("user-owned\n", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
+
+    def test_setup_plan_id_ignores_details_only_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            _, planned = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--json"], root=root)
+            original = azhou_hub.inspect_installation
+            with mock.patch("scripts.azhou_hub.inspect_installation", side_effect=lambda source, destination, mode: (lambda result: (result[0], "different prose"))(original(source, destination, mode))):
+                result, payload = self._json_main(["setup", "--skill", "sample", "--target", str(target), "--apply", "--plan-id", planned["planId"], "--json"], root=root)
+            self.assertEqual(0, result, payload)
 
     def test_managed_apply_writes_atomic_receipt_and_requires_pairing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -920,7 +1099,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 raise OSError("injected install failure")
 
             with mock.patch("scripts.azhou_hub._copy_package", side_effect=copy_then_fail), mock.patch("scripts.azhou_hub.shutil.rmtree", side_effect=OSError("injected rollback failure")):
-                payload = azhou_hub.setup_skills(root=root, target=target, skills=["sample", "second"], mode="copy", dry_run=False)
+                payload = self._setup_skills(root=root, target=target, skills=["sample", "second"], mode="copy", dry_run=False)
             self.assertEqual("partial", payload["status"])
             self.assertTrue((target / "sample").exists())
 

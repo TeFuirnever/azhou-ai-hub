@@ -62,6 +62,8 @@ python3 scripts/azhou_hub.py verify
 
 `setup`, `repair`, `migrate`, and `uninstall` stay read-only until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Receipt-owned lifecycle commands require the same explicit target and independently verify the canonical source and installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. The packages are shared across harnesses, but discovery, invocation, permissions and optional integrations remain host-specific; see the [support matrix](docs/support-matrix.md) and [Foundation CLI contract](docs/foundations.md).
 
+For setup, review the deterministic `planId` from the dry-run, then pass the exact value with `--apply --plan-id <reviewed-planId>`; source, target, mode, or pre-apply state changes invalidate the apply.
+
 ## Skills
 
 | Skill | Real job | Verification basis |
