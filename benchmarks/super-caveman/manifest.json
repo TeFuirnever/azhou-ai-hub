@@ -40,7 +40,9 @@
     "results/revision-c5366b95-attempt-1-summary.json",
     "results/revision-c5366b95-exact-diff-approval.json",
     "results/revision-e2d998c6-attempt-1-summary.json",
-    "results/revision-e2d998c6-exact-diff-approval.json"
+    "results/revision-e2d998c6-exact-diff-approval.json",
+    "results/revision-a726d695-attempt-1-summary.json",
+    "results/revision-a726d695-exact-diff-approval.json"
   ],
   "claims": {
     "mapped_source_skills": 7,
@@ -50,6 +52,6 @@
     "installable_packages": 1,
     "trigger_routes": 8,
     "response_cases": 19,
-    "model_quality": "Current revision-e2d998c6 retains the byte-identical 19-case candidate output set, passed a fresh 44/44 current-tree delta review, retains three candidate paired-review votes, and has zero high-risk regressions; promotion status is determined by the structured exact-diff approval record"
+    "model_quality": "Current revision-a726d695 retains the byte-identical 19-case candidate output set, passed an independent current-tree adapter delta review, retains three candidate paired-review votes, and has zero high-risk regressions; promotion status is determined by the structured exact-diff approval record"
   }
 }

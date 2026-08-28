@@ -6,17 +6,20 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Unified project-local Azhou runtime state under `.azhou/`: skill state uses `.azhou/<canonical-name>/`, Hub lifecycle receipts use `.azhou/hub/receipts/`, and explicit plan-bound migrations preserve recognized legacy sources without fallback reads or dual writes.
+- Added `llm-wiki`, a neutral private Markdown knowledge base with one canonical store, seven-tool stdio MCP, explicit lifecycle/trigger/command adapters, reviewed project context, atomic source-preserving migration, Azhou stage anchors, receipt v2 and deterministic production gates.
 - Added harness-neutral `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify` Agent Skills that delegate to the repository Foundation CLI without host-specific runtime copies.
 - Added a zero-dependency foundation CLI with `info`, `version`, read-only `doctor`, dry-run-first scoped `setup`, stable JSON/exit codes and delegation to the canonical repository verifier.
 - Added opt-in, single-skill checkout lifecycle receipts with fail-closed `repair`, same-target `migrate`, `uninstall`, and read-only Treehouse lease diagnostics.
 - Added a repository-enforced Treehouse worktree policy with durable task leases, identity-conditioned return, dry-run-first cleanup, a bounded Git pool and a documented migration/recovery path.
 - Added copyable input/output demos for the two task skills and a live OpenSSF Scorecard badge.
 - Added a redacted public-source discovery and clean-install receipt for the two original task skills; this is not six-package or cross-harness evidence.
-- Added Azhou Scenes effect previews for `repo-pedant` and `excalidraw-diagram`; the Excalidraw preview was regenerated after a P0 eye-identity review.
+- Added Azhou Scenes effect previews for `repo-pedant`, `excalidraw-diagram`, and `super-caveman`; the Super Caveman README preview keeps formal colour promotion and final human identity/hand approval explicit checkpoints.
 - Added `super-caveman`: the original Caveman terse-mode core enhanced with six companion routes, the complete pinned `i-have-adhd` output-behavior contract, guarded compression, and a restrained evidence-bound Azhou stage protocol, including 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion bounded behavior run, and a 3/3 independent paired-judge candidate result with zero high-risk regressions.
 
 ### Fixed
 
+- Unified Excalidraw Diagram on one public motto and normalized new Repo Pedant receipt headers to the canonical display name while preserving prior branded and legacy headers as read compatibility.
 - Split reproducible public repository verification from explicit maintainer promotion-evidence authentication, while keeping exact-diff replay mandatory in both modes and the Git-external Super Caveman approval gate fail-closed for releases.
 - Upgraded managed lifecycle receipts to v2 filesystem identities, added a genuine v1 byte-digest upgrade path for link and copy installs, rejected same-mode migration of drifted artifacts, prevented byte-identical replacement deletion, and made package digests executable-aware.
 - Added real managed lifecycle regression coverage for `repo-pedant`, `super-caveman`, and `excalidraw-diagram`.

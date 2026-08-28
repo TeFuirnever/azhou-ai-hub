@@ -26,6 +26,10 @@ SECRET_PATTERNS = (
     ("google-api-key", re.compile(rb"AIza[0-9A-Za-z_-]{35}")),
     ("private-key", re.compile(rb"-----BEGIN (?:EC |OPENSSH |RSA )?PRIVATE KEY-----")),
 )
+RUNTIME_DEFAULT_PATTERN = re.compile(
+    r"\b(?:DEFAULT_[A-Z0-9_]*(?:STORE|STATE|ROOT|DIR|PATH)|default)\s*=\s*"
+    r"[\"'](?P<path>\.[^\"']+)[\"']"
+)
 
 REQUIRED_PATHS = (
     ".github/CODEOWNERS",
@@ -48,6 +52,8 @@ REQUIRED_PATHS = (
     "LICENSE",
     "README.md",
     "README.zh-CN.md",
+    "assets/skills/llm-wiki-effect.png",
+    "assets/skills/super-caveman-effect.png",
     "SECURITY.md",
     "SUPPORT.md",
     "THIRD_PARTY_NOTICES.md",
@@ -58,6 +64,7 @@ REQUIRED_PATHS = (
     "scripts/azhou_hub.py",
     "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
+    "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
 )
 
@@ -69,6 +76,56 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
+}
+REPOSITORY_EXTENSION_SKILL_PATHS = {
+    "skills/llm-wiki/SKILL.md",
+}
+
+SKILL_BRAND_CONTRACTS = {
+    "skills/azhou-doctor/SKILL.md": {
+        "display_name": "Azhou Doctor",
+        "motto": "先诊断，不越权修复。",
+        "startup": "🦊 阿舟 · Azhou Doctor 启动｜mode=doctor｜scope=<checkout>",
+    },
+    "skills/azhou-info/SKILL.md": {
+        "display_name": "Azhou Info",
+        "motto": "只报告仓库能证明的事实。",
+        "startup": "🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>",
+    },
+    "skills/azhou-setup/SKILL.md": {
+        "display_name": "Azhou Setup",
+        "motto": "先看计划，再按同一计划执行。",
+        "startup": "🦊 阿舟 · Azhou Setup 启动｜mode=<setup|repair|migrate|uninstall>｜scope=<checkout>",
+    },
+    "skills/azhou-verify/SKILL.md": {
+        "display_name": "Azhou Verify",
+        "motto": "完整 gate 跑完，结论才成立。",
+        "startup": "🦊 阿舟 · Azhou Verify 启动｜mode=verify｜scope=<checkout>",
+    },
+    "skills/excalidraw-diagram/SKILL.md": {
+        "display_name": "Excalidraw Diagram",
+        "motto": "先让结构讲清关系，再让文字补充证据。",
+        "startup": "🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>",
+        "brand_path": "skills/excalidraw-diagram/references/brand-layer.md",
+    },
+    "skills/llm-wiki/SKILL.md": {
+        "display_name": "LLM Wiki",
+        "motto": "知识要留得住，也要经得起查证。",
+        "startup": "🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
+        "brand_path": "skills/llm-wiki/references/brand-layer.md",
+    },
+    "skills/repo-pedant/SKILL.md": {
+        "display_name": "Repo Pedant",
+        "motto": "代码是唯一现役答案，其他都要对齐。",
+        "startup": "🦊 阿舟 · Repo Pedant 启动｜mode=<mode>｜scope=<repo>",
+        "brand_path": "skills/repo-pedant/references/brand-layer.md",
+    },
+    "skills/super-caveman/SKILL.md": {
+        "display_name": "Super Caveman",
+        "motto": "少说话，技术信号不丢。",
+        "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
+        "brand_path": "skills/super-caveman/references/brand-layer.md",
+    },
 }
 
 BASELINE_HASHES = {
@@ -87,7 +144,8 @@ def public_files(root: Path = ROOT) -> list[Path]:
         capture_output=True,
     )
     names = [item for item in result.stdout.decode().split("\0") if item]
-    return [root / name for name in sorted(set(names))]
+    paths = [root / name for name in sorted(set(names))]
+    return [path for path in paths if path.exists() or path.is_symlink()]
 
 
 def check_required(root: Path) -> list[str]:
@@ -118,8 +176,69 @@ def check_treehouse_config(root: Path) -> list[str]:
 
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"}
-    errors = [f"installable skill missing: {path}" for path in sorted(INSTALLABLE_SKILL_PATHS - actual)]
-    errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - INSTALLABLE_SKILL_PATHS))
+    repository_extensions = {
+        path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
+    }
+    expected = INSTALLABLE_SKILL_PATHS | repository_extensions
+    errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
+    errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
+    return errors
+
+
+def check_skill_brand_contract(root: Path) -> list[str]:
+    """Enforce the shared display identity without homogenizing domain stages."""
+    expected = INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
+    contracted = set(SKILL_BRAND_CONTRACTS)
+    errors = [f"skill brand contract missing: {path}" for path in sorted(expected - contracted)]
+    errors.extend(f"unexpected skill brand contract: {path}" for path in sorted(contracted - expected))
+
+    for relative, contract in sorted(SKILL_BRAND_CONTRACTS.items()):
+        skill_path = root / relative
+        if not skill_path.is_file():
+            continue
+        try:
+            skill = skill_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"cannot read skill brand surface {relative}: {exc}")
+            continue
+
+        combined = skill
+        brand_relative = contract.get("brand_path")
+        if brand_relative:
+            brand_path = root / brand_relative
+            if not brand_path.is_file():
+                errors.append(f"skill brand layer missing: {brand_relative}")
+                continue
+            try:
+                brand = brand_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                errors.append(f"cannot read skill brand layer {brand_relative}: {exc}")
+                continue
+            combined += "\n" + brand
+            if contract["startup"] not in brand:
+                errors.append(f"skill brand startup drift: {brand_relative}")
+
+        display_name = contract["display_name"]
+        if f"🦊 阿舟 · {display_name}" not in combined:
+            errors.append(f"skill brand identity missing: {relative}")
+        if contract["motto"] not in combined:
+            errors.append(f"skill brand motto missing: {relative}")
+        if contract["startup"] not in combined:
+            errors.append(f"skill brand startup drift: {relative}")
+
+        for marker, label in (
+            ("✅ 验证通过", "success marker"),
+            ("❌ 验证失败", "failure marker"),
+            ("🔒 阿舟暂停这一项", "hold marker"),
+        ):
+            if marker not in combined:
+                errors.append(f"skill brand {label} missing: {relative}")
+        if "Emoji" not in combined:
+            errors.append(f"skill brand emoji boundary missing: {relative}")
+        if not any(marker in combined for marker in ("原始证据", "raw evidence")):
+            errors.append(f"skill brand raw-evidence boundary missing: {relative}")
+        if not any(marker in combined for marker in ("host 不支持 Unicode", "Host 不支持 Unicode", "A host without Unicode")):
+            errors.append(f"skill brand Unicode fallback missing: {relative}")
     return errors
 
 
@@ -213,6 +332,38 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:
+    errors: list[str] = []
+    ignore = root / ".gitignore"
+    try:
+        ignored = ignore.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        errors.append(f"cannot read .gitignore for runtime-state policy: {exc}")
+    else:
+        if ".azhou/" not in ignored:
+            errors.append("repository .gitignore must contain .azhou/")
+
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        if path.suffix != ".py" or not relative.startswith(("scripts/", "skills/")):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"cannot inspect runtime-state defaults in {relative}: {exc}")
+            continue
+        for line_number, line in enumerate(lines, 1):
+            for match in RUNTIME_DEFAULT_PATTERN.finditer(line):
+                value = match.group("path")
+                if value == ".azhou" or value.startswith(".azhou/"):
+                    continue
+                errors.append(
+                    "Azhou runtime state must use .azhou/<skill-name>/ or .azhou/hub/: "
+                    f"{relative}:{line_number} defaults to {value}"
+                )
+    return errors
+
+
 def check_secret_patterns(files: list[Path], root: Path) -> list[str]:
     """Reject high-confidence credential shapes without printing their values."""
     errors: list[str] = []
@@ -255,10 +406,12 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_required(root))
     errors.extend(check_treehouse_config(root))
     errors.extend(check_skill_discovery(files, root))
+    errors.extend(check_skill_brand_contract(root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
+    errors.extend(check_runtime_state_contract(files, root))
     errors.extend(check_secret_patterns(files, root))
     errors.extend(check_provenance(root))
     return errors

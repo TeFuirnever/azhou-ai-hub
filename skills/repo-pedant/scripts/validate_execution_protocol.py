@@ -167,7 +167,12 @@ def validate_protocol(data: Any) -> list[str]:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("protocol", type=Path)
+    parser.add_argument(
+        "protocol",
+        nargs="?",
+        type=Path,
+        default=Path(".azhou/repo-pedant/execution.json"),
+    )
     parser.add_argument("--format", choices=("json", "text"), default="json")
     return parser.parse_args(argv)
 

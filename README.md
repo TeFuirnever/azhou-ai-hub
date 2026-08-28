@@ -34,6 +34,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
+npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
 ~~~
 
 These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
@@ -61,6 +62,8 @@ python3 scripts/azhou_hub.py verify
 
 `setup`, `repair`, `migrate`, and `uninstall` stay read-only until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Receipt-owned lifecycle commands require the same explicit target and independently verify the canonical source and installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. The packages are shared across harnesses, but discovery, invocation, permissions and optional integrations remain host-specific; see the [support matrix](docs/support-matrix.md) and [Foundation CLI contract](docs/foundations.md).
 
+For setup, review the deterministic `planId` from the dry-run, then pass the exact value with `--apply --plan-id <reviewed-planId>`; source, target, mode, or pre-apply state changes invalidate the apply.
+
 ## Skills
 
 | Skill | Real job | Verification basis |
@@ -71,17 +74,19 @@ python3 scripts/azhou_hub.py verify
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | Run the public full-repository integrity gate or an explicit maintainer promotion replay. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates; promotion mode additionally requires Git-external evidence. |
 | [Repo Pedant](skills/repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
+| [LLM Wiki](skills/llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, seven MCP tools, three lifecycle events, atomic migration, privacy defaults and focused deterministic contract tests. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
 
-All seven packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All eight packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
-## Try three task skills
+## Try four task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
 | Repo Pedant | <code>This phase is done. Run repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/repo-pedant.md). |
 | Excalidraw Diagram | <code>Use excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/excalidraw-diagram.md). |
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
+| LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/llm-wiki.md). |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
 
@@ -129,13 +134,30 @@ The skill never calls JSON validity “done.” It requires an editable source s
 
 Super Caveman keeps original Caveman's persistent terse modes as its core, absorbs six companion skills as compact delegation, commit-message, review, guarded compression, help and evidence-bound statistics routes, and fully adopts the pinned `i-have-adhd` output-behavior contract. Everything ships as one canonical `super-caveman` package. Safety and explicit output contracts run first, the complete ADHD-friendly behavior contract runs second, and Caveman compression runs last. Plugin installation, hooks, global configuration, diagnostic claims and unverified cross-session persistence are outside this neutral package. File compression never launches a second model or silently transmits content; a standard-library guard checks the source, validates protected structure, writes an out-of-tree backup, uses a checkpointed no-clobber install, and refuses restore over newer work. Guarded apply and restore require same-directory hard-link support and fail before moving the source when the filesystem denies it. Material operations use one restrained Azhou anchor per verified stage; ordinary terse replies do not add lifecycle emoji. Exact statistics remain unavailable when the host exposes no audited counters.
 
+![Super Caveman guarded-compression effect preview](assets/skills/super-caveman-effect.png)
+
+> 🦊 Effect preview generated with Azhou Scenes. Composition, text and run binding were checked; formal v1.9 colour promotion and final identity/hand approval remain checkpoints.
+
 [Read the package](skills/super-caveman/SKILL.md) · [Read setup](skills/super-caveman/references/setup.md) · [Read provenance](skills/super-caveman/references/provenance.md) · [Read compression safety](skills/super-caveman/references/compression.md)
+
+## LLM Wiki
+
+> 📚 Knowledge should persist—and stand up to verification.
+
+LLM Wiki stores Markdown pages only under `<project>/.azhou/llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, seven-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
+
+![LLM Wiki end-to-end evidence preview](assets/skills/llm-wiki-effect.png)
+
+> 🦊 Evidence preview built from one real isolated CLI, MCP `tools/list`, and `SessionStart` run. Bundle, render, and visual inspection passed; final public visual approval remains a human checkpoint.
+
+[Run the demo](docs/demos/llm-wiki.md) · [Read the package](skills/llm-wiki/SKILL.md) · [Read brand contract](skills/llm-wiki/references/brand-layer.md) · [Read design](skills/llm-wiki/references/design.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md)
 
 ## One architecture
 
 ~~~text
 docs/skill-standard.md ── governs ──> skills/<name>/       installable runtime
           │                              │
+          ├── allocates ─────────────> .azhou/<name>/      private runtime state
           ├── governs ───────────────> tests/              deterministic proof
           └── governs ───────────────> benchmarks/<name>/  isolated behavior evidence
 
@@ -144,6 +166,8 @@ history signals ──> isolated candidate ──> paired review ──> human p
 ~~~
 
 The [Azhou Skill Standard](docs/skill-standard.md) is the single project authority. [Architecture](docs/architecture.md) explains the boundaries; [governance](GOVERNANCE.md) explains decisions.
+
+Installable packages remain under `skills/`. Project-local Azhou runtime state uses `.azhou/<skill-name>/`; `.azhou/hub/` is reserved for checkout-managed lifecycle receipts. Host configuration, host caches and user-selected deliverables stay outside this namespace.
 
 ## Develop
 

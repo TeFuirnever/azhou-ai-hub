@@ -37,6 +37,22 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
         self.assertTrue(json.loads(result.stdout)["valid"])
 
+    def test_default_protocol_uses_repo_pedant_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            protocol = project / ".azhou" / "repo-pedant" / "execution.json"
+            protocol.parent.mkdir(parents=True)
+            protocol.write_bytes((FIXTURES / "valid.execution.json").read_bytes())
+            result = subprocess.run(
+                ["python3", str(SCRIPT)],
+                cwd=project,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+            self.assertTrue(json.loads(result.stdout)["valid"])
+
     def test_prior_freeform_brand_drift_is_rejected(self) -> None:
         result = self.run_validator(FIXTURES / "prior-drift.execution.json")
         self.assertEqual(1, result.returncode)

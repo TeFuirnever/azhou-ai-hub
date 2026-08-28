@@ -16,10 +16,12 @@ AZHOU_SKILL_NAMES = (
     "azhou-verify",
 )
 SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
+LLM_WIKI_DIR = ROOT / "skills" / "llm-wiki"
 SKILL_DIRS = (
     SKILL_DIR,
     ROOT / "skills" / "excalidraw-diagram",
     SUPER_CAVEMAN_DIR,
+    LLM_WIKI_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
 )
 
@@ -56,7 +58,7 @@ class SkillPackageTest(unittest.TestCase):
                 if (
                     not path.is_file()
                     or path.suffix not in text_suffixes
-                    or {"node_modules", ".venv", ".omc"} & set(path.parts)
+                    or {"node_modules", ".venv"} & set(path.parts)
                 ):
                     continue
                 text = path.read_text(encoding="utf-8")
@@ -223,8 +225,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(7, len(SKILL_DIRS))
-        self.assertIn("seven canonical packages", support)
+        self.assertEqual(8, len(SKILL_DIRS))
+        self.assertIn("eight canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
@@ -289,6 +291,62 @@ class SkillPackageTest(unittest.TestCase):
         self.assertNotIn("/user/starred/", skill)
         self.assertNotIn("github.com/TeFuirnever/azhou-ai-hub", cli)
         self.assertNotIn("/user/starred/", cli)
+    def test_llm_wiki_import_is_mapped_and_harness_neutral(self) -> None:
+        skill = (LLM_WIKI_DIR / "SKILL.md").read_text(encoding="utf-8")
+        design = (LLM_WIKI_DIR / "references" / "design.md").read_text(encoding="utf-8")
+        provenance = (LLM_WIKI_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+        brand = (LLM_WIKI_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        script = (LLM_WIKI_DIR / "scripts" / "llm_wiki.py").read_text(encoding="utf-8")
+
+        for operation in ("wiki_ingest", "wiki_query", "wiki_lint", "wiki_add", "wiki_list", "wiki_read", "wiki_delete"):
+            self.assertIn(operation, skill)
+        self.assertIn("Canonical store", design)
+        self.assertIn("Production gates", design)
+        self.assertIn("deee3a446dadc9bfea31cdc8b19b00b16718082e", provenance)
+        self.assertIn("llm-wiki.receipt.v2", brand)
+        self.assertIn("autoCapture` defaults to false", skill)
+        self.assertIn('DEFAULT_STORE = ".azhou/llm-wiki"', script)
+
+    def test_llm_wiki_license_and_notice_are_retained(self) -> None:
+        license_text = (ROOT / "LICENSES" / "llm-wiki-source-MIT.txt").read_text(encoding="utf-8")
+        notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        self.assertIn("Copyright (c) 2025 Yeachan Heo", license_text)
+        self.assertIn("Yeachan Heo", notices)
+        self.assertIn("llm-wiki-source-MIT.txt", notices)
+
+    def test_llm_wiki_brand_layer_covers_the_interactive_lifecycle(self) -> None:
+        skill = (LLM_WIKI_DIR / "SKILL.md").read_text(encoding="utf-8")
+        brand = (LLM_WIKI_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        script = (LLM_WIKI_DIR / "scripts" / "llm_wiki.py").read_text(encoding="utf-8")
+        anchors = (
+            "🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
+            "🧭 知识范围锁定｜topic=<topic>｜sources=<n|none>｜privacy=<checked|hold>",
+            "🔎 Wiki 检索完成｜operation=<query|list|read>｜matches=<n>｜read_only=<true|false>",
+            "📝 Wiki 更新完成｜action=<created|updated|deleted>｜page=<filename>｜confidence=<level|none>",
+            "📦 Wiki 迁移完成｜status=<planned|migrated|already_current>｜files=<n>｜source_preserved=true",
+            "🧪 Wiki 健康检查｜errors=<n>｜warnings=<n>｜info=<n>",
+            "✅ 验证通过｜checks=<comma-separated ids>",
+            "❌ 验证失败｜check=<id>｜impact=<fact>",
+            "🔒 阿舟暂停这一项｜action=<action>｜missing=<authority|safe-input>",
+        )
+        for anchor in anchors:
+            self.assertIn(anchor, brand)
+        for section in (
+            "### 🧭 Current truth",
+            "### 📝 Changes",
+            "### ✅ Verification",
+            "### 🔒 Boundaries",
+            "### ➡️ Next action",
+            "### 🧠 Learning",
+        ):
+            self.assertIn(section, brand)
+        self.assertIn("知识要留得住，也要经得起查证。", skill)
+        self.assertIn("知识要留得住，也要经得起查证。", brand)
+        self.assertIn("llm-wiki.receipt.v2", brand)
+        self.assertIn('RECEIPT_SCHEMA = "llm-wiki.receipt.v2"', script)
+        self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
+        self.assertIn("Unicode", brand)
+
     def test_repo_pedant_brand_layer_covers_the_interactive_lifecycle(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         brand = (SKILL_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
@@ -308,6 +366,8 @@ class SkillPackageTest(unittest.TestCase):
         for anchor in anchors:
             self.assertIn(anchor, brand)
         self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
+        self.assertIn("## 🦊 阿舟 · Repo Pedant receipt", skill)
+        self.assertNotIn("## 🦊 阿舟 · Repo-pedant receipt", skill)
         self.assertIn('REMINDER = "🟡 阿舟提醒｜', hook)
         self.assertIn('PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜', hook)
 
@@ -351,6 +411,17 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("至少 3 个独立 paired judges", evolution)
         self.assertIn("exact diff", evolution)
         self.assertIn("不能写 live", evolution)
+
+    def test_excalidraw_uses_one_canonical_public_motto(self) -> None:
+        package = ROOT / "skills" / "excalidraw-diagram"
+        skill = (package / "SKILL.md").read_text(encoding="utf-8")
+        brand = (package / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        motto = "先让结构讲清关系，再让文字补充证据。"
+
+        self.assertIn(f"> ✏️ {motto}", skill)
+        self.assertIn(f"- 口号：`{motto}`", brand)
+        self.assertIn(f"> ✏️ {motto}", brand)
+        self.assertNotIn("图要可编辑，也要把关系说清楚。", brand)
 
     def test_excalidraw_export_example_matches_locked_runtime_and_cli(self) -> None:
         package = ROOT / "skills" / "excalidraw-diagram"

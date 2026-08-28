@@ -19,8 +19,8 @@ SPEC.loader.exec_module(MODULE)
 
 class CloseoutHookTest(unittest.TestCase):
     def write_state(self, workspace: Path, **overrides: object) -> Path:
-        path = workspace / ".repo-pedant" / "closeout-state.json"
-        path.parent.mkdir()
+        path = workspace / ".azhou" / "repo-pedant" / "closeout-state.json"
+        path.parent.mkdir(parents=True)
         value = {
             "schema_version": MODULE.SCHEMA_VERSION,
             "repo_root": str(workspace.resolve()),
@@ -37,11 +37,11 @@ class CloseoutHookTest(unittest.TestCase):
     def args(self, workspace: Path, runtime: Path, **overrides: object) -> Namespace:
         value = {
             "workspace": workspace,
-            "state": ".repo-pedant/closeout-state.json",
+            "state": ".azhou/repo-pedant/closeout-state.json",
             "event": "stop",
             "mode": "advisory",
             "format": "plain",
-            "runtime_state_dir": runtime,
+            "runtime_state_dir": workspace / ".azhou" / "repo-pedant" / "hooks",
             "block_cap": 3,
         }
         value.update(overrides)
@@ -71,8 +71,8 @@ class CloseoutHookTest(unittest.TestCase):
             workspace.mkdir()
             outside = base / "outside.json"
             outside.write_text("{}", encoding="utf-8")
-            state = workspace / ".repo-pedant" / "closeout-state.json"
-            state.parent.mkdir()
+            state = workspace / ".azhou" / "repo-pedant" / "closeout-state.json"
+            state.parent.mkdir(parents=True)
             state.symlink_to(outside)
             output, diagnostic = MODULE.evaluate_event(self.args(workspace, base / "cache"), {})
             self.assertEqual("", output)

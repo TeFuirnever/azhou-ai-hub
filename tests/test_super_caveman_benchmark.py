@@ -156,13 +156,13 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         self.assertEqual(0, contract["promotion_review"]["high_risk_regressions_allowed"])
         approval = contract["promotion_review"]["exact_diff_human_approval"]
         self.assertTrue(approval["required"])
-        self.assertEqual("super-caveman-exact-diff-approval.v1", approval["schema"])
+        self.assertEqual("super-caveman-exact-diff-approval.v2", approval["schema"])
         self.assertEqual("Git aggregate receipt; raw approval Git-external", approval["record_storage"])
         self.assertEqual("SUPER_CAVEMAN_APPROVAL_RECORD", approval["raw_record_environment"])
         self.assertEqual("SUPER_CAVEMAN_REVIEW_RECORD", approval["review_record_environment"])
         self.assertIn("every promotion ingest and replay", approval["raw_record_validation"])
         self.assertIn(
-            "every replay revalidates both Git-external raw records",
+            "every promotion replay revalidates both Git-external raw records",
             approval["approved_replay_validation"],
         )
         self.assertIn("current staged or committed exact-diff", approval["approved_replay_validation"])
@@ -170,6 +170,9 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         self.assertIn("current staged or committed exact-diff", approval["approved_replay_validation"])
         self.assertIn("byte-identical index and working-tree", approval["approved_replay_validation"])
         self.assertIn("later commits or working-tree changes", approval["approved_replay_validation"])
+        self.assertIn("public squash replay", approval["approved_replay_validation"])
+        self.assertIn("reviewed_blobs", approval["approved_replay_validation"])
+        self.assertIn("each approved target blob must match HEAD", approval["approved_replay_validation"])
         self.assertIn("path/blob tuples", approval["digest_algorithm"])
         self.assertIn("sha256", approval["digest_algorithm"])
 
@@ -322,13 +325,23 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             results = benchmark_root / "results"
             results.mkdir()
             result_path = results / "revision-test-summary.json"
+            reviewed_blobs = [
+                {
+                    "path": "README.md",
+                    "old_oid": "a" * 40,
+                    "new_oid": "b" * 40,
+                }
+            ]
+            reviewed_tuple = b"README.md\0" + b"a" * 40 + b"\0" + b"b" * 40 + b"\0"
+            path_set_sha256 = hashlib.sha256(b"README.md\0").hexdigest()
+            staged_patch_sha256 = hashlib.sha256(reviewed_tuple).hexdigest()
             approval = {
-                "schema": "super-caveman-exact-diff-approval.v1",
+                "schema": "super-caveman-exact-diff-approval.v2",
                 "status": "approved",
                 "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
                 "base_commit": "1" * 40,
-                "path_set_sha256": "2" * 64,
-                "staged_patch_sha256": "3" * 64,
+                "path_set_sha256": path_set_sha256,
+                "staged_patch_sha256": staged_patch_sha256,
                 "approver": "workspace-owner",
                 "approved_at": "2026-08-24T12:00:00+08:00",
                 "record_path": "results/revision-1234abcd-exact-diff-approval.json",
@@ -352,21 +365,22 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                     "approved_at": "2026-08-24T12:00:00+08:00",
                     "base_commit": "1" * 40,
                     "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-                    "path_set_sha256": "2" * 64,
-                    "staged_patch_sha256": "3" * 64,
+                    "path_set_sha256": path_set_sha256,
+                    "staged_patch_sha256": staged_patch_sha256,
                 }
                 raw_path = benchmark_root / "raw-human-approval.json"
                 raw_path.write_text(json.dumps(raw_record, indent=2) + "\n", encoding="utf-8")
 
                 record = {
-                    "schema": "super-caveman-exact-diff-approval-record.v1",
+                    "schema": "super-caveman-exact-diff-approval-record.v2",
                     "decision": "approved",
                     "approver": "workspace-owner",
                     "approved_at": "2026-08-24T12:00:00+08:00",
                     "base_commit": "1" * 40,
                     "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-                    "path_set_sha256": "2" * 64,
-                    "staged_patch_sha256": "3" * 64,
+                    "path_set_sha256": path_set_sha256,
+                    "staged_patch_sha256": staged_patch_sha256,
+                    "reviewed_blobs": reviewed_blobs,
                     "raw_approval_record_sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
                     "raw_approval_storage": "Git-external",
                 }
@@ -404,8 +418,8 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                 }
                 staged = {
                     "base_commit": "1" * 40,
-                    "path_set_sha256": "2" * 64,
-                    "staged_patch_sha256": "3" * 64,
+                    "path_set_sha256": path_set_sha256,
+                    "staged_patch_sha256": staged_patch_sha256,
                 }
                 with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=staged
@@ -560,6 +574,108 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                     benchmark, "committed_review_digests", return_value=staged
                 ):
                     self.assertTrue(benchmark.is_approved_exact_diff(approval, result_path))
+                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                    benchmark, "staged_review_digests", return_value=None
+                ), mock.patch.object(
+                    benchmark, "committed_review_digests", return_value=None
+                ), mock.patch.object(
+                    benchmark, "committed_review_digests_from_blobs", return_value=None
+                ), mock.patch.object(
+                    benchmark, "reviewed_blob_snapshot_matches", return_value=True
+                ):
+                    self.assertTrue(
+                        benchmark.is_approved_exact_diff(
+                            approval,
+                            result_path,
+                            require_external_evidence=False,
+                        )
+                    )
+                    self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
+                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                    benchmark, "staged_review_digests", return_value=None
+                ), mock.patch.object(
+                    benchmark, "committed_review_digests", return_value=None
+                ), mock.patch.object(
+                    benchmark, "committed_review_digests_from_blobs", return_value=None
+                ), mock.patch.object(
+                    benchmark, "reviewed_blob_snapshot_matches", return_value=False
+                ):
+                    self.assertFalse(
+                        benchmark.is_approved_exact_diff(
+                            approval,
+                            result_path,
+                            require_external_evidence=False,
+                        )
+                    )
+
+    def test_reviewed_blob_snapshot_allows_squash_replay(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "super-caveman@example.invalid"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Super Caveman Test"],
+                cwd=repository,
+                check=True,
+            )
+            readme = repository / "README.md"
+            readme.write_text("root\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "root"], cwd=repository, check=True)
+            main_branch = subprocess.check_output(
+                ["git", "branch", "--show-current"], cwd=repository, text=True
+            ).strip()
+
+            subprocess.run(["git", "switch", "-qc", "approval-side"], cwd=repository, check=True)
+            (repository / "approval-base.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "approval base"], cwd=repository, check=True
+            )
+            approval_base = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            readme.write_text("approved\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "approved patch"], cwd=repository, check=True
+            )
+            with mock.patch.object(benchmark, "ROOT", repository):
+                tuples = benchmark._canonical_blob_tuples(
+                    f"{approval_base}..HEAD",
+                    ["."],
+                )
+
+            subprocess.run(["git", "switch", "-q", main_branch], cwd=repository, check=True)
+            readme.write_text("approved\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "squashed patch"], cwd=repository, check=True
+            )
+            with mock.patch.object(benchmark, "ROOT", repository), mock.patch.object(
+                benchmark,
+                "BENCHMARK",
+                repository / "benchmarks/super-caveman",
+            ):
+                self.assertIsNone(
+                    benchmark.committed_review_digests_from_blobs(
+                        set(),
+                        approval_base,
+                        tuples,
+                    )
+                )
+                self.assertTrue(benchmark.reviewed_blob_snapshot_matches(tuples))
+                readme.write_text("drift\n", encoding="utf-8")
+                self.assertFalse(benchmark.reviewed_blob_snapshot_matches(tuples))
 
     def test_staged_review_digests_normalize_benchmark_relative_exclusions(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
@@ -916,7 +1032,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             errors = benchmark.check()
         self.assertIn("exactly one current passing evaluation result is required; found 0", errors)
 
-    def test_public_integrity_still_recomputes_the_approved_exact_diff(self) -> None:
+    def test_public_integrity_allows_squash_snapshot_but_rejects_blob_drift(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
         try:
             import benchmark
@@ -927,6 +1043,29 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             benchmark, "staged_review_digests", return_value=None
         ), mock.patch.object(
             benchmark, "committed_review_digests", return_value=None
+        ), mock.patch.object(
+            benchmark, "committed_review_digests_from_blobs", return_value=None
+        ):
+            errors = benchmark.check(require_promotion_evidence=False)
+
+        self.assertFalse(
+            any(
+                error.startswith(
+                    "passing evaluation result lacks valid paired promotion evidence: "
+                )
+                for error in errors
+            ),
+            errors,
+        )
+
+        with mock.patch.object(
+            benchmark, "staged_review_digests", return_value=None
+        ), mock.patch.object(
+            benchmark, "committed_review_digests", return_value=None
+        ), mock.patch.object(
+            benchmark, "committed_review_digests_from_blobs", return_value=None
+        ), mock.patch.object(
+            benchmark, "reviewed_blob_snapshot_matches", return_value=False
         ):
             errors = benchmark.check(require_promotion_evidence=False)
 

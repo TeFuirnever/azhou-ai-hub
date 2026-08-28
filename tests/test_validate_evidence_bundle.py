@@ -61,7 +61,7 @@ def report() -> dict:
     }
 
 
-RECEIPT = """## 🦊 阿舟 · Repo-pedant receipt
+RECEIPT = """## 🦊 阿舟 · Repo Pedant receipt
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 
@@ -89,6 +89,10 @@ RECEIPT = """## 🦊 阿舟 · Repo-pedant receipt
 ### 🧠 Learning
 - Learning signal: stale_fact — synthetic evidence
 """
+PRIOR_BRANDED_RECEIPT = RECEIPT.replace(
+    "## 🦊 阿舟 · Repo Pedant receipt",
+    "## 🦊 阿舟 · Repo-pedant receipt",
+)
 
 LEGACY_RECEIPT = """## Repo-pedant receipt
 - Mode: audit
@@ -127,6 +131,9 @@ class ValidateEvidenceBundleTest(unittest.TestCase):
 
     def test_legacy_receipt_remains_valid(self) -> None:
         self.assertEqual([], MODULE.validate_receipt(LEGACY_RECEIPT))
+
+    def test_prior_branded_receipt_remains_valid(self) -> None:
+        self.assertEqual([], MODULE.validate_receipt(PRIOR_BRANDED_RECEIPT))
 
     def test_branded_receipt_enforces_machine_status_invariants(self) -> None:
         emoji_status = RECEIPT.replace("- Status: complete_with_holds", "- Status: 🟡 收齐，但有挂起")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -99,6 +100,196 @@ class CodexAdapterContractTest(unittest.TestCase):
             [{"matcher": OWN_MATCHER, "hooks": [{"type": "command", "command": "echo external", "timeout": 4}]}],
             after_remove["hooks"]["SessionStart"],
         )
+
+    def test_setup_replaces_relocated_adapter_and_uninstall_removes_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            hooks_path, options = self.hooks_for(root, "project")
+            payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+            payload["hooks"]["SessionStart"].insert(
+                0,
+                {
+                    "matcher": OWN_MATCHER,
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "/old/python /old/cache/super-caveman/scripts/codex_adapter.py render",
+                            "timeout": 5,
+                            "additionalContextLimit": 1024,
+                            "statusMessage": "Loading Super Caveman",
+                        }
+                    ],
+                },
+            )
+            hooks_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            installed = self.invoke("setup", "project", options)
+            after_install = json.loads(hooks_path.read_text(encoding="utf-8"))
+            removed = self.invoke("uninstall", "project", options)
+            after_remove = json.loads(hooks_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, installed.returncode, installed.stderr)
+        owned = [
+            handler
+            for registration in after_install["hooks"]["SessionStart"]
+            for handler in registration.get("hooks", [])
+            if "codex_adapter.py" in handler.get("command", "")
+        ]
+        self.assertEqual(1, len(owned))
+        self.assertIn(str(ADAPTER.resolve()), owned[0]["command"])
+        self.assertEqual(0, removed.returncode, removed.stderr)
+        self.assertNotIn("codex_adapter.py", json.dumps(after_remove))
+
+    def test_single_stable_field_mismatch_and_malformed_commands_are_unowned(self) -> None:
+        current = f"{shlex.quote(sys.executable)} {shlex.quote(str(ADAPTER.resolve()))} render"
+        variants = []
+        for field, value in (
+            ("matcher", "startup"),
+            ("type", "prompt"),
+            ("timeout", 4),
+            ("additionalContextLimit", 1023),
+            ("statusMessage", "different"),
+            ("command", current + " extra"),
+        ):
+            registration = {"matcher": OWN_MATCHER, "hooks": [{
+                "type": "command", "command": current, "timeout": 5,
+                "additionalContextLimit": 1024, "statusMessage": "Loading Super Caveman",
+            }]}
+            if field == "matcher":
+                registration[field] = value
+            else:
+                registration["hooks"][0][field] = value
+            variants.append(registration)
+        malformed = {"matcher": OWN_MATCHER, "hooks": [{
+            "type": "command", "command": 'python3 "unterminated', "timeout": 5,
+            "additionalContextLimit": 1024, "statusMessage": "Loading Super Caveman",
+        }]}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            hooks_path, options = self.hooks_for(root, "project")
+            payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+            payload["hooks"]["SessionStart"] = variants + [malformed]
+            hooks_path.write_text(json.dumps(payload), encoding="utf-8")
+            result = self.invoke("setup", "project", options)
+            updated = json.loads(hooks_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        session_start = updated["hooks"]["SessionStart"]
+        self.assertEqual(8, len(session_start))
+        self.assertEqual(7, sum("codex_adapter.py" in json.dumps(entry) for entry in session_start))
+        canonical = [
+            registration for registration in session_start
+            if registration.get("matcher") == OWN_MATCHER
+            and registration.get("hooks", [{}])[0].get("command") == current
+            and registration["hooks"][0].get("type") == "command"
+            and registration["hooks"][0].get("timeout") == 5
+            and registration["hooks"][0].get("additionalContextLimit") == 1024
+            and registration["hooks"][0].get("statusMessage") == "Loading Super Caveman"
+        ]
+        self.assertEqual(1, len(canonical))
+
+    def test_arbitrary_harness_root_adapter_path_is_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            hooks_path, options = self.hooks_for(root, "project")
+            payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+            payload["hooks"]["SessionStart"] = [{
+                "matcher": OWN_MATCHER,
+                "hooks": [{
+                    "type": "command",
+                    "command": "/usr/bin/python3 /any/harness/root/super-caveman/scripts/codex_adapter.py render",
+                    "timeout": 5,
+                    "additionalContextLimit": 1024,
+                    "statusMessage": "Loading Super Caveman",
+                }],
+            }]
+            hooks_path.write_text(json.dumps(payload), encoding="utf-8")
+            result = self.invoke("uninstall", "project", options)
+            updated = json.loads(hooks_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("SessionStart", updated.get("hooks", {}))
+
+    def test_setup_and_uninstall_preserve_unowned_registrations_deeply(self) -> None:
+        old_command = "/old/python '/old/cache/super-caveman/scripts/codex_adapter.py' render"
+        owned_handler = {
+            "type": "command",
+            "command": old_command,
+            "timeout": 5,
+            "additionalContextLimit": 1024,
+            "statusMessage": "Loading Super Caveman",
+        }
+        unrelated = {
+            "matcher": "startup",
+            "registrationUnknown": {"nested": [1, "keep", False]},
+            "hooks": [{"type": "command", "command": "echo unrelated", "handlerUnknown": {"x": 1}}],
+        }
+        lookalike_timeout = {
+            "matcher": OWN_MATCHER,
+            "registrationUnknown": "lookalike-one",
+            "hooks": [{
+                "type": "command", "command": old_command, "timeout": 4,
+                "additionalContextLimit": 1024, "statusMessage": "Loading Super Caveman",
+                "handlerUnknown": ["preserve", 2],
+            }],
+        }
+        owned_one = {"matcher": OWN_MATCHER, "ownedRegistration": 1, "hooks": [owned_handler]}
+        empty_owned_matcher = {
+            "matcher": OWN_MATCHER,
+            "registrationUnknown": {"empty": True},
+            "hooks": [],
+        }
+        scalar = {"arrayEntryUnknown": "keep-me", "hooks": "not-a-list"}
+        lookalike_status = {
+            "matcher": OWN_MATCHER,
+            "registrationUnknown": "lookalike-two",
+            "hooks": [{
+                "type": "command", "command": old_command, "timeout": 5,
+                "additionalContextLimit": 1024, "statusMessage": "Different",
+                "handlerUnknown": {"preserve": True},
+            }],
+        }
+        owned_two = {"matcher": OWN_MATCHER, "ownedRegistration": 2, "hooks": [dict(owned_handler)]}
+        original_session_start = [
+            unrelated,
+            lookalike_timeout,
+            owned_one,
+            empty_owned_matcher,
+            scalar,
+            lookalike_status,
+            owned_two,
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            hooks_path, options = self.hooks_for(root, "project")
+            payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+            payload["hooks"]["SessionStart"] = original_session_start
+            hooks_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            installed = self.invoke("setup", "project", options)
+            after_install = json.loads(hooks_path.read_text(encoding="utf-8"))
+            removed = self.invoke("uninstall", "project", options)
+            after_uninstall = json.loads(hooks_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, installed.returncode, installed.stderr)
+        current = after_install["hooks"]["SessionStart"][2]
+        self.assertEqual(OWN_MATCHER, current["matcher"])
+        self.assertEqual("command", current["hooks"][0]["type"])
+        self.assertEqual(5, current["hooks"][0]["timeout"])
+        expected_unowned = [unrelated, lookalike_timeout, empty_owned_matcher, scalar, lookalike_status]
+        expected_after_install = [
+            unrelated,
+            lookalike_timeout,
+            current,
+            empty_owned_matcher,
+            scalar,
+            lookalike_status,
+        ]
+        self.assertEqual(expected_after_install, after_install["hooks"]["SessionStart"])
+        self.assertEqual(0, removed.returncode, removed.stderr)
+        self.assertEqual(expected_unowned, after_uninstall["hooks"]["SessionStart"])
 
     def test_reconcile_legacy_removes_only_the_two_superseded_global_injections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -76,6 +76,7 @@ CAVEMAN_COMMIT = "11ddc0c9813c8f75365cd5be2f753df08712f154"
 ADHD_COMMIT = "b42a45a068e080294924bfba19a7a2e8944c48ff"
 ADHD_SKILL_SHA256 = "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+GIT_BLOB_OID = re.compile(r"^[0-9a-f]{40}$")
 CAVEMAN_UPSTREAM_SHA256 = {
     "cavecrew": "b74f374f6aae6e9a31e78e7d876860406fe5833378e9298536edf176c12f379b",
     "caveman": "daf9cec496ebd039809d8236f99f17fa1b4beaadf8ce4e2d532d0da51d70afce",
@@ -107,8 +108,8 @@ CAVEMAN_DELTA_SHA256 = {
 CAVEMAN_DELTA_PATHS = {
     name: f"upstream/local-source-deltas/{name}.patch" for name in CAVEMAN_DELTA_SHA256
 }
-APPROVAL_SCHEMA = "super-caveman-exact-diff-approval.v1"
-APPROVAL_RECORD_SCHEMA = "super-caveman-exact-diff-approval-record.v1"
+APPROVAL_SCHEMA = "super-caveman-exact-diff-approval.v2"
+APPROVAL_RECORD_SCHEMA = "super-caveman-exact-diff-approval-record.v2"
 RAW_APPROVAL_SCHEMA = "super-caveman-exact-diff-human-record.v1"
 REVIEW_RECORD_SCHEMA = "super-caveman-spec-review.v1"
 APPROVAL_SCOPE = "all staged task paths except the aggregate result and aggregate approval record"
@@ -227,6 +228,103 @@ def _canonical_blob_tuples(diff_range: str | None, selectors: list[str]) -> list
 
 def _canonical_digest(tuples: list[bytes]) -> str:
     return hashlib.sha256(b"".join(tuples)).hexdigest()
+
+
+def reviewed_blob_tuples(value: object) -> list[bytes] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    tuples: list[bytes] = []
+    previous_path: str | None = None
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {"path", "old_oid", "new_oid"}:
+            return None
+        path = item.get("path")
+        old_oid = item.get("old_oid")
+        new_oid = item.get("new_oid")
+        if not isinstance(path, str) or not path or path == ".":
+            return None
+        path_object = Path(path)
+        if path_object.is_absolute() or ".." in path_object.parts or path_object.as_posix() != path:
+            return None
+        if previous_path is not None and path <= previous_path:
+            return None
+        if not all(
+            isinstance(oid, str) and (oid == "<deleted>" or GIT_BLOB_OID.fullmatch(oid))
+            for oid in (old_oid, new_oid)
+        ):
+            return None
+        if old_oid == new_oid:
+            return None
+        try:
+            path_bytes = os.fsencode(path)
+        except UnicodeEncodeError:
+            return None
+        tuples.append(
+            path_bytes
+            + b"\0"
+            + old_oid.encode("ascii")
+            + b"\0"
+            + new_oid.encode("ascii")
+            + b"\0"
+        )
+        previous_path = path
+    return tuples
+
+
+def _review_digests(base_commit: str, tuples: list[bytes]) -> dict[str, str]:
+    return {
+        "base_commit": base_commit,
+        "path_set_sha256": hashlib.sha256(
+            b"".join(item.split(b"\0", 1)[0] + b"\0" for item in tuples)
+        ).hexdigest(),
+        "staged_patch_sha256": _canonical_digest(tuples),
+    }
+
+
+def _tuple_paths(tuples: list[bytes]) -> list[str]:
+    return [os.fsdecode(item.split(b"\0", 1)[0]) for item in tuples]
+
+
+def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
+    paths = _tuple_paths(tuples)
+    selectors = [f":(top,literal){path}" for path in paths]
+    try:
+        changes = subprocess.check_output(
+            canonical_git_diff("--name-only", "-z", "HEAD", "--", *selectors),
+            cwd=ROOT,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    if changes:
+        return False
+    for item, path in zip(tuples, paths, strict=True):
+        _, _, new_oid, _ = item.split(b"\0")
+        if new_oid == b"<deleted>":
+            absolute = ROOT / path
+            if absolute.exists() or absolute.is_symlink():
+                return False
+            exists = subprocess.run(
+                ["git", "cat-file", "-e", f"HEAD:{path}"],
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if exists.returncode == 0:
+                return False
+            continue
+        try:
+            current_oid = subprocess.check_output(
+                ["git", "rev-parse", "--verify", f"HEAD:{path}"],
+                cwd=ROOT,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            return False
+        if current_oid != new_oid.decode("ascii"):
+            return False
+    return True
 
 
 def _staged_aggregates_match(excluded_paths: set[str]) -> bool:
@@ -374,6 +472,78 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
     }
 
 
+def committed_review_digests_from_blobs(
+    excluded_paths: set[str],
+    base_commit: str,
+    tuples: list[bytes],
+) -> dict[str, str] | None:
+    try:
+        resolved_base = subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"{base_commit}^{{commit}}"],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", resolved_base, "HEAD"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        return None
+    paths = _tuple_paths(tuples)
+    approved_path_selectors = [f":(top,literal){path}" for path in paths]
+    try:
+        commits = subprocess.check_output(
+            [
+                "git",
+                "rev-list",
+                "--reverse",
+                "--topo-order",
+                "--ancestry-path",
+                f"{resolved_base}..HEAD",
+                "--",
+                *approved_path_selectors,
+            ],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).splitlines()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    selectors = review_selectors(excluded_paths)
+    approval_anchor = None
+    for commit in commits:
+        candidate = _canonical_blob_tuples(
+            f"{resolved_base}..{commit}",
+            selectors,
+        )
+        if candidate == tuples:
+            approval_anchor = commit
+            break
+    if approval_anchor is None:
+        return None
+    later_commits = subprocess.check_output(
+        ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
+        cwd=ROOT,
+    )
+    if later_commits.strip():
+        return None
+    working_tree_changes = subprocess.check_output(
+        canonical_git_diff(
+            "--name-only", "-z", "HEAD", "--", *approved_path_selectors
+        ),
+        cwd=ROOT,
+    )
+    if working_tree_changes:
+        return None
+    return _review_digests(resolved_base, tuples)
+
+
 def is_approved_exact_diff(
     value: object,
     result_path: Path,
@@ -445,6 +615,7 @@ def is_approved_exact_diff(
         "review_scope",
         "path_set_sha256",
         "staged_patch_sha256",
+        "reviewed_blobs",
         "raw_approval_record_sha256",
         "raw_approval_storage",
     }
@@ -463,23 +634,44 @@ def is_approved_exact_diff(
         or not is_sha256(record.get("raw_approval_record_sha256"))
     ):
         return False
+    reviewed_tuples = reviewed_blob_tuples(record.get("reviewed_blobs"))
+    if reviewed_tuples is None:
+        return False
+    declared_review = _review_digests(value["base_commit"], reviewed_tuples)
+    if not all(
+        declared_review[key] == value[key]
+        for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
+    ):
+        return False
 
     try:
         result_relative = result_path.relative_to(BENCHMARK).as_posix()
     except ValueError:
         return False
+    exclusions = {result_relative, record_relative}
     try:
-        reviewed = staged_review_digests({result_relative, record_relative})
-        reviewed = reviewed or committed_review_digests(
-            {result_relative, record_relative}, value["base_commit"]
+        candidates = [staged_review_digests(exclusions)]
+        candidates.append(committed_review_digests(exclusions, value["base_commit"]))
+        candidates.append(
+            committed_review_digests_from_blobs(
+                exclusions,
+                value["base_commit"],
+                reviewed_tuples,
+            )
         )
     except (OSError, subprocess.CalledProcessError, ValueError):
         return False
-    if reviewed is None or not all(
-        reviewed[key] == value[key]
-        for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
-    ):
-        return False
+    exact_replay = any(
+        candidate is not None
+        and all(
+            candidate[key] == value[key]
+            for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
+        )
+        for candidate in candidates
+    )
+    if not exact_replay:
+        if require_external_evidence or not reviewed_blob_snapshot_matches(reviewed_tuples):
+            return False
 
     if not require_external_evidence:
         return True
@@ -785,13 +977,22 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         or "regular file" not in approval_contract.get("raw_record_validation", "")
         or "actual SHA-256" not in approval_contract.get("raw_record_validation", "")
         or REVIEW_RECORD_ENV not in approval_contract.get("raw_record_validation", "")
-        or "every replay revalidates both Git-external raw records" not in approval_contract.get(
+        or "every promotion replay revalidates both Git-external raw records" not in approval_contract.get(
             "approved_replay_validation", ""
         )
         or "byte-identical index and working-tree" not in approval_contract.get(
             "approved_replay_validation", ""
         )
         or "current staged or committed exact-diff" not in approval_contract.get(
+            "approved_replay_validation", ""
+        )
+        or "public squash replay" not in approval_contract.get(
+            "approved_replay_validation", ""
+        )
+        or "reviewed_blobs" not in approval_contract.get(
+            "approved_replay_validation", ""
+        )
+        or "each approved target blob must match HEAD" not in approval_contract.get(
             "approved_replay_validation", ""
         )
         or "path/blob tuples" not in approval_contract.get("digest_algorithm", "")

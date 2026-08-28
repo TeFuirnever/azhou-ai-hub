@@ -5,11 +5,25 @@ description: Report provable Azhou AI Hub checkout information or revision facts
 
 # Azhou Info
 
+**🦊 阿舟 · Azhou Info**
+
+> 🔎 只报告仓库能证明的事实。
+
 Use the repository Foundation CLI as the only authority. Do not reconstruct version or package facts from memory.
+
+## Brand protocol
+
+Emit this exact display event once:
+
+```text
+🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>
+```
+
+Use `✅ 验证通过` only after the selected read-only command succeeds and its output is read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
 
 ## Workflow
 
-1. Emit `🦊 阿舟 · Azhou Info 启动` with `mode=info|version` and the checkout scope.
+1. Emit the startup protocol once with the selected mode and resolved checkout scope.
 2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 3. Run one read-only command from that checkout:
    - General project/runtime/support facts and installable repository inventory: `python3 scripts/azhou_hub.py info --json`

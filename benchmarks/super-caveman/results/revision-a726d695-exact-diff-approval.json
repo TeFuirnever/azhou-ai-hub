@@ -1,0 +1,34 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-08-28T07:23:48Z",
+  "base_commit": "9c7e5f7c4a0de6fe6af2517942285d9290d96c8d",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "95a077b8eeb677e35ff0a4e9e9b10d4ebd10c84632b66922f738faf74304351c",
+  "staged_patch_sha256": "feca4efdf37c60d355bd24b7de37a476cec3b2627233ddd7654017c38e45bab1",
+  "reviewed_blobs": [
+    {
+      "path": "benchmarks/super-caveman/manifest.json",
+      "old_oid": "9175890bdc9ec638b8811624f625995715183345",
+      "new_oid": "a2b552d8246f5bb6a7f7c934d4cc3d404987fd19"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/revision-e2d998c6-attempt-1-summary.json",
+      "old_oid": "caf5de546cee1af00278d4ddae09558636e1778f",
+      "new_oid": "ac8e3da942ff5e5e36f25c3fee55d3bc9f39ab8e"
+    },
+    {
+      "path": "skills/super-caveman/scripts/codex_adapter.py",
+      "old_oid": "676138fc7f8c8f8c5b71c93a8150985442b58eab",
+      "new_oid": "e4abe8b34ac331ef36fd9f905d594d2794354566"
+    },
+    {
+      "path": "tests/test_super_caveman_codex_adapter.py",
+      "old_oid": "a49bd624c552252b5edf3fc270f4e6d1e7e77573",
+      "new_oid": "670ce3f311ead2bed63099bdc47c4d662e7678a5"
+    }
+  ],
+  "raw_approval_record_sha256": "e39a4369af28044ad0b5a22952656592ce9f17040038a56a6be2062df9a12ea1",
+  "raw_approval_storage": "Git-external"
+}

@@ -232,6 +232,24 @@ class CollectAgentHistoryTest(unittest.TestCase):
             self.assertEqual("receipt_inferred", report["runs"][0]["invocation_kind"])
             self.assertTrue(report["runs"][0]["receipt_present"])
 
+    def test_canonical_branded_receipt_can_infer_a_run_without_invocation_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            roots = self.empty_roots(Path(directory))
+            self.write_codex(
+                roots["codex"],
+                [
+                    codex_message("user", "这个阶段做完了，整理文档"),
+                    codex_message("assistant", "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/repo"),
+                    codex_message("assistant", "## 🦊 阿舟 · Repo Pedant receipt\n- Schema: repo-pedant.receipt.v2"),
+                ],
+            )
+
+            report = MODULE.collect(roots, ("codex",), {"repo-pedant", "neat-freak"}, 20, False)
+
+            self.assertEqual(1, report["runs_found"])
+            self.assertEqual("receipt_inferred", report["runs"][0]["invocation_kind"])
+            self.assertTrue(report["runs"][0]["receipt_present"])
+
     def test_codex_can_infer_cleanup_from_skill_file_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             roots = self.empty_roots(Path(directory))

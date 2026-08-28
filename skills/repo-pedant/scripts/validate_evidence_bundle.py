@@ -64,7 +64,8 @@ COUNTER_FIELDS = {
     "user_corrections_heuristic",
 }
 LEGACY_RECEIPT_HEADER = "## Repo-pedant receipt"
-BRANDED_RECEIPT_HEADER = "## 🦊 阿舟 · Repo-pedant receipt"
+PRIOR_BRANDED_RECEIPT_HEADER = "## 🦊 阿舟 · Repo-pedant receipt"
+BRANDED_RECEIPT_HEADER = "## 🦊 阿舟 · Repo Pedant receipt"
 BRANDED_RECEIPT_SCHEMA = "repo-pedant.receipt.v2"
 BRAND_SLOGAN = "> 🧹 代码是唯一现役答案，其他都要对齐。"
 LEGACY_RECEIPT_FIELDS = (
@@ -312,10 +313,11 @@ def validate_report(
 def validate_receipt(text: str) -> list[str]:
     errors: list[str] = []
     legacy_headers = text.count(LEGACY_RECEIPT_HEADER)
+    prior_branded_headers = text.count(PRIOR_BRANDED_RECEIPT_HEADER)
     branded_headers = text.count(BRANDED_RECEIPT_HEADER)
-    if legacy_headers + branded_headers != 1:
-        errors.append("receipt.header: expected exactly one supported Repo-pedant receipt header")
-    branded = branded_headers == 1 and legacy_headers == 0
+    if legacy_headers + prior_branded_headers + branded_headers != 1:
+        errors.append("receipt.header: expected exactly one supported Repo Pedant receipt header")
+    branded = branded_headers + prior_branded_headers == 1 and legacy_headers == 0
     required_fields = BRANDED_RECEIPT_FIELDS if branded else LEGACY_RECEIPT_FIELDS
     fields: dict[str, list[str]] = {name: [] for name in required_fields}
     pattern = re.compile(r"^- (?P<name>[^:]+):\s*(?P<value>.*)$")
