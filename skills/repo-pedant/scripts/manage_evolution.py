@@ -14,6 +14,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+import azhou_runtime_state
+
 
 SIGNAL_SCHEMA = "repo-pedant.evolution-signal.v1"
 CANDIDATE_SCHEMA = "repo-pedant.evolution-candidate.v1"
@@ -88,16 +93,20 @@ def safe_state_root(project: Path, value: Path | None) -> Path:
     project = project.expanduser().resolve()
     if not project.is_dir():
         raise EvolutionError("project directory missing")
-    candidate = value.expanduser() if value else project / ".repo-pedant" / "evolution"
-    if not candidate.is_absolute():
-        candidate = project / candidate
-    raw = candidate.absolute()
-    if raw.is_symlink():
-        raise EvolutionError("evolution state root cannot be a symlink")
-    candidate = raw.resolve()
-    if not inside(candidate, project):
-        raise EvolutionError("evolution state must stay inside the project")
-    return candidate
+    try:
+        namespace = azhou_runtime_state.state_path(project, "repo-pedant")
+        if value is None:
+            return azhou_runtime_state.state_path(project, "repo-pedant", "evolution")
+        raw = value.expanduser()
+        if raw.is_absolute():
+            relative = raw.absolute().relative_to(project)
+        else:
+            relative = raw
+        candidate = azhou_runtime_state.relative_path(project, relative)
+        candidate.relative_to(namespace)
+        return candidate
+    except (ValueError, azhou_runtime_state.StateError) as exc:
+        raise EvolutionError("evolution state must stay inside .azhou/repo-pedant") from exc
 
 
 def contains_forbidden_key(value: Any) -> bool:

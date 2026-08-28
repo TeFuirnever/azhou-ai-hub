@@ -36,6 +36,16 @@ The complete pinned output-behavior contract and its original fourteen response 
 
 Upstream README files, installers, status-line integration and separate alias packages are not redistributed. Source hashes, adaptation mapping and integrity fixtures live under `benchmarks/super-caveman/`.
 
+## LLM Wiki
+
+`skills/llm-wiki/` is a Python standard-library adaptation of the LLM Wiki implementation in [Yeachan-Heo/oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) at commit [`deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/commit/deee3a446dadc9bfea31cdc8b19b00b16718082e), audited as package version `4.14.6`.
+
+- Copyright: Yeachan Heo
+- License: [MIT](LICENSES/llm-wiki-source-MIT.txt)
+- Adaptation boundary: Markdown page schema, seven wiki operations, keyword/CJK search, append merge, lint, catalog, operation log, locking and lifecycle concepts. Current product integration uses a neutral CLI, stdio MCP server, lifecycle adapter, and a single private store.
+
+The upstream comments credit the persistent self-maintained wiki concept to Andrej Karpathy. This repository does not redistribute Karpathy-authored code or text.
+
 ## Excalidraw Diagram
 
 The package uses these licensed upstreams. Package versions and local digests are current runtime evidence. The three commit rows marked “selected baseline” were chosen on 2026-08-26 as the latest public commits at or before the 2026-08-23 package build; they are immutable future comparison points, not proof of the exact historical import commit.

@@ -45,7 +45,7 @@ class AzhouHubCliTest(unittest.TestCase):
 
     def _managed_fixture(self, directory: str, mode: str = "link") -> tuple[Path, Path, Path]:
         root, source, target = self._fixture_repo(directory)
-        receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+        receipt = target / ".azhou/hub" / "receipts" / "sample.json"
         result, payload = self._json_main(
             [
                 "setup", "--managed", "--receipt", str(receipt), "--skill", "sample",
@@ -104,9 +104,18 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
+            ["hub", "llm-wiki", "repo-pedant"],
+            payload["runtime_state"]["namespaces"],
+        )
+        self.assertEqual(
+            [".azhou-ai-hub/receipts", ".llm-wiki", ".omc/wiki", ".repo-pedant"],
+            payload["runtime_state"]["compatibility_sources"],
+        )
+        self.assertEqual(
             [
                 *AZHOU_SKILL_NAMES,
                 "excalidraw-diagram",
+                "llm-wiki",
                 "repo-pedant",
                 "super-caveman",
             ],
@@ -141,13 +150,15 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual(0, result, doctor)
                 self.assertEqual("healthy", doctor["status"])
                 checks = {check["name"]: check for check in doctor["checks"]}
+                self.assertEqual("pass", checks["target:hub-receipts"]["status"])
+                checks = {check["name"]: check for check in doctor["checks"]}
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
     def test_task_skill_real_packages_complete_managed_lifecycle(self) -> None:
         for name in ("repo-pedant", "super-caveman", "excalidraw-diagram"):
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
                 target = Path(directory) / "skills"
-                receipt = target / ".azhou-ai-hub" / "receipts" / f"{name}.json"
+                receipt = target / ".azhou/hub" / "receipts" / f"{name}.json"
                 destination = target / name
 
                 result, setup = self._json_main(
@@ -679,7 +690,7 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_managed_dry_run_writes_no_target_or_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
-            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            receipt = target / ".azhou/hub" / "receipts" / "sample.json"
             result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--json"], root=root)
             self.assertEqual(0, result)
             self.assertEqual("dry_run", payload["status"])
@@ -689,7 +700,7 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_managed_apply_writes_atomic_receipt_and_requires_pairing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
-            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            receipt = target / ".azhou/hub" / "receipts" / "sample.json"
             result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
             self.assertEqual(0, result)
             self.assertTrue(receipt.is_file())
@@ -703,10 +714,59 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(1, result)
             self.assertEqual("fail", payload["status"])
 
+    def test_legacy_receipts_require_explicit_reviewed_namespace_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, current_receipt = self._managed_fixture(directory, mode="copy")
+            legacy_receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            legacy_receipt.parent.mkdir(parents=True)
+            shutil.copy2(current_receipt, legacy_receipt)
+            shutil.rmtree(target / ".azhou")
+
+            result, planned = self._json_main(
+                ["migrate-receipts", "--target", str(target), "--json"],
+                root=root,
+            )
+            self.assertEqual(0, result, planned)
+            self.assertEqual("planned", planned["status"])
+            self.assertTrue(legacy_receipt.is_file())
+            self.assertFalse(current_receipt.exists())
+
+            result, migrated = self._json_main(
+                [
+                    "migrate-receipts",
+                    "--target",
+                    str(target),
+                    "--apply",
+                    "--plan-id",
+                    planned["planId"],
+                    "--json",
+                ],
+                root=root,
+            )
+            self.assertEqual(0, result, migrated)
+            self.assertEqual("migrated", migrated["status"])
+            self.assertTrue(legacy_receipt.is_file())
+            self.assertTrue(current_receipt.is_file())
+
+            result, repeated = self._json_main(
+                [
+                    "migrate-receipts",
+                    "--target",
+                    str(target),
+                    "--apply",
+                    "--plan-id",
+                    planned["planId"],
+                    "--json",
+                ],
+                root=root,
+            )
+            self.assertEqual(0, result, repeated)
+            self.assertEqual("already-current", repeated["status"])
+
     def test_receipt_write_failure_rolls_back_managed_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
-            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            receipt = target / ".azhou/hub" / "receipts" / "sample.json"
             with mock.patch("scripts.azhou_hub._write_receipt", side_effect=OSError("disk full")):
                 result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
             self.assertEqual(1, result)
@@ -718,7 +778,7 @@ class AzhouHubCliTest(unittest.TestCase):
             root, source, target = self._fixture_repo(directory)
             target.mkdir()
             (target / "sample").symlink_to(source, target_is_directory=True)
-            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            receipt = target / ".azhou/hub" / "receipts" / "sample.json"
 
             result, payload = self._json_main(
                 ["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"],
@@ -755,19 +815,19 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertFalse(outside.parent.exists())
 
     def test_managed_receipt_rejects_azhou_or_receipts_symlink(self) -> None:
-        for link_part in (".azhou-ai-hub", "receipts"):
+        for link_part in (".azhou", "receipts"):
             with self.subTest(link_part=link_part), tempfile.TemporaryDirectory() as directory:
                 root, _, target = self._fixture_repo(directory)
                 target.mkdir()
                 anchor = Path(directory) / "anchor"
                 anchor.mkdir()
-                if link_part == ".azhou-ai-hub":
+                if link_part == ".azhou":
                     (target / link_part).symlink_to(anchor, target_is_directory=True)
                 else:
-                    metadata = target / ".azhou-ai-hub"
-                    metadata.mkdir()
+                    metadata = target / ".azhou/hub"
+                    metadata.mkdir(parents=True)
                     (metadata / link_part).symlink_to(anchor, target_is_directory=True)
-                receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+                receipt = target / ".azhou/hub" / "receipts" / "sample.json"
                 result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--json"], root=root)
                 self.assertEqual(1, result)
                 self.assertEqual("fail", payload["status"])
@@ -777,9 +837,9 @@ class AzhouHubCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
             target.mkdir()
-            lock = target / ".azhou-ai-hub" / "mutation.lock"
+            lock = target / ".azhou/hub" / "mutation.lock"
             lock.mkdir(parents=True)
-            receipt = target / ".azhou-ai-hub" / "receipts" / "sample.json"
+            receipt = target / ".azhou/hub" / "receipts" / "sample.json"
             result, payload = self._json_main(["setup", "--managed", "--receipt", str(receipt), "--skill", "sample", "--target", str(target), "--apply", "--json"], root=root)
             self.assertEqual(1, result)
             self.assertFalse((target / "sample").exists() or (target / "sample").is_symlink())
@@ -793,7 +853,7 @@ class AzhouHubCliTest(unittest.TestCase):
             managed_directory.mkdir()
             root, target, receipt = self._managed_fixture(str(managed_directory), mode="copy")
             shutil.rmtree(target / "sample")
-            lock = target / ".azhou-ai-hub" / "mutation.lock"
+            lock = target / ".azhou/hub" / "mutation.lock"
             lock.mkdir(parents=True)
             result, payload = self._json_main(["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root)
             self.assertEqual(1, result)

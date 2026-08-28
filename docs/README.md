@@ -8,6 +8,7 @@
 | Try the Repo Pedant reference demo | [Repo Pedant demo](demos/repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
 | Use action-first terse response, commit, review or compression workflows | [Super Caveman package](../skills/super-caveman/SKILL.md) |
+| Build or inspect persistent project knowledge | [LLM Wiki package](../skills/llm-wiki/SKILL.md) |
 | Know what each harness really supports | [Support matrix](support-matrix.md) |
 | Understand repository boundaries | [Architecture](architecture.md) |
 | Build or evolve a skill | [Azhou Skill Standard](skill-standard.md) |

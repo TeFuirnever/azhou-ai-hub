@@ -53,7 +53,7 @@ When planning-with-files is active, its all-phases-complete state may be treated
 
 ## Neutral core
 
-The shipped core is `scripts/closeout_hook.py`. It reads only a canonically contained `.repo-pedant/closeout-state.json` matching `assets/closeout-state.schema.json`. A symlink, external path, invalid schema, workspace mismatch, absent state, completed state, or session mismatch exits successfully without control output.
+The shipped core is `scripts/closeout_hook.py`. It reads only a canonically contained `.azhou/repo-pedant/closeout-state.json` matching `assets/closeout-state.schema.json`. A symlink, external path, invalid schema, workspace mismatch, absent state, completed state, or session mismatch exits successfully without control output.
 
 Create the marker only after an explicit closeout begins:
 

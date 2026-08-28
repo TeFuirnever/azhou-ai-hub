@@ -27,6 +27,15 @@
 
 开发期 prompts、expected outputs、fixtures、judge records、真实运行聚合和 benchmark runner 统一放在仓库级 `benchmarks/<skill>/`。运行时包不包含 `benchmarks/`、`agents/openai.yaml` 或其他模型专用身份；Codex、Claude、zcode 和其他 harness 共享同一个 neutral core。
 
+### 2.1 运行状态命名空间
+
+- 可安装包继续位于 `skills/<canonical-name>/`；Azhou 自有的项目内运行状态统一位于 `<authorized-root>/.azhou/<canonical-name>/`。
+- `hub` 是保留命名空间：跨 Skill 安装与生命周期 receipt 只能位于显式安装目标的 `.azhou/hub/`。Skill 不得占用它。
+- `.git`、`.codex`、`.claude`、`.agents`、`.omx`、`.treehouse` 等宿主或工具自有目录保持在 `.azhou/` 外；用户选择的文档、图片和交付物也不因运行状态规则而搬迁。
+- 旧状态根只能作为具名 compatibility source。迁移必须先生成稳定 dry-run plan，再以同一 `planId` 原子应用并验证；源目录保留。禁止 fallback read、dual-write、静默清理和扫描无关隐藏目录。
+- 路径解析必须从显式项目或安装目标出发，拒绝绝对覆盖、遍历、symlink、文件祖先和越界。目录默认 `0700`，文件默认 `0600`；Skill 不得在未获授权时修改另一个项目的 ignore 文件。
+- 共享路径与迁移逻辑的项目权威是 `scripts/azhou_runtime_state.py`。为保持单个 Skill 独立安装，确有使用者可携带 byte-identical runtime copy；仓库测试必须证明副本与权威一致。
+
 ## 3. 阿舟交互层
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
