@@ -21,7 +21,7 @@ For an interactive run, read [brand-layer.md](references/brand-layer.md), then s
 
 Use one fixed anchor per completed material stage. Keep machine JSON, paths, commands, schema values, page content, and raw evidence emoji-free. Never emit `✅ 验证通过` after a `fail`, `hold`, or `skipped` machine receipt. A host without Unicode may remove emoji without changing prefixes, separators, fields, or values.
 
-Every runtime entry uses the canonical `<project>/.llm-wiki/` store. The CLI is `scripts/llm_wiki.py`; the optional stdio MCP server is `scripts/llm_wiki_mcp.py`.
+Every runtime entry uses the canonical `<project>/.azhou/llm-wiki/` store. The CLI is `scripts/llm_wiki.py`; the optional stdio MCP server is `scripts/llm_wiki_mcp.py`.
 
 ## Operating contract
 

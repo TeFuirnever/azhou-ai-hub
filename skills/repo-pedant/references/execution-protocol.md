@@ -1,6 +1,6 @@
 # Execution protocol
 
-Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 record 默认写到受影响项目的 `.repo-pedant/execution.json`；schema 为 `repo-pedant.execution.v1`，机器定义见 `../assets/execution-protocol.schema.json`。
+Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 record 默认写到受影响项目的 `.azhou/repo-pedant/execution.json`；schema 为 `repo-pedant.execution.v1`，机器定义见 `../assets/execution-protocol.schema.json`。
 
 ## 固定顺序
 
@@ -29,7 +29,7 @@ Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 r
 
 ```bash
 python3 <skill-dir>/scripts/validate_execution_protocol.py \
-  /absolute/project/.repo-pedant/execution.json
+  /absolute/project/.azhou/repo-pedant/execution.json
 ```
 
 退出码 `0` 后原样发送 record 里的成功消息，不再执行工具或修改文件。退出码 `1` 时发送确定性失败锚点，修复后重跑相关检查并重新验证 record。JSON schema 约束形状；脚本额外约束顺序、固定文案、check 完整性和成功时点。

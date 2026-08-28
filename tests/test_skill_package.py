@@ -305,7 +305,7 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("deee3a446dadc9bfea31cdc8b19b00b16718082e", provenance)
         self.assertIn("llm-wiki.receipt.v2", brand)
         self.assertIn("autoCapture` defaults to false", skill)
-        self.assertIn('DEFAULT_STORE = ".llm-wiki"', script)
+        self.assertIn('DEFAULT_STORE = ".azhou/llm-wiki"', script)
 
     def test_llm_wiki_license_and_notice_are_retained(self) -> None:
         license_text = (ROOT / "LICENSES" / "llm-wiki-source-MIT.txt").read_text(encoding="utf-8")

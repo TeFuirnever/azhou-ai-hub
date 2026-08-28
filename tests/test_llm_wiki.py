@@ -58,7 +58,7 @@ class LlmWikiTest(unittest.TestCase):
                 set(initialized),
             )
             self.assertEqual("none", initialized["learningSignal"])
-            self.assertTrue((root / ".llm-wiki" / ".gitignore").is_file())
+            self.assertTrue((root / ".azhou" / "llm-wiki" / ".gitignore").is_file())
 
             added = self.run_cli(
                 root,
@@ -173,7 +173,8 @@ class LlmWikiTest(unittest.TestCase):
     def test_page_reads_and_internal_logs_reject_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            wiki = root / ".llm-wiki"
+            wiki = root / ".azhou" / "llm-wiki"
+            wiki.parent.mkdir()
             wiki.mkdir()
             outside = root / "outside.md"
             outside.write_text("secret\n", encoding="utf-8")
@@ -191,8 +192,8 @@ class LlmWikiTest(unittest.TestCase):
     def test_invalid_frontmatter_is_a_lint_error(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = root / ".llm-wiki"
-            store.mkdir()
+            store = root / ".azhou" / "llm-wiki"
+            store.mkdir(parents=True)
             broken = store / "broken.md"
             broken.write_text("not frontmatter\n", encoding="utf-8")
             result = self.run_cli(root, "lint", "--no-log", expected_code=1)
@@ -212,7 +213,7 @@ class LlmWikiTest(unittest.TestCase):
     def test_prior_store_requires_explicit_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = llm_wiki.WikiStore(root, ".prior-wiki")
+            source = llm_wiki.WikiStore(root, ".llm-wiki")
             source.add(
                 title="Prior Page",
                 content="Source remains intact.",
@@ -221,10 +222,18 @@ class LlmWikiTest(unittest.TestCase):
                 sources=[],
                 confidence="medium",
             )
-            planned = self.run_cli(root, "migrate", "--from-store", ".prior-wiki")
+            planned = self.run_cli(root, "migrate", "--from-store", ".llm-wiki")
             self.assertEqual("planned", planned["result"]["status"])
-            self.assertFalse((root / ".llm-wiki").exists())
-            applied = self.run_cli(root, "migrate", "--from-store", ".prior-wiki", "--apply")
+            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            applied = self.run_cli(
+                root,
+                "migrate",
+                "--from-store",
+                ".llm-wiki",
+                "--apply",
+                "--plan-id",
+                planned["result"]["planId"],
+            )
             self.assertEqual("migrated", applied["result"]["status"])
             self.assertTrue((source.directory / "prior-page.md").is_file())
             result = self.run_cli(root, "list")
@@ -236,21 +245,21 @@ class LlmWikiTest(unittest.TestCase):
             event = json.dumps({"cwd": str(root), "session_id": "session-123"})
             skipped = self.run_cli(root, "hook", "session-end", input_text=event)
             self.assertEqual("skipped", skipped["status"])
-            self.assertFalse((root / ".llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
 
             configured = self.run_cli(root, "config", "--auto-capture", "true")
             self.assertTrue(configured["result"]["autoCapture"])
             captured = self.run_cli(root, "hook", "session-end", input_text=event)
             self.assertEqual("pass", captured["status"])
             self.assertEqual(1, self.run_cli(root, "list", "--category", "session-log")["result"]["count"])
-            page = next((root / ".llm-wiki").glob("session-log-*.md"))
+            page = next((root / ".azhou" / "llm-wiki").glob("session-log-*.md"))
             self.assertNotIn("session-123", page.read_text(encoding="utf-8"))
 
     def test_context_hook_is_bounded_and_read_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.run_cli(root, "add", "--title", "One", "--content", "First fact.")
-            log = root / ".llm-wiki" / "log.md"
+            log = root / ".azhou" / "llm-wiki" / "log.md"
             before = log.read_bytes()
             event = json.dumps({"cwd": str(root)})
             result = self.run_cli(root, "hook", "session-start", "--limit", "4", input_text=event)

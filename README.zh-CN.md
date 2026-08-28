@@ -138,7 +138,7 @@ Super Caveman 保留原版 Caveman 的持续精简模式作为核心，把六个
 
 > 📚 知识要留得住，也要经得起查证。
 
-LLM Wiki 只把 Markdown 页面保存在 `<project>/.llm-wiki/`，维护自动索引和操作日志，并提供确定性的关键词、标签、CJK 检索与健康检查。CLI、7 工具 stdio MCP、生命周期事件、项目上下文和迁移共用同一 Python 核心。其他目录必须先 dry-run 再原子复制，源数据保留，会话采集重置为关闭。配置只生成供人工审核，不会静默安装。
+LLM Wiki 只把 Markdown 页面保存在 `<project>/.azhou/llm-wiki/`，维护自动索引和操作日志，并提供确定性的关键词、标签、CJK 检索与健康检查。CLI、7 工具 stdio MCP、生命周期事件、项目上下文和迁移共用同一 Python 核心。其他目录必须先 dry-run 再原子复制，源数据保留，会话采集重置为关闭。配置只生成供人工审核，不会静默安装。
 
 [运行 demo](docs/demos/llm-wiki.md) · [运行包](skills/llm-wiki/SKILL.md) · [品牌协议](skills/llm-wiki/references/brand-layer.md) · [生产设计](skills/llm-wiki/references/design.md) · [依赖安装](skills/llm-wiki/references/setup.md) · [来源说明](skills/llm-wiki/references/provenance.md)
 
@@ -147,6 +147,7 @@ LLM Wiki 只把 Markdown 页面保存在 `<project>/.llm-wiki/`，维护自动�
 ~~~text
 docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运行包
           │                              │
+          ├── 分配 ──────────────────> .azhou/<name>/      私有运行状态
           ├── 约束 ──────────────────> tests/              确定性证明
           └── 约束 ──────────────────> benchmarks/<name>/  隔离行为证据
 
@@ -155,6 +156,8 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 ~~~
 
 [Azhou Skill Standard](docs/skill-standard.md) 是项目唯一准则。[架构说明](docs/architecture.md)解释边界，[治理规则](GOVERNANCE.md)解释决策方式。
+
+可安装包继续放在 `skills/`。项目内 Azhou 运行状态统一使用 `.azhou/<skill-name>/`；`.azhou/hub/` 专门保存 checkout-managed 生命周期 receipt。宿主配置、宿主缓存和用户选择的交付物都留在这个命名空间之外。
 
 ## 开发
 

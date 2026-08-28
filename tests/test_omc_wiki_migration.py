@@ -31,7 +31,7 @@ class OMCWikiMigrationTest(unittest.TestCase):
             planned = llm_wiki.migrate_store(root, ".omc/wiki", apply=False)
             self.assertEqual("planned", planned["status"])
             self.assertTrue(planned["sourcePreserved"])
-            self.assertFalse((root / ".llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
 
             migrated = llm_wiki.migrate_store(root, ".omc/wiki", apply=True)
             self.assertEqual("migrated", migrated["status"])

@@ -19,11 +19,11 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
 ~~~
 
-`init` creates `<project>/.llm-wiki/`, secures the directory to the current user, and writes its private-by-default `.gitignore` and generated `index.md`.
+`init` creates `<project>/.azhou/llm-wiki/`, secures the directory to the current user, and writes its private-by-default `.gitignore` and generated `index.md`.
 
 ## MCP server
 
-`scripts/llm_wiki_mcp.py` exposes seven tools over newline-delimited JSON-RPC stdio. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.llm-wiki/`.
+`scripts/llm_wiki_mcp.py` exposes seven tools over newline-delimited JSON-RPC stdio. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.azhou/llm-wiki/`.
 
 ~~~bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \
@@ -57,7 +57,7 @@ python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-hooks \
   --skill-dir "$SKILL_DIR" --python "$(command -v python3)"
 ~~~
 
-Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
+Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.azhou/llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
 
 ~~~bash
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" config --auto-capture true
@@ -75,22 +75,22 @@ python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" trigger "wiki query"
 
 ## Migration and rollback
 
-Dry-run any prior project-relative store:
+Dry-run a recognized prior store:
 
 ~~~bash
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
-  migrate --from-store .prior-wiki
+  migrate --from-store .llm-wiki
 ~~~
 
 After reviewing `files`, `target`, `sourcePreserved`, and `autoCaptureReset`, apply:
 
 ~~~bash
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
-  migrate --from-store .prior-wiki --apply
+  migrate --from-store .llm-wiki --apply --plan-id '<reviewed-planId>'
 ~~~
 
-Migration refuses symlinks, active locks, unknown entries, invalid pages, invalid configuration, and target conflicts. It restores the private ignore rule, disables session capture, stages the full copy, rebuilds the index, then atomically publishes `.llm-wiki/`. The source remains untouched. Rollback means stop using the canonical store and return to the preserved source; deleting either directory is a separate destructive action.
+Migration refuses symlinks, active locks, unknown entries, invalid pages, invalid configuration, and target conflicts. It restores the private ignore rule, disables session capture, stages the full copy, rebuilds the index, then atomically publishes `.azhou/llm-wiki/`. The source remains untouched. Rollback means stop using the canonical store and return to the preserved source; deleting either directory is a separate destructive action.
 
 ## Environment snapshot
 
-`capture-environment` accepts reviewed JSON and stores its SHA-256 digest in page sources. Inspect and redact the file first. For automatic local refresh, write the smaller reviewed context to `.llm-wiki/project-context.json`.
+`capture-environment` accepts reviewed JSON and stores its SHA-256 digest in page sources. Inspect and redact the file first. For automatic local refresh, write the smaller reviewed context to `.azhou/llm-wiki/project-context.json`.

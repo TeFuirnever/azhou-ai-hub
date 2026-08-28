@@ -2,10 +2,10 @@
 
 ## Storage
 
-The default store is `<project>/.llm-wiki/`:
+The default store is `<project>/.azhou/llm-wiki/`:
 
 ~~~text
-.llm-wiki/
+.azhou/llm-wiki/
 ├── .gitignore     private-by-default boundary
 ├── config.json    optional lifecycle configuration
 ├── project-context.json  optional reviewed lifecycle input

@@ -76,7 +76,7 @@ The normal JSON setup result names the source, destination, mode, applied state 
 Use managed mode only when this CLI should later repair, switch or remove the exact artifact it installed. Managed mode accepts one skill, requires an explicit receipt path, and still defaults to a dry-run:
 
 ~~~bash
-RECEIPT="$SKILLS_HOME/.azhou-ai-hub/receipts/repo-pedant.json"
+RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
 
 python3 scripts/azhou_hub.py setup \
   --managed \
@@ -97,6 +97,16 @@ python3 scripts/azhou_hub.py setup \
 ~~~
 
 The v2 receipt records the canonical source, source digest, explicit target, recomputed destination, repository revision, and the installed filesystem object's device, inode, and mode. Package digests include file bytes plus the normalized executable bit. Its integrity digest detects accidental corruption; it is not a signature and does not authenticate an untrusted file. Every later mutation also requires `--target` and independently revalidates the current canonical skill, source digest, destination boundary, executable intent, and installed object identity.
+
+Receipts from the prior metadata root are compatibility sources only. Move validated receipts into the hub namespace with a reviewed plan id:
+
+~~~bash
+python3 scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
+python3 scripts/azhou_hub.py migrate-receipts \
+  --target "$SKILLS_HOME" --apply --plan-id '<reviewed-planId>' --json
+~~~
+
+Migration preserves the source directory and rejects receipt drift, target mismatch, source mismatch, forged identity, symlinks and changed plans. Lifecycle commands never fall back to the prior root.
 
 Legacy `azhou-ai-hub.install-receipt.v1` files remain readable but cannot authorize migration or deletion because they did not record an object identity. Run `repair` without `--apply` to inspect the upgrade, then explicitly run `repair --apply`. The upgrade validates source and installed content with the original v1 byte digest, records the current object identity, and recomputes both executable-aware v2 digests before writing the receipt. Byte drift remains a conflict; v1 could not prove historical executable intent beyond the current canonical source.
 

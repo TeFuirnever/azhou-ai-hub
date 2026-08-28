@@ -17,6 +17,14 @@ import uuid
 from contextlib import nullcontext
 from typing import Any, Iterable
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+try:
+    import azhou_runtime_state
+except ModuleNotFoundError:  # Direct `verify` fixtures intentionally copy only this file.
+    azhou_runtime_state = None  # type: ignore[assignment]
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_PYTHON = (3, 11)
@@ -102,33 +110,38 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def _receipt_path_error(path: Path, target: Path) -> str | None:
-    target = target.expanduser().resolve()
-    state_root = target / ".azhou-ai-hub"
-    allowed = state_root / "receipts"
     try:
+        target = target.expanduser().resolve()
+        state_root = azhou_runtime_state.state_path(target, "hub")
+        allowed = azhou_runtime_state.state_path(target, "hub", "receipts")
         raw = path.expanduser()
         if raw.is_symlink() or allowed.is_symlink() or state_root.is_symlink():
             return "receipt path contains a symlink"
         if state_root.exists() and not state_root.is_dir():
-            return "target/.azhou-ai-hub exists and is not a directory"
+            return "target/.azhou/hub exists and is not a directory"
         if allowed.exists() and not allowed.is_dir():
-            return "target/.azhou-ai-hub/receipts exists and is not a directory"
+            return "target/.azhou/hub/receipts exists and is not a directory"
         resolved = raw.resolve(strict=False)
         if resolved.parent != allowed.resolve(strict=False):
-            return "receipt path must be directly inside target/.azhou-ai-hub/receipts"
-    except OSError as exc:
+            return "receipt path must be directly inside target/.azhou/hub/receipts"
+    except (OSError, azhou_runtime_state.StateError) as exc:
         return str(exc)
     return None
 
 
 def _mutation_lock(target: Path):
-    lock = target.expanduser().resolve() / ".azhou-ai-hub" / "mutation.lock"
+    target = target.expanduser().resolve()
+    try:
+        lock = azhou_runtime_state.state_path(target, "hub", "mutation.lock")
+    except azhou_runtime_state.StateError as exc:
+        raise PackageError(str(exc)) from exc
     class Lock:
         def __enter__(self):
             try:
-                lock.parent.mkdir(parents=True, exist_ok=True)
+                target.mkdir(parents=True, exist_ok=True)
+                azhou_runtime_state.ensure_private_directory(lock.parent, root=target)
                 lock.mkdir()
-            except OSError as exc:
+            except (OSError, azhou_runtime_state.StateError) as exc:
                 raise PackageError(f"mutation lock unavailable: {exc}") from exc
             return self
         def __exit__(self, *_args):
@@ -137,6 +150,79 @@ def _mutation_lock(target: Path):
             except OSError:
                 pass
     return Lock()
+
+
+def migrate_receipt_namespace(
+    *,
+    target: Path,
+    root: Path,
+    apply: bool,
+    plan_id: str | None,
+) -> dict[str, Any]:
+    target = target.expanduser().resolve()
+    try:
+        source = azhou_runtime_state.relative_path(target, ".azhou-ai-hub/receipts")
+        for receipt_path in sorted(source.iterdir(), key=lambda path: path.name):
+            if receipt_path.is_symlink() or not receipt_path.is_file() or receipt_path.suffix != ".json":
+                raise PackageError(f"legacy receipt source contains an unsupported entry: {receipt_path.name}")
+            receipt, error = _load_receipt(receipt_path)
+            if error or receipt is None:
+                raise PackageError(error or f"cannot validate legacy receipt: {receipt_path.name}")
+            if Path(receipt["target"]).resolve() != target:
+                raise PackageError(f"legacy receipt target mismatch: {receipt_path.name}")
+            if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
+                raise PackageError(f"legacy receipt source mismatch: {receipt_path.name}")
+            state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
+            if state != "current":
+                raise PackageError(f"legacy receipt identity cannot be verified: {details}")
+        plan = azhou_runtime_state.plan_directory_migration(
+            target,
+            namespace="hub",
+            source=".azhou-ai-hub/receipts",
+            allowed_sources=(".azhou-ai-hub/receipts",),
+            target_parts=("receipts",),
+        )
+        if not apply:
+            return plan
+        if not plan_id:
+            raise PackageError("--apply requires the reviewed --plan-id")
+        if plan_id != plan["planId"]:
+            raise PackageError("receipt migration plan changed; run dry-run again")
+        result = azhou_runtime_state.apply_directory_migration(plan)
+        azhou_runtime_state.verify_directory_migration(result)
+        return result
+    except azhou_runtime_state.StateError as exc:
+        raise PackageError(str(exc)) from exc
+
+
+def _doctor_hub_receipts(root: Path, target: Path) -> tuple[str, str]:
+    try:
+        receipts = azhou_runtime_state.state_path(target, "hub", "receipts")
+    except azhou_runtime_state.StateError as exc:
+        return "fail", str(exc)
+    if not receipts.exists():
+        return "pass", "no checkout-managed receipts in .azhou/hub/receipts"
+    if receipts.is_symlink() or not receipts.is_dir():
+        return "fail", ".azhou/hub/receipts is not a safe directory"
+    managed = [
+        path
+        for path in sorted(receipts.iterdir(), key=lambda item: item.name)
+        if path.name != azhou_runtime_state.MIGRATION_RECEIPT
+    ]
+    if any(path.is_symlink() or not path.is_file() or path.suffix != ".json" for path in managed):
+        return "fail", ".azhou/hub/receipts contains an unsupported entry"
+    for path in managed:
+        receipt, error = _load_receipt(path)
+        if error or receipt is None:
+            return "fail", f"{path.name}: {error or 'receipt invalid'}"
+        if Path(receipt["target"]).resolve() != target:
+            return "fail", f"{path.name}: target mismatch"
+        if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
+            return "fail", f"{path.name}: canonical source mismatch"
+        state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
+        if state != "current":
+            return "fail", f"{path.name}: {details}"
+    return "pass", f"{len(managed)} checkout-managed receipt(s) verified in .azhou/hub/receipts"
 
 
 def _new_receipt(root: Path, target: Path, mode: str, rows: list[dict[str, str]]) -> dict[str, Any]:
@@ -218,6 +304,16 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
         "commands": COMMANDS,
         "verification_command": "python3 scripts/verify.py",
         "support_matrix": "docs/support-matrix.md",
+        "runtime_state": {
+            "root": ".azhou",
+            "namespaces": ["hub", "llm-wiki", "repo-pedant"],
+            "compatibility_sources": [
+                ".azhou-ai-hub/receipts",
+                ".llm-wiki",
+                ".omc/wiki",
+                ".repo-pedant",
+            ],
+        },
     }
 
 
@@ -968,6 +1064,8 @@ def run_doctor(
                 else:
                     status, details = "fail", "target contains different or unowned content"
                 checks.append(_check(f"target:{name}", status, details))
+            receipt_status, receipt_details = _doctor_hub_receipts(root, resolved_target)
+            checks.append(_check("target:hub-receipts", receipt_status, receipt_details))
 
     if run_verification:
         try:
@@ -1159,6 +1257,15 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     migrate.add_argument("--apply", action="store_true")
     migrate.add_argument("--json", action="store_true")
 
+    receipt_migration = subcommands.add_parser(
+        "migrate-receipts",
+        help="Move validated managed receipts into the Azhou hub namespace",
+    )
+    receipt_migration.add_argument("--target", type=Path, required=True)
+    receipt_migration.add_argument("--apply", action="store_true")
+    receipt_migration.add_argument("--plan-id")
+    receipt_migration.add_argument("--json", action="store_true")
+
     verify = subcommands.add_parser("verify", help="Run the authoritative repository verification gate")
     verify.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
     verify.add_argument(
@@ -1203,7 +1310,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             _print_doctor(payload)
         return 0 if payload["valid"] else 1
 
-    if args.command in {"repair", "migrate", "uninstall"} and not args.target.is_absolute():
+    if args.command in {"repair", "migrate", "migrate-receipts", "uninstall"} and not args.target.is_absolute():
         payload = _lifecycle_report("fail", [], error="--target must be an absolute path")
         print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
         return 1
@@ -1297,6 +1404,21 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
                 payload = _lifecycle_report("fail", [], error=str(exc))
         print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
+
+    if args.command == "migrate-receipts":
+        try:
+            context = _mutation_lock(args.target) if args.apply else nullcontext()
+            with context:
+                payload = migrate_receipt_namespace(
+                    target=args.target,
+                    root=root,
+                    apply=args.apply,
+                    plan_id=args.plan_id,
+                )
+        except PackageError as exc:
+            payload = {"status": "fail", "applied": False, "error": str(exc)}
+        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        return 0 if payload["status"] in {"planned", "migrated", "already-current"} else 1
 
     if args.command == "verify":
         return run_verifier(root, args.python, promotion_evidence=args.promotion_evidence)

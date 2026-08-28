@@ -42,7 +42,7 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" query auth --no-
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" lint --no-log
 ```
 
-Every normal entrypoint must use only `$PROJECT_ROOT/.llm-wiki/`. The focused development checks are:
+Every normal entrypoint must use only `$PROJECT_ROOT/.azhou/llm-wiki/`. The focused development checks are:
 
 ```bash
 python3 -m unittest \

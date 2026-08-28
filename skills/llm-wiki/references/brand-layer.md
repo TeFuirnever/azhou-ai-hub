@@ -93,7 +93,7 @@ Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v2` 的稳定机器状
 - Schema: llm-wiki.receipt.v2
 - Status: pass | hold | skipped | fail
 - Operation: <operation>
-- Store: .llm-wiki | none
+- Store: .azhou/llm-wiki | none
 
 ### 🧭 Current truth
 - Current truth: <currentTruth from the machine receipt plus verified readback>

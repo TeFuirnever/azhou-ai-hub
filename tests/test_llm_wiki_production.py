@@ -61,6 +61,8 @@ class LLMWikiProductionTests(unittest.TestCase):
             if FORBIDDEN_PRODUCT_TERMS.search(relative):
                 violations.append(f"path:{relative}")
             for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "COMPATIBILITY_STORES =" in line or "migrate --from-store .llm-wiki" in line:
+                    continue
                 if FORBIDDEN_PRODUCT_TERMS.search(line):
                     violations.append(f"{relative}:{line_number}")
 
@@ -102,9 +104,12 @@ class LLMWikiProductionTests(unittest.TestCase):
             event = json.dumps({"cwd": str(root)})
             started = llm_wiki_adapter.run_host_hook("session-start", event)
             self.assertEqual("SessionStart", started["hookSpecificOutput"]["hookEventName"])
-            self.assertEqual(".llm-wiki", llm_wiki.DEFAULT_STORE)
-            self.assertTrue((root / ".llm-wiki" / "canonical-store.md").is_file())
-            self.assertEqual([root / ".llm-wiki"], [path for path in root.iterdir() if path.is_dir()])
+            self.assertEqual(".azhou/llm-wiki", llm_wiki.DEFAULT_STORE)
+            self.assertTrue((root / ".azhou" / "llm-wiki" / "canonical-store.md").is_file())
+            self.assertEqual(
+                [root / ".azhou"],
+                [path for path in root.iterdir() if path.is_dir()],
+            )
 
     def test_lifecycle_refreshes_project_context_and_capture_is_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -143,7 +148,7 @@ class LLMWikiProductionTests(unittest.TestCase):
     def test_generic_migration_is_dry_run_atomic_idempotent_and_preserves_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = llm_wiki.WikiStore(root, ".previous-wiki")
+            source = llm_wiki.WikiStore(root, ".llm-wiki")
             source.add(
                 title="Migrated Decision",
                 content="Preserve verified data.",
@@ -154,23 +159,31 @@ class LLMWikiProductionTests(unittest.TestCase):
             )
             source.set_auto_capture(True)
 
-            planned = llm_wiki.migrate_store(root, ".previous-wiki", apply=False)
+            planned = llm_wiki.migrate_store(root, ".llm-wiki", apply=False)
             self.assertEqual("planned", planned["status"])
-            self.assertFalse((root / ".llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertRegex(planned["planId"], r"^[a-f0-9]{64}$")
 
-            migrated = llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+            migrated = llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
             self.assertEqual("migrated", migrated["status"])
             self.assertTrue((source.directory / "migrated-decision.md").is_file())
             target = llm_wiki.WikiStore(root)
             self.assertTrue((target.directory / "migrated-decision.md").is_file())
             self.assertFalse(target.config()["autoCapture"])
+            receipt = json.loads(
+                (target.directory / ".migration-receipt.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(planned["planId"], receipt["planId"])
 
-            repeated = llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+            repeated = llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
             self.assertEqual("already-current", repeated["status"])
 
             (target.directory / "migrated-decision.md").write_text("conflict", encoding="utf-8")
             with self.assertRaises(llm_wiki.WikiError):
-                llm_wiki.migrate_store(root, ".previous-wiki", apply=True)
+                llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
+
+            with self.assertRaises(llm_wiki.WikiError):
+                llm_wiki.migrate_store(root, ".unknown-wiki", apply=False)
 
     def test_migration_rejects_unsafe_sources_and_cleans_failed_staging(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -178,7 +191,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             for case, entry in (("unknown", "payload.bin"), ("active", ".wiki-lock")):
                 root = parent / case
                 root.mkdir()
-                source = llm_wiki.WikiStore(root, ".source")
+                source = llm_wiki.WikiStore(root, ".llm-wiki")
                 source.add(
                     title="Safe Page",
                     content="Verified source.",
@@ -189,12 +202,12 @@ class LLMWikiProductionTests(unittest.TestCase):
                 )
                 (source.directory / entry).write_text("blocked\n", encoding="utf-8")
                 with self.assertRaises(llm_wiki.WikiError):
-                    llm_wiki.migrate_store(root, ".source", apply=True)
-                self.assertFalse((root / ".llm-wiki").exists())
+                    llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
+                self.assertFalse((root / ".azhou" / "llm-wiki").exists())
 
             root = parent / "interrupted"
             root.mkdir()
-            source = llm_wiki.WikiStore(root, ".source")
+            source = llm_wiki.WikiStore(root, ".llm-wiki")
             source.add(
                 title="Atomic Page",
                 content="Publish as one directory.",
@@ -203,7 +216,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 sources=[],
                 confidence="high",
             )
-            target = root.resolve() / ".llm-wiki"
+            target = root.resolve() / ".azhou" / "llm-wiki"
             real_replace = llm_wiki.os.replace
 
             def fail_publish(source_path: Path | str, target_path: Path | str) -> None:
@@ -213,9 +226,9 @@ class LLMWikiProductionTests(unittest.TestCase):
 
             with mock.patch.object(llm_wiki.os, "replace", side_effect=fail_publish):
                 with self.assertRaises(OSError):
-                    llm_wiki.migrate_store(root, ".source", apply=True)
+                    llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
             self.assertFalse(target.exists())
-            self.assertEqual([], list(root.glob(".llm-wiki-migration-*")))
+            self.assertEqual([], list((root / ".azhou").glob(".wiki-migration-*")))
             self.assertTrue((source.directory / "atomic-page.md").is_file())
 
     def test_generic_adapter_cli_and_assets_are_host_neutral(self) -> None:
@@ -282,7 +295,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             responses = [json.loads(line) for line in completed.stdout.splitlines()]
             self.assertEqual(7, len(responses))
             self.assertTrue(all("isError" not in response["result"] for response in responses))
-            self.assertFalse((root / ".llm-wiki" / "process-page.md").exists())
+            self.assertFalse((root / ".azhou" / "llm-wiki" / "process-page.md").exists())
 
             subprocess.run(
                 [
@@ -316,7 +329,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             self.assertIn("hookSpecificOutput", run_event("session-start"))
             self.assertIn("systemMessage", run_event("pre-compact"))
             self.assertEqual({"continue": True}, run_event("session-end"))
-            self.assertEqual([], list((root / ".llm-wiki").glob("session-log-*.md")))
+            self.assertEqual([], list((root / ".azhou" / "llm-wiki").glob("session-log-*.md")))
 
             subprocess.run(
                 [
@@ -333,9 +346,9 @@ class LLMWikiProductionTests(unittest.TestCase):
                 check=True,
             )
             self.assertEqual({"continue": True}, run_event("session-end"))
-            session_page = next((root / ".llm-wiki").glob("session-log-*.md"))
+            session_page = next((root / ".azhou" / "llm-wiki").glob("session-log-*.md"))
             self.assertNotIn("private-process-id", session_page.read_text(encoding="utf-8"))
-            self.assertEqual([root / ".llm-wiki"], [path for path in root.iterdir() if path.is_dir()])
+            self.assertEqual([root / ".azhou"], [path for path in root.iterdir() if path.is_dir()])
 
     def test_machine_receipt_is_complete_and_emoji_free(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

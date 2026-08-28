@@ -36,7 +36,7 @@ Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails close
 To let this checkout later repair, switch or remove exactly what it installed, opt into a single-skill managed receipt:
 
 ~~~bash
-RECEIPT="$SKILLS_HOME/.azhou-ai-hub/receipts/repo-pedant.json"
+RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
 
 python3 scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
@@ -48,6 +48,16 @@ python3 scripts/azhou_hub.py setup \
 ~~~
 
 The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).
+
+Existing checkout-managed receipts under the prior metadata root are migration sources only. Diagnose and copy them without deleting the source:
+
+~~~bash
+python3 scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
+python3 scripts/azhou_hub.py migrate-receipts \
+  --target "$SKILLS_HOME" --apply --plan-id '<reviewed-planId>' --json
+~~~
+
+The apply step revalidates each receipt's target, canonical source, digest and installed object identity before publishing `.azhou/hub/receipts/` atomically.
 
 ## Manual copy
 
@@ -97,7 +107,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Inspect dry-runs before installing: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
-- LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.llm-wiki/` stays private by default: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).
+- LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
@@ -117,4 +127,4 @@ Add `--apply` only after reviewing the JSON plan. There is no force overwrite, c
 
 Remove the legacy <code>neat-freak</code> name only after confirming <code>repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.
 
-LLM Wiki normal operations use only <code>.llm-wiki/</code>. Import another project-relative directory through the dry-run-first <code>migrate --from-store</code> command. Migration never deletes the source; contraction remains separately authorized.
+LLM Wiki normal operations use only <code>.azhou/llm-wiki/</code>. Import a recognized prior store through the dry-run-first <code>migrate --from-store</code> command, then bind apply to the emitted <code>planId</code>. Migration never deletes the source; contraction remains separately authorized.

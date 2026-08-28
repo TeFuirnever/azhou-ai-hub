@@ -65,8 +65,11 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 {**common, "title": "MCP Page", "content": "Initial fact.", "tags": ["mcp"]},
             )
             self.assertNotIn("isError", added)
-            self.assertTrue((root / ".llm-wiki" / "mcp-page.md").is_file())
-            self.assertIn("] ingest", (root / ".llm-wiki" / "log.md").read_text(encoding="utf-8"))
+            self.assertTrue((root / ".azhou" / "llm-wiki" / "mcp-page.md").is_file())
+            self.assertIn(
+                "] ingest",
+                (root / ".azhou" / "llm-wiki" / "log.md").read_text(encoding="utf-8"),
+            )
 
             ingested = llm_wiki_mcp.call_tool(
                 "wiki_ingest",
@@ -218,7 +221,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
             root = Path(directory)
             event = json.dumps({"cwd": str(root), "session_id": "blocked-12345678"})
             self.assertEqual({"continue": True}, llm_wiki_adapter.run_host_hook("session-end", event))
-            self.assertFalse((root / ".llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
 
             store = llm_wiki.WikiStore(root)
             store.init()

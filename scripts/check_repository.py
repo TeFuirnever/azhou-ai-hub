@@ -26,6 +26,10 @@ SECRET_PATTERNS = (
     ("google-api-key", re.compile(rb"AIza[0-9A-Za-z_-]{35}")),
     ("private-key", re.compile(rb"-----BEGIN (?:EC |OPENSSH |RSA )?PRIVATE KEY-----")),
 )
+RUNTIME_DEFAULT_PATTERN = re.compile(
+    r"\b(?:DEFAULT_[A-Z0-9_]*(?:STORE|STATE|ROOT|DIR|PATH)|default)\s*=\s*"
+    r"[\"'](?P<path>\.[^\"']+)[\"']"
+)
 
 REQUIRED_PATHS = (
     ".github/CODEOWNERS",
@@ -222,6 +226,38 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:
+    errors: list[str] = []
+    ignore = root / ".gitignore"
+    try:
+        ignored = ignore.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        errors.append(f"cannot read .gitignore for runtime-state policy: {exc}")
+    else:
+        if ".azhou/" not in ignored:
+            errors.append("repository .gitignore must contain .azhou/")
+
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        if path.suffix != ".py" or not relative.startswith(("scripts/", "skills/")):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"cannot inspect runtime-state defaults in {relative}: {exc}")
+            continue
+        for line_number, line in enumerate(lines, 1):
+            for match in RUNTIME_DEFAULT_PATTERN.finditer(line):
+                value = match.group("path")
+                if value == ".azhou" or value.startswith(".azhou/"):
+                    continue
+                errors.append(
+                    "Azhou runtime state must use .azhou/<skill-name>/ or .azhou/hub/: "
+                    f"{relative}:{line_number} defaults to {value}"
+                )
+    return errors
+
+
 def check_secret_patterns(files: list[Path], root: Path) -> list[str]:
     """Reject high-confidence credential shapes without printing their values."""
     errors: list[str] = []
@@ -268,6 +304,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
+    errors.extend(check_runtime_state_contract(files, root))
     errors.extend(check_secret_patterns(files, root))
     errors.extend(check_provenance(root))
     return errors

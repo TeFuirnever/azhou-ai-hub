@@ -138,7 +138,7 @@ Super Caveman keeps original Caveman's persistent terse modes as its core, absor
 
 > 📚 Knowledge should persist—and stand up to verification.
 
-LLM Wiki stores Markdown pages only under `<project>/.llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, seven-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
+LLM Wiki stores Markdown pages only under `<project>/.azhou/llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, seven-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
 
 [Run the demo](docs/demos/llm-wiki.md) · [Read the package](skills/llm-wiki/SKILL.md) · [Read brand contract](skills/llm-wiki/references/brand-layer.md) · [Read design](skills/llm-wiki/references/design.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md)
 
@@ -147,6 +147,7 @@ LLM Wiki stores Markdown pages only under `<project>/.llm-wiki/`, keeps a genera
 ~~~text
 docs/skill-standard.md ── governs ──> skills/<name>/       installable runtime
           │                              │
+          ├── allocates ─────────────> .azhou/<name>/      private runtime state
           ├── governs ───────────────> tests/              deterministic proof
           └── governs ───────────────> benchmarks/<name>/  isolated behavior evidence
 
@@ -155,6 +156,8 @@ history signals ──> isolated candidate ──> paired review ──> human p
 ~~~
 
 The [Azhou Skill Standard](docs/skill-standard.md) is the single project authority. [Architecture](docs/architecture.md) explains the boundaries; [governance](GOVERNANCE.md) explains decisions.
+
+Installable packages remain under `skills/`. Project-local Azhou runtime state uses `.azhou/<skill-name>/`; `.azhou/hub/` is reserved for checkout-managed lifecycle receipts. Host configuration, host caches and user-selected deliverables stay outside this namespace.
 
 ## Develop
 

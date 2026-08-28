@@ -19,14 +19,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+import azhou_runtime_state
+
 
 SCHEMA_VERSION = 1
 RECEIPT_SCHEMA = "llm-wiki.receipt.v2"
-DEFAULT_STORE = ".llm-wiki"
+DEFAULT_STORE = ".azhou/llm-wiki"
+COMPATIBILITY_STORES = {".llm-wiki", ".omc/wiki"}
 INDEX_FILE = "index.md"
 LOG_FILE = "log.md"
 CONFIG_FILE = "config.json"
 PROJECT_CONTEXT_FILE = "project-context.json"
+MIGRATION_RECEIPT_FILE = ".migration-receipt.json"
 RESERVED_FILES = {INDEX_FILE, LOG_FILE, "environment.md"}
 CATEGORIES = {
     "architecture",
@@ -234,29 +241,21 @@ class WikiStore:
     def __init__(self, root: Path, store: str = DEFAULT_STORE) -> None:
         self.root = root.expanduser().resolve()
         store_path = Path(store)
-        if store_path.is_absolute():
-            raise WikiError("store path must be project-relative")
-        candidate = self.root / store_path
-        cursor = self.root
-        for part in store_path.parts:
-            cursor /= part
-            if cursor.is_symlink():
-                raise WikiError(f"refusing symlinked wiki store path: {cursor}")
-        self.directory = candidate.resolve()
         try:
-            self.directory.relative_to(self.root)
-        except ValueError as exc:
-            raise WikiError("store path escapes project root") from exc
+            self.directory = (
+                azhou_runtime_state.state_path(self.root, "llm-wiki")
+                if store == DEFAULT_STORE
+                else azhou_runtime_state.relative_path(self.root, store_path)
+            )
+        except azhou_runtime_state.StateError as exc:
+            raise WikiError(str(exc)) from exc
         self.store = store_path.as_posix()
 
     def ensure(self) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if self.directory.is_symlink():
-            raise WikiError(f"refusing symlinked wiki store: {self.directory}")
         try:
-            self.directory.chmod(0o700)
-        except OSError as exc:
-            raise WikiError(f"cannot secure wiki store permissions: {self.directory}") from exc
+            azhou_runtime_state.ensure_private_directory(self.directory, root=self.root)
+        except azhou_runtime_state.StateError as exc:
+            raise WikiError(str(exc)) from exc
         ignore = self.directory / ".gitignore"
         if ignore.is_symlink():
             raise WikiError(f"refusing symlinked wiki ignore file: {ignore}")
@@ -944,6 +943,8 @@ def run_hook_event(
 
 
 def migration_payload(root: Path, source_store: str) -> tuple[Path, dict[str, str], bool]:
+    if Path(source_store).as_posix() not in COMPATIBILITY_STORES:
+        raise WikiError(f"unrecognized migration source: {source_store}")
     source = WikiStore(root, source_store)
     target = WikiStore(root)
     if source.directory == target.directory:
@@ -1007,6 +1008,8 @@ def target_migration_payload(target: WikiStore) -> dict[str, str]:
     payload: dict[str, str] = {}
     allowed_names = {".gitignore", CONFIG_FILE, PROJECT_CONTEXT_FILE}
     for path in sorted(target.directory.iterdir(), key=lambda item: item.name):
+        if path.name == MIGRATION_RECEIPT_FILE:
+            continue
         if path.is_symlink() or not path.is_file():
             raise WikiError(f"canonical store contains unsupported entry: {path.name}")
         if path.name == INDEX_FILE:
@@ -1020,55 +1023,100 @@ def target_migration_payload(target: WikiStore) -> dict[str, str]:
     return payload
 
 
-def migrate_store(root: Path, source_store: str, *, apply: bool) -> dict[str, Any]:
+def migration_plan(
+    source_directory: Path,
+    target_directory: Path,
+    payload: dict[str, str],
+    auto_capture_reset: bool,
+) -> dict[str, Any]:
+    contents = [
+        {
+            "path": name,
+            "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            "size": len(content.encode("utf-8")),
+        }
+        for name, content in sorted(payload.items())
+    ]
+    binding = {
+        "schemaVersion": "llm-wiki.migration.v1",
+        "source": source_directory.as_posix(),
+        "target": target_directory.as_posix(),
+        "contents": contents,
+        "sourcePreserved": True,
+        "autoCaptureReset": auto_capture_reset,
+    }
+    plan_id = hashlib.sha256(
+        json.dumps(binding, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {**binding, "planId": plan_id}
+
+
+def migrate_store(
+    root: Path,
+    source_store: str,
+    *,
+    apply: bool,
+    expected_plan_id: str | None = None,
+) -> dict[str, Any]:
     """Copy a complete prior store into the canonical store without deleting the source."""
 
     root = root.expanduser().resolve()
     source_directory, payload, auto_capture_reset = migration_payload(root, source_store)
     target = WikiStore(root)
     files = sorted({*payload, INDEX_FILE})
+    plan = migration_plan(source_directory, target.directory, payload, auto_capture_reset)
+    if expected_plan_id is not None and expected_plan_id != plan["planId"]:
+        raise WikiError("migration plan changed; run dry-run again")
     if target.directory.exists():
         if not target.directory.is_dir():
             raise WikiError(f"canonical store path is not a directory: {target.directory}")
         if target_migration_payload(target) != payload:
             raise WikiError("canonical store already exists with conflicting content")
+        receipt_path = target.directory / MIGRATION_RECEIPT_FILE
+        if receipt_path.is_symlink() or not receipt_path.is_file():
+            raise WikiError("canonical store migration receipt is missing or unsafe")
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise WikiError("canonical store migration receipt is invalid") from exc
+        if receipt.get("planId") != plan["planId"]:
+            raise WikiError("canonical store migration receipt does not match the source")
         return {
+            **plan,
             "status": "already-current",
-            "source": source_directory.as_posix(),
-            "target": target.directory.as_posix(),
             "files": files,
-            "sourcePreserved": True,
-            "autoCaptureReset": auto_capture_reset,
         }
     if not apply:
         return {
+            **plan,
             "status": "planned",
-            "source": source_directory.as_posix(),
-            "target": target.directory.as_posix(),
             "files": files,
-            "sourcePreserved": True,
-            "autoCaptureReset": auto_capture_reset,
         }
 
-    stage = Path(tempfile.mkdtemp(prefix=".llm-wiki-migration-", dir=root))
+    try:
+        azhou_runtime_state.ensure_private_directory(target.directory.parent, root=root)
+    except azhou_runtime_state.StateError as exc:
+        raise WikiError(str(exc)) from exc
+    stage = Path(tempfile.mkdtemp(prefix=".wiki-migration-", dir=target.directory.parent))
     try:
         for name, content in payload.items():
             atomic_write(stage / name, content)
-        staged_store = WikiStore(root, stage.name)
+        staged_store = WikiStore(root, stage.relative_to(root).as_posix())
         with staged_store.lock():
             staged_store.update_index_unsafe()
+        atomic_write(
+            stage / MIGRATION_RECEIPT_FILE,
+            json.dumps({**plan, "status": "migrated"}, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        )
         os.replace(stage, target.directory)
     except Exception:
         if stage.exists():
             shutil.rmtree(stage)
         raise
     return {
+        **plan,
         "status": "migrated",
-        "source": source_directory.as_posix(),
-        "target": target.directory.as_posix(),
         "files": files,
-        "sourcePreserved": True,
-        "autoCaptureReset": auto_capture_reset,
     }
 
 
@@ -1178,6 +1226,7 @@ def build_parser() -> argparse.ArgumentParser:
     migrate = subparsers.add_parser("migrate", help="copy a prior store into the canonical store")
     migrate.add_argument("--from-store", required=True, help="project-relative source store")
     migrate.add_argument("--apply", action="store_true", help="apply after reviewing the dry-run receipt")
+    migrate.add_argument("--plan-id", help="bind --apply to the reviewed dry-run plan")
     return parser
 
 
@@ -1415,7 +1464,14 @@ def run(args: argparse.Namespace) -> int:
     elif command == "hook":
         return handle_hook(args, store)
     elif command == "migrate":
-        result = migrate_store(args.root, args.from_store, apply=args.apply)
+        if args.apply and not args.plan_id:
+            raise WikiError("--apply requires the reviewed --plan-id")
+        result = migrate_store(
+            args.root,
+            args.from_store,
+            apply=args.apply,
+            expected_plan_id=args.plan_id,
+        )
         applied = result["status"] in {"migrated", "already-current"}
         emit(
             command,

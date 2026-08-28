@@ -15,7 +15,9 @@ python3 scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mod
 python3 scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode link --apply --json
 ~~~
 
-Managed operations use a receipt directly below `<target>/.azhou-ai-hub/receipts/`. Run every `repair`, `migrate`, or `uninstall` command once without `--apply`, review the exact plan, then apply only with authorization.
+Managed operations use a receipt directly below `<target>/.azhou/hub/receipts/`. Run every `repair`, `migrate`, or `uninstall` command once without `--apply`, review the exact plan, then apply only with authorization.
+
+Receipts under the prior metadata root are not read as a fallback. Use `migrate-receipts --target <absolute-root> --json`, review the emitted `planId`, then rerun with `--apply --plan-id <reviewed-planId>`. The source remains intact.
 
 Current managed installs write `azhou-ai-hub.install-receipt.v2`, including the installed object's filesystem identity and executable-aware package digest. Legacy v1 receipts cannot authorize migration or deletion; an explicit `repair --apply` validates their original byte digests, records the current object identity, and recomputes source and installed v2 digests. Byte drift remains blocked.
 
