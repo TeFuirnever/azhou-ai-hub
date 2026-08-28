@@ -14,7 +14,7 @@ BENCHMARK = ROOT / "benchmarks" / "repo-pedant" / "benchmark.py"
 FIXTURE = ROOT / "benchmarks" / "repo-pedant" / "fixtures" / "code-spec-conflict"
 
 
-RECEIPT = """## 🦊 阿舟 · Repo-pedant receipt
+RECEIPT = """## 🦊 阿舟 · Repo Pedant receipt
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 

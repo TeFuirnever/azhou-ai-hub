@@ -42,7 +42,7 @@ Read [evidence-contract.md](evidence-contract.md) before interpreting zero resul
 
 Prefer evidence in this order:
 
-1. direct user corrections and `Repo-pedant receipt` fields;
+1. direct user corrections and `Repo Pedant receipt` fields;
 2. failed checks, reverted edits, scope violations, or unsafe actions;
 3. runtime history with an explicit coverage limit;
 4. supplied exports and synthetic fixtures.

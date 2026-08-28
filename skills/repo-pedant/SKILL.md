@@ -146,7 +146,7 @@ python3 <skill-dir>/scripts/validate_execution_protocol.py \
 ### 🧾 5. 输出稳定收据
 
 ```markdown
-## 🦊 阿舟 · Repo-pedant receipt
+## 🦊 阿舟 · Repo Pedant receipt
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 

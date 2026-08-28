@@ -366,6 +366,8 @@ class SkillPackageTest(unittest.TestCase):
         for anchor in anchors:
             self.assertIn(anchor, brand)
         self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
+        self.assertIn("## 🦊 阿舟 · Repo Pedant receipt", skill)
+        self.assertNotIn("## 🦊 阿舟 · Repo-pedant receipt", skill)
         self.assertIn('REMINDER = "🟡 阿舟提醒｜', hook)
         self.assertIn('PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜', hook)
 
@@ -409,6 +411,17 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("至少 3 个独立 paired judges", evolution)
         self.assertIn("exact diff", evolution)
         self.assertIn("不能写 live", evolution)
+
+    def test_excalidraw_uses_one_canonical_public_motto(self) -> None:
+        package = ROOT / "skills" / "excalidraw-diagram"
+        skill = (package / "SKILL.md").read_text(encoding="utf-8")
+        brand = (package / "references" / "brand-layer.md").read_text(encoding="utf-8")
+        motto = "先让结构讲清关系，再让文字补充证据。"
+
+        self.assertIn(f"> ✏️ {motto}", skill)
+        self.assertIn(f"- 口号：`{motto}`", brand)
+        self.assertIn(f"> ✏️ {motto}", brand)
+        self.assertNotIn("图要可编辑，也要把关系说清楚。", brand)
 
     def test_excalidraw_export_example_matches_locked_runtime_and_cli(self) -> None:
         package = ROOT / "skills" / "excalidraw-diagram"
