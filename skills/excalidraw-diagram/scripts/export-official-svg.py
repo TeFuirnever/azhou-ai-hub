@@ -49,7 +49,7 @@ REFERENCES = Path(__file__).resolve().parent.parent / "references"
 
 MUTATE_JS = """
 (fontB64) => {
-    const svg = document.querySelector('#root svg');
+    const svg = document.querySelector('#canvas svg');
     let styleEl = svg.querySelector('style.style-fonts');
     if (!styleEl) {
         styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
@@ -71,7 +71,7 @@ MUTATE_JS = """
 
 PLAIN_JS = """
 () => {
-    const svg = document.querySelector('#root svg');
+    const svg = document.querySelector('#canvas svg');
     const clone = svg.cloneNode(true);
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     return clone.outerHTML;
@@ -100,17 +100,17 @@ def export(src: Path, dst: Path, png_dst: Path | None, subset: Path | None) -> N
         try:
             page = browser.new_page(viewport={"width": 1400, "height": 1000})
             page.goto(url)
-            page.wait_for_function("window.__moduleReady === true", timeout=30000)
-            result = page.evaluate(f"window.renderDiagram({json.dumps(data)})")
-            if not result or not result.get("success"):
+            page.wait_for_function("window.rendererReady === true", timeout=30000)
+            result = page.evaluate("scene => window.drawScene(scene)", data)
+            if not isinstance(result, dict) or result.get("ok") is not True:
                 print(f"ERROR: {result}", file=sys.stderr)
                 sys.exit(1)
-            page.wait_for_function("window.__renderComplete === true", timeout=15000)
+            # drawScene resolves only after document.fonts.ready; settle once more.
             page.wait_for_timeout(300)  # let injected fonts settle
             svg_html = page.evaluate(MUTATE_JS, font_b64) if font_b64 else page.evaluate(PLAIN_JS)
             dst.write_text(svg_html, encoding="utf-8")
             if png_dst:
-                page.query_selector("#root svg").screenshot(path=str(png_dst))
+                page.query_selector("#canvas svg").screenshot(path=str(png_dst))
         finally:
             browser.close()
             httpd.shutdown()
