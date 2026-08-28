@@ -22,6 +22,20 @@ from scripts.check_repository import (
 ROOT = Path(__file__).parents[1]
 
 
+def copy_skill_brand_surfaces(root: Path) -> None:
+    for relative, contract in SKILL_BRAND_CONTRACTS.items():
+        source = ROOT / relative
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        brand_path = contract.get("brand_path")
+        if brand_path:
+            brand_source = ROOT / brand_path
+            brand_target = root / brand_path
+            brand_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(brand_source, brand_target)
+
+
 def release_workflow_script() -> str:
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     marker = "      - name: Validate tag and create draft\n        run: |\n"
@@ -41,17 +55,7 @@ class RepositoryPolicyTest(unittest.TestCase):
     def test_skill_brand_contract_rejects_a_drifted_startup_protocol(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for relative, contract in SKILL_BRAND_CONTRACTS.items():
-                source = ROOT / relative
-                target = root / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, target)
-                brand_path = contract.get("brand_path")
-                if brand_path:
-                    brand_source = ROOT / brand_path
-                    brand_target = root / brand_path
-                    brand_target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(brand_source, brand_target)
+            copy_skill_brand_surfaces(root)
 
             skill = root / "skills" / "azhou-info" / "SKILL.md"
             skill.write_text(
@@ -67,6 +71,56 @@ class RepositoryPolicyTest(unittest.TestCase):
             self.assertIn(
                 "skill brand startup drift: skills/azhou-info/SKILL.md",
                 errors,
+            )
+
+    def test_skill_brand_contract_rejects_missing_required_markers(self) -> None:
+        relative = "skills/llm-wiki/SKILL.md"
+        contract = SKILL_BRAND_CONTRACTS[relative]
+        cases = (
+            ("identity", ("🦊 阿舟 · LLM Wiki",), "identity missing"),
+            ("motto", (contract["motto"],), "motto missing"),
+            ("success", ("✅ 验证通过",), "success marker missing"),
+            ("failure", ("❌ 验证失败",), "failure marker missing"),
+            ("hold", ("🔒 阿舟暂停这一项",), "hold marker missing"),
+            ("emoji boundary", ("Emoji",), "emoji boundary missing"),
+            ("raw evidence", ("原始证据", "raw evidence"), "raw-evidence boundary missing"),
+            (
+                "Unicode fallback",
+                ("host 不支持 Unicode", "Host 不支持 Unicode", "A host without Unicode"),
+                "Unicode fallback missing",
+            ),
+        )
+
+        for name, markers, expected in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                copy_skill_brand_surfaces(root)
+                surfaces = [root / relative, root / contract["brand_path"]]
+                replacements = 0
+                for surface in surfaces:
+                    text = surface.read_text(encoding="utf-8")
+                    for marker in markers:
+                        replacements += text.count(marker)
+                        text = text.replace(marker, "removed-marker")
+                    surface.write_text(text, encoding="utf-8")
+
+                self.assertGreater(replacements, 0)
+                self.assertIn(
+                    f"skill brand {expected}: {relative}",
+                    check_skill_brand_contract(root),
+                )
+
+    def test_skill_brand_contract_rejects_a_missing_brand_layer(self) -> None:
+        relative = "skills/llm-wiki/SKILL.md"
+        contract = SKILL_BRAND_CONTRACTS[relative]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            copy_skill_brand_surfaces(root)
+            (root / contract["brand_path"]).unlink()
+
+            self.assertIn(
+                f"skill brand layer missing: {contract['brand_path']}",
+                check_skill_brand_contract(root),
             )
 
     def test_only_canonical_runtime_skills_are_discoverable(self) -> None:
