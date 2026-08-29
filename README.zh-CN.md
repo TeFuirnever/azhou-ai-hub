@@ -89,7 +89,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | Excalidraw Diagram | <code>用 excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/excalidraw-diagram.md)。 |
 | Super Caveman | <code>使用 /super-caveman full，再为这份 diff 写 commit message。</code> | 行动优先精简模式和可直接粘贴的 Conventional Commit；不暂存、不提交。 |
 | LLM Wiki | <code>用 llm-wiki 保存这条已验证的架构决策，再检索回来并检查 wiki。</code> | 私有本地页面、来源与置信度、检索结果、健康报告和稳定收据。[运行 demo](docs/demos/llm-wiki.md)。 |
-| Spec Relay | <code>用 spec-relay 把这份 Spec 和审阅评论打包成一份可传递 HTML。</code> | 与来源关联的 HTML、可寻址分区、内嵌评论与批注、已处置反馈、未决责任人、明确的 transport/publication 状态和 relay 收据。 |
+| Spec Relay | <code>用 spec-relay 把这份 Spec 和审阅评论打包成一份可传递 HTML。</code> | 与来源关联的 HTML、可寻址分区、内嵌评论与批注、已处置反馈、未决责任人、明确的 transport/publication 状态和 relay 收据。[运行 demo](docs/demos/spec-relay.md)。 |
 
 Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合同和 verifier 接线，只有冻结的 attempt-1 运行才算模型证据。
 

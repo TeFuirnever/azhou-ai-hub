@@ -89,7 +89,7 @@ All nine packages are independently installable and discoverable as package surf
 | Excalidraw Diagram | <code>Use excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/excalidraw-diagram.md). |
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
 | LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/llm-wiki.md). |
-| Spec Relay | <code>Use spec-relay to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. |
+| Spec Relay | <code>Use spec-relay to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. [Run the demo](docs/demos/spec-relay.md). |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
 
