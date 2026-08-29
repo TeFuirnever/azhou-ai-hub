@@ -6,6 +6,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Added `spec-relay`, an enhanced and provenance-tracked derivative of Lavish Editor that packages specs, complete comments, selected-text annotations, feedback disposition and next-owner state inside one portable HTML relay packet; standalone export and third-party sharing retain separate authorization boundaries.
+- Added Spec Relay feedback and handoff updates, packet identity, optimistic revision guards, exact visible-ledger validation and a responsive review ledger.
+- Added Repo Pedant-aligned Azhou stage anchors, emoji discipline and receipts for Spec Relay while keeping transferable HTML brand-neutral.
 - Unified project-local Azhou runtime state under `.azhou/`: skill state uses `.azhou/<canonical-name>/`, Hub lifecycle receipts use `.azhou/hub/receipts/`, and explicit plan-bound migrations preserve recognized legacy sources without fallback reads or dual writes.
 - Added `llm-wiki`, a neutral private Markdown knowledge base with one canonical store, seven-tool stdio MCP, explicit lifecycle/trigger/command adapters, reviewed project context, atomic source-preserving migration, Azhou stage anchors, receipt v2 and deterministic production gates.
 - Added harness-neutral `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify` Agent Skills that delegate to the repository Foundation CLI without host-specific runtime copies.

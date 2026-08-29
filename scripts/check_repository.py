@@ -66,6 +66,7 @@ REQUIRED_PATHS = (
     "skills/excalidraw-diagram/SKILL.md",
     "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
+    "skills/spec-relay/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
@@ -76,6 +77,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
+    "skills/spec-relay/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
@@ -125,6 +127,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "少说话，技术信号不丢。",
         "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
         "brand_path": "skills/super-caveman/references/brand-layer.md",
+    },
+    "skills/spec-relay/SKILL.md": {
+        "display_name": "Spec Relay",
+        "motto": "HTML 本身就是交接包。",
+        "startup": "🦊 阿舟 · Spec Relay 启动｜mode=<relay|artifact|review|export|share>｜scope=<short scope>",
+        "brand_path": "skills/spec-relay/references/brand-layer.md",
     },
 }
 

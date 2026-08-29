@@ -130,6 +130,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "excalidraw-diagram",
                 "llm-wiki",
                 "repo-pedant",
+                "spec-relay",
                 "super-caveman",
             ],
             payload["installable_skills"],
