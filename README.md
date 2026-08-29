@@ -35,6 +35,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
+npx skills add TeFuirnever/azhou-ai-hub --skill spec-relay
 ~~~
 
 These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
@@ -76,10 +77,11 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 | [LLM Wiki](skills/llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, seven MCP tools, three lifecycle events, atomic migration, privacy defaults and focused deterministic contract tests. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
+| [Spec Relay](skills/spec-relay/SKILL.md) | Package a PRD, RFC, design spec or technical plan with comments, selected-text annotations, disposition and next-owner state inside one portable HTML file. | Enhanced Lavish derivative keeps an immutable upstream baseline and locked CLI <code>0.1.47</code>; Azhou stage anchors and receipts stay in the agent interaction layer while HTML remains brand-neutral. Deterministic checks cover feedback updates, stale-copy rejection, exact visible-state projection and responsive layout. No hosted-share receipt is claimed. |
 
-All eight packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All nine packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
-## Try four task skills
+## Try five task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
@@ -87,6 +89,7 @@ All eight packages are independently installable and discoverable as package sur
 | Excalidraw Diagram | <code>Use excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/excalidraw-diagram.md). |
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
 | LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/llm-wiki.md). |
+| Spec Relay | <code>Use spec-relay to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
 
@@ -151,6 +154,14 @@ LLM Wiki stores Markdown pages only under `<project>/.azhou/llm-wiki/`, keeps a 
 > 🦊 Evidence preview built from one real isolated CLI, MCP `tools/list`, and `SessionStart` run. Bundle, render, and visual inspection passed; final public visual approval remains a human checkpoint.
 
 [Run the demo](docs/demos/llm-wiki.md) · [Read the package](skills/llm-wiki/SKILL.md) · [Read brand contract](skills/llm-wiki/references/brand-layer.md) · [Read design](skills/llm-wiki/references/design.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md)
+
+## Spec Relay
+
+> 🪄 The HTML is the relay packet.
+
+Spec Relay is an Azhou-maintained derivative of Lavish Editor. It keeps the upstream review runtime, focused playbooks, editable Mermaid/Excalidraw whiteboard review, portable export and optional sharing. Azhou appears only in agent progress anchors and receipts; the transferable HTML never receives Azhou identity, emoji, character assets or colors from the skill. The local relay layer writes complete comments, selected-text annotations, targets, dispositions and ownership into an HTML-safe <code>spec-relay.html-state.v1</code> block. Reviewers can resolve feedback and move the packet to its next owner without losing the original record; packet revisions reject stale-copy overwrites. The responsive visible ledger is validated as the exact projection of embedded state, so the same file carries the Spec and its review history to the next teammate or agent. Local review is not publication; <code>share</code> still requires separate authorization and transfers the embedded comments too.
+
+[Read the package](skills/spec-relay/SKILL.md) · [Read the relay contract](skills/spec-relay/references/spec-relay.md) · [Read setup](skills/spec-relay/references/setup.md) · [Read provenance](skills/spec-relay/references/provenance.md) · [Read compatibility](skills/spec-relay/references/upstream-compatibility.md)
 
 ## One architecture
 

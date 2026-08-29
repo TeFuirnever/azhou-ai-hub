@@ -46,6 +46,17 @@ Upstream README files, installers, status-line integration and separate alias pa
 
 The upstream comments credit the persistent self-maintained wiki concept to Andrej Karpathy. This repository does not redistribute Karpathy-authored code or text.
 
+## Spec Relay / Lavish Editor
+
+`skills/spec-relay/` is an enhanced derivative of the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`232972beba9e0e4e75682c98f2aeb2cf01532122`](https://github.com/kunchenguid/lavish-axi/commit/232972beba9e0e4e75682c98f2aeb2cf01532122). The unmodified upstream baseline is hash-locked for reproducibility; the local Skill intentionally diverges and uses a distinct canonical name.
+
+- Copyright: Kun Chen, 2026
+- License: [MIT](LICENSES/Lavish-AXI-MIT.txt)
+- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored
+- Local changes: `spec-relay` identity, neutral frontmatter, locked CLI baseline, portable Spec HTML, embedded comment/annotation state, stable review IDs, feedback disposition, next-owner receipts, setup/provenance/compatibility records and explicit authorization checkpoints
+
+`lavish-axi` remains an external npm runtime dependency. `ht-ml.app` sharing is a third-party publication action, not a bundled or repository-operated service.
+
 ## Excalidraw Diagram
 
 The package uses these licensed upstreams. Package versions and local digests are current runtime evidence. The three commit rows marked “selected baseline” were chosen on 2026-08-26 as the latest public commits at or before the 2026-08-23 package build; they are immutable future comparison points, not proof of the exact historical import commit.

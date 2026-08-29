@@ -134,6 +134,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "azhou-setup" / "SKILL.md",
                 root / "skills" / "azhou-verify" / "SKILL.md",
                 root / "skills" / "repo-pedant" / "SKILL.md",
+                root / "skills" / "spec-relay" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             legacy = root / "benchmarks" / "repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
