@@ -70,3 +70,8 @@ benchmarks/repo-pedant/workspace/
 benchmarks/excalidraw-diagram/history/raw/
 benchmarks/excalidraw-diagram/history/local/
 benchmarks/excalidraw-diagram/workspace/
+
+# Harness-local agent state dirs; session state, never committed.
+/.claude/
+/.local/
+/.treehouse/
