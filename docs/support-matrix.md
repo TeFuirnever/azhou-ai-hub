@@ -4,7 +4,7 @@
 
 | Capability | Codex | Claude Code | zcode | Other compatible harnesses |
 |---|---|---|---|---|
-| Neutral package availability (repository surface) | nine canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
+| Neutral package availability (repository surface) | ten canonical packages present and independently installable | same neutral package set | same repository package set | package availability is a repository fact; host install is not implied |
 | Load canonical <code>SKILL.md</code> package | supported by a configured skill root | supported by a configured skill root | host-dependent; verify installation | host-dependent |
 | Azhou Info / Doctor / Setup / Verify Agent Skills | package available; Codex discovery/invocation is locally smoke-tested | package available; Claude discovery/invocation requires a fresh host receipt | package available; discovery/invocation not evidenced here | expected only for Agent Skills-compatible hosts with Python and checkout access; verify locally |
 | Foundation `info` / `version` / `doctor` / `setup` / public `verify` CLI | supported from a checkout with Python 3.11+ and an explicit skill root for setup | same neutral checkout CLI | same neutral checkout CLI when Python and a writable skill root exist | public verify needs no private evidence but still replays the approved exact diff; `--promotion-evidence` additionally authenticates two Git-external records |
@@ -36,6 +36,7 @@
 | Spec Relay browser review and foreground polling | supported with Node.js 22+, a local browser and attached command execution | supported with Node.js 22+, a local browser and attached command execution | host-dependent; verify browser and foreground command lifecycle | host-dependent |
 | Spec Relay standalone export | supported through locked Lavish CLI after dependency resolution | same neutral package | host-dependent | Node.js 22+ and local file access required |
 | Spec Relay third-party share | available only after explicit publication authorization and network verification | same boundary | same boundary | share transfers embedded comments; no claim without receipt |
+| Lavish rich-HTML artifact review loop | supported with Node.js 22+, the locked <code>lavish-axi@0.1.47</code> baseline and a local browser; artifacts and session state stay local until explicit publication | same neutral package | supported when the host loads the skill and permits local execution | host-dependent; the <code>ht-ml.app</code> share is a third-party publication action, not a bundled service |
 
 ## Meaning of “supported”
 

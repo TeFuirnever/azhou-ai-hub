@@ -108,6 +108,8 @@ The adapter is a response-style convenience, not a security gate. Invalid hook i
 
 ## Verification and rollback
 
+## Verification and rollback
+
 Run the deterministic adapter checks from the repository root:
 
 ```bash
