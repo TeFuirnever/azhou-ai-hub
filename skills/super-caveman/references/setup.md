@@ -63,16 +63,60 @@ python3 "$SKILL_DIR/scripts/codex_adapter.py" uninstall --scope project --projec
 python3 "$SKILL_DIR/scripts/codex_adapter.py" uninstall --scope user
 ```
 
-Claude Code receives no shipped adapter in this release. A future adapter requires a separate host contract, deterministic tests, real-host smoke evidence, frozen evaluation, and fresh exact-diff approval.
+## Optional Claude Code lifecycle adapter
+
+The package also bundles an opt-in Claude Code adapter (`scripts/claude_adapter.py`). Like the Codex adapter it is off by default, never registered by ordinary skill installation, and reads no transcripts, session logs, or network resources. It registers two owned hooks in one explicitly selected Claude settings scope: a `SessionStart` handler for `startup`, `resume`, `clear`, and `compact`, and a `UserPromptSubmit` handler that resolves the five-layer state hierarchy (adapter installation, user default, project default, session state, one-shot state) on every prompt.
+
+Resolve the current state at any time:
+
+```bash
+python3 "$SKILL_DIR/scripts/claude_adapter.py" status --project-dir /absolute/path/to/project
+```
+
+Choose one explicit adapter scope:
+
+```bash
+# Writes /absolute/path/to/project/.claude/settings.json
+python3 "$SKILL_DIR/scripts/claude_adapter.py" setup --scope project --project-dir /absolute/path/to/project
+
+# Writes ~/.claude/settings.json
+python3 "$SKILL_DIR/scripts/claude_adapter.py" setup --scope user
+```
+
+Setup preserves unrelated settings entries, is idempotent, uses an atomic local write, and rejects symbolic-link paths. Claude Code requires review before new or changed hooks run; inspect and approve the two owned entries with `/hooks` before treating setup as active.
+
+Persistent defaults are explicit and separate from session state:
+
+```bash
+# New sessions in this project start in full mode
+python3 "$SKILL_DIR/scripts/claude_adapter.py" enable --scope project --mode full --project-dir /absolute/path/to/project
+
+# Permanent opt-out at user scope (project explicit off still wins)
+python3 "$SKILL_DIR/scripts/claude_adapter.py" disable --scope user
+```
+
+Effective mode precedence: session stop or session override, then the resumed session mode, then the project default (including explicit off), then the user default, then the neutral core with no automatic response shaping. Session mode switches (`/super-caveman <mode>` or `/caveman <mode>`) and the stop phrases (`stop super-caveman`, `stop caveman`, `stop adhd mode`, `normal mode`) affect only the current session. In Claude Code, a leading slash form is consumed by the host command layer before it reaches a prompt hook; the attempt-1 host receipt records this delivery finding, and until a host command file ships, submit the trigger forms where the host delivers them as prompt text (the stop phrases already work as plain phrases). `/super-caveman commit`, `review`, and `compress` are one-shot routes that restore the previous session mode; `status`, `help`, and `stats` never mutate state. Prompt reinforcement stays at most 1,024 characters and never re-emits the full startup capsule.
+
+Remove only the adapter-owned entries with the matching explicit scope; add `--purge-state` to also remove adapter-owned defaults and session state:
+
+```bash
+python3 "$SKILL_DIR/scripts/claude_adapter.py" uninstall --scope project --project-dir /absolute/path/to/project [--purge-state]
+python3 "$SKILL_DIR/scripts/claude_adapter.py" uninstall --scope user [--purge-state]
+```
+
+The adapter is a response-style convenience, not a security gate. Invalid hook input, oversized or corrupt state, symlinked paths, and internal errors fail open with diagnostics on stderr only. Rollback is the scoped `uninstall` above; it removes only the two owned hook entries and preserves unrelated Claude settings.
+
+## Verification and rollback
 
 ## Verification and rollback
 
 Run the deterministic adapter checks from the repository root:
 
 ```bash
-python3 -m unittest tests.test_super_caveman_codex_adapter
+python3 -m unittest tests.test_super_caveman_codex_adapter tests.test_super_caveman_claude_adapter
+python3 benchmarks/super-caveman/benchmark.py check
 ```
 
-Deterministic adapter checks prove only the local configuration and JSON protocol. A live Codex smoke also needs the host's trust receipt; it is not performance evidence or promotion approval.
+Deterministic adapter checks prove only the local configuration, the JSON protocol, and the normalized lifecycle contract. Deterministic evidence is not performance evidence, is not a host trust receipt, and is not promotion approval.
 
-Rollback uses the scoped `uninstall` command above. It removes only this adapter's one hook entry and preserves unrelated Codex hooks.
+Rollback is the scoped `uninstall` of the selected adapter and scope; it removes only that adapter's owned hook entries and preserves unrelated host settings.
