@@ -171,8 +171,8 @@ def check_treehouse_config(root: Path) -> list[str]:
 
     errors: list[str] = []
     max_trees = config.get("max_trees")
-    if isinstance(max_trees, bool) or not isinstance(max_trees, int) or not 1 <= max_trees <= 4:
-        errors.append("treehouse max_trees must be an integer from 1 through 4")
+    if isinstance(max_trees, bool) or not isinstance(max_trees, int) or not 1 <= max_trees <= 6:
+        errors.append("treehouse max_trees must be an integer from 1 through 6")
     if config.get("vcs") != "git":
         errors.append("treehouse vcs must be git")
     if "hooks" in config:

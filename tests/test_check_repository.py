@@ -267,7 +267,7 @@ exit 0
 
             config.write_text('max_trees = 16\nvcs = "jj"\n', encoding="utf-8")
             errors = check_treehouse_config(root)
-            self.assertIn("treehouse max_trees must be an integer from 1 through 4", errors)
+            self.assertIn("treehouse max_trees must be an integer from 1 through 6", errors)
             self.assertIn("treehouse vcs must be git", errors)
 
     def test_treehouse_config_rejects_repo_hooks_and_invalid_toml(self) -> None:

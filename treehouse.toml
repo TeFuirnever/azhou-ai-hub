@@ -1,3 +1,3 @@
 # Repository-safe defaults for maintainer and coding-agent worktree leases.
-max_trees = 4
+max_trees = 6
 vcs = "git"
