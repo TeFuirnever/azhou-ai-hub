@@ -36,6 +36,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill spec-relay
+npx skills add TeFuirnever/azhou-ai-hub --skill lavish
 ~~~
 
 These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
@@ -77,9 +78,10 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 | [LLM Wiki](skills/llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, seven MCP tools, three lifecycle events, atomic migration, privacy defaults and focused deterministic contract tests. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
+| [Lavish](skills/lavish/SKILL.md) | Turn complex or visual agent responses into rich, reviewable HTML artifacts users can annotate and answer through the Lavish Editor CLI — the general review loop, without the spec-packet state layer. | Upstream import kept as a byte-locked baseline at the locked CLI <code>0.1.47</code> (same locked baseline as Spec Relay); provenance records the immutable upstream commit and the reproducible source check. Local review is not publication; <code>share</code> requires separate authorization. No hosted-share receipt is claimed. |
 | [Spec Relay](skills/spec-relay/SKILL.md) | Package a PRD, RFC, design spec or technical plan with comments, selected-text annotations, disposition and next-owner state inside one portable HTML file. | Enhanced Lavish derivative keeps an immutable upstream baseline and locked CLI <code>0.1.47</code>; Azhou stage anchors and receipts stay in the agent interaction layer while HTML remains brand-neutral. Deterministic checks cover feedback updates, stale-copy rejection, exact visible-state projection and responsive layout. No hosted-share receipt is claimed. |
 
-All nine packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All ten packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 ## Try five task skills
 

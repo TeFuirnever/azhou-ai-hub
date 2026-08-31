@@ -34,6 +34,7 @@ class LLMWikiRepositoryTest(unittest.TestCase):
                 root / "skills" / "azhou-verify" / "SKILL.md",
                 root / "skills" / "repo-pedant" / "SKILL.md",
                 root / "skills" / "spec-relay" / "SKILL.md",
+                root / "skills" / "lavish" / "SKILL.md",
             ]
 
             self.assertEqual([], check_skill_discovery(expected, root))

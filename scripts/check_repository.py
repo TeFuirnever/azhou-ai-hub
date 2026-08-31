@@ -67,6 +67,7 @@ REQUIRED_PATHS = (
     "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
     "skills/spec-relay/SKILL.md",
+    "skills/lavish/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
@@ -78,6 +79,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
     "skills/spec-relay/SKILL.md",
+    "skills/lavish/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
@@ -109,6 +111,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先让结构讲清关系，再让文字补充证据。",
         "startup": "🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>",
         "brand_path": "skills/excalidraw-diagram/references/brand-layer.md",
+    },
+    "skills/lavish/SKILL.md": {
+        "display_name": "Lavish",
+        "motto": "把复杂结果变成可审阅的界面。",
+        "startup": "🦊 阿舟 · Lavish 启动 | mode=<artifact|review|export|share> | scope=<short scope>",
+        "brand_path": "skills/lavish/references/brand-layer.md",
     },
     "skills/llm-wiki/SKILL.md": {
         "display_name": "LLM Wiki",
