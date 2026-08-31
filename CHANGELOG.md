@@ -40,10 +40,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Planned
 
-- First tagged release aligned to the verified public source after explicit publication authorization.
 - First complete cross-harness evidence set.
 
-## 0.1.0 draft content (unpublished)
+## [0.1.0] - 2026-08-28
 
 ### Added
 
