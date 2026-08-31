@@ -4,12 +4,34 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Planned
+
+- First complete cross-harness evidence set.
+
+## [0.2.0] - 2026-08-31
+
 ### Added
 
 - Added `spec-relay`, an enhanced and provenance-tracked derivative of Lavish Editor that packages specs, complete comments, selected-text annotations, feedback disposition and next-owner state inside one portable HTML relay packet; standalone export and third-party sharing retain separate authorization boundaries.
 - Added Spec Relay feedback and handoff updates, packet identity, optimistic revision guards, exact visible-ledger validation and a responsive review ledger.
 - Added Repo Pedant-aligned Azhou stage anchors, emoji discipline and receipts for Spec Relay while keeping transferable HTML brand-neutral.
 - Added a Spec Relay reference demo with the invocation, expected outputs, deterministic checks and skill-standard evidence receipts for one real run.
+
+### Changed
+
+- Ignored harness-local agent state directories (`.claude/`, `.local/`, `.treehouse/`) so guarded fleet and clone refreshes stop skipping a local checkout.
+- Raised the Treehouse worktree pool capacity from 4 to 6, widening the repository policy bound to match.
+
+## [0.1.0] - 2026-08-28
+
+### Added
+
+- <code>repo-pedant</code>, a strict documented superset of <code>neat-freak</code> with exhaustive knowledge inventory, project-memory proof, fixed stage protocol, advisory lifecycle hooks and bounded cross-runtime evolution.
+- <code>excalidraw-diagram</code>, an editable-scene workflow with offline official rendering, converters, fonts, component libraries, deterministic checks and honest visual-review gates.
+- Repository-level unit tests, isolated behavior benchmarks and one-command verification.
+- English/Chinese product entry, installation/support/architecture/release docs, community governance and security reporting.
+- GitHub issue forms, PR template, CODEOWNERS, Dependabot, pinned-SHA CI, CodeQL, dependency review, Scorecard and manual draft-release automation.
+- Explicit third-party notices and an independently re-expressed Excalidraw runtime after a no-license prior-art audit.
 - Unified project-local Azhou runtime state under `.azhou/`: skill state uses `.azhou/<canonical-name>/`, Hub lifecycle receipts use `.azhou/hub/receipts/`, and explicit plan-bound migrations preserve recognized legacy sources without fallback reads or dual writes.
 - Added `llm-wiki`, a neutral private Markdown knowledge base with one canonical store, seven-tool stdio MCP, explicit lifecycle/trigger/command adapters, reviewed project context, atomic source-preserving migration, Azhou stage anchors, receipt v2 and deterministic production gates.
 - Added harness-neutral `azhou-info`, `azhou-doctor`, `azhou-setup`, and `azhou-verify` Agent Skills that delegate to the repository Foundation CLI without host-specific runtime copies.
@@ -34,27 +56,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Security
 
-- Neutralized the upstream public Firebase client identifier in the offline Excalidraw bundle.
 - Added non-echoing repository checks for high-confidence credential shapes.
-- Scoped CodeQL write permissions to the analysis job.
-
-### Planned
-
-- First complete cross-harness evidence set.
-
-## [0.1.0] - 2026-08-28
-
-### Added
-
-- <code>repo-pedant</code>, a strict documented superset of <code>neat-freak</code> with exhaustive knowledge inventory, project-memory proof, fixed stage protocol, advisory lifecycle hooks and bounded cross-runtime evolution.
-- <code>excalidraw-diagram</code>, an editable-scene workflow with offline official rendering, converters, fonts, component libraries, deterministic checks and honest visual-review gates.
-- Repository-level unit tests, isolated behavior benchmarks and one-command verification.
-- English/Chinese product entry, installation/support/architecture/release docs, community governance and security reporting.
-- GitHub issue forms, PR template, CODEOWNERS, Dependabot, pinned-SHA CI, CodeQL, dependency review, Scorecard and manual draft-release automation.
-- Explicit third-party notices and an independently re-expressed Excalidraw runtime after a no-license prior-art audit.
-
-### Security
-
-- Raw runtime histories and private evidence remain outside Git.
 - History observers and hooks cannot write live skills.
+- Neutralized the upstream public Firebase client identifier in the offline Excalidraw bundle.
+- Raw runtime histories and private evidence remain outside Git.
+- Scoped CodeQL write permissions to the analysis job.
 - Secret scanning/push protection, dependency alerts and private vulnerability reporting are repository requirements.
