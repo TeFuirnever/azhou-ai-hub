@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- Added `lavish`, the general rich-HTML artifact review loop, imported as a byte-locked baseline from `kunchenguid/lavish-axi` at immutable commit `232972beba9e0e4e75682c98f2aeb2cf01532122`. The locked `lavish-axi@0.1.47` baseline stays identical to Spec Relay, the retained MIT license copy and provenance carry the vendored-material law, and local review, export portability and third-party sharing keep separate authorization boundaries.
+
 ### Planned
 
 - First complete cross-harness evidence set.
