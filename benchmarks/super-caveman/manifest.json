@@ -42,7 +42,9 @@
     "results/revision-e2d998c6-attempt-1-summary.json",
     "results/revision-e2d998c6-exact-diff-approval.json",
     "results/revision-a726d695-attempt-1-summary.json",
-    "results/revision-a726d695-exact-diff-approval.json"
+    "results/revision-a726d695-exact-diff-approval.json",
+    "results/revision-a32a3a41-attempt-1-summary.json",
+    "results/revision-a32a3a41-exact-diff-approval.json"
   ],
   "claims": {
     "mapped_source_skills": 7,
