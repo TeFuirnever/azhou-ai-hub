@@ -584,12 +584,12 @@ def run_prompt(home_dir: str | None, project_dir: str | None) -> int:
                 work["override_mode"] = head
                 dirty = True
                 mode = head
-            elif head == "enable" and len(rest) >= 2 and rest[1] in ("project", "user") and rest[0] in MODES:
-                write_layer(home_dir, scope, rest[1], rest[0])
-                text = f"Super Caveman persistent default enabled: mode={rest[0]} at {rest[1]} scope. New sessions start in this mode."
-            elif head == "disable" and len(rest) >= 1 and rest[0] in ("project", "user"):
-                write_layer(home_dir, scope, rest[0], OFF)
-                text = f"Super Caveman persistent default disabled at {rest[0]} scope (mode=off). Session overrides still win for this session."
+            elif head == "enable" and len(rest) >= 3 and rest[1] in MODES and rest[2] in ("project", "user"):
+                write_layer(home_dir, scope, rest[2], rest[1])
+                text = f"Super Caveman persistent default enabled: mode={rest[1]} at {rest[2]} scope. New sessions start in this mode."
+            elif head == "disable" and len(rest) >= 2 and rest[1] in ("project", "user"):
+                write_layer(home_dir, scope, rest[1], OFF)
+                text = f"Super Caveman persistent default disabled at {rest[1]} scope (mode=off). Session overrides still win for this session."
             elif head == "status":
                 text = status_text(home_dir, project_dir, cwd, work)
             elif head == "help":
