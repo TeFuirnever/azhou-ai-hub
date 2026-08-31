@@ -1,0 +1,54 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-08-31T09:44:25Z",
+  "base_commit": "e46733c653ee9919f37bcf61faadf68ce4cb9df8",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "65603f9aeb5c3674c09e09f06bc30778ede1e37a23e2a583dfb5369978fec5cc",
+  "staged_patch_sha256": "b2be590b386d727dbb2f3201ff0a6bddfeabf3e9b732676d33962921f304e79f",
+  "reviewed_blobs": [
+    {
+      "path": "README.md",
+      "old_oid": "6170f7c297c9ec0a314dc39a4d409b45a57317a5",
+      "new_oid": "f1d17747e7731e2a93fa374526aadb4452eae4c8"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "old_oid": "49502c7bf93b4126f1b9600f95af8a3b6b495a1d",
+      "new_oid": "9cd61d8baff999681156e0bf42e08ffaa15252e2"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/claude-smoke-receipt-attempt-1.json",
+      "old_oid": "<deleted>",
+      "new_oid": "e13d7a4183d1d955c67d7279e46b976a0aabff48"
+    },
+    {
+      "path": "docs/support-matrix.md",
+      "old_oid": "2f7674766f558e4b7a3fa43af1b3d92a95df7293",
+      "new_oid": "eedf1103af9bb53dac2872bcab8828836cb2a2e4"
+    },
+    {
+      "path": "skills/super-caveman/SKILL.md",
+      "old_oid": "1c1782632f685d6ae3937838aae718d6d934eae2",
+      "new_oid": "44ce9900ecead81e1af837bbb72932c0181278a6"
+    },
+    {
+      "path": "skills/super-caveman/references/provenance.md",
+      "old_oid": "095ef5cd99319efa13858bf2071477016f20cc32",
+      "new_oid": "6de21a4772eac8db060d6bdadd3f103e8eeaa53f"
+    },
+    {
+      "path": "skills/super-caveman/references/setup.md",
+      "old_oid": "c497648f18f5929c11e6457fd2bf3a1149805baa",
+      "new_oid": "4d56f4896ce200b6f5b45dea3d77bce96f58ba00"
+    },
+    {
+      "path": "tests/test_super_caveman_lifecycle_benchmark.py",
+      "old_oid": "<deleted>",
+      "new_oid": "709d9b063d54ef0c85404c3e482be7e802060515"
+    }
+  ],
+  "raw_approval_record_sha256": "35a177d1ef28716f43947d58f59b2b75765fff533fe3c4416a1e96c792d57211",
+  "raw_approval_storage": "Git-external"
+}
