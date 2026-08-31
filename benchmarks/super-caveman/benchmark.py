@@ -1149,6 +1149,7 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
             errors.append(f"absorbed source remains installable: {alias}")
     if not (SKILL / "SKILL.md").is_file():
         errors.append("canonical super-caveman package missing")
+    errors.extend(lifecycle_errors())
     return errors
 
 
@@ -1167,9 +1168,146 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
     mode = "promotion evidence" if args.promotion_evidence else "public integrity"
-    print(f"super-caveman benchmark {mode} passed: 1 core + 6 companions, 1 package, 8 routes, 19 response cases")
+    lifecycle_count = len(json.loads((BENCHMARK / "lifecycle-cases.json").read_text(encoding="utf-8"))["cases"])
+    print(f"super-caveman benchmark {mode} passed: 1 core + 6 companions, 1 package, 8 routes, 19 response cases, {lifecycle_count} lifecycle cases")
     return 0
 
+
+
+
+def lifecycle_errors() -> list[str]:
+    """Run normalized lifecycle contract cases against the real adapter."""
+    import subprocess
+    import sys
+    import tempfile
+
+    spec = json.loads((BENCHMARK / "lifecycle-cases.json").read_text(encoding="utf-8"))
+    adapter = ROOT / spec["adapter"]
+    if not adapter.is_file():
+        return [f"lifecycle adapter missing: {spec['adapter']}"]
+    errors: list[str] = []
+
+    def substitute(value: str, project: Path, home: Path) -> str:
+        return value.replace("PROJECT", str(project)).replace("HOME", str(home))
+
+    def run_item(item: dict, project: Path, home: Path) -> tuple[int, str, str]:
+        argv = [sys.executable, str(adapter), item["command"]]
+        for flag in item.get("argv", []):
+            argv.append(substitute(flag, project, home))
+        if item["command"] in ("setup", "uninstall", "enable", "disable"):
+            argv.extend(["--project-dir", str(project), "--home-dir", str(home)])
+        else:
+            argv.extend(["--home-dir", str(home)])
+        stdin_text = ""
+        if "payload" in item:
+            payload = dict(item["payload"])
+            payload["cwd"] = str(project)
+            stdin_text = json.dumps(payload)
+        if "raw_stdin" in item:
+            stdin_text = item["raw_stdin"]
+        done = subprocess.run(
+            argv, input=stdin_text, capture_output=True, text=True,
+            check=False, timeout=10,
+        )
+        return done.returncode, done.stdout.strip(), done.stderr.strip()
+
+    def settings_owned(project: Path, event: str) -> int:
+        settings_file = project / ".claude" / "settings.json"
+        if not settings_file.exists():
+            return 0
+        payload = json.loads(settings_file.read_text(encoding="utf-8"))
+        entries = payload.get("hooks", {}).get(event, [])
+        return sum(1 for entry in entries if "claude_adapter.py" in json.dumps(entry))
+
+    def check_context(case_spec: dict, context: str, cid: str) -> None:
+        low = context.lower()
+        for fragment in case_spec.get("expect_contains", []):
+            if fragment.lower() not in low:
+                errors.append(f"lifecycle case {cid}: missing fragment: {fragment}")
+        for fragment in case_spec.get("expect_absent", []):
+            if fragment.lower() in low:
+                errors.append(f"lifecycle case {cid}: unexpected fragment: {fragment}")
+        limit = case_spec.get("max_chars")
+        if limit is not None and len(context) > limit:
+            errors.append(f"lifecycle case {cid}: context exceeds {limit} chars")
+
+    def run_case(case_spec: dict) -> None:
+        cid = case_spec["id"]
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw) / "proj"
+            home = Path(raw) / "home"
+            project.mkdir()
+            home.mkdir()
+            try:
+                for _ in range(int(case_spec.get("setup_runs", 1))):
+                    code, _o, err = run_item({"command": "setup",
+                                              "argv": ["--scope", "project",
+                                                       "--project-dir", "PROJECT",
+                                                       "--home-dir", "HOME"]}, project, home)
+                    if code != 0:
+                        raise RuntimeError(f"setup exit {code}: {err}")
+                if case_spec.get("corrupt_session"):
+                    corrupt = project / ".azhou" / "super-caveman" / "sessions" / f"{case_spec['corrupt_session']}.json"
+                    corrupt.parent.mkdir(parents=True, exist_ok=True)
+                    corrupt.write_text("{broken", encoding="utf-8")
+                for pre in case_spec.get("prelude", []):
+                    code, _o, err = run_item(pre, project, home)
+                    if code != 0:
+                        raise RuntimeError(f"prelude {pre.get('command')} exit {code}: {err}")
+                code, out, err = run_item(case_spec["event"], project, home)
+                if case_spec.get("expect_exit_nonzero"):
+                    if code == 0:
+                        errors.append(f"lifecycle case {cid}: expected nonzero exit, got 0")
+                    return
+                if code != 0:
+                    errors.append(f"lifecycle case {cid}: exit {code}: {err}")
+                    return
+                if case_spec.get("expect_empty_object"):
+                    if out != "{}":
+                        errors.append(f"lifecycle case {cid}: expected empty protocol object")
+                    return
+                payload = json.loads(out)
+                context = payload.get("hookSpecificOutput", {}).get("additionalContext")
+                if context is None:
+                    if case_spec.get("expect_contains"):
+                        errors.append(f"lifecycle case {cid}: expected output, got none")
+                    for fragment in case_spec.get("expect_absent", []):
+                        if fragment.lower() in out.lower():
+                            errors.append(f"lifecycle case {cid}: unexpected fragment in empty output: {fragment}")
+                    after = case_spec.get("final_session")
+                    if after:
+                        state_file = project / ".azhou" / "super-caveman" / "sessions" / f"{after['session_id']}.json"
+                        state = json.loads(state_file.read_text(encoding="utf-8"))
+                        for key, want in after.items():
+                            if key != "session_id" and state.get(key) != want:
+                                errors.append(f"lifecycle case context-less case {cid}: session {key}={state.get(key)} want {want}")
+                    return
+                check_context(case_spec, context, cid)
+                if case_spec.get("event_again"):
+                    code2, out2, err2 = run_item(case_spec["event_again"], project, home)
+                    if code2 != 0:
+                        errors.append(f"lifecycle case {cid}: repeat exit {code2}: {err2}")
+                    else:
+                        repeat = json.loads(out2).get("hookSpecificOutput", {}).get("additionalContext")
+                        if repeat != context:
+                            errors.append(f"lifecycle case {cid}: repeated delivery output differs")
+                after = case_spec.get("final_session")
+                if after:
+                    state_file = project / ".azhou" / "super-caveman" / "sessions" / f"{after['session_id']}.json"
+                    state = json.loads(state_file.read_text(encoding="utf-8"))
+                    for key, want in after.items():
+                        if key != "session_id" and state.get(key) != want:
+                            errors.append(f"lifecycle case {cid}: session {key}={state.get(key)} want {want}")
+                after_settings = case_spec.get("settings_after")
+                if after_settings == {"hooks": "gone"}:
+                    if settings_owned(project, "SessionStart") or settings_owned(project, "UserPromptSubmit"):
+                        errors.append(f"lifecycle case {cid}: owned entries survive uninstall")
+            except Exception as exc:
+                errors.append(f"lifecycle case {cid}: {exc}")
+
+    for spec_case in spec["cases"]:
+        run_case(spec_case)
+    return errors
 
 if __name__ == "__main__":
     raise SystemExit(main())

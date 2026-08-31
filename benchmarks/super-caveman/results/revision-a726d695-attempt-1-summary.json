@@ -1,6 +1,6 @@
 {
   "schema": "super-caveman-evaluation-result.v1",
-  "status": "pass",
+  "status": "superseded",
   "runtime": "frozen Super Caveman skill runtime",
   "harness": "Codex desktop byte-reuse review with independent current-tree adapter delta reviewer",
   "model": "GPT-5 family",
@@ -35,7 +35,11 @@
   "promotion_review": {
     "paired_status": "pass",
     "independent_paired_judges": 3,
-    "presentation_orders": ["candidate-baseline", "baseline-candidate", "candidate-baseline"],
+    "presentation_orders": [
+      "candidate-baseline",
+      "baseline-candidate",
+      "candidate-baseline"
+    ],
     "candidate_majority_required": 2,
     "candidate_raw_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
     "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
@@ -55,9 +59,24 @@
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     },
     "judges": [
-      {"identity": "/root/judge_fresh_pair_1", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"},
-      {"identity": "/root/judge_fresh_pair_2", "order": "baseline-candidate", "vote": "candidate", "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"},
-      {"identity": "/root/judge_fresh_pair_3", "order": "candidate-baseline", "vote": "candidate", "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"}
+      {
+        "identity": "/root/judge_fresh_pair_1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"
+      },
+      {
+        "identity": "/root/judge_fresh_pair_2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"
+      },
+      {
+        "identity": "/root/judge_fresh_pair_3",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"
+      }
     ]
   },
   "passed": 19,
@@ -65,25 +84,82 @@
   "high_risk_failed": 0,
   "format_failed": 0,
   "case_results": [
-    {"id": "direct-answer", "status": "pass"},
-    {"id": "agent-owned-edit", "status": "pass"},
-    {"id": "debugging-cause", "status": "pass"},
-    {"id": "concept-explanation", "status": "pass"},
-    {"id": "destructive-action", "status": "pass"},
-    {"id": "real-ambiguity", "status": "pass"},
-    {"id": "multi-step-progress", "status": "pass"},
-    {"id": "long-form-request", "status": "pass"},
-    {"id": "error-report", "status": "pass"},
-    {"id": "casual-message", "status": "pass"},
-    {"id": "code-answer", "status": "pass"},
-    {"id": "complex-plan", "status": "pass"},
-    {"id": "partial-success", "status": "pass"},
-    {"id": "medical-boundary", "status": "pass"},
-    {"id": "under-two-minute-next-action", "status": "pass"},
-    {"id": "host-plan-tool-state", "status": "pass"},
-    {"id": "task-wins-options", "status": "pass"},
-    {"id": "stop-mode-default-style", "status": "pass"},
-    {"id": "uncertainty-and-idiom", "status": "pass"}
+    {
+      "id": "direct-answer",
+      "status": "pass"
+    },
+    {
+      "id": "agent-owned-edit",
+      "status": "pass"
+    },
+    {
+      "id": "debugging-cause",
+      "status": "pass"
+    },
+    {
+      "id": "concept-explanation",
+      "status": "pass"
+    },
+    {
+      "id": "destructive-action",
+      "status": "pass"
+    },
+    {
+      "id": "real-ambiguity",
+      "status": "pass"
+    },
+    {
+      "id": "multi-step-progress",
+      "status": "pass"
+    },
+    {
+      "id": "long-form-request",
+      "status": "pass"
+    },
+    {
+      "id": "error-report",
+      "status": "pass"
+    },
+    {
+      "id": "casual-message",
+      "status": "pass"
+    },
+    {
+      "id": "code-answer",
+      "status": "pass"
+    },
+    {
+      "id": "complex-plan",
+      "status": "pass"
+    },
+    {
+      "id": "partial-success",
+      "status": "pass"
+    },
+    {
+      "id": "medical-boundary",
+      "status": "pass"
+    },
+    {
+      "id": "under-two-minute-next-action",
+      "status": "pass"
+    },
+    {
+      "id": "host-plan-tool-state",
+      "status": "pass"
+    },
+    {
+      "id": "task-wins-options",
+      "status": "pass"
+    },
+    {
+      "id": "stop-mode-default-style",
+      "status": "pass"
+    },
+    {
+      "id": "uncertainty-and-idiom",
+      "status": "pass"
+    }
   ],
   "limitations": [
     "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",

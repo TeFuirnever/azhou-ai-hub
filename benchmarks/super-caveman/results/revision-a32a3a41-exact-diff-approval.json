@@ -1,0 +1,24 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-08-31T09:14:18Z",
+  "base_commit": "6716925aeb1546aa269cb56c1738aea02263c709",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "e3228136d5d388481bbf623edf02fb07a23b2e313f3f9d09be6fb0659439c79e",
+  "staged_patch_sha256": "7743b1f6ee4d1a1fcd502703cb3a042d2ece4e156d7c68600a72f985dba16f1d",
+  "reviewed_blobs": [
+    {
+      "path": "skills/super-caveman/scripts/claude_adapter.py",
+      "old_oid": "<deleted>",
+      "new_oid": "ca7b2c96f1fd4ffd2d9b4227f047387e4cb2724b"
+    },
+    {
+      "path": "tests/test_super_caveman_claude_adapter.py",
+      "old_oid": "<deleted>",
+      "new_oid": "015da5d528f3807db984cc2f3ed1df5555989db8"
+    }
+  ],
+  "raw_approval_record_sha256": "35a177d1ef28716f43947d58f59b2b75765fff533fe3c4416a1e96c792d57211",
+  "raw_approval_storage": "Git-external"
+}

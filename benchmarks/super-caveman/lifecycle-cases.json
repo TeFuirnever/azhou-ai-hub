@@ -1,0 +1,596 @@
+{
+  "schema": "super-caveman-lifecycle-cases.v1",
+  "adapter": "skills/super-caveman/scripts/claude_adapter.py",
+  "budgets": {
+    "capsule_max_chars": 10000,
+    "prompt_max_chars": 1024,
+    "timeout_seconds": 5
+  },
+  "notes": "Normalized host events against a disposable per-case project/home. PROJECT and HOME are substituted per run; transcript_path values are synthetic and never read. One registered hook produces one protocol object per delivered event; repeated legitimate deliveries stay valid.",
+  "cases": [
+    {
+      "id": "setup-requires-explicit-scope",
+      "setup_runs": 1,
+      "prelude": [],
+      "event": {
+        "command": "setup",
+        "argv": []
+      },
+      "expect_contains": [],
+      "expect_absent": [],
+      "expect_exit_nonzero": true
+    },
+    {
+      "id": "setup-project-scope-registers-exact-owned-settings",
+      "setup_runs": 1,
+      "prelude": [],
+      "event": {
+        "command": "setup",
+        "argv": [
+          "--scope",
+          "project"
+        ]
+      },
+      "expect_contains": [],
+      "expect_absent": [],
+      "expect_settings": {
+        "session_start_owned": 1,
+        "prompt_owned": 1,
+        "timeout": 5,
+        "matcher": "startup|resume|clear|compact"
+      },
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "duplicate-setup-idempotent",
+      "setup_runs": 2,
+      "prelude": [],
+      "event": {
+        "command": "setup",
+        "argv": [
+          "--scope",
+          "project"
+        ]
+      },
+      "expect_contains": [],
+      "expect_absent": [],
+      "expect_settings": {
+        "session_start_owned": 1,
+        "prompt_owned": 1
+      },
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "startup-neutral-reports-off-state",
+      "setup_runs": 1,
+      "prelude": [],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "startup",
+          "session_id": "lc-1",
+          "transcript_path": "/private/never-read"
+        }
+      },
+      "expect_contains": [
+        "response shaping is off",
+        "event=startup"
+      ],
+      "expect_absent": [
+        "active_mode="
+      ],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "startup-with-project-default-full",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "startup",
+          "session_id": "lc-2"
+        }
+      },
+      "expect_contains": [
+        "active_mode=full",
+        "event=startup"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "resume-restores-session-override",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman ultra",
+            "session_id": "lc-3"
+          }
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "resume",
+          "session_id": "lc-3"
+        }
+      },
+      "expect_contains": [
+        "active_mode=ultra"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "resume-invalid-state-falls-back-to-default",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "resume",
+          "session_id": "lc-4"
+        }
+      },
+      "expect_contains": [
+        "active_mode=full"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false,
+      "corrupt_session": "lc-4"
+    },
+    {
+      "id": "clear-resets-override-to-default",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman lite",
+            "session_id": "lc-5"
+          }
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "clear",
+          "session_id": "lc-5"
+        }
+      },
+      "expect_contains": [
+        "active_mode=full"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "compact-preserves-session-override",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman lite",
+            "session_id": "lc-6"
+          }
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "compact",
+          "session_id": "lc-6"
+        }
+      },
+      "expect_contains": [
+        "active_mode=lite"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "repeated-compact-still-valid",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman lite",
+            "session_id": "lc-7"
+          }
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "compact",
+          "session_id": "lc-7"
+        }
+      },
+      "expect_contains": [
+        "active_mode=lite"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false,
+      "event_again": {
+        "command": "render",
+        "payload": {
+          "source": "compact",
+          "session_id": "lc-7"
+        }
+      }
+    },
+    {
+      "id": "user-default-when-no-project-default",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "user",
+            "--mode",
+            "lite"
+          ]
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "startup",
+          "session_id": "lc-8"
+        }
+      },
+      "expect_contains": [
+        "active_mode=lite"
+      ],
+      "expect_absent": [],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "prompt-ordinary-reinforces-effective-mode",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        }
+      ],
+      "event": {
+        "command": "prompt",
+        "payload": {
+          "prompt": "ordinary work",
+          "session_id": "lc-9"
+        }
+      },
+      "expect_contains": [
+        "mode=full"
+      ],
+      "expect_absent": [],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "prompt-mode-switch-then-stop",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman ultra",
+            "session_id": "lc-10"
+          }
+        }
+      ],
+      "event": {
+        "command": "prompt",
+        "payload": {
+          "prompt": "normal mode",
+          "session_id": "lc-10"
+        }
+      },
+      "expect_contains": [],
+      "expect_absent": [
+        "Super Caveman"
+      ],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false,
+      "final_session": {
+        "session_id": "lc-10",
+        "stopped": true
+      }
+    },
+    {
+      "id": "prompt-one-shot-commit-restores-mode",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman ultra",
+            "session_id": "lc-11"
+          }
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman commit",
+            "session_id": "lc-11"
+          }
+        }
+      ],
+      "event": {
+        "command": "prompt",
+        "payload": {
+          "prompt": "ordinary work",
+          "session_id": "lc-11"
+        }
+      },
+      "expect_contains": [
+        "mode=ultra"
+      ],
+      "expect_absent": [],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false,
+      "final_session": {
+        "session_id": "lc-11",
+        "one_shot": null,
+        "previous_mode": null
+      }
+    },
+    {
+      "id": "prompt-status-route-non-mutating",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman lite",
+            "session_id": "lc-12"
+          }
+        }
+      ],
+      "event": {
+        "command": "prompt",
+        "payload": {
+          "prompt": "/super-caveman status",
+          "session_id": "lc-12"
+        }
+      },
+      "expect_contains": [
+        "effective mode: lite",
+        "persistent project default: full"
+      ],
+      "expect_absent": [
+        "Super Caveman active:"
+      ],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false,
+      "final_session": {
+        "session_id": "lc-12",
+        "override_mode": "lite"
+      }
+    },
+    {
+      "id": "persistent-disable-project-beats-user-default",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "user",
+            "--mode",
+            "lite"
+          ]
+        },
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "project",
+            "--mode",
+            "full"
+          ]
+        },
+        {
+          "command": "disable",
+          "argv": [
+            "--scope",
+            "project"
+          ]
+        }
+      ],
+      "event": {
+        "command": "render",
+        "payload": {
+          "source": "startup",
+          "session_id": "lc-13"
+        }
+      },
+      "expect_contains": [
+        "response shaping is off"
+      ],
+      "expect_absent": [
+        "active_mode="
+      ],
+      "max_chars": 10000,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "prompt-disable-then-enable-persists",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "enable",
+          "argv": [
+            "--scope",
+            "user",
+            "--mode",
+            "lite"
+          ]
+        },
+        {
+          "command": "prompt",
+          "payload": {
+            "prompt": "/super-caveman disable user",
+            "session_id": "lc-14"
+          }
+        }
+      ],
+      "event": {
+        "command": "prompt",
+        "payload": {
+          "prompt": "plain",
+          "session_id": "lc-14"
+        }
+      },
+      "expect_contains": [],
+      "expect_absent": [
+        "Super Caveman active:"
+      ],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false
+    },
+    {
+      "id": "exact-uninstall-removes-both-owned-entries",
+      "setup_runs": 1,
+      "prelude": [
+        {
+          "command": "setup",
+          "argv": [
+            "--scope",
+            "project"
+          ]
+        }
+      ],
+      "event": {
+        "command": "uninstall",
+        "argv": [
+          "--scope",
+          "project"
+        ]
+      },
+      "expect_contains": [],
+      "expect_absent": [],
+      "expect_exit_nonzero": false,
+      "settings_after": {
+        "hooks": "gone"
+      }
+    },
+    {
+      "id": "prompt-fail-open-on-malformed-input",
+      "setup_runs": 1,
+      "prelude": [],
+      "event": {
+        "command": "prompt",
+        "raw_stdin": "not-json"
+      },
+      "expect_contains": [],
+      "expect_absent": [],
+      "max_chars": 1024,
+      "expect_exit_nonzero": false,
+      "expect_empty_object": true
+    }
+  ]
+}
