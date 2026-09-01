@@ -5,6 +5,8 @@
 ## 公开收据
 
 - [2026-08-23 public install smoke](public-install-smoke-2026-08-23.md)：从公开 GitHub 默认分支发现并隔离安装两个 canonical skill；不升级为发布、跨 harness 或模型质量证明。
+- [2026-09-01 Foundation discovery/invocation on Claude Code](foundation-discovery-invocation-claude-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、headless 主机发现与文档化只读调用；不升级为个人根安装、交互会话或跨 harness 一致性证明。
+- [2026-09-01 Foundation discovery on zcode](foundation-discovery-invocation-zcode-2026-09-01.md)：四个 Foundation package 的项目级 link 安装与 `skills list` 主机发现；调用未在本机取证（headless 调用需要用户级 model provider 配置决策），不升级为 GUI 行为或跨 harness 一致性证明。
 
 ## 可进入 Git
 
