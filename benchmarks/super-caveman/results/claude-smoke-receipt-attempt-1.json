@@ -1,0 +1,125 @@
+{
+  "schema": "super-caveman-claude-smoke-receipt.v1",
+  "attempt": 1,
+  "date": "2026-08-31",
+  "runtime": {
+    "host": "Claude Code CLI",
+    "host_version": "2.1.239",
+    "mode": "headless print mode (-p), disposable temp project, project-scope hooks"
+  },
+  "adapter_digest": "bf88fe1af4ac55786fbc8cb4599b5a444f6acdffb29c22629e812216546fc8f4",
+  "rules_digest": "81520e91ed016e5bfbade80ebe70efe52cd011dd2321783b740a5ffce6f6bf37",
+  "event_sources_exercised": [
+    "startup",
+    "resume",
+    "UserPromptSubmit"
+  ],
+  "steps": [
+    {
+      "step": "neutral-install",
+      "claude_dir_exists": false
+    },
+    {
+      "step": "adapter-cli",
+      "command": "setup",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "adapter-cli",
+      "command": "enable",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "setup",
+      "settings_json": true
+    },
+    {
+      "step": "startup",
+      "session_created": true,
+      "observed": "full"
+    },
+    {
+      "step": "mode-switch",
+      "state": {
+        "one_shot": null,
+        "override_mode": null,
+        "previous_mode": null,
+        "schema_version": "super-caveman.adapter-state.v1",
+        "session_id": "43ec1a6c-6739-405a-a606-07dc7a821363",
+        "stopped": false
+      },
+      "error": ""
+    },
+    {
+      "step": "resume-persists",
+      "state": {
+        "one_shot": null,
+        "override_mode": null,
+        "previous_mode": null,
+        "schema_version": "super-caveman.adapter-state.v1",
+        "session_id": "43ec1a6c-6739-405a-a606-07dc7a821363",
+        "stopped": false
+      },
+      "observed": "full"
+    },
+    {
+      "step": "session-stop",
+      "state": {
+        "one_shot": null,
+        "override_mode": null,
+        "previous_mode": null,
+        "schema_version": "super-caveman.adapter-state.v1",
+        "session_id": "43ec1a6c-6739-405a-a606-07dc7a821363",
+        "stopped": true
+      }
+    },
+    {
+      "step": "adapter-cli",
+      "command": "disable",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "persistent-disable",
+      "defaults": "off"
+    },
+    {
+      "step": "status-route",
+      "observed": "Unknown command: /super-caveman"
+    },
+    {
+      "step": "adapter-cli",
+      "command": "uninstall",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "uninstall",
+      "hooks_remaining": [],
+      "state_tree_removed": true
+    }
+  ],
+  "result": {
+    "verified_live": [
+      "neutral install leaves host settings untouched (no .claude dir before setup)",
+      "explicit scoped setup writes exactly the two owned hook entries",
+      "startup SessionStart fired in the real host: session state file created and the model answered active_mode=full",
+      "resume SessionStart fired in the real host: capsule re-injected (active_mode=full observed)",
+      "session stop phrase (normal mode) parsed by UserPromptSubmit: stopped=true persisted in session state",
+      "persistent project disable via adapter CLI: defaults mode=off",
+      "exact uninstall removed both owned entries and purged adapter state"
+    ],
+    "failed_or_unverified": [
+      "slash-form triggers (/super-caveman ...) were consumed by the host command layer and never reached UserPromptSubmit verbatim, so live mode switch, one-shot route, and status-route delivery are unverified in this attempt",
+      "compact was not forced in the live host; startup/resume/stop/disable/uninstall are the live steps (compact semantics proven by the deterministic lifecycle cases)"
+    ]
+  },
+  "limitations": [
+    "headless -p cannot grant host hook trust interactively; hooks fired without an explicit trust step in this environment and interactive trust behavior is unverified",
+    "one scripted attempt; no retry, no cherry-picking",
+    "model replies recorded as short redacted observations, no raw prompts or private history stored",
+    "adapter state digests and step artifacts are synthetic-session evidence only"
+  ]
+}

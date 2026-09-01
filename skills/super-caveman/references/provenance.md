@@ -49,10 +49,10 @@ Local changes:
 - retain old Caveman commands only as compatibility triggers;
 - fully adopt the pinned output-behavior semantics, covered by the original fourteen evaluation cases plus five closure cases, without installing upstream hooks, plugin adapters, global configuration, or persistence files;
 - add one locally authored, opt-in Codex lifecycle adapter inside this package. It explicitly configures one bounded, fail-open full-mode `SessionStart` injection for `startup`, `resume`, `clear`, and `compact`; it neither reads private history nor contacts the network, and preserves unrelated hooks as documented in `setup.md`;
-- defer Claude Code lifecycle support to the roadmap; it has no shipped adapter or support claim;
+- add one locally authored, opt-in Claude Code lifecycle adapter inside this package. Its upstream hook-semantics baseline is the Claude Code Hooks reference (https://code.claude.com/docs/en/hooks, accessed 2026-08-31), adapted with the safety substitutions below; it neither reads private history nor contacts the network, and preserves unrelated settings as documented in `setup.md`;
 - make no diagnosis or medical claim from response-style use.
 
-Omitted upstream README files, model-specific package metadata, generated evaluation outputs, upstream hooks, and separate alias packages are not runtime capabilities of this neutral skill. The local opt-in Codex adapter above is an authored integration, not an upstream hook import or a cross-host compatibility claim.
+Omitted upstream README files, model-specific package metadata, generated evaluation outputs, upstream hooks, and separate alias packages are not runtime capabilities of this neutral skill. The local opt-in Codex and Claude Code adapters above are authored integrations, not upstream hook imports or cross-host compatibility claims; no parity between hosts is claimed. The Codex-side feasibility evidence and follow-up requirements are recorded in `docs/research/2026-08-31-codex-lifecycle-adapter-feasibility.md`.
 
 ## Reproducible update
 
