@@ -8,6 +8,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - First complete cross-harness evidence set.
 
+## [0.4.0] - 2026-09-01
+
+### Added
+
+- Receipt-backed the remaining conditional support-matrix cells on locally-available hosts: LLM Wiki stdio MCP transport (Claude + zcode real server calls), LLM Wiki lifecycle adapter wiring (Claude full; zcode session-start live with pre-compact/session-end honestly blocked on zcode 0.16.5 hook availability), Repo Pedant history parsers against real Claude/zcode sessions, and Super Caveman zcode host counters; each cell now states exactly what its dated evidence receipt proves.
+- Added a read-only Excalidraw Playwright Chromium preflight so setup installs the locked browser only when the checker reports it missing, while renderer errors point back to the same gate.
+
 ## [0.3.0] - 2026-08-31
 
 ### Added
