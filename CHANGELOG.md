@@ -4,13 +4,17 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
-### Added
-
-- Added `lavish`, the general rich-HTML artifact review loop, imported as a byte-locked baseline from `kunchenguid/lavish-axi` at immutable commit `232972beba9e0e4e75682c98f2aeb2cf01532122`. The locked `lavish-axi@0.1.47` baseline stays identical to Spec Relay, the retained MIT license copy and provenance carry the vendored-material law, and local review, export portability and third-party sharing keep separate authorization boundaries.
-
 ### Planned
 
 - First complete cross-harness evidence set.
+
+## [0.3.0] - 2026-08-31
+
+### Added
+
+- Added `lavish`, the general rich-HTML artifact review loop, imported as a byte-locked baseline from `kunchenguid/lavish-axi` at immutable commit `232972beba9e0e4e75682c98f2aeb2cf01532122`. The locked `lavish-axi@0.1.47` baseline stays identical to Spec Relay, the retained MIT license copy and provenance carry the vendored-material law, and local review, export portability and third-party sharing keep separate authorization boundaries.
+- Added the opt-in `super-caveman` Claude lifecycle adapter: the `UserPromptSubmit` state machine (#38) and the `SessionStart` slice (#37) with the exact precedence hierarchy from the parent spec, stop controls, status routes and one-shot commands, gated by a 19-case lifecycle benchmark plus a real-host attempt-1 receipt (Claude Code CLI 2.1.239, redacted) whose findings and limitations - slash-trigger delivery, headless compact and headless trust - are recorded rather than claimed (#40).
+- Added the documentation-backed Codex lifecycle adapter feasibility decision for Super Caveman, explicit that it implies no cross-host parity.
 
 ## [0.2.0] - 2026-08-31
 
