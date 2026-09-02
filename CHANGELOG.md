@@ -4,6 +4,11 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- Added `eli5`, the dead-simple picture-explainer skill, adapted from `anthropics/claude-plugins-community` at immutable commit `794af9e63d07fad17087dcab61f21f44cb48effd` under Apache-2.0. The upstream behavior sentence is retained verbatim with a hash-locked provenance check, and the local layer adds the topic boundary, self-contained artifact contract, Azhou brand protocol and stable receipt.
+- Added `autoresearch`, an Azhou-authored wrapper that drives automatic nanochat training experiments inside a user-owned checkout of `karpathy/autoresearch` pinned at `228791fb499afffb54b46200aca536f79142f117`. The upstream publishes no license, so zero upstream bytes are vendored; setup fails closed on GPU, uv and pin checks, and unattended GPU runs keep an explicit authorization checkpoint.
+
 ### Planned
 
 - First complete cross-harness evidence set.
