@@ -79,6 +79,18 @@ The vendored `excalidraw-all.esm.js` retains its generated bundled-license block
 
 Refresh these sources only in an isolated checkout or package workspace at an approved immutable commit/version. Rebuild the engine and font set together. Before replacing libraries, compare the selected baseline to the checked-in snapshot; if it differs, record the verified source commit instead of assuming equivalence. Retain author paths, regenerate `skills/excalidraw-diagram/references/icon-catalog.md`, update both provenance surfaces and license copies, then run `python3 scripts/verify.py`. Never refresh from a moving default branch directly into the runtime package.
 
+## Eli5
+
+`skills/eli5/` adapts the `eli5` skill from [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community) at immutable commit [`794af9e63d07fad17087dcab61f21f44cb48effd`](https://github.com/anthropics/claude-plugins-community/commit/794af9e63d07fad17087dcab61f21f44cb48effd). The upstream baseline is a single 321-byte `SKILL.md`; its behavior sentence is retained verbatim in the local package.
+
+- License: [Apache-2.0](LICENSES/Claude-Plugins-Community-Apache-2.0.txt), the repository-level license file of the upstream project
+- Imported boundary: the eli5 behavior sentence and trigger intent; no other upstream files exist
+- Local changes: harness-neutral description and topic argument, topic boundary, self-contained artifact contract, Azhou brand protocol, stable receipt, provenance and compatibility records
+
+## Autoresearch (referenced, not redistributed)
+
+`skills/autoresearch/` is an Azhou-authored wrapper around [karpathy/autoresearch](https://github.com/karpathy/autoresearch) pinned at commit `228791fb499afffb54b46200aca536f79142f117`. The upstream repository publishes no license file, so no upstream bytes are vendored: the runtime environment is the user's own pinned checkout, the experiment protocol stays in the upstream `program.md`, and this package ships wrapper, setup and provenance text only.
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.

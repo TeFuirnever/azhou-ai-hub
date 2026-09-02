@@ -80,12 +80,19 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/repo-pedant/SKILL.md",
     "skills/spec-relay/SKILL.md",
     "skills/lavish/SKILL.md",
+    "skills/eli5/SKILL.md",
+    "skills/autoresearch/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
 }
 
 SKILL_BRAND_CONTRACTS = {
+    "skills/autoresearch/SKILL.md": {
+        "display_name": "Autoresearch",
+        "motto": "实验通宵跑，边界先说清。",
+        "startup": "🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>",
+    },
     "skills/azhou-doctor/SKILL.md": {
         "display_name": "Azhou Doctor",
         "motto": "先诊断，不越权修复。",
@@ -105,6 +112,11 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Azhou Verify",
         "motto": "完整 gate 跑完，结论才成立。",
         "startup": "🦊 阿舟 · Azhou Verify 启动｜mode=verify｜scope=<checkout>",
+    },
+    "skills/eli5/SKILL.md": {
+        "display_name": "Eli5",
+        "motto": "把复杂讲给零基础的人，少字，多图。",
+        "startup": "🦊 阿舟 · Eli5 启动｜mode=explain｜scope=<topic>",
     },
     "skills/excalidraw-diagram/SKILL.md": {
         "display_name": "Excalidraw Diagram",
