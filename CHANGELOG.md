@@ -4,14 +4,19 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Planned
+
+- First complete cross-harness evidence set.
+
+## [0.5.0] - 2026-09-02
+
 ### Added
 
 - Added `eli5`, the dead-simple picture-explainer skill, adapted from `anthropics/claude-plugins-community` at immutable commit `794af9e63d07fad17087dcab61f21f44cb48effd` under Apache-2.0. The upstream behavior sentence is retained verbatim with a hash-locked provenance check, and the local layer adds the topic boundary, self-contained artifact contract, Azhou brand protocol and stable receipt.
 - Added `autoresearch`, an Azhou-authored wrapper that drives automatic nanochat training experiments inside a user-owned checkout of `karpathy/autoresearch` pinned at `228791fb499afffb54b46200aca536f79142f117`. The upstream publishes no license, so zero upstream bytes are vendored; setup fails closed on GPU, uv and pin checks, and unattended GPU runs keep an explicit authorization checkpoint.
-
-### Planned
-
-- First complete cross-harness evidence set.
+- Added bounded deterministic fuzzing for the Spec Relay state parser: a stdlib-only seeded mutation harness (`fuzz_relay_state.py`), a time-boxed SHA-pinned `fuzz.yml` CI workflow, five real parser crash classes found and fixed with fail-before/pass-after regression tests, and ~450k clean inputs across seeds post-fix.
+- Completed the zcode host evidence column: dated receipts for canonical SKILL.md package load (10/10 discovery), the live zcode hook surface (SessionStart/PreToolUse confirmed, PreCompact/SessionEnd absent in 0.16.5), Repo Pedant manual invocation, Lavish and Spec Relay review loops, Super Caveman compact delegation via a real child subagent session, and the receipt-backed Super Caveman zcode session-statistics projection.
+- Recorded the honest Super Caveman zcode behavior attempt-1 failure (9/19 cases, 25/44 criteria, seven timeout-bound at the pinned 120s/case cap) in both the evidence receipt and the support matrix, with the binding evaluation unchanged; documented the completed-and-smoke-receipted zcode lifecycle adapter as landing-blocked by the version-pinned skill-tree binding gate.
 
 ## [0.4.1] - 2026-09-02
 
