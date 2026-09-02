@@ -1,0 +1,38 @@
+name: Fuzz
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relay-state:
+    name: Fuzz spec-relay state parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Run bounded fuzzer
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '540' || '120' }}
+        run: python scripts/fuzz_relay_state.py --seconds "$FUZZ_SECONDS" --seed "${GITHUB_RUN_ID:-20260902}"

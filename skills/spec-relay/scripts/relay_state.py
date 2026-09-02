@@ -117,7 +117,7 @@ def _load_state(html: str) -> dict[str, Any]:
         raise RelayStateError(f"expected one spec-relay-state block, found {len(matches)}")
     try:
         state = json.loads(matches[0])
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
         raise RelayStateError(f"invalid embedded state JSON: {exc}") from exc
     if not isinstance(state, dict):
         raise RelayStateError("embedded state must be a JSON object")
@@ -274,7 +274,8 @@ def _validation_errors(
         for field in ("spec", "revision", "review_goal", "review_status"):
             if not isinstance(source.get(field), str) or not source[field]:
                 errors.append(f"source.{field} must be a non-empty string")
-        if source.get("review_status") not in REVIEW_STATUSES:
+        review_status = source.get("review_status")
+        if not isinstance(review_status, str) or review_status not in REVIEW_STATUSES:
             errors.append("source.review_status is invalid")
 
     review_ids = _review_ids(html)
@@ -312,9 +313,11 @@ def _validation_errors(
                 errors.append(f"{prefix}.{field} must be a non-empty string")
         target = item.get("target")
         selection = item.get("selection")
-        if target not in review_id_set and selection in (None, "", "none"):
+        target_resolves = isinstance(target, str) and target in review_id_set
+        if not target_resolves and selection in (None, "", "none"):
             errors.append(f"{prefix} target does not resolve and has no selection")
-        if item.get("disposition") not in DISPOSITIONS:
+        disposition = item.get("disposition")
+        if not isinstance(disposition, str) or disposition not in DISPOSITIONS:
             errors.append(f"{prefix}.disposition is invalid")
     if len(feedback_ids) != len(set(feedback_ids)):
         errors.append("feedback_id values must be unique")
@@ -323,6 +326,7 @@ def _validation_errors(
         item["feedback_id"]
         for item in feedback
         if isinstance(item, dict)
+        and isinstance(item.get("disposition"), str)
         and item.get("disposition") in UNRESOLVED_DISPOSITIONS
         and isinstance(item.get("feedback_id"), str)
     )
@@ -336,7 +340,7 @@ def _validation_errors(
         else:
             try:
                 expected_ledger = _render_ledger(feedback)
-            except (KeyError, TypeError):
+            except (KeyError, TypeError, AttributeError):
                 expected_ledger = None
             if expected_ledger is not None and ledger_match.group(0) != expected_ledger:
                 errors.append("visible ledger must be the exact projection of embedded feedback")
