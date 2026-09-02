@@ -1,0 +1,29 @@
+{
+ "schema": "super-caveman-exact-diff-approval-record.v2",
+ "decision": "approved",
+ "approver": "workspace-owner",
+ "approved_at": "2026-09-02T12:51:18Z",
+ "base_commit": "21a59d571d685e8d6cd919600447fb6c16792ebd",
+ "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+ "path_set_sha256": "c82cac0de028d5f7ac8db51c4fd0b591c62d85273c0a128630136e8e07404c83",
+ "staged_patch_sha256": "b829d7c5d3f756cdc16d9ad64f582d081220a0c06c54b4b662fb792d6cad62bb",
+ "reviewed_blobs": [
+  {
+   "path": "benchmarks/super-caveman/results/revision-e6680676-attempt-1-summary.json",
+   "old_oid": "<deleted>",
+   "new_oid": "a9dc8d7085c0dcfe99ea248ac97dd71eb353cb4c"
+  },
+  {
+   "path": "docs/support-matrix.md",
+   "old_oid": "852537dbb40bf925bf9e4f2aaa64e2701bcb98a2",
+   "new_oid": "9dde88f7db081c5d227cf6455a64ccac080c4efe"
+  },
+  {
+   "path": "evidence/super-caveman-behavior-zcode-2026-09-02.md",
+   "old_oid": "<deleted>",
+   "new_oid": "bd10509a47f4eeafdcd42da9c9cbb4ebfbe99221"
+  }
+ ],
+ "raw_approval_record_sha256": "f595652926df3e2307537380a110b83b447f2391681fbe54fdeaf8a14beb7937",
+ "raw_approval_storage": "Git-external"
+}
