@@ -1,0 +1,179 @@
+{
+ "schema": "super-caveman-exact-diff-approval-record.v2",
+ "decision": "approved",
+ "approver": "workspace-owner",
+ "approved_at": "2026-09-02T18:34:24Z",
+ "base_commit": "4ad46dbd6f625b9e3b7a627854085626a8fa23cb",
+ "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+ "path_set_sha256": "b5d4fa812b3e7bd1b1446c4419baffd173ebbf034f77d7b58fff6281a58485b8",
+ "staged_patch_sha256": "81af7da5d4eb3ff79053d8344281ee70c230451ab85c26c60be21d583bdf132e",
+ "reviewed_blobs": [
+  {
+   "path": ".github/workflows/fuzz.yml",
+   "old_oid": "e9681bd820afc15f19802cec9ae6431a1b1873c4",
+   "new_oid": "043cf38b8488954002a7e18db2b3a9cca0b61f8f"
+  },
+  {
+   "path": "README.md",
+   "old_oid": "f1d17747e7731e2a93fa374526aadb4452eae4c8",
+   "new_oid": "dbb7d21ead3a27b132ae61dd87fed9dfb9bb376c"
+  },
+  {
+   "path": "README.zh-CN.md",
+   "old_oid": "9cd61d8baff999681156e0bf42e08ffaa15252e2",
+   "new_oid": "bf38416f7a1c132ee66c5446886077c21a7c90cc"
+  },
+  {
+   "path": "THIRD_PARTY_NOTICES.md",
+   "old_oid": "22b98a7b2b6eb4f1e37c58cab4b502e0b78f8d5c",
+   "new_oid": "31a2248890aef1eb5fa5d2fe8edddba3be1cb918"
+  },
+  {
+   "path": "docs/README.md",
+   "old_oid": "5178af06329b3734ae0e675b800cfea317d8fd3c",
+   "new_oid": "e9a2514fb4a7e563f76cb2a6a0d18f4bd1c5b635"
+  },
+  {
+   "path": "docs/demos/lavish.md",
+   "old_oid": "002fd16316d7ef2067555c4f7c334419f5d34f1b",
+   "new_oid": "2f98d2089013bec0efab3f397d8631dfa1959ad6"
+  },
+  {
+   "path": "docs/demos/spec-relay.md",
+   "old_oid": "b3a29730ba4066fde1f52554b59b9bca895b1b09",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "docs/installation.md",
+   "old_oid": "636468219f2b0080900d59359487702c1e63fd49",
+   "new_oid": "ee84b57caa3f733e97beed7abbb102e4bcee690c"
+  },
+  {
+   "path": "docs/support-matrix.md",
+   "old_oid": "9dde88f7db081c5d227cf6455a64ccac080c4efe",
+   "new_oid": "606ee3c7bee2abe15dd429ecdec8b3de5e14564a"
+  },
+  {
+   "path": "scripts/check_repository.py",
+   "old_oid": "ee5b5cbb9281f59ac74b9ff112eace8b02415211",
+   "new_oid": "ecc14691f3f9cfcb26a0f2cf4228a1195b28e7f1"
+  },
+  {
+   "path": "scripts/fuzz_relay_state.py",
+   "old_oid": "755504ba09e871292d66bdc140ac799349dc2b93",
+   "new_oid": "1df1a9d8b3dc9c4200ab5e77c21928c76ed121e4"
+  },
+  {
+   "path": "skills/lavish/SKILL.md",
+   "old_oid": "466120c346da8f603d0181712986df8de4bd6d4a",
+   "new_oid": "668b24e9a0dfbfa3b040610abbe9ff455d3e54b8"
+  },
+  {
+   "path": "skills/lavish/references/brand-layer.md",
+   "old_oid": "93f034db8f79e7238b30e593a51f68f12805e782",
+   "new_oid": "3bc1c45bba2dec6df9dab3b6f6a9093c511e4430"
+  },
+  {
+   "path": "skills/lavish/references/provenance.md",
+   "old_oid": "7c0e17200f801d6f15e65e0def9ba8090e651d38",
+   "new_oid": "712a48b83d75ef7581c49aa4d29985ad394476f5"
+  },
+  {
+   "path": "skills/lavish/references/setup.md",
+   "old_oid": "b558b37a68e7623cdaf1b55ac708fd618e25ecb8",
+   "new_oid": "7ff50e6e08dee6aa9bad53866353c30886484bad"
+  },
+  {
+   "path": "skills/lavish/references/spec-relay.md",
+   "old_oid": "<deleted>",
+   "new_oid": "b9eb492dd8d1801481171c3538e8f21dab525b2a"
+  },
+  {
+   "path": "skills/lavish/references/upstream-compatibility.md",
+   "old_oid": "e1e7e2e98d284f15b3088b69c5c93d232843a891",
+   "new_oid": "b7d162c9a748e8ba6a060eb80090499cefd5a8a0"
+  },
+  {
+   "path": "skills/lavish/scripts/relay_state.py",
+   "old_oid": "<deleted>",
+   "new_oid": "67f6db47932c593d26a6da65a6cf0eccb2fe6e22"
+  },
+  {
+   "path": "skills/spec-relay/SKILL.md",
+   "old_oid": "891aca9d3de329afe841d6aa72a4213f3ee40707",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/references/brand-layer.md",
+   "old_oid": "d1623ead770807314294b8873f3bcaced766724e",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/references/provenance.md",
+   "old_oid": "9ca8abca7c505c64f3aa8949b07608c960c555af",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/references/setup.md",
+   "old_oid": "4188e90c789833181d0acbc30c74363e869585df",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/references/spec-relay.md",
+   "old_oid": "dcf41a967b39f7aef7c45eda9f12cfe5e4040625",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/references/upstream-compatibility.md",
+   "old_oid": "cbe925800f6571f3affc50f41a1a7535226bf5d1",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "skills/spec-relay/scripts/relay_state.py",
+   "old_oid": "67f6db47932c593d26a6da65a6cf0eccb2fe6e22",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "tests/test_azhou_hub.py",
+   "old_oid": "4db5d60848eff9d1a0113655ade7d4ee49197edf",
+   "new_oid": "f3004d9a74e742bbf185702128e043ad1a09d158"
+  },
+  {
+   "path": "tests/test_check_repository.py",
+   "old_oid": "3109b76e6d004517922e6956ee1e904be7da2926",
+   "new_oid": "add3a981284afb14b962a714b026d5fd607225e7"
+  },
+  {
+   "path": "tests/test_lavish_relay_fuzz_regressions.py",
+   "old_oid": "<deleted>",
+   "new_oid": "003d4efb764fa37cbdbdde1cc64ea3f3f841cc08"
+  },
+  {
+   "path": "tests/test_lavish_relay_state.py",
+   "old_oid": "<deleted>",
+   "new_oid": "93e94d7ece7ce31dbb7911332cee05f55f5bbc80"
+  },
+  {
+   "path": "tests/test_llm_wiki_repository.py",
+   "old_oid": "ae165e725ee6b0d2c4f1c9d7b980e4cde7b60f3d",
+   "new_oid": "c6006c6fd159be97b07d3c673853e6b953e5bf39"
+  },
+  {
+   "path": "tests/test_skill_package.py",
+   "old_oid": "6686a033d2b8f12ba7c87c406d2cf3510540bef4",
+   "new_oid": "984020752999a27a7e3f7accc768541d69b5c851"
+  },
+  {
+   "path": "tests/test_spec_relay.py",
+   "old_oid": "4d73b27b2b3c4ccc5f9bec8f775adcfcd798c6dc",
+   "new_oid": "<deleted>"
+  },
+  {
+   "path": "tests/test_spec_relay_fuzz_regressions.py",
+   "old_oid": "92b7c4f653fda0ff226dfe8330b5faa5ebcd83b2",
+   "new_oid": "<deleted>"
+  }
+ ],
+ "raw_approval_record_sha256": "6364766fab99bc9cf4bc9ca7a3a46b63924a9cadf5a8d8b4a58481d18cfb4917",
+ "raw_approval_storage": "Git-external"
+}
