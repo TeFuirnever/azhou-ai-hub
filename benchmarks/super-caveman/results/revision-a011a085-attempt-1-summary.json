@@ -1,174 +1,174 @@
 {
-  "schema": "super-caveman-evaluation-result.v1",
-  "runtime": "frozen Super Caveman skill runtime",
-  "model": "GPT-5 family",
-  "model_limitation": "Exact serving snapshots were not exposed; the original producer, paired-judge, and current delta-review identities are retained in Git-external records.",
-  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
-  "tool_permissions": {
-    "network": false,
-    "repository_write": "disposable agent-owned-edit fixture only in the original byte-reused run",
-    "shell": "fixture verification only in the original byte-reused run",
-    "external_apps": false
+ "schema": "super-caveman-evaluation-result.v1",
+ "runtime": "frozen Super Caveman skill runtime",
+ "model": "GPT-5 family",
+ "model_limitation": "Exact serving snapshots were not exposed; the original producer, paired-judge, and current delta-review identities are retained in Git-external records.",
+ "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+ "tool_permissions": {
+  "network": false,
+  "repository_write": "disposable agent-owned-edit fixture only in the original byte-reused run",
+  "shell": "fixture verification only in the original byte-reused run",
+  "external_apps": false
+ },
+ "attempt": 1,
+ "output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+ "case_results": [
+  {
+   "id": "direct-answer",
+   "status": "pass"
   },
-  "attempt": 1,
-  "output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
-  "case_results": [
-    {
-      "id": "direct-answer",
-      "status": "pass"
-    },
-    {
-      "id": "agent-owned-edit",
-      "status": "pass"
-    },
-    {
-      "id": "debugging-cause",
-      "status": "pass"
-    },
-    {
-      "id": "concept-explanation",
-      "status": "pass"
-    },
-    {
-      "id": "destructive-action",
-      "status": "pass"
-    },
-    {
-      "id": "real-ambiguity",
-      "status": "pass"
-    },
-    {
-      "id": "multi-step-progress",
-      "status": "pass"
-    },
-    {
-      "id": "long-form-request",
-      "status": "pass"
-    },
-    {
-      "id": "error-report",
-      "status": "pass"
-    },
-    {
-      "id": "casual-message",
-      "status": "pass"
-    },
-    {
-      "id": "code-answer",
-      "status": "pass"
-    },
-    {
-      "id": "complex-plan",
-      "status": "pass"
-    },
-    {
-      "id": "partial-success",
-      "status": "pass"
-    },
-    {
-      "id": "medical-boundary",
-      "status": "pass"
-    },
-    {
-      "id": "under-two-minute-next-action",
-      "status": "pass"
-    },
-    {
-      "id": "host-plan-tool-state",
-      "status": "pass"
-    },
-    {
-      "id": "task-wins-options",
-      "status": "pass"
-    },
-    {
-      "id": "stop-mode-default-style",
-      "status": "pass"
-    },
-    {
-      "id": "uncertainty-and-idiom",
-      "status": "pass"
-    }
-  ],
-  "passed": 19,
-  "failed": 0,
-  "high_risk_failed": 0,
-  "format_failed": 0,
-  "limitations": [
-    "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
-    "The current-tree runtime delta is limited to the optional off-by-default Codex lifecycle adapter; its deterministic regression tests are outside the runtime tree. SKILL.md, references/modes.md, the response cases, and maintained response rules are unchanged.",
-    "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
-    "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
-    "The exact-diff approval is bound to the four-path adapter hardening, benchmark-manifest registration, and prior-result supersession delta from 9c7e5f7c4a0de6fe6af2517942285d9290d96c8d; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
-    "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
-    "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
-  ],
-  "status": "pass",
-  "harness": "byte-reuse chain: revision-a726d695 outputs retained through revision-a32a3a41 and re-bound to revision-e46720a0; scripts-plus-docs delta covered by two isolated current-tree delta reviews and the keyed exact-diff approvals",
-  "skill_tree_sha256": "a011a0859365369c396375371b116a7a0894b6d9b4ba2e99b5e9f6a7c0212fb0",
-  "automatic_checks": {
-    "raw_schema": "pass",
-    "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; current tree matched revision-a011a085; delta vs revision-a32a3a41 is docs-plus-benchmark (SKILL.md adapter-boundary wording, setup.md Claude adapter section, provenance adapter entries, support matrix, READMEs, lifecycle receipt, wiring test); modes.md and response-cases.json untouched; isolated delta review 848a5c25324f3185... by fm-worker/isolated-delta-reviewer-stage3 confirmed response case semantics unchanged",
-    "case_count": "19/19",
-    "criteria_count": "44/44",
-    "unique_case_ids": "19/19",
-    "byte_reuse": "19/19 candidate responses byte-identical down the chain from revision-a726d695",
-    "maximum_observed_concurrency": 1,
-    "fixture_side_effect": "pass in the original byte-reused run",
-    "plan_tool_state": "pass in the original byte-reused run",
-    "repository_scope": "pass in the original byte-reused run",
-    "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a32a3a41 (byte-identical output set); the docs delta is covered by the stage-3 isolated delta review and keyed approval [key=stage3-diff-approval]"
+  {
+   "id": "agent-owned-edit",
+   "status": "pass"
   },
-  "reviewer": {
-    "identity": "fm-worker/isolated-delta-reviewer-stage3",
-    "review_sha256": "848a5c25324f318523c9ca51328fa1f4db6c5e2b2490120d103db8dd39993809"
+  {
+   "id": "debugging-cause",
+   "status": "pass"
   },
-  "promotion_review": {
-    "paired_status": "pass",
-    "independent_paired_judges": 3,
-    "presentation_orders": [
-      "candidate-baseline",
-      "baseline-candidate",
-      "candidate-baseline"
-    ],
-    "candidate_majority_required": 2,
-    "candidate_raw_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
-    "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
-    "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
-    "high_risk_regressions": 0,
-    "exact_diff_human_approval": {
-      "schema": "super-caveman-exact-diff-approval.v2",
-      "status": "approved",
-      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "364925fbfd940efd7589c89a8b078afef57792ff",
-      "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
-      "staged_patch_sha256": "b08e4bcc1f258f40bf9461f3de18694c67a6353ca046c2eef3c5fb57357bbd72",
-      "approver": "workspace-owner",
-      "approved_at": "2026-09-01T07:14:51Z",
-      "record_path": "results/revision-b08e4bcc-exact-diff-approval.json",
-      "record_sha256": "e7cf0efd257806a30d3b18f5dfa89c97af4764dca1d96cbb75a6880c3ed5fdd4",
-      "record_storage": "Git aggregate receipt; raw approval Git-external"
-    },
-    "judges": [
-      {
-        "identity": "/root/judge_fresh_pair_1",
-        "order": "candidate-baseline",
-        "vote": "candidate",
-        "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"
-      },
-      {
-        "identity": "/root/judge_fresh_pair_2",
-        "order": "baseline-candidate",
-        "vote": "candidate",
-        "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"
-      },
-      {
-        "identity": "/root/judge_fresh_pair_3",
-        "order": "candidate-baseline",
-        "vote": "candidate",
-        "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"
-      }
-    ]
+  {
+   "id": "concept-explanation",
+   "status": "pass"
+  },
+  {
+   "id": "destructive-action",
+   "status": "pass"
+  },
+  {
+   "id": "real-ambiguity",
+   "status": "pass"
+  },
+  {
+   "id": "multi-step-progress",
+   "status": "pass"
+  },
+  {
+   "id": "long-form-request",
+   "status": "pass"
+  },
+  {
+   "id": "error-report",
+   "status": "pass"
+  },
+  {
+   "id": "casual-message",
+   "status": "pass"
+  },
+  {
+   "id": "code-answer",
+   "status": "pass"
+  },
+  {
+   "id": "complex-plan",
+   "status": "pass"
+  },
+  {
+   "id": "partial-success",
+   "status": "pass"
+  },
+  {
+   "id": "medical-boundary",
+   "status": "pass"
+  },
+  {
+   "id": "under-two-minute-next-action",
+   "status": "pass"
+  },
+  {
+   "id": "host-plan-tool-state",
+   "status": "pass"
+  },
+  {
+   "id": "task-wins-options",
+   "status": "pass"
+  },
+  {
+   "id": "stop-mode-default-style",
+   "status": "pass"
+  },
+  {
+   "id": "uncertainty-and-idiom",
+   "status": "pass"
   }
+ ],
+ "passed": 19,
+ "failed": 0,
+ "high_risk_failed": 0,
+ "format_failed": 0,
+ "limitations": [
+  "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
+  "The current-tree runtime delta is limited to the optional off-by-default Codex lifecycle adapter; its deterministic regression tests are outside the runtime tree. SKILL.md, references/modes.md, the response cases, and maintained response rules are unchanged.",
+  "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
+  "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
+  "The exact-diff approval is bound to the four-path adapter hardening, benchmark-manifest registration, and prior-result supersession delta from 9c7e5f7c4a0de6fe6af2517942285d9290d96c8d; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+  "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
+  "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
+ ],
+ "status": "pass",
+ "harness": "byte-reuse chain: revision-a726d695 outputs retained through revision-a32a3a41 and re-bound to revision-e46720a0; scripts-plus-docs delta covered by two isolated current-tree delta reviews and the keyed exact-diff approvals",
+ "skill_tree_sha256": "a011a0859365369c396375371b116a7a0894b6d9b4ba2e99b5e9f6a7c0212fb0",
+ "automatic_checks": {
+  "raw_schema": "pass",
+  "raw_digest": "pass",
+  "skill_tree_digest": "stable-v2; current tree matched revision-a011a085; delta vs revision-a32a3a41 is docs-plus-benchmark (SKILL.md adapter-boundary wording, setup.md Claude adapter section, provenance adapter entries, support matrix, READMEs, lifecycle receipt, wiring test); modes.md and response-cases.json untouched; isolated delta review 848a5c25324f3185... by fm-worker/isolated-delta-reviewer-stage3 confirmed response case semantics unchanged",
+  "case_count": "19/19",
+  "criteria_count": "44/44",
+  "unique_case_ids": "19/19",
+  "byte_reuse": "19/19 candidate responses byte-identical down the chain from revision-a726d695",
+  "maximum_observed_concurrency": 1,
+  "fixture_side_effect": "pass in the original byte-reused run",
+  "plan_tool_state": "pass in the original byte-reused run",
+  "repository_scope": "pass in the original byte-reused run",
+  "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a32a3a41 (byte-identical output set); the docs delta is covered by the stage-3 isolated delta review and keyed approval [key=stage3-diff-approval]"
+ },
+ "reviewer": {
+  "identity": "fm-worker/isolated-delta-reviewer-stage3",
+  "review_sha256": "848a5c25324f318523c9ca51328fa1f4db6c5e2b2490120d103db8dd39993809"
+ },
+ "promotion_review": {
+  "paired_status": "pass",
+  "independent_paired_judges": 3,
+  "presentation_orders": [
+   "candidate-baseline",
+   "baseline-candidate",
+   "candidate-baseline"
+  ],
+  "candidate_majority_required": 2,
+  "candidate_raw_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+  "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
+  "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
+  "high_risk_regressions": 0,
+  "exact_diff_human_approval": {
+   "schema": "super-caveman-exact-diff-approval.v2",
+   "status": "approved",
+   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+   "base_commit": "21a59d571d685e8d6cd919600447fb6c16792ebd",
+   "path_set_sha256": "c82cac0de028d5f7ac8db51c4fd0b591c62d85273c0a128630136e8e07404c83",
+   "staged_patch_sha256": "b829d7c5d3f756cdc16d9ad64f582d081220a0c06c54b4b662fb792d6cad62bb",
+   "approver": "workspace-owner",
+   "approved_at": "2026-09-02T12:51:18Z",
+   "record_path": "results/revision-b829d7c5-exact-diff-approval.json",
+   "record_sha256": "73eed16b3864e3449fc202883eeb35a3494979472f0e61af30612a2a29b5758e",
+   "record_storage": "Git aggregate receipt; raw approval Git-external"
+  },
+  "judges": [
+   {
+    "identity": "/root/judge_fresh_pair_1",
+    "order": "candidate-baseline",
+    "vote": "candidate",
+    "record_sha256": "b5e533b88c44b2a199cf3e08da008fc5518deaac7cf5ea506e61c5d8c14fad96"
+   },
+   {
+    "identity": "/root/judge_fresh_pair_2",
+    "order": "baseline-candidate",
+    "vote": "candidate",
+    "record_sha256": "6262b5184f27adeaf90201550e26756230bc6f83a98f9ca30782920e735c53f0"
+   },
+   {
+    "identity": "/root/judge_fresh_pair_3",
+    "order": "candidate-baseline",
+    "vote": "candidate",
+    "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"
+   }
+  ]
+ }
 }
