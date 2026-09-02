@@ -147,7 +147,7 @@
    "approver": "workspace-owner",
    "approved_at": "2026-09-02T12:51:18Z",
    "record_path": "results/revision-b829d7c5-exact-diff-approval.json",
-   "record_sha256": "73eed16b3864e3449fc202883eeb35a3494979472f0e61af30612a2a29b5758e",
+   "record_sha256": "556c1deb8b3d40ddf9bb415844b574c7ccab86c2a23e03167358ec6bff658a0e",
    "record_storage": "Git aggregate receipt; raw approval Git-external"
   },
   "judges": [

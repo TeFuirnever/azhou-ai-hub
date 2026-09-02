@@ -9,6 +9,11 @@
  "staged_patch_sha256": "b829d7c5d3f756cdc16d9ad64f582d081220a0c06c54b4b662fb792d6cad62bb",
  "reviewed_blobs": [
   {
+   "path": "benchmarks/super-caveman/results/revision-e6680676-attempt-1-summary.json",
+   "old_oid": "<deleted>",
+   "new_oid": "a9dc8d7085c0dcfe99ea248ac97dd71eb353cb4c"
+  },
+  {
    "path": "docs/support-matrix.md",
    "old_oid": "852537dbb40bf925bf9e4f2aaa64e2701bcb98a2",
    "new_oid": "9dde88f7db081c5d227cf6455a64ccac080c4efe"
@@ -17,11 +22,6 @@
    "path": "evidence/super-caveman-behavior-zcode-2026-09-02.md",
    "old_oid": "<deleted>",
    "new_oid": "bd10509a47f4eeafdcd42da9c9cbb4ebfbe99221"
-  },
-  {
-   "path": "benchmarks/super-caveman/results/revision-e6680676-attempt-1-summary.json",
-   "old_oid": "<deleted>",
-   "new_oid": "a9dc8d7085c0dcfe99ea248ac97dd71eb353cb4c"
   }
  ],
  "raw_approval_record_sha256": "f595652926df3e2307537380a110b83b447f2391681fbe54fdeaf8a14beb7937",
