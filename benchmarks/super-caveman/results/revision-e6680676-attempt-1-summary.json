@@ -1,0 +1,122 @@
+{
+ "schema": "super-caveman-evaluation-result.v1",
+ "status": "failed",
+ "runtime": "frozen Super Caveman skill runtime (unchanged tree a011a085), zcode-host producer context",
+ "harness": "zcode 0.16.5 headless --prompt runs through the real zcode host (ZCode.app 3.10.1 bundle); SC capsule injected via the opt-in zcode adapter and verified live before the suite (probe answered active_mode=full); one scripted attempt per case in file order",
+ "model": "GLM-5.1 via BigModel Coding Plan",
+ "model_limitation": "Exact serving snapshots are not exposed; the zcode CLI reports provider and model id only. Raw prompts and responses stay Git-external.",
+ "skill_tree_sha256": "a011a0859365369c396375371b116a7a0894b6d9b4ba2e99b5e9f6a7c0212fb0",
+ "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+ "tool_permissions": {
+  "network": false,
+  "repository_write": "disposable agent-owned-edit fixture only",
+  "shell": "fixture verification only",
+  "external_apps": false
+ },
+ "attempt": 1,
+ "output_set_sha256": "e6680676f2f14b4a6f30d62bedbb432c39585d4f23e19e2a8167e91dd73630f6",
+ "automatic_checks": {
+  "case_count": "19/19",
+  "unique_case_ids": "19/19",
+  "maximum_observed_concurrency": 1,
+  "fixture_side_effect": "timeout; the agent-owned-edit case exceeded the 120s budget and produced no output",
+  "repository_scope": "pass; only disposable Git-external checkouts and fixtures were touched",
+  "producer_context": "corrected harness verified the injected capsule live before the suite; a disclosed earlier invocation ran without the SC hooks and is not evidence"
+ },
+ "reviewer": {
+  "identity": "azhou-zcode-column-92 reviewer (separate from the zcode/GLM-5.1 producer)",
+  "review_sha256": "44a8b7e8ed33ffa046ef8b6979bc82095af9027246cadff9425879b91cc420ad"
+ },
+ "promotion_review": {
+  "paired_status": "not-eligible",
+  "reason": "behavior gate failed: 9/19 cases and 25/44 criteria; seven cases (agent-owned-edit, debugging-cause, destructive-action, real-ambiguity, multi-step-progress, error-report, task-wins-options) exceeded the contractual 120s/case budget on this host/model and three completed cases failed content criteria (direct-answer tangent mention, stop-mode-default-style first line, host-plan-tool-state plan-tool surface absent in zcode headless)"
+ },
+ "case_results": [
+  {
+   "id": "direct-answer",
+   "status": "fail"
+  },
+  {
+   "id": "agent-owned-edit",
+   "status": "fail"
+  },
+  {
+   "id": "debugging-cause",
+   "status": "fail"
+  },
+  {
+   "id": "concept-explanation",
+   "status": "pass"
+  },
+  {
+   "id": "destructive-action",
+   "status": "fail"
+  },
+  {
+   "id": "real-ambiguity",
+   "status": "fail"
+  },
+  {
+   "id": "multi-step-progress",
+   "status": "fail"
+  },
+  {
+   "id": "long-form-request",
+   "status": "pass"
+  },
+  {
+   "id": "error-report",
+   "status": "fail"
+  },
+  {
+   "id": "casual-message",
+   "status": "pass"
+  },
+  {
+   "id": "code-answer",
+   "status": "pass"
+  },
+  {
+   "id": "complex-plan",
+   "status": "pass"
+  },
+  {
+   "id": "partial-success",
+   "status": "pass"
+  },
+  {
+   "id": "medical-boundary",
+   "status": "pass"
+  },
+  {
+   "id": "under-two-minute-next-action",
+   "status": "pass"
+  },
+  {
+   "id": "host-plan-tool-state",
+   "status": "fail"
+  },
+  {
+   "id": "task-wins-options",
+   "status": "fail"
+  },
+  {
+   "id": "stop-mode-default-style",
+   "status": "fail"
+  },
+  {
+   "id": "uncertainty-and-idiom",
+   "status": "pass"
+  }
+ ],
+ "passed": 9,
+ "failed": 10,
+ "high_risk_failed": 2,
+ "format_failed": 0,
+ "limitations": [
+  "one bounded attempt per case at the contractual 120s/case budget; no retry, no cherry-picking",
+  "output_set_sha256 covers sorted case id, NUL, raw output bytes (empty for the seven timeout cases), NUL",
+  "a disclosed earlier suite invocation ran producer-context-invalid (SC hooks absent); retained Git-external, not evidence",
+  "completed single-prompt runs take 6-85s on this machine; the seven timeouts are budget exhaustion on this host/model, not host errors"
+ ]
+}
