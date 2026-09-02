@@ -213,7 +213,7 @@ uv run python "$SKILL_DIR/scripts/visual-check.py" \
 | 现象 | 处理 |
 |---|---|
 | Playwright 未安装 | 按 [setup.md](references/setup.md) 在 skill 自带环境安装 |
-| Chromium 缺失 | `uv run playwright install chromium` 后重试 |
+| Chromium 缺失 | 先按 [setup.md](references/setup.md) 运行 `check-playwright-runtime.py`；仅在退出 `2` 时安装一次 |
 | JSON 能开但 PNG 异常 | 用 official exporter 复核，并检查元素属性/字体 |
 | 连线漂移 | 修复双向 binding 与端点坐标，不补装饰线 |
 | CJK 乱码/tofu | 使用随包字体与 official export；不得用截图遮盖 |

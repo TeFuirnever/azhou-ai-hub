@@ -156,7 +156,8 @@ def render_scene(
         message = str(exc)
         if "Executable doesn't exist" in message:
             raise RenderError(
-                "Playwright Chromium is missing; run 'uv run playwright install chromium'"
+                "Playwright Chromium is missing; run the check-playwright-runtime.py "
+                "preflight from setup.md and install only when it exits 2"
             ) from exc
         raise RenderError(f"browser render failed: {message}") from exc
 

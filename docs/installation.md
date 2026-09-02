@@ -107,7 +107,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 ## Skill-specific dependencies
 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [repo-pedant setup](../skills/repo-pedant/references/setup.md).
-- Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Inspect dry-runs before installing: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
+- Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).

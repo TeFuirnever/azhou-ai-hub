@@ -10,7 +10,7 @@ Read this before first use or when rendering, conversion, export, or font toolin
 | Node.js + npm | Node 20 | local rough-SVG renderer |
 | uv | maintained release | locked Python environment |
 | Chromium for Playwright | version selected by Playwright | offline render and official export |
-| Disk | about 250 MB | Python environment, browser, vendored assets, Node modules |
+| Disk | about 750 MB | current macOS arm64 Python environment, browser, vendored assets, Node modules; varies by platform |
 
 Rendering is offline after dependency installation. Interactive MCP preview is optional and harness-specific; file generation and validation do not depend on it.
 
@@ -19,7 +19,7 @@ Rendering is offline after dependency installation. Interactive MCP preview is o
 | Component | Declaration or asset | Install action |
 |---|---|---|
 | Playwright Python | `references/pyproject.toml`, `references/uv.lock` | `uv sync --frozen` |
-| Playwright Chromium | Playwright browser manifest | `uv run playwright install chromium` |
+| Playwright Chromium | Playwright browser manifest | check first; install only when the runtime check exits `2` |
 | roughjs, jsdom | `scripts/package.json`, `scripts/package-lock.json` | `npm ci` |
 | Excalidraw engine and converters | `references/vendor/excalidraw-all.esm.js` | none; vendored |
 | Official fonts | `references/fonts/` | none; vendored |
@@ -60,14 +60,21 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 
 cd "$SKILL_DIR/references"
 uv sync --frozen
-uv run playwright install --dry-run chromium
-uv run playwright install chromium
+uv run python "$SKILL_DIR/scripts/check-playwright-runtime.py"
 
 cd "$SKILL_DIR/scripts"
 npm ci --ignore-scripts
 ```
 
-Re-run the Chromium command whenever the locked Playwright version changes. Linux CI may require Playwright system libraries; use `uv run playwright install --with-deps chromium` only in an environment where OS-package changes are authorized.
+If the runtime check exits `2`, Chromium for the locked Playwright version is absent. Install it once, then repeat the check:
+
+```bash
+cd "$SKILL_DIR/references"
+uv run playwright install chromium
+uv run python "$SKILL_DIR/scripts/check-playwright-runtime.py"
+```
+
+Exit `0` means the browser is already ready and must not be reinstalled. Exit `1` or `3` identifies a Playwright runtime or Python-package problem; fix that problem instead of downloading Chromium. After the locked Playwright version changes, repeat the check and install only if it exits `2`. Linux CI may require Playwright system libraries; use `uv run playwright install --with-deps chromium` only in an environment where OS-package changes are authorized.
 
 ## Verify
 
@@ -80,6 +87,7 @@ test -d "$SKILL_DIR/references/libraries"
 
 cd "$SKILL_DIR/references"
 uv run python -c "import playwright; print('playwright ok')"
+uv run python "$SKILL_DIR/scripts/check-playwright-runtime.py"
 uv run playwright install --list
 
 python3 "$SKILL_DIR/scripts/check-scene-hygiene.py" --help
