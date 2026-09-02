@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skills" / "spec-relay" / "scripts" / "relay_state.py"
+SCRIPT = ROOT / "skills" / "lavish" / "scripts" / "relay_state.py"
 STATE_BLOCK = '<script type="application/json" id="spec-relay-state">'
 
 

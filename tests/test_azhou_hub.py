@@ -133,7 +133,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 "lavish",
                 "llm-wiki",
                 "repo-pedant",
-                "spec-relay",
                 "super-caveman",
             ],
             payload["installable_skills"],

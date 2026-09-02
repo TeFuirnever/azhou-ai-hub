@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   relay-state:
-    name: Fuzz spec-relay state parser
+    name: Fuzz the Lavish relay state parser
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

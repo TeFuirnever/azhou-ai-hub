@@ -1,6 +1,6 @@
 # Spec Relay
 
-Read this file for any PRD, RFC, design spec, technical spec, implementation plan, or team-transfer request. The relay packet is complete only when another teammate or agent can open one HTML file, identify the source revision, inspect every material requirement, recover comments and annotations, and continue unresolved work without reconstructing prior context.
+This is the contract for the relay mode of the Lavish skill. Read it for any PRD, RFC, design spec, technical spec, implementation plan, or team-transfer request. The relay packet is complete only when another teammate or agent can open one HTML file, identify the source revision, inspect every material requirement, recover comments and annotations, and continue unresolved work without reconstructing prior context.
 
 ## Source contract
 
@@ -76,7 +76,7 @@ Encode the block as valid JSON and escape `<`, `>`, and `&` in user-supplied str
 
 ## State commands
 
-Resolve `<skill-dir>` to the installed `skills/spec-relay/` directory.
+Resolve `<skill-dir>` to the installed `skills/lavish/` directory.
 
 Initialize a generated HTML packet:
 

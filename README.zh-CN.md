@@ -35,8 +35,9 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
-npx skills add TeFuirnever/azhou-ai-hub --skill spec-relay
 npx skills add TeFuirnever/azhou-ai-hub --skill lavish
+npx skills add TeFuirnever/azhou-ai-hub --skill eli5
+npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
 ~~~
 
 以上是文档化的包管理器路径；完成时间和 harness 发现能力取决于宿主，这里不承诺固定秒数。
@@ -78,12 +79,11 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
 | [LLM Wiki](skills/llm-wiki/SKILL.md) | 构建私有、持久的 Markdown 项目知识库，让 Agent 跨会话摄取、检索、读取和检查知识。 | 标准本地目录、7 个 MCP 工具、3 个生命周期事件、原子迁移、隐私默认值和专项确定性合同测试。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
-| [Lavish](skills/lavish/SKILL.md) | 把复杂或视觉化的 Agent 回复变成富 HTML 产物，用户可以标注、排队 prompt 并通过 Lavish Editor CLI 反馈——这是通用审阅回路，不含 spec-relay 的内嵌状态层。 | 上游基线按字节锁定导入，CLI 锁定 <code>0.1.47</code>（与 Spec Relay 同一锁定基线）；provenance 记录不可变上游 commit 与可复现源校验。本地审阅不是发布；<code>share</code> 需要单独授权。不主张 hosted-share receipt。 |
-| [Spec Relay](skills/spec-relay/SKILL.md) | 把 PRD、RFC、设计或技术 Spec 连同评论、选区批注、处置与下一责任人状态打包进一份可传递 HTML。 | Lavish 增强派生保留不可变上游基线与锁定 CLI <code>0.1.47</code>；阿舟阶段锚点与收据留在 Agent 交互层，HTML 保持品牌中立。确定性检查覆盖反馈更新、旧副本拒绝、可见状态精确投影与响应式布局。不主张 hosted-share receipt。 |
+| [Lavish](skills/lavish/SKILL.md) | 把复杂或视觉化的 Agent 回复变成富 HTML 产物，用户可以标注、排队 prompt 并通过 Lavish Editor CLI 反馈；Spec Relay relay 模式把 PRD、RFC、设计或技术 Spec 连同评论、选区批注、处置与下一责任人状态打包进一份可传递 HTML。 | 上游基线哈希锁定用于复现，CLI 锁定 <code>0.1.47</code>，本地层在其上加入 relay 模式；provenance 记录不可变上游 commit 与可复现源校验。relay 模式内嵌 <code>spec-relay.html-state.v1</code> 与乐观修订守卫；确定性检查覆盖反馈更新、旧副本拒绝、可见状态精确投影与响应式布局。本地审阅不是发布；<code>share</code> 需要单独授权。不主张 hosted-share receipt。 |
 | [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、自包含产物合同、品牌协议和稳定收据，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 | [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 
-十二个包都能作为独立 package surface 安装和发现，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+十一个包都能作为独立 package surface 安装和发现，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
 ## 试用五个任务型 Skill
 
@@ -93,7 +93,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | Excalidraw Diagram | <code>用 excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/excalidraw-diagram.md)。 |
 | Super Caveman | <code>使用 /super-caveman full，再为这份 diff 写 commit message。</code> | 行动优先精简模式和可直接粘贴的 Conventional Commit；不暂存、不提交。 |
 | LLM Wiki | <code>用 llm-wiki 保存这条已验证的架构决策，再检索回来并检查 wiki。</code> | 私有本地页面、来源与置信度、检索结果、健康报告和稳定收据。[运行 demo](docs/demos/llm-wiki.md)。 |
-| Spec Relay | <code>用 spec-relay 把这份 Spec 和审阅评论打包成一份可传递 HTML。</code> | 与来源关联的 HTML、可寻址分区、内嵌评论与批注、已处置反馈、未决责任人、明确的 transport/publication 状态和 relay 收据。[运行 demo](docs/demos/spec-relay.md)。 |
+| Lavish | <code>用 lavish 的 relay 模式把这份 Spec 和审阅评论打包成一份可传递 HTML。</code> | 与来源关联的 HTML、可寻址分区、内嵌评论与批注、已处置反馈、未决责任人、明确的 transport/publication 状态和 relay 收据。[运行 demo](docs/demos/lavish.md)。 |
 
 Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合同和 verifier 接线，只有冻结的 attempt-1 运行才算模型证据。
 
@@ -159,13 +159,13 @@ LLM Wiki 只把 Markdown 页面保存在 `<project>/.azhou/llm-wiki/`，维护�
 
 [运行 demo](docs/demos/llm-wiki.md) · [运行包](skills/llm-wiki/SKILL.md) · [品牌协议](skills/llm-wiki/references/brand-layer.md) · [生产设计](skills/llm-wiki/references/design.md) · [依赖安装](skills/llm-wiki/references/setup.md) · [来源说明](skills/llm-wiki/references/provenance.md)
 
-## Spec Relay
+## Lavish Editor
 
 > 🪄 HTML 本身就是交接包。
 
-Spec Relay 是由阿舟维护的 Lavish Editor 增强版。它保留上游浏览器审阅、专用 playbook、Mermaid/Excalidraw 可编辑审阅、单文件导出和可选分享。阿舟只出现在 Agent 进度锚点与收据中；可传递 HTML 不会被 Skill 注入阿舟身份、emoji、角色资产或配色。新增 Relay 层把完整评论、选中文字批注、定位目标、处置状态和责任人写入 HTML-safe 的 <code>spec-relay.html-state.v1</code>。审阅者可以在保留原记录的同时改判反馈并把交接包移交下一责任人；状态修订号会拒绝旧副本静默覆盖。响应式可见台账必须与内嵌状态精确一致，同一份文件即可把 Spec 和审阅历史传给下一位队友或 Agent。本地审阅不等于发布；<code>share</code> 仍需单独授权，并会一并传递内嵌评论。
+Lavish Editor 是通用富 HTML 审阅面：artifact 模式服务复杂或视觉化回复，阿舟维护的 Spec Relay relay 模式服务 Spec 交接。两者共用上游浏览器审阅、专用 playbook、Mermaid/Excalidraw 可编辑审阅、单文件导出和可选分享。阿舟只出现在 Agent 进度锚点与收据中；可传递 HTML 不会被 Skill 注入阿舟身份、emoji、角色资产或配色。relay 模式把完整评论、选中文字批注、定位目标、处置状态和责任人写入 HTML-safe 的 <code>spec-relay.html-state.v1</code>。审阅者可以在保留原记录的同时改判反馈并把交接包移交下一责任人；状态修订号会拒绝旧副本静默覆盖。响应式可见台账必须与内嵌状态精确一致，同一份文件即可把 Spec 和审阅历史传给下一位队友或 Agent。本地审阅不等于发布；<code>share</code> 仍需单独授权，并会一并传递内嵌评论。
 
-[运行包](skills/spec-relay/SKILL.md) · [Relay 协议](skills/spec-relay/references/spec-relay.md) · [依赖安装](skills/spec-relay/references/setup.md) · [来源说明](skills/spec-relay/references/provenance.md) · [上游兼容映射](skills/spec-relay/references/upstream-compatibility.md)
+[运行包](skills/lavish/SKILL.md) · [Relay 协议](skills/lavish/references/spec-relay.md) · [依赖安装](skills/lavish/references/setup.md) · [来源说明](skills/lavish/references/provenance.md) · [上游兼容映射](skills/lavish/references/upstream-compatibility.md)
 
 ## 一套架构
 
