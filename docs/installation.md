@@ -13,7 +13,9 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
-npx skills add TeFuirnever/azhou-ai-hub --skill spec-relay
+npx skills add TeFuirnever/azhou-ai-hub --skill lavish
+npx skills add TeFuirnever/azhou-ai-hub --skill eli5
+npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
@@ -71,7 +73,7 @@ SKILLS_HOME=/absolute/path/to/harness/skills
 cp -R "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
 cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 cp -R "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
-cp -R "$REPO_ROOT/skills/spec-relay" "$SKILLS_HOME/spec-relay"
+cp -R "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
 ~~~
 
 Keep every runtime subdirectory: <code>references/</code>, <code>scripts/</code>, <code>assets/</code>, <code>templates/</code> and vendored runtime data. Do not copy repository-level <code>benchmarks/</code>.
@@ -88,7 +90,7 @@ ln -s "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
 ln -s "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
 ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ln -s "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
-ln -s "$REPO_ROOT/skills/spec-relay" "$SKILLS_HOME/spec-relay"
+ln -s "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
 ~~~
 
 If a harness cached its skill catalog before the symlink existed, reload the harness or start a new task. Do not create duplicate copies to force refresh.
@@ -111,7 +113,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).
-- Spec Relay uses Python 3.11+ standard library for embedded review state, plus Node.js 22+ and the locked `lavish-axi@0.1.47` npm package for browser review. Its HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Spec Relay setup](../skills/spec-relay/references/setup.md).
+- Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.47` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/lavish/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 

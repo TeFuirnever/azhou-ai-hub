@@ -66,7 +66,6 @@ REQUIRED_PATHS = (
     "skills/excalidraw-diagram/SKILL.md",
     "skills/llm-wiki/SKILL.md",
     "skills/repo-pedant/SKILL.md",
-    "skills/spec-relay/SKILL.md",
     "skills/lavish/SKILL.md",
 )
 
@@ -78,7 +77,6 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
     "skills/repo-pedant/SKILL.md",
-    "skills/spec-relay/SKILL.md",
     "skills/lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
@@ -127,7 +125,7 @@ SKILL_BRAND_CONTRACTS = {
     "skills/lavish/SKILL.md": {
         "display_name": "Lavish",
         "motto": "把复杂结果变成可审阅的界面。",
-        "startup": "🦊 阿舟 · Lavish 启动 | mode=<artifact|review|export|share> | scope=<short scope>",
+        "startup": "🦊 阿舟 · Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>",
         "brand_path": "skills/lavish/references/brand-layer.md",
     },
     "skills/llm-wiki/SKILL.md": {
@@ -147,12 +145,6 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "少说话，技术信号不丢。",
         "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
         "brand_path": "skills/super-caveman/references/brand-layer.md",
-    },
-    "skills/spec-relay/SKILL.md": {
-        "display_name": "Spec Relay",
-        "motto": "HTML 本身就是交接包。",
-        "startup": "🦊 阿舟 · Spec Relay 启动｜mode=<relay|artifact|review|export|share>｜scope=<short scope>",
-        "brand_path": "skills/spec-relay/references/brand-layer.md",
     },
 }
 

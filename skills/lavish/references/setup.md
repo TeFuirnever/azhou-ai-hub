@@ -9,15 +9,17 @@ Read this before first use or when the CLI, browser session, polling, export, or
 | Node.js + npm/npx | Node 22+ | Run `lavish-axi` |
 | `lavish-axi` | `0.1.47` | Open, poll, export, end, and optionally share review artifacts |
 | Browser | host default | Local interactive review surface |
+| Python | 3.11+ | Initialize, persist, inspect, and validate embedded relay state |
 | Network | npm fetch; optional remote assets/share | Resolve the CLI when not installed and load explicitly remote resources |
 
-The skill package contains instructions only. The CLI, browser runtime, and remote assets are not vendored.
+The package contains the Skill instructions and a Python standard-library state helper. The Lavish CLI, browser runtime, and remote assets are not vendored.
 
 ## Inspect before executing
 
 ```bash
 node --version
 npm --version
+python3 --version
 npm view lavish-axi@0.1.47 version dist.integrity repository.url license engines --json
 npx -y lavish-axi@0.1.47 --help
 ```
@@ -30,7 +32,9 @@ npx -y lavish-axi@0.1.47 --help
 npx -y lavish-axi@0.1.47 <html-file>
 ```
 
-This writes Lavish session state outside the repository and starts a local server/browser flow. Keep `.lavish/` artifacts and private annotations out of Git unless the user explicitly selects a sanitized artifact for version control.
+This writes Lavish session state outside the repository and starts a local server/browser flow. Relay mode also persists returned feedback inside the HTML packet. Keep `.lavish/` artifacts with private comments out of Git unless the user explicitly selects a sanitized packet for version control.
+
+The relay state helper uses optimistic revisions and atomic replacement. Every mutation supplies `--expected-revision`; a stale writer exits nonzero without changing the packet. Successful replacement preserves the packet's existing permission bits. This protects one shared file from silent older-copy overwrite, but it is not a multi-user database or a network lock service.
 
 ## Optional isolated install
 
@@ -49,6 +53,8 @@ A global install or `lavish-axi setup hooks` changes user-level state. Run eithe
 npx -y lavish-axi@0.1.47 --version
 npx -y lavish-axi@0.1.47 playbook table
 npx -y lavish-axi@0.1.47 design
+python3 <skill-dir>/scripts/relay_state.py --help
+python3 -m unittest tests.test_lavish_relay_state -v
 ```
 
 Do not open, share, or publish a real artifact merely to prove package installation. A share requires separate publication authorization because it uploads the artifact to a third-party service.
@@ -57,7 +63,8 @@ Do not open, share, or publish a real artifact merely to prove package installat
 
 1. Select an immutable commit from `kunchenguid/lavish-axi`.
 2. Rebuild or read `skills/lavish/SKILL.md` at that commit and record its SHA-256 in [provenance.md](provenance.md).
-3. Update the locked CLI version, npm integrity, license copy, compatibility map, public docs, and tests together.
-4. Run the skill validator and `python3 scripts/verify.py` before promotion.
+3. Reconcile upstream behavior with the local relay contract, including embedded-state compatibility.
+4. Update the locked CLI version, npm integrity, license copy, compatibility map, public docs, and tests together.
+5. Run the skill validator and `python3 scripts/verify.py` before promotion.
 
 Do not silently float the locked baseline to the newest npm release.

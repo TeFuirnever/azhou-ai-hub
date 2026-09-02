@@ -33,7 +33,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELAY_STATE = ROOT / "skills" / "spec-relay" / "scripts" / "relay_state.py"
+RELAY_STATE = ROOT / "skills" / "lavish" / "scripts" / "relay_state.py"
 STATE_BLOCK = re.compile(
     r'<script\s+type="application/json"\s+id="spec-relay-state">\s*(.*?)\s*</script>',
     re.DOTALL,
