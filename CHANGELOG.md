@@ -8,6 +8,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - First complete cross-harness evidence set.
 
+## [0.4.1] - 2026-09-02
+
+### Fixed
+
+- Landed the Excalidraw Chromium preflight completion that the 0.4.0 notes described ahead of its code: the read-only `check-playwright-runtime.py` checker, its regression test, and the renderer/setup/installation wiring now ship inside the tag.
+
 ## [0.4.0] - 2026-09-01
 
 ### Added
