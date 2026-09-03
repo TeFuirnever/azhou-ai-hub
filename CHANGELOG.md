@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- Added the `relay` mode to `lavish` by merging Spec Relay into it as the single canonical package with two modes: `artifact` remains the unchanged general rich-HTML review loop while `relay` serves the portable handoff packet with embedded `spec-relay.html-state.v1` state, stable `data-review-id`s, feedback disposition, next-owner handoff, optimistic revision guards and `spec-relay.receipt.v1` receipts; `relay_state.py` moved byte-identical into `skills/lavish/scripts/` alongside the Spec Relay reference, machine-stable names (the state schema, `spec-relay.receipt.v1`, the `spec-relay:` CLI error prefix and the pinned `lavish-axi@0.1.47` baseline) are preserved, receipts and the fuzz workflow re-point at the single package, and the canonical package count drops from twelve to eleven.
+
 ### Planned
 
 - First complete cross-harness evidence set.
