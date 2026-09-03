@@ -58,6 +58,6 @@ python3 scripts/verify.py
 
 This runs repository policy, all unit tests, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/excalidraw-diagram/references/setup.md`.
 
-Editing any path in the latest super-caveman promotion record (`benchmarks/super-caveman/results/*-exact-diff-approval.json` `reviewed_blobs` — currently the two READMEs, `docs/support-matrix.md`, the super-caveman `SKILL.md` and references, the lifecycle test, and the claude-smoke receipt) fails the public gate until a fresh checked-in promotion receipt matches the new content; plan such edits together with the maintainer-approved promotion flow.
+Editing any path in the latest super-caveman promotion record (`benchmarks/super-caveman/results/*-exact-diff-approval.json` `reviewed_blobs` — read the latest record before editing public docs, skill surfaces or tests; as of the 2026-09-03 promotion `revision-2f0b8a63` it covers the lavish/spec-relay merge diff, including the two READMEs, `docs/support-matrix.md`, the `skills/lavish/` package, tests, scripts and the fuzz workflow) fails the public gate until a fresh checked-in promotion receipt matches the new content; plan such edits together with the maintainer-approved promotion flow.
 
 Use `uv run --with pyyaml python <skill-creator>/scripts/quick_validate.py skills/<skill>` only for development validation; PyYAML is not a runtime dependency of these skills.
