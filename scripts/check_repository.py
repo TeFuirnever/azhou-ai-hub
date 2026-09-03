@@ -206,7 +206,7 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
 
 
 def check_skill_brand_contract(root: Path) -> list[str]:
-    """Enforce the shared display identity without homogenizing domain stages."""
+    """Enforce the shared display identity in every SKILL.md without homogenizing domain stages."""
     expected = INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
     contracted = set(SKILL_BRAND_CONTRACTS)
     errors = [f"skill brand contract missing: {path}" for path in sorted(expected - contracted)]
@@ -239,9 +239,9 @@ def check_skill_brand_contract(root: Path) -> list[str]:
                 errors.append(f"skill brand startup drift: {brand_relative}")
 
         display_name = contract["display_name"]
-        if f"🦊 阿舟 · {display_name}" not in combined:
+        if f"🦊 阿舟 · {display_name}" not in skill:
             errors.append(f"skill brand identity missing: {relative}")
-        if contract["motto"] not in combined:
+        if contract["motto"] not in skill:
             errors.append(f"skill brand motto missing: {relative}")
         if contract["startup"] not in combined:
             errors.append(f"skill brand startup drift: {relative}")

@@ -40,7 +40,7 @@
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
 
-1. 每个 canonical package 在 `SKILL.md` 或其品牌层公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。像 Super Caveman 这样明确禁止普通回复生命周期播报的模式 skill，可把身份与启动协议只保留在关键操作的品牌层。
+1. 每个 canonical package 的 `SKILL.md` 必须在正文开头公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。规则对全部 skill 统一，没有例外：普通回复禁止生命周期播报的模式 skill（如 Super Caveman）同样在 `SKILL.md` 携带身份锚点，其阶段事件协议仍完整保留在 `references/brand-layer.md`。
 2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。
 3. 多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
 4. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
@@ -49,7 +49,7 @@
 
 Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名和原始证据保持稳定纯文本；不支持 Unicode 的 host 可移除 emoji，不能改机器字段和值。
 
-`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：身份、精确启动格式、成功/失败/hold、原始证据边界和 Unicode 降级缺一不可。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
+`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：`SKILL.md` 内的身份与口号、精确启动格式、成功/失败/hold、原始证据边界和 Unicode 降级缺一不可；身份与口号必须命中 `SKILL.md` 本身，品牌层只承载阶段事件协议。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
 
 ## 4. 证据与评测
 

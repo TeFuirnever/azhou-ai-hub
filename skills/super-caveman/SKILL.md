@@ -5,6 +5,10 @@ description: Enhanced Caveman skill that combines the original terse-mode core, 
 
 # Super Caveman
 
+**🦊 阿舟 · Super Caveman**
+
+> 🪨 少说话，技术信号不丢。
+
 Enhance the original Caveman core without replacing its identity: fully adopt the pinned `i-have-adhd` output-behavior contract, then apply Caveman compression as the final style layer. The core adopts response semantics, not upstream plugin installation, global configuration, or unverified cross-session persistence. Optional, explicit host lifecycle adapters (Codex and Claude Code) are local to this canonical package; they are never registered by ordinary skill installation. Absorb six companion skills—`cavecrew`, `caveman-commit`, `caveman-compress`, `caveman-help`, `caveman-review`, and `caveman-stats`—as routes inside this one `super-caveman` package. Never create or invoke those sources as separate installable skills.
 
 ## Apply response precedence
@@ -43,7 +47,7 @@ Mode changes persist only within the active conversation. Stop on `stop super-ca
 
 ## Material-operation receipt
 
-For compression or another multi-step operation, use [brand-layer.md](references/brand-layer.md). Ordinary replies, help, commit messages, review comments, and statistics do not need lifecycle event spam.
+For compression or another multi-step operation, use [brand-layer.md](references/brand-layer.md). The identity anchor at the top is this package's fixed identity layer, not a lifecycle event; ordinary replies, help, commit messages, review comments, and statistics do not need lifecycle event spam.
 
 ## Runtime boundary
 
