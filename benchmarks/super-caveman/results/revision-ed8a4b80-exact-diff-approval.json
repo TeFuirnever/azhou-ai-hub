@@ -1,0 +1,54 @@
+{
+ "schema": "super-caveman-exact-diff-approval-record.v2",
+ "decision": "approved",
+ "approver": "workspace-owner",
+ "approved_at": "2026-09-03T05:12:55Z",
+ "base_commit": "f6955ee61c08a6fa47b3d8d011519b7e8db02285",
+ "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+ "path_set_sha256": "9a5deb1b3b3aaf6cf82e2b8be8349dc2753d88f8bbe6166ff8755398d994ceaa",
+ "staged_patch_sha256": "e4d18dc8251b9fad6796db13acfc4069b73c29d38455b88ec944079d916f9038",
+ "raw_approval_record_sha256": "11474b26e5fbd5f2d05f9b0bc0f89a6783dd7b9fa12241a11b265efbedfabe3f",
+ "raw_approval_storage": "Git-external",
+ "reviewed_blobs": [
+  {
+   "path": "CHANGELOG.md",
+   "old_oid": "4674150bccc85aee12a3866921183c8df2e7c201",
+   "new_oid": "152f0c661f443b445c0a8f36deaf33497063861d"
+  },
+  {
+   "path": "benchmarks/super-caveman/manifest.json",
+   "old_oid": "012f4e3f91da35a23be3b4b923d1d0039f6b6ae8",
+   "new_oid": "cc1178663cd81d5bfa46e9ee74122107392efe2f"
+  },
+  {
+   "path": "benchmarks/super-caveman/results/revision-a011a085-attempt-1-summary.json",
+   "old_oid": "4fdc78d944f5167a0f276b75a8f589ba52e0d262",
+   "new_oid": "8900c2666a646726f7f5ae146fbcfef1c88664e9"
+  },
+  {
+   "path": "docs/skill-standard.md",
+   "old_oid": "fe5738f5ce9bc06bc2fb93a8302c86589ebed2e4",
+   "new_oid": "ba8ea3039ca573a175bbd906dfd4722cd5011124"
+  },
+  {
+   "path": "scripts/check_repository.py",
+   "old_oid": "ecc14691f3f9cfcb26a0f2cf4228a1195b28e7f1",
+   "new_oid": "a5010c8ad257ed5db631646b6c265a103a95ffb3"
+  },
+  {
+   "path": "skills/super-caveman/SKILL.md",
+   "old_oid": "44ce9900ecead81e1af837bbb72932c0181278a6",
+   "new_oid": "0cc01c04eefafbeab4e85a4e3b1d73f076c8b268"
+  },
+  {
+   "path": "tests/test_check_repository.py",
+   "old_oid": "add3a981284afb14b962a714b026d5fd607225e7",
+   "new_oid": "8b1a60356fbe8162f1a3db91fd23030f54179177"
+  },
+  {
+   "path": "tests/test_skill_package.py",
+   "old_oid": "984020752999a27a7e3f7accc768541d69b5c851",
+   "new_oid": "f49bd134f420446d674c8fa63075d8e3f263baaf"
+  }
+ ]
+}

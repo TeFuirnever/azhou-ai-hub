@@ -123,6 +123,25 @@ class RepositoryPolicyTest(unittest.TestCase):
                 check_skill_brand_contract(root),
             )
 
+    def test_skill_brand_contract_requires_identity_in_skill_md_itself(self) -> None:
+        relative = "skills/super-caveman/SKILL.md"
+        contract = SKILL_BRAND_CONTRACTS[relative]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            copy_skill_brand_surfaces(root)
+            skill = root / relative
+            skill.write_text(
+                skill.read_text(encoding="utf-8").replace(
+                    f"🦊 阿舟 · {contract['display_name']}", "removed-marker"
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertIn(
+                f"skill brand identity missing: {relative}",
+                check_skill_brand_contract(root),
+            )
+
     def test_only_canonical_runtime_skills_are_discoverable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

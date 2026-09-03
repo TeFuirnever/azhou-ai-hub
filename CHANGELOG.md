@@ -8,6 +8,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - Added the `relay` mode to `lavish` by merging Spec Relay into it as the single canonical package with two modes: `artifact` remains the unchanged general rich-HTML review loop while `relay` serves the portable handoff packet with embedded `spec-relay.html-state.v1` state, stable `data-review-id`s, feedback disposition, next-owner handoff, optimistic revision guards and `spec-relay.receipt.v1` receipts; `relay_state.py` moved byte-identical into `skills/lavish/scripts/` alongside the Spec Relay reference, machine-stable names (the state schema, `spec-relay.receipt.v1`, the `spec-relay:` CLI error prefix and the pinned `lavish-axi@0.1.47` baseline) are preserved, receipts and the fuzz workflow re-point at the single package, and the canonical package count drops from twelve to eleven.
 
+### Changed
+
+- Unified the Azhou identity anchor across all canonical packages: every `SKILL.md` now carries the `🦊 阿舟 · <Skill>` identity and motto in its own body, Super Caveman included — its stage-event protocol stays byte-identical in `references/brand-layer.md` and ordinary terse replies still add no lifecycle emoji. `check_skill_brand_contract` enforces identity and motto against `SKILL.md` itself instead of the combined skill+brand surface, a regression test proves identity removal from `SKILL.md` alone fails the gate even when the brand layer retains it, and `docs/skill-standard.md` states the uniform rule without the previous Super Caveman exemption. The Super Caveman package tree digest changes, so the passing evaluation re-binds only through fresh promotion evidence.
+
 ### Planned
 
 - First complete cross-harness evidence set.

@@ -103,6 +103,8 @@ class SkillPackageTest(unittest.TestCase):
         self.assertEqual("caveman", capability_map["core_source"])
         self.assertEqual(6, capability_map["absorbed_companions"])
         self.assertIn("# Super Caveman", skill)
+        self.assertIn("🦊 阿舟 · Super Caveman", skill)
+        self.assertIn("少说话，技术信号不丢。", skill)
         self.assertIn("/super-caveman", skill)
         self.assertEqual(
             {

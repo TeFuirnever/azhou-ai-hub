@@ -96,20 +96,20 @@
  "format_failed": 0,
  "limitations": [
   "All 19 candidate response payloads are byte-reused from the Git-external revision-c5366b95 raw output set; raw SHA-256 and case ordering match the current 19-case suite.",
-  "The current-tree runtime delta is limited to the optional off-by-default Codex lifecycle adapter; its deterministic regression tests are outside the runtime tree. SKILL.md, references/modes.md, the response cases, and maintained response rules are unchanged.",
+  "The current-tree runtime delta is limited to the SKILL.md documentation-identity layer (the 🦊 阿舟 · Super Caveman anchor block and one clarifying sentence in the Material-operation receipt section); references/modes.md, the response cases, and maintained response rules are byte-identical to revision-a011a085.",
   "The three paired-judge records are byte-reused because candidate and baseline output sets and presentation orders are unchanged; their records bind those exact output digests and current case digest, not the runtime tree.",
-  "The adapter is not exercised by this response fixture review; live Codex SessionStart trust and host smoke evidence remain separate and are not claimed.",
-  "The exact-diff approval is bound to the four-path adapter hardening, benchmark-manifest registration, and prior-result supersession delta from 9c7e5f7c4a0de6fe6af2517942285d9290d96c8d; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
+  "The SKILL.md identity-layer delta and the repository tooling delta (brand-contract enforcement, regression tests, skill-standard rule, changelog) are covered by two isolated current-tree delta reviews; live model behavior was not re-run for this re-bind.",
+  "The exact-diff approval is bound to the eight-path anchor-unification delta (including the supersession of revision-a011a085) from f6955ee61c08a6fa47b3d8d011519b7e8db02285; the new aggregate result and aggregate approval record remain excluded from the approved subject paths.",
   "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
   "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
  ],
- "status": "superseded",
- "harness": "byte-reuse chain: revision-a726d695 outputs retained through revision-a32a3a41 and re-bound to revision-e46720a0; scripts-plus-docs delta covered by two isolated current-tree delta reviews and the keyed exact-diff approvals",
- "skill_tree_sha256": "a011a0859365369c396375371b116a7a0894b6d9b4ba2e99b5e9f6a7c0212fb0",
+ "status": "pass",
+ "harness": "byte-reuse chain: revision-a011a085 outputs retained and re-bound to revision-ed8a4b80; SKILL.md identity-layer delta plus repository tooling covered by two isolated current-tree delta reviews and the keyed exact-diff approval [key=anchor-unification-diff-approval]",
+ "skill_tree_sha256": "ed8a4b80db27c8c7760755d3aff7a159efe93c2fe2e4e6668c7d3e2f29ebcc34",
  "automatic_checks": {
   "raw_schema": "pass",
   "raw_digest": "pass",
-  "skill_tree_digest": "stable-v2; current tree matched revision-a011a085; delta vs revision-a32a3a41 is docs-plus-benchmark (SKILL.md adapter-boundary wording, setup.md Claude adapter section, provenance adapter entries, support matrix, READMEs, lifecycle receipt, wiring test); modes.md and response-cases.json untouched; isolated delta review 848a5c25324f3185... by fm-worker/isolated-delta-reviewer-stage3 confirmed response case semantics unchanged",
+  "skill_tree_digest": "stable-v2; current tree matched revision-ed8a4b80; delta vs revision-a011a085 is docs-plus-tooling (SKILL.md identity anchor and Material-operation-receipt sentence, scripts/check_repository.py SKILL.md-level identity enforcement, tests/test_check_repository.py regression, tests/test_skill_package.py assertions, docs/skill-standard.md uniform rule, CHANGELOG.md Unreleased entry); modes.md and response-cases.json untouched; isolated delta reviews 043e296e50cac45e2a488328c101106fb6846df53c8d546bbdcb3d9f762af705 and e32af325a250bcaf8ee38346eeb5b3c2a66d692cffe7a35d8a81d0d2090da602 by coding-agent/isolated-delta-reviewer-anchor-a and coding-agent/isolated-delta-reviewer-anchor-b confirmed response case semantics unchanged",
   "case_count": "19/19",
   "criteria_count": "44/44",
   "unique_case_ids": "19/19",
@@ -118,11 +118,11 @@
   "fixture_side_effect": "pass in the original byte-reused run",
   "plan_tool_state": "pass in the original byte-reused run",
   "repository_scope": "pass in the original byte-reused run",
-  "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a32a3a41 (byte-identical output set); the docs delta is covered by the stage-3 isolated delta review and keyed approval [key=stage3-diff-approval]"
+  "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a011a085 (byte-identical output set); the delta is covered by the two isolated delta reviews and keyed approval [key=anchor-unification-diff-approval]"
  },
  "reviewer": {
-  "identity": "fm-worker/isolated-delta-reviewer-stage3",
-  "review_sha256": "848a5c25324f318523c9ca51328fa1f4db6c5e2b2490120d103db8dd39993809"
+  "identity": "coding-agent/isolated-delta-reviewer-anchor-b",
+  "review_sha256": "0999cfb6adf0ba265f31fe21ed3bde973bf616f722a3c14aa408887e1a06ea4c"
  },
  "promotion_review": {
   "paired_status": "pass",
@@ -137,19 +137,6 @@
   "baseline_output_set_sha256": "9456b0799686b25659b55564cff7f58c7da2f37aff11657528aa0efb716b5027",
   "candidate_output_set_sha256": "dec0f3f2f57cc4a7b69932fadb81f9151cd9c8ad2f1d017ffaf3d7c78d5b70c9",
   "high_risk_regressions": 0,
-  "exact_diff_human_approval": {
-   "schema": "super-caveman-exact-diff-approval.v2",
-   "status": "approved",
-   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-   "base_commit": "3fbdaf4deb84a8f9f9be8621fbc9f20aff9c37fa",
-   "path_set_sha256": "3614491077867010b95c24426c2d4dd4c821fca14b3681976ccf7199ae5c43b5",
-   "staged_patch_sha256": "e617aa5b57bcb9314e2148e3acac7cbc29e5df0db5ea2597264d0e5fae80a287",
-   "approver": "workspace-owner",
-   "approved_at": "2026-09-02T23:47:41Z",
-   "record_path": "results/revision-2f0b8a63-exact-diff-approval.json",
-   "record_sha256": "1a74c939b0f07e86e78f2cf2008f2cf5cd20fb990fb073f8295d1b527f2eb800",
-   "record_storage": "Git aggregate receipt; raw approval Git-external"
-  },
   "judges": [
    {
     "identity": "/root/judge_fresh_pair_1",
@@ -169,6 +156,19 @@
     "vote": "candidate",
     "record_sha256": "b7e0a84824b2981dc9628dbb3ccd2666d825616b09a9783cba6730568c3e05aa"
    }
-  ]
+  ],
+  "exact_diff_human_approval": {
+   "schema": "super-caveman-exact-diff-approval.v2",
+   "status": "approved",
+   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+   "base_commit": "f6955ee61c08a6fa47b3d8d011519b7e8db02285",
+   "path_set_sha256": "9a5deb1b3b3aaf6cf82e2b8be8349dc2753d88f8bbe6166ff8755398d994ceaa",
+   "staged_patch_sha256": "e4d18dc8251b9fad6796db13acfc4069b73c29d38455b88ec944079d916f9038",
+   "approver": "workspace-owner",
+   "approved_at": "2026-09-03T05:12:55Z",
+   "record_path": "results/revision-ed8a4b80-exact-diff-approval.json",
+   "record_sha256": "108965e2f6253a53a6e8c0583835deee04b2e5b4f30a5e247db725770ac282a5",
+   "record_storage": "Git aggregate receipt; raw approval Git-external"
+  }
  }
 }
