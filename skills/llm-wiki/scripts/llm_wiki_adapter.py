@@ -142,7 +142,10 @@ def render_hooks(skill_dir: Path, python_path: Path) -> dict[str, Any]:
     def group(event: str, timeout: int) -> list[dict[str, Any]]:
         return [
             {
-                "matcher": "*",
+                # Hosts compile hook matchers as regular expressions; "*"
+                # alone is invalid there ("nothing to repeat"), so match-all
+                # is spelled ".*".
+                "matcher": ".*",
                 "hooks": [
                     {
                         "type": "command",
