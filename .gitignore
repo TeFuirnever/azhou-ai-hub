@@ -62,6 +62,7 @@ temp/
 # Local task-manager state; keep it on disk, outside the public repository.
 /backlog.md
 /note-archive.md
+/done-archive.md
 
 # Agent-history and benchmark workspace state; checked-in fixtures/results stay public.
 benchmarks/repo-pedant/history/raw/
