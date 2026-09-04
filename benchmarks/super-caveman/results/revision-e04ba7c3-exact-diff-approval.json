@@ -2,48 +2,18 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-04T13:41:43Z",
-  "base_commit": "771a1f6f6c3fc8a8333947e0a15ee6ef4832f0b1",
+  "approved_at": "2026-09-04T14:29:25Z",
+  "base_commit": "7653f078665f9cbfb22c8e7c21acbb1564131757",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "3fe920056893fd32d54e08a85a5fa63423c0d386b7fe4854b62b9d1687a0aaa3",
-  "staged_patch_sha256": "5feed84fb803891cf099d40b9176a8dc72d84f23c7799fa8cf523268a344b2e0",
+  "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
+  "staged_patch_sha256": "f2fbf7536fa4a59b7305b102a89621f0ae4d9e72ced18bb46bdaf01638d38cf5",
   "reviewed_blobs": [
     {
-      "path": "CHANGELOG.md",
-      "old_oid": "e4a115226a0650a86d805517e20a03dff6fbd965",
-      "new_oid": "f4b34cd7edc45eff24450d82912188a78715ac51"
-    },
-    {
-      "path": "benchmarks/super-caveman/manifest.json",
-      "old_oid": "1449af05434f1bbda31fa82b77e423a6a73369cd",
-      "new_oid": "70e2b737ae3a2a228dbb71b1fc6e43dbed14bfc0"
-    },
-    {
-      "path": "benchmarks/super-caveman/results/revision-c41e0a4c-attempt-1-summary.json",
-      "old_oid": "0ab32d6077e03b72cf055b4a20002070ef4f4be3",
-      "new_oid": "b4ee7db5e20558177c83ab51cacf390dba3de68d"
-    },
-    {
       "path": "docs/support-matrix.md",
-      "old_oid": "bd98bd152d2aa02572b463cafc08ebaca3475a1c",
-      "new_oid": "0e24cebe37a32aca523f1be67cd4abe4ffce551c"
-    },
-    {
-      "path": "skills/super-caveman/scripts/codex_adapter.py",
-      "old_oid": "e4abe8b34ac331ef36fd9f905d594d2794354566",
-      "new_oid": "bbe96c750854d234bc0fbcae9318547759bffb1f"
-    },
-    {
-      "path": "tests/test_super_caveman_codex_adapter.py",
-      "old_oid": "670ce3f311ead2bed63099bdc47c4d662e7678a5",
-      "new_oid": "640a5f9cca450c72ca407107bf808f66afd4342e"
-    },
-    {
-      "path": "tests/test_super_caveman_codex_adapter_lifecycle.py",
-      "old_oid": "<deleted>",
-      "new_oid": "a499b8ac0ebfc3aa0b712a0c03427f2fd0895930"
+      "old_oid": "0e24cebe37a32aca523f1be67cd4abe4ffce551c",
+      "new_oid": "697419f2189039dace84ef25615bd2fbb9f1c34d"
     }
   ],
-  "raw_approval_record_sha256": "b6acb1d7627b156731e5a629ad93588a505d3f74a8a59f3c92b305e8f56ceabe",
+  "raw_approval_record_sha256": "5b862f359d4e3a126d1becf5a2e62d35ee3c720bb14213580ae60eb5b659d4c9",
   "raw_approval_storage": "Git-external"
 }
