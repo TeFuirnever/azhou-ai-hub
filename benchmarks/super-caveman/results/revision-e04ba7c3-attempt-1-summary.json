@@ -103,13 +103,13 @@
     "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ],
-  "status": "superseded",
-  "harness": "byte-reuse chain: revision-ed8a4b80 outputs retained and re-bound to revision-c41e0a4c; delta is additive tooling only (skills/super-caveman/scripts/zcode_adapter.py and tests/test_super_caveman_zcode_adapter.py; no existing byte changed; canonical handlers reused, not forked)",
-  "skill_tree_sha256": "c41e0a4cabd87a76881ee2bcb11cad9d3f6dd4092d81d61d459c85c29aa2dd13",
+  "status": "pass",
+  "harness": "byte-reuse chain: revision-c41e0a4c outputs retained and re-bound to revision-e04ba7c3; delta is adapter tooling only (codex_adapter.py full lifecycle via canonical claude_adapter delegation, contract+lifecycle tests, matrix and CHANGELOG; canonical behavior sources byte-unchanged)",
+  "skill_tree_sha256": "e04ba7c3cd20b23a7035ddfd9cb48fed2402e174a13e689a0764a14191eb7970",
   "automatic_checks": {
     "raw_schema": "pass",
     "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; current tree matched revision-c41e0a4c; delta vs revision-ed8a4b80 is additive-tooling (zcode lifecycle adapter reusing the canonical claude_adapter handlers, its 15-case deterministic contract tests, zcode smoke receipt, re-derived hook-surface receipt, manifest inputs); modes.md and response-cases.json untouched; isolated delta reviews c7fe6b35a7825b6b71fcf35506a4017c9710f7f287fc263823ba86d3ac519bba and 66ca8cdc19f5c74f71fa99c3c4926167c2403a1b5bafcac501337de25376385a by coding-agent/isolated-delta-reviewer-anchor-a and coding-agent/isolated-delta-reviewer-anchor-b confirmed response case semantics unchanged",
+    "skill_tree_digest": "stable-v2; current tree matched revision-e04ba7c3; delta vs revision-c41e0a4c is adapter-tooling (codex lifecycle adapter delegating render/prompt/enable/disable/status to the unchanged canonical claude_adapter handlers; disclosed codex-host capsule convergence); modes.md and response-cases.json untouched; isolated delta reviews 54d4ad76e685cc01270038518a7676fc82f3ebd85b94dadfe0a785cafbe64ebc and 6a2e84fcb3722e2fd1377170f04cae6cbd74bf970af5e8c2d7c4542dcaf93a48 by coding-agent/isolated-delta-reviewer-anchor-c and coding-agent/isolated-delta-reviewer-anchor-d confirmed response case semantics unchanged",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
@@ -121,8 +121,8 @@
     "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a011a085 (byte-identical output set); the delta is covered by the two isolated delta reviews and keyed approval [key=anchor-unification-diff-approval]"
   },
   "reviewer": {
-    "identity": "coding-agent/isolated-delta-reviewer-anchor-b",
-    "review_sha256": "66ca8cdc19f5c74f71fa99c3c4926167c2403a1b5bafcac501337de25376385a"
+    "identity": "coding-agent/isolated-delta-reviewer-anchor-d",
+    "review_sha256": "6a2e84fcb3722e2fd1377170f04cae6cbd74bf970af5e8c2d7c4542dcaf93a48"
   },
   "promotion_review": {
     "paired_status": "pass",
@@ -161,13 +161,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "47c9016e4fb144ca4c345ae2ae0d5ed4e5904139",
-      "path_set_sha256": "857ed04baee9dac6fe29da914323846970f14bca01d3d5a9f4544d66f73f0684",
-      "staged_patch_sha256": "fdc4e526939218b6436438a07b2f2dd30047de5091823519168894718d9238b4",
+      "base_commit": "771a1f6f6c3fc8a8333947e0a15ee6ef4832f0b1",
+      "path_set_sha256": "3fe920056893fd32d54e08a85a5fa63423c0d386b7fe4854b62b9d1687a0aaa3",
+      "staged_patch_sha256": "5feed84fb803891cf099d40b9176a8dc72d84f23c7799fa8cf523268a344b2e0",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-04T06:42:01Z",
-      "record_path": "results/revision-c41e0a4c-exact-diff-approval.json",
-      "record_sha256": "3e790145dfb36ec24d02fa8fd3132a44b66b691d7b509132f3b9e278ac9b9753",
+      "approved_at": "2026-09-04T13:41:43Z",
+      "record_path": "results/revision-e04ba7c3-exact-diff-approval.json",
+      "record_sha256": "d514e9cd52c044533cd1e2305e6c3197a0f3ad8762b49a77cac5a25a367e372b",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

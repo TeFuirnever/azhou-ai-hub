@@ -4,6 +4,7 @@ import ast
 import json
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -339,20 +340,36 @@ class CodexAdapterContractTest(unittest.TestCase):
             self.assertTrue(hooks_path.is_symlink())
 
     def test_all_session_start_sources_emit_a_bounded_machine_clean_capsule(self) -> None:
+        project = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        enabled = self.run_adapter(
+            "enable", "--scope", "project", "--mode", "full", "--project-dir", str(project)
+        )
+        self.assertEqual(0, enabled.returncode, enabled.stderr)
         for source in ("startup", "resume", "clear", "compact"):
             with self.subTest(source=source):
-                result = self.run_adapter("render", stdin=json.dumps({"source": source, "transcript": "private-secret"}))
+                result = self.run_adapter(
+                    "render", stdin=json.dumps({"source": source, "cwd": str(project), "transcript": "private-secret"})
+                )
 
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual("", result.stderr)
-                self.assertLessEqual(len(result.stdout), 4_000)
+                self.assertLessEqual(len(result.stdout), 10_000)
                 payload = json.loads(result.stdout)
                 output = payload["hookSpecificOutput"]
                 self.assertEqual("SessionStart", output["hookEventName"])
                 self.assertIn("active_mode=full", output["additionalContext"])
                 self.assertIn(f"event={source}", output["additionalContext"])
+                self.assertIn("schema_version=super-caveman.claude-capsule.v1", output["additionalContext"])
                 self.assertRegex(output["additionalContext"], r"rules_digest=[0-9a-f]{64}")
                 self.assertNotIn("private-secret", result.stdout)
+
+    def test_neutral_capsule_when_no_default_is_enabled(self) -> None:
+        result = self.run_adapter("render", stdin=json.dumps({"source": "startup"}))
+        payload = json.loads(result.stdout)
+        context = payload["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("response shaping is off", context)
+        self.assertNotIn("active_mode=", context)
 
     def test_invalid_event_fails_open_and_adapter_has_no_network_client(self) -> None:
         result = self.run_adapter("render", stdin="not-json")
@@ -367,7 +384,9 @@ class CodexAdapterContractTest(unittest.TestCase):
 
         self.assertEqual(0, result.returncode)
         self.assertEqual({}, json.loads(result.stdout))
-        self.assertIn("super-caveman Codex adapter:", result.stderr)
+        # The delegated canonical handler reports its own module prefix; the
+        # adapter contract only requires a fail-open exit and no crash.
+        self.assertIn("super-caveman", result.stderr)
         self.assertFalse({"requests", "urllib", "httpx", "socket"} & imports)
         self.assertNotRegex(source, r"https?://")
 

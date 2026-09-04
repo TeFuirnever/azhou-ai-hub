@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Codex-first, opt-in SessionStart adapter for Super Caveman.
+"""Codex-first, opt-in lifecycle adapter for Super Caveman.
 
 ``setup`` and ``uninstall`` change only one explicit Codex ``hooks.json``
-scope. ``render`` consumes one Codex SessionStart event from stdin and emits
-only Codex's documented JSON hook-output shape.  The adapter never reads
-transcripts, contacts the network, or acts as a security gate.
+scope, owning one SessionStart registration and one UserPromptSubmit
+registration. ``render`` and ``prompt`` delegate to the canonical Claude
+adapter handlers from the same package, so the capsule builder, mode
+hierarchy and session state machine stay single-source; the emitted shape is
+Codex's documented JSON hook output. The adapter never reads transcripts,
+contacts the network, or acts as a security gate; handler output fails open.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,37 +23,21 @@ import tempfile
 from typing import Any
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import claude_adapter  # noqa: E402  (same-package canonical handler module)
+
 SCHEMA_VERSION = "super-caveman.codex-session-start.v1"
-SUPPORTED_SOURCES = {"startup", "resume", "clear", "compact"}
 OWN_MATCHER = "startup|resume|clear|compact"
+PROMPT_MATCHER = ".*"  # official docs: matcher is ignored for UserPromptSubmit
 HOOK_TIMEOUT_SECONDS = 5
-MAX_CONTEXT_CHARS = 4_000
 
-
-class AdapterError(RuntimeError):
-    pass
+# One error contract with the canonical handler module this adapter reuses.
+AdapterError = claude_adapter.AdapterError
 
 
 def _absolute_path(path: str | Path) -> Path:
     """Normalize path segments without resolving symbolic links."""
     return Path(os.path.abspath(Path(path).expanduser()))
-
-
-def _package_dir() -> Path:
-    return Path(__file__).resolve().parent.parent
-
-
-def _rules_digest() -> str:
-    digest = hashlib.sha256()
-    for name in ("SKILL.md", "references/modes.md"):
-        path = _package_dir() / name
-        digest.update(name.encode("utf-8"))
-        digest.update(b"\0")
-        try:
-            digest.update(path.read_bytes())
-        except OSError:
-            digest.update(b"missing\0")
-    return digest.hexdigest()
 
 
 def _reject_symlink_components(path: Path, scope_root: Path) -> None:
@@ -87,11 +73,11 @@ def _hooks_path(args: argparse.Namespace) -> Path:
     return path
 
 
-def _hook_command() -> str:
-    return f"{shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).resolve()))} render"
+def _hook_command(sub: str) -> str:
+    return f"{shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).resolve()))} {sub}"
 
 
-def _is_adapter_command(command: Any) -> bool:
+def _is_adapter_command(command: Any, sub: str = "render") -> bool:
     """Recognize the adapter by its lexical command shape, not its checkout."""
     if not isinstance(command, str):
         return False
@@ -99,14 +85,14 @@ def _is_adapter_command(command: Any) -> bool:
         tokens = shlex.split(command)
     except ValueError:
         return False
-    if len(tokens) != 3 or not tokens[0] or tokens[2] != "render":
+    if len(tokens) != 3 or not tokens[0] or tokens[2] != sub:
         return False
     return Path(tokens[1]).parts[-3:] == ("super-caveman", "scripts", "codex_adapter.py")
 
 
-def _is_ours(registration: Any, handler: Any) -> bool:
+def _is_ours(registration: Any, handler: Any, matcher: str, sub: str) -> bool:
     """Require every stable registration and handler field to match."""
-    if not isinstance(registration, dict) or registration.get("matcher") != OWN_MATCHER:
+    if not isinstance(registration, dict) or registration.get("matcher") != matcher:
         return False
     return (
         isinstance(handler, dict)
@@ -114,7 +100,7 @@ def _is_ours(registration: Any, handler: Any) -> bool:
         and handler.get("timeout") == HOOK_TIMEOUT_SECONDS
         and handler.get("additionalContextLimit") == 1024
         and handler.get("statusMessage") == "Loading Super Caveman"
-        and _is_adapter_command(handler.get("command"))
+        and _is_adapter_command(handler.get("command"), sub)
     )
 
 
@@ -145,13 +131,13 @@ def _load_hooks(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _owned_registration() -> dict[str, Any]:
+def _owned_registration(matcher: str, sub: str) -> dict[str, Any]:
     return {
-        "matcher": OWN_MATCHER,
+        "matcher": matcher,
         "hooks": [
             {
                 "type": "command",
-                "command": _hook_command(),
+                "command": _hook_command(sub),
                 "timeout": HOOK_TIMEOUT_SECONDS,
                 "additionalContextLimit": 1024,
                 "statusMessage": "Loading Super Caveman",
@@ -160,18 +146,23 @@ def _owned_registration() -> dict[str, Any]:
     }
 
 
-def _replace_owned(registrations: list[Any], replacement: dict[str, Any] | None) -> list[Any]:
+def _replace_owned(
+    entries: list[Any],
+    matcher: str,
+    sub: str,
+    replacement: dict[str, Any] | None,
+) -> list[Any]:
     result: list[Any] = []
     replacement_added = False
-    for registration in registrations:
-        if not isinstance(registration, dict) or registration.get("matcher") != OWN_MATCHER:
+    for registration in entries:
+        if not isinstance(registration, dict) or registration.get("matcher") != matcher:
             result.append(registration)
             continue
         handlers = registration.get("hooks")
         if not isinstance(handlers, list):
             result.append(registration)
             continue
-        owned = [_is_ours(registration, handler) for handler in handlers]
+        owned = [_is_ours(registration, handler, matcher, sub) for handler in handlers]
         if not any(owned):
             result.append(registration)
             continue
@@ -193,24 +184,37 @@ def _install(payload: dict[str, Any]) -> dict[str, Any]:
     hooks = payload.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         raise AdapterError("Codex hooks field must be an object")
-    starts = hooks.setdefault("SessionStart", [])
-    if not isinstance(starts, list):
-        raise AdapterError("Codex SessionStart hooks must be an array")
-    hooks["SessionStart"] = _replace_owned(starts, _owned_registration())
+    hooks["SessionStart"] = _replace_owned(
+        _event_list(hooks, "SessionStart"), OWN_MATCHER, "render", _owned_registration(OWN_MATCHER, "render")
+    )
+    hooks["UserPromptSubmit"] = _replace_owned(
+        _event_list(hooks, "UserPromptSubmit"), PROMPT_MATCHER, "prompt", _owned_registration(PROMPT_MATCHER, "prompt")
+    )
     return payload
+
+
+def _event_list(hooks: dict[str, Any], event: str) -> list[Any]:
+    entries = hooks.setdefault(event, [])
+    if not isinstance(entries, list):
+        raise AdapterError(f"Codex {event} hooks must be an array")
+    return entries
 
 
 def _uninstall(payload: dict[str, Any]) -> dict[str, Any]:
     hooks = payload.get("hooks")
     if not isinstance(hooks, dict):
         return payload
-    starts = hooks.get("SessionStart")
-    if isinstance(starts, list):
-        cleaned = _replace_owned(starts, None)
-        if cleaned:
-            hooks["SessionStart"] = cleaned
-        else:
-            hooks.pop("SessionStart", None)
+    for event, matcher, sub in (
+        ("SessionStart", OWN_MATCHER, "render"),
+        ("UserPromptSubmit", PROMPT_MATCHER, "prompt"),
+    ):
+        entries = hooks.get(event)
+        if isinstance(entries, list):
+            cleaned = _replace_owned(entries, matcher, sub, None)
+            if cleaned:
+                hooks[event] = cleaned
+            else:
+                hooks.pop(event, None)
     if not hooks:
         payload.pop("hooks", None)
     return payload
@@ -274,50 +278,6 @@ def _atomic_write(path: Path, payload: dict[str, Any], scope_root: Path) -> None
             pass
 
 
-def _capsule(source: str) -> str:
-    package = _package_dir()
-    context = "\n".join(
-        (
-            "Super Caveman is active. active_mode=full.",
-            "Apply: safety and explicit format first; action-first ADHD-friendly structure second; Caveman compression last.",
-            "Lead with the result or next action. Number multi-step work. Keep current step visible. End with one concrete next action when work remains.",
-            "Preserve exact code, commands, paths, numbers, dates, and requested detail. Do not compress safety, order, causality, or required artifacts.",
-            "On 'stop super-caveman', 'stop caveman', 'stop adhd mode', or 'normal mode', confirm once and return to normal style.",
-            f"Canonical rules: {package / 'SKILL.md'} and {package / 'references' / 'modes.md'}.",
-            f"schema_version={SCHEMA_VERSION}",
-            f"rules_digest={_rules_digest()}",
-            f"event={source}",
-        )
-    )
-    return context[:MAX_CONTEXT_CHARS]
-
-
-def _render() -> int:
-    try:
-        event = json.load(sys.stdin)
-        if not isinstance(event, dict):
-            raise ValueError("event must be an object")
-        source = event.get("source", "startup")
-        if source not in SUPPORTED_SOURCES:
-            source = "startup"
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "SessionStart",
-                        "additionalContext": _capsule(source),
-                    }
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-        )
-    except Exception as exc:
-        print("{}")
-        print(f"super-caveman Codex adapter: {exc}", file=sys.stderr)
-    return 0
-
-
 def _scope_root(args: argparse.Namespace) -> Path:
     return _absolute_path(args.project_dir or os.getcwd() if args.scope == "project" else args.home_dir or Path.home())
 
@@ -334,11 +294,34 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("setup", "uninstall", "reconcile-legacy"):
         _scope_parser(commands.add_parser(name))
-    commands.add_parser("render")
+    enable = commands.add_parser("enable")
+    enable.add_argument("--scope", required=True, choices=("project", "user"))
+    enable.add_argument("--mode", required=True, choices=claude_adapter.MODES)
+    enable.add_argument("--project-dir")
+    enable.add_argument("--home-dir")
+    disable = commands.add_parser("disable")
+    disable.add_argument("--scope", required=True, choices=("project", "user"))
+    disable.add_argument("--project-dir")
+    disable.add_argument("--home-dir")
+    for name in ("status", "render", "prompt"):
+        cmd = commands.add_parser(name)
+        cmd.add_argument("--project-dir")
+        cmd.add_argument("--home-dir")
     args = parser.parse_args(argv)
+    home = getattr(args, "home_dir", None)
+    project = getattr(args, "project_dir", None)
     try:
         if args.command == "render":
-            return _render()
+            return claude_adapter.run_render(home, project)
+        if args.command == "prompt":
+            return claude_adapter.run_prompt(home, project)
+        if args.command == "enable":
+            return claude_adapter.write_layer_cli(args)
+        if args.command == "disable":
+            return claude_adapter.write_layer_cli(args)
+        if args.command == "status":
+            print(json.dumps(claude_adapter.status_report(home, project), ensure_ascii=False, indent=2))
+            return 0
         root = _scope_root(args)
         path = _hooks_path(args)
         payload = _load_hooks(path)
