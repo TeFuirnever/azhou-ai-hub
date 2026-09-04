@@ -104,12 +104,12 @@
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ],
   "status": "pass",
-  "harness": "byte-reuse chain: revision-e04ba7c3 outputs retained and re-bound to revision-e04ba7c3; delta is documentation only (one support-matrix cell citing the committed live-GUI receipt; no skill, script, test or fixture byte changed)",
+  "harness": "byte-reuse chain unchanged at revision-e04ba7c3 (docs-only deltas); approval record evolved 2026-09-04 for the codex live-firing receipt and its support-matrix cell update; no skill, script, test or fixture byte changed",
   "skill_tree_sha256": "e04ba7c3cd20b23a7035ddfd9cb48fed2402e174a13e689a0764a14191eb7970",
   "automatic_checks": {
     "raw_schema": "pass",
     "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; current tree matched revision-e04ba7c3; delta vs revision-e04ba7c3 is docs-only (support-matrix row-31 zcode cell now cites evidence/super-caveman-zcode-adapter-live-gui-2026-09-04.md); isolated delta reviews 6c7e1b3b11076b8b0a1ac27bee239dc11624a7cc6ff55db2bd438ff5eba0d5b5 and 2c40a6e8adb79e025b6de9887dfd78f5fa85ea49f0c98d1b0ead2c104096b893 by coding-agent/isolated-delta-reviewer-anchor-e and coding-agent/isolated-delta-reviewer-anchor-f confirmed response case semantics unchanged",
+    "skill_tree_digest": "stable-v2; current tree matched revision-e04ba7c3; approval evolution is docs-only (evidence/super-caveman-codex-adapter-live-2026-09-04.md plus matrix row-31 codex cell receipt-backed wording); isolated delta reviews 310b92f6832a9abf4bb675a07905488d0362dd315975e49375bdfdddba081ddd and d02f70d2576783546135219262384e7938aa7fc33e4c0c1b01115846bb361c64 by coding-agent/isolated-delta-reviewer-anchor-g and coding-agent/isolated-delta-reviewer-anchor-h confirmed response case semantics unchanged",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
@@ -121,8 +121,8 @@
     "carry_over": "paired-judge records, case results, and output digests carried unchanged from revision-a011a085 (byte-identical output set); the delta is covered by the two isolated delta reviews and keyed approval [key=anchor-unification-diff-approval]"
   },
   "reviewer": {
-    "identity": "coding-agent/isolated-delta-reviewer-anchor-f",
-    "review_sha256": "2c40a6e8adb79e025b6de9887dfd78f5fa85ea49f0c98d1b0ead2c104096b893"
+    "identity": "coding-agent/isolated-delta-reviewer-anchor-h",
+    "review_sha256": "d02f70d2576783546135219262384e7938aa7fc33e4c0c1b01115846bb361c64"
   },
   "promotion_review": {
     "paired_status": "pass",
@@ -161,13 +161,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "7653f078665f9cbfb22c8e7c21acbb1564131757",
-      "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
-      "staged_patch_sha256": "f2fbf7536fa4a59b7305b102a89621f0ae4d9e72ced18bb46bdaf01638d38cf5",
+      "base_commit": "9a280cb1c733884c3883e5356560a35f9d46f22f",
+      "path_set_sha256": "a1da041e7db4205a62a54d80726ad04134a95faa34d0f26a00bcd7c2a5836bd7",
+      "staged_patch_sha256": "b13dc040802cd9f690c2572712490b636a8945b8d555cdbb0922a479e655c286",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-04T14:29:25Z",
+      "approved_at": "2026-09-04T14:56:26Z",
       "record_path": "results/revision-e04ba7c3-exact-diff-approval.json",
-      "record_sha256": "38335506009c38914406f47da86240ea992e4b1f02db0be1f4e2a68250d05b7d",
+      "record_sha256": "650caa3f32b6cb7d7bf31ce722d73f4f4c944e2383a555bb79aae0b356d05f8e",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }
