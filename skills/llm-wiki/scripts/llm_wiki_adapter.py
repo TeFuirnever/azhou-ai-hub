@@ -156,11 +156,13 @@ def render_hooks(skill_dir: Path, python_path: Path) -> dict[str, Any]:
             }
         ]
 
+    # SessionEnd budgets are capped near 3 seconds by hook hosts; asking for
+    # more only produces a clamp warning (or a silent clamp) at load time.
     return {
         "hooks": {
             "SessionStart": group("session-start", 5),
             "PreCompact": group("pre-compact", 3),
-            "SessionEnd": group("session-end", 30),
+            "SessionEnd": group("session-end", 3),
         }
     }
 

@@ -517,6 +517,9 @@ class LlmWikiTest(unittest.TestCase):
                 for hook in entry["hooks"]:
                     self.assertIn("host-hook", hook["command"])
                     self.assertTrue(hook["command"].endswith(canonical[event]))
+                    self.assertLessEqual(hook["timeout"], 5)
+                    if event == "SessionEnd":
+                        self.assertLessEqual(hook["timeout"], 3)
 
 
 if __name__ == "__main__":
