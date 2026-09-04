@@ -1,0 +1,66 @@
+{
+  "schema": "super-caveman-zcode-smoke-receipt.v1",
+  "attempt": 1,
+  "date": "2026-09-04",
+  "runtime": {
+    "host": "zcode headless CLI via the ZCode.app bundle",
+    "host_version": "0.16.5",
+    "mode": "headless print mode (-p), disposable scratch Git project, project-scope hooks"
+  },
+  "adapter_digest": "71efca60e803ec5cce201dc41201c0ed0bb347ba0f76841b76a945010184a325",
+  "rules_digest": "1197b53d8803a3e78649ced7006b84fdb7f5305e5204d19b395e4cde09a041bc",
+  "event_sources_exercised": [],
+  "steps": [
+    {
+      "step": "neutral-install",
+      "zcode_cli_dir_exists": false
+    },
+    {
+      "step": "adapter-cli",
+      "command": "setup --scope project",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "adapter-cli",
+      "command": "enable --scope project --mode full",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "step": "setup",
+      "config_json": true,
+      "events_registered": [
+        "SessionStart",
+        "UserPromptSubmit"
+      ],
+      "hooks_enabled": true
+    },
+    {
+      "step": "headless-session",
+      "prompt": "Reply with the single word DONE",
+      "completed": true,
+      "session_state_written": false
+    },
+    {
+      "step": "hook-execution-probe",
+      "method": "four marker command hooks (SessionStart, UserPromptSubmit, PostToolUse, Stop) registered project-scope in the same scratch config; one completed headless session",
+      "marker_fires": 0,
+      "finding": "zcode 0.16.5 -p executes no project-scope hooks at all"
+    },
+    {
+      "step": "adapter-cli",
+      "command": "uninstall --scope project --purge-state",
+      "exit": 0,
+      "stderr": "",
+      "config_cleaned": true,
+      "state_purged": true
+    }
+  ],
+  "disclosures": [
+    "Headless -p hook execution is a verified negative: no adapter handler can run in this mode, so the empty session state is fully explained by the probe finding and not by payload shape.",
+    "An earlier run in this series produced model replies that referenced Super Caveman stop phrasing; those replies come from the skill listing visible to the model, not from hook injection, and an interim camelCase-payload attribution was corrected on the record.",
+    "Live firing in the interactive GUI host was not verified in this attempt (host automation was blocked by an accessibility permission), so GUI live firing stays unclaimed.",
+    "The 2026-09-02 hook-surface receipt this work depended on was found committed empty; the surface was re-derived and recorded as evidence/zcode-hook-surface-2026-09-04.md."
+  ]
+}
