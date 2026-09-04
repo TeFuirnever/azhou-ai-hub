@@ -12,7 +12,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
-- Fixed the `llm-wiki` hook-wiring renderer emitting a bare `"*"` matcher: hosts that compile hook matchers as regular expressions (Codex, Claude Code) reject it as invalid ("nothing to repeat"), so `render-hooks` now emits the valid match-all `".*"` and a regression test pins all three event matchers as compilable regular expressions ending at the canonical event name.
+- Fixed the `llm-wiki` hook-wiring renderer emitting a bare `"*"` matcher: runtimes that compile hook matchers as regular expressions reject it as invalid ("nothing to repeat"), so `render-hooks` now emits the valid match-all `".*"` and a regression test pins all three event matchers as compilable regular expressions ending at the canonical event name.
 
 ### Changed
 

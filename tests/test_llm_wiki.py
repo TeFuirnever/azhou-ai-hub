@@ -492,9 +492,9 @@ class LlmWikiTest(unittest.TestCase):
             self.assertIn("sha256:", " ".join(page["result"]["sources"]))
 
     def test_render_hooks_matchers_are_valid_regular_expressions(self) -> None:
-        # Regression for the codex-host wiring failure: a bare "*" matcher is
-        # not a valid regular expression ("nothing to repeat") and made the
-        # host report a hook-loading issue.
+        # Regression for a real wiring failure: a bare "*" matcher is not a
+        # valid regular expression ("nothing to repeat") and made the
+        # consuming runtime report a hook-loading issue.
         import re
 
         adapter_spec = importlib.util.spec_from_file_location(
