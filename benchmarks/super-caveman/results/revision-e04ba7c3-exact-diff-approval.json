@@ -2,18 +2,23 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-04T14:29:25Z",
-  "base_commit": "7653f078665f9cbfb22c8e7c21acbb1564131757",
+  "approved_at": "2026-09-04T14:56:26Z",
+  "base_commit": "9a280cb1c733884c3883e5356560a35f9d46f22f",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
-  "staged_patch_sha256": "f2fbf7536fa4a59b7305b102a89621f0ae4d9e72ced18bb46bdaf01638d38cf5",
+  "path_set_sha256": "a1da041e7db4205a62a54d80726ad04134a95faa34d0f26a00bcd7c2a5836bd7",
+  "staged_patch_sha256": "b13dc040802cd9f690c2572712490b636a8945b8d555cdbb0922a479e655c286",
   "reviewed_blobs": [
     {
       "path": "docs/support-matrix.md",
-      "old_oid": "0e24cebe37a32aca523f1be67cd4abe4ffce551c",
-      "new_oid": "697419f2189039dace84ef25615bd2fbb9f1c34d"
+      "old_oid": "697419f2189039dace84ef25615bd2fbb9f1c34d",
+      "new_oid": "e83e36cd7610bee6d1eef31b6b97b00cef9bb1f4"
+    },
+    {
+      "path": "evidence/super-caveman-codex-adapter-live-2026-09-04.md",
+      "old_oid": "<deleted>",
+      "new_oid": "5619e1bde6b0f553209512d425b8237d69e51697"
     }
   ],
-  "raw_approval_record_sha256": "5b862f359d4e3a126d1becf5a2e62d35ee3c720bb14213580ae60eb5b659d4c9",
+  "raw_approval_record_sha256": "bc443b482131cdf65210b997c32038c7aff5022380fc846c20c7648659c11b8a",
   "raw_approval_storage": "Git-external"
 }
