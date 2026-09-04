@@ -1,0 +1,69 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-09-04T06:42:01Z",
+  "base_commit": "47c9016e4fb144ca4c345ae2ae0d5ed4e5904139",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "857ed04baee9dac6fe29da914323846970f14bca01d3d5a9f4544d66f73f0684",
+  "staged_patch_sha256": "fdc4e526939218b6436438a07b2f2dd30047de5091823519168894718d9238b4",
+  "reviewed_blobs": [
+    {
+      "path": "CHANGELOG.md",
+      "old_oid": "152f0c661f443b445c0a8f36deaf33497063861d",
+      "new_oid": "e4a115226a0650a86d805517e20a03dff6fbd965"
+    },
+    {
+      "path": "README.md",
+      "old_oid": "919ab71c1aa56ebb3a3cbb893dd61aa45105cdd2",
+      "new_oid": "bc2024086a1bd6b635174ded6ebd68f0a0bebd0d"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "old_oid": "0178524d8576b2ec034049a6bd02d97c1767ff65",
+      "new_oid": "6eb5a1a70ce2f5b73354fef3cfce1174ba3409a4"
+    },
+    {
+      "path": "benchmarks/super-caveman/manifest.json",
+      "old_oid": "cc1178663cd81d5bfa46e9ee74122107392efe2f",
+      "new_oid": "1449af05434f1bbda31fa82b77e423a6a73369cd"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/revision-ed8a4b80-attempt-1-summary.json",
+      "old_oid": "db2154e489601275490b70114b35ec22c83d2520",
+      "new_oid": "409220906f074e02ce25ccc30ded80fc8769fd80"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/zcode-smoke-receipt-attempt-1.json",
+      "old_oid": "<deleted>",
+      "new_oid": "eab8aa68ee6c093759d6db1ebe8dedf2be4dce83"
+    },
+    {
+      "path": "docs/support-matrix.md",
+      "old_oid": "2167b2dcd017621359a64021258d7492385b6b5f",
+      "new_oid": "bd98bd152d2aa02572b463cafc08ebaca3475a1c"
+    },
+    {
+      "path": "evidence/zcode-hook-surface-2026-09-02.md",
+      "old_oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "evidence/zcode-hook-surface-2026-09-04.md",
+      "old_oid": "<deleted>",
+      "new_oid": "1e68df46a409d43e5339dcaab04755618b0cfc40"
+    },
+    {
+      "path": "skills/super-caveman/scripts/zcode_adapter.py",
+      "old_oid": "<deleted>",
+      "new_oid": "edb92ac6b4145904cbd5d38603907a55c94f6b9a"
+    },
+    {
+      "path": "tests/test_super_caveman_zcode_adapter.py",
+      "old_oid": "<deleted>",
+      "new_oid": "a41c4cac9bb34c119cf83074bca3f69e731bd098"
+    }
+  ],
+  "raw_approval_record_sha256": "74f4784491f578df25a76dd87dd84509b02d0ca2349d5dfb26e8f3c4b319ae64",
+  "raw_approval_storage": "Git-external"
+}
