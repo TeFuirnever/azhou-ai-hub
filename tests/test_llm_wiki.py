@@ -491,6 +491,33 @@ class LlmWikiTest(unittest.TestCase):
             page = self.run_cli(root, "read", "Project Environment Snapshot")
             self.assertIn("sha256:", " ".join(page["result"]["sources"]))
 
+    def test_render_hooks_matchers_are_valid_regular_expressions(self) -> None:
+        # Regression for the codex-host wiring failure: a bare "*" matcher is
+        # not a valid regular expression ("nothing to repeat") and made the
+        # host report a hook-loading issue.
+        import re
+
+        adapter_spec = importlib.util.spec_from_file_location(
+            "llm_wiki_adapter", SCRIPT.with_name("llm_wiki_adapter.py")
+        )
+        assert adapter_spec and adapter_spec.loader
+        adapter = importlib.util.module_from_spec(adapter_spec)
+        sys.modules[adapter_spec.name] = adapter
+        adapter_spec.loader.exec_module(adapter)
+        with tempfile.TemporaryDirectory() as directory:
+            wiring = adapter.render_hooks(Path(directory), Path(sys.executable))
+        events = wiring["hooks"]
+        self.assertEqual(sorted(events), ["PreCompact", "SessionEnd", "SessionStart"])
+        canonical = {"SessionStart": "session-start", "PreCompact": "pre-compact", "SessionEnd": "session-end"}
+        for event, entries in events.items():
+            for entry in entries:
+                matcher = entry["matcher"]
+                self.assertEqual(matcher, ".*", f"{event} matcher must be a valid match-all regex")
+                re.compile(matcher)  # must not raise
+                for hook in entry["hooks"]:
+                    self.assertIn("host-hook", hook["command"])
+                    self.assertTrue(hook["command"].endswith(canonical[event]))
+
 
 if __name__ == "__main__":
     unittest.main()
