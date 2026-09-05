@@ -72,6 +72,13 @@ python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
 python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
   --memory-decision 'none_discovered::checked repository MEMORY.md and active harness project-memory path'
+
+# Full form with global-instruction candidate and an explicit output path:
+python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
+  --project /absolute/project \
+  --memory /absolute/project-memory/MEMORY.md \
+  --global-instruction /absolute/global-instructions.md \
+  --output /absolute/project/.azhou/repo-pedant/inventory.json
 ```
 
 A single-project snapshot defaults to `.azhou/repo-pedant/inventory.json`; multi-project runs require an explicit `--output`. Validate execution state without a path to read `.azhou/repo-pedant/execution.json` from the current project.

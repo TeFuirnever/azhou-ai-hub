@@ -58,6 +58,8 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 
 技术主题先检索官方规范或当前代码。把可核实事实放进图：真实事件、字段、调用、载荷、入口和失败分支。不要用“Service A”“处理数据”替代已经可得的具体信息。
 
+完成判据：六项确认字段各有具体值或显式 `🔒 阿舟暂停这一项`；`thesis` 能压缩成一句话的关系断言；`facts` 里的名称、字段与事件与来源逐字一致，零占位名。
+
 ## 2. 选表达法
 
 先读 [diagram-types.md](references/diagram-types.md)，再按关系选择结构：
@@ -81,6 +83,8 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 - [element-templates.md](references/element-templates.md)
 - [icon-catalog.md](references/icon-catalog.md) 与 `references/libraries/`
 
+完成判据：所选结构对应上表其中一行；三个缩放层（主路径、责任分区、可验证细节）各有明确定位；每个细节项能指回 `thesis` 或某条 `fact`。
+
 ## 3. 构图
 
 用 [design-system.md](references/design-system.md) 的网格、间距、路由和文本规则。推荐顺序：
@@ -101,6 +105,8 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 - 交叉不可避免时减少交叉次数，并让交点远离标签；
 - 长文本拆成证据块或移到配套说明；
 - 画布留出外边距，避免内容贴边或出现巨大空洞。
+
+完成判据：八条硬规则逐条自查通过；每个视觉区域能命名一个主要职责；主路径在渲染图中可被一眼指出。
 
 ## 4. 生成可编辑场景
 
