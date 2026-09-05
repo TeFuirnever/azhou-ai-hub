@@ -82,6 +82,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Lavish](skills/lavish/SKILL.md) | 把复杂或视觉化的 Agent 回复变成富 HTML 产物，用户可以标注、排队 prompt 并通过 Lavish Editor CLI 反馈；Spec Relay relay 模式把 PRD、RFC、设计或技术 Spec 连同评论、选区批注、处置与下一责任人状态打包进一份可传递 HTML。 | 上游基线哈希锁定用于复现，CLI 锁定 <code>0.1.47</code>，本地层在其上加入 relay 模式；provenance 记录不可变上游 commit 与可复现源校验。relay 模式内嵌 <code>spec-relay.html-state.v1</code> 与乐观修订守卫；确定性检查覆盖反馈更新、旧副本拒绝、可见状态精确投影与响应式布局。本地审阅不是发布；<code>share</code> 需要单独授权。不主张 hosted-share receipt。 |
 | [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、自包含产物合同、品牌协议和稳定收据，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 | [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。 |
+| [Arch Doc](skills/arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与三份评审指南作为 references 随包交付。 |
 
 十一个包都能作为独立 package surface 安装和发现，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
