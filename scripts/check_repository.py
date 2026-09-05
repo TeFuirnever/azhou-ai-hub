@@ -151,6 +151,7 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Arch Doc",
         "motto": "先读上游，再写契约，声称不越证据。",
         "startup": "🦊 阿舟 · Arch Doc 启动｜mode=<draft|calibrate|review|sequence>｜scope=<repo-or-document>",
+        "brand_path": "skills/arch-doc/references/brand-layer.md",
     },
 }
 
