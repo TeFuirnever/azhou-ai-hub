@@ -46,3 +46,9 @@
 | P1 | G2 行为基准 golden case（进仓库 benchmarks/ 与 CI） | 本轮 |
 | P1 | G3 渲染门（可选项）+ G5 追溯 checker（verify_doc 扩展） | 本轮 |
 | P2 | G7 同步流程注 + 首轮两条非阻塞观察（§8.1 词形 / ADR 路径写法） | 两轮 |
+
+---
+
+## 状态更新（同日执行记录）
+
+合并 backlog 全部执行完毕：G1 `scripts/new_doc.py`（含选择器链接改写，脚手架→verify 实测 exit 0）；G2 `benchmarks/arch-doc/`（case-01-scaffold）；G3 `verify_doc.py --plantuml-cli`（可选项，缺失时诚实 skipped）；G4 calibration-guide 不可信输入纪律；G5 `verify_doc.py --trace-prd/--trace-detail-dir`；G6 `references/adr-template.md`；G7 PROVENANCE 同步流程；G8 SKILL.md 产出语言规则。首轮两条非阻塞观察此前已修。仓库门禁：861 files passed、unittest OK、whitespace 干净。

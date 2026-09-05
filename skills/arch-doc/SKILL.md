@@ -67,6 +67,7 @@ PlantUML 是文档唯一权威图形式。每张图带四联注：目的 / 范�
 ### 6. 评审对标与入账
 
 按 [references/review-guide.md](references/review-guide.md) 做结构线与技术线对标评审，输出评分、按严重度排序的发现、可落地改进清单（动作 / 章节 / 收益 / 工作量 S-M-L）。收尾确定性校验全绿才算完成：运行 `scripts/verify_doc.py <文档.md>`（配平 / 链接 / 图注版本入账 / changelog 有序 / 空白；可选 `--plantuml-cli` 渲染门、`--trace-prd/--trace-detail-dir` 追溯门、`--states` 状态词提示），状态词与驱动场景映射人工复核。新文档起步用 `scripts/new_doc.py` 从只读模板脚手架实例化；ADR 用 [references/adr-template.md](references/adr-template.md)。
+多阶段事件协议（启动行 / 状态前缀 / 收据 schema / Unicode 降级）见 [references/brand-layer.md](references/brand-layer.md)；可选依赖与边界见 [references/setup.md](references/setup.md)。
 
 全绿输出 `✅ 验证通过`；任一 gate 失败输出 `❌ 验证失败` 并列出具体 gate。评审发现只入改进清单，未经用户点名不扩权修改。
 
@@ -91,4 +92,5 @@ mode、源文档与产物路径、已跑校验清单（链接 / 配平 / changel
 - [references/calibration-guide.md](references/calibration-guide.md) — 上游研读与回源交叉校准方法
 - [references/review-guide.md](references/review-guide.md) — 最佳实践对标框架与改进清单模板
 - [references/format-standard.md](references/format-standard.md) — 输出格式规范（42010 / 1016 / arc42 完整性判据）
+- [references/history-evolution.md](references/history-evolution.md) 与 [references/evolution-contract.md](references/evolution-contract.md) — 证据驱动演化（用户点名 `evolve` 时进入）
 - [references/templates/PROVENANCE.md](references/templates/PROVENANCE.md) — 模板只读锁（来源与 SHA-256）

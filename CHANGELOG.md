@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and repository-level [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
-- Added `arch-doc` skill: end-to-end architecture-document authoring, calibration and best-practice review, with the MCC-proven templates vendored under `references/templates/` and deterministic repository gates updated.
+- Completed the `arch-doc` skill backlog: brand layer, setup contract, controlled-evolution files, benchmark runner with evidence receipt, demo document, read-only template provenance and deterministic gate refinements (`--plantuml-cli`, `--trace`).
 
 ### Added
 
