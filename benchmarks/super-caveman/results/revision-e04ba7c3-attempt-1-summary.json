@@ -104,7 +104,7 @@
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ],
   "status": "pass",
-  "harness": "byte-reuse chain unchanged at revision-e04ba7c3 (docs-only deltas); approval record evolved 2026-09-05 for the llm-wiki codex wiring receipt, its matrix cell update and the AGENTS.md latest-record pointer refresh; no skill, script, test or fixture byte changed",
+  "harness": "byte-reuse chain unchanged at revision-e04ba7c3 (docs-only deltas); approval record evolved 2026-09-05 for the support-matrix twelve-package count refresh and the new arch-doc capability row; no skill, script, test or fixture byte changed",
   "skill_tree_sha256": "e04ba7c3cd20b23a7035ddfd9cb48fed2402e174a13e689a0764a14191eb7970",
   "automatic_checks": {
     "raw_schema": "pass",
@@ -161,13 +161,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "8bb83c911b6244061b3e5d9cb8490b6533688f98",
-      "path_set_sha256": "3325641ba173e52ba1702b523a08c7a1d7327a2dd121b8cda0ed25876154c1ad",
-      "staged_patch_sha256": "dde7496b7630fdcb2b6991f94a681f2fc322b27077ce69ff05bc8168d43aa028",
+      "base_commit": "b9e9598d94b05fca7c28ee780de60b2d82de2293",
+      "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
+      "staged_patch_sha256": "b17c530170b796f26270f99a9050d9bf4b63608b50356138d0edae5b13542ad3",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-04T16:58:55Z",
+      "approved_at": "2026-09-05T03:08:57Z",
       "record_path": "results/revision-e04ba7c3-exact-diff-approval.json",
-      "record_sha256": "ef9b2a6ccfab7e1d070564a24aacdbf6150bc979afb0fdb2067dc11c7419b36d",
+      "record_sha256": "489aa8e363d1f6d52de8eb1063b3e19b6ea4643bfc28a0d922c92aaf77e3b79a",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

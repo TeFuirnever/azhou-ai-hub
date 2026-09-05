@@ -27,6 +27,7 @@ SKILL_DIRS = (
     LAVISH_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
+    ROOT / "skills" / "arch-doc",
 )
 
 
@@ -231,8 +232,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(11, len(SKILL_DIRS))
-        self.assertIn("eleven canonical packages", support)
+        self.assertEqual(12, len(SKILL_DIRS))
+        self.assertIn("twelve canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
