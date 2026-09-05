@@ -32,6 +32,17 @@ Excalidraw Diagram 的品牌感来自清楚、克制、可验证的作图过程�
 🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=checkout-flow
 ```
 
+## 启动行取值纪律
+
+- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），需求锁定阶段事件回填具体值。
+- 尖括号模板（如 `<diagram>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
+- 示例（锁定前后各一）：
+
+```text
+🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=unresolved
+🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=checkout-flow
+```
+
 审核示例：
 
 ```text
@@ -54,6 +65,7 @@ Emoji 是显示映射；右侧英文值才是稳定机器状态。
 - `complete_with_holds`：可用产物已交付；`Holds` 列出不影响当前交付但仍未关闭的真实限制。
 - `failed`：没有把不可信产物包装成完成；`Next action` 给出一个可执行动作。
 - `Visual review` 为 `skipped`、`pending` 或缺少 reviewer 时，不能使用 `complete`。
+- `complete` 要求 scope 已解析：启动行与收据 `Scope` 携带具体值，`unresolved` 只允许出现在需求锁定之前的阶段事件里。
 
 ## 稳定收据
 
