@@ -38,6 +38,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
+npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 ~~~
 
 These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
@@ -84,9 +85,9 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Autoresearch](skills/autoresearch/SKILL.md) | Wrap a user-owned pinned <code>karpathy/autoresearch</code> checkout so an agent can prepare, run, resume and report automatic nanochat training experiments, holding before any unattended GPU run. | Azhou-authored wrapper vendors zero upstream bytes because the upstream publishes no license; fail-closed setup checks the CUDA GPU, uv and the pinned commit, covered by deterministic package-surface checks. No behavior benchmark yet. |
 | [Arch Doc](skills/arch-doc/SKILL.md) | Draft, calibrate and review an architecture design document from upstream sources: reading notes with per-fact provenance, a baseline skeleton with controlled evidence vocabulary, PlantUML-only diagram discipline (four-part captions, sequence-diagram rules), source cross-calibration and two-line best-practice review gates. | Distilled from the MCC ARCH-2026-001 v0.1-v0.17 pipeline (upstream team research, readability audit, best-practice review and an architect-approved 20-item backlog); five validated sequence diagrams and two registered review guides ship as references; deterministic scaffold (`new_doc.py`), closing-gate checker (`verify_doc.py`) and a golden scaffold case in `benchmarks/arch-doc/`. |
 
-All eleven packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All twelve packages are independently installable and discoverable as package surfaces. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
-## Try five task skills
+## Try six task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
@@ -95,6 +96,7 @@ All eleven packages are independently installable and discoverable as package su
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
 | LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/llm-wiki.md). |
 | Lavish | <code>Use lavish in relay mode to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. [Run the demo](docs/demos/lavish.md). |
+| Arch Doc | <code>Use arch-doc to draft this repository's architecture document from its upstream design docs.</code> | Research notes with per-fact provenance, a template scaffold with accounted diagram captions, PlantUML-only diagrams, deterministic closing gates and a stable receipt. [Run the demo](docs/demos/arch-doc.md). |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
 

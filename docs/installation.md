@@ -16,6 +16,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
+npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
@@ -114,6 +115,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/llm-wiki/references/setup.md).
 - Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.47` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/lavish/references/setup.md).
+- Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/arch-doc/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
