@@ -80,6 +80,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
+    "skills/arch-doc/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
@@ -145,6 +146,11 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "少说话，技术信号不丢。",
         "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
         "brand_path": "skills/super-caveman/references/brand-layer.md",
+    },
+    "skills/arch-doc/SKILL.md": {
+        "display_name": "Arch Doc",
+        "motto": "先读上游，再写契约，声称不越证据。",
+        "startup": "🦊 阿舟 · Arch Doc 启动｜mode=<draft|calibrate|review|sequence>｜scope=<repo-or-document>",
     },
 }
 

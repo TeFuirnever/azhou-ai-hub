@@ -126,6 +126,7 @@ class AzhouHubCliTest(unittest.TestCase):
         )
         self.assertEqual(
             [
+                "arch-doc",
                 "autoresearch",
                 *AZHOU_SKILL_NAMES,
                 "eli5",

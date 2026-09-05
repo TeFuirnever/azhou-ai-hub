@@ -25,6 +25,7 @@ class LLMWikiRepositoryTest(unittest.TestCase):
             package.mkdir(parents=True)
             (package / "SKILL.md").write_text("llm-wiki\n", encoding="utf-8")
             expected = [
+                root / "skills" / "arch-doc" / "SKILL.md",
                 root / "skills" / "super-caveman" / "SKILL.md",
                 root / "skills" / "excalidraw-diagram" / "SKILL.md",
                 root / "skills" / "azhou-doctor" / "SKILL.md",
