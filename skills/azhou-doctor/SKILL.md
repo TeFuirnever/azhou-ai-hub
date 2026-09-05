@@ -13,7 +13,7 @@ Run the repository Foundation CLI and keep diagnosis read-only. Never turn a doc
 
 ## Brand protocol
 
-Emit this exact display event once:
+Emit this exact display event once, at the start of every run, with the resolved checkout scope:
 
 ```text
 🦊 阿舟 · Azhou Doctor 启动｜mode=doctor｜scope=<checkout>
@@ -23,14 +23,13 @@ Use `✅ 验证通过` only after the diagnostic command completes and its resul
 
 ## Workflow
 
-1. Emit the startup protocol once with the resolved checkout scope.
-2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
-3. Build `python3 scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
+1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
+2. Build `python3 scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
    - `--target <skill-root>` for an exact install root.
    - `--skill <canonical-name>` for each requested package.
    - `--treehouse-root <pool-root>` for the explicit Treehouse boundary.
    - `--verify` only when the user requests the complete repository gate or the claim requires it.
-4. Preserve the CLI distinction between `healthy`, `degraded`, and failed diagnostics. A warning is not a deterministic failure.
-5. Report findings and recommended next actions without applying them. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
+3. Preserve the CLI distinction between `healthy`, `degraded`, and failed diagnostics. A warning is not a deterministic failure.
+4. Report findings and recommended next actions without applying them. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 
 If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and supported checks, read [setup and compatibility](references/setup.md).

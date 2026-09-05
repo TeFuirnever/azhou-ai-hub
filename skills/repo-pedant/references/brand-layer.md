@@ -47,6 +47,17 @@ Repo-pedant 的品牌感来自稳定、克制、可辨认的过程语言。品�
 🟡 阿舟提醒｜需要跑 repo-pedant 收尾吗？
 ```
 
+## 启动行取值纪律
+
+- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 范围锁定` 事件回填具体值。
+- 尖括号模板（如 `<repo>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
+- 示例（锁定前后各一）：
+
+```text
+🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=unresolved
+🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/absolute/repo
+```
+
 ## 状态词典
 
 Emoji 是显示映射；右侧英文值才是稳定机器状态。
@@ -64,6 +75,7 @@ Emoji 是显示映射；右侧英文值才是稳定机器状态。
 - `complete_with_holds`：`Holds` 必须列出真实挂起项；
 - `audit_only`：`Mode` 必须为 `audit`，`Changed` 必须为 `none`；
 - `failed`：`Next action` 必须给出一个可执行动作。
+- `complete` 要求 scope 已解析：启动行与收据 `Scope` 携带具体值，`unresolved` 只允许出现在 `🧭 范围锁定` 之前的阶段事件里。
 
 ## 边界
 

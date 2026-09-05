@@ -35,7 +35,7 @@
 ### Mind Map
 - **Extract**: central topic; main branches; sub-topics per branch.
 - **Layout**: radial — `angle = 2π·i/n`, place level-1 on circle radius ≈ 280 (see also the
-  Spacing Reference in SKILL.md merged additions). Lines, not arrows, for connections.
+  [Spacing Reference](advanced-workflows.md)). Lines, not arrows, for connections.
 - **Budget**: 4–6 branches (max 8), 2–4 sub-topics each.
 
 ### Architecture
@@ -79,5 +79,4 @@ view first.
 
 ## Element-count sanity
 
-<20 elements total keeps a diagram legible; above that, prefer splitting or dropping containers
-(see SKILL.md container discipline).
+<20 elements total keeps a diagram legible; above that, prefer splitting or dropping containers.

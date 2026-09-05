@@ -194,7 +194,6 @@ python3 <skill-dir>/scripts/validate_execution_protocol.py \
 
 ## 禁止
 
-- 相关性抽样代替全清单；
 - 正则批量替代语义阅读；
 - spec 伪装成现役行为；
 - 项目规则写成变更日志；

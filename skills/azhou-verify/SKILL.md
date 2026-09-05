@@ -13,7 +13,7 @@ Use the repository Foundation CLI as the only full-gate entry. Do not replace it
 
 ## Brand protocol
 
-Emit this exact display event once:
+Emit this exact display event once, at the start of every run, with the resolved checkout scope:
 
 ```text
 🦊 阿舟 · Azhou Verify 启动｜mode=verify｜scope=<checkout>
@@ -23,12 +23,11 @@ Use `✅ 验证通过` only after the full gate exits successfully and its outpu
 
 ## Workflow
 
-1. Emit the startup protocol once with the resolved checkout scope.
-2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
-3. Run `python3 scripts/azhou_hub.py verify` from that checkout. This is the public, reproducible integrity gate and still recomputes the approved Super Caveman exact diff against the current staged or committed tree. Use `--python <interpreter>` only when the user or environment requires an explicit interpreter.
-4. Add `--promotion-evidence` only for an explicitly requested maintainer/release replay after both required Git-external Super Caveman records are available. This mode authenticates those raw records against the same exact diff. Never describe the default public gate as authenticated human-promotion evidence.
-5. Derive the verdict mechanically: the gate is **green** only when the exit code is 0 and the captured output ends with the gate's own passing summary; a failure verdict line anywhere in the captured output makes it **red** regardless of any other wording. Quote the exit code and the last captured line in the receipt `verification` field. A green gate takes the success anchor; a red or unavailable gate takes the failure anchor with the conflicting lines quoted. Skipped and unavailable checks appear in the report as skipped and unavailable.
-6. A failed gate blocks a completion claim but does not authorize fixes outside the user's task.
-7. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
+1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
+2. Run `python3 scripts/azhou_hub.py verify` from that checkout. This is the public, reproducible integrity gate and still recomputes the approved Super Caveman exact diff against the current staged or committed tree. Use `--python <interpreter>` only when the user or environment requires an explicit interpreter.
+3. Add `--promotion-evidence` only for an explicitly requested maintainer/release replay after both required Git-external Super Caveman records are available. This mode authenticates those raw records against the same exact diff. Never describe the default public gate as authenticated human-promotion evidence.
+4. Derive the verdict mechanically: the gate is **green** only when the exit code is 0 and the captured output ends with the gate's own passing summary; a failure verdict line anywhere in the captured output makes it **red** regardless of any other wording. Quote the exit code and the last captured line in the receipt `verification` field. A green gate takes the success anchor; a red or unavailable gate takes the failure anchor with the conflicting lines quoted. Skipped and unavailable checks appear in the report as skipped and unavailable.
+5. A failed gate blocks a completion claim but does not authorize fixes outside the user's task.
+6. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 
 For requirements and the exact full-gate boundary, read [setup and compatibility](references/setup.md).
