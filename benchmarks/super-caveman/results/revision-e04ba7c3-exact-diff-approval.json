@@ -2,28 +2,18 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-04T16:58:55Z",
-  "base_commit": "8bb83c911b6244061b3e5d9cb8490b6533688f98",
+  "approved_at": "2026-09-05T03:08:57Z",
+  "base_commit": "b9e9598d94b05fca7c28ee780de60b2d82de2293",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "3325641ba173e52ba1702b523a08c7a1d7327a2dd121b8cda0ed25876154c1ad",
-  "staged_patch_sha256": "dde7496b7630fdcb2b6991f94a681f2fc322b27077ce69ff05bc8168d43aa028",
+  "path_set_sha256": "5b8b746dab4e73d82bb050a9bed12db633282d2442d97cff8c16c01f5fa2652d",
+  "staged_patch_sha256": "b17c530170b796f26270f99a9050d9bf4b63608b50356138d0edae5b13542ad3",
   "reviewed_blobs": [
     {
-      "path": "AGENTS.md",
-      "old_oid": "6ba86ddd2082e1ed83cccd45ff94777128bb686e",
-      "new_oid": "af3cae89b85023dbb644cb7f7fa8dc431672dd16"
-    },
-    {
       "path": "docs/support-matrix.md",
-      "old_oid": "e83e36cd7610bee6d1eef31b6b97b00cef9bb1f4",
-      "new_oid": "ce34dc00be402e6ded9fe6228572954dbb13975e"
-    },
-    {
-      "path": "evidence/llm-wiki-wiring-2026-09-05.md",
-      "old_oid": "<deleted>",
-      "new_oid": "b089e3b8911a059ca6654728902fcbd3568645bd"
+      "old_oid": "ce34dc00be402e6ded9fe6228572954dbb13975e",
+      "new_oid": "bb49ed2bcb58a6142820f0d0041625682a8889bc"
     }
   ],
-  "raw_approval_record_sha256": "a4ed277c4f5741b7380ba9f6173e640624914cb2410b3f88b74d027223cfc0a3",
+  "raw_approval_record_sha256": "ccc828d391702ba9ea4938672ef05d638c266dfc093913abf64d4c66c40e6cdf",
   "raw_approval_storage": "Git-external"
 }
