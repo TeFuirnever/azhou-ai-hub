@@ -14,12 +14,32 @@ from scripts.check_repository import (
     check_secret_patterns,
     check_skill_brand_contract,
     check_skill_discovery,
+    check_router_coverage,
     check_treehouse_config,
     relative_markdown_targets,
 )
 
 
 ROOT = Path(__file__).parents[1]
+
+
+class RouterCoverageTest(unittest.TestCase):
+    def test_router_names_every_canonical_skill(self) -> None:
+        self.assertEqual([], check_router_coverage(ROOT))
+
+    def test_router_missing_a_name_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            router = root / "skills" / "ask-azhou"
+            router.mkdir(parents=True)
+            (router / "SKILL.md").write_text("Routes to eli5 and lavish only.\n", encoding="utf-8")
+            errors = check_router_coverage(root)
+            self.assertTrue(
+                any("router coverage missing" in error for error in errors),
+                errors,
+            )
+            self.assertIn("router coverage missing: arch-doc", errors)
+            self.assertNotIn("router coverage missing: eli5", errors)
 
 
 def copy_skill_brand_surfaces(root: Path) -> None:
@@ -158,6 +178,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "ci-test-reliability" / "SKILL.md",
                 root / "skills" / "prose-standard" / "SKILL.md",
+                root / "skills" / "ask-azhou" / "SKILL.md",
                 root / "skills" / "arch-doc" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))

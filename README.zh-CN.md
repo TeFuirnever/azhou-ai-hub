@@ -39,6 +39,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill ci-test-reliability
 npx skills add TeFuirnever/azhou-ai-hub --skill prose-standard
+npx skills add TeFuirnever/azhou-ai-hub --skill ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
 npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 ~~~
@@ -86,6 +87,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、自包含产物合同、品牌协议和稳定收据，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 | [CI Test Reliability](skills/ci-test-reliability/SKILL.md) | 设计在真实 CI 并发下保持确定性的测试：原子资源分配、进程全局状态包含、平台自有语义、超时预算、安静收尾、回归负控与防抖掩清单。 | 方法论改编自锁定的上游技能并换用 Python 栈示例；确定性包面与品牌合同检查覆盖。尚无行为 benchmark。 |
 | [Prose Standard](skills/prose-standard/SKILL.md) | 改散文不丢事实：完整命题规则、按位置的覆盖矩阵、带校准探针的思维链泄漏分类法、跑过才算数的文档核查。 | 三个上游能力合为一包；recall-battery 接线完整性套件已注册进门禁。尚无行为 benchmark。 |
+| [Ask Azhou](skills/ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用；路由覆盖由仓库门禁强制。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。 |
 | [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 | [Arch Doc](skills/arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与两份评审指南作为 references 随包交付；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/arch-doc/` 黄金用例。 |
 

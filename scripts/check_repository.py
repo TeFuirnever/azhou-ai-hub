@@ -82,6 +82,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/autoresearch/SKILL.md",
     "skills/ci-test-reliability/SKILL.md",
     "skills/prose-standard/SKILL.md",
+    "skills/ask-azhou/SKILL.md",
     "skills/arch-doc/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
@@ -103,6 +104,11 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Prose Standard",
         "motto": "每个事实都活着，才动手删字。",
         "startup": "🦊 阿舟 · Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>",
+    },
+    "skills/ask-azhou/SKILL.md": {
+        "display_name": "Ask Azhou",
+        "motto": "说清你想做什么，我告诉你敲哪扇门。",
+        "startup": "🦊 阿舟 · Ask Azhou 启动｜mode=route｜scope=<catalog>",
     },
     "skills/azhou-doctor/SKILL.md": {
         "display_name": "Azhou Doctor",
@@ -222,6 +228,33 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
     errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
     return errors
+
+
+ROUTER_SKILL_RELATIVE = "skills/ask-azhou/SKILL.md"
+
+
+def check_router_coverage(root: Path) -> list[str]:
+    """The ask-azhou routing map must name every canonical skill.
+
+    Add or rename a canonical skill without updating the router and this
+    check fails; removal is caught by discovery parity, not by this check — the structural fix for hand-maintained router currency.
+    """
+    router = root / ROUTER_SKILL_RELATIVE
+    if not router.is_file():
+        return [f"router skill missing: {ROUTER_SKILL_RELATIVE}"]
+    try:
+        text = router.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"cannot read router skill: {exc}"]
+    expected_names = {
+        Path(path).parent.name
+        for path in INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
+    }
+    return [
+        f"router coverage missing: {name}"
+        for name in sorted(expected_names)
+        if name not in text
+    ]
 
 
 def check_skill_brand_contract(root: Path) -> list[str]:
@@ -446,6 +479,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_treehouse_config(root))
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
+    errors.extend(check_router_coverage(root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))

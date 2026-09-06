@@ -29,6 +29,7 @@ SKILL_DIRS = (
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
     ROOT / "skills" / "ci-test-reliability",
     ROOT / "skills" / "prose-standard",
+    ROOT / "skills" / "ask-azhou",
     ROOT / "skills" / "arch-doc",
 )
 
@@ -234,8 +235,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(14, len(SKILL_DIRS))
-        self.assertIn("fourteen canonical packages", support)
+        self.assertEqual(15, len(SKILL_DIRS))
+        self.assertIn("fifteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
