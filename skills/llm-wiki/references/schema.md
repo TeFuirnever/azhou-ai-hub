@@ -9,6 +9,7 @@ The default store is `<project>/.azhou/llm-wiki/`:
 ├── .gitignore     private-by-default boundary
 ├── config.json    optional lifecycle configuration
 ├── project-context.json  optional reviewed lifecycle input
+├── .archive-lock.json  archived-page content hashes and archival metadata
 ├── index.md       generated catalog
 ├── log.md         append-only operation chronicle
 └── <slug>.md      Markdown knowledge pages
@@ -38,9 +39,13 @@ Every page contains these fields:
 
 Search stays local and deterministic. It uses exact tag filters, weighted title/tag/content matching, Latin tokens, CJK characters and CJK bigrams. It does not use embeddings or an external model.
 
+## Archive
+
+`archive --title <t>` freezes a decision page whose lifecycle is `implemented`: the lifecycle becomes `archived`, the page's exact bytes are hashed into `.archive-lock.json` together with the archival timestamp, and the page is byte-frozen from then on. `archived` is reachable only through this command — creation refuses `--lifecycle archived`. Each lock entry records `{sha256, archivedAt, title}` per page; archival metadata lives in the lock, never in the page. `ingest` and `delete` both refuse archived pages, and lint recomputes every lock hash: a changed byte, a missing archived page, an `archived` page without a lock entry, or a corrupt/invalid lock file each fail lint. A hand-edited page stuck in `archived` without a lock is remediated by restoring `lifecycle: implemented` and running `archive`.
+
 ## Lint
 
-Lint reports orphan, stale, broken-reference, low-confidence, oversized, structural-contradiction, missing-alternatives, and invalid-page findings. A `decision` page in the `implemented` or `rejected` lifecycle without an `## Alternatives considered` section is a missing-alternatives error: recorded alternatives prevent re-litigating a settled decision. Broken references, invalid pages, and missing-alternatives findings produce command status `fail`; warnings and informational findings do not.
+Lint reports orphan, stale, broken-reference, low-confidence, oversized, structural-contradiction, missing-alternatives, archive-tamper, unfrozen-archived, and invalid-page findings. A `decision` page in the `implemented` or `rejected` lifecycle without an `## Alternatives considered` section is a missing-alternatives error: recorded alternatives prevent re-litigating a settled decision. Broken references, invalid pages, missing-alternatives, archive-tamper, and unfrozen-archived findings produce command status `fail`; warnings and informational findings do not.
 
 ## Receipt
 

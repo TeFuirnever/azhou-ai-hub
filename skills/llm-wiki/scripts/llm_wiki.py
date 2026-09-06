@@ -34,6 +34,7 @@ LOG_FILE = "log.md"
 CONFIG_FILE = "config.json"
 PROJECT_CONTEXT_FILE = "project-context.json"
 MIGRATION_RECEIPT_FILE = ".migration-receipt.json"
+ARCHIVE_LOCK_FILE = ".archive-lock.json"
 RESERVED_FILES = {INDEX_FILE, LOG_FILE, "environment.md"}
 CATEGORIES = {
     "architecture",
@@ -521,6 +522,8 @@ class WikiStore:
                 )
                 action = "created"
             else:
+                if existing.lifecycle == "archived":
+                    raise WikiError(f"archived page is frozen: {existing.filename}")
                 if lifecycle is not None and lifecycle != existing.lifecycle:
                     raise WikiError(
                         f"ingest does not change an existing page's lifecycle: page holds {existing.lifecycle or 'none'}"
@@ -553,12 +556,67 @@ class WikiStore:
             self.append_log_unsafe("ingest", [filename], f'{action.title()} page "{title}"')
             return page, action
 
+    def archive_lock_path(self) -> Path:
+        return self.directory / ARCHIVE_LOCK_FILE
+
+    def read_archive_lock(self) -> dict[str, Any]:
+        path = self.archive_lock_path()
+        if not path.is_file():
+            return {"version": 1, "entries": {}}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise WikiError(f"archive lock is unreadable: {exc}") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("entries"), dict):
+            raise WikiError("archive lock has an invalid shape")
+        return data
+
+    def archive(self, *, title: str) -> Page:
+        timestamp = now_iso()
+        with self.lock():
+            filename, existing = self.resolve_title(title)
+            if existing is None:
+                raise WikiError(f"page not found: {title}")
+            if existing.category != "decision" or existing.lifecycle != "implemented":
+                raise WikiError("archive requires a decision page with lifecycle: implemented")
+            frozen = Page(
+                filename=existing.filename,
+                title=existing.title,
+                tags=existing.tags,
+                created=existing.created,
+                updated=existing.updated,
+                sources=existing.sources,
+                links=existing.links,
+                category=existing.category,
+                confidence=existing.confidence,
+                schema_version=existing.schema_version,
+                content=existing.content,
+                lifecycle="archived",
+            )
+            self.write_page_unsafe(frozen)
+            lock = self.read_archive_lock()
+            lock["version"] = 1
+            lock["entries"][frozen.filename] = {
+                "sha256": hashlib.sha256((self.directory / frozen.filename).read_bytes()).hexdigest(),
+                "archivedAt": timestamp,
+                "title": frozen.title,
+            }
+            atomic_write(
+                self.archive_lock_path(),
+                json.dumps(lock, ensure_ascii=False, indent=2) + "\n",
+            )
+            self.update_index_unsafe()
+            self.append_log_unsafe("archive", [frozen.filename], f'Archived page "{title}"')
+            return frozen
+
     def delete(self, value: str) -> bool:
         filename = self.safe_filename(value)
         with self.lock():
             path = self.directory / filename
             if path.is_symlink():
                 raise WikiError(f"refusing symlinked wiki page: {path}")
+            if filename in self.read_archive_lock()["entries"]:
+                raise WikiError(f"archived page is frozen; deletion is refused: {filename}")
             if not path.is_file():
                 return False
             path.unlink()
@@ -602,6 +660,8 @@ def validate_input(title: str, category: str, confidence: str, lifecycle: str | 
             raise WikiError("lifecycle requires category: decision")
         if lifecycle not in DECISION_LIFECYCLES:
             raise WikiError(f"unsupported lifecycle: {lifecycle}")
+        if lifecycle == "archived":
+            raise WikiError("lifecycle archived is reached only through the archive command")
 
 
 def validate_config(value: Any, *, source: str = "wiki config") -> dict[str, Any]:
@@ -778,6 +838,37 @@ def lint_store(
                 }
             )
 
+    try:
+        lock_entries: dict[str, Any] | None = store.read_archive_lock()["entries"]
+    except WikiError:
+        lock_entries = None
+        issues.append(
+            {"page": ARCHIVE_LOCK_FILE, "severity": "error", "type": "archive-tamper", "message": "Archive lock is unreadable"}
+        )
+    if lock_entries is not None:
+        for locked_name, entry in lock_entries.items():
+            if not locked_name.endswith(".md") or "/" in locked_name or "\\" in locked_name:
+                issues.append(
+                    {"page": ARCHIVE_LOCK_FILE, "severity": "error", "type": "archive-tamper", "message": "Archive lock contains a non-page entry"}
+                )
+                continue
+            locked_path = store.directory / locked_name
+            if not locked_path.is_file():
+                issues.append(
+                    {"page": locked_name, "severity": "error", "type": "archive-tamper", "message": "Archived page is missing"}
+                )
+                continue
+            if hashlib.sha256(locked_path.read_bytes()).hexdigest() != entry.get("sha256"):
+                issues.append(
+                    {"page": locked_name, "severity": "error", "type": "archive-tamper", "message": "Archived page content hash mismatch"}
+                )
+        locked_names = set(lock_entries)
+        for page in pages:
+            if page.lifecycle == "archived" and page.filename not in locked_names:
+                issues.append(
+                    {"page": page.filename, "severity": "error", "type": "unfrozen-archived", "message": "Archived page has no archive lock entry"}
+                )
+
     groups: dict[str, list[Page]] = {}
     for page in pages:
         groups.setdefault("-".join(page.filename.split("-")[:2]), []).append(page)
@@ -819,6 +910,8 @@ def lint_store(
         "lowConfidenceCount": sum(issue["type"] == "low-confidence" for issue in issues),
         "oversizedCount": sum(issue["type"] == "oversized" for issue in issues),
         "missingAlternativesCount": sum(issue["type"] == "missing-alternatives" for issue in issues),
+        "archiveTamperCount": sum(issue["type"] == "archive-tamper" for issue in issues),
+        "unfrozenArchivedCount": sum(issue["type"] == "unfrozen-archived" for issue in issues),
         "contradictionCount": sum(issue["type"] == "structural-contradiction" for issue in issues),
     }
     if log:
@@ -1102,7 +1195,7 @@ def target_migration_payload(target: WikiStore) -> dict[str, str]:
     payload: dict[str, str] = {}
     allowed_names = {".gitignore", CONFIG_FILE, PROJECT_CONTEXT_FILE}
     for path in sorted(target.directory.iterdir(), key=lambda item: item.name):
-        if path.name == MIGRATION_RECEIPT_FILE:
+        if path.name in {MIGRATION_RECEIPT_FILE, ARCHIVE_LOCK_FILE}:
             continue
         if path.is_symlink() or not path.is_file():
             raise WikiError(f"canonical store contains unsupported entry: {path.name}")
@@ -1283,6 +1376,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("init", help="create the private wiki store and index")
     add_page_arguments(subparsers.add_parser("add", help="create a page; fail if it exists"))
     add_page_arguments(subparsers.add_parser("ingest", help="create or append to a page"))
+    archive = subparsers.add_parser("archive", help="freeze an implemented decision page under a content hash")
+    archive.add_argument("--title", required=True)
 
     query = subparsers.add_parser("query", help="keyword and tag search")
     query.add_argument("query", nargs="*", help="search terms")
@@ -1464,6 +1559,19 @@ def run(args: argparse.Namespace) -> int:
             next_action="Use ingest to append a verified update." if page else "List pages.",
             learning_signal="retrieval",
         )
+    elif command == "archive":
+        frozen = store.archive(title=args.title)
+        emit(
+            command,
+            status="pass",
+            store=store,
+            current_truth=f"Decision page {frozen.filename} is archived and byte-frozen under a recorded content hash.",
+            result={"page": frozen.metadata()},
+            changes=[frozen.filename, ARCHIVE_LOCK_FILE, INDEX_FILE, LOG_FILE],
+            verification=["lifecycle rewritten to archived", "content hash recorded", "index rebuilt", "operation logged"],
+            next_action="Run lint to verify archive integrity.",
+            learning_signal="lifecycle",
+        )
     elif command == "delete":
         if not args.yes:
             raise PermissionHold("delete requires explicit authorization and --yes")
@@ -1492,6 +1600,8 @@ def run(args: argparse.Namespace) -> int:
             report["stats"]["brokenRefCount"]
             + report["stats"]["invalidPageCount"]
             + report["stats"]["missingAlternativesCount"]
+            + report["stats"]["archiveTamperCount"]
+            + report["stats"]["unfrozenArchivedCount"]
         )
         emit(
             command,
@@ -1500,7 +1610,7 @@ def run(args: argparse.Namespace) -> int:
             current_truth=f"Lint checked {report['stats']['totalPages']} page(s) and found {errors} error-severity issue(s).",
             result=report,
             changes=[] if args.no_log else [LOG_FILE],
-            verification=["orphan", "stale", "broken-ref", "confidence", "size", "structural contradiction", "decision alternatives"],
+            verification=["orphan", "stale", "broken-ref", "confidence", "size", "structural contradiction", "decision alternatives", "archive integrity"],
             holds=[f"{errors} error-severity issue(s)"] if errors else [],
             next_action="Fix error-severity issues." if errors else "Review informational and warning issues.",
             learning_signal="lint",
