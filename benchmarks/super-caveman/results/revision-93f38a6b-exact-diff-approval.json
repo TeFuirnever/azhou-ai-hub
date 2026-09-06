@@ -1,0 +1,54 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-09-06T01:42:46Z",
+  "base_commit": "0e0b7087672a67a148a4a2768e5f665dc56711d0",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "49c715c6f2d92ec95a70adb7af8f8f62a2b2f70356517b830ddcc62b8592fd1f",
+  "staged_patch_sha256": "a77c21d072c0843c9d131c65fdfb12a0b9399be63cd7e65e5866fde09fcf2b23",
+  "reviewed_blobs": [
+    {
+      "path": "CHANGELOG.md",
+      "old_oid": "b78e86b1fa90cdbd2e9785008565eb1152761105",
+      "new_oid": "d9f0ab1fbae237c7afe0d6a35778a4e9bdfd2364"
+    },
+    {
+      "path": "benchmarks/repo-pedant/results.tsv",
+      "old_oid": "4f158397057a4f72cde8bfb8873ee12b7d51388c",
+      "new_oid": "e7904da1e6aa6d355bf85de88fae6f8fa5374d9f"
+    },
+    {
+      "path": "benchmarks/super-caveman/manifest.json",
+      "old_oid": "70e2b737ae3a2a228dbb71b1fc6e43dbed14bfc0",
+      "new_oid": "537db23146d55471a19c049defd5b0f3c5572bfd"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/revision-e04ba7c3-attempt-1-summary.json",
+      "old_oid": "6ae288393da0d29ee3c600903d120e33ece71b6f",
+      "new_oid": "f59a95be93786388991d21a590d55adcc4546cb1"
+    },
+    {
+      "path": "skills/super-caveman/SKILL.md",
+      "old_oid": "0cc01c04eefafbeab4e85a4e3b1d73f076c8b268",
+      "new_oid": "b361cf52cb9a91024d10899a18ff455f49339aaf"
+    },
+    {
+      "path": "skills/super-caveman/references/brand-layer.md",
+      "old_oid": "90f5ac014216008416f30c8a3b069d5d51b70e93",
+      "new_oid": "4aaea19d22e29d6105e0b1de1da827aeb67d5ae4"
+    },
+    {
+      "path": "skills/super-caveman/references/setup.md",
+      "old_oid": "4d56f4896ce200b6f5b45dea3d77bce96f58ba00",
+      "new_oid": "d5d23f4fdc41cceb273e7045aac7269a33d77237"
+    },
+    {
+      "path": "tests/test_brand_startup_discipline.py",
+      "old_oid": "cc6125dd34e5068acce19c0136726aafbac7c060",
+      "new_oid": "b423c89855284de916e05b66c13837e896712bfc"
+    }
+  ],
+  "raw_approval_record_sha256": "ad92ecfc654ca8114b1a56771878e342e9595906176355d5b6686c2647ff5132",
+  "raw_approval_storage": "Git-external"
+}

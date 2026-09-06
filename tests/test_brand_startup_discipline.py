@@ -23,21 +23,20 @@ _spec = importlib.util.spec_from_file_location(
 check_repository = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_repository)
 
-# super-caveman lands with its own promotion flow (its runtime tree is
-# digest-bound by the super-caveman benchmark); extend BRAND_SKILLS and the
-# maps below in that same promotion when its brand layer adds the discipline.
 BRAND_SKILLS = ("llm-wiki", "repo-pedant", "arch-doc")
 
 DISCIPLINE_HEADINGS = {
     "llm-wiki": "启动行取值纪律",
     "repo-pedant": "启动行取值纪律",
     "arch-doc": "启动行取值纪律",
+    "super-caveman": "Startup value discipline",
 }
 
 RESOLVED_SCOPE_MARKERS = {
     "llm-wiki": "知识范围锁定",
     "repo-pedant": "范围锁定",
     "arch-doc": "回填具体值",
+    "super-caveman": "范围锁定",
 }
 
 

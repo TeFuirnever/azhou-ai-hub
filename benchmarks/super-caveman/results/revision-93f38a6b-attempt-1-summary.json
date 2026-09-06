@@ -1,0 +1,170 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
+  "model": "GLM (builtin:bigmodel-start-plan/GLM-5.3-Flash)",
+  "model_limitation": "Fresh producer for this revision: the historical GPT-5 raw output set is not byte-reusable because this revision changes skill-tree bytes. Each response was produced by one isolated zcode general-purpose subagent whose context held only the frozen runtime files and the single case prompt; case criteria, reference answers, prior outputs and reviewer decisions were never in the producer context.",
+  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+  "tool_permissions": {
+    "network": false,
+    "repository_write": "disposable agent-owned-edit fixture only (/tmp/sc-fixture-agent-owned-edit)",
+    "shell": "read-only verification commands inside the disposable fixture only (agent-owned-edit case)",
+    "external_apps": false
+  },
+  "attempt": 1,
+  "output_set_sha256": "58710b07a0fa373982a621f2c68d1097c78964582fff55b498667d22af3a9d34",
+  "case_results": [
+    {
+      "id": "direct-answer",
+      "status": "pass"
+    },
+    {
+      "id": "agent-owned-edit",
+      "status": "pass"
+    },
+    {
+      "id": "debugging-cause",
+      "status": "pass"
+    },
+    {
+      "id": "concept-explanation",
+      "status": "pass"
+    },
+    {
+      "id": "destructive-action",
+      "status": "pass"
+    },
+    {
+      "id": "real-ambiguity",
+      "status": "pass"
+    },
+    {
+      "id": "multi-step-progress",
+      "status": "pass"
+    },
+    {
+      "id": "long-form-request",
+      "status": "pass"
+    },
+    {
+      "id": "error-report",
+      "status": "pass"
+    },
+    {
+      "id": "casual-message",
+      "status": "pass"
+    },
+    {
+      "id": "code-answer",
+      "status": "pass"
+    },
+    {
+      "id": "complex-plan",
+      "status": "pass"
+    },
+    {
+      "id": "partial-success",
+      "status": "pass"
+    },
+    {
+      "id": "medical-boundary",
+      "status": "pass"
+    },
+    {
+      "id": "under-two-minute-next-action",
+      "status": "pass"
+    },
+    {
+      "id": "host-plan-tool-state",
+      "status": "pass"
+    },
+    {
+      "id": "task-wins-options",
+      "status": "pass"
+    },
+    {
+      "id": "stop-mode-default-style",
+      "status": "pass"
+    },
+    {
+      "id": "uncertainty-and-idiom",
+      "status": "pass"
+    }
+  ],
+  "passed": 19,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "limitations": [
+    "Fresh-producer round: all 19 candidate responses were generated in this attempt by GLM via isolated zcode subagents; the byte-reuse chain from the historical GPT-5 raw set is retired for this revision.",
+    "A pre-flight bring-up run without the contracted fixtures (plan tool absent, agent-owned-edit fixture repository absent) failed host-plan-tool-state 0:3 and agent-owned-edit 2:1; it was discarded as harness bring-up, its raw set is retained Git-external (revision-93f38a6b-raw-output-set.json), and the recorded attempt-1 is the first execution under the contracted fixtures.",
+    "Paired review: the baseline output set was produced by the same producer from the pre-change tree (0e0b708 content, digest e04ba7c3...) under the same harness; three judges compared anonymized sets with j2's presentation order reversed and voted 3:0 candidate (no regression; 2 of 3 found candidate strictly better on named cases).",
+    "The host-plan-tool-state recorded run carries the responder's exact TodoWrite payload (3 items, exactly 1 in_progress) captured in the raw set; agent-owned-edit fixture state was mechanically verified by the harness after the run (README.md == 'Super Caveman')."
+  ],
+  "status": "pass",
+  "harness": "zcode CLI isolated subagents (GLM), one case per agent, serial execution; fixtures provisioned per evaluation-contract execution.fixtures; maintainer-directed producer switch recorded in session sess_5accfb94",
+  "skill_tree_sha256": "93f38a6bb0273b5bc04d7bf21b2b2e97d6262fbb511290009833b7f2d086ad07",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; landed tree matched revision-93f38a6b (93f38a6bb0273b5bc04d7bf21b2b2e97d6262fbb511290009833b7f2d086ad07); four blobs landed with the keyed approval record (super-caveman SKILL.md, brand-layer.md, setup.md, shared brand-startup discipline test)",
+    "case_count": "19/19",
+    "criteria_count": "44/44",
+    "unique_case_ids": "19/19",
+    "byte_reuse": "0/19; fresh-producer attempt (see limitations)",
+    "maximum_observed_concurrency": 1,
+    "fixture_side_effect": "verified by harness after the run: /tmp fixture README.md == 'Super Caveman'",
+    "plan_tool_state": "verified: recorded TodoWrite payload has exactly 3 items with exactly 1 in_progress",
+    "repository_scope": "pass (no writes outside the disposable fixture during response production)"
+  },
+  "reviewer": {
+    "identity": "coding-agent/zcode-response-panel-2026-09-06",
+    "review_sha256": "657d2f6a288b3bad0224876375057685153f7828e017f4d79dcbae09c56f4625"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "independent_paired_judges": 3,
+    "presentation_orders": [
+      "candidate-baseline",
+      "baseline-candidate",
+      "candidate-baseline"
+    ],
+    "candidate_majority_required": 2,
+    "candidate_raw_sha256": "58710b07a0fa373982a621f2c68d1097c78964582fff55b498667d22af3a9d34",
+    "baseline_output_set_sha256": "ea40992f28f1d2455e4544950f5111142cc8913618d259fc369c5872aac44e8b",
+    "candidate_output_set_sha256": "58710b07a0fa373982a621f2c68d1097c78964582fff55b498667d22af3a9d34",
+    "high_risk_regressions": 0,
+    "judges": [
+      {
+        "identity": "coding-agent/zcode-paired-judge-j1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "78c7e4b3e41fc8bbbe51a0064628fe3059dc6fbcf05e35d8e2d5074193a55f77"
+      },
+      {
+        "identity": "coding-agent/zcode-paired-judge-j2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "2c54f7102ca11d3776621b067f53e70963f803ae9cfda69888ae7ec83966b353"
+      },
+      {
+        "identity": "coding-agent/zcode-paired-judge-j3",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "646e889c7bb391b01ef59a23c92933e6a57ee66ad98e76aabd948c595372cdda"
+      }
+    ],
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v2",
+      "status": "approved",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "0e0b7087672a67a148a4a2768e5f665dc56711d0",
+      "path_set_sha256": "49c715c6f2d92ec95a70adb7af8f8f62a2b2f70356517b830ddcc62b8592fd1f",
+      "staged_patch_sha256": "a77c21d072c0843c9d131c65fdfb12a0b9399be63cd7e65e5866fde09fcf2b23",
+      "approver": "workspace-owner",
+      "approved_at": "2026-09-06T01:42:46Z",
+      "record_path": "results/revision-93f38a6b-exact-diff-approval.json",
+      "record_sha256": "1a9606271ebbceeea8a1e1f64737d01b2dea7ebeae2d1be8483a3195938efb9c",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    }
+  }
+}

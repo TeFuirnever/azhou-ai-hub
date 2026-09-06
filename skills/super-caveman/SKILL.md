@@ -43,7 +43,7 @@ When several routes match, honor the explicit command first. Commit, review, and
 
 ## Persistence
 
-Mode changes persist only within the active conversation. Stop on `stop super-caveman`, `stop caveman`, `stop adhd mode`, or `normal mode`. Do not claim cross-session persistence unless the host provides and verifies it. The optional Codex and Claude Code adapters are the documented exceptions: after explicit local setup the Codex adapter reinjects the bounded full-mode capsule at every supported `SessionStart` source, and the Claude Code adapter additionally resolves session mode, stop phrases, persistent user and project defaults, and one-shot routes at every prompt; their ownership and removal boundaries are in [setup.md](references/setup.md). Do not announce the style except for help or mode-status requests.
+Mode changes persist only within the active conversation. Stop on `stop super-caveman`, `stop caveman`, `stop adhd mode`, or `normal mode`. Do not claim cross-session persistence unless the host provides and verifies it. The optional Codex and Claude Code adapters are the documented exceptions after explicit local setup; what they inject, their boundaries, and their ownership are described in Runtime boundary below and in [setup.md](references/setup.md). Do not announce the style except for help or mode-status requests.
 
 ## Material-operation receipt
 

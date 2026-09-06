@@ -26,6 +26,11 @@ Text before and between `｜` separators is fixed. Every fact field must contain
 
 Do not rename `范围锁定`, `候选完成`, `验证通过`, or `验证失败`. Do not replace `｜` with another separator. A material run may record repeated failure events while fixing evidence, but success appears once and is the final stage event.
 
+## Startup value discipline
+
+- The start line is a runtime broadcast: every field after `｜` carries the concrete value known at that moment; when a value cannot be named yet, the only legal spelling is the machine-stable literal `unresolved` (for example `scope=unresolved`), backfilled at the `🧭 范围锁定` event.
+- Angle-bracket templates (for example `<target>`) exist only in this file's contract examples; emitting one in a real broadcast violates the discipline.
+
 ## Display status mapping
 
 Emoji is a display mapping. The right column is the stable machine value.
@@ -43,6 +48,7 @@ Consistency rules:
 - `failed`: `verification` names the failed check and `next_action` is executable.
 - `blocked`: `holds` names missing authority or evidence; unrelated safe work may continue.
 - `skipped`: `verification` explains why no success claim is made.
+- `pass` requires a resolved scope: the start line carries concrete values; `unresolved` may only appear in stage events before `🧭 范围锁定`.
 
 ## Stable receipt
 
