@@ -39,6 +39,7 @@ class LLMWikiRepositoryTest(unittest.TestCase):
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "ci-test-reliability" / "SKILL.md",
                 root / "skills" / "prose-standard" / "SKILL.md",
+                root / "skills" / "ask-azhou" / "SKILL.md",
             ]
 
             self.assertEqual([], check_skill_discovery(expected, root))

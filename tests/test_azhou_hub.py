@@ -127,6 +127,7 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(
             [
                 "arch-doc",
+                "ask-azhou",
                 "autoresearch",
                 *AZHOU_SKILL_NAMES,
                 "ci-test-reliability",
