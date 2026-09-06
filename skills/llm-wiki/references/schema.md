@@ -29,9 +29,10 @@ Every page contains these fields:
 | `links` | filenames derived from `[[Wiki Link]]` references |
 | `category` | `architecture`, `decision`, `pattern`, `debugging`, `environment`, `session-log`, `reference`, or `convention` |
 | `confidence` | `high`, `medium`, or `low` |
+| `lifecycle` | optional, decision pages only: `proposed`, `implemented`, `archived`, or `rejected`; any other value, or the field on another category, makes the page invalid |
 | `schemaVersion` | currently `1` |
 
-`ingest` never replaces existing content. It unions tags, sources, and links; keeps the higher confidence; and appends a timestamped update section. The original category remains stable.
+`ingest` never replaces existing content. It unions tags, sources, and links; keeps the higher confidence; and appends a timestamped update section. The original category and lifecycle remain stable.
 
 ## Query
 
@@ -39,7 +40,7 @@ Search stays local and deterministic. It uses exact tag filters, weighted title/
 
 ## Lint
 
-Lint reports orphan, stale, broken-reference, low-confidence, oversized, structural-contradiction, and invalid-page findings. Broken references and invalid pages produce command status `fail`; warnings and informational findings do not.
+Lint reports orphan, stale, broken-reference, low-confidence, oversized, structural-contradiction, missing-alternatives, and invalid-page findings. A `decision` page in the `implemented` or `rejected` lifecycle without an `## Alternatives considered` section is a missing-alternatives error: recorded alternatives prevent re-litigating a settled decision. Broken references, invalid pages, and missing-alternatives findings produce command status `fail`; warnings and informational findings do not.
 
 ## Receipt
 

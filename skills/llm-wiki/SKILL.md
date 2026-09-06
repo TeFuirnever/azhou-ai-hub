@@ -28,7 +28,7 @@ Every runtime entry uses the canonical `<project>/.azhou/llm-wiki/` store. The C
 1. Resolve the project root before reading or writing. Normal operations never select an alternate store.
 2. Query or list before adding related knowledge. Use `ingest` to append a sourced update; use `add` only when duplicate titles should fail.
 3. Record evidence in `--source`, choose an honest confidence, and exclude secrets, raw private transcripts, tokens, and unrelated personal data.
-4. Run `lint --no-log` after mutations. Broken references and invalid pages keep status `fail`; warnings remain visible.
+4. Run `lint --no-log` after mutations. Broken references, invalid pages, and `implemented`/`rejected` decision pages without an `## Alternatives considered` section keep status `fail`; warnings remain visible. Decision pages may carry a `lifecycle` (`proposed`, `implemented`, `archived`, `rejected`), set at creation via `--lifecycle`; ingest never changes an existing page's lifecycle.
 5. Return the script's `llm-wiki.receipt.v2` fields, including `currentTruth` and `learningSignal`. Do not claim a lifecycle event, migration, or deletion succeeded without its receipt.
 
 `query` writes an operation log by default. Add `--no-log` for a strictly read-only task. `delete` is destructive: require direct user authorization immediately before running it, then pass `--yes`.

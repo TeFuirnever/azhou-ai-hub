@@ -46,6 +46,8 @@ CATEGORIES = {
     "convention",
 }
 CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
+DECISION_LIFECYCLES = {"proposed", "implemented", "archived", "rejected"}
+ALTERNATIVES_HEADING = "## Alternatives considered"
 RECEIPT_STATUSES = {"pass", "fail", "hold", "skipped"}
 LEARNING_SIGNALS = {
     "none",
@@ -91,6 +93,7 @@ class Page:
     confidence: str
     schema_version: int
     content: str
+    lifecycle: str | None = None
 
     def metadata(self) -> dict[str, Any]:
         data = asdict(self)
@@ -212,7 +215,10 @@ def parse_frontmatter(raw: str, filename: str) -> Page | None:
         title = parse_yaml_scalar(values.get("title", ""))
         category = parse_yaml_scalar(values.get("category", "reference"))
         confidence = parse_yaml_scalar(values.get("confidence", "medium"))
+        lifecycle = parse_yaml_scalar(values.get("lifecycle", "")) or None
         if not title or category not in CATEGORIES or confidence not in CONFIDENCE_RANK:
+            return None
+        if lifecycle is not None and (category != "decision" or lifecycle not in DECISION_LIFECYCLES):
             return None
         return Page(
             filename=filename,
@@ -226,6 +232,7 @@ def parse_frontmatter(raw: str, filename: str) -> Page | None:
             confidence=confidence,
             schema_version=int(values.get("schemaVersion", SCHEMA_VERSION)),
             content=match.group(2),
+            lifecycle=lifecycle,
         )
     except (TypeError, ValueError):
         return None
@@ -241,8 +248,10 @@ def serialize_page(page: Page) -> str:
         f"links: {yaml_array(page.links)}",
         f"category: {page.category}",
         f"confidence: {page.confidence}",
-        f"schemaVersion: {page.schema_version}",
     ]
+    if page.lifecycle is not None:
+        lines.append(f"lifecycle: {page.lifecycle}")
+    lines.append(f"schemaVersion: {page.schema_version}")
     frontmatter = "\n".join(lines)
     return f"---\n{frontmatter}\n---\n{page.content}"
 
@@ -443,8 +452,9 @@ class WikiStore:
         category: str,
         sources: Sequence[str],
         confidence: str,
+        lifecycle: str | None = None,
     ) -> Page:
-        validate_input(title, category, confidence)
+        validate_input(title, category, confidence, lifecycle)
         timestamp = now_iso()
         with self.lock():
             filename, existing = self.resolve_title(title)
@@ -467,6 +477,7 @@ class WikiStore:
                 confidence=confidence,
                 schema_version=SCHEMA_VERSION,
                 content=f"\n# {title}\n\n{content}\n",
+                lifecycle=lifecycle,
             )
             self.write_page_unsafe(page)
             self.update_index_unsafe()
@@ -482,8 +493,9 @@ class WikiStore:
         category: str,
         sources: Sequence[str],
         confidence: str,
+        lifecycle: str | None = None,
     ) -> tuple[Page, str]:
-        validate_input(title, category, confidence)
+        validate_input(title, category, confidence, lifecycle)
         timestamp = now_iso()
         with self.lock():
             filename, existing = self.resolve_title(title)
@@ -505,9 +517,14 @@ class WikiStore:
                     confidence=confidence,
                     schema_version=SCHEMA_VERSION,
                     content=f"\n# {title}\n\n{content}\n",
+                    lifecycle=lifecycle,
                 )
                 action = "created"
             else:
+                if lifecycle is not None and lifecycle != existing.lifecycle:
+                    raise WikiError(
+                        f"ingest does not change an existing page's lifecycle: page holds {existing.lifecycle or 'none'}"
+                    )
                 selected_confidence = (
                     confidence
                     if CONFIDENCE_RANK[confidence] >= CONFIDENCE_RANK[existing.confidence]
@@ -528,6 +545,7 @@ class WikiStore:
                         existing.content.rstrip()
                         + f"\n\n---\n\n## Update ({timestamp})\n\n{content}\n"
                     ),
+                    lifecycle=existing.lifecycle,
                 )
                 action = "updated"
             self.write_page_unsafe(page)
@@ -572,13 +590,18 @@ class WikiStore:
             return config
 
 
-def validate_input(title: str, category: str, confidence: str) -> None:
+def validate_input(title: str, category: str, confidence: str, lifecycle: str | None = None) -> None:
     if not title.strip():
         raise WikiError("title must not be empty")
     if category not in CATEGORIES:
         raise WikiError(f"unsupported category: {category}")
     if confidence not in CONFIDENCE_RANK:
         raise WikiError(f"unsupported confidence: {confidence}")
+    if lifecycle is not None:
+        if category != "decision":
+            raise WikiError("lifecycle requires category: decision")
+        if lifecycle not in DECISION_LIFECYCLES:
+            raise WikiError(f"unsupported lifecycle: {lifecycle}")
 
 
 def validate_config(value: Any, *, source: str = "wiki config") -> dict[str, Any]:
@@ -741,6 +764,19 @@ def lint_store(
                     "message": f"Content is {size} bytes",
                 }
             )
+        if (
+            page.category == "decision"
+            and page.lifecycle in {"implemented", "rejected"}
+            and not any(line.strip() == ALTERNATIVES_HEADING for line in page.content.splitlines())
+        ):
+            issues.append(
+                {
+                    "page": page.filename,
+                    "severity": "error",
+                    "type": "missing-alternatives",
+                    "message": f"{page.lifecycle} decision requires an Alternatives considered section",
+                }
+            )
 
     groups: dict[str, list[Page]] = {}
     for page in pages:
@@ -782,6 +818,7 @@ def lint_store(
         "brokenRefCount": sum(issue["type"] == "broken-ref" for issue in issues),
         "lowConfidenceCount": sum(issue["type"] == "low-confidence" for issue in issues),
         "oversizedCount": sum(issue["type"] == "oversized" for issue in issues),
+        "missingAlternativesCount": sum(issue["type"] == "missing-alternatives" for issue in issues),
         "contradictionCount": sum(issue["type"] == "structural-contradiction" for issue in issues),
     }
     if log:
@@ -1233,6 +1270,7 @@ def add_page_arguments(parser: argparse.ArgumentParser) -> None:
     content.add_argument("--content-file")
     parser.add_argument("--tag", action="append", default=[])
     parser.add_argument("--category", choices=sorted(CATEGORIES), default="reference")
+    parser.add_argument("--lifecycle", choices=sorted(DECISION_LIFECYCLES), default=None)
     parser.add_argument("--source", action="append", default=[])
     parser.add_argument("--confidence", choices=sorted(CONFIDENCE_RANK), default="medium")
 
@@ -1349,6 +1387,7 @@ def run(args: argparse.Namespace) -> int:
                 category=args.category,
                 sources=args.source,
                 confidence=args.confidence,
+                lifecycle=args.lifecycle,
             )
             action = "created"
         else:
@@ -1359,6 +1398,7 @@ def run(args: argparse.Namespace) -> int:
                 category=args.category,
                 sources=args.source,
                 confidence=args.confidence,
+                lifecycle=args.lifecycle,
             )
         emit(
             command,
@@ -1448,7 +1488,11 @@ def run(args: argparse.Namespace) -> int:
             max_page_size=args.max_page_size if args.max_page_size is not None else config["maxPageSize"],
             log=not args.no_log,
         )
-        errors = report["stats"]["brokenRefCount"] + report["stats"]["invalidPageCount"]
+        errors = (
+            report["stats"]["brokenRefCount"]
+            + report["stats"]["invalidPageCount"]
+            + report["stats"]["missingAlternativesCount"]
+        )
         emit(
             command,
             status="pass" if errors == 0 else "fail",
@@ -1456,7 +1500,7 @@ def run(args: argparse.Namespace) -> int:
             current_truth=f"Lint checked {report['stats']['totalPages']} page(s) and found {errors} error-severity issue(s).",
             result=report,
             changes=[] if args.no_log else [LOG_FILE],
-            verification=["orphan", "stale", "broken-ref", "confidence", "size", "structural contradiction"],
+            verification=["orphan", "stale", "broken-ref", "confidence", "size", "structural contradiction", "decision alternatives"],
             holds=[f"{errors} error-severity issue(s)"] if errors else [],
             next_action="Fix error-severity issues." if errors else "Review informational and warning issues.",
             learning_signal="lint",

@@ -522,5 +522,193 @@ class LlmWikiTest(unittest.TestCase):
                         self.assertLessEqual(hook["timeout"], 3)
 
 
+    def _write_page(self, root: Path, filename: str, frontmatter: str, body: str) -> None:
+        store = root / ".azhou" / "llm-wiki"
+        store.mkdir(parents=True, exist_ok=True)
+        (store / filename).write_text(f"---\n{frontmatter}\n---\n\n{body}\n", encoding="utf-8")
+
+    def test_decision_lifecycle_round_trip_and_prior_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Auth decision",
+                "--content",
+                "Chose argon2id.",
+                "--category",
+                "decision",
+                "--confidence",
+                "high",
+                "--lifecycle",
+                "proposed",
+            )
+            self.assertEqual("pass", created["status"])
+            page_file = (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8")
+            self.assertIn("lifecycle: proposed", page_file)
+            appended = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Auth decision",
+                "--content",
+                "More context.",
+                expected_code=0,
+            )
+            self.assertEqual("pass", appended["status"])
+            self.assertIn(
+                "lifecycle: proposed",
+                (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
+            )
+            self._write_page(
+                root,
+                "prior-decision.md",
+                "title: Prior decision\ncategory: decision\nconfidence: medium",
+                "# Prior decision\n\nOld page without lifecycle.",
+            )
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=0)
+            self.assertEqual("pass", linted["status"])
+            self.assertEqual(0, linted["result"]["stats"]["invalidPageCount"])
+            updated = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Prior decision",
+                "--content",
+                "Appended fact.",
+                expected_code=0,
+            )
+            self.assertEqual("pass", updated["status"])
+            prior_text = (root / ".azhou" / "llm-wiki" / "prior-decision.md").read_text(encoding="utf-8")
+            self.assertNotIn("lifecycle:", prior_text)
+            refused = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Auth decision",
+                "--content",
+                "Must not transition.",
+                "--lifecycle",
+                "implemented",
+                expected_code=2,
+            )
+            self.assertEqual("fail", refused["status"])
+            self.assertIn(
+                "lifecycle: proposed",
+                (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
+            )
+
+    def test_invalid_lifecycle_is_an_invalid_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_page(
+                root,
+                "bad-value.md",
+                "title: Bad value\ncategory: decision\nconfidence: high\nlifecycle: shipped",
+                "# Bad value",
+            )
+            self._write_page(
+                root,
+                "wrong-category.md",
+                "title: Wrong category\ncategory: pattern\nconfidence: high\nlifecycle: proposed",
+                "# Wrong category",
+            )
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual(2, linted["result"]["stats"]["invalidPageCount"])
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--root",
+                    str(root),
+                    "add",
+                    "--title",
+                    "Bad enum",
+                    "--content",
+                    "Rejected by choices.",
+                    "--category",
+                    "decision",
+                    "--lifecycle",
+                    "shipped",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(2, completed.returncode, completed.stderr)
+            self.assertIn("invalid choice", completed.stderr)
+
+    def test_implemented_and_rejected_decisions_require_alternatives(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_page(
+                root,
+                "no-alternatives.md",
+                "title: No alternatives\ncategory: decision\nconfidence: high\nlifecycle: implemented",
+                "# No alternatives\n\n## Decision\n\nShip it.",
+            )
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual("fail", linted["status"])
+            self.assertEqual(1, linted["result"]["stats"]["missingAlternativesCount"])
+            self.assertEqual(
+                "error",
+                next(
+                    issue["severity"]
+                    for issue in linted["result"]["issues"]
+                    if issue["type"] == "missing-alternatives"
+                ),
+            )
+            self._write_page(
+                root,
+                "with-alternatives.md",
+                "title: With alternatives\ncategory: decision\nconfidence: high\nlifecycle: implemented",
+                "# With alternatives\n\n## Decision\n\nShip it.\n\n## Alternatives considered\n\nbcrypt lost on memory hardness.",
+            )
+            self._write_page(
+                root,
+                "rejected-no-alternatives.md",
+                "title: Rejected no alternatives\ncategory: decision\nconfidence: high\nlifecycle: rejected",
+                "# Rejected no alternatives\n\n## Problem\n\nToo slow.",
+            )
+            self._write_page(
+                root,
+                "proposed-no-alternatives.md",
+                "title: Proposed no alternatives\ncategory: decision\nconfidence: high\nlifecycle: proposed",
+                "# Proposed no alternatives\n\n## Proposal\n\nTry it.",
+            )
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            counts = linted["result"]["stats"]
+            self.assertEqual(2, counts["missingAlternativesCount"])
+            missing_pages = {
+                issue["page"]
+                for issue in linted["result"]["issues"]
+                if issue["type"] == "missing-alternatives"
+            }
+            self.assertEqual(
+                {"no-alternatives.md", "rejected-no-alternatives.md"},
+                missing_pages,
+            )
+
+    def test_add_rejects_lifecycle_outside_decision_category(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rejected = self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Pattern page",
+                "--content",
+                "A pattern.",
+                "--category",
+                "pattern",
+                "--lifecycle",
+                "proposed",
+                expected_code=2,
+            )
+            self.assertEqual("fail", rejected["status"])
+            self.assertFalse((root / ".azhou" / "llm-wiki" / "pattern-page.md").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
