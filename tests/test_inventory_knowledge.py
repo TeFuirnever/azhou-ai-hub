@@ -70,6 +70,51 @@ class InventoryKnowledgeTest(unittest.TestCase):
             inventory = self.complete(MODULE.build_inventory([project], [], []))
             self.assertEqual([], MODULE.validate_inventory(inventory))
 
+    def test_consumer_class_enum_is_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = self.make_project(Path(directory))
+            inventory = self.complete(MODULE.build_inventory([project], [], []))
+            target = next(
+                record
+                for record in inventory["files"]
+                if Path(record["path"]).name == "runbook.md"
+            )
+            target["classification"] = "remove_proposal"
+            target["reason"] = "Superseded by the README; no production consumer."
+            target["deletion_authorized"] = False
+            target["consumer_class"] = "non_production"
+            self.assertEqual([], MODULE.validate_inventory(inventory))
+            target["consumer_class"] = "shipped"
+            errors = MODULE.validate_inventory(inventory)
+            self.assertTrue(
+                any("consumer_class" in error for error in errors),
+                errors,
+            )
+            del target["consumer_class"]
+            self.assertEqual([], MODULE.validate_inventory(inventory))
+
+    def test_tombstone_consumer_class_is_still_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = self.make_project(Path(directory))
+            inventory = self.complete(MODULE.build_inventory([project], [], []))
+            target = next(
+                record
+                for record in inventory["files"]
+                if Path(record["path"]).name == "runbook.md"
+            )
+            Path(target["path"]).unlink()
+            target["classification"] = "remove_proposal"
+            target["reason"] = "Authorized tombstone for the enum check."
+            target["deletion_authorized"] = True
+            target["consumer_class"] = "prod"
+            errors = MODULE.validate_inventory(inventory)
+            self.assertTrue(
+                any("consumer_class" in error for error in errors),
+                errors,
+            )
+            target["consumer_class"] = "non_production"
+            self.assertEqual([], MODULE.validate_inventory(inventory))
+
     def test_unclassified_file_and_incomplete_history_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = self.make_project(Path(directory))

@@ -27,6 +27,12 @@ CLASSIFICATIONS = {
     "hold",
     "out_of_scope",
 }
+CONSUMER_CLASSES = {
+    "production",
+    "non_production",
+    "ambiguous",
+    "not_applicable",
+}
 REQUIRED_CHECKS = (
     "current_truth_recorded",
     "history_reviewed",
@@ -361,6 +367,11 @@ def validate_inventory(data: Any) -> list[str]:
         records_by_path[path_value] = record
         path = Path(path_value)
         classification = record.get("classification")
+        consumer_class = record.get("consumer_class")
+        if consumer_class is not None and consumer_class not in CONSUMER_CLASSES:
+            errors.append(
+                f"{label}.consumer_class: must be one of: {', '.join(sorted(CONSUMER_CLASSES))}"
+            )
         if not path.is_file():
             if classification == "remove_proposal" and record.get("deletion_authorized") is True and str(record.get("reason", "")).strip():
                 continue

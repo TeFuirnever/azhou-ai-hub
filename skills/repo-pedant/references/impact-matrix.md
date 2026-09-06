@@ -59,6 +59,21 @@ Look for material that should leave an active surface:
 
 Merge or move only when destination and authorization are clear. Make deletion a proposal until the exact target is authorized.
 
+## Consumer classification for simplification
+
+Before proposing that a surface be removed, folded, or demoted, classify its consumers:
+
+| Consumer class | Meaning | Consequence |
+|---|---|---|
+| `production` | shipped code, a runtime path, or an external consumer depends on it | the simplification is a feature decision, not cleanup |
+| `non_production` | only tests, docs, fixtures, or examples pin it, and the pinned behavior is not load-bearing | removal or folding candidate; keep a regression that proves the removal |
+| `ambiguous` | usage cannot be proven from repository evidence | record the evidence gap and `hold`; never guess a class |
+| `not_applicable` | the surface has no consumers to classify, for example a brand-new duplicate | removal candidate once destination and authorization are clear |
+
+Classify from call sites, loader and config paths, generated catalogs, and wire formats — not from file names. Record the class in the inventory entry's `consumer_class` field; the validator rejects any value outside the enum, and a removal proposal without a recorded class is an evidence gap, not a silent default.
+
+Thin candidates do not earn a removal proposal: a single typo, one unused symbol without call-site proof, or "this looks complex" downgrades to an inline TODO note that names the smell and the revisit condition.
+
 ## Repository audiences
 
 | Surface | Primary reader | Keep here |
