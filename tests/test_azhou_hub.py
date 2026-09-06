@@ -134,6 +134,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "excalidraw-diagram",
                 "lavish",
                 "llm-wiki",
+                "prose-standard",
                 "repo-pedant",
                 "super-caveman",
             ],

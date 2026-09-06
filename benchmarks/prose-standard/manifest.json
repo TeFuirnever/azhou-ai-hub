@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "skill": "prose-standard",
+  "purpose": "recall-battery wiring integrity: every leakage fixture hits at least one probe; the keep corpus hits only the documented false-positive families",
+  "corpus": {
+    "leakage": [
+      "change-narration.md",
+      "dead-citation.md",
+      "draft-section.md",
+      "hedge.md",
+      "review-choreography.md",
+      "stack-vantage.md",
+      "zh-narration.zh-CN.md"
+    ],
+    "keep": [
+      "counterfactual.md",
+      "external-standard.md",
+      "issue-references.md",
+      "measured-bound.md",
+      "runtime-lifecycle.md"
+    ]
+  }
+}

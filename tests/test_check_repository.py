@@ -157,6 +157,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "eli5" / "SKILL.md",
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "ci-test-reliability" / "SKILL.md",
+                root / "skills" / "prose-standard" / "SKILL.md",
                 root / "skills" / "arch-doc" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
