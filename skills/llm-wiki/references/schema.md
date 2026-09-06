@@ -49,12 +49,14 @@ Lint reports orphan, stale, broken-reference, low-confidence, oversized, structu
 
 ## Receipt
 
-Every command emits one JSON object with schema `llm-wiki.receipt.v2`:
+Every command emits one JSON object with schema `llm-wiki.receipt.v3`:
 
 ~~~text
 schema, status, operation, store, currentTruth, result,
 changes, verification, holds, nextAction, learningSignal
 ~~~
+
+v3 succeeds v2 (which exists only in historical session logs and receipts): it adds `supersessionCandidates` on top of the decision-lifecycle surfaces — the `lifecycle` page field and archive receipts — that already shipped in the v2 series. The schema string is a compatibility declaration: a consumer that reads a receipt whose schema it does not know must fail closed, not guess at the fields. When an `add`/`ingest` receipt concerns a `decision` page and other decision pages share at least one tag (case-insensitive), `result.supersessionCandidates` lists their filenames (at most 8; `nextAction` reports any remainder) and `nextAction` points at them; the hint never changes `status` — reviewing or superseding them stays with the operator.
 
 `currentTruth` states the bounded post-operation fact without copying page content or private input. `learningSignal` is one of `none`, `scope`, `source`, `privacy`, `retrieval`, `write`, `lint`, `migration`, `lifecycle`, `deletion`, or `config`.
 

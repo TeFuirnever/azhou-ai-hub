@@ -522,7 +522,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 )
                 self.assertEqual(returncode, completed.returncode)
                 receipt = json.loads(completed.stdout)
-                self.assertEqual("llm-wiki.receipt.v2", receipt["schema"])
+                self.assertEqual("llm-wiki.receipt.v3", receipt["schema"])
                 self.assertEqual(status, receipt["status"])
                 self.assertTrue(receipt["currentTruth"])
                 self.assertEqual(learning_signal, receipt["learningSignal"])

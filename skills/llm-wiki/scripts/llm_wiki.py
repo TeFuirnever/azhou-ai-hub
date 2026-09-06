@@ -26,7 +26,8 @@ import azhou_runtime_state
 
 
 SCHEMA_VERSION = 1
-RECEIPT_SCHEMA = "llm-wiki.receipt.v2"
+RECEIPT_SCHEMA = "llm-wiki.receipt.v3"
+SUPERCESSION_LIMIT = 8
 DEFAULT_STORE = ".azhou/llm-wiki"
 COMPATIBILITY_STORES = {".llm-wiki", ".omc/wiki"}
 INDEX_FILE = "index.md"
@@ -1495,15 +1496,32 @@ def run(args: argparse.Namespace) -> int:
                 confidence=args.confidence,
                 lifecycle=args.lifecycle,
             )
+        result: dict[str, Any] = {"page": page.metadata(), "action": action}
+        next_action = "Query the stored fact with a key term."
+        if page.category == "decision":
+            page_tags = {tag.lower() for tag in page.tags}
+            matches = sorted(
+                other.filename
+                for other in store.pages()
+                if other.category == "decision"
+                and other.filename != page.filename
+                and page_tags.intersection(tag.lower() for tag in other.tags)
+            )
+            if matches:
+                shown = matches[:SUPERCESSION_LIMIT]
+                hidden = len(matches) - len(shown)
+                result["supersessionCandidates"] = shown
+                suffix = f", and {hidden} more" if hidden else ""
+                next_action = f"Review supersession candidates: {', '.join(shown)}{suffix}."
         emit(
             command,
             status="pass",
             store=store,
             current_truth=f"Page {page.filename} was {action} in the canonical store.",
-            result={"page": page.metadata(), "action": action},
+            result=result,
             changes=[page.filename, INDEX_FILE, LOG_FILE],
             verification=["atomic write", "index rebuilt", "operation logged"],
-            next_action="Query the stored fact with a key term.",
+            next_action=next_action,
             learning_signal="write",
         )
     elif command == "query":

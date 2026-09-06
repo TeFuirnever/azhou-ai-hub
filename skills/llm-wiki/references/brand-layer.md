@@ -76,7 +76,7 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 
 ## 状态词典
 
-Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v2` 的稳定机器状态。
+Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v3` 的稳定机器状态。
 
 | 显示 | `status` |
 |---|---|
@@ -102,7 +102,7 @@ Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v2` 的稳定机器状
 
 > 📚 知识要留得住，也要经得起查证。
 
-- Schema: llm-wiki.receipt.v2
+- Schema: llm-wiki.receipt.v3
 - Status: pass | hold | skipped | fail
 - Operation: <operation>
 - Store: .azhou/llm-wiki | none
