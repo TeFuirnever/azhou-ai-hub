@@ -129,6 +129,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "arch-doc",
                 "autoresearch",
                 *AZHOU_SKILL_NAMES,
+                "ci-test-reliability",
                 "eli5",
                 "excalidraw-diagram",
                 "lavish",

@@ -80,6 +80,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
+    "skills/ci-test-reliability/SKILL.md",
     "skills/arch-doc/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
@@ -91,6 +92,11 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Autoresearch",
         "motto": "实验通宵跑，边界先说清。",
         "startup": "🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>",
+    },
+    "skills/ci-test-reliability/SKILL.md": {
+        "display_name": "CI Test Reliability",
+        "motto": "测试自己可靠，才配当证据。",
+        "startup": "🦊 阿舟 · CI Test Reliability 启动｜mode=<design|review|diagnose>｜scope=<test-or-suite>",
     },
     "skills/azhou-doctor/SKILL.md": {
         "display_name": "Azhou Doctor",
