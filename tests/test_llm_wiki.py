@@ -710,5 +710,238 @@ class LlmWikiTest(unittest.TestCase):
             self.assertFalse((root / ".azhou" / "llm-wiki" / "pattern-page.md").exists())
 
 
+    def _add_implemented_decision(self, root: Path, title: str) -> None:
+        self.run_cli(
+            root,
+            "add",
+            "--title",
+            title,
+            "--content",
+            "## Decision\n\nShip it.\n\n## Alternatives considered\n\nThe other option lost on cost.",
+            "--category",
+            "decision",
+            "--confidence",
+            "high",
+            "--lifecycle",
+            "implemented",
+        )
+
+    def test_archive_freezes_page_and_lint_verifies_integrity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            archived = self.run_cli(root, "archive", "--title", "Auth decision")
+            self.assertEqual("pass", archived["status"])
+            self.assertEqual("lifecycle", archived["learningSignal"])
+            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_text = page_path.read_text(encoding="utf-8")
+            self.assertIn("lifecycle: archived", page_text)
+            lock = json.loads((root / ".azhou" / "llm-wiki" / ".archive-lock.json").read_text(encoding="utf-8"))
+            entry = lock["entries"]["auth-decision.md"]
+            self.assertEqual(
+                hashlib.sha256(page_path.read_bytes()).hexdigest(),
+                entry["sha256"],
+            )
+            self.assertTrue(entry["archivedAt"])
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=0)
+            self.assertEqual("pass", linted["status"])
+            self.assertEqual(0, linted["result"]["stats"]["archiveTamperCount"])
+
+    def test_archive_tamper_is_a_lint_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_path.write_text(page_path.read_text(encoding="utf-8") + " ", encoding="utf-8")
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual("fail", linted["status"])
+            self.assertEqual(1, linted["result"]["stats"]["archiveTamperCount"])
+            self.assertEqual(
+                "auth-decision.md",
+                next(
+                    issue["page"]
+                    for issue in linted["result"]["issues"]
+                    if issue["type"] == "archive-tamper"
+                ),
+            )
+            page_path.unlink()
+            deleted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual(1, deleted["result"]["stats"]["archiveTamperCount"])
+
+    def test_ingest_refuses_archived_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            before = page_path.read_bytes()
+            refused = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Auth decision",
+                "--content",
+                "Must not append.",
+                expected_code=2,
+            )
+            self.assertEqual("fail", refused["status"])
+            self.assertEqual(before, page_path.read_bytes())
+
+    def test_archive_requires_implemented_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Draft decision",
+                "--content",
+                "## Proposal\n\nTry it.",
+                "--category",
+                "decision",
+                "--lifecycle",
+                "proposed",
+            )
+            proposed = self.run_cli(root, "archive", "--title", "Draft decision", expected_code=2)
+            self.assertEqual("fail", proposed["status"])
+            self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Plain pattern",
+                "--content",
+                "A pattern.",
+                "--category",
+                "pattern",
+            )
+            pattern = self.run_cli(root, "archive", "--title", "Plain pattern", expected_code=2)
+            self.assertEqual("fail", pattern["status"])
+            unknown = self.run_cli(root, "archive", "--title", "No such page", expected_code=2)
+            self.assertEqual("fail", unknown["status"])
+
+    def test_archived_without_lock_is_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_page(
+                root,
+                "hand-archived.md",
+                "title: Hand archived\ncategory: decision\nconfidence: high\nlifecycle: archived",
+                "# Hand archived\n\n## Decision\n\nShip.\n\n## Alternatives considered\n\nNone.",
+            )
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual("fail", linted["status"])
+            self.assertEqual(1, linted["result"]["stats"]["unfrozenArchivedCount"])
+
+
+    def test_archive_is_byte_stable_across_freeze(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            before_lines = page_path.read_text(encoding="utf-8").splitlines()
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            after_lines = page_path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(before_lines), len(after_lines))
+            self.assertEqual(
+                [("lifecycle: implemented", "lifecycle: archived")],
+                [(a, b) for a, b in zip(before_lines, after_lines) if a != b],
+            )
+
+    def test_rearchive_and_delete_refuse_frozen_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            rearchive = self.run_cli(root, "archive", "--title", "Auth decision", expected_code=2)
+            self.assertEqual("fail", rearchive["status"])
+            deleted = self.run_cli(
+                root,
+                "delete",
+                "auth-decision.md",
+                "--yes",
+                expected_code=2,
+            )
+            self.assertEqual("fail", deleted["status"])
+            self.assertTrue((root / ".azhou" / "llm-wiki" / "auth-decision.md").is_file())
+
+    def test_add_rejects_archived_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rejected = self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Preset archive",
+                "--content",
+                "## Decision\n\nShip.\n\n## Alternatives considered\n\nNone.",
+                "--category",
+                "decision",
+                "--lifecycle",
+                "archived",
+                expected_code=2,
+            )
+            self.assertEqual("fail", rejected["status"])
+            self.assertFalse((root / ".azhou" / "llm-wiki" / "preset-archive.md").exists())
+
+    def test_corrupt_archive_lock_is_a_lint_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_page(
+                root,
+                "plain.md",
+                "title: Plain\ncategory: reference\nconfidence: medium",
+                "# Plain",
+            )
+            (root / ".azhou" / "llm-wiki" / ".archive-lock.json").write_text("{not json", encoding="utf-8")
+            linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
+            self.assertEqual("fail", linted["status"])
+            self.assertEqual(1, linted["result"]["stats"]["archiveTamperCount"])
+            self.assertEqual(
+                ".archive-lock.json",
+                next(
+                    issue["page"]
+                    for issue in linted["result"]["issues"]
+                    if issue["type"] == "archive-tamper"
+                ),
+            )
+
+    def test_migration_scan_skips_archive_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / ".llm-wiki"
+            source.mkdir()
+            (source / "prior-page.md").write_text(
+                "---\ntitle: Prior page\ncategory: reference\n---\n\n# Prior page\n",
+                encoding="utf-8",
+            )
+            planned = self.run_cli(root, "migrate", "--from-store", ".llm-wiki")
+            applied = self.run_cli(
+                root,
+                "migrate",
+                "--from-store",
+                ".llm-wiki",
+                "--apply",
+                "--plan-id",
+                planned["result"]["planId"],
+            )
+            self.assertEqual("migrated", applied["result"]["status"])
+            self._add_implemented_decision(root, "Auth decision")
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            scanned = llm_wiki.target_migration_payload(llm_wiki.WikiStore(root))
+            self.assertIn("auth-decision.md", scanned)
+            self.assertNotIn(llm_wiki.ARCHIVE_LOCK_FILE, scanned)
+            rerun = self.run_cli(root, "migrate", "--from-store", ".llm-wiki", expected_code=2)
+            self.assertEqual("fail", rerun["status"])
+            self.assertTrue(
+                any("conflicting content" in hold for hold in rerun["holds"]),
+                rerun["holds"],
+            )
+            self.assertFalse(
+                any("unsupported entry" in hold for hold in rerun["holds"]),
+                rerun["holds"],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
