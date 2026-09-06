@@ -106,7 +106,7 @@
   "automatic_checks": {
     "raw_schema": "pass",
     "raw_digest": "pass",
-    "skill_tree_digest": "stable-v2; landed tree matched revision-93f38a6b (93f38a6bb0273b5bc04d7bf21b2b2e97d6262fbb511290009833b7f2d086ad07); four blobs landed with the keyed approval record (super-caveman SKILL.md, brand-layer.md, setup.md, shared brand-startup discipline test)",
+    "skill_tree_digest": "stable-v2; landed tree matched revision-93f38a6b (93f38a6bb0273b5bc04d7bf21b2b2e97d6262fbb511290009833b7f2d086ad07); four blobs landed with the keyed approval record (super-caveman SKILL.md, brand-layer.md, setup.md, shared brand-startup discipline test); approval record evolved 2026-09-06 for the 0.6.0 changelog cut (docs-only, tree digest unchanged)",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
@@ -159,11 +159,11 @@
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
       "base_commit": "0e0b7087672a67a148a4a2768e5f665dc56711d0",
       "path_set_sha256": "49c715c6f2d92ec95a70adb7af8f8f62a2b2f70356517b830ddcc62b8592fd1f",
-      "staged_patch_sha256": "a77c21d072c0843c9d131c65fdfb12a0b9399be63cd7e65e5866fde09fcf2b23",
+      "staged_patch_sha256": "5f9e2444acf136c698955b1f5b71344349aed6d4c449ba76c5eed49c4ce659ff",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-06T01:42:46Z",
+      "approved_at": "2026-09-06T03:56:38Z",
       "record_path": "results/revision-93f38a6b-exact-diff-approval.json",
-      "record_sha256": "1a9606271ebbceeea8a1e1f64737d01b2dea7ebeae2d1be8483a3195938efb9c",
+      "record_sha256": "f7d2bbb908462b0bb5f9a375cfe83da6d908c10458b57080dad06eba24aa83c2",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

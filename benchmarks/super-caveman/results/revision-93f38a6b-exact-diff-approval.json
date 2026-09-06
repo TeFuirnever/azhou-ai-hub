@@ -2,16 +2,16 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-06T01:42:46Z",
+  "approved_at": "2026-09-06T03:56:38Z",
   "base_commit": "0e0b7087672a67a148a4a2768e5f665dc56711d0",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "49c715c6f2d92ec95a70adb7af8f8f62a2b2f70356517b830ddcc62b8592fd1f",
-  "staged_patch_sha256": "a77c21d072c0843c9d131c65fdfb12a0b9399be63cd7e65e5866fde09fcf2b23",
+  "staged_patch_sha256": "5f9e2444acf136c698955b1f5b71344349aed6d4c449ba76c5eed49c4ce659ff",
   "reviewed_blobs": [
     {
       "path": "CHANGELOG.md",
       "old_oid": "b78e86b1fa90cdbd2e9785008565eb1152761105",
-      "new_oid": "d9f0ab1fbae237c7afe0d6a35778a4e9bdfd2364"
+      "new_oid": "db982bcb99755089e72e599558446ce9a6ef769e"
     },
     {
       "path": "benchmarks/repo-pedant/results.tsv",
@@ -49,6 +49,6 @@
       "new_oid": "b423c89855284de916e05b66c13837e896712bfc"
     }
   ],
-  "raw_approval_record_sha256": "ad92ecfc654ca8114b1a56771878e342e9595906176355d5b6686c2647ff5132",
+  "raw_approval_record_sha256": "e25a095685b86d98409fa098cb5823be69840f7e955c1b3bf4bcc6f46ce9fcc5",
   "raw_approval_storage": "Git-external"
 }
