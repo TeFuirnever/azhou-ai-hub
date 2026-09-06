@@ -41,7 +41,7 @@
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
 
 1. 每个 canonical package 的 `SKILL.md` 必须在正文开头公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。规则对全部 skill 统一，没有例外：普通回复禁止生命周期播报的模式 skill（如 Super Caveman）同样在 `SKILL.md` 携带身份锚点，其阶段事件协议仍完整保留在 `references/brand-layer.md`。
-2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。
+2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。启动行是运行时播报：字段值填充当下已知的具体值，无法命名时使用机器稳定字面量 `unresolved` 并在下一阶段事件回填；尖括号模板仅存在于契约示例，不得原样播出。
 3. 多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
 4. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
 5. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。

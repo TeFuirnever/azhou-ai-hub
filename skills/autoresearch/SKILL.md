@@ -13,7 +13,7 @@ This package is an Azhou-authored wrapper. The experiment protocol lives in the 
 
 ## Brand protocol
 
-Emit this exact display event once:
+Emit this exact display event once, at the start of every run, with the resolved checkout scope:
 
 ```text
 🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>
@@ -23,12 +23,11 @@ Use `✅ 验证通过` only after every declared check has run and its output wa
 
 ## Workflow
 
-1. Emit the startup protocol once with the resolved checkout scope.
-2. Resolve the checkout from a user-supplied path only. Verify that `git rev-parse HEAD` inside it equals the pinned commit recorded in [setup](references/setup.md), and refuse to continue on any mismatch. Never scan unrelated directories and never clone into any Git repository.
-3. `mode=prepare` verifies the environment per setup: uv present, CUDA GPU visible, `uv sync` clean, data prepared, and one baseline training run possible. Every missing check fails closed; no partial state is reported as ready.
-4. `mode=run` and `mode=resume` read `program.md` from the checkout and follow it inside that checkout. Before any unattended sequence, hold with `🔒 阿舟暂停这一项` until the user confirms the GPU hours and disk cost. Results stay in the checkout; this skill never pushes, publishes, or copies results into any repository.
-5. `mode=report` aggregates experiment results that already exist in the checkout. Conversation excerpts, machine paths, and other raw evidence stay out of any committed surface.
-6. End with a receipt containing `schema`, `status`, `current_truth`, `artifacts`, `verification`, `holds`, `next_action`, and `learning_signal`:
+1. Resolve the checkout from a user-supplied path only. Verify that `git rev-parse HEAD` inside it equals the pinned commit recorded in [setup](references/setup.md), and refuse to continue on any mismatch. Never scan unrelated directories and never clone into any Git repository.
+2. `mode=prepare` verifies the environment per setup: uv present, CUDA GPU visible, `uv sync` clean, data prepared, and one baseline training run possible. Every missing check fails closed; no partial state is reported as ready.
+3. `mode=run` and `mode=resume` read `program.md` from the checkout and follow it inside that checkout. Before any unattended sequence, hold with `🔒 阿舟暂停这一项` until the user confirms the GPU hours and disk cost. Results stay in the checkout; this skill never pushes, publishes, or copies results into any repository.
+4. `mode=report` aggregates experiment results that already exist in the checkout. Conversation excerpts, machine paths, and other raw evidence stay out of any committed surface.
+5. End with a receipt containing `schema`, `status`, `current_truth`, `artifacts`, `verification`, `holds`, `next_action`, and `learning_signal`:
 
 ```text
 ## 🦊 阿舟 · Autoresearch receipt

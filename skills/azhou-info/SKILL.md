@@ -13,7 +13,7 @@ Use the repository Foundation CLI as the only authority. Do not reconstruct vers
 
 ## Brand protocol
 
-Emit this exact display event once:
+Emit this exact display event once, at the start of every run, with the selected mode and resolved checkout scope:
 
 ```text
 🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>
@@ -23,12 +23,11 @@ Use `✅ 验证通过` only after the selected read-only command succeeds and it
 
 ## Workflow
 
-1. Emit the startup protocol once with the selected mode and resolved checkout scope.
-2. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
-3. Run one read-only command from that checkout:
+1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
+2. Run one read-only command from that checkout:
    - General project/runtime/support facts and installable repository inventory: `python3 scripts/azhou_hub.py info --json`
    - Revision, branch, dirty state, or release-version questions: `python3 scripts/azhou_hub.py version --json`
-4. Report only fields returned by the command. A missing `release_version` is not an installation failure and must not be invented.
-5. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
+3. Report only fields returned by the command. A missing `release_version` is not an installation failure and must not be invented.
+4. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 
 If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and a smoke check, read [setup and compatibility](references/setup.md).

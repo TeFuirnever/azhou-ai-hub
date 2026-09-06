@@ -155,15 +155,13 @@ Colors encode information, not decoration. Every color choice should come from `
 
 ---
 
-## Modern Aesthetics
+## Modern Aesthetics (opt-in)
 
-For clean, professional diagrams:
+The default deliverable style is hand-drawn: elements `roughness: 1`, text `fontFamily: 1` (Virgil) — `check-handdrawn-style.py` enforces it on every formal export (SKILL.md §4, §6). Use the clean, professional style below only when the user explicitly names it or an existing asset contract requires it; the hand-drawn style gate does not apply to those user-named deliverables.
 
 ### Roughness
-- `roughness: 0` — Clean, crisp edges. Use for modern/technical diagrams.
-- `roughness: 1` — Hand-drawn, organic feel. Use for brainstorming/informal diagrams and for hand-drawn production deliverables (see Deliverables & Export).
-
-**Default to 0** for most professional use cases.
+- `roughness: 1` — Hand-drawn, organic feel. **Default for every production deliverable.**
+- `roughness: 0` — Clean, crisp edges. Only inside the opt-in modern style above.
 
 ### Stroke Width
 - `strokeWidth: 1` — Thin, elegant. Good for lines, dividers, subtle connections.
@@ -219,6 +217,6 @@ inside localized prose are correct; leaving the surrounding prose untranslated i
 }
 ```
 
-Settings: `fontSize: 16`, `textAlign: "center"`, `verticalAlign: "middle"`; `fontFamily: 3` (Cascadia) for the clean/modern preset, `1` (Virgil) for hand-drawn deliverables — decide per deliverable, never mix
+Settings: `fontSize: 16`, `textAlign: "center"`, `verticalAlign: "middle"`; `fontFamily: 1` (Virgil) for hand-drawn deliverables — the default; `fontFamily: 3` (Cascadia) only inside the opt-in modern style — decide per deliverable, never mix
 
 ---

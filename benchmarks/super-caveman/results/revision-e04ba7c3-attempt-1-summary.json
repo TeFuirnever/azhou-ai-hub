@@ -103,8 +103,8 @@
     "The v2 aggregate receipt retains the reviewed old and new blob IDs so public integrity can replay approved content after a squash; Git-external promotion still requires reconstructible exact-diff history.",
     "Raw producer, reviewer, paired-judge, and human approval records remain Git-external."
   ],
-  "status": "pass",
-  "harness": "byte-reuse chain unchanged at revision-e04ba7c3 (docs-only deltas); approval record evolved 2026-09-05 for the support-matrix twelve-package count refresh and the new arch-doc capability row; no skill, script, test or fixture byte changed",
+  "status": "superseded",
+  "harness": "byte-reuse chain unchanged at revision-e04ba7c3 (docs-only deltas); approval record evolved 2026-09-05 for the support-matrix twelve-package count refresh and the new arch-doc capability row; no skill, script, test or fixture byte changed; superseded 2026-09-06 by revision-93f38a6b (fresh zcode/GLM producer attempt; skill-tree bytes changed so the recorded digest no longer matches any current tree)",
   "skill_tree_sha256": "e04ba7c3cd20b23a7035ddfd9cb48fed2402e174a13e689a0764a14191eb7970",
   "automatic_checks": {
     "raw_schema": "pass",

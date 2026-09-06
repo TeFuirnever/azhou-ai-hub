@@ -53,6 +53,17 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 
 锚点只使用安全文件名、计数和枚举。不得把页面正文、查询片段、会话标识、用户路径之外的私有数据或来源内容拼进阶段消息。
 
+## 启动行取值纪律
+
+- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 知识范围锁定` 事件回填具体值。
+- 尖括号模板（如 `<project-root>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
+- 示例（锁定前后各一）：
+
+```text
+🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=unresolved
+🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+```
+
 ## 操作顺序
 
 - 读取：`start -> scope -> read -> verify`
@@ -80,6 +91,7 @@ Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v2` 的稳定机器状
 - `hold`：目标动作未执行；`holds` 指明缺少的授权或安全输入。
 - `skipped`：没有把缺失输入、空存储或禁用能力升级为完成。
 - `fail`：`nextAction` 给出一个可执行修复动作，已有数据状态保持可观察。
+- `pass` 要求 scope 已解析：启动行携带具体值，`unresolved` 只允许出现在 `🧭 知识范围锁定` 之前的阶段事件里。
 
 ## 稳定收据
 

@@ -13,7 +13,7 @@ Capability baseline, imported verbatim from the locked upstream commit: "Explain
 
 ## Brand protocol
 
-Emit this exact display event once:
+Emit this exact display event once, at the start of every run, with the resolved topic scope:
 
 ```text
 🦊 阿舟 · Eli5 启动｜mode=explain｜scope=<topic>
@@ -23,7 +23,7 @@ Use `✅ 验证通过` only after the artifact is written to disk and read back.
 
 ## Workflow
 
-1. Emit the startup protocol once with the resolved topic scope. Resolve the topic from the user's request or the trailing argument after the `/eli5` trigger; do not require a specific harness command syntax.
+1. Resolve the topic from the user's request or the trailing argument after the `/eli5` trigger; do not require a specific harness command syntax.
 2. Check the boundary before writing. eli5 is for a zero-background picture explanation. If the user asks for precision-critical material such as spec review, security analysis, migration plans, or numerical claims, emit `🔒 阿舟暂停这一项` and answer in the requesting mode instead of degrading it to pictures.
 3. Produce exactly one self-contained HTML artifact: big pictures, few words, no network dependency at view time. Write it to an explicit user-visible path, `eli5-<topic-slug>.html` in the current working directory unless the user names one, and never overwrite an existing file without saying so.
 4. Read the artifact back and verify it opens as standalone HTML with the promised sections. The receipt's current truth may claim only what the read-back shows; raw evidence such as conversation excerpts or user paths stays out of the artifact unless the user supplied it.

@@ -1,6 +1,6 @@
 ---
 name: repo-pedant
-description: Reconcile repository knowledge at explicit task close. MUST trigger for sync up, tidy up docs, update memory, clean up docs, /sync, /neat, /repo-pedant, 同步一下, 整理文档, 整理一下, 更新记忆, 梳理一下, 收尾, 这个阶段做完了, 新人能直接上手, stale docs, conflicting memories, clean handoff, or bare tidy/整理 in development context. Preserve docs, AGENTS.md/CLAUDE.md, project memory, cross-project consumers, and anti-bloat checks. Inferred completion only reminds; ordinary implementation that merely mentions or edits this skill does not authorize closeout.
+description: Reconcile repository knowledge at explicit task close. MUST trigger for sync up, tidy or clean up docs, update memory, /sync, /neat, /repo-pedant, 同步一下, 整理文档, 整理一下, 更新记忆, 梳理一下, 收尾, 这个阶段做完了, 新人能直接上手, stale docs, conflicting memories, clean handoff, or bare tidy/整理 in development context, 检查项目技术债务, 仓库健康检查, repo health check. An audit phrasing invites a repository-level review; a request scoped to a single file or task stays ordinary work. Inferred completion only reminds; ordinary implementation that merely mentions or edits this skill does not authorize closeout.
 ---
 
 # Repo Pedant
@@ -103,6 +103,8 @@ python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
 
 不存在的 surface 也要分类为不适用、应创建或 hold，不能因文件名不存在而跳过。即使本次对话没有新事实，也必须审查旧漂移和上次收尾遗漏。
 
+**完成条件：**清单中每项已变化代码事实都追到消费者 surface，或带理由的显式 `out_of_scope`/`hold`；上列每类 surface 有分类（适用、不适用带理由、应创建或 hold）；旧漂移与上次收尾遗漏有处置记录。
+
 ### 🧹 3. 做最小真实同步
 
 先 docs，再项目 agent 规则，最后项目 memory。每个编辑关闭一个 inventory 项：
@@ -116,6 +118,8 @@ python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
 - 过期条目可在已有项目文件内修正、合并或移除；整文件/目录删除仍为 `remove_proposal` checkpoint。
 
 项目已有可运行代码却缺少 `README.md` 或项目 agent 规则时，创建最小可用 surface；仍是探索/vibe 阶段则记录不创建理由。
+
+**完成条件：**inventory 中每个可行动项已是 `verified`/`update`/`merge` 或带理由的显式分类；每个编辑关闭一个 inventory 项；未产生第二权威；进入 checkpoint 的项有具名授权缺口。
 
 🔒 **CHECKPOINT · 阿舟暂停这一项**：全局配置写入、归属不明 memory、整文件/目录删除、无关跨仓写入、发布或部署缺少明确授权时，只停止该动作；其他独立同步继续。
 
@@ -194,7 +198,6 @@ python3 <skill-dir>/scripts/validate_execution_protocol.py \
 
 ## 禁止
 
-- 相关性抽样代替全清单；
 - 正则批量替代语义阅读；
 - spec 伪装成现役行为；
 - 项目规则写成变更日志；

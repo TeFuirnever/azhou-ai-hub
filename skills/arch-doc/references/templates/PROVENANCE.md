@@ -24,4 +24,4 @@ shasum -a 256 references/templates/*.md
 
 1. 在来源仓库更新模板原版，记录变更点。
 2. 重拷副本到本目录，重算 `shasum -a 256`，更新上表哈希。
-3. 跑 `scripts/verify_doc.py`（对既有产出文档回归一次），并在来源仓库与本仓库各留一条变更记录。
+3. 跑 `<skill-dir>/scripts/verify_doc.py`（对既有产出文档回归一次），并在来源仓库与本仓库各留一条变更记录。

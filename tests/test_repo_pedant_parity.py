@@ -28,9 +28,8 @@ class RepoPedantParityTest(unittest.TestCase):
         frontmatter = re.match(r"^---\n(?P<body>.*?)\n---", SKILL_TEXT, re.DOTALL).group("body")
         for phrase in (
             "sync up",
-            "tidy up docs",
+            "tidy or clean up docs",
             "update memory",
-            "clean up docs",
             "/sync",
             "/neat",
             "同步一下",
@@ -96,7 +95,7 @@ class RepoPedantParityTest(unittest.TestCase):
             "reconcile",
             "handoff",
             "evolve",
-            "project memory",
+            "项目 memory",
             "CHECKPOINT",
         ):
             self.assertIn(phrase, SKILL_TEXT)
