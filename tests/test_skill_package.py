@@ -310,7 +310,7 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("Canonical store", design)
         self.assertIn("Production gates", design)
         self.assertIn("deee3a446dadc9bfea31cdc8b19b00b16718082e", provenance)
-        self.assertIn("llm-wiki.receipt.v2", brand)
+        self.assertIn("llm-wiki.receipt.v3", brand)
         self.assertIn("autoCapture` defaults to false", skill)
         self.assertIn('DEFAULT_STORE = ".azhou/llm-wiki"', script)
 
@@ -349,8 +349,8 @@ class SkillPackageTest(unittest.TestCase):
             self.assertIn(section, brand)
         self.assertIn("知识要留得住，也要经得起查证。", skill)
         self.assertIn("知识要留得住，也要经得起查证。", brand)
-        self.assertIn("llm-wiki.receipt.v2", brand)
-        self.assertIn('RECEIPT_SCHEMA = "llm-wiki.receipt.v2"', script)
+        self.assertIn("llm-wiki.receipt.v3", brand)
+        self.assertIn('RECEIPT_SCHEMA = "llm-wiki.receipt.v3"', script)
         self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
         self.assertIn("Unicode", brand)
 

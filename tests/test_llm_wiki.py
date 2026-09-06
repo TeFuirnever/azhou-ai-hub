@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -46,7 +47,7 @@ class LlmWikiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialized = self.run_cli(root, "init")
-            self.assertEqual("llm-wiki.receipt.v2", initialized["schema"])
+            self.assertEqual("llm-wiki.receipt.v3", initialized["schema"])
             self.assertEqual(
                 {
                     "schema",
@@ -940,6 +941,181 @@ class LlmWikiTest(unittest.TestCase):
             self.assertFalse(
                 any("unsupported entry" in hold for hold in rerun["holds"]),
                 rerun["holds"],
+            )
+
+
+    def test_ingest_reports_supersession_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Auth via argon2",
+                "--content",
+                "## Decision\n\nArgon2id.\n\n## Alternatives considered\n\nbcrypt lost.",
+                "--category",
+                "decision",
+                "--tag",
+                "auth",
+                "--confidence",
+                "high",
+                "--lifecycle",
+                "implemented",
+            )
+            self.assertEqual("pass", first["status"])
+            self.assertNotIn("supersessionCandidates", first["result"])
+            second = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Session auth",
+                "--content",
+                "## Decision\n\nRotate tokens.\n\n## Alternatives considered\n\nLong-lived tokens lost.",
+                "--category",
+                "decision",
+                "--tag",
+                "auth",
+                "--lifecycle",
+                "implemented",
+            )
+            self.assertEqual("pass", second["status"])
+            self.assertEqual(
+                ["auth-via-argon2.md"],
+                second["result"]["supersessionCandidates"],
+            )
+            self.assertIn("auth-via-argon2.md", second["nextAction"])
+            unrelated = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Diagrams",
+                "--content",
+                "A reference note.",
+                "--category",
+                "reference",
+                "--tag",
+                "auth",
+            )
+            self.assertEqual("pass", unrelated["status"])
+            self.assertNotIn("supersessionCandidates", unrelated["result"])
+
+    def test_receipt_schema_is_v3(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialized = self.run_cli(root, "init")
+            self.assertEqual("llm-wiki.receipt.v3", initialized["schema"])
+
+    def test_migration_half_state_is_never_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / ".llm-wiki"
+            source.mkdir()
+            (source / "prior-page.md").write_text(
+                "---\ntitle: Prior page\ncategory: reference\n---\n\n# Prior page\n",
+                encoding="utf-8",
+            )
+            planned = self.run_cli(root, "migrate", "--from-store", ".llm-wiki")
+            plan_id = planned["result"]["planId"]
+            partial = root / ".azhou" / "llm-wiki"
+            partial.mkdir(parents=True)
+            (partial / "prior-page.md").write_text(
+                "---\ntitle: Prior page\ncategory: reference\n---\n\n# Prior page\n",
+                encoding="utf-8",
+            )
+            conflicted = self.run_cli(
+                root,
+                "migrate",
+                "--from-store",
+                ".llm-wiki",
+                "--apply",
+                "--plan-id",
+                plan_id,
+                expected_code=2,
+            )
+            self.assertEqual("fail", conflicted["status"])
+            self.assertTrue(
+                any("conflicting content" in hold for hold in conflicted["holds"]),
+                conflicted["holds"],
+            )
+            shutil.rmtree(partial)
+            applied = self.run_cli(
+                root,
+                "migrate",
+                "--from-store",
+                ".llm-wiki",
+                "--apply",
+                "--plan-id",
+                plan_id,
+            )
+            self.assertEqual("migrated", applied["result"]["status"])
+            (partial / ".migration-receipt.json").unlink()
+            unreceipted = self.run_cli(
+                root,
+                "migrate",
+                "--from-store",
+                ".llm-wiki",
+                "--apply",
+                "--plan-id",
+                plan_id,
+                expected_code=2,
+            )
+            self.assertEqual("fail", unreceipted["status"])
+            self.assertTrue(
+                any("migration receipt is missing" in hold for hold in unreceipted["holds"]),
+                unreceipted["holds"],
+            )
+
+    def test_supersession_covers_add_and_update_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Auth via argon2",
+                "--content",
+                "## Decision\n\nArgon2id.\n\n## Alternatives considered\n\nbcrypt lost.",
+                "--category",
+                "decision",
+                "--tag",
+                "auth",
+                "--lifecycle",
+                "implemented",
+            )
+            added = self.run_cli(
+                root,
+                "add",
+                "--title",
+                "Session auth",
+                "--content",
+                "## Decision\n\nRotate tokens.\n\n## Alternatives considered\n\nStatic tokens lost.",
+                "--category",
+                "decision",
+                "--tag",
+                "AUTH",
+                "--lifecycle",
+                "implemented",
+            )
+            self.assertEqual("pass", added["status"])
+            self.assertEqual(
+                ["auth-via-argon2.md"],
+                added["result"]["supersessionCandidates"],
+            )
+            updated = self.run_cli(
+                root,
+                "ingest",
+                "--title",
+                "Auth via argon2",
+                "--content",
+                "More context.",
+                "--tag",
+                "auth",
+            )
+            self.assertEqual("pass", updated["status"])
+            self.assertEqual(
+                ["session-auth.md"],
+                updated["result"]["supersessionCandidates"],
             )
 
 

@@ -23,7 +23,7 @@ The interaction uses one restrained Azhou anchor per completed stage:
 ✅ 验证通过｜checks=readback,lint
 ```
 
-The CLI JSON stays emoji-free and returns `llm-wiki.receipt.v2`, including `currentTruth`, exact changes and verification, holds, one next action, and `learningSignal`. A success anchor is invalid after `fail`, `hold`, or `skipped`.
+The CLI JSON stays emoji-free and returns `llm-wiki.receipt.v3`, including `currentTruth`, exact changes and verification, holds, one next action, and `learningSignal`. A success anchor is invalid after `fail`, `hold`, or `skipped`.
 
 ## 3. Verify the runtime contract
 
