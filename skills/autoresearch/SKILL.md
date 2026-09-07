@@ -1,6 +1,7 @@
 ---
 name: autoresearch
 description: Wrap Karpathy's autoresearch environment so an agent can run, resume, and report automatic nanochat training experiments inside a user-owned pinned checkout. Requires an NVIDIA GPU and uv; vendors no upstream bytes. Use when the user asks to run or check autoresearch experiments.
+invocation: user-invoked orchestrator
 ---
 
 # Autoresearch

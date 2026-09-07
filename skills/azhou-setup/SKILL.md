@@ -1,6 +1,7 @@
 ---
 name: azhou-setup
 description: Plan and explicitly apply Azhou AI Hub skill installation or receipt-owned repair, migration, and uninstall. Use for checkout-assisted setup and managed lifecycle operations with an exact target root.
+invocation: user-invoked orchestrator
 ---
 
 # Azhou Setup

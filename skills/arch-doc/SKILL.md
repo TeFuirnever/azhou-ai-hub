@@ -1,6 +1,7 @@
 ---
 name: arch-doc
 description: End-to-end authoring and calibration of an architecture design document from upstream sources. MUST trigger for 写架构设计文档, 架构说明书, ARCH 文档, 软件实现架构说明书, 架构文档补时序图, PlantUML 时序图（架构文档内）, 交叉校准, 回源核对, 上游研读, 上游真源, 最佳实践评审, 架构评审对标, 架构文档模板, PRD 模板, 产品需求文档模板, 功能详细设计模板, 校准架构文档, 质量场景卡, or whenever a repository needs a software-implementation-architecture document drafted, calibrated against upstream design docs, or reviewed against industry best practices. Distilled from the MCC ARCH-2026-001 authoring pipeline.
+invocation: user-invoked orchestrator
 ---
 
 # Arch Doc

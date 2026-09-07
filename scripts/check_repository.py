@@ -264,10 +264,11 @@ def check_router_coverage(root: Path) -> list[str]:
 
 
 def check_invocation_axis(root: Path) -> list[str]:
-    """Validate the optional `invocation` frontmatter key against docs/skill-standard.md.
+    """Validate declared `invocation` values against docs/skill-standard.md.
 
-    The key stays optional: an absent declaration means `both` until the
-    per-skill declaration sweep lands; unknown values fail closed.
+    Fourteen of fifteen canonical packages declare the key; super-caveman's
+    declaration is frozen with its promotion digest and rides its next
+    promotion ride. Unknown declared values fail closed.
     """
     errors: list[str] = []
     for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
@@ -282,10 +283,13 @@ def check_invocation_axis(root: Path) -> list[str]:
         match = SKILL_FRONTMATTER_PATTERN.match(text)
         if not match:
             continue
-        for line in match.group("frontmatter").splitlines():
-            key, _, value = line.partition(":")
-            if key.strip() == "invocation" and value.strip() not in INVOCATION_CLASSES:
-                errors.append(f"skill invocation enum invalid: {relative}: {value.strip()}")
+        declared = [
+            line.partition(":")[2].strip()
+            for line in match.group("frontmatter").splitlines()
+            if line.partition(":")[0].strip() == "invocation"
+        ]
+        if declared and declared[0] not in INVOCATION_CLASSES:
+            errors.append(f"skill invocation enum invalid: {relative}: {declared[0]}")
     return errors
 
 

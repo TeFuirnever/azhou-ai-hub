@@ -1,6 +1,7 @@
 ---
 name: eli5
 description: Explain a topic like I'm 5 with one HTML artifact of big pictures and few words. Use when the user types /eli5 <topic> or asks for a dead-simple picture explainer of how something works.
+invocation: user-invoked orchestrator
 ---
 
 # Eli5
