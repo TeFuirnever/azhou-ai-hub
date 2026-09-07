@@ -33,7 +33,7 @@ If Treehouse `v2.3.0` or newer is unavailable, do not install or upgrade it impl
 
 - Keep generated caches and dependencies inside the leased worktree or normal external caches; do not commit pool state.
 - Treat code and machine-readable configuration as current behavior. A lease is not evidence that tests, approval or publication gates passed.
-- Run targeted tests first, then `python3 scripts/verify.py` before handoff. Preserve any unrelated baseline failure as an explicit hold.
+- Run targeted tests first, then `python scripts/verify.py` before handoff. Preserve any unrelated baseline failure as an explicit hold.
 - Record branch, HEAD, dirty state, verification commands and results in the handoff receipt.
 - Never run implementation from the primary checkout when the task was allocated a lease.
 

@@ -81,7 +81,7 @@ Resolve `<skill-dir>` to the installed `skills/lavish/` directory.
 Initialize a generated HTML packet:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py init .lavish/spec.html \
+python <skill-dir>/scripts/relay_state.py init .lavish/spec.html \
   --source-spec docs/spec.md \
   --source-revision <revision> \
   --review-goal "approve scope" \
@@ -92,7 +92,7 @@ python3 <skill-dir>/scripts/relay_state.py init .lavish/spec.html \
 Persist one comment returned by polling:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py add-feedback .lavish/spec.html \
+python <skill-dir>/scripts/relay_state.py add-feedback .lavish/spec.html \
   --feedback-id FB-001 \
   --expected-revision 0 \
   --target REQ-001 \
@@ -106,7 +106,7 @@ python3 <skill-dir>/scripts/relay_state.py add-feedback .lavish/spec.html \
 Resolve a comment after its owner responds:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py update-feedback .lavish/spec.html \
+python <skill-dir>/scripts/relay_state.py update-feedback .lavish/spec.html \
   --feedback-id FB-001 \
   --expected-revision 1 \
   --disposition accepted \
@@ -118,7 +118,7 @@ python3 <skill-dir>/scripts/relay_state.py update-feedback .lavish/spec.html \
 Move the packet to its next reviewer or source revision:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py update-metadata .lavish/spec.html \
+python <skill-dir>/scripts/relay_state.py update-metadata .lavish/spec.html \
   --expected-revision 2 \
   --source-revision <revision> \
   --review-status approved \
@@ -128,15 +128,15 @@ python3 <skill-dir>/scripts/relay_state.py update-metadata .lavish/spec.html \
 Regenerate a stale or altered visible ledger from canonical embedded state:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py refresh-ledger .lavish/spec.html \
+python <skill-dir>/scripts/relay_state.py refresh-ledger .lavish/spec.html \
   --expected-revision 3
 ```
 
 Inspect or validate the state before relay:
 
 ```bash
-python3 <skill-dir>/scripts/relay_state.py show .lavish/spec.html
-python3 <skill-dir>/scripts/relay_state.py validate .lavish/spec.html
+python <skill-dir>/scripts/relay_state.py show .lavish/spec.html
+python <skill-dir>/scripts/relay_state.py validate .lavish/spec.html
 ```
 
 The standard-library tool preserves the HTML file mode, updates the embedded JSON through a unique temporary file, and atomically replaces the packet only after validation. A rejected or stale update leaves the HTML unchanged. `validate` requires the complete visible ledger—not only its IDs or counts—to be the exact escaped projection of the embedded feedback. `refresh-ledger` is the explicit repair and renderer-upgrade path: it validates canonical state, checks the expected revision, regenerates the view, and advances the packet revision.

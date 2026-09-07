@@ -19,7 +19,7 @@ The package contains the Skill instructions and a Python standard-library state 
 ```bash
 node --version
 npm --version
-python3 --version
+python --version
 npm view lavish-axi@0.1.47 version dist.integrity repository.url license engines --json
 npx -y lavish-axi@0.1.47 --help
 ```
@@ -53,8 +53,8 @@ A global install or `lavish-axi setup hooks` changes user-level state. Run eithe
 npx -y lavish-axi@0.1.47 --version
 npx -y lavish-axi@0.1.47 playbook table
 npx -y lavish-axi@0.1.47 design
-python3 <skill-dir>/scripts/relay_state.py --help
-python3 -m unittest tests.test_lavish_relay_state -v
+python <skill-dir>/scripts/relay_state.py --help
+python -m unittest tests.test_lavish_relay_state -v
 ```
 
 Do not open, share, or publish a real artifact merely to prove package installation. A share requires separate publication authorization because it uploads the artifact to a third-party service.
@@ -65,6 +65,6 @@ Do not open, share, or publish a real artifact merely to prove package installat
 2. Rebuild or read `skills/lavish/SKILL.md` at that commit and record its SHA-256 in [provenance.md](provenance.md).
 3. Reconcile upstream behavior with the local relay contract, including embedded-state compatibility.
 4. Update the locked CLI version, npm integrity, license copy, compatibility map, public docs, and tests together.
-5. Run the skill validator and `python3 scripts/verify.py` before promotion.
+5. Run the skill validator and `python scripts/verify.py` before promotion.
 
 Do not silently float the locked baseline to the newest npm release.

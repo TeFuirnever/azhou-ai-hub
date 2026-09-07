@@ -18,7 +18,7 @@ Default privacy posture:
 Run from the repository root:
 
 ```bash
-python3 skills/repo-pedant/scripts/collect_agent_history.py \
+python skills/repo-pedant/scripts/collect_agent_history.py \
   --runtime all \
   --skill repo-pedant \
   --alias neat-freak \
@@ -32,7 +32,7 @@ The collector reads Codex, Claude, and zcode formats. It emits no raw text by de
 Validate a JSON report before comparison or storage:
 
 ```bash
-python3 skills/repo-pedant/scripts/validate_evidence_bundle.py report.json \
+python skills/repo-pedant/scripts/validate_evidence_bundle.py report.json \
   --require-runtime codex \
   --require-runtime claude \
   --require-runtime zcode
@@ -52,7 +52,7 @@ Prefer evidence in this order:
 Convert only reviewed evidence into typed, digests-only signals:
 
 ```bash
-python3 skills/repo-pedant/scripts/manage_evolution.py add-signal \
+python skills/repo-pedant/scripts/manage_evolution.py add-signal \
   --project /absolute/repository \
   --runtime codex \
   --mechanism missed-project-memory \
@@ -81,7 +81,7 @@ Describe the mechanism, not one transcript's wording. Add one realistic regressi
 Create the quarantined proposal only after threshold evidence exists:
 
 ```bash
-python3 skills/repo-pedant/scripts/manage_evolution.py propose \
+python skills/repo-pedant/scripts/manage_evolution.py propose \
   --project /absolute/repository \
   --mechanism missed-project-memory \
   --change-summary "Require project-bound memory classification" \
@@ -93,7 +93,7 @@ Ordinary mechanisms need two independent failing sessions. One high/critical saf
 After reading and validating the candidate JSON, archive only the converted live batch:
 
 ```bash
-python3 skills/repo-pedant/scripts/manage_evolution.py archive \
+python skills/repo-pedant/scripts/manage_evolution.py archive \
   --project /absolute/repository \
   --candidate .azhou/repo-pedant/evolution/candidates/<candidate-id>.json
 ```
@@ -121,7 +121,7 @@ Use this paired evolution protocol:
 Represent the decision with `assets/evolution-evaluation.schema.json`, then validate all gates:
 
 ```bash
-python3 skills/repo-pedant/scripts/manage_evolution.py gate \
+python skills/repo-pedant/scripts/manage_evolution.py gate \
   --candidate .azhou/repo-pedant/evolution/candidates/<candidate-id>.json \
   --evaluation /absolute/local/evaluation.json
 ```

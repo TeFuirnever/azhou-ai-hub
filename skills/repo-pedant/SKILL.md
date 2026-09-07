@@ -58,7 +58,7 @@ spec 与代码冲突：
 首次使用脚本先读 [setup.md](references/setup.md)。对每个受影响项目重复 `--project`；明确提供项目 memory 与全局规则候选：
 
 ```bash
-python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
+python <skill-dir>/scripts/inventory_knowledge.py snapshot \
   --project /absolute/affected-project \
   --memory /absolute/project-memory \
   --global-instruction /absolute/global-instructions.md \
@@ -131,7 +131,7 @@ python3 <skill-dir>/scripts/inventory_knowledge.py snapshot \
 将 inventory 的 11 个语义检查设为 `true`，再执行：
 
 ```bash
-python3 <skill-dir>/scripts/inventory_knowledge.py validate \
+python <skill-dir>/scripts/inventory_knowledge.py validate \
   /absolute/affected-project/.azhou/repo-pedant/inventory.json
 ```
 
@@ -140,7 +140,7 @@ python3 <skill-dir>/scripts/inventory_knowledge.py validate \
 全部检查结束后，把**准备发送**的最终 `verify_success` 事件写入 execution record，再执行：
 
 ```bash
-python3 <skill-dir>/scripts/validate_execution_protocol.py \
+python <skill-dir>/scripts/validate_execution_protocol.py \
   /absolute/affected-project/.azhou/repo-pedant/execution.json
 ```
 

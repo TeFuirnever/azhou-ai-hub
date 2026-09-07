@@ -60,11 +60,11 @@ Four portable Azhou Agent Skills expose the checkout workflow without duplicatin
 | `azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate; maintainers can explicitly add promotion-evidence replay. |
 
 ~~~bash
-python3 scripts/azhou_hub.py info --json
-python3 scripts/azhou_hub.py version --json
-python3 scripts/azhou_hub.py doctor --json
-python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
-python3 scripts/azhou_hub.py verify
+python scripts/azhou_hub.py info --json
+python scripts/azhou_hub.py version --json
+python scripts/azhou_hub.py doctor --json
+python scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python scripts/azhou_hub.py verify
 ~~~
 
 `setup`, `repair`, `migrate`, and `uninstall` stay read-only until `--apply` is present. Setup is idempotent and refuses to overwrite a different installation. Receipt-owned lifecycle commands require the same explicit target and independently verify the canonical source and installed identity; they never force drifted content, cross harness roots, install hooks, rewrite harness configuration, contact a registry or update the CLI. The packages are shared across harnesses, but discovery, invocation, permissions and optional integrations remain host-specific; see the [support matrix](docs/support-matrix.md) and [Foundation CLI contract](docs/foundations.md).
@@ -198,10 +198,10 @@ Installable packages remain under `skills/`. Project-local Azhou runtime state u
 Python 3.11+ is enough for the repository gate:
 
 ~~~bash
-python3 scripts/verify.py
+python scripts/verify.py
 ~~~
 
-The same command checks repository policy, all unit tests, four public benchmark-integrity suites and Git whitespace without private inputs. Super Caveman's public integrity check still recomputes the approved exact diff against the current staged or committed tree, so a changed approved path requires fresh promotion evidence instead of silently passing. Release maintainers additionally run `python3 scripts/verify.py --promotion-evidence` after materializing the Git-external Super Caveman approval and review records. That second mode authenticates the raw promotion evidence; the default public gate validates the checked-in receipt and exact diff but does not claim external authentication. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
+The same command checks repository policy, all unit tests, four public benchmark-integrity suites and Git whitespace without private inputs. Super Caveman's public integrity check still recomputes the approved exact diff against the current staged or committed tree, so a changed approved path requires fresh promotion evidence instead of silently passing. Release maintainers additionally run `python scripts/verify.py --promotion-evidence` after materializing the Git-external Super Caveman approval and review records. That second mode authenticates the raw promotion evidence; the default public gate validates the checked-in receipt and exact diff but does not claim external authentication. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
 
 ## Project
 

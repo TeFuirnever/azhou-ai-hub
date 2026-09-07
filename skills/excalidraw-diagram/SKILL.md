@@ -155,8 +155,8 @@ SKILL_DIR=/absolute/path/to/excalidraw-diagram
 先运行结构检查，再渲染真实场景：
 
 ```bash
-python3 "$SKILL_DIR/scripts/check-scene-hygiene.py" /absolute/diagram.excalidraw
-python3 "$SKILL_DIR/scripts/audit-overlaps.py" /absolute/diagram.excalidraw
+python "$SKILL_DIR/scripts/check-scene-hygiene.py" /absolute/diagram.excalidraw
+python "$SKILL_DIR/scripts/audit-overlaps.py" /absolute/diagram.excalidraw
 
 cd "$SKILL_DIR/references"
 uv run python render_excalidraw.py /absolute/diagram.excalidraw --output /absolute/diagram.png

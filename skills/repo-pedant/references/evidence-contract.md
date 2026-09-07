@@ -36,7 +36,7 @@ Compare baseline and candidate on identical isolated fixtures and permissions. U
 ## Deterministic validation
 
 ```bash
-python3 skills/repo-pedant/scripts/validate_evidence_bundle.py report.json \
+python skills/repo-pedant/scripts/validate_evidence_bundle.py report.json \
   --require-runtime codex \
   --require-runtime claude \
   --require-runtime zcode

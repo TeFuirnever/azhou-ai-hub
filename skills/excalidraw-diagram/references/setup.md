@@ -33,7 +33,7 @@ Set `SKILL_DIR` to the installed skill directory. Do not assume a Codex-, Claude
 
 ```bash
 SKILL_DIR=/absolute/path/to/excalidraw-diagram
-python3 --version
+python --version
 node --version
 npm --version
 uv --version
@@ -90,8 +90,8 @@ uv run python -c "import playwright; print('playwright ok')"
 uv run python "$SKILL_DIR/scripts/check-playwright-runtime.py"
 uv run playwright install --list
 
-python3 "$SKILL_DIR/scripts/check-scene-hygiene.py" --help
-python3 "$SKILL_DIR/scripts/check-handdrawn-style.py" --help
+python "$SKILL_DIR/scripts/check-scene-hygiene.py" --help
+python "$SKILL_DIR/scripts/check-handdrawn-style.py" --help
 node "$SKILL_DIR/scripts/to-excalidraw.mjs"
 ```
 

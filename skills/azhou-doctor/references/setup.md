@@ -12,7 +12,7 @@ This Skill is harness-neutral and does not bundle or install the repository-leve
 ## Smoke check
 
 ~~~bash
-python3 scripts/azhou_hub.py doctor --json
+python scripts/azhou_hub.py doctor --json
 ~~~
 
 The doctor is read-only. It never calls Treehouse `get`, `return`, `prune`, or `destroy`, and it never repairs package or harness state.

@@ -10,6 +10,7 @@ import unittest
 from scripts.check_repository import (
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
+    check_command_surface,
     check_invocation_axis,
     check_markdown_links,
     check_secret_patterns,
@@ -242,6 +243,27 @@ class RepositoryPolicyTest(unittest.TestCase):
             errors = check_markdown_links([readme], root)
             self.assertEqual(1, len(errors))
             self.assertIn("broken local link", errors[0])
+
+    def test_command_surface_reports_posix_only_interpreter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "docs" / "installation.md"
+            target.parent.mkdir(parents=True)
+            target.write_text("```bash\npython3 scripts/x.py --json\n```\n", encoding="utf-8")
+            errors = check_command_surface([target], root)
+            self.assertEqual(1, len(errors))
+            self.assertIn("POSIX-only interpreter 'python3' in docs/installation.md:2", errors[0])
+
+    def test_command_surface_skips_promotion_bound_and_historical_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            held = root / "skills" / "super-caveman" / "references" / "setup.md"
+            held.parent.mkdir(parents=True)
+            held.write_text("python3 run.py\n", encoding="utf-8")
+            historical = root / "docs" / "research" / "2026-09-07-note.md"
+            historical.parent.mkdir(parents=True)
+            historical.write_text("the survey counted python3 occurrences\n", encoding="utf-8")
+            self.assertEqual([], check_command_surface([held, historical], root))
 
     def test_workflow_action_requires_full_sha(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

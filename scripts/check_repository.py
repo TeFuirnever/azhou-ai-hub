@@ -415,6 +415,42 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+COMMAND_SURFACE_FILES = ("README.md", "README.zh-CN.md")
+COMMAND_SURFACE_DIRECTORIES = ("docs/", "skills/")
+COMMAND_SURFACE_EXCLUDED_DIRECTORIES = (
+    "docs/research/",
+    "docs/specs/",
+    "docs/demos/",
+    # super-caveman is bound to its promotion skill-tree digest; its command
+    # surface rides the pending promotion ride (see .azhou/win-07-doc-command-sweep/).
+    "skills/super-caveman/",
+)
+PYTHON3_TOKEN = re.compile(r"\bpython3\b")
+
+
+def check_command_surface(files: list[Path], root: Path) -> list[str]:
+    """Documentation command surface must not point users at a POSIX-only interpreter."""
+    errors: list[str] = []
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        in_scope = relative in COMMAND_SURFACE_FILES or (
+            relative.startswith(COMMAND_SURFACE_DIRECTORIES)
+            and not relative.startswith(COMMAND_SURFACE_EXCLUDED_DIRECTORIES)
+            and "/references/upstream/" not in f"/{relative}"
+        )
+        if path.suffix.lower() != ".md" or not in_scope:
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"cannot read command surface {relative}: {exc}")
+            continue
+        for line_number, line in enumerate(lines, 1):
+            if PYTHON3_TOKEN.search(line):
+                errors.append(f"POSIX-only interpreter 'python3' in {relative}:{line_number}; use 'python'")
+    return errors
+
+
 def check_action_pins(files: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
     workflow_root = root / ".github" / "workflows"
@@ -533,6 +569,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_invocation_axis(root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
+    errors.extend(check_command_surface(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
     errors.extend(check_runtime_state_contract(files, root))
