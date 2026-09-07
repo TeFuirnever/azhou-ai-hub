@@ -5,6 +5,8 @@ import re
 import unittest
 from pathlib import Path
 
+from scripts.check_repository import INVOCATION_CLASSES
+
 
 ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "repo-pedant"
@@ -48,7 +50,11 @@ class SkillPackageTest(unittest.TestCase):
             self.assertEqual(package.name, name.group(1).strip())
             self.assertLessEqual(len(description.group(1).strip()), 1024)
             self.assertRegex(name.group(1).strip(), r"^[a-z0-9-]+$")
-            self.assertEqual({"name", "description"}, {line.split(":", 1)[0] for line in frontmatter.splitlines()})
+            keys = {line.split(":", 1)[0] for line in frontmatter.splitlines()}
+            self.assertEqual({"name", "description"}, keys - {"invocation"})
+            invocation = re.search(r"^invocation:\s*([^\n]+)$", frontmatter, re.MULTILINE)
+            if invocation is not None:
+                self.assertIn(invocation.group(1).strip(), INVOCATION_CLASSES)
 
     def test_skill_links_resolve(self) -> None:
         for package in SKILL_DIRS:

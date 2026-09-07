@@ -88,6 +88,12 @@ INSTALLABLE_SKILL_PATHS = {
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
 }
+INVOCATION_CLASSES = (
+    "user-invoked orchestrator",
+    "model-invoked discipline",
+    "both",
+)
+SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
 
 SKILL_BRAND_CONTRACTS = {
     "skills/autoresearch/SKILL.md": {
@@ -255,6 +261,32 @@ def check_router_coverage(root: Path) -> list[str]:
         for name in sorted(expected_names)
         if name not in text
     ]
+
+
+def check_invocation_axis(root: Path) -> list[str]:
+    """Validate the optional `invocation` frontmatter key against docs/skill-standard.md.
+
+    The key stays optional: an absent declaration means `both` until the
+    per-skill declaration sweep lands; unknown values fail closed.
+    """
+    errors: list[str] = []
+    for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
+        skill_path = root / relative
+        if not skill_path.is_file():
+            continue
+        try:
+            text = skill_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"cannot read skill frontmatter {relative}: {exc}")
+            continue
+        match = SKILL_FRONTMATTER_PATTERN.match(text)
+        if not match:
+            continue
+        for line in match.group("frontmatter").splitlines():
+            key, _, value = line.partition(":")
+            if key.strip() == "invocation" and value.strip() not in INVOCATION_CLASSES:
+                errors.append(f"skill invocation enum invalid: {relative}: {value.strip()}")
+    return errors
 
 
 def check_skill_brand_contract(root: Path) -> list[str]:
@@ -480,6 +512,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_router_coverage(root))
+    errors.extend(check_invocation_axis(root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_action_pins(files, root))

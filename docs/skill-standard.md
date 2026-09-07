@@ -36,6 +36,12 @@
 - 路径解析必须从显式项目或安装目标出发，拒绝绝对覆盖、遍历、symlink、文件祖先和越界。目录默认 `0700`，文件默认 `0600`；Skill 不得在未获授权时修改另一个项目的 ignore 文件。
 - 共享路径与迁移逻辑的项目权威是 `scripts/azhou_runtime_state.py`。为保持单个 Skill 独立安装，确有使用者可携带 byte-identical runtime copy；仓库测试必须证明副本与权威一致。
 
+### 2.2 调用类轴与 frontmatter 合同
+
+调用类轴把 canonical skill 分为三类：`user-invoked orchestrator | model-invoked discipline | both`。语义沿用目录已验证的分工：user-invoked orchestrator 花用户的认知负载，目录的统一前门（`ask-azhou` 路由器）负责治愈“技能多到记不住”；model-invoked discipline 花常驻上下文负载，必须在普通工作中不点名即可被自主到达。组合律：orchestrator 可以指向 discipline；任何编排器不得链入另一个 orchestrator；discipline 不调用 orchestrator。该轴沿袭 [mattpocock/skills](https://github.com/mattpocock/skills) 以同一双轴组织整个目录的先例（不可变 pin `3cca18b368ae95cdbdebbff572ccafa662551015`，MIT）；frontmatter 键名是 azhou 自有决策，不复制上游 `disable-model-invocation` 等宿主专用键。
+
+`SKILL.md` frontmatter 合同：`name` 与 `description` 必填；`invocation` 可选，值限前述三个枚举，出现其他值即非法；键缺省表示 `both`，等待逐技能声明迁移。`scripts/check_repository.py` 对出现的 `invocation` 值做枚举校验；对全部 canonical skill 强制完整声明是后续变更，未落地前不改变任何技能的发现与调用行为。
+
 ## 3. 阿舟交互层
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：

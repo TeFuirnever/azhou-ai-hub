@@ -1,6 +1,7 @@
 ---
 name: ask-azhou
 description: One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary.
+invocation: user-invoked orchestrator
 ---
 
 # Ask Azhou
@@ -9,7 +10,7 @@ description: One-line router for the Azhou AI Hub skill catalog: describe what y
 
 > 🚪 说清你想做什么，我告诉你敲哪扇门。
 
-Invocation class: user-invoked orchestrator (spec #126 ID-9) — invoked by name or by an explicit "which skill" request; it recommends, never invokes another skill on the user's behalf, and never chains into another orchestrator.
+Invocation class: user-invoked orchestrator, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — invoked by name or by an explicit "which skill" request; it recommends and never invokes another skill on the user's behalf.
 
 It is guidance, not a script. This is the hub's front door: fifteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
 

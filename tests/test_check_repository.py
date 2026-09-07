@@ -10,6 +10,7 @@ import unittest
 from scripts.check_repository import (
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
+    check_invocation_axis,
     check_markdown_links,
     check_secret_patterns,
     check_skill_brand_contract,
@@ -40,6 +41,36 @@ class RouterCoverageTest(unittest.TestCase):
             )
             self.assertIn("router coverage missing: arch-doc", errors)
             self.assertNotIn("router coverage missing: eli5", errors)
+
+
+class InvocationAxisTest(unittest.TestCase):
+    def test_declared_invocation_values_match_the_enum(self) -> None:
+        self.assertEqual([], check_invocation_axis(ROOT))
+
+    def test_unknown_invocation_value_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "prose-standard" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: prose-standard\ndescription: probe\ninvocation: sometimes\n---\n# Prose Standard\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                ["skill invocation enum invalid: skills/prose-standard/SKILL.md: sometimes"],
+                check_invocation_axis(root),
+            )
+
+    def test_absent_invocation_key_stays_legal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "prose-standard" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: prose-standard\ndescription: probe\n---\n# Prose Standard\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_invocation_axis(root))
 
 
 def copy_skill_brand_surfaces(root: Path) -> None:
