@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "consumer-classification",
+  "prompt": "ledger-api 这个项目准备做一轮简化清理。我翻了下 src/，有几个东西想动：src/legacy.py 的 legacy_slugify 感觉已经没人用了；src/migrate.py 的 migrate_config 全库搜不到调用；src/retry.py 的 retry_until_quiet 写得绕到看不懂，想整个换掉；另外 format_money 那种小工具函数现在 test 和 guide 里都在引用，是不是也可以顺手折掉。请逐个评估这些候选能不能动，给出每个候选的结论和依据；没有我的授权不要真的删代码，也不要改坏现有行为。",
+  "expected_output": "先做消费者分类再下结论，把每个候选写入 analysis/inventory.json（candidates 数组，字段 surface 与 consumer_class，枚举 production/non_production/ambiguous/not_applicable）：format_money 的消费者真实分裂——server.py 生产路径在用，tests 与 docs 也同时引用，取最强消费者记 production，折叠它是功能决策不是清理；legacy_slugify 只有测试与文档钉住且非承载行为，记 non_production，removal 记 pending_authorization 并要求留下证明移除的回归；migrate_config 经运行时配置文件动态分发，仓库证据无法证明其被调用，记 ambiguous，evidence_gap 写明缺口并 hold，绝不猜类；retry_until_quiet 是现役请求路径依赖，记 production，'看起来复杂'不构成移除提案，只在 src/retry.py 内联降级为一条 TODO 注释，点名坏味道与重访条件。不改任何 protected 源码、不删文件；输出 branded receipt v2，机器字段和值不含 emoji。",
+  "fixture": "fixtures/consumer-classification",
+  "verify_command": ["./verify.sh"],
+  "protected_paths": ["src/format.py", "src/server.py", "src/legacy.py", "src/migrate.py", "tests/test_format.py", "tests/test_legacy.py", "docs/guide.md", "docs/migration.md", "config/migration-steps.txt", "verify.sh"],
+  "required_outputs": ["response.md", "checks.txt", "analysis/inventory.json"],
+  "require_receipt": true
+}

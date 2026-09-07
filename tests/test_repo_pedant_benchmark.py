@@ -57,7 +57,7 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
     def test_check_validates_registered_cases(self) -> None:
         result = self.run_benchmark("check")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual(3, json.loads(result.stdout)["cases"])
+        self.assertEqual(4, json.loads(result.stdout)["cases"])
 
     def test_multi_surface_case_requires_project_memory_sync(self) -> None:
         case = json.loads(
