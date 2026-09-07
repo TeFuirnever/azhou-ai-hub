@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
+import shlex
+import sys
 import tempfile
 import unittest
 from argparse import Namespace
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -130,6 +134,48 @@ class CloseoutHookTest(unittest.TestCase):
         args = Namespace(max_input_bytes=1024)
         with mock.patch.dict(os.environ, {"REPO_PEDANT_DISABLED": "1"}):
             self.assertEqual(0, MODULE.cmd_event(args))
+
+    def render_hooks(self, **overrides: object) -> dict:
+        value: dict = {"format": "claude", "mode": "advisory", "python": None, "python_windows": None}
+        value.update(overrides)
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            self.assertEqual(0, MODULE.cmd_render_hooks(Namespace(**value)))
+        return json.loads(buffer.getvalue())
+
+    def test_render_hooks_binds_running_interpreter_without_stale_placeholders(self) -> None:
+        for host_format in ("claude", "codex"):
+            with self.subTest(format=host_format):
+                fragment = self.render_hooks(format=host_format)
+                precompact = fragment["hooks"]["PreCompact"][0]["hooks"][0]["command"]
+                stop = fragment["hooks"]["Stop"][0]["hooks"][0]["command"]
+                for command in (precompact, stop):
+                    self.assertTrue(command.startswith(shlex.quote(sys.executable)))
+                    self.assertNotIn("||", command)
+                    self.assertNotIn("/absolute/path/to/repo-pedant", command)
+                    self.assertIn("--workspace-from-input", command)
+                self.assertEqual(30, fragment["hooks"]["Stop"][0]["hooks"][0]["timeout"])
+
+    def test_render_hooks_gate_changes_only_the_stop_command(self) -> None:
+        fragment = self.render_hooks(format="claude", mode="gate")
+        precompact = fragment["hooks"]["PreCompact"][0]["hooks"][0]["command"]
+        stop = fragment["hooks"]["Stop"][0]["hooks"][0]["command"]
+        self.assertIn("--mode advisory", precompact)
+        self.assertIn("--mode gate", stop)
+
+    def test_render_hooks_codex_keeps_status_message_and_optional_windows_command(self) -> None:
+        fragment = self.render_hooks(format="codex", python_windows="C:\\Tools\\python.exe")
+        precompact_hook = fragment["hooks"]["PreCompact"][0]["hooks"][0]
+        self.assertIn("阿舟 · Repo Pedant", precompact_hook["statusMessage"])
+        self.assertTrue(precompact_hook["commandWindows"].startswith('"C:\\Tools\\python.exe"'))
+        plain = self.render_hooks(format="claude")
+        self.assertNotIn("commandWindows", plain["hooks"]["PreCompact"][0]["hooks"][0])
+        self.assertNotIn("statusMessage", plain["hooks"]["PreCompact"][0]["hooks"][0])
+
+    def test_render_hooks_accepts_explicit_python_override(self) -> None:
+        fragment = self.render_hooks(format="claude", python="/opt/py/bin/python3.11")
+        stop = fragment["hooks"]["Stop"][0]["hooks"][0]["command"]
+        self.assertTrue(stop.startswith(shlex.quote("/opt/py/bin/python3.11")))
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ Do not add another `repo-pedant` copy or link under a second skill root merely t
 ## Preflight
 
 ```bash
-python3 --version
+python --version
 git --version
 rg --version
 ```
@@ -48,12 +48,12 @@ Set `SKILL_DIR` to the installed `repo-pedant` directory:
 
 ```bash
 SKILL_DIR=/absolute/path/to/repo-pedant
-python3 "$SKILL_DIR/scripts/collect_agent_history.py" --help
-python3 "$SKILL_DIR/scripts/validate_evidence_bundle.py" --help
-python3 "$SKILL_DIR/scripts/inventory_knowledge.py" --help
-python3 "$SKILL_DIR/scripts/closeout_hook.py" --help
-python3 "$SKILL_DIR/scripts/manage_evolution.py" --help
-python3 "$SKILL_DIR/scripts/validate_execution_protocol.py" --help
+python "$SKILL_DIR/scripts/collect_agent_history.py" --help
+python "$SKILL_DIR/scripts/validate_evidence_bundle.py" --help
+python "$SKILL_DIR/scripts/inventory_knowledge.py" --help
+python "$SKILL_DIR/scripts/closeout_hook.py" --help
+python "$SKILL_DIR/scripts/manage_evolution.py" --help
+python "$SKILL_DIR/scripts/validate_execution_protocol.py" --help
 ```
 
 The collector reads local Codex, Claude, or zcode history only when explicitly requested. It does not need network access. Excerpt output is opt-in, local-only, and must remain outside Git.
@@ -65,16 +65,16 @@ Inventory, execution records, closeout markers, hook counters, and evolution can
 Inventory v2 requires one memory decision per project. Pass an enumerated memory candidate or explicit discovery evidence:
 
 ```bash
-python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
+python "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
   --memory /absolute/project-memory/MEMORY.md
 
-python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
+python "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
   --memory-decision 'none_discovered::checked repository MEMORY.md and active harness project-memory path'
 
 # Full form with global-instruction candidate and an explicit output path:
-python3 "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
+python "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \
   --memory /absolute/project-memory/MEMORY.md \
   --global-instruction /absolute/global-instructions.md \
@@ -86,8 +86,8 @@ A single-project snapshot defaults to `.azhou/repo-pedant/inventory.json`; multi
 To import the prior `.repo-pedant/` state root, review and bind one explicit migration plan:
 
 ```bash
-python3 "$SKILL_DIR/scripts/migrate_state.py" --project /absolute/project
-python3 "$SKILL_DIR/scripts/migrate_state.py" \
+python "$SKILL_DIR/scripts/migrate_state.py" --project /absolute/project
+python "$SKILL_DIR/scripts/migrate_state.py" \
   --project /absolute/project --apply --plan-id '<reviewed-planId>'
 ```
 
@@ -97,4 +97,11 @@ Use `hold` instead of `none_discovered` when a candidate cannot be inspected or 
 
 The optional hook stores only gate counters under `.azhou/repo-pedant/hooks/`. It never stores document or transcript bodies.
 
-Hook fragments live under `assets/hooks/`. Copy the relevant fragment into the host's supported configuration, replace `/absolute/path/to/repo-pedant`, then run the doctor command from [trigger-hooks.md](trigger-hooks.md). Skill installation alone does not install hooks.
+Hook fragments are rendered, never copied by hand: run the renderer, review the absolute paths, then merge the printed JSON into the host's supported configuration and run the doctor command from [trigger-hooks.md](trigger-hooks.md). Skill installation alone does not install hooks.
+
+```bash
+python "$SKILL_DIR/scripts/closeout_hook.py" render-hooks --format claude
+python "$SKILL_DIR/scripts/closeout_hook.py" render-hooks --format codex
+```
+
+Host shell premise: rendered commands are POSIX shell syntax executed by the host shell — on Windows this requires Git Bash (a PowerShell fallback is outside the supported claim). Pass `--python` to bind a different host interpreter. The event core is fail-open and always exits 0 in advisory mode.

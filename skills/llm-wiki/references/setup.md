@@ -14,9 +14,9 @@ No Node package, hosted database, model API, or global configuration is required
 SKILL_DIR=/absolute/path/to/llm-wiki
 PROJECT_ROOT=/absolute/path/to/project
 
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --help
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
+python "$SKILL_DIR/scripts/llm_wiki.py" --help
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
 ~~~
 
 `init` creates `<project>/.azhou/llm-wiki/`, secures the directory to the current user, and writes its private-by-default `.gitignore` and generated `index.md`.
@@ -27,14 +27,14 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
 
 ~~~bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \
-  python3 "$SKILL_DIR/scripts/llm_wiki_mcp.py"
+  python "$SKILL_DIR/scripts/llm_wiki_mcp.py"
 ~~~
 
 Render a configuration fragment, review absolute paths, then merge only the emitted `llm-wiki` entry into the active MCP client configuration:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-mcp \
-  --skill-dir "$SKILL_DIR" --python "$(command -v python3)"
+python "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-mcp \
+  --skill-dir "$SKILL_DIR" --python "$(command -v python)"
 ~~~
 
 The renderer prints JSON only. It never edits configuration files.
@@ -47,20 +47,22 @@ The neutral event core supports `session-start`, `pre-compact`, and `session-end
 
 ~~~bash
 printf '%s\n' '{"cwd":"/absolute/path/to/project"}' | \
-  python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" hook session-start
+  python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" hook session-start
 ~~~
 
 Render command hooks for a compatible event host:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-hooks \
-  --skill-dir "$SKILL_DIR" --python "$(command -v python3)"
+python "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-hooks \
+  --skill-dir "$SKILL_DIR" --python "$(command -v python)"
 ~~~
+
+Host shell premise: rendered hook commands are POSIX shell syntax executed by the host shell — on Windows this requires Git Bash; a PowerShell fallback is outside the supported claim.
 
 Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.azhou/llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" config --auto-capture true
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" config --auto-capture true
 ~~~
 
 Disable with the same command and `false`. Capture stores a one-way session reference only; no raw session identifier or transcript is retained.
@@ -70,7 +72,7 @@ Disable with the same command and `false`. Capture stores a one-way session refe
 The explicit command template lives at `assets/host/commands/wiki.md`. Copy it only into a recognized command location after reviewing namespace rules. Test trigger classification without installation:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" trigger "wiki query"
+python "$SKILL_DIR/scripts/llm_wiki_adapter.py" trigger "wiki query"
 ~~~
 
 ## Migration and rollback
@@ -78,14 +80,14 @@ python3 "$SKILL_DIR/scripts/llm_wiki_adapter.py" trigger "wiki query"
 Dry-run a recognized prior store:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
   migrate --from-store .llm-wiki
 ~~~
 
 After reviewing `files`, `target`, `sourcePreserved`, and `autoCaptureReset`, apply:
 
 ~~~bash
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
   migrate --from-store .llm-wiki --apply --plan-id '<reviewed-planId>'
 ~~~
 

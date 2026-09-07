@@ -516,8 +516,6 @@ class SkillPackageTest(unittest.TestCase):
             SKILL_DIR / "assets" / "evolution-signal.schema.json",
             SKILL_DIR / "assets" / "evolution-candidate.schema.json",
             SKILL_DIR / "assets" / "execution-protocol.schema.json",
-            SKILL_DIR / "assets" / "hooks" / "codex-hooks.fragment.json",
-            SKILL_DIR / "assets" / "hooks" / "claude-hooks.fragment.json",
             ROOT / "benchmarks" / "repo-pedant" / "manifest.json",
             ROOT / "benchmarks" / "repo-pedant" / "neat-freak-parity.json",
             ROOT / "benchmarks" / "repo-pedant" / "regression-map.json",

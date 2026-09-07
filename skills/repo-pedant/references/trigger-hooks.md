@@ -74,11 +74,11 @@ Advance `progress` only after a completed closeout step. Set `unrecorded_progres
 Core smoke checks:
 
 ```bash
-python3 <skill-dir>/scripts/closeout_hook.py event \
+python <skill-dir>/scripts/closeout_hook.py event \
   --event stop --workspace /absolute/project/root \
   --format plain --mode advisory
 
-python3 <skill-dir>/scripts/closeout_hook.py event \
+python <skill-dir>/scripts/closeout_hook.py event \
   --event precompact --workspace /absolute/project/root \
   --format plain --mode advisory
 ```
@@ -87,8 +87,9 @@ python3 <skill-dir>/scripts/closeout_hook.py event \
 
 ## Host installation
 
-- Codex: merge `assets/hooks/codex-hooks.fragment.json` into the supported workspace/global hook configuration. Keep `--mode advisory`; the audited adapter is non-blocking.
-- Claude Code: merge `assets/hooks/claude-hooks.fragment.json`. Advisory is default. To opt into tested Stop blocking, change only the Stop command to `--mode gate`; private counters cap blocks at three and require progress between blocks.
+- Codex: render with `python <skill-dir>/scripts/closeout_hook.py render-hooks --format codex`, review the absolute paths, then merge the printed JSON into the supported workspace/global hook configuration. Keep `--mode advisory`; the audited adapter is non-blocking.
+- Claude Code: render with `python <skill-dir>/scripts/closeout_hook.py render-hooks --format claude`, review the absolute paths, then merge the printed JSON. Advisory is default. To opt into tested Stop blocking, render with `--mode gate` — only the Stop command changes; private counters cap blocks at three and require progress between blocks.
+- Host shell premise: rendered commands are POSIX shell syntax executed by the host shell — on Windows this requires Git Bash; a PowerShell fallback is outside the supported claim. The event core is fail-open (always exits 0 in advisory mode), so no shell-level failure cushion is needed.
 - Pi: call the same core from an explicitly activated `agent_end`/`pre_compact` extension; keep per-session activation in the extension and advisory output unless its continuation contract is tested.
 - OpenCode, Cursor, zcode, and other harnesses: wire Stop/agent-end only after verifying event input/output and workspace identity. Until then use the project rule or skill trigger; do not claim a hook is active.
 
@@ -99,7 +100,7 @@ Optional always-loaded reminder text lives at `assets/hooks/project-rule.md`.
 Run after installation and after host upgrades:
 
 ```bash
-python3 <skill-dir>/scripts/closeout_hook.py doctor \
+python <skill-dir>/scripts/closeout_hook.py doctor \
   --workspace /absolute/project/root \
   --config /absolute/workspace-hook-config.json \
   --require-env HOST_HOOKS_ENABLED=1
