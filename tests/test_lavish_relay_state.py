@@ -63,7 +63,8 @@ class SpecRelayStateTest(unittest.TestCase):
             self.assertIn("@media(max-width:36rem)", text)
             self.assertIn("width:min(calc(100% - 2rem),72rem)", text)
             self.assertIn("var(--sr-fg) 68%", text)
-            self.assertEqual(0o640, path.stat().st_mode & 0o777)
+            if os.name != "nt":  # os.chmod on Windows implements only the read-only bit
+                self.assertEqual(0o640, path.stat().st_mode & 0o777)
             state = json.loads(self._run("show", str(path)).stdout)
             self.assertTrue(state["packet_id"])
             self.assertEqual(0, state["state_revision"])

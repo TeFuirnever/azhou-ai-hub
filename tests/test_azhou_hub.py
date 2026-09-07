@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -317,6 +318,7 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("conflict", stale["skills"][0]["status"])
             self.assertEqual("version one\n", (target / "sample" / "SKILL.md").read_text(encoding="utf-8"))
 
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits are not portable to Windows")
     def test_doctor_rejects_executable_permission_drift_in_a_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, source, target = self._fixture_repo(directory)
