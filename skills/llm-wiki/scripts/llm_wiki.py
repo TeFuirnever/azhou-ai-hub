@@ -1459,6 +1459,24 @@ def handle_hook(args: argparse.Namespace, base_store: WikiStore) -> int:
     return 0
 
 
+def supersession_candidates(store: WikiStore, page: Page) -> list[str]:
+    """List same-topic decision pages that this page may supersede.
+
+    Shared by the CLI and the MCP surface; callers render the bounded
+    candidate text with SUPERCESSION_LIMIT.
+    """
+    if page.category != "decision":
+        return []
+    page_tags = {tag.lower() for tag in page.tags}
+    return sorted(
+        other.filename
+        for other in store.pages()
+        if other.category == "decision"
+        and other.filename != page.filename
+        and page_tags.intersection(tag.lower() for tag in other.tags)
+    )
+
+
 def run(args: argparse.Namespace) -> int:
     store = WikiStore(args.root)
     command = args.command
@@ -1498,21 +1516,13 @@ def run(args: argparse.Namespace) -> int:
             )
         result: dict[str, Any] = {"page": page.metadata(), "action": action}
         next_action = "Query the stored fact with a key term."
-        if page.category == "decision":
-            page_tags = {tag.lower() for tag in page.tags}
-            matches = sorted(
-                other.filename
-                for other in store.pages()
-                if other.category == "decision"
-                and other.filename != page.filename
-                and page_tags.intersection(tag.lower() for tag in other.tags)
-            )
-            if matches:
-                shown = matches[:SUPERCESSION_LIMIT]
-                hidden = len(matches) - len(shown)
-                result["supersessionCandidates"] = shown
-                suffix = f", and {hidden} more" if hidden else ""
-                next_action = f"Review supersession candidates: {', '.join(shown)}{suffix}."
+        matches = supersession_candidates(store, page)
+        if matches:
+            shown = matches[:SUPERCESSION_LIMIT]
+            hidden = len(matches) - len(shown)
+            result["supersessionCandidates"] = shown
+            suffix = f", and {hidden} more" if hidden else ""
+            next_action = f"Review supersession candidates: {', '.join(shown)}{suffix}."
         emit(
             command,
             status="pass",

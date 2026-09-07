@@ -29,6 +29,7 @@ EXPECTED_TOOLS = [
     "wiki_list",
     "wiki_read",
     "wiki_delete",
+    "wiki_archive",
 ]
 
 
@@ -55,9 +56,21 @@ class LLMWikiFullParityTests(unittest.TestCase):
             ],
             ingest["properties"]["category"]["enum"],
         )
-        self.assertTrue(tools[-1]["annotations"]["destructiveHint"])
+        self.assertEqual(
+            ["proposed", "implemented", "rejected"],
+            ingest["properties"]["lifecycle"]["enum"],
+        )
+        add = tools[3]["inputSchema"]
+        self.assertEqual(
+            ["proposed", "implemented", "rejected"],
+            add["properties"]["lifecycle"]["enum"],
+        )
+        archive = tools[-1]
+        self.assertEqual("wiki_archive", archive["name"])
+        self.assertEqual({"page", "confirm"}, set(archive["inputSchema"]["required"]))
+        self.assertTrue(archive["annotations"]["destructiveHint"])
 
-    def test_mcp_all_seven_operations_use_working_directory(self) -> None:
+    def test_mcp_all_eight_operations_use_working_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             common = {"workingDirectory": str(root)}
@@ -95,6 +108,92 @@ class LLMWikiFullParityTests(unittest.TestCase):
                     "wiki_delete", {**common, "page": "mcp-page", "confirm": True}
                 )["content"][0]["text"],
             )
+
+    def test_mcp_archive_matches_cli_archive(self) -> None:
+        def seed_and_archive(root: Path, *, via_mcp: bool) -> dict:
+            root.mkdir(parents=True)
+            if via_mcp:
+                created = llm_wiki_mcp.call_tool(
+                    "wiki_add",
+                    {
+                        "workingDirectory": str(root),
+                        "title": "Freeze this decision",
+                        "content": "Decision body with an alternatives section.",
+                        "category": "decision",
+                        "lifecycle": "implemented",
+                    },
+                )
+                self.assertNotIn("isError", created)
+                archived = llm_wiki_mcp.call_tool(
+                    "wiki_archive",
+                    {"workingDirectory": str(root), "page": "Freeze this decision", "confirm": True},
+                )
+                self.assertNotIn("isError", archived)
+            else:
+                store = llm_wiki.WikiStore(root)
+                store.add(
+                    title="Freeze this decision",
+                    content="Decision body with an alternatives section.",
+                    tags=[],
+                    category="decision",
+                    sources=[],
+                    confidence="medium",
+                    lifecycle="implemented",
+                )
+                store.archive(title="Freeze this decision")
+            store_root = root / ".azhou" / "llm-wiki"
+            lock = json.loads((store_root / ".archive-lock.json").read_text(encoding="utf-8"))
+            entry = lock["entries"]["freeze-this-decision.md"]
+            digest = hashlib.sha256((store_root / "freeze-this-decision.md").read_bytes()).hexdigest()
+            self.assertEqual(digest, entry["sha256"])
+            return entry
+
+        with tempfile.TemporaryDirectory() as directory:
+            mcp_entry = seed_and_archive(Path(directory) / "mcp", via_mcp=True)
+            cli_entry = seed_and_archive(Path(directory) / "cli", via_mcp=False)
+            # The archive mechanism is one core function, so both surfaces
+            # record the same lock-entry shape; page timestamps make the
+            # digests themselves run-specific, and each helper already proved
+            # its digest matches its own frozen bytes.
+            self.assertEqual(set(cli_entry), set(mcp_entry))
+            self.assertEqual(cli_entry["title"], mcp_entry["title"])
+
+    def test_mcp_archive_requires_confirm_and_frozen_pages_hold(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            common = {"workingDirectory": directory}
+            created = llm_wiki_mcp.call_tool(
+                "wiki_add",
+                {
+                    **common,
+                    "title": "Archive Me",
+                    "content": "Decision body.",
+                    "category": "decision",
+                    "lifecycle": "implemented",
+                },
+            )
+            self.assertNotIn("isError", created)
+            held = llm_wiki_mcp.call_tool("wiki_archive", {**common, "page": "Archive Me"})
+            self.assertTrue(held["isError"])
+            archived = llm_wiki_mcp.call_tool(
+                "wiki_archive", {**common, "page": "Archive Me", "confirm": True}
+            )
+            self.assertIn("Archived decision page", archived["content"][0]["text"])
+            refrozen = llm_wiki_mcp.call_tool(
+                "wiki_archive", {**common, "page": "Archive Me", "confirm": True}
+            )
+            self.assertTrue(refrozen["isError"])
+            conflicting = llm_wiki_mcp.call_tool(
+                "wiki_ingest",
+                {
+                    **common,
+                    "title": "Archive Me",
+                    "content": "Attempt to touch a frozen page.",
+                    "tags": ["frozen"],
+                    "category": "decision",
+                },
+            )
+            self.assertTrue(conflicting["isError"])
+            self.assertIn("frozen", conflicting["content"][0]["text"])
 
     def test_mcp_enforces_input_limits_and_root_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
