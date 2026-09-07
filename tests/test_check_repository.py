@@ -61,7 +61,7 @@ class InvocationAxisTest(unittest.TestCase):
                 check_invocation_axis(root),
             )
 
-    def test_undeclared_super_caveman_stays_legal_until_its_promotion_ride(self) -> None:
+    def test_missing_invocation_declaration_fails_except_the_held_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             skill = root / "skills" / "prose-standard" / "SKILL.md"
@@ -70,7 +70,20 @@ class InvocationAxisTest(unittest.TestCase):
                 "---\nname: prose-standard\ndescription: probe\n---\n# Prose Standard\n",
                 encoding="utf-8",
             )
-            self.assertEqual([], check_invocation_axis(root))
+            self.assertEqual(
+                ["skill invocation declaration missing: skills/prose-standard/SKILL.md"],
+                check_invocation_axis(root),
+            )
+            held = root / "skills" / "super-caveman" / "SKILL.md"
+            held.parent.mkdir(parents=True)
+            held.write_text(
+                "---\nname: super-caveman\ndescription: probe\n---\n# Super Caveman\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                [],
+                [e for e in check_invocation_axis(root) if "super-caveman" in e],
+            )
 
 
 def copy_skill_brand_surfaces(root: Path) -> None:
