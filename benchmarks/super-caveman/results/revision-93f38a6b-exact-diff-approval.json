@@ -2,16 +2,16 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-07T02:40:52Z",
+  "approved_at": "2026-09-07T02:52:36Z",
   "base_commit": "0e0b7087672a67a148a4a2768e5f665dc56711d0",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "49c715c6f2d92ec95a70adb7af8f8f62a2b2f70356517b830ddcc62b8592fd1f",
-  "staged_patch_sha256": "a29a99ae35fc30e0b757f8cfcf0d99c1854ac7545e13595a57940eb26a16e98f",
+  "staged_patch_sha256": "ce6381475d9bef1bfd5b30a668653b47e1f0a63138ae15400b7e14cce5b6959e",
   "reviewed_blobs": [
     {
       "path": "CHANGELOG.md",
       "old_oid": "b78e86b1fa90cdbd2e9785008565eb1152761105",
-      "new_oid": "70debda5de31343ba9feb7988319001ac862c957"
+      "new_oid": "e459dc70a3acb1e1d94cf183e1281c06b57614ee"
     },
     {
       "path": "benchmarks/repo-pedant/results.tsv",
