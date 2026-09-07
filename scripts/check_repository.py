@@ -263,12 +263,21 @@ def check_router_coverage(root: Path) -> list[str]:
     ]
 
 
-def check_invocation_axis(root: Path) -> list[str]:
-    """Validate declared `invocation` values against docs/skill-standard.md.
+GATE_HELD_INVOCATIONS = {
+    # super-caveman's whole tree is frozen by its promotion digest
+    # (93f38a6b...), so its invocation class is held here until the next
+    # super-caveman promotion ride migrates it into SKILL.md frontmatter.
+    "skills/super-caveman/SKILL.md": "user-invoked orchestrator",
+}
 
-    Fourteen of fifteen canonical packages declare the key; super-caveman's
-    declaration is frozen with its promotion digest and rides its next
-    promotion ride. Unknown declared values fail closed.
+
+def check_invocation_axis(root: Path) -> list[str]:
+    """Require the invocation class for every canonical skill.
+
+    Fourteen packages declare the class in SKILL.md frontmatter;
+    super-caveman's class is held in GATE_HELD_INVOCATIONS because its
+    promotion digest freezes the whole skill tree. Values outside the
+    docs/skill-standard.md enum fail closed.
     """
     errors: list[str] = []
     for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
@@ -281,15 +290,20 @@ def check_invocation_axis(root: Path) -> list[str]:
             errors.append(f"cannot read skill frontmatter {relative}: {exc}")
             continue
         match = SKILL_FRONTMATTER_PATTERN.match(text)
-        if not match:
-            continue
-        declared = [
-            line.partition(":")[2].strip()
-            for line in match.group("frontmatter").splitlines()
-            if line.partition(":")[0].strip() == "invocation"
-        ]
-        if declared and declared[0] not in INVOCATION_CLASSES:
-            errors.append(f"skill invocation enum invalid: {relative}: {declared[0]}")
+        declared = None
+        if match:
+            declared = [
+                line.partition(":")[2].strip()
+                for line in match.group("frontmatter").splitlines()
+                if line.partition(":")[0].strip() == "invocation"
+            ]
+            declared = declared[0] if declared else None
+        if declared is None and relative in GATE_HELD_INVOCATIONS:
+            declared = GATE_HELD_INVOCATIONS[relative]
+        if declared is None:
+            errors.append(f"skill invocation declaration missing: {relative}")
+        elif declared not in INVOCATION_CLASSES:
+            errors.append(f"skill invocation enum invalid: {relative}: {declared}")
     return errors
 
 
