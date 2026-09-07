@@ -23,7 +23,7 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
 
 ## MCP server
 
-`scripts/llm_wiki_mcp.py` exposes seven tools over newline-delimited JSON-RPC stdio. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.azhou/llm-wiki/`.
+`scripts/llm_wiki_mcp.py` exposes eight tools over newline-delimited JSON-RPC stdio; `wiki_add` and `wiki_ingest` accept an optional decision `lifecycle`, and `wiki_archive` freezes an implemented decision page. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.azhou/llm-wiki/`.
 
 ~~~bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \

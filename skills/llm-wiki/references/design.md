@@ -54,6 +54,6 @@ Release requires all of these:
 
 1. Product-surface negative scan contains no historical path, brand, or host-specific term outside mandatory legal provenance.
 2. Fixed Azhou stage anchors map honestly to receipt v3; machine outputs contain no brand emoji.
-3. CLI, seven MCP tools, and three lifecycle events pass real-process integration tests against `.azhou/llm-wiki/`.
+3. CLI, eight MCP tools, and three lifecycle events pass real-process integration tests against `.azhou/llm-wiki/`.
 4. Migration proves dry-run, atomic apply, idempotent retry, conflict rejection, privacy reset, and source preservation.
 5. Repository policy, unit tests, benchmark-integrity suites, whitespace checks, and knowledge-graph coverage pass with no unreviewed code gaps.

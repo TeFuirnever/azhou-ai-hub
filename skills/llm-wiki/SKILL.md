@@ -51,7 +51,7 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" lint --no-log
 
 Use `--content-file -` for reviewed stdin content. Prefer file input over shell-escaped multiline text.
 
-Configured MCP clients receive exactly seven tools: `wiki_ingest`, `wiki_query`, `wiki_lint`, `wiki_add`, `wiki_list`, `wiki_read`, and `wiki_delete`. Apply the same evidence, privacy, lint, and deletion checkpoints as the CLI; `wiki_delete` requires `confirm: true` after direct authorization.
+Configured MCP clients receive exactly eight tools: `wiki_ingest`, `wiki_query`, `wiki_lint`, `wiki_add`, `wiki_list`, `wiki_read`, `wiki_delete`, and `wiki_archive`. Apply the same evidence, privacy, lint, and deletion checkpoints as the CLI; `wiki_delete` and `wiki_archive` require `confirm: true` after direct authorization, and `wiki_archive` freezes an implemented decision page under a recorded content hash.
 
 ## Migration checkpoint
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standard-library MCP stdio server for the seven LLM Wiki tools."""
+"""Standard-library MCP stdio server for the eight LLM Wiki tools."""
 
 from __future__ import annotations
 
@@ -49,6 +49,11 @@ TAGS = {
     "description": "Searchable tags",
 }
 CATEGORY = {"type": "string", "enum": CATEGORY_VALUES, "description": "Page category"}
+LIFECYCLE = {
+    "type": "string",
+    "enum": ["proposed", "implemented", "rejected"],
+    "description": "Decision-page lifecycle (requires category: decision; archived is reached only through wiki_archive)",
+}
 
 
 TOOL_DEFINITIONS = [
@@ -67,6 +72,7 @@ TOOL_DEFINITIONS = [
                     "maxItems": 10,
                 },
                 "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+                "lifecycle": LIFECYCLE,
                 "workingDirectory": WORKING_DIRECTORY,
             },
             ("title", "content", "tags", "category"),
@@ -103,6 +109,7 @@ TOOL_DEFINITIONS = [
                 "content": CONTENT,
                 "tags": TAGS,
                 "category": CATEGORY,
+                "lifecycle": LIFECYCLE,
                 "workingDirectory": WORKING_DIRECTORY,
             },
             ("title", "content"),
@@ -133,6 +140,22 @@ TOOL_DEFINITIONS = [
                 "confirm": {
                     "type": "boolean",
                     "description": "Must be true only after the user authorizes this deletion",
+                },
+                "workingDirectory": WORKING_DIRECTORY,
+            },
+            ("page", "confirm"),
+        ),
+        "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False},
+    },
+    {
+        "name": "wiki_archive",
+        "description": "Freeze a decision page as archived. Requires a decision page with lifecycle: implemented; the page becomes byte-frozen under a recorded content hash.",
+        "inputSchema": object_schema(
+            {
+                "page": {"type": "string", "description": "Decision page title or filename"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true only after the user authorizes this archive",
                 },
                 "workingDirectory": WORKING_DIRECTORY,
             },
@@ -198,6 +221,25 @@ def page_argument(arguments: dict[str, Any]) -> str:
     return page if page.endswith(".md") else f"{page}.md"
 
 
+def supersession_lines(store: llm_wiki.WikiStore, page: Any) -> list[str]:
+    candidates = llm_wiki.supersession_candidates(store, page)
+    if not candidates:
+        return []
+    shown = candidates[: llm_wiki.SUPERCESSION_LIMIT]
+    hidden = len(candidates) - len(shown)
+    suffix = f", and {hidden} more" if hidden else ""
+    return [f"- Supersession candidates: {', '.join(shown)}{suffix} — review before continuing."]
+
+
+def optional_lifecycle(arguments: dict[str, Any]) -> str | None:
+    lifecycle = arguments.get("lifecycle")
+    if lifecycle is None:
+        return None
+    if not isinstance(lifecycle, str) or lifecycle not in ("proposed", "implemented", "rejected"):
+        raise llm_wiki.WikiError("lifecycle must be proposed, implemented, or rejected")
+    return lifecycle
+
+
 def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
     values = arguments if isinstance(arguments, dict) else {}
     try:
@@ -211,6 +253,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             confidence = values.get("confidence", "medium")
             if confidence not in llm_wiki.CONFIDENCE_RANK:
                 raise llm_wiki.WikiError("confidence must be high, medium, or low")
+            lifecycle = optional_lifecycle(values)
             page, action = store.ingest(
                 title=title,
                 content=content,
@@ -218,10 +261,13 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
                 category=category,
                 sources=sources,
                 confidence=confidence,
+                lifecycle=lifecycle,
             )
             created = page.filename if action == "created" else "none"
             updated = page.filename if action == "updated" else "none"
-            return text_result(f"Wiki ingest complete.\n- Created: {created}\n- Updated: {updated}\n- Total affected: 1")
+            lines = [f"Wiki ingest complete.", f"- Created: {created}", f"- Updated: {updated}", "- Total affected: 1"]
+            lines.extend(supersession_lines(store, page))
+            return text_result("\n".join(lines))
 
         if name == "wiki_query":
             query = require_string(values, "query")
@@ -274,6 +320,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             category = values.get("category", "reference")
             if category not in llm_wiki.CATEGORIES:
                 raise llm_wiki.WikiError(f"unsupported category: {category}")
+            lifecycle = optional_lifecycle(values)
             page = store.add(
                 title=title,
                 content=content,
@@ -281,8 +328,11 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
                 category=category,
                 sources=[],
                 confidence="medium",
+                lifecycle=lifecycle,
             )
-            return text_result(f"Wiki page created: {page.filename}\nPath: {store.store}/{page.filename}")
+            lines = [f"Wiki page created: {page.filename}", f"Path: {store.store}/{page.filename}"]
+            lines.extend(supersession_lines(store, page))
+            return text_result("\n".join(lines))
 
         if name == "wiki_list":
             index = store.directory / llm_wiki.INDEX_FILE
@@ -326,6 +376,16 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
                 return text_result(f"Wiki page not found: {filename}", error=True)
             return text_result(f"Deleted wiki page: {filename}")
 
+        if name == "wiki_archive":
+            archived_title = require_string(values, "page")
+            if values.get("confirm") is not True:
+                return text_result("Archiving requires confirm=true after explicit user authorization.", error=True)
+            frozen = store.archive(title=archived_title)
+            return text_result(
+                f"Archived decision page: {frozen.filename}\n"
+                "The page is byte-frozen under a recorded content hash. Run wiki_lint to verify archive integrity."
+            )
+
         return text_result(f"Unknown tool: {name}", error=True)
     except (llm_wiki.WikiError, OSError, ValueError) as exc:
         prefixes = {
@@ -336,6 +396,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             "wiki_list": "Error listing wiki",
             "wiki_read": "Error reading wiki page",
             "wiki_delete": "Error deleting wiki page",
+            "wiki_archive": "Error archiving wiki page",
         }
         return text_result(f"{prefixes.get(name, f'Error in {name}')}: {exc}", error=True)
 
@@ -388,7 +449,7 @@ def serve() -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Expose all seven LLM Wiki operations over MCP stdio")
+    parser = argparse.ArgumentParser(description="Expose all eight LLM Wiki operations over MCP stdio")
     return parser
 
 
