@@ -61,7 +61,7 @@ class InvocationAxisTest(unittest.TestCase):
                 check_invocation_axis(root),
             )
 
-    def test_absent_invocation_key_stays_legal(self) -> None:
+    def test_undeclared_super_caveman_stays_legal_until_its_promotion_ride(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             skill = root / "skills" / "prose-standard" / "SKILL.md"

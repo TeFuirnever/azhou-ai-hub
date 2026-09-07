@@ -1,6 +1,7 @@
 ---
 name: excalidraw-diagram
 description: Build or edit accurate, editable Excalidraw scenes; render the real scene, inspect the image, run deterministic layout/style checks, and deliver source plus requested exports. Use for workflows, architectures, sequences, data flows, concept maps, or existing .excalidraw files. Supports native JSON, offline Mermaid/SVG conversion, official component libraries, CJK-safe SVG/PNG export, and optional interactive preview.
+invocation: user-invoked orchestrator
 ---
 
 # Excalidraw Diagram

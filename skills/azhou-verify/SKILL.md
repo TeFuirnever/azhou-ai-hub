@@ -1,6 +1,7 @@
 ---
 name: azhou-verify
 description: Run and report the authoritative Azhou AI Hub repository verification gate. Use before completion, handoff, commit, pull request, release, or when full-codebase evidence is requested.
+invocation: both
 ---
 
 # Azhou Verify

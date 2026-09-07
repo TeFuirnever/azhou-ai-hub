@@ -1,6 +1,7 @@
 ---
 name: repo-pedant
 description: Reconcile repository knowledge at explicit task close. MUST trigger for sync up, tidy or clean up docs, update memory, /sync, /neat, /repo-pedant, 同步一下, 整理文档, 整理一下, 更新记忆, 梳理一下, 收尾, 这个阶段做完了, 新人能直接上手, stale docs, conflicting memories, clean handoff, or bare tidy/整理 in development context, 检查项目技术债务, 仓库健康检查, repo health check. An audit phrasing invites a repository-level review; a request scoped to a single file or task stays ordinary work. Inferred completion only reminds; ordinary implementation that merely mentions or edits this skill does not authorize closeout.
+invocation: both
 ---
 
 # Repo Pedant

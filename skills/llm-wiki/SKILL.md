@@ -1,6 +1,7 @@
 ---
 name: llm-wiki
 description: Build, query, lint, migrate, and maintain a private project Markdown wiki when verified architecture, decisions, debugging facts, or conventions must persist across sessions. Do not use it for global memory, ephemeral scratch notes, secrets, or unreviewed transcripts.
+invocation: both
 ---
 
 # LLM Wiki

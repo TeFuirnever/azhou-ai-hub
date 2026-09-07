@@ -1,6 +1,7 @@
 ---
 name: lavish
 description: Turn complex or visual agent responses into rich, reviewable HTML artifacts that users can annotate and send feedback on through the Lavish Editor CLI, and relay a PRD, RFC, design spec, or technical plan with comments, selected-text annotations, feedback disposition, and next-owner state inside one portable HTML file. Use for visual artifacts, HTML explainers, interactive prototypes, review surfaces, product or technical plans, team spec review or transfer, comparisons, diagrams, tables, code views, reports, slides, or browser-based feedback loops.
+invocation: user-invoked orchestrator
 ---
 
 # Lavish Editor
