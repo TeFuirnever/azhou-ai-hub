@@ -79,18 +79,20 @@ gzipped — is vendored at `references/libraries/`, and
 
 ```bash
 L="$SKILL_DIR/scripts/excalidraw_lib.py"
-python3 $L catalog                              # offline inventory of all vendored libs
-python3 $L search firewall                      # match by filename or item name
-python3 $L items dwelle/network-topology-icons.excalidrawlib   # flags image-based items
-python3 $L merge scene.excalidraw dwelle/network-topology-icons.excalidrawlib Firewall 400 150 \
+python $L catalog                              # offline inventory of all vendored libs
+python $L search firewall                      # match by filename or item name
+python $L items dwelle/network-topology-icons.excalidrawlib   # flags image-based items
+python $L merge scene.excalidraw dwelle/network-topology-icons.excalidrawlib Firewall 400 150 \
     --scale 1.2 --strip-text --roughness 1
 ```
 
 Browse the full inventory + a verified quick-pick table (entity type → library
 → item name) in [`icon-catalog.md`](icon-catalog.md).
 Resolution order for `<source>`: local path → vendored `.gz` → network fetch.
-Only non-vendored future libraries need the manual pre-cache:
-`curl -sL https://raw.githubusercontent.com/excalidraw/excalidraw-libraries/main/libraries/<author>/<lib>.excalidrawlib -o /tmp/excalidraw-libs/<author>/<lib>.excalidrawlib`.
+Only non-vendored future libraries need the manual pre-cache into the helper's
+cache directory (`tempfile.gettempdir()/excalidraw-libs` — `/tmp/excalidraw-libs`
+on macOS/Linux, `%TEMP%\excalidraw-libs` on Windows):
+`curl -sL https://raw.githubusercontent.com/excalidraw/excalidraw-libraries/main/libraries/<author>/<lib>.excalidrawlib -o "<cache-dir>/<author>/<lib>.excalidrawlib"`.
 
 Rules: vector only — the script refuses items containing `image` elements (they
 won't render; `items` flags them `[HAS IMAGE]`); icons accent a diagram, they
