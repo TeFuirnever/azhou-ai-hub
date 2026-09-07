@@ -38,3 +38,10 @@ curl -fsSL https://raw.githubusercontent.com/kunchenguid/lavish-axi/232972beba9e
 ```
 
 Expected SHA-256: `7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857`.
+
+On platforms without `shasum` (e.g. Windows), the standard-library equivalent:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kunchenguid/lavish-axi/232972beba9e0e4e75682c98f2aeb2cf01532122/skills/lavish/SKILL.md \
+  | python -c "import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())"
+```

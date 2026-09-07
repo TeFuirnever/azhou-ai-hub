@@ -32,11 +32,11 @@ Usage:
 <source> is "author/name.excalidrawlib" (vendored or fetched from the official repo)
 or a path to a local .excalidrawlib file.
 """
-import argparse, copy, gzip, json, math, os, re, sys, urllib.request
+import argparse, copy, gzip, json, math, os, re, sys, tempfile, urllib.request
 from pathlib import Path
 
 BASE = "https://raw.githubusercontent.com/excalidraw/excalidraw-libraries/main"
-CACHE = "/tmp/excalidraw-libs"
+CACHE = os.path.join(tempfile.gettempdir(), "excalidraw-libs")
 VENDORED = Path(__file__).resolve().parent.parent / "references" / "libraries"
 SOURCE_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.excalidrawlib$")
 
@@ -50,7 +50,7 @@ def fetch(url, dest):
 
 
 def load_index():
-    return json.load(open(fetch(f"{BASE}/libraries.json", f"{CACHE}/libraries.json")))
+    return json.load(open(fetch(f"{BASE}/libraries.json", f"{CACHE}/libraries.json"), encoding="utf-8"))
 
 
 def vendored_path(source):

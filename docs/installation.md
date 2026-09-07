@@ -25,14 +25,16 @@ The four Foundation Skills are portable UX wrappers around a local checkout. The
 
 ## Checkout-assisted setup
 
+Examples invoke the unversioned `python` interpreter (Python ≥3.10 required). If your system only installs a versioned name — common on macOS — substitute it in the examples, or add the unversioned name via `brew install python`.
+
 For a local checkout, the foundation CLI can plan and reconcile a manual copy or contributor symlink. It requires the exact harness skill root and defaults to a read-only dry-run:
 
 ~~~bash
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
-python3 scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
-python3 scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
+python scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
+python scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
 ~~~
 
 Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a package-manager installation or rewrites harness configuration.
@@ -42,11 +44,11 @@ To let this checkout later repair, switch or remove exactly what it installed, o
 ~~~bash
 RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
   --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
   --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
 ~~~
@@ -56,8 +58,8 @@ The first command is still read-only. Keep the receipt: `repair`, same-target `m
 Existing checkout-managed receipts under the prior metadata root are migration sources only. Diagnose and copy them without deleting the source:
 
 ~~~bash
-python3 scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
-python3 scripts/azhou_hub.py migrate-receipts \
+python scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py migrate-receipts \
   --target "$SKILLS_HOME" --apply --plan-id '<reviewed-planId>' --json
 ~~~
 
@@ -96,6 +98,23 @@ ln -s "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
 
 If a harness cached its skill catalog before the symlink existed, reload the harness or start a new task. Do not create duplicate copies to force refresh.
 
+## Windows notes
+
+All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows, run them in Git Bash (recommended; install Git for Windows) or translate:
+
+| POSIX example | PowerShell equivalent |
+|---|---|
+| `SKILLS_HOME=/absolute/path` | `$env:SKILLS_HOME = "C:\absolute\path"` |
+| `"$SKILLS_HOME"` | `$env:SKILLS_HOME` |
+| `cp -R src dst` | `Copy-Item -Recurse src dst` |
+
+- Checkout-assisted `setup` defaults to `--mode link`, which creates a symlink. Windows requires Developer Mode or an elevated prompt for symlink creation; without it, use `--mode copy`, which needs no special privilege and produces a standalone snapshot.
+- Development symlinks follow the same privilege premise as `--mode link`; without Developer Mode prefer `--mode copy`.
+- Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
+- Hook commands rendered by repo-pedant, super-caveman and LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
+
+A checked-in Windows full-flow receipt (info → setup → verify) is not yet available; it is tracked by the `win-05-rerun-receipt` ticket.
+
 ## One-path rule
 
 For one canonical name, choose exactly one ownership mode and target root. Do not mix modes in one target root:
@@ -126,9 +145,9 @@ Package-manager installations follow the package manager's update/remove command
 For a checkout-managed artifact, inspect before applying:
 
 ~~~bash
-python3 scripts/azhou_hub.py repair --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
-python3 scripts/azhou_hub.py migrate --receipt "$RECEIPT" --target "$SKILLS_HOME" --mode copy --json
-python3 scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py repair --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py migrate --receipt "$RECEIPT" --target "$SKILLS_HOME" --mode copy --json
+python scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
 ~~~
 
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.

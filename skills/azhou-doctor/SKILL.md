@@ -25,7 +25,7 @@ Use `✅ 验证通过` only after the diagnostic command completes and its resul
 ## Workflow
 
 1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
-2. Build `python3 scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
+2. Build `python scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
    - `--target <skill-root>` for an exact install root.
    - `--skill <canonical-name>` for each requested package.
    - `--treehouse-root <pool-root>` for the explicit Treehouse boundary.

@@ -27,7 +27,7 @@ Use `✅ 验证通过` only after the exact reviewed plan is applied when mutati
 1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 2. Require an explicit absolute `--target`. For setup, require the intended canonical skill and choose `link` or `copy`; do not choose a harness root for the user.
 3. Run the selected command without `--apply` and present its JSON plan:
-   - `python3 scripts/azhou_hub.py setup --skill <name> --target </absolute/root> --mode <link|copy> --json` emits a deterministic `planId`.
+   - `python scripts/azhou_hub.py setup --skill <name> --target </absolute/root> --mode <link|copy> --json` emits a deterministic `planId`.
    - Managed setup additionally requires `--managed --receipt <path>` and exactly one skill.
    - `repair`, `migrate`, and `uninstall` require the exact managed receipt plus the same target.
 4. Add `--apply --plan-id <reviewed-planId>` only after the user has authorized that exact plan and target. The CLI recomputes the plan under its mutation lock and rejects drift. A prior general setup request does not authorize a changed target, uninstall, migration, force behavior, or cross-root action.

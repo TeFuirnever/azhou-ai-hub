@@ -18,6 +18,12 @@
 shasum -a 256 references/templates/*.md
 ```
 
+无 `shasum` 的平台（如 Windows）用标准库等价命令，输出同为 `哈希 文件名`：
+
+```bash
+python -c "import sys,hashlib; [print(hashlib.sha256(open(p,'rb').read()).hexdigest(), p) for p in sys.argv[1:]]" references/templates/*.md
+```
+
 哈希与本表不一致 = 模板被改动，先恢复再使用。
 
 ## 同步流程（来源模板演进时）

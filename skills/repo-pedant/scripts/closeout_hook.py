@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -261,6 +262,63 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+CODEX_STATUS_MESSAGE = "🟡 阿舟 · Repo Pedant 正在检查收尾状态"
+
+
+def hook_command(python: str, *, event: str, host_format: str, mode: str) -> str:
+    parts = [
+        shlex.quote(python),
+        shlex.quote(str(Path(__file__).resolve())),
+        "event",
+        "--event",
+        event,
+        "--workspace-from-input",
+        "--format",
+        host_format,
+        "--mode",
+        mode,
+    ]
+    return " ".join(parts)
+
+
+def hook_command_windows(python_windows: str, *, event: str, host_format: str, mode: str) -> str:
+    script = Path(__file__).resolve()
+    return (
+        f'"{python_windows}" "{script}" event --event {event} '
+        f"--workspace-from-input --format {host_format} --mode {mode}"
+    )
+
+
+def cmd_render_hooks(args: argparse.Namespace) -> int:
+    python = args.python or sys.executable
+    precompact_hook: dict[str, Any] = {
+        "type": "command",
+        "command": hook_command(python, event="precompact", host_format=args.format, mode="advisory"),
+    }
+    stop_hook: dict[str, Any] = {
+        "type": "command",
+        "command": hook_command(python, event="stop", host_format=args.format, mode=args.mode),
+        "timeout": 30,
+    }
+    if args.format == "codex":
+        precompact_hook["statusMessage"] = CODEX_STATUS_MESSAGE
+        if args.python_windows:
+            precompact_hook["commandWindows"] = hook_command_windows(
+                args.python_windows, event="precompact", host_format=args.format, mode="advisory"
+            )
+            stop_hook["commandWindows"] = hook_command_windows(
+                args.python_windows, event="stop", host_format=args.format, mode=args.mode
+            )
+    fragment = {
+        "hooks": {
+            "PreCompact": [{"matcher": "*", "hooks": [precompact_hook]}],
+            "Stop": [{"hooks": [stop_hook]}],
+        }
+    }
+    print(json.dumps(fragment, ensure_ascii=False, indent=2))
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -282,12 +340,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     doctor.add_argument("--config", action="append", default=[], type=Path)
     doctor.add_argument("--require-env", action="append", default=[])
     doctor.set_defaults(func=cmd_doctor)
+    render = subparsers.add_parser(
+        "render-hooks", help="print a hooks configuration fragment bound to this interpreter and script"
+    )
+    render.add_argument("--format", choices=("claude", "codex"), required=True)
+    render.add_argument(
+        "--mode", choices=("advisory", "gate"), default="advisory", help="Stop-command mode; PreCompact stays advisory"
+    )
+    render.add_argument(
+        "--python", help="interpreter on the host that runs the hooks (default: the interpreter running this renderer)"
+    )
+    render.add_argument("--python-windows", help="interpreter for the Codex commandWindows field (codex format only)")
+    render.set_defaults(func=cmd_render_hooks)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if getattr(args, "block_cap", 1) < 1 or getattr(args, "max_input_bytes", 1) < 256:
+    if getattr(args, "func", None) is cmd_event and (args.block_cap < 1 or args.max_input_bytes < 256):
         print("invalid positive bound", file=sys.stderr)
         return 2
     return args.func(args)

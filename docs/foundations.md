@@ -16,23 +16,23 @@ The same `SKILL.md` packages can be installed into any Agent Skills-compatible r
 ## Commands
 
 ~~~bash
-python3 scripts/azhou_hub.py info --json
-python3 scripts/azhou_hub.py version --json
-python3 scripts/azhou_hub.py doctor --json
-python3 scripts/azhou_hub.py verify
-python3 scripts/azhou_hub.py verify --promotion-evidence
+python scripts/azhou_hub.py info --json
+python scripts/azhou_hub.py version --json
+python scripts/azhou_hub.py doctor --json
+python scripts/azhou_hub.py verify
+python scripts/azhou_hub.py verify --promotion-evidence
 ~~~
 
 - `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. The `azhou-ai-hub.info.v1` schema adds `primary_commands` as the preferred five-command field while retaining the original `commands` field with the same value; changing the schema discriminator requires an explicitly approved incompatible migration.
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate.
-- `verify` delegates to `python3 scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, the current staged-or-committed Super Caveman exact diff, and Git whitespace without private evidence. Changes to approved paths fail closed until a fresh checked-in promotion receipt matches them.
+- `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, the current staged-or-committed Super Caveman exact diff, and Git whitespace without private evidence. Changes to approved paths fail closed until a fresh checked-in promotion receipt matches them.
 - `verify --promotion-evidence` is a maintainer/release gate. It additionally requires `SUPER_CAVEMAN_APPROVAL_RECORD` and `SUPER_CAVEMAN_REVIEW_RECORD` to name absolute, Git-external files and authenticates them against the same exact diff. Missing or invalid evidence fails closed.
 
 When a task is running inside a Treehouse pool, the doctor can also verify the explicit pool without changing its lease:
 
 ~~~bash
-python3 scripts/azhou_hub.py doctor \
+python scripts/azhou_hub.py doctor \
   --treehouse-root /absolute/path/to/treehouse-pool \
   --json
 ~~~
@@ -48,20 +48,20 @@ Use `--help` on the root command or any subcommand for current options.
 ~~~bash
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --skill repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --json
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --skill repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --apply --plan-id '<reviewed-planId>' \
   --json
 
-python3 scripts/azhou_hub.py doctor \
+python scripts/azhou_hub.py doctor \
   --skill repo-pedant \
   --target "$SKILLS_HOME" \
   --json
@@ -78,7 +78,7 @@ Use managed mode only when this CLI should later repair, switch or remove the ex
 ~~~bash
 RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --managed \
   --receipt "$RECEIPT" \
   --skill repo-pedant \
@@ -86,7 +86,7 @@ python3 scripts/azhou_hub.py setup \
   --mode link \
   --json
 
-python3 scripts/azhou_hub.py setup \
+python scripts/azhou_hub.py setup \
   --managed \
   --receipt "$RECEIPT" \
   --skill repo-pedant \
@@ -102,8 +102,8 @@ The v2 receipt records the canonical source, source digest, explicit target, rec
 Receipts from the prior metadata root are compatibility sources only. Move validated receipts into the hub namespace with a reviewed plan id:
 
 ~~~bash
-python3 scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
-python3 scripts/azhou_hub.py migrate-receipts \
+python scripts/azhou_hub.py migrate-receipts --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py migrate-receipts \
   --target "$SKILLS_HOME" --apply --plan-id '<reviewed-planId>' --json
 ~~~
 
@@ -113,21 +113,21 @@ Legacy `azhou-ai-hub.install-receipt.v1` files remain readable but cannot author
 
 ~~~bash
 # Restore only a missing, receipt-owned artifact.
-python3 scripts/azhou_hub.py repair \
+python scripts/azhou_hub.py repair \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
-python3 scripts/azhou_hub.py repair \
+python scripts/azhou_hub.py repair \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --apply --json
 
 # Switch the same skill at the same target between link and copy.
-python3 scripts/azhou_hub.py migrate \
+python scripts/azhou_hub.py migrate \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --mode copy --json
-python3 scripts/azhou_hub.py migrate \
+python scripts/azhou_hub.py migrate \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --mode copy --apply --json
 
 # Remove only the exact artifact still matching the receipt.
-python3 scripts/azhou_hub.py uninstall \
+python scripts/azhou_hub.py uninstall \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
-python3 scripts/azhou_hub.py uninstall \
+python scripts/azhou_hub.py uninstall \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --apply --json
 ~~~
 

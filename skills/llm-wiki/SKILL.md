@@ -43,11 +43,11 @@ Lifecycle wiring is optional and explicit. `autoCapture` defaults to false, reco
 SKILL_DIR=/absolute/path/to/llm-wiki
 PROJECT_ROOT=/absolute/path/to/project
 
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" ingest --title "Auth decision" --content-file /absolute/note.md --tag auth --category decision --source issue-42 --confidence high
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" query auth --no-log
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" archive --title "Auth decision"
-python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" lint --no-log
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" ingest --title "Auth decision" --content-file /absolute/note.md --tag auth --category decision --source issue-42 --confidence high
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" query auth --no-log
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" archive --title "Auth decision"
+python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" lint --no-log
 ~~~
 
 Use `--content-file -` for reviewed stdin content. Prefer file input over shell-escaped multiline text.

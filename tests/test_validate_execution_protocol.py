@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ FIXTURES = ROOT / "benchmarks" / "repo-pedant" / "protocol"
 class ValidateExecutionProtocolTest(unittest.TestCase):
     def run_validator(self, path: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["python3", str(SCRIPT), str(path)],
+            [sys.executable, str(SCRIPT), str(path)],
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -44,7 +45,7 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
             protocol.parent.mkdir(parents=True)
             protocol.write_bytes((FIXTURES / "valid.execution.json").read_bytes())
             result = subprocess.run(
-                ["python3", str(SCRIPT)],
+                [sys.executable, str(SCRIPT)],
                 cwd=project,
                 text=True,
                 capture_output=True,

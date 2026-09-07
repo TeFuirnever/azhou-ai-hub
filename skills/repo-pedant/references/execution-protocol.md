@@ -28,7 +28,7 @@ Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 r
 先完成所有检查，再把准备发送的成功事件写进 record。运行：
 
 ```bash
-python3 <skill-dir>/scripts/validate_execution_protocol.py \
+python <skill-dir>/scripts/validate_execution_protocol.py \
   /absolute/project/.azhou/repo-pedant/execution.json
 ```
 

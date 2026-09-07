@@ -26,8 +26,8 @@ Use `✅ 验证通过` only after the selected read-only command succeeds and it
 
 1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
 2. Run one read-only command from that checkout:
-   - General project/runtime/support facts and installable repository inventory: `python3 scripts/azhou_hub.py info --json`
-   - Revision, branch, dirty state, or release-version questions: `python3 scripts/azhou_hub.py version --json`
+   - General project/runtime/support facts and installable repository inventory: `python scripts/azhou_hub.py info --json`
+   - Revision, branch, dirty state, or release-version questions: `python scripts/azhou_hub.py version --json`
 3. Report only fields returned by the command. A missing `release_version` is not an installation failure and must not be invented.
 4. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 

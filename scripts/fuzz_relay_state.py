@@ -251,8 +251,12 @@ def probe(module: Any, html: str) -> str | None:
     def timeout(signum: int, frame: Any) -> None:
         raise TimeoutError()
 
-    previous = signal.signal(signal.SIGALRM, timeout)
-    signal.setitimer(signal.ITIMER_REAL, PER_INPUT_SECONDS)
+    # SIGALRM/ITIMER_REAL are POSIX-only; without them the --seconds wall-clock
+    # budget is the only deadline.
+    use_alarm = hasattr(signal, "SIGALRM")
+    if use_alarm:
+        previous = signal.signal(signal.SIGALRM, timeout)
+        signal.setitimer(signal.ITIMER_REAL, PER_INPUT_SECONDS)
     try:
         try:
             state = module._load_state(html)
@@ -265,8 +269,9 @@ def probe(module: Any, html: str) -> str | None:
             return f"{type(exc).__name__}: {exc}"[:300]
         return None
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous)
+        if use_alarm:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
 
 
 def main(argv: list[str] | None = None) -> int:

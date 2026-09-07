@@ -20,7 +20,8 @@ class AzhouRuntimeStateTest(unittest.TestCase):
             azhou_runtime_state.ensure_private_directory(state, root=root)
 
             self.assertTrue(state.is_dir())
-            self.assertEqual(0o700, state.stat().st_mode & 0o777)
+            if os.name != "nt":  # os.chmod on Windows implements only the read-only bit
+                self.assertEqual(0o700, state.stat().st_mode & 0o777)
             self.assertFalse((root / ".gitignore").exists())
 
     def test_namespace_resolution_rejects_traversal_and_symlinks(self) -> None:

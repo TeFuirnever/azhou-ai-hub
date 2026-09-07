@@ -11,8 +11,8 @@ This Skill is harness-neutral and does not bundle the repository-level Foundatio
 ## Dry-run and apply
 
 ~~~bash
-python3 scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode link --json
-python3 scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode link --apply --plan-id <reviewed-planId> --json
+python scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode link --json
+python scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode link --apply --plan-id <reviewed-planId> --json
 ~~~
 
 Managed operations use a receipt directly below `<target>/.azhou/hub/receipts/`. Run every `repair`, `migrate`, or `uninstall` command once without `--apply`, review the exact plan, then apply only with authorization.

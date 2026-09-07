@@ -11,8 +11,8 @@ This Skill is harness-neutral and does not bundle or install the repository-leve
 ## Smoke check
 
 ~~~bash
-python3 scripts/azhou_hub.py info --json
-python3 scripts/azhou_hub.py version --json
+python scripts/azhou_hub.py info --json
+python scripts/azhou_hub.py version --json
 ~~~
 
 Both commands are read-only. A non-zero exit is a failure to report, not permission to repair or update the checkout.

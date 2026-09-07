@@ -60,11 +60,11 @@ npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 | `azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate；维护者可显式追加 promotion evidence 回放。 |
 
 ~~~bash
-python3 scripts/azhou_hub.py info --json
-python3 scripts/azhou_hub.py version --json
-python3 scripts/azhou_hub.py doctor --json
-python3 scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
-python3 scripts/azhou_hub.py verify
+python scripts/azhou_hub.py info --json
+python scripts/azhou_hub.py version --json
+python scripts/azhou_hub.py doctor --json
+python scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python scripts/azhou_hub.py verify
 ~~~
 
 `setup`、`repair`、`migrate` 和 `uninstall` 在出现 `--apply` 前保持只读。Setup 可重复收敛，遇到不同安装会拒绝覆盖。Receipt-owned 生命周期命令要求再次提供同一显式 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。各 harness 共用同一批包，但发现、调用、权限和可选集成仍由宿主负责；完整边界见[支持矩阵](docs/support-matrix.md)与[基础 CLI 合同](docs/foundations.md)。
@@ -198,10 +198,10 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 仓库级验证只需要 Python 3.11+：
 
 ~~~bash
-python3 scripts/verify.py
+python scripts/verify.py
 ~~~
 
-同一条命令不依赖私有输入，检查仓库策略、全部单元测试、四套公开 benchmark 完整性和 Git 空白。Super Caveman 的公开完整性检查仍会针对当前 staged 或 committed tree 重算已批准的 exact diff，因此已批准路径一旦变化，就必须取得新的 promotion evidence，不能静默通过。发布维护者在物化 Git-external 的 Super Caveman approval/review 记录后，额外运行 `python3 scripts/verify.py --promotion-evidence`；该模式验证原始 promotion evidence 的真实性，默认公开 gate 只验证仓内 receipt 和 exact diff，不声称完成外部认证。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
+同一条命令不依赖私有输入，检查仓库策略、全部单元测试、四套公开 benchmark 完整性和 Git 空白。Super Caveman 的公开完整性检查仍会针对当前 staged 或 committed tree 重算已批准的 exact diff，因此已批准路径一旦变化，就必须取得新的 promotion evidence，不能静默通过。发布维护者在物化 Git-external 的 Super Caveman approval/review 记录后，额外运行 `python scripts/verify.py --promotion-evidence`；该模式验证原始 promotion evidence 的真实性，默认公开 gate 只验证仓内 receipt 和 exact diff，不声称完成外部认证。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
 
 ## 项目入口
 
