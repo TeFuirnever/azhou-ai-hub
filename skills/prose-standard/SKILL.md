@@ -1,6 +1,7 @@
 ---
 name: prose-standard
 description: Use when writing, reviewing, trimming, or auditing prose on current-state surfaces — Markdown docs, SKILL.md bodies, references, READMEs, comments, commit messages — when a cleanup pass must compress without losing facts, when prose reads like a leaked reasoning transcript (dead citations, change narration, PR vantage, review choreography, hedges), or when documentation claims an operation that must be verified by running it.
+invocation: model-invoked discipline
 ---
 
 # Prose Standard
@@ -9,7 +10,7 @@ description: Use when writing, reviewing, trimming, or auditing prose on current
 
 > ✂️ 每个事实都活着，才动手删字。
 
-Invocation class: model-invoked engineering discipline (spec #126 ID-9) — applicable during ordinary writing and review work without being named, and still directly invocable.
+Invocation class: model-invoked discipline, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — applicable during ordinary writing and review work without being named, and still directly invocable.
 
 It is guidance, not a script. One package owns two branches of the same craft: the **writing branch** (enough prose to preserve the contract, then remove repetition and decoration) and the **audit branch** (hunting and fixing chain-of-thought leakage). Every branch is disclosed on demand — the entry carries only what both need.
 

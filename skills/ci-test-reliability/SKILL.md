@@ -1,6 +1,7 @@
 ---
 name: ci-test-reliability
 description: Use when writing or changing tests that own resources (ports, temp paths, subprocesses, clocks, process-global state), when tests run under concurrent CI workers or a platform matrix, when reviewing test isolation, or when diagnosing a flaky CI failure; covers topology-aware allocation, quiescent teardown, timeout budgeting, regression negative controls, and the flake-masking blacklist.
+invocation: model-invoked discipline
 ---
 
 # CI Test Reliability
@@ -9,7 +10,7 @@ description: Use when writing or changing tests that own resources (ports, temp 
 
 > 🧪 测试自己可靠，才配当证据。
 
-Invocation class: model-invoked engineering discipline (spec #126 ID-9) — applicable during ordinary test-writing and review work without being named, and still directly invocable.
+Invocation class: model-invoked discipline, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — applicable during ordinary test-writing and review work without being named, and still directly invocable.
 
 It is guidance, not a script. Build tests that stay correct under the repository's real CI topology — concurrent workers, a platform matrix, shared hosts — not only when run alone on a quiet workstation. This skill owns isolation and reliability judgment for test design and flake diagnosis; it never selects or replaces the repository verification gate itself.
 
