@@ -108,6 +108,7 @@ jobs:
       - name: Full deterministic gate
         env:
           PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONUTF8: "1"
         run: python scripts/verify.py
 
   required:
