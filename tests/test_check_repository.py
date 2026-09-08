@@ -287,6 +287,10 @@ class RepositoryPolicyTest(unittest.TestCase):
 
         self.assertIn("fetch-depth: 0", benchmark_job)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "the release-workflow mock drives a POSIX sh gh shim; the workflow itself runs on ubuntu",
+    )
     def test_release_workflow_enforces_ref_and_api_outcomes(self) -> None:
         cases = (
             ("outside-main", "refs/heads/feature", 2, False),

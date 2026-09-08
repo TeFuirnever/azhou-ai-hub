@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,10 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
             check=False,
         )
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "case verify commands are POSIX shell scripts; the deterministic gate runs on ubuntu",
+    )
     def test_check_validates_registered_cases(self) -> None:
         result = self.run_benchmark("check")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
@@ -71,6 +76,10 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
         verifier = memory.parents[1] / "verify.sh"
         self.assertIn("agent-memory/MEMORY.md", verifier.read_text(encoding="utf-8"))
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "case verify commands are POSIX shell scripts; the deterministic gate runs on ubuntu",
+    )
     def test_verify_accepts_usable_first_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -115,6 +124,10 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertTrue(json.loads(result.stdout)["first_pass_usable"])
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "case verify commands are POSIX shell scripts; the deterministic gate runs on ubuntu",
+    )
     def test_verify_detects_protected_code_change(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
