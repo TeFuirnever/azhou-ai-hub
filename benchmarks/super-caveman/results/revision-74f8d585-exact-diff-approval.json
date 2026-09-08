@@ -1,0 +1,69 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-09-08T09:52:52Z",
+  "base_commit": "f1bc7d44c60eb2ad536085eb4d82c916bda05a83",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "466470ca45cdcd1386eb663eea337595497c40096ed74bcdf764834affe4d651",
+  "staged_patch_sha256": "084f170dcebe7091fad10b90a80f6971da7ad27ebc1e9784312a0eea82834ae9",
+  "reviewed_blobs": [
+    {
+      "path": "AGENTS.md",
+      "old_oid": "6629a36f193f7c22c3665ab058cf7b94ecadb0d2",
+      "new_oid": "6f57a9040986cca76da23ec7356dbf1d8c6b09ab"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "old_oid": "a20cf28d494697f2c7f1ff6a63a2be248d9469e5",
+      "new_oid": "7dad5763ae8dd7850e6963b4e17583cd84254959"
+    },
+    {
+      "path": "benchmarks/repo-pedant/results.tsv",
+      "old_oid": "6bda9dc2320e129c7b67a4399fd2297442f9c277",
+      "new_oid": "d8cdfab26c9b9c0b162fcc5401225323cc95e2d5"
+    },
+    {
+      "path": "benchmarks/super-caveman/manifest.json",
+      "old_oid": "537db23146d55471a19c049defd5b0f3c5572bfd",
+      "new_oid": "c0e94aefe0f91e9f4fbf139758070057e7719994"
+    },
+    {
+      "path": "benchmarks/super-caveman/results/revision-93f38a6b-attempt-1-summary.json",
+      "old_oid": "60ca7f2ed5b8d3c7ff654ce64a2c87c36e483342",
+      "new_oid": "dd7e202269d4219497b37092c4050671e36ba6ca"
+    },
+    {
+      "path": "skills/super-caveman/references/compression.md",
+      "old_oid": "59d455eccec5de96c8df7c490b8230c0deaff608",
+      "new_oid": "6a85b0a19af8d5ec6b74d709fe2473ea1f3761bc"
+    },
+    {
+      "path": "skills/super-caveman/references/setup.md",
+      "old_oid": "d5d23f4fdc41cceb273e7045aac7269a33d77237",
+      "new_oid": "6278fa055a4871bd15a4c2e4afa8ef8a521eddd3"
+    },
+    {
+      "path": "skills/super-caveman/scripts/claude_adapter.py",
+      "old_oid": "ca7b2c96f1fd4ffd2d9b4227f047387e4cb2724b",
+      "new_oid": "430b732f486d78b1907514b05b4583e5fc5b0789"
+    },
+    {
+      "path": "skills/super-caveman/scripts/codex_adapter.py",
+      "old_oid": "bbe96c750854d234bc0fbcae9318547759bffb1f",
+      "new_oid": "b6f5450e91c74d0af8b3c20c65eb35401cb8e995"
+    },
+    {
+      "path": "skills/super-caveman/scripts/zcode_adapter.py",
+      "old_oid": "edb92ac6b4145904cbd5d38603907a55c94f6b9a",
+      "new_oid": "77190672f83fb11c7c227764c09b268f6b44eacf"
+    },
+    {
+      "path": "tests/test_docs_code_contract.py",
+      "old_oid": "81749ca8b2df7e2066d45367c4b3c19ab483b453",
+      "new_oid": "5090ad0d486d93ea19ca3f07854fce3dd2abbd93"
+    }
+  ],
+  "raw_approval_record_sha256": "dbdf8268e1b3a0298542da85406aa01882ce9bb4fb8938562a3ddff26d31d05a",
+  "raw_approval_storage": "Git-external"
+}

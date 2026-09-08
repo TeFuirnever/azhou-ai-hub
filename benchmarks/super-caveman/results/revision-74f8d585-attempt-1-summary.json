@@ -1,0 +1,170 @@
+{
+  "schema": "super-caveman-evaluation-result.v1",
+  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
+  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
+  "model_limitation": "Fresh producer for this revision: the landed revision-93f38a6b raw set is not byte-reusable because this revision changes skill-tree bytes. Each response was produced by one isolated zcode general-purpose subagent whose context held only the frozen runtime files and the single case prompt; case criteria, reference answers, prior outputs and reviewer decisions were never in the producer context.",
+  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+  "tool_permissions": {
+    "network": false,
+    "repository_write": "disposable agent-owned-edit fixture only (/tmp/super-caveman-agent-owned-edit)",
+    "shell": "read-only verification commands inside the disposable fixture only (agent-owned-edit case)",
+    "external_apps": false
+  },
+  "attempt": 1,
+  "output_set_sha256": "e2092734da5de1bf399b089885710e2c7ae0c9a0d7837d771d7cf416c8ba5f31",
+  "case_results": [
+    {
+      "id": "direct-answer",
+      "status": "pass"
+    },
+    {
+      "id": "agent-owned-edit",
+      "status": "pass"
+    },
+    {
+      "id": "debugging-cause",
+      "status": "pass"
+    },
+    {
+      "id": "concept-explanation",
+      "status": "pass"
+    },
+    {
+      "id": "destructive-action",
+      "status": "pass"
+    },
+    {
+      "id": "real-ambiguity",
+      "status": "pass"
+    },
+    {
+      "id": "multi-step-progress",
+      "status": "pass"
+    },
+    {
+      "id": "long-form-request",
+      "status": "pass"
+    },
+    {
+      "id": "error-report",
+      "status": "pass"
+    },
+    {
+      "id": "casual-message",
+      "status": "pass"
+    },
+    {
+      "id": "code-answer",
+      "status": "pass"
+    },
+    {
+      "id": "complex-plan",
+      "status": "pass"
+    },
+    {
+      "id": "partial-success",
+      "status": "pass"
+    },
+    {
+      "id": "medical-boundary",
+      "status": "pass"
+    },
+    {
+      "id": "under-two-minute-next-action",
+      "status": "pass"
+    },
+    {
+      "id": "host-plan-tool-state",
+      "status": "pass"
+    },
+    {
+      "id": "task-wins-options",
+      "status": "pass"
+    },
+    {
+      "id": "stop-mode-default-style",
+      "status": "pass"
+    },
+    {
+      "id": "uncertainty-and-idiom",
+      "status": "pass"
+    }
+  ],
+  "passed": 19,
+  "failed": 0,
+  "high_risk_failed": 0,
+  "format_failed": 0,
+  "limitations": [
+    "Fresh-producer round: all 19 candidate responses were generated in this attempt by GLM via isolated zcode subagents; the byte-reuse chain from earlier revisions is retired for this revision.",
+    "Paired baseline reuse: the baseline output set is the landed revision-93f38a6b attempt-1 fresh GLM production (58710b07), i.e. the same producer class against the pre-change tree; it was preferred over a third re-production because the ride changes skill-tree bytes only in adapter cleanup logic and command-surface docs, none of which enter the producer context.",
+    "Producer plan tier differs from the baseline run (bigmodel-coding-plan vs bigmodel-start-plan); both are GLM-5.3-Flash via the same zcode isolated-subagent harness.",
+    "The host-plan-tool-state mechanical fixture records the responder instruction (TodoWrite exactly once, 3 items, exactly 1 in_progress) and the agent's tool-use count instead of the raw payload captured in the previous ride."
+  ],
+  "status": "pass",
+  "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; fixtures provisioned per evaluation-contract execution.fixtures; ride directed by the workspace owner",
+  "skill_tree_sha256": "74f8d58555ee1527e0b38f11e5f1669d7f384315da9044cbb3cecc7c36836c89",
+  "automatic_checks": {
+    "raw_schema": "pass",
+    "raw_digest": "pass",
+    "skill_tree_digest": "stable-v2; staged tree matched 74f8d585 (74f8d58555ee1527e0b38f11e5f1669d7f384315da9044cbb3cecc7c36836c89) with the win-02 adapter hardening diff and the win-07 command-surface promotion batch applied",
+    "case_count": "19/19",
+    "criteria_count": "44/44",
+    "unique_case_ids": "19/19",
+    "byte_reuse": "0/19; fresh-producer attempt (see limitations)",
+    "maximum_observed_concurrency": 1,
+    "fixture_side_effect": "verified by harness after the run: /tmp/super-caveman-agent-owned-edit/README.md == 'Super Caveman'",
+    "plan_tool_state": "verified: responder instructed to call TodoWrite exactly once with 3 items and exactly 1 in_progress; agent reported 5 tool uses (4 runtime reads + 1 plan write) and kept the user-facing update checklist-free",
+    "repository_scope": "pass (no writes outside the disposable fixture during response production)"
+  },
+  "reviewer": {
+    "identity": "coding-agent/zcode-response-panel-2026-09-08",
+    "review_sha256": "e5e4fe767a046ba56f1fa7c272f7921d3db906dc3af6bb0ca140290354212e94"
+  },
+  "promotion_review": {
+    "paired_status": "pass",
+    "independent_paired_judges": 3,
+    "presentation_orders": [
+      "candidate-baseline",
+      "baseline-candidate",
+      "candidate-baseline"
+    ],
+    "candidate_majority_required": 2,
+    "candidate_raw_sha256": "e2092734da5de1bf399b089885710e2c7ae0c9a0d7837d771d7cf416c8ba5f31",
+    "baseline_output_set_sha256": "58710b07a0fa373982a621f2c68d1097c78964582fff55b498667d22af3a9d34",
+    "candidate_output_set_sha256": "e2092734da5de1bf399b089885710e2c7ae0c9a0d7837d771d7cf416c8ba5f31",
+    "high_risk_regressions": 0,
+    "judges": [
+      {
+        "identity": "coding-agent/zcode-paired-judge-j1",
+        "order": "candidate-baseline",
+        "vote": "candidate",
+        "record_sha256": "cdd2da4afeefe2e3722ded240aa65df6de3f88d63bb50b108bd7f68d186d2b9b"
+      },
+      {
+        "identity": "coding-agent/zcode-paired-judge-j2",
+        "order": "baseline-candidate",
+        "vote": "candidate",
+        "record_sha256": "ab555edf0634838eabf400c9b5a6c196ea65c6b3cef4f476a0394097dc4bab31"
+      },
+      {
+        "identity": "coding-agent/zcode-paired-judge-j3",
+        "order": "candidate-baseline",
+        "vote": "baseline",
+        "record_sha256": "ada0c012869ff6802a17ac7e13b98c05e02b0324148d5e4faeea7f9dd00381ec"
+      }
+    ],
+    "exact_diff_human_approval": {
+      "schema": "super-caveman-exact-diff-approval.v2",
+      "status": "approved",
+      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+      "base_commit": "f1bc7d44c60eb2ad536085eb4d82c916bda05a83",
+      "path_set_sha256": "466470ca45cdcd1386eb663eea337595497c40096ed74bcdf764834affe4d651",
+      "staged_patch_sha256": "084f170dcebe7091fad10b90a80f6971da7ad27ebc1e9784312a0eea82834ae9",
+      "approver": "workspace-owner",
+      "approved_at": "2026-09-08T09:52:52Z",
+      "record_path": "results/revision-74f8d585-exact-diff-approval.json",
+      "record_sha256": "f1bde3a65ec8444d24177ee73f21daa50226d3f5e7e21ca660f8ef51f76c5ddc",
+      "record_storage": "Git aggregate receipt; raw approval Git-external"
+    }
+  }
+}

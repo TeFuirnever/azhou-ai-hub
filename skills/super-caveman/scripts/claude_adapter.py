@@ -104,9 +104,11 @@ def atomic_write(path: Path, payload: dict[str, Any], root: Path) -> None:
     except OSError as exc:
         raise AdapterError(f"atomic state write failed: {path}") from exc
     finally:
+        # Windows: os.replace can fail while another handle (e.g. a scanner)
+        # holds the fresh temp file; best-effort cleanup must not mask that error.
         try:
             tmp_path.unlink()
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError):
             pass
 
 

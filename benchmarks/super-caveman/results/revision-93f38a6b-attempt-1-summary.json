@@ -100,7 +100,7 @@
     "Paired review: the baseline output set was produced by the same producer from the pre-change tree (0e0b708 content, digest e04ba7c3...) under the same harness; three judges compared anonymized sets with j2's presentation order reversed and voted 3:0 candidate (no regression; 2 of 3 found candidate strictly better on named cases).",
     "The host-plan-tool-state recorded run carries the responder's exact TodoWrite payload (3 items, exactly 1 in_progress) captured in the raw set; agent-owned-edit fixture state was mechanically verified by the harness after the run (README.md == 'Super Caveman')."
   ],
-  "status": "pass",
+  "status": "superseded",
   "harness": "zcode CLI isolated subagents (GLM), one case per agent, serial execution; fixtures provisioned per evaluation-contract execution.fixtures; maintainer-directed producer switch recorded in session sess_5accfb94",
   "skill_tree_sha256": "93f38a6bb0273b5bc04d7bf21b2b2e97d6262fbb511290009833b7f2d086ad07",
   "automatic_checks": {
