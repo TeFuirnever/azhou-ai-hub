@@ -28,3 +28,18 @@
 ## 结论
 
 win-05 收据成立：Windows 残余失败集 = { win-02 晋级集群 } ∪ { 6 项 check/benchmark 残余 }。`PYTHONUTF8=1` 前提有效且与 installation.md 文档一致。CI job 保留为常驻证据传感器（continue-on-error，不入 Required）。
+
+## 追加：fchmod 根因修复对照（2026-09-08，PR #175）
+
+PR #174 的 Windows job 将真实根因从“清理掩盖”推进到确定结论：**`os.fchmod` 为 POSIX-only API，Windows 上 `atomic_write` 直接 AttributeError → CLI exit 1**，45 项断言失败与 19 项 lifecycle 级联均由此单一根因产生（此前“WinError 32 文件锁”为另一消费机上掩盖后的表象）。
+
+| 轮次 | 环境 | 结果 |
+|---|---|---|
+| Run 4 | promotion 分支（无守卫） | 435 测试：45 FAIL + 9 ERROR + 6 skip；46 唯一失败全部 super-caveman |
+| Run 5 | + fchmod hasattr 守卫 + 2 项 inode 测试 skipIf(nt) | 435 测试：**6 FAIL + 1 ERROR + 8 skip；46 → 7 唯一失败** |
+
+剩余 7 项全部位于 test_super_caveman_benchmark：3 项为绑定/配对校验（新字节无新晋级记录时按设计拒绝——随晋级骑行落地转绿），4 项为同源级联（capability/trigger、review digests、staged/committed review 场景）。
+
+- Run 4: https://github.com/TeFuirnever/azhou-ai-hub/actions/runs/34212619018/job/102016911113
+- Run 5: https://github.com/TeFuirnever/azhou-ai-hub/actions/runs/34219846175/job/102040246435
+- 修复分支: fix/win-12-fchmod（PR #175，落地须随下一轮晋级骑行）
