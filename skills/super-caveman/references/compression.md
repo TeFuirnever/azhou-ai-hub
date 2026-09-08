@@ -7,7 +7,7 @@ Compress only natural-language files: Markdown, text, reStructuredText, Typst, T
 1. Run preflight:
 
    ```bash
-   python3 "$SKILL_DIR/scripts/compression_guard.py" preflight /absolute/path/to/file --json
+   python "$SKILL_DIR/scripts/compression_guard.py" preflight /absolute/path/to/file --json
    ```
 
 2. Read the source. Create a candidate in a temporary path without changing the source. Compress prose only.
@@ -15,14 +15,14 @@ Compress only natural-language files: Markdown, text, reStructuredText, Typst, T
 4. Validate:
 
    ```bash
-   python3 "$SKILL_DIR/scripts/compression_guard.py" validate /absolute/path/to/file /absolute/path/to/candidate --json
+   python "$SKILL_DIR/scripts/compression_guard.py" validate /absolute/path/to/file /absolute/path/to/candidate --json
    ```
 
 5. Fix only reported mismatches. Retry at most twice. Never recompress an already valid section merely to repair one mismatch.
 6. Apply only after validation passes:
 
    ```bash
-   python3 "$SKILL_DIR/scripts/compression_guard.py" apply /absolute/path/to/file /absolute/path/to/candidate --json
+   python "$SKILL_DIR/scripts/compression_guard.py" apply /absolute/path/to/file /absolute/path/to/candidate --json
    ```
 
 The guard mechanically compares its recognized command forms, camel-case or uppercase identifiers, dates, versions, and numbers. It does not recognize every lowercase library or product name. The active agent must still perform semantic readback and preserve unrecognized names exactly.
@@ -36,7 +36,7 @@ UTF-8 reads preserve the source's LF or CRLF bytes. The backup and restore path 
 Restore only when the current source hash still matches the receipt's compressed hash:
 
 ```bash
-python3 "$SKILL_DIR/scripts/compression_guard.py" restore /absolute/path/to/file --json
+python "$SKILL_DIR/scripts/compression_guard.py" restore /absolute/path/to/file --json
 ```
 
 If the current file changed after compression, stop. Do not force restoration over newer work. A `conflict` receipt can be reconciled by running restore again only when the current hash still equals the recorded original or compressed hash; any third hash remains a manual hold.
@@ -44,7 +44,7 @@ If the current file changed after compression, stop. Do not force restoration ov
 Successful restore retains the verified backup, all recorded handoffs, and a `restored` receipt. Close every editor or process that may still hold the old file, then explicitly finalize:
 
 ```bash
-python3 "$SKILL_DIR/scripts/compression_guard.py" finalize /absolute/path/to/file --json
+python "$SKILL_DIR/scripts/compression_guard.py" finalize /absolute/path/to/file --json
 ```
 
 Finalize requires the current source and backup to match the original hash and every handoff to match its recorded checkpoint hash. It removes the verified backup and handoffs, then retains an idempotent `finalized` receipt until the next apply retires it. A `finalizing` receipt resumes partial cleanup safely. Finalize is required before another apply; a changed handoff or incomplete state remains a manual hold.

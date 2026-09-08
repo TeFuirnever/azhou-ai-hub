@@ -114,9 +114,9 @@ class AgentsMdPromotionPointer(unittest.TestCase):
         self.assertTrue(ok, detail)
 
     def test_stale_revision_pointer_is_rejected(self) -> None:
-        stale_summary = json.loads((RESULTS / "revision-e04ba7c3-attempt-1-summary.json").read_text(encoding="utf-8"))
+        stale_summary = json.loads((RESULTS / "revision-93f38a6b-attempt-1-summary.json").read_text(encoding="utf-8"))
         self.assertEqual(stale_summary.get("status"), "superseded")
-        stale_text = AGENTS_MD.read_text(encoding="utf-8").replace("93f38a6b", "e04ba7c3")
+        stale_text = AGENTS_MD.read_text(encoding="utf-8").replace("74f8d585", "93f38a6b")
         ok, detail = agents_md_promotion_is_current(stale_text, RESULTS)
         self.assertFalse(ok, "a superseded-only promotion pointer must not pass")
 
