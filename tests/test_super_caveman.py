@@ -463,6 +463,10 @@ class SuperCavemanCompressionGuardTest(unittest.TestCase):
                 self.assertFalse(receipt.exists())
                 self.assertEqual([], list(root.glob(".notes.md.super-caveman-handoff-*")))
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "the guard relies on POSIX unlink-while-open inode semantics; Windows has no stale-inode conflict to detect",
+    )
     def test_late_open_descriptor_write_is_retained_and_blocks_restore(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -569,6 +573,10 @@ class SuperCavemanCompressionGuardTest(unittest.TestCase):
                 self.assertEqual(CANDIDATE, source.read_text(encoding="utf-8"))
                 self.assertEqual("restored", GUARD.restore_source(source)["status"])
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "the guard relies on POSIX unlink-while-open inode semantics; Windows has no stale-inode conflict to detect",
+    )
     def test_late_restore_inode_write_marks_conflict(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

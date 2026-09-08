@@ -3,6 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and repository-level [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+- Promoted revision 8f493670 of the super-caveman skill tree via the new producer-context invariance pathway (19/19 cases against the byte-identical producer context, zero high-risk regressions) carrying the Windows fchmod fix: the three harness adapters guard the POSIX-only `os.fchmod` call behind a capability check instead of letting it raise on Windows, taking the Windows evidence job from 46 failures to the 7 promotion-bound mechanismic reds that turn green with this landing; the evaluation contract gained the `producer_context_invariance` clause with a gate validator plus positive and negative tests, and the attempt/approval records bind the new skill-tree digest.
 - Promoted revision 74f8d585 of the super-caveman skill tree via a fresh GLM producer ride (19/19 cases, paired 2:1 candidate, zero high-risk regressions) carrying two Windows-compatibility changes: the three harness adapters' atomic-write cleanup branches now tolerate a locked temp file instead of masking the real write error (the WinError 32 cluster from the Windows receipt), and the reference command surface moved from `python3` to the unversioned `python` with the host-shell premise documented; the promotion records bind the new skill-tree digest and the Windows evidence job remains the platform sensor.
 
 ## [0.8.0] - 2026-09-07
