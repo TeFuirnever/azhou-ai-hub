@@ -263,7 +263,8 @@ def _atomic_write(path: Path, payload: dict[str, Any], scope_root: Path) -> None
     descriptor, temporary = tempfile.mkstemp(prefix=".super-caveman-", suffix=".tmp", dir=str(path.parent))
     temporary_path = Path(temporary)
     try:
-        os.fchmod(descriptor, mode)
+        if hasattr(os, "fchmod"):  # POSIX-only; Windows scopes access via the state directory's ACLs
+            os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(serialized)
             stream.flush()
