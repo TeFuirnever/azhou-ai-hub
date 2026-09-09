@@ -20,6 +20,8 @@ MANIFEST = BENCHMARK_ROOT / "manifest.json"
 VALIDATOR_DIR = REPO_ROOT / "skills" / "repo-pedant" / "scripts"
 sys.path.insert(0, str(VALIDATOR_DIR))
 
+_ON_WINDOWS = os.name == "nt"
+
 from validate_evidence_bundle import validate_receipt  # noqa: E402
 
 
@@ -125,7 +127,7 @@ def find_case(case_id: str) -> dict[str, Any]:
 
 def run_verify_command(case: dict[str, Any], candidate: Path) -> subprocess.CompletedProcess[str]:
     command = list(case["verify_command"])
-    if os.name == "nt" and command and command[0].endswith(".sh"):
+    if _ON_WINDOWS and command and command[0].endswith(".sh"):
         # CreateProcess cannot exec a POSIX shell script directly; the
         # documented host-shell premise on Windows is Git Bash, so route the
         # script through it explicitly.

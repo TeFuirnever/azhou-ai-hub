@@ -79,7 +79,7 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
         module = load_benchmark_module()
         completed = subprocess.CompletedProcess(["bash", "./verify.sh"], 1)
         with tempfile.TemporaryDirectory() as directory:
-            with mock.patch.object(module.os, "name", "nt"), mock.patch.object(
+            with mock.patch.object(module, "_ON_WINDOWS", True), mock.patch.object(
                 module.shutil,
                 "which",
                 side_effect=lambda name: r"C:\Git\bin\bash.exe" if name == "bash" else None,
@@ -92,7 +92,7 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
         module = load_benchmark_module()
         completed = subprocess.CompletedProcess(["tool", "--check"], 0)
         with tempfile.TemporaryDirectory() as directory:
-            with mock.patch.object(module.os, "name", "nt"), mock.patch.object(
+            with mock.patch.object(module, "_ON_WINDOWS", True), mock.patch.object(
                 module.subprocess, "run", return_value=completed
             ) as run_mock:
                 result = module.run_verify_command({"verify_command": ["tool", "--check"]}, Path(directory))
@@ -103,7 +103,7 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
         module = load_benchmark_module()
         completed = subprocess.CompletedProcess(["./verify.sh"], 1)
         with tempfile.TemporaryDirectory() as directory:
-            with mock.patch.object(module.os, "name", "posix"), mock.patch.object(
+            with mock.patch.object(module, "_ON_WINDOWS", False), mock.patch.object(
                 module.subprocess, "run", return_value=completed
             ) as run_mock:
                 result = module.run_verify_command({"verify_command": ["./verify.sh"]}, Path(directory))
