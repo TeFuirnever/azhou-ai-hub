@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,8 @@ REPO_ROOT = BENCHMARK_ROOT.parents[1]
 MANIFEST = BENCHMARK_ROOT / "manifest.json"
 VALIDATOR_DIR = REPO_ROOT / "skills" / "repo-pedant" / "scripts"
 sys.path.insert(0, str(VALIDATOR_DIR))
+
+_ON_WINDOWS = os.name == "nt"
 
 from validate_evidence_bundle import validate_receipt  # noqa: E402
 
@@ -123,9 +126,28 @@ def find_case(case_id: str) -> dict[str, Any]:
 
 
 def run_verify_command(case: dict[str, Any], candidate: Path) -> subprocess.CompletedProcess[str]:
+    command = list(case["verify_command"])
+    if _ON_WINDOWS and command and command[0].endswith(".sh"):
+        # CreateProcess cannot exec a POSIX shell script directly; the
+        # documented host-shell premise on Windows is Git Bash, so route the
+        # script through it explicitly.
+        shell = shutil.which("bash") or shutil.which("sh")
+        if shell is None:
+            for fallback in (
+                r"C:\Program Files\Git\bin\bash.exe",
+                r"C:\Program Files (x86)\Git\bin\bash.exe",
+            ):
+                if Path(fallback).is_file():
+                    shell = fallback
+                    break
+        if shell is None:
+            raise BenchmarkError(
+                "verify command requires Git Bash on Windows (POSIX shell premise)"
+            )
+        command = [shell, *command]
     try:
         return subprocess.run(
-            case["verify_command"],
+            command,
             cwd=candidate,
             capture_output=True,
             text=True,
