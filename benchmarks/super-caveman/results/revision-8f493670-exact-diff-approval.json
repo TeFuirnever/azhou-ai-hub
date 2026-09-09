@@ -6,27 +6,27 @@
   "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
-  "staged_patch_sha256": "9d2577c2df8dae2db9891daff8cd72a61f067724667883becbe8ad268b3fd4b9",
+  "staged_patch_sha256": "9cc19566c00a074ed48e68152743c3d56293d2dbafc6223b9f00185289fb4bb9",
   "reviewed_blobs": [
     {
       "path": ".github/workflows/ci.yml",
       "old_oid": "b0798c63dafbdc8d290c04a85ce699c376cb5d21",
-      "new_oid": "7454e5a63b764153ab7bf7b7d6b4409b69a66ec2"
+      "new_oid": "a460368f59500560db3c6b86698c9e7e5a4a7bfb"
     },
     {
       "path": "CHANGELOG.md",
       "old_oid": "31d22cdb2f30ee386f99c46e36a49e3b61f3fef3",
-      "new_oid": "7b511003f2586ed98d1855c51b8573f22f7f03b9"
+      "new_oid": "140e6ce89fbead0c1b4f861f5101fcb3d2dee4ab"
     },
     {
       "path": "README.md",
       "old_oid": "65ec50a54a809d9b52ca2cc66701367a361c2dab",
-      "new_oid": "e07b44129d639333b6380803c4f90296ffb48c68"
+      "new_oid": "60e6f74f28fa266a0a21afa4c44cdf041a318c96"
     },
     {
       "path": "README.zh-CN.md",
       "old_oid": "97e9e25fb57d673a759eea1bbc2e4599ec903ece",
-      "new_oid": "0dacd445531e5ec7d8556457450709ed24716bf8"
+      "new_oid": "506a628b671017926bf20ff547692202b4bb9060"
     },
     {
       "path": "benchmarks/super-caveman/benchmark.py",
@@ -36,7 +36,7 @@
     {
       "path": "docs/support-matrix.md",
       "old_oid": "ec3d5aeb8140c6dc6521d1b1162da2c8a2a3bfd2",
-      "new_oid": "1b0914c15fe980b476a44dac8e221aa18a2aaa36"
+      "new_oid": "c23f35f6eeb18f429758824539881df6e2de5340"
     }
   ],
   "raw_approval_record_sha256": "a198d65872e2db6f26b0e1faea81cbb56bded17dfff32fa1f41ed75088208b2a",
