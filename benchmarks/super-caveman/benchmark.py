@@ -882,7 +882,11 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         "HEAD="
         + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()[:12]
         + " branch="
-        + subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=ROOT, text=True).strip(),
+        + subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=ROOT, text=True).strip()
+        + " log="
+        + subprocess.check_output(["git", "log", "--oneline", "-2"], cwd=ROOT, text=True).replace("\n", " | ").strip()
+        + " ancestor_rc="
+        + str(subprocess.run(["git", "merge-base", "--is-ancestor", "ce242fad50f9852c50c967dd54a36238d03600ff", "HEAD"], cwd=ROOT).returncode),
     )
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
