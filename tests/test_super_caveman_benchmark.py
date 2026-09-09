@@ -54,6 +54,17 @@ def current_pass_summaries() -> list[dict]:
     ]
 
 
+def _cleared_environ(overrides: dict[str, str] | None = None):
+    # POSIX execvp falls back to a default search path when PATH is cleared,
+    # but Windows CreateProcess resolves executables through PATH only, so a
+    # fully cleared environment cannot launch the gate's git subprocesses.
+    # Keep PATH while clearing everything else.
+    keep = {"PATH": os.environ.get("PATH", "")}
+    if overrides:
+        keep.update(overrides)
+    return mock.patch.dict(os.environ, keep, clear=True)
+
+
 class SuperCavemanBenchmarkTest(unittest.TestCase):
     def test_approved_benchmark_requires_raw_approval_environment(self) -> None:
         environment = os.environ.copy()
@@ -97,7 +108,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                     key: approval[key]
                     for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
                 }
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=reviewed
                 ):
                     self.assertEqual([], benchmark.check(require_promotion_evidence=False))
@@ -487,7 +498,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                     "path_set_sha256": path_set_sha256,
                     "staged_patch_sha256": staged_patch_sha256,
                 }
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=staged
                 ):
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
@@ -496,10 +507,8 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                             {**approval, "status": "pending"}, result_path
                         )
                     )
-                with mock.patch.dict(
-                    benchmark.os.environ,
+                with _cleared_environ(
                     {benchmark.RAW_APPROVAL_ENV: ""},
-                    clear=True,
                 ), mock.patch.object(benchmark, "staged_review_digests", return_value=staged):
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
                 with mock.patch.dict(
@@ -609,23 +618,21 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                 review_path.write_text(
                     json.dumps(review_record, indent=2) + "\n", encoding="utf-8"
                 )
-                with mock.patch.dict(
-                    benchmark.os.environ,
+                with _cleared_environ(
                     {benchmark.RAW_APPROVAL_ENV: str(raw_path)},
-                    clear=True,
                 ), mock.patch.object(benchmark, "staged_review_digests", return_value=staged):
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark,
                     "staged_review_digests",
                     return_value={**staged, "staged_patch_sha256": "6" * 64},
                 ):
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=None
                 ), mock.patch.object(benchmark, "committed_review_digests", return_value=None):
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=None
                 ), mock.patch.object(
                     benchmark, "committed_review_digests", return_value=staged
@@ -640,7 +647,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                     benchmark, "committed_review_digests", return_value=staged
                 ):
                     self.assertTrue(benchmark.is_approved_exact_diff(approval, result_path))
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=None
                 ), mock.patch.object(
                     benchmark, "committed_review_digests", return_value=None
@@ -657,7 +664,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                         )
                     )
                     self.assertFalse(benchmark.is_approved_exact_diff(approval, result_path))
-                with mock.patch.dict(benchmark.os.environ, {}, clear=True), mock.patch.object(
+                with _cleared_environ(), mock.patch.object(
                     benchmark, "staged_review_digests", return_value=None
                 ), mock.patch.object(
                     benchmark, "committed_review_digests", return_value=None
