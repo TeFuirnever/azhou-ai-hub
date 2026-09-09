@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -8,11 +9,21 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).parents[1]
 BENCHMARK = ROOT / "benchmarks" / "repo-pedant" / "benchmark.py"
 FIXTURE = ROOT / "benchmarks" / "repo-pedant" / "fixtures" / "code-spec-conflict"
+
+
+def load_benchmark_module():
+    # Load under a unique name: test_super_caveman_benchmark imports its own
+    # module as plain "benchmark", and sys.modules must not collide.
+    spec = importlib.util.spec_from_file_location("repo_pedant_benchmark", BENCHMARK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 RECEIPT = """## 🦊 阿舟 · Repo Pedant receipt
@@ -63,6 +74,41 @@ class RepoPedantBenchmarkTest(unittest.TestCase):
         result = self.run_benchmark("check")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual(4, json.loads(result.stdout)["cases"])
+
+    def test_run_verify_command_routes_shell_scripts_through_git_bash_on_windows(self) -> None:
+        module = load_benchmark_module()
+        completed = subprocess.CompletedProcess(["bash", "./verify.sh"], 1)
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(module.os, "name", "nt"), mock.patch.object(
+                module.shutil,
+                "which",
+                side_effect=lambda name: r"C:\Git\bin\bash.exe" if name == "bash" else None,
+            ), mock.patch.object(module.subprocess, "run", return_value=completed) as run_mock:
+                result = module.run_verify_command({"verify_command": ["./verify.sh"]}, Path(directory))
+        self.assertIs(completed, result)
+        self.assertEqual([r"C:\Git\bin\bash.exe", "./verify.sh"], run_mock.call_args.args[0])
+
+    def test_run_verify_command_leaves_non_shell_commands_untouched_on_windows(self) -> None:
+        module = load_benchmark_module()
+        completed = subprocess.CompletedProcess(["tool", "--check"], 0)
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(module.os, "name", "nt"), mock.patch.object(
+                module.subprocess, "run", return_value=completed
+            ) as run_mock:
+                result = module.run_verify_command({"verify_command": ["tool", "--check"]}, Path(directory))
+        self.assertIs(completed, result)
+        self.assertEqual(["tool", "--check"], run_mock.call_args.args[0])
+
+    def test_run_verify_command_leaves_shell_scripts_direct_on_posix(self) -> None:
+        module = load_benchmark_module()
+        completed = subprocess.CompletedProcess(["./verify.sh"], 1)
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(module.os, "name", "posix"), mock.patch.object(
+                module.subprocess, "run", return_value=completed
+            ) as run_mock:
+                result = module.run_verify_command({"verify_command": ["./verify.sh"]}, Path(directory))
+        self.assertIs(completed, result)
+        self.assertEqual(["./verify.sh"], run_mock.call_args.args[0])
 
     def test_multi_surface_case_requires_project_memory_sync(self) -> None:
         case = json.loads(
