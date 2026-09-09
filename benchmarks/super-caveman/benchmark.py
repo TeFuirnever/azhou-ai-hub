@@ -482,7 +482,10 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         cwd=ROOT,
     )
     if working_tree_changes:
-        _gate_trace("committed", f"wt dirty: {working_tree_changes[:120]!r}")
+        probe = subprocess.run(
+            canonical_git_diff("HEAD", "--", *(p for p in ("README.md",))),
+            cwd=ROOT, capture_output=True)
+        _gate_trace("committed", f"wt dirty: {working_tree_changes[:120]!r} patch={probe.stdout[:500]!r} cfg={subprocess.check_output(['git','config','--list','--show-origin'], cwd=ROOT)[:400]!r}")
         return None
     tuples = _canonical_blob_tuples(diff_range, selectors)
     if not tuples:
