@@ -110,6 +110,8 @@ jobs:
           git rev-parse HEAD:README.md
           git diff HEAD --stat -- README.md
           git diff HEAD -- README.md
+      - name: Dump promotion candidates
+        run: python tmp_diag_win.py
       - name: Full deterministic gate
         env:
           PYTHONDONTWRITEBYTECODE: "1"
