@@ -42,3 +42,21 @@ readme = subprocess.check_output(
 )
 print("wt README  :", readme)
 print("git version:", subprocess.check_output(["git", "--version"], cwd=benchmark.ROOT, text=True).strip())
+
+import hashlib
+commits = subprocess.check_output(
+    ["git", "rev-list", "--reverse", "--topo-order", "--ancestry-path", f"{BASE}..HEAD", "--",
+     *sorted(f"benchmarks/super-caveman/{p}" for p in EXCLUSIONS)],
+    cwd=benchmark.ROOT, text=True,
+).splitlines()
+print("rev-list commits:", commits)
+for commit in commits:
+    for p in sorted(EXCLUSIONS):
+        rel = f"benchmarks/super-caveman/{p}"
+        shown = subprocess.check_output(["git", "show", f"{commit}:{rel}"], cwd=benchmark.ROOT)
+        wt = (benchmark.BENCHMARK / p).read_bytes()
+        print(
+            f"{commit[:10]} {p}: show={len(shown)}B sha={hashlib.sha256(shown).hexdigest()[:12]} "
+            f"wt={len(wt)}B sha={hashlib.sha256(wt).hexdigest()[:12]} "
+            f"norm_eq={benchmark._normalized_newlines(shown) == benchmark._normalized_newlines(wt)}"
+        )
