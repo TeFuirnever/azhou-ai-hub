@@ -60,3 +60,22 @@ for commit in commits:
             f"wt={len(wt)}B sha={hashlib.sha256(wt).hexdigest()[:12]} "
             f"norm_eq={benchmark._normalized_newlines(shown) == benchmark._normalized_newlines(wt)}"
         )
+
+
+print("=== rev-list variants ===")
+base_arg = f"{BASE}^{{commit}}"
+variants = {
+    "ancestry+paths": ["git", "rev-list", "--reverse", "--topo-order", "--ancestry-path", f"{base_arg}..HEAD", "--",
+                       "benchmarks/super-caveman/results/revision-8f493670-attempt-1-summary.json",
+                       "benchmarks/super-caveman/results/revision-8f493670-exact-diff-approval.json"],
+    "no-ancestry+paths": ["git", "rev-list", "--reverse", "--topo-order", f"{base_arg}..HEAD", "--",
+                          "benchmarks/super-caveman/results/revision-8f493670-attempt-1-summary.json",
+                          "benchmarks/super-caveman/results/revision-8f493670-exact-diff-approval.json"],
+    "ancestry+onepath": ["git", "rev-list", "--ancestry-path", f"{base_arg}..HEAD", "--",
+                         "benchmarks/super-caveman/results/revision-8f493670-attempt-1-summary.json"],
+    "noancestry+onepath": ["git", "rev-list", f"{base_arg}..HEAD", "--",
+                           "benchmarks/super-caveman/results/revision-8f493670-attempt-1-summary.json"],
+}
+for name, argv in variants.items():
+    r = subprocess.run(argv, cwd=benchmark.ROOT, capture_output=True, text=True)
+    print(f"{name}: rc={r.returncode} out={r.stdout.strip().splitlines()!r} err={r.stderr.strip()[:160]!r}")
