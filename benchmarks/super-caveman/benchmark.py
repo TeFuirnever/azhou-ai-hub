@@ -182,6 +182,11 @@ def is_sha256(value: object) -> bool:
     return isinstance(value, str) and SHA256.fullmatch(value) is not None
 
 
+def _gate_trace(location: str, reason: str) -> None:
+    if os.environ.get("SUPER_CAVEMAN_GATE_TRACE"):
+        os.write(2, f"[gate-trace] {location}: {reason}\n".encode("utf-8", "replace"))
+
+
 def review_selectors(excluded_paths: set[str]) -> list[str]:
     benchmark_relative = BENCHMARK.relative_to(ROOT)
     root_exclusions: set[str] = set()
@@ -293,9 +298,11 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
             canonical_git_diff("--name-only", "-z", "HEAD", "--", *selectors),
             cwd=ROOT,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as error:
+        _gate_trace("snapshot_matches", f"diff HEAD failed: {error!r}")
         return False
     if changes:
+        _gate_trace("snapshot_matches", f"worktree dirty on recorded paths: {changes[:200]!r}")
         return False
     for item, path in zip(tuples, paths, strict=True):
         _, _, new_oid, _ = item.split(b"\0")
@@ -320,9 +327,14 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.CalledProcessError) as error:
+            _gate_trace("snapshot_matches", f"rev-parse HEAD:{path} failed: {error!r}")
             return False
         if current_oid != new_oid.decode("ascii"):
+            _gate_trace(
+                "snapshot_matches",
+                f"HEAD blob drift for {path}: recorded={new_oid.decode('ascii')[:12]} head={current_oid[:12]}",
+            )
             return False
     return True
 
@@ -332,16 +344,23 @@ def _staged_aggregates_match(excluded_paths: set[str]) -> bool:
     for value in sorted(excluded_paths):
         path = Path(value)
         if path.is_absolute() or ".." in path.parts:
+            _gate_trace("staged_aggregates_match", f"unsafe exclusion path: {value}")
             return None
         absolute = BENCHMARK / path
         if absolute.is_symlink() or not absolute.is_file():
+            _gate_trace("staged_aggregates_match", f"aggregate missing on disk: {absolute}")
             return None
         relative = (benchmark_relative / path).as_posix()
         try:
             index_bytes = subprocess.check_output(["git", "show", f":{relative}"], cwd=ROOT)
-        except (subprocess.CalledProcessError, OSError):
+        except (subprocess.CalledProcessError, OSError) as error:
+            _gate_trace("staged_aggregates_match", f"git show :{relative} failed: {error!r}")
             return False
         if absolute.read_bytes() != index_bytes:
+            _gate_trace(
+                "staged_aggregates_match",
+                f"worktree/index bytes differ for {relative}: worktree={len(absolute.read_bytes())} index={len(index_bytes)}",
+            )
             return False
     return True
 
@@ -350,6 +369,10 @@ def staged_review_digests(excluded_paths: set[str]) -> dict[str, str] | None:
     selectors = review_selectors(excluded_paths)
     tuples = _canonical_blob_tuples("--cached", selectors)
     if not tuples or not _staged_aggregates_match(excluded_paths):
+        if not tuples:
+            _gate_trace("staged_review_digests", "no canonical tuples from --cached diff")
+        else:
+            _gate_trace("staged_review_digests", "aggregate index/worktree split")
         return None
     base_commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -435,6 +458,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
             approval_anchor = commit
             break
     if approval_anchor is None:
+        _gate_trace("committed_review_digests", "no approval anchor: no commit has the current aggregate bytes")
         return None
     selectors = review_selectors(excluded_paths)
     diff_range = f"{resolved_base}..{approval_anchor}"
@@ -444,6 +468,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
     )
     items = sorted(item for item in paths.split(b"\0") if item)
     if not items:
+        _gate_trace("committed_review_digests", f"empty diff items in range {diff_range}")
         return None
     approved_path_selectors = [
         f":(top,literal){os.fsdecode(item)}" for item in items
@@ -453,6 +478,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         cwd=ROOT,
     )
     if later_commits.strip():
+        _gate_trace("committed_review_digests", f"later commits touch approved paths after anchor {approval_anchor[:10]}")
         return None
     working_tree_changes = subprocess.check_output(
         canonical_git_diff(
@@ -461,9 +487,14 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         cwd=ROOT,
     )
     if working_tree_changes:
+        _gate_trace(
+            "committed_review_digests",
+            f"worktree dirty on approved paths: {working_tree_changes[:200]!r}",
+        )
         return None
     tuples = _canonical_blob_tuples(diff_range, selectors)
     if not tuples:
+        _gate_trace("committed_review_digests", f"no canonical tuples in range {diff_range}")
         return None
     return {
         "base_commit": resolved_base,
@@ -526,6 +557,10 @@ def committed_review_digests_from_blobs(
             approval_anchor = commit
             break
     if approval_anchor is None:
+        _gate_trace(
+            "from_blobs",
+            f"no commit in {resolved_base[:10]}..HEAD reproduces the recorded tuples (searched {len(commits)} commits touching approved paths)",
+        )
         return None
     later_commits = subprocess.check_output(
         ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
@@ -670,7 +705,14 @@ def is_approved_exact_diff(
         for candidate in candidates
     )
     if not exact_replay:
-        if require_external_evidence or not reviewed_blob_snapshot_matches(reviewed_tuples):
+        snapshot_ok = reviewed_blob_snapshot_matches(reviewed_tuples)
+        if require_external_evidence or not snapshot_ok:
+            _gate_trace(
+                "is_approved_exact_diff",
+                f"record {record_relative}: exact_replay=False "
+                f"(candidates={[c is not None for c in candidates]}) snapshot={snapshot_ok} "
+                f"require_external={require_external_evidence}",
+            )
             return False
 
     if not require_external_evidence:
