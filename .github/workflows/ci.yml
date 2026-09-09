@@ -89,9 +89,10 @@ jobs:
 
   verify-windows:
     name: Verify on Windows (experimental evidence)
-    # Non-blocking evidence collector for the windows-macos-compat spec (win-05/win-10).
-    # Not part of the Required gate until the OS declaration lands; failures feed
-    # the tracked follow-up tickets instead of silently skipping the platform.
+    # Non-blocking evidence collector for the windows-macos-compat spec. The
+    # Required flip is tracked as the win-10 residual: one promotion-replay
+    # divergence on windows-latest remains under diagnosis (EOL normalization
+    # and stat-cache refresh already landed; see the follow-up ticket).
     runs-on: windows-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -109,6 +110,7 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONUTF8: "1"
+          SUPER_CAVEMAN_GATE_TRACE: "1"
         run: python scripts/verify.py
 
   required:

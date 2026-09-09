@@ -146,13 +146,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "f2b7219c1afcacc56555b1a7085135d6723dc916",
-      "path_set_sha256": "abf016ca36ee551d8bbffd9777c2a7f4a5c53167bb570bbda29ef6dae4e571d2",
-      "staged_patch_sha256": "297b8e9c2aa4c5f21e78fbe791dcb30ebdfe13c16fc21878ca2a52d03a4b5b89",
+      "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
+      "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
+      "staged_patch_sha256": "9cc19566c00a074ed48e68152743c3d56293d2dbafc6223b9f00185289fb4bb9",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-09T01:54:18Z",
+      "approved_at": "2026-09-09T02:43:11Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "cad947b606e44e662fc77fad5cb3f70492d9b9ea70e3bd1240c9bfa815363e74",
+      "record_sha256": "3d19d623b6aa8d13ac14f50af862200f3088f15f68ee70be7db855a1fe836d74",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

@@ -2,73 +2,43 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-09T01:54:18Z",
-  "base_commit": "f2b7219c1afcacc56555b1a7085135d6723dc916",
+  "approved_at": "2026-09-09T02:43:11Z",
+  "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "abf016ca36ee551d8bbffd9777c2a7f4a5c53167bb570bbda29ef6dae4e571d2",
-  "staged_patch_sha256": "297b8e9c2aa4c5f21e78fbe791dcb30ebdfe13c16fc21878ca2a52d03a4b5b89",
+  "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
+  "staged_patch_sha256": "9cc19566c00a074ed48e68152743c3d56293d2dbafc6223b9f00185289fb4bb9",
   "reviewed_blobs": [
     {
-      "path": "AGENTS.md",
-      "old_oid": "6f57a9040986cca76da23ec7356dbf1d8c6b09ab",
-      "new_oid": "1263513056e2d803c2f7fef1ebb232a70db5ccdd"
+      "path": ".github/workflows/ci.yml",
+      "old_oid": "b0798c63dafbdc8d290c04a85ce699c376cb5d21",
+      "new_oid": "a460368f59500560db3c6b86698c9e7e5a4a7bfb"
     },
     {
       "path": "CHANGELOG.md",
-      "old_oid": "7dad5763ae8dd7850e6963b4e17583cd84254959",
-      "new_oid": "31d22cdb2f30ee386f99c46e36a49e3b61f3fef3"
+      "old_oid": "31d22cdb2f30ee386f99c46e36a49e3b61f3fef3",
+      "new_oid": "140e6ce89fbead0c1b4f861f5101fcb3d2dee4ab"
+    },
+    {
+      "path": "README.md",
+      "old_oid": "65ec50a54a809d9b52ca2cc66701367a361c2dab",
+      "new_oid": "60e6f74f28fa266a0a21afa4c44cdf041a318c96"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "old_oid": "97e9e25fb57d673a759eea1bbc2e4599ec903ece",
+      "new_oid": "506a628b671017926bf20ff547692202b4bb9060"
     },
     {
       "path": "benchmarks/super-caveman/benchmark.py",
-      "old_oid": "619a522d7ca2091ab69ea41bb5ad61f01c113b89",
-      "new_oid": "09194746b8d1a3cc7985e71608d23efb9f8943fd"
+      "old_oid": "09194746b8d1a3cc7985e71608d23efb9f8943fd",
+      "new_oid": "b2434fc30a957780153ce154c0ae30d651cd5569"
     },
     {
-      "path": "benchmarks/super-caveman/evaluation-contract.json",
-      "old_oid": "ef2003c0c04276e774340c86c47b463bb8e4de64",
-      "new_oid": "63642699bf00876f3d10a3390f8a9fd5fcd9af3e"
-    },
-    {
-      "path": "benchmarks/super-caveman/manifest.json",
-      "old_oid": "c0e94aefe0f91e9f4fbf139758070057e7719994",
-      "new_oid": "a93ba89a97009b78c1d958b96204d9286fa9acf3"
-    },
-    {
-      "path": "benchmarks/super-caveman/results/revision-74f8d585-attempt-1-summary.json",
-      "old_oid": "e7d5c4b58a83c8188dd92ee80298fc22d8e3c343",
-      "new_oid": "d7bdd0c6c55de72d04a8c820de319bcef8e9e486"
-    },
-    {
-      "path": "skills/super-caveman/scripts/claude_adapter.py",
-      "old_oid": "430b732f486d78b1907514b05b4583e5fc5b0789",
-      "new_oid": "aec178f9182299b17c18784ceb9da6ceffc0998f"
-    },
-    {
-      "path": "skills/super-caveman/scripts/codex_adapter.py",
-      "old_oid": "b6f5450e91c74d0af8b3c20c65eb35401cb8e995",
-      "new_oid": "ef567ef1678df47036c8b117939e9f7938b562c7"
-    },
-    {
-      "path": "skills/super-caveman/scripts/zcode_adapter.py",
-      "old_oid": "77190672f83fb11c7c227764c09b268f6b44eacf",
-      "new_oid": "d9fbe6aa5a34cb2c1a24129068078309fcffbb74"
-    },
-    {
-      "path": "tests/test_docs_code_contract.py",
-      "old_oid": "5090ad0d486d93ea19ca3f07854fce3dd2abbd93",
-      "new_oid": "b36bf434e5d4c77bbc5d1877ee83def8fb0f7b54"
-    },
-    {
-      "path": "tests/test_super_caveman.py",
-      "old_oid": "e793cd8ae7f28461ba353306539e3e7b5ece27f2",
-      "new_oid": "3ce7743a5cc30ba2ca6dee810707a9367e633b25"
-    },
-    {
-      "path": "tests/test_super_caveman_benchmark.py",
-      "old_oid": "a000e653510a56c9677ba50847b4fa9950dfbbe5",
-      "new_oid": "ef7400739f5f5410ec8772b3c7c2ad34756469fb"
+      "path": "docs/support-matrix.md",
+      "old_oid": "ec3d5aeb8140c6dc6521d1b1162da2c8a2a3bfd2",
+      "new_oid": "c23f35f6eeb18f429758824539881df6e2de5340"
     }
   ],
-  "raw_approval_record_sha256": "ac56b741361cfd728396c13899b7274ab14e9f4ee1a10988ff8fa6093b100fbe",
+  "raw_approval_record_sha256": "a198d65872e2db6f26b0e1faea81cbb56bded17dfff32fa1f41ed75088208b2a",
   "raw_approval_storage": "Git-external"
 }

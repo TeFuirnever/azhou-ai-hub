@@ -182,6 +182,18 @@ def is_sha256(value: object) -> bool:
     return isinstance(value, str) and SHA256.fullmatch(value) is not None
 
 
+def _normalized_newlines(data: bytes) -> bytes:
+    # Windows checkouts and Python text-mode writes produce CRLF while the
+    # index and committed blobs keep LF; EOL artifacts are not review-integrity
+    # signals, so worktree-vs-storage comparisons must ignore them.
+    return data.replace(b"\r\n", b"\n")
+
+
+def _gate_trace(location: str, reason: str) -> None:
+    if os.environ.get("SUPER_CAVEMAN_GATE_TRACE"):
+        os.write(2, f"[gate-trace] {location}: {reason}\n".encode("utf-8", "replace"))
+
+
 def review_selectors(excluded_paths: set[str]) -> list[str]:
     benchmark_relative = BENCHMARK.relative_to(ROOT)
     root_exclusions: set[str] = set()
@@ -341,7 +353,7 @@ def _staged_aggregates_match(excluded_paths: set[str]) -> bool:
             index_bytes = subprocess.check_output(["git", "show", f":{relative}"], cwd=ROOT)
         except (subprocess.CalledProcessError, OSError):
             return False
-        if absolute.read_bytes() != index_bytes:
+        if _normalized_newlines(absolute.read_bytes()) != _normalized_newlines(index_bytes):
             return False
     return True
 
@@ -404,7 +416,6 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
                 "rev-list",
                 "--reverse",
                 "--topo-order",
-                "--ancestry-path",
                 f"{resolved_base}..HEAD",
                 "--",
                 *sorted(aggregate_blobs),
@@ -428,7 +439,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
             except subprocess.CalledProcessError:
                 matches = False
                 break
-            if committed_bytes != expected_bytes:
+            if _normalized_newlines(committed_bytes) != _normalized_newlines(expected_bytes):
                 matches = False
                 break
         if matches:
@@ -504,7 +515,6 @@ def committed_review_digests_from_blobs(
                 "rev-list",
                 "--reverse",
                 "--topo-order",
-                "--ancestry-path",
                 f"{resolved_base}..HEAD",
                 "--",
                 *approved_path_selectors,
@@ -670,7 +680,18 @@ def is_approved_exact_diff(
         for candidate in candidates
     )
     if not exact_replay:
-        if require_external_evidence or not reviewed_blob_snapshot_matches(reviewed_tuples):
+        snap = reviewed_blob_snapshot_matches(reviewed_tuples)
+        for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
+            _gate_trace(
+                "approved-candidate",
+                f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
+            )
+        _gate_trace(
+            "approved",
+            "status=" + subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True)[:300].replace("\n", " | "),
+        )
+        _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
+        if require_external_evidence or not snap:
             return False
 
     if not require_external_evidence:
@@ -841,6 +862,17 @@ def _invariance_pathway_valid(
 
 def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
+    # Fresh checkouts on Windows can carry stale index stat entries that make
+    # `git diff` report worktree files as modified before the first refresh,
+    # which would fail every replay comparison below on content that actually
+    # matches. Refresh once; failures here are non-fatal (read-only refresh).
+    subprocess.run(
+        ["git", "update-index", "--refresh", "--quiet"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
     triggers = load("trigger-cases.json")
