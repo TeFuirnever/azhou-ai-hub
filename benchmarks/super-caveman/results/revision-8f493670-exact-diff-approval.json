@@ -6,12 +6,12 @@
   "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
-  "staged_patch_sha256": "05634b16673f8640e68c722648739dba649507f68c18184bdc93570c24e1e126",
+  "staged_patch_sha256": "b8c405acfab4cdb8178acb5932ec1c727d5990a59f8c604818e2398d4fb5a2bd",
   "reviewed_blobs": [
     {
       "path": ".github/workflows/ci.yml",
       "old_oid": "b0798c63dafbdc8d290c04a85ce699c376cb5d21",
-      "new_oid": "bd40e235727dce466651932f702e6cc9c3d7055a"
+      "new_oid": "7454e5a63b764153ab7bf7b7d6b4409b69a66ec2"
     },
     {
       "path": "CHANGELOG.md",
