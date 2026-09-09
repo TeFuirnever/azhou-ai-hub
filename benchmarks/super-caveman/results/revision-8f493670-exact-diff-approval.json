@@ -6,12 +6,12 @@
   "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
-  "staged_patch_sha256": "36530b5680a163052d00f7aa5b4c036fffdc51efedc09c4c8424993d8478db3c",
+  "staged_patch_sha256": "7b8521b1b04c7458f3753230ab4c460b096a0f99213933e3c84a730cd912dae9",
   "reviewed_blobs": [
     {
       "path": ".github/workflows/ci.yml",
       "old_oid": "b0798c63dafbdc8d290c04a85ce699c376cb5d21",
-      "new_oid": "7454e5a63b764153ab7bf7b7d6b4409b69a66ec2"
+      "new_oid": "bd40e235727dce466651932f702e6cc9c3d7055a"
     },
     {
       "path": "CHANGELOG.md",
@@ -31,7 +31,7 @@
     {
       "path": "benchmarks/super-caveman/benchmark.py",
       "old_oid": "09194746b8d1a3cc7985e71608d23efb9f8943fd",
-      "new_oid": "58d750fc2fc4be1c79060d83316e15a3240fb002"
+      "new_oid": "1479d7f96100374ffb64b40deec67e98fc922333"
     },
     {
       "path": "docs/support-matrix.md",

@@ -103,20 +103,10 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - name: Diagnose README drift
-        run: |
-          git status --short -- README.md
-          git hash-object README.md
-          git rev-parse HEAD:README.md
-          git diff HEAD --stat -- README.md
-          git diff HEAD -- README.md
-      - name: Dump promotion candidates
-        run: python tmp_diag_win.py
       - name: Full deterministic gate
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONUTF8: "1"
-          SUPER_CAVEMAN_GATE_TRACE: "1"
         run: python scripts/verify.py
 
   required:

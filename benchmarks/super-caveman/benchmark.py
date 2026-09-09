@@ -182,11 +182,6 @@ def is_sha256(value: object) -> bool:
     return isinstance(value, str) and SHA256.fullmatch(value) is not None
 
 
-def _gate_trace(location: str, reason: str) -> None:
-    if os.environ.get("SUPER_CAVEMAN_GATE_TRACE"):
-        os.write(2, f"[gate-trace] {location}: {reason}\n".encode("utf-8", "replace"))
-
-
 def _normalized_newlines(data: bytes) -> bytes:
     # Windows checkouts and Python text-mode writes produce CRLF while the
     # index and committed blobs keep LF; EOL artifacts are not review-integrity
@@ -305,11 +300,9 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
             canonical_git_diff("--name-only", "-z", "HEAD", "--", *selectors),
             cwd=ROOT,
         )
-    except (OSError, subprocess.CalledProcessError) as e:
-        _gate_trace("snapshot", f"diff failed: {e!r}")
+    except (OSError, subprocess.CalledProcessError):
         return False
     if changes:
-        _gate_trace("snapshot", f"dirty: {changes[:120]!r}")
         return False
     for item, path in zip(tuples, paths, strict=True):
         _, _, new_oid, _ = item.split(b"\0")
@@ -334,11 +327,9 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()
-        except (OSError, subprocess.CalledProcessError) as e:
-            _gate_trace("snapshot", f"revparse failed {path}: {e!r}")
+        except (OSError, subprocess.CalledProcessError):
             return False
         if current_oid != new_oid.decode("ascii"):
-            _gate_trace("snapshot", f"drift {path}: rec={new_oid.decode('ascii')[:10]} head={current_oid[:10]}")
             return False
     return True
 
@@ -355,11 +346,9 @@ def _staged_aggregates_match(excluded_paths: set[str]) -> bool:
         relative = (benchmark_relative / path).as_posix()
         try:
             index_bytes = subprocess.check_output(["git", "show", f":{relative}"], cwd=ROOT)
-        except (subprocess.CalledProcessError, OSError) as e:
-            _gate_trace("agg_match", f"git show failed: {e!r}")
+        except (subprocess.CalledProcessError, OSError):
             return False
         if _normalized_newlines(absolute.read_bytes()) != _normalized_newlines(index_bytes):
-            _gate_trace("agg_match", f"byte split: {relative}")
             return False
     return True
 
@@ -368,7 +357,6 @@ def staged_review_digests(excluded_paths: set[str]) -> dict[str, str] | None:
     selectors = review_selectors(excluded_paths)
     tuples = _canonical_blob_tuples("--cached", selectors)
     if not tuples or not _staged_aggregates_match(excluded_paths):
-        _gate_trace("staged", f"tuples_empty={not tuples}")
         return None
     base_commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -423,7 +411,6 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
                 "rev-list",
                 "--reverse",
                 "--topo-order",
-                "--ancestry-path",
                 f"{resolved_base}..HEAD",
                 "--",
                 *sorted(aggregate_blobs),
@@ -434,7 +421,6 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         ).splitlines()
     except subprocess.CalledProcessError:
         return None
-    _gate_trace("committed", f"rev-list gave {len(commits)} commits: {commits}")
     approval_anchor = None
     for commit in commits:
         matches = True
@@ -455,7 +441,6 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
             approval_anchor = commit
             break
     if approval_anchor is None:
-        _gate_trace("committed", "anchor None: no commit has current aggregate bytes")
         return None
     selectors = review_selectors(excluded_paths)
     diff_range = f"{resolved_base}..{approval_anchor}"
@@ -474,7 +459,6 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         cwd=ROOT,
     )
     if later_commits.strip():
-        _gate_trace("committed", "later commits")
         return None
     working_tree_changes = subprocess.check_output(
         canonical_git_diff(
@@ -483,14 +467,9 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         cwd=ROOT,
     )
     if working_tree_changes:
-        probe = subprocess.run(
-            canonical_git_diff("HEAD", "--", *(p for p in ("README.md",))),
-            cwd=ROOT, capture_output=True)
-        _gate_trace("committed", f"wt dirty: {working_tree_changes[:120]!r} patch={probe.stdout[:500]!r} cfg={subprocess.check_output(['git','config','--list','--show-origin'], cwd=ROOT)[:400]!r}")
         return None
     tuples = _canonical_blob_tuples(diff_range, selectors)
     if not tuples:
-        _gate_trace("committed", "tuples empty")
         return None
     return {
         "base_commit": resolved_base,
@@ -511,8 +490,7 @@ def committed_review_digests_from_blobs(
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
-    except (OSError, subprocess.CalledProcessError) as error:
-        _gate_trace("from_blobs", f"rev-parse failed: {error!r}")
+    except (OSError, subprocess.CalledProcessError):
         return None
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", resolved_base, "HEAD"],
@@ -522,7 +500,6 @@ def committed_review_digests_from_blobs(
         check=False,
     )
     if ancestor.returncode != 0:
-        _gate_trace("from_blobs", "base not ancestor")
         return None
     paths = _tuple_paths(tuples)
     approved_path_selectors = [f":(top,literal){path}" for path in paths]
@@ -533,7 +510,6 @@ def committed_review_digests_from_blobs(
                 "rev-list",
                 "--reverse",
                 "--topo-order",
-                "--ancestry-path",
                 f"{resolved_base}..HEAD",
                 "--",
                 *approved_path_selectors,
@@ -542,11 +518,9 @@ def committed_review_digests_from_blobs(
             text=True,
             stderr=subprocess.DEVNULL,
         ).splitlines()
-    except (OSError, subprocess.CalledProcessError) as error:
-        _gate_trace("from_blobs", f"rev-list failed: {error!r}")
+    except (OSError, subprocess.CalledProcessError):
         return None
     selectors = review_selectors(excluded_paths)
-    _gate_trace("from_blobs", f"rev-list gave {len(commits)} commits")
     approval_anchor = None
     for commit in commits:
         candidate = _canonical_blob_tuples(
@@ -557,14 +531,12 @@ def committed_review_digests_from_blobs(
             approval_anchor = commit
             break
     if approval_anchor is None:
-        _gate_trace("from_blobs", "anchor None")
         return None
     later_commits = subprocess.check_output(
         ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
         cwd=ROOT,
     )
     if later_commits.strip():
-        _gate_trace("from_blobs", "later commits")
         return None
     working_tree_changes = subprocess.check_output(
         canonical_git_diff(
@@ -573,7 +545,6 @@ def committed_review_digests_from_blobs(
         cwd=ROOT,
     )
     if working_tree_changes:
-        _gate_trace("from_blobs", f"wt dirty: {working_tree_changes[:120]!r}")
         return None
     return _review_digests(resolved_base, tuples)
 
@@ -704,9 +675,7 @@ def is_approved_exact_diff(
         for candidate in candidates
     )
     if not exact_replay:
-        snap = reviewed_blob_snapshot_matches(reviewed_tuples)
-        if require_external_evidence or not snap:
-            _gate_trace("approved", f"exact_replay=False snapshot={snap} req_ext={require_external_evidence}")
+        if require_external_evidence or not reviewed_blob_snapshot_matches(reviewed_tuples):
             return False
 
     if not require_external_evidence:
@@ -877,17 +846,6 @@ def _invariance_pathway_valid(
 
 def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
-    _gate_trace(
-        "check",
-        "HEAD="
-        + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()[:12]
-        + " branch="
-        + subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=ROOT, text=True).strip()
-        + " log="
-        + subprocess.check_output(["git", "log", "--oneline", "-2"], cwd=ROOT, text=True).replace("\n", " | ").strip()
-        + " ancestor_rc="
-        + str(subprocess.run(["git", "merge-base", "--is-ancestor", "ce242fad50f9852c50c967dd54a36238d03600ff", "HEAD"], cwd=ROOT).returncode),
-    )
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
     triggers = load("trigger-cases.json")
