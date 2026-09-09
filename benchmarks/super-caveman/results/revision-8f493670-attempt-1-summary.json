@@ -148,11 +148,11 @@
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
       "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
       "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
-      "staged_patch_sha256": "7b8521b1b04c7458f3753230ab4c460b096a0f99213933e3c84a730cd912dae9",
+      "staged_patch_sha256": "05634b16673f8640e68c722648739dba649507f68c18184bdc93570c24e1e126",
       "approver": "workspace-owner",
       "approved_at": "2026-09-09T02:43:11Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "970e4c3634d2b524e021b7ef760e176a4f51add465059920a38e248ccbad77b8",
+      "record_sha256": "272768474184254cbfce8de11e8ccc089de7d81056ec42f05a3d81c05ccfa8ed",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

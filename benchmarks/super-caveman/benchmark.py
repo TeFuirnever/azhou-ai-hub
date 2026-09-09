@@ -189,6 +189,11 @@ def _normalized_newlines(data: bytes) -> bytes:
     return data.replace(b"\r\n", b"\n")
 
 
+def _gate_trace(location: str, reason: str) -> None:
+    if os.environ.get("SUPER_CAVEMAN_GATE_TRACE"):
+        os.write(2, f"[gate-trace] {location}: {reason}\n".encode("utf-8", "replace"))
+
+
 def review_selectors(excluded_paths: set[str]) -> list[str]:
     benchmark_relative = BENCHMARK.relative_to(ROOT)
     root_exclusions: set[str] = set()
@@ -675,7 +680,14 @@ def is_approved_exact_diff(
         for candidate in candidates
     )
     if not exact_replay:
-        if require_external_evidence or not reviewed_blob_snapshot_matches(reviewed_tuples):
+        snap = reviewed_blob_snapshot_matches(reviewed_tuples)
+        for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
+            _gate_trace(
+                "approved-candidate",
+                f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
+            )
+        _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
+        if require_external_evidence or not snap:
             return False
 
     if not require_external_evidence:

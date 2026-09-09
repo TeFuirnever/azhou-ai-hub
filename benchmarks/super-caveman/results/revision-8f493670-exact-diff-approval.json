@@ -6,7 +6,7 @@
   "base_commit": "ce242fad50f9852c50c967dd54a36238d03600ff",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
   "path_set_sha256": "47b15292942113f4270460ab697b46a9c079efe32e4543f8c8ba14dd4fd9a457",
-  "staged_patch_sha256": "7b8521b1b04c7458f3753230ab4c460b096a0f99213933e3c84a730cd912dae9",
+  "staged_patch_sha256": "05634b16673f8640e68c722648739dba649507f68c18184bdc93570c24e1e126",
   "reviewed_blobs": [
     {
       "path": ".github/workflows/ci.yml",
@@ -31,7 +31,7 @@
     {
       "path": "benchmarks/super-caveman/benchmark.py",
       "old_oid": "09194746b8d1a3cc7985e71608d23efb9f8943fd",
-      "new_oid": "1479d7f96100374ffb64b40deec67e98fc922333"
+      "new_oid": "1383ae35e3fc75c09f5e5ad40e899186da5017e4"
     },
     {
       "path": "docs/support-matrix.md",
