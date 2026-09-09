@@ -877,6 +877,13 @@ def _invariance_pathway_valid(
 
 def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
+    _gate_trace(
+        "check",
+        "HEAD="
+        + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()[:12]
+        + " branch="
+        + subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=ROOT, text=True).strip(),
+    )
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
     triggers = load("trigger-cases.json")
