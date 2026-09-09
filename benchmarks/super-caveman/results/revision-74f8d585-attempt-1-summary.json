@@ -100,7 +100,7 @@
     "Producer plan tier differs from the baseline run (bigmodel-coding-plan vs bigmodel-start-plan); both are GLM-5.3-Flash via the same zcode isolated-subagent harness.",
     "The host-plan-tool-state mechanical fixture records the responder instruction (TodoWrite exactly once, 3 items, exactly 1 in_progress) and the agent's tool-use count instead of the raw payload captured in the previous ride."
   ],
-  "status": "pass",
+  "status": "superseded",
   "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; fixtures provisioned per evaluation-contract execution.fixtures; ride directed by the workspace owner",
   "skill_tree_sha256": "74f8d58555ee1527e0b38f11e5f1669d7f384315da9044cbb3cecc7c36836c89",
   "automatic_checks": {

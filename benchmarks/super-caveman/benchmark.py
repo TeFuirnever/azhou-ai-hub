@@ -781,6 +781,64 @@ def sha256_skill_tree() -> str:
     return digest.hexdigest()
 
 
+INVARIANCE_SCHEMA = "super-caveman-producer-context-invariance.v1"
+
+
+def _invariance_pathway_valid(
+    result: dict, paired: dict, approval: dict, promotion: dict
+) -> bool:
+    config = promotion.get("producer_context_invariance")
+    if not isinstance(config, dict) or config.get("enabled") is not True:
+        return False
+    context_files = config.get("context_files")
+    if not isinstance(context_files, list) or not context_files:
+        return False
+    proof = paired.get("invariance_proof")
+    if not isinstance(proof, dict) or proof.get("schema") != INVARIANCE_SCHEMA:
+        return False
+    declared = proof.get("producer_context_files")
+    if not isinstance(declared, dict) or set(declared) != set(context_files):
+        return False
+    if proof.get("capsule_rules_digest") != config.get("capsule_rules_digest"):
+        return False
+    runtime = result.get("runtime")
+    runtime_digest = runtime.get("capsule_rules_digest") if isinstance(runtime, dict) else None
+    if runtime_digest is not None and runtime_digest != config.get("capsule_rules_digest"):
+        return False
+    changed_paths = {
+        blob.get("path") for blob in approval.get("reviewed_blobs", []) if isinstance(blob, dict)
+    }
+    if changed_paths & {f"skills/super-caveman/{rel}" for rel in context_files}:
+        return False
+    base_commit = approval.get("base_commit")
+    if re.fullmatch(r"[0-9a-f]{40}", str(base_commit)) is None:
+        return False
+    for rel in context_files:
+        entry = declared[rel]
+        if not isinstance(entry, dict) or set(entry) != {"base_blob_sha256", "candidate_blob_sha256"}:
+            return False
+        try:
+            base_blob = subprocess.check_output(
+                ["git", "rev-parse", f"{base_commit}:skills/super-caveman/{rel}"],
+                cwd=ROOT,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            head_blob = subprocess.check_output(
+                ["git", "rev-parse", f":skills/super-caveman/{rel}"],
+                cwd=ROOT,
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+        except (OSError, subprocess.CalledProcessError):
+            return False
+        if (
+            entry["base_blob_sha256"] != base_blob
+            or entry["candidate_blob_sha256"] != head_blob
+            or base_blob != head_blob
+        ):
+            return False
+    return True
+
+
 def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
     manifest = load("manifest.json")
@@ -963,6 +1021,14 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         errors.append("promotion review must reverse paired presentation order")
     if promotion.get("candidate_majority_required") != 2 or promotion.get("high_risk_regressions_allowed") != 0:
         errors.append("promotion review majority or safety gate is too weak")
+    invariance = promotion.get("producer_context_invariance", {})
+    if invariance.get("enabled") is True and (
+        not isinstance(invariance.get("context_files"), list)
+        or not invariance.get("context_files")
+        or not isinstance(invariance.get("capsule_rules_digest"), str)
+        or not invariance.get("capsule_rules_digest", "").strip()
+    ):
+        errors.append("producer context invariance pathway is malformed")
     approval_contract = promotion.get("exact_diff_human_approval")
     if (
         not isinstance(approval_contract, dict)
@@ -1116,26 +1182,38 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
                 if isinstance(judge, dict)
             )
             approval = paired.get("exact_diff_human_approval") if isinstance(paired, dict) else None
-            if (
-                not isinstance(paired, dict)
-                or paired.get("paired_status") != "pass"
-                or not is_sha256(paired.get("baseline_output_set_sha256"))
-                or paired.get("candidate_output_set_sha256") != result.get("output_set_sha256")
-                or len(judges) != 3
-                or len(identities) != 3
-                or not identities_valid
-                or orders != promotion.get("presentation_orders")
-                or candidate_votes < promotion.get("candidate_majority_required", 2)
-                or paired.get("high_risk_regressions") != 0
-                or not judge_digests_valid
-                or not isinstance(approval, dict)
-                or approval.get("record_path") not in manifest_inputs
-                or not is_approved_exact_diff(
+            approval_valid = (
+                isinstance(approval, dict)
+                and approval.get("record_path") in manifest_inputs
+                and is_approved_exact_diff(
                     approval,
                     result_path,
                     require_external_evidence=require_promotion_evidence,
                 )
-            ):
+            )
+            pairing_classical = (
+                isinstance(paired, dict)
+                and paired.get("paired_status") == "pass"
+                and is_sha256(paired.get("baseline_output_set_sha256"))
+                and paired.get("candidate_output_set_sha256") == result.get("output_set_sha256")
+                and len(judges) == 3
+                and len(identities) == 3
+                and identities_valid
+                and orders == promotion.get("presentation_orders")
+                and candidate_votes >= promotion.get("candidate_majority_required", 2)
+                and paired.get("high_risk_regressions") == 0
+                and judge_digests_valid
+            )
+            pairing_invariant = (
+                isinstance(paired, dict)
+                and paired.get("paired_status") == "invariant"
+                and promotion.get("invariance_pathway_allowed") is True
+                and _invariance_pathway_valid(result, paired, approval, promotion)
+                and is_sha256(paired.get("candidate_output_set_sha256"))
+                and paired.get("candidate_output_set_sha256") == result.get("output_set_sha256")
+                and paired.get("high_risk_regressions") == 0
+            )
+            if not ((pairing_classical or pairing_invariant) and approval_valid):
                 errors.append(f"passing evaluation result lacks valid paired promotion evidence: {result_path.name}")
 
     if len(current_passing_results) != 1:

@@ -11,7 +11,22 @@
     {
       "sha256": "0f4b59246c731e2fb2138ac74a2fc8b9c3bf0c864f2ed3856cb8244fe9ad2598",
       "count": 14,
-      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity"],
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity"
+      ],
       "result_files": {
         "revision-a6cfc850-attempt-1-summary.json": "78b67833aef9ad2bf337eb2a851905cd2b7622781fe863d4a82ccd897d3ea9d0",
         "revision-de6b836a-attempt-1-summary.json": "ceeeeda13a7984f5050fb300a8d2f9afb81fc595e4ef6227d08a599b0ddfc9fc",
@@ -23,7 +38,27 @@
     {
       "sha256": "cfe991555de0f3086ebc4e294266ffe6c8ac84122a748eabdb1d64dece250bb8",
       "count": 19,
-      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "host-plan-tool-state",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity",
+        "stop-mode-default-style",
+        "task-wins-options",
+        "uncertainty-and-idiom",
+        "under-two-minute-next-action"
+      ],
       "result_files": {
         "revision-daa150ae-attempt-1-summary.json": "88c488455e9ded1a38f786e784d6ea7abde82be8236a8810c5dcae297e193429",
         "revision-8cb8447d-attempt-1-summary.json": "c0ffea2f249c4300f44a6c15aace76fb9cad61c2c9bb950ccfa22b8648096422",
@@ -33,7 +68,27 @@
     {
       "sha256": "1d75a0a86b3da90c5551e1c6e78c4b09a310ad8a011cc5116fef64ac0d450d19",
       "count": 19,
-      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "host-plan-tool-state",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity",
+        "stop-mode-default-style",
+        "task-wins-options",
+        "uncertainty-and-idiom",
+        "under-two-minute-next-action"
+      ],
       "result_files": {
         "revision-e5f16195-attempt-1-summary.json": "be2d02f6e3d259ee7d41857afe7cd1d32ef949ec099f4e895ce4378746e60715"
       }
@@ -41,7 +96,27 @@
     {
       "sha256": "3136808262609cf5bc9083b379b7f1cf15bb79b788127f012ff294142da09290",
       "count": 19,
-      "case_ids": ["agent-owned-edit", "casual-message", "code-answer", "complex-plan", "concept-explanation", "debugging-cause", "destructive-action", "direct-answer", "error-report", "host-plan-tool-state", "long-form-request", "medical-boundary", "multi-step-progress", "partial-success", "real-ambiguity", "stop-mode-default-style", "task-wins-options", "uncertainty-and-idiom", "under-two-minute-next-action"],
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "host-plan-tool-state",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity",
+        "stop-mode-default-style",
+        "task-wins-options",
+        "uncertainty-and-idiom",
+        "under-two-minute-next-action"
+      ],
       "result_files": {
         "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
         "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95"
@@ -130,7 +205,11 @@
     "candidate": "the frozen Super Caveman runtime used by the passing behavior result",
     "same_cases_required": true,
     "independent_paired_judges": 3,
-    "presentation_orders": ["candidate-baseline", "baseline-candidate", "candidate-baseline"],
+    "presentation_orders": [
+      "candidate-baseline",
+      "baseline-candidate",
+      "candidate-baseline"
+    ],
     "candidate_majority_required": 2,
     "high_risk_regressions_allowed": 0,
     "judge_records": "Git-external; aggregate identities, orders, votes, digests, and limitations belong in the passing result",
@@ -145,7 +224,28 @@
       "review_record_environment": "SUPER_CAVEMAN_REVIEW_RECORD",
       "raw_record_validation": "required for every promotion ingest and replay; SUPER_CAVEMAN_APPROVAL_RECORD and SUPER_CAVEMAN_REVIEW_RECORD must both name absolute Git-external regular files; verify the approval record's actual SHA-256, schema, decision, approver, timestamp, base commit, path-set digest, and tuple digest; verify the reviewer record's actual SHA-256, schema, identity, candidate raw-output SHA-256, and case-set SHA-256 against the aggregate result",
       "approved_replay_validation": "every promotion replay revalidates both Git-external raw records before deterministic verification; current staged or committed exact-diff validation remains required for promotion; staged replay also requires the aggregate result and aggregate approval record to have byte-identical index and working-tree copies; committed replay anchors to a base-descendant and HEAD-ancestor commit whose canonical tuple set matches reviewed_blobs, permits later unrelated commits, and rejects later commits or working-tree changes that touch any approved subject path; public squash replay may use reviewed_blobs only when exact history is unavailable, and each approved target blob must match HEAD with no working-tree change on an approved path",
-      "required_approved_fields": ["status", "approver", "approved_at", "base_commit", "path_set_sha256", "staged_patch_sha256", "record_path", "record_sha256"]
+      "required_approved_fields": [
+        "status",
+        "approver",
+        "approved_at",
+        "base_commit",
+        "path_set_sha256",
+        "staged_patch_sha256",
+        "record_path",
+        "record_sha256"
+      ]
+    },
+    "invariance_pathway_allowed": true,
+    "producer_context_invariance": {
+      "schema": "super-caveman-producer-context-invariance.v1",
+      "enabled": true,
+      "context_files": [
+        "SKILL.md",
+        "references/modes.md",
+        "references/brand-layer.md"
+      ],
+      "capsule_rules_digest": "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17",
+      "requirement": "When the promotion diff touches none of the producer context files and the capsule rules digest is unchanged, a fresh candidate production adds no behavioral signal relative to a production against the base tree: the attempt may reuse a raw output set produced against the base tree and substitute the three-judge paired review with the invariance proof (per-file blob equality between base and candidate)."
     }
   },
   "claim_gate": {

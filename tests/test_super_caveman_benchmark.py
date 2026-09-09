@@ -253,6 +253,72 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                 check=True,
             ).stdout.strip())
 
+    RULES_DIGEST = "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17"
+
+    def _invariance_fixtures(self, tamper: bool) -> tuple[dict, dict, dict]:
+        import subprocess
+        base_commit = subprocess.run(
+            ["git", "rev-parse", "HEAD~1"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        context = ["SKILL.md", "references/modes.md", "references/brand-layer.md"]
+        declared = {}
+        for rel in context:
+            base_blob = subprocess.run(
+                ["git", "rev-parse", f"{base_commit}:skills/super-caveman/{rel}"],
+                cwd=ROOT, capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            head_blob = subprocess.run(
+                ["git", "rev-parse", f":skills/super-caveman/{rel}"],
+                cwd=ROOT, capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            if tamper:
+                head_blob = "0" * 40
+            declared[rel] = {"base_blob_sha256": base_blob, "candidate_blob_sha256": head_blob}
+        result = {"runtime": {"capsule_rules_digest": self.RULES_DIGEST}}
+        paired = {
+            "paired_status": "invariant",
+            "invariance_proof": {
+                "schema": "super-caveman-producer-context-invariance.v1",
+                "producer_context_files": declared,
+                "capsule_rules_digest": self.RULES_DIGEST,
+            },
+            "candidate_output_set_sha256": "a" * 64,
+            "high_risk_regressions": 0,
+        }
+        approval = {
+            "reviewed_blobs": [
+                {"path": "skills/super-caveman/scripts/claude_adapter.py", "old_oid": "b" * 40, "new_oid": "c" * 40}
+            ],
+            "base_commit": base_commit,
+        }
+        promotion = {
+            "invariance_pathway_allowed": True,
+            "producer_context_invariance": {
+                "enabled": True,
+                "context_files": context,
+                "capsule_rules_digest": self.RULES_DIGEST,
+            },
+        }
+        return result, paired, approval, promotion
+
+    def test_invariance_pathway_accepts_unchanged_producer_context(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        result, paired, approval, promotion = self._invariance_fixtures(tamper=False)
+        self.assertTrue(benchmark._invariance_pathway_valid(result, paired, approval, promotion))
+
+    def test_invariance_pathway_rejects_changed_producer_context(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        result, paired, approval, promotion = self._invariance_fixtures(tamper=True)
+        self.assertFalse(benchmark._invariance_pathway_valid(result, paired, approval, promotion))
+
     def test_legacy_case_results_are_history_not_stale_current_passes(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
         try:
