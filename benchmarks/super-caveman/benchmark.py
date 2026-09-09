@@ -187,6 +187,13 @@ def _gate_trace(location: str, reason: str) -> None:
         os.write(2, f"[gate-trace] {location}: {reason}\n".encode("utf-8", "replace"))
 
 
+def _normalized_newlines(data: bytes) -> bytes:
+    # Windows checkouts and Python text-mode writes produce CRLF while the
+    # index and committed blobs keep LF; EOL artifacts are not review-integrity
+    # signals, so worktree-vs-storage comparisons must ignore them.
+    return data.replace(b"\r\n", b"\n")
+
+
 def review_selectors(excluded_paths: set[str]) -> list[str]:
     benchmark_relative = BENCHMARK.relative_to(ROOT)
     root_exclusions: set[str] = set()
@@ -356,7 +363,7 @@ def _staged_aggregates_match(excluded_paths: set[str]) -> bool:
         except (subprocess.CalledProcessError, OSError) as error:
             _gate_trace("staged_aggregates_match", f"git show :{relative} failed: {error!r}")
             return False
-        if absolute.read_bytes() != index_bytes:
+        if _normalized_newlines(absolute.read_bytes()) != _normalized_newlines(index_bytes):
             _gate_trace(
                 "staged_aggregates_match",
                 f"worktree/index bytes differ for {relative}: worktree={len(absolute.read_bytes())} index={len(index_bytes)}",
@@ -451,7 +458,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
             except subprocess.CalledProcessError:
                 matches = False
                 break
-            if committed_bytes != expected_bytes:
+            if _normalized_newlines(committed_bytes) != _normalized_newlines(expected_bytes):
                 matches = False
                 break
         if matches:
