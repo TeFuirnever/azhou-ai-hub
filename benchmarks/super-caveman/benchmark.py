@@ -434,6 +434,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
         ).splitlines()
     except subprocess.CalledProcessError:
         return None
+    _gate_trace("committed", f"rev-list gave {len(commits)} commits: {commits}")
     approval_anchor = None
     for commit in commits:
         matches = True
@@ -454,7 +455,7 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
             approval_anchor = commit
             break
     if approval_anchor is None:
-        _gate_trace("committed", "anchor None")
+        _gate_trace("committed", "anchor None: no commit has current aggregate bytes")
         return None
     selectors = review_selectors(excluded_paths)
     diff_range = f"{resolved_base}..{approval_anchor}"
@@ -510,7 +511,8 @@ def committed_review_digests_from_blobs(
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as error:
+        _gate_trace("from_blobs", f"rev-parse failed: {error!r}")
         return None
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", resolved_base, "HEAD"],
@@ -520,6 +522,7 @@ def committed_review_digests_from_blobs(
         check=False,
     )
     if ancestor.returncode != 0:
+        _gate_trace("from_blobs", "base not ancestor")
         return None
     paths = _tuple_paths(tuples)
     approved_path_selectors = [f":(top,literal){path}" for path in paths]
@@ -539,9 +542,11 @@ def committed_review_digests_from_blobs(
             text=True,
             stderr=subprocess.DEVNULL,
         ).splitlines()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as error:
+        _gate_trace("from_blobs", f"rev-list failed: {error!r}")
         return None
     selectors = review_selectors(excluded_paths)
+    _gate_trace("from_blobs", f"rev-list gave {len(commits)} commits")
     approval_anchor = None
     for commit in commits:
         candidate = _canonical_blob_tuples(
