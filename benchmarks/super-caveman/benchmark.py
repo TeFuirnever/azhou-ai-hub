@@ -686,6 +686,10 @@ def is_approved_exact_diff(
                 "approved-candidate",
                 f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
             )
+        _gate_trace(
+            "approved",
+            "status=" + subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True)[:300].replace("\n", " | "),
+        )
         _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
         if require_external_evidence or not snap:
             return False
@@ -858,6 +862,17 @@ def _invariance_pathway_valid(
 
 def check(*, require_promotion_evidence: bool = False) -> list[str]:
     errors: list[str] = []
+    # Fresh checkouts on Windows can carry stale index stat entries that make
+    # `git diff` report worktree files as modified before the first refresh,
+    # which would fail every replay comparison below on content that actually
+    # matches. Refresh once; failures here are non-fatal (read-only refresh).
+    subprocess.run(
+        ["git", "update-index", "--refresh", "--quiet"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
     manifest = load("manifest.json")
     mapping = load("capability-map.json")
     triggers = load("trigger-cases.json")
