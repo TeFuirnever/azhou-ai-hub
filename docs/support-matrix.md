@@ -41,6 +41,16 @@
 | Autoresearch nanochat training wrapper | package available; receipt-backed 2026-09-04 (evidence/autoresearch-load-fail-closed-codex-2026-09-04.md): headless `codex exec` run loads the linked package; `mode=prepare` fails closed exactly as documented on a CUDA-less host (`nvidia-smi` exit 127, uv present, nothing cloned, no ready state) and the skill's `autoresearch.receipt.v1` stable reports `fail` | same neutral package | receipt-backed 2026-09-03 (evidence/autoresearch-load-fail-closed-zcode-2026-09-03.md): interactive GUI run loads the linked package; `mode=prepare` fails closed exactly as documented on a CUDA-less host (Apple M5, uv present); no training run claimed | host-dependent; requires a user-owned pinned upstream checkout with NVIDIA CUDA GPU and uv |
 | Arch Doc architecture-document authoring (draft, calibrate, review, sequence) | package available; deterministic <code>new_doc.py</code> scaffold and <code>verify_doc.py</code> closing gates run on the Python 3 standard library; golden scaffold case with a checked-in receipt (<code>benchmarks/arch-doc/</code>, evidence/arch-doc-benchmark-receipt-2026-09-04.json); optional PlantUML CLI render gate is skipped honestly when the CLI is absent; no host discovery/invocation receipt yet | same neutral package | same neutral package | host-dependent; Python 3 and local file access required; the deliverable is one local Markdown document with embedded PlantUML sources |
 
+## Operating system support (deterministic gate)
+
+The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ standard library only) is enforced per operating system. This table covers the gate and the shipped runtime scripts; the harness rows above are OS-neutral claims about adapters and receipts and are not extended by it.
+
+| Surface | Linux | macOS | Windows |
+|---|---|---|---|
+| Repository gate `scripts/verify.py` | enforced: `Required` CI job (ubuntu-latest, `.github/workflows/ci.yml`) | verified on the maintainer macOS checkout for every landing | enforced: `Verify on Windows` CI job (windows-latest) since win-10 (2026-09-09) |
+| Super Caveman harness adapters and gate machinery | enforced by the same gate | same | same — the adapters guard POSIX-only `os.fchmod` behind capability checks and the gate replay ignores checkout EOL artifacts (evidence/windows-ci-receipt-2026-09-08.md; Windows evidence trend 46 → 7 → 0) |
+| Host lifecycle hooks, MCP transports and memory APIs | per harness rows above | per harness rows above | not claimed beyond those rows; hooks and transports stay host-local |
+
 ## Meaning of “supported”
 
 - **Supported**: implemented in the repository and covered by deterministic checks or a documented real adapter.

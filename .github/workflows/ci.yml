@@ -88,13 +88,11 @@ jobs:
           fi
 
   verify-windows:
-    name: Verify on Windows (experimental evidence)
-    # Non-blocking evidence collector for the windows-macos-compat spec (win-05/win-10).
-    # Not part of the Required gate until the OS declaration lands; failures feed
-    # the tracked follow-up tickets instead of silently skipping the platform.
+    name: Verify on Windows
+    # win-10: the deterministic gate is enforced on windows-latest. The OS
+    # support claims in docs/support-matrix.md and both READMEs point here.
     runs-on: windows-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,7 +107,6 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONUTF8: "1"
-          SUPER_CAVEMAN_GATE_TRACE: "1"
         run: python scripts/verify.py
 
   required:
@@ -119,15 +116,18 @@ jobs:
       - tests
       - benchmarks
       - policy
+      - verify-windows
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
       TESTS_RESULT: ${{ needs.tests.result }}
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
+      WINDOWS_RESULT: ${{ needs.verify-windows.result }}
     steps:
       - name: Require every CI gate
         run: |
           test "$TESTS_RESULT" = "success"
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
+          test "$WINDOWS_RESULT" = "success"
