@@ -47,7 +47,7 @@ The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ st
 
 | Surface | Linux | macOS | Windows |
 |---|---|---|---|
-| Repository gate `scripts/verify.py` | enforced: `Required` CI job (ubuntu-latest, `.github/workflows/ci.yml`) | verified on the maintainer macOS checkout for every landing | evidence: `Verify on Windows` CI job (windows-latest, non-blocking); the Required flip is tracked as the win-10 residual — 46 → 7 → 4 → 1 known failure, one promotion-replay divergence under diagnosis |
+| Repository gate `scripts/verify.py` | enforced: `Required` CI job (ubuntu-latest, `.github/workflows/ci.yml`) | verified on the maintainer macOS checkout for every landing | enforced: `Verify on Windows` CI job (windows-latest), folded into the `Required` gate by win-13 after the residual divergences were root-caused and fixed (evidence/windows-ci-receipt-2026-09-09.md) |
 | Super Caveman harness adapters and gate machinery | enforced by the same gate | same | same — the adapters guard POSIX-only `os.fchmod` behind capability checks, the gate replay normalizes checkout EOL artifacts and refreshes the index stat cache (evidence/windows-ci-receipt-2026-09-08.md) |
 | Host lifecycle hooks, MCP transports and memory APIs | per harness rows above | per harness rows above | not claimed beyond those rows; hooks and transports stay host-local |
 

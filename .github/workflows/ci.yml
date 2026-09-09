@@ -88,14 +88,12 @@ jobs:
           fi
 
   verify-windows:
-    name: Verify on Windows (experimental evidence)
-    # Non-blocking evidence collector for the windows-macos-compat spec. The
-    # Required flip is tracked as the win-10 residual: one promotion-replay
-    # divergence on windows-latest remains under diagnosis (EOL normalization
-    # and stat-cache refresh already landed; see the follow-up ticket).
+    name: Verify on Windows
+    # Enforced Windows leg of the deterministic gate. Flipped to Required by
+    # win-13 after the last Windows-only divergences were root-caused and
+    # fixed (evidence/windows-ci-receipt-2026-09-09.md).
     runs-on: windows-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -120,15 +118,18 @@ jobs:
       - tests
       - benchmarks
       - policy
+      - verify-windows
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
       TESTS_RESULT: ${{ needs.tests.result }}
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
+      WINDOWS_RESULT: ${{ needs.verify-windows.result }}
     steps:
       - name: Require every CI gate
         run: |
           test "$TESTS_RESULT" = "success"
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
+          test "$WINDOWS_RESULT" = "success"
