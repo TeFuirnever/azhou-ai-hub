@@ -681,6 +681,140 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                         )
                     )
 
+    def test_invariance_pathway_review_binding(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark_root = Path(directory)
+            results = benchmark_root / "results"
+            results.mkdir()
+            result_path = results / "revision-test-summary.json"
+            path_set_sha256 = hashlib.sha256(b"README.md\0").hexdigest()
+            staged_patch_sha256 = hashlib.sha256(
+                b"README.md\0" + b"a" * 40 + b"\0" + b"b" * 40 + b"\0"
+            ).hexdigest()
+            staged = {
+                "base_commit": "1" * 40,
+                "path_set_sha256": path_set_sha256,
+                "staged_patch_sha256": staged_patch_sha256,
+            }
+            raw_path = benchmark_root / "raw-human-approval.json"
+            raw_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "super-caveman-exact-diff-human-record.v1",
+                        "decision": "approved",
+                        "approver": "workspace-owner",
+                        "approved_at": "2026-08-24T12:00:00+08:00",
+                        "base_commit": "1" * 40,
+                        "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+                        "path_set_sha256": path_set_sha256,
+                        "staged_patch_sha256": staged_patch_sha256,
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            record_path = results / "revision-1234abcd-exact-diff-approval.json"
+            record_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "super-caveman-exact-diff-approval-record.v2",
+                        "decision": "approved",
+                        "approver": "workspace-owner",
+                        "approved_at": "2026-08-24T12:00:00+08:00",
+                        "base_commit": "1" * 40,
+                        "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+                        "path_set_sha256": path_set_sha256,
+                        "staged_patch_sha256": staged_patch_sha256,
+                        "reviewed_blobs": [
+                            {"path": "README.md", "old_oid": "a" * 40, "new_oid": "b" * 40}
+                        ],
+                        "raw_approval_record_sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
+                        "raw_approval_storage": "Git-external",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            approval = {
+                "schema": "super-caveman-exact-diff-approval.v2",
+                "status": "approved",
+                "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+                "base_commit": "1" * 40,
+                "path_set_sha256": path_set_sha256,
+                "staged_patch_sha256": staged_patch_sha256,
+                "approver": "workspace-owner",
+                "approved_at": "2026-08-24T12:00:00+08:00",
+                "record_path": "results/revision-1234abcd-exact-diff-approval.json",
+                "record_sha256": hashlib.sha256(record_path.read_bytes()).hexdigest(),
+                "record_storage": "Git aggregate receipt; raw approval Git-external",
+            }
+            reused_output_set = "7" * 64
+
+            def write_pair(review_candidate: str, promotion: dict) -> str:
+                review_path = benchmark_root / "review.json"
+                review_path.write_text(
+                    json.dumps(
+                        {
+                            "schema": "super-caveman-spec-review.v1",
+                            "identity": "/root/reviewer",
+                            "candidate_raw_sha256": review_candidate,
+                            "cases_sha256": "8" * 64,
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                result_path.write_text(
+                    json.dumps(
+                        {
+                            "reviewer": {
+                                "identity": "/root/reviewer",
+                                "review_sha256": hashlib.sha256(review_path.read_bytes()).hexdigest(),
+                            },
+                            "promotion_review": promotion,
+                            "cases_sha256": "8" * 64,
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return str(review_path)
+
+            def run_with(review: str) -> bool:
+                with _cleared_environ(
+                    {
+                        benchmark.RAW_APPROVAL_ENV: str(raw_path),
+                        benchmark.REVIEW_RECORD_ENV: review,
+                    }
+                ), mock.patch.object(benchmark, "staged_review_digests", return_value=staged):
+                    return benchmark.is_approved_exact_diff(approval, result_path)
+
+            with mock.patch.object(benchmark, "BENCHMARK", benchmark_root):
+                # Invariant landings bind the review record to the reused output set.
+                review = write_pair(
+                    reused_output_set,
+                    {"paired_status": "invariant", "candidate_output_set_sha256": reused_output_set},
+                )
+                self.assertTrue(run_with(review))
+                # A review record bound to different bytes must not authenticate.
+                review = write_pair(
+                    "9" * 64,
+                    {"paired_status": "invariant", "candidate_output_set_sha256": reused_output_set},
+                )
+                self.assertFalse(run_with(review))
+                # The classical pathway still requires candidate_raw_sha256.
+                review = write_pair(reused_output_set, {"candidate_output_set_sha256": reused_output_set})
+                self.assertFalse(run_with(review))
+
     def test_reviewed_blob_snapshot_allows_squash_replay(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
         try:

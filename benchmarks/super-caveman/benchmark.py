@@ -767,7 +767,13 @@ def is_approved_exact_diff(
         return False
     reviewer = result_record.get("reviewer") if isinstance(result_record, dict) else None
     promotion = result_record.get("promotion_review") if isinstance(result_record, dict) else None
-    candidate_raw_sha256 = promotion.get("candidate_raw_sha256") if isinstance(promotion, dict) else None
+    if isinstance(promotion, dict) and promotion.get("paired_status") == "invariant":
+        # Invariance-pathway landings reuse the baseline raw output set, so the
+        # review record binds candidate_output_set_sha256; that pathway carries
+        # no separate candidate_raw_sha256.
+        candidate_raw_sha256 = promotion.get("candidate_output_set_sha256")
+    else:
+        candidate_raw_sha256 = promotion.get("candidate_raw_sha256") if isinstance(promotion, dict) else None
     if (
         not isinstance(review_record, dict)
         or not isinstance(reviewer, dict)
