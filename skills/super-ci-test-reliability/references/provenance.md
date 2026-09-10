@@ -22,4 +22,4 @@
 
 ## Fidelity classification
 
-Classification: `adapted` — the upstream methodology (pinned commit `0a53fb55bea101816fa226bb964ae2bed71c343b`) is re-expressed for a different stack: TypeScript/Vitest examples become a Python standard-library and unittest/pytest stack, and the diagnosis reference is collapsed and re-expressed rather than translated, per the adaptation boundary above. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.
+Classification: `adapted` — the upstream methodology (pinned commit `0a53fb55bea101816fa226bb964ae2bed71c343b`) is re-expressed for a different stack: TypeScript/Vitest examples become a Python standard-library and unittest/pytest stack, and the diagnosis reference is collapsed and re-expressed rather than translated, per the adaptation boundary above. The canonical name is `super-ci-test-reliability` (renamed from `ci-test-reliability` in #178 under the audit's rename milestone); the old name survives only as a compatibility trigger in the entry description. Skill-standard §2.3.

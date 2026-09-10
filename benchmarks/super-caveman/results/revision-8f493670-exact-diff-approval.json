@@ -2,103 +2,93 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-10T15:11:11Z",
+  "approved_at": "2026-09-10T17:23:10Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "47b5c525d97c906b94cb5de75d7c3112bc9a3ad2",
-  "path_set_sha256": "6a010ce15f58ca3c509f373fbe8940e9a2666acbc609b17d401431f5a61ee9a8",
-  "staged_patch_sha256": "bcf2aa9522868a760eb909743407255bf350906347659c961d5cee2352e79e32",
+  "base_commit": "c1adee66e652bf6805d2935abaa848add69fe5a6",
+  "path_set_sha256": "8defb04160262f57009deb0445ca4c2c788dea1b0afee342e9a81fc011bd5a38",
+  "staged_patch_sha256": "fd3686eab583500fdec34cb2a353ffe7a4fb4c8fbdd9cca150f88be01822057b",
   "reviewed_blobs": [
     {
       "path": "AGENTS.md",
-      "old_oid": "e61ebcedf4edd6e60dc1ff4d74ee2e611dc418a6",
-      "new_oid": "d49c44062fe2761483d3007251a77068347ab525"
+      "old_oid": "d49c44062fe2761483d3007251a77068347ab525",
+      "new_oid": "f5a3690cbd24e93d33cd5d0fbe324c464dba4063"
     },
     {
-      "path": "docs/skill-standard.md",
-      "old_oid": "c170efb59c4994fbdda0b71d29d616e0e320e470",
-      "new_oid": "046dedd8f19269a66f77f92f865074162cd8c95e"
+      "path": "CHANGELOG.md",
+      "old_oid": "60135b509ca55c527acf7a23bd86d79f98de8145",
+      "new_oid": "5c5f20c3925091e9c115417b9ec52468ab112ed1"
+    },
+    {
+      "path": "README.md",
+      "old_oid": "9b3ec3e5fe7b31093ae6edd23dfa424b647af582",
+      "new_oid": "06b7ae8dfaef1e08770f4f050e5659ce72c05b39"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "old_oid": "6562a1c11c0d70b068f295f3dd2d06404b7b945c",
+      "new_oid": "fd2a03e2e8141b9df4c14a01049db7b0db0bbc05"
     },
     {
       "path": "scripts/check_repository.py",
-      "old_oid": "c4d44017a307bf3e7dad03a54a950b707de7d1fd",
-      "new_oid": "bdd805116eee27d1af07a9cf9bd70211f1abf850"
+      "old_oid": "bdd805116eee27d1af07a9cf9bd70211f1abf850",
+      "new_oid": "ed910a26b404860d90df9f775e81657c04bfbe2e"
     },
     {
-      "path": "skills/arch-doc/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "bcc2c4195872244b97982053e74ea06b6dbc531a"
+      "path": "skills/ask-azhou/SKILL.md",
+      "old_oid": "24f1df2d77e7b1911dd9fe8c0cc6014904791781",
+      "new_oid": "044d093925fae08597f33100b4dd890272beb06a"
     },
     {
-      "path": "skills/ask-azhou/references/provenance.md",
-      "old_oid": "e7d992b2e9827ae2073358ea7828460edc27e2ca",
-      "new_oid": "20e2ca1abcc3f6fe94ae1819150816c10427b21d"
+      "path": "skills/ci-test-reliability/SKILL.md",
+      "old_oid": "ce5a378108bf9b126a1c8b69e0d120fbd51d998f",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "skills/autoresearch/references/provenance.md",
-      "old_oid": "80d3e866e61c31eccef38ceddb3120c09a512f9c",
-      "new_oid": "085d33700f70b99ee894ef6f1438f3bb386073fe"
-    },
-    {
-      "path": "skills/azhou-doctor/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "78c83e7ff8b3cae7fa096ed47125f7e16d3cc7c6"
-    },
-    {
-      "path": "skills/azhou-info/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "63e1e2a4e4890584615e0402b940ad47e6ecf738"
-    },
-    {
-      "path": "skills/azhou-setup/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "122b0894bf792f32974b360caca59930b4f3f748"
-    },
-    {
-      "path": "skills/azhou-verify/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "3ef75b755177d0376036ee66c592439082583d29"
+      "path": "skills/ci-test-reliability/references/ci-flake-diagnosis.md",
+      "old_oid": "f419915c8cb43bbd3f85495ca9fb872bc67b2906",
+      "new_oid": "<deleted>"
     },
     {
       "path": "skills/ci-test-reliability/references/provenance.md",
-      "old_oid": "bbceb9eb7a9fa60fbf106f475bfd80e4d791c9bc",
-      "new_oid": "52ecb4c245ca55331200009df4c4d98e0c06075d"
+      "old_oid": "52ecb4c245ca55331200009df4c4d98e0c06075d",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "skills/eli5/references/provenance.md",
-      "old_oid": "f3093fec949672e26c43e9d30d754b8dc412ad62",
-      "new_oid": "1efa3f35b8af48d5691054b8c82f79aaa52c5f1c"
-    },
-    {
-      "path": "skills/excalidraw-diagram/references/provenance.md",
-      "old_oid": "e54a001a9878f78192599ebbd0aeadd5b325f844",
-      "new_oid": "b1624fe5c0c5fbc4a51b0adbbe874b512f7c6cf1"
-    },
-    {
-      "path": "skills/lavish/references/provenance.md",
-      "old_oid": "18510bd42a5013f1e510527759ac454ccda60f69",
-      "new_oid": "49105d6096a272ff35a98ee471838407938fbe91"
-    },
-    {
-      "path": "skills/llm-wiki/references/provenance.md",
-      "old_oid": "fa9b0b0ddfe20cb1302b236c4ab53879c9658128",
-      "new_oid": "6d7fa61a22bbee2899e301a4d3a8026fc72b0906"
-    },
-    {
-      "path": "skills/prose-standard/references/provenance.md",
-      "old_oid": "848c757b073c295b320547abd9c694f6885d4c7f",
-      "new_oid": "10be02fc70482316fb570b0d72ae49e8f00aea05"
-    },
-    {
-      "path": "skills/repo-pedant/references/provenance.md",
+      "path": "skills/super-ci-test-reliability/SKILL.md",
       "old_oid": "<deleted>",
-      "new_oid": "090b6b903da29e8003b72d00b94e90ef1b905b32"
+      "new_oid": "74c8ca2a4ba9669514b7aef6880fc16d85fbbc35"
     },
     {
-      "path": "skills/session-insights/references/provenance.md",
-      "old_oid": "1d55cd4f8fddfa477bcffb873a3c951ddd66707f",
-      "new_oid": "542164aa57a558e20bce6225ad44887ba126553f"
+      "path": "skills/super-ci-test-reliability/references/ci-flake-diagnosis.md",
+      "old_oid": "<deleted>",
+      "new_oid": "f419915c8cb43bbd3f85495ca9fb872bc67b2906"
+    },
+    {
+      "path": "skills/super-ci-test-reliability/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "8bd2794b8559761745d767dad5140cbf2391244d"
+    },
+    {
+      "path": "tests/test_azhou_hub.py",
+      "old_oid": "e09b439a03254e27b6006e3d1b46c99f96bf2365",
+      "new_oid": "0c8035996b33ddd62eb12893ec4e9ab327b0d4c2"
+    },
+    {
+      "path": "tests/test_check_repository.py",
+      "old_oid": "2e83fcb2a7b6846af3b59fc40c345fea216ae37a",
+      "new_oid": "623f42aa62fbbaf39845b1fc7c3340f7b36ccb13"
+    },
+    {
+      "path": "tests/test_llm_wiki_repository.py",
+      "old_oid": "139ebdc7636e4e5282a1df9e150d494c3c986659",
+      "new_oid": "a0835ae446f1be51edf1ddd421b93cdd5b363048"
+    },
+    {
+      "path": "tests/test_skill_package.py",
+      "old_oid": "1bf9865d6b77fccd3b341535d1ac5d8830c0eacd",
+      "new_oid": "294bf3436920afa9999fcf2e8c621319880daa80"
     }
   ],
-  "raw_approval_record_sha256": "10630fea4e951e00d6f08ba0c976c226f4afe184d3fed4f798e287defd7b234e",
+  "raw_approval_record_sha256": "31d034394d53607938f9c57cc971f40355ddedd1a6aaf47eb8f9b5b76dcf1103",
   "raw_approval_storage": "Git-external"
 }

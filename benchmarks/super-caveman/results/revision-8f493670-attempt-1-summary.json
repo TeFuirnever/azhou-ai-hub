@@ -2,7 +2,7 @@
   "schema": "super-caveman-evaluation-result.v1",
   "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
   "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
-  "model_limitation": "Producer-context invariance rebind for the super-prefix fidelity-axis landing (#176/#177). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+  "model_limitation": "Producer-context invariance rebind for the first super-prefix rename (#176/#178, ci-test-reliability to super-ci-test-reliability). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
@@ -95,7 +95,7 @@
   "high_risk_failed": 0,
   "format_failed": 0,
   "limitations": [
-    "This rebind adds the skill-standard fidelity axis, per-skill provenance classifications and the gate-held super-caveman classification, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
+    "This rebind renames one unrelated canonical skill and syncs its reference surfaces, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
     "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence."
   ],
   "status": "pass",
@@ -115,8 +115,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "kimi-code/sp-m1-invariance-review/2026-09-10",
-    "review_sha256": "f866c133d5bdbddb99b37786ff624778ca7e8bf6494675cd18955ce389dba56d"
+    "identity": "kimi-code/sp-m2-178-invariance-review/2026-09-11",
+    "review_sha256": "0cc21028e2aa878ebcfcbdffe05afdf81d8332f7224ec694a4f963491fc8a8a4"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -146,13 +146,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "47b5c525d97c906b94cb5de75d7c3112bc9a3ad2",
-      "path_set_sha256": "6a010ce15f58ca3c509f373fbe8940e9a2666acbc609b17d401431f5a61ee9a8",
-      "staged_patch_sha256": "bcf2aa9522868a760eb909743407255bf350906347659c961d5cee2352e79e32",
+      "base_commit": "c1adee66e652bf6805d2935abaa848add69fe5a6",
+      "path_set_sha256": "8defb04160262f57009deb0445ca4c2c788dea1b0afee342e9a81fc011bd5a38",
+      "staged_patch_sha256": "fd3686eab583500fdec34cb2a353ffe7a4fb4c8fbdd9cca150f88be01822057b",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-10T15:11:11Z",
+      "approved_at": "2026-09-10T17:23:10Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "0e63ba7a59f658404eee581fa68f126215983de20277eeb5387e39e260fa3229",
+      "record_sha256": "106dd57ab625e46e96696cb17946ea3caa8459a7b16e3a8b040149f1c2f829ad",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

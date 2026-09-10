@@ -131,7 +131,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 "ask-azhou",
                 "autoresearch",
                 *AZHOU_SKILL_NAMES,
-                "ci-test-reliability",
                 "eli5",
                 "excalidraw-diagram",
                 "lavish",
@@ -140,6 +139,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "repo-pedant",
                 "session-insights",
                 "super-caveman",
+                "super-ci-test-reliability",
             ],
             payload["installable_skills"],
         )
