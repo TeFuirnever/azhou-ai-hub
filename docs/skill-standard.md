@@ -76,6 +76,7 @@ observed -> corroborated -> regression_ready -> isolated_candidate
 - 普通失败至少在两个独立运行中重复；权限、删除、安全、隐私或损坏交付类严重失败可由一次证据形成候选。
 - 修改前增加回归 case。baseline 与 candidate 使用同一输入和权限，candidate 保持隔离。
 - promotion 需要确定性检查通过、无安全回归、至少 3 个独立 paired judges 的奇数多数、反转 A/B 顺序，以及人类对 exact diff 的明确批准。
+- 每次重绑仓内收据的骑行（含 re-bind 落地）必须在同一提交刷新 Git-external raw approval 与 review 记录的绑定（raw 的摘要字段、summary 的 `reviewer.review_sha256`），并在落地前用 `python scripts/verify.py --promotion-evidence`（或 `benchmarks/super-caveman/benchmark.py check --promotion-evidence`）做一次认证回放；回放失败不得落地。invariant 通路的 review 记录绑定复用的 `candidate_output_set_sha256`。
 - 后台 observer、hook、历史采集器和健康趋势都不能静默修改 live skill。失败批次保留；成功只归档已验证批次。
 
 ## 6. 收尾与完成定义

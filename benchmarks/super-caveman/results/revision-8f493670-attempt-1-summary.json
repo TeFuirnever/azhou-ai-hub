@@ -116,7 +116,7 @@
   },
   "reviewer": {
     "identity": "coding-agent/zcode-invariance-proof-2026-09-08",
-    "review_sha256": "b355e67c827782e7d94c78142cb9a2d8f7faf68d11f74f4f4915c3a29e39398b"
+    "review_sha256": "35d5f21182acfcb93a513e00e27833687faae8fc796af89456edb0cf47a12a04"
   },
   "promotion_review": {
     "paired_status": "invariant",
