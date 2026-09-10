@@ -2,7 +2,7 @@
   "schema": "super-caveman-evaluation-result.v1",
   "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
   "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
-  "model_limitation": "Producer-context invariance landing: the ride diff (fchmod guards, POSIX-inode test guards, promotion records) touches none of the producer context files, proven per-file by blob equality between the base commit and this tree; the output set is the ride-v2 fresh GLM production against the byte-identical base tree context (revision-74f8d585-ride2-baseline raw set), reused under the invariance pathway.",
+  "model_limitation": "Producer-context invariance rebind for the approved bilingual README image links and two GitHub PNG assets. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
@@ -95,8 +95,8 @@
   "high_risk_failed": 0,
   "format_failed": 0,
   "limitations": [
-    "Invariance reuse: the output set was produced against revision-74f8d585 whose producer context is byte-identical to this tree (per-file blob equality recorded in promotion_review.invariance_proof); the ride diff touches only adapter internals, test guards, gate machinery and bookkeeping.",
-    "First pairing attempt for this ride context (v2 production vs cross-run v1 baseline) was rejected 2:1 (1 baseline, 2 tie, 0 candidate) and retained Git-external; the invariance pathway replaces that noise-voted pairing per contract clause producer_context_invariance."
+    "This rebind changes only two README image references and two image assets, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
+    "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence."
   ],
   "status": "pass",
   "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
@@ -104,7 +104,7 @@
   "automatic_checks": {
     "raw_schema": "pass (reused raw set, schema super-caveman-raw-output-set.v1)",
     "raw_digest": "pass (56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034)",
-    "skill_tree_digest": "stable-v2; landed tree matched 8f493670 with the fchmod guards and POSIX-inode test guards applied",
+    "skill_tree_digest": "unchanged full skill tree: 8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
     "case_count": "19/19",
     "criteria_count": "44/44",
     "unique_case_ids": "19/19",
@@ -115,8 +115,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "coding-agent/zcode-invariance-proof-2026-09-08",
-    "review_sha256": "35d5f21182acfcb93a513e00e27833687faae8fc796af89456edb0cf47a12a04"
+    "identity": "codex-native-verifier/pv07_invariance_review/2026-09-10",
+    "review_sha256": "d5f136f1703a1356592cb37bdb90de04d04816d8b49f624734d56736224daed3"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -146,13 +146,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "db2c4727bac45864191b21cd8b91e882fe5281e9",
-      "path_set_sha256": "30fbeb51ab790f3d8e3f3cd83090f0cf6d3cbfe89361579d0cf2287f935fdb48",
-      "staged_patch_sha256": "4b555a29113014c74476b347014ac04eab337f4677dcc0497209935a8c00fddb",
+      "base_commit": "562c4dbf2c4754233fe80987059e9e3442f6391f",
+      "path_set_sha256": "978f146854c585a708b4adb3820f80c5643786e5c16f8bdbcac5686ec4b06813",
+      "staged_patch_sha256": "9a1fab404e45e81c9b369d0353eecdd022eadf76f6df21918d653139d1a1ce0f",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-09T16:31:23Z",
+      "approved_at": "2026-09-10T03:21:22Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "f43082c03923602a970a2ba141127dd8bc31082eb0a42730ed7148adfeebfc56",
+      "record_sha256": "62976c98297e11fcc6efb899aec2cf72959daf499f4c7202d00d18e380e474c3",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }
