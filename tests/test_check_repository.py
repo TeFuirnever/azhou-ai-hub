@@ -225,6 +225,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "prose-standard" / "SKILL.md",
                 root / "skills" / "ask-azhou" / "SKILL.md",
                 root / "skills" / "arch-doc" / "SKILL.md",
+                root / "skills" / "session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             legacy = root / "benchmarks" / "repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
