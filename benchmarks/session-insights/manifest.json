@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "skill": "session-insights",
+  "purpose": "wiring integrity for the session-insights aggregate/report pipeline: synthetic Claude Code/Codex/zcode stores are built at check time inside a temporary directory, the CLI runs as a subprocess against them, golden aggregates pin the metric semantics, and privacy plus fail-closed negative controls prove redaction and unsupported holds",
+  "fixtures": {
+    "generated_at_check_time": true,
+    "note": "No fixture bytes are checked in; the store (including secret-shaped seeds) exists only inside a tempfile.TemporaryDirectory during check.",
+    "claude_code_sessions": [
+      {
+        "file": "projects/-Users-test-dev-alpha/11111111-1111-1111-1111-111111111111.jsonl",
+        "role": "baseline session: two turns, Read/Bash tool calls, one isApiErrorMessage error, one malformed line, one isMeta line, one bookkeeping summary line, one tool_result-only user record"
+      },
+      {
+        "file": "projects/-Users-test-dev-alpha/22222222-2222-2222-2222-222222222222.jsonl",
+        "role": "friction session: two interruption markers, one truthy error field, one Bash call"
+      },
+      {
+        "file": "projects/-Users-test-dev-alpha/33333333-3333-3333-3333-333333333333.jsonl",
+        "role": "skipped-subagent session: every line carries isSidechain true"
+      },
+      {
+        "file": "projects/-Users-test-dev-alpha/44444444-4444-4444-4444-444444444444.jsonl",
+        "role": "newest session, repeats the shared first prompt, anchors the window at 2026-09-09T18:05:00Z"
+      },
+      {
+        "file": "projects/-Users-test-dev-beta/55555555-5555-5555-5555-555555555555.jsonl",
+        "role": "stale session at 2026-08-01: trimmed by the default 30-day window, included at --days 60"
+      },
+      {
+        "file": "projects/-Users-test-dev-beta/66666666-6666-6666-6666-666666666666.jsonl",
+        "role": "privacy session: first prompt over 200 chars embedding the absolute home path and secret-shaped seeds (sk-, ghp_, AKIA, AIza, PEM marker)"
+      }
+    ],
+    "codex": [
+      "sessions/2026/09/01/rollout-2026-09-01T00-00-00-aaaaaaaa.jsonl (present and detectable; adapter must fail closed)"
+    ],
+    "zcode": [
+      "v2/sessions/deadbeefworkspace/claude-import-0123456789abcdef01234567.json (present and detectable; adapter must fail closed)"
+    ]
+  },
+  "goldens": [
+    "GOLDEN_AGGREGATE in benchmark.py pins the full claude-code aggregate section except the mtime-dependent composite digest",
+    "GOLDEN_DAYS60_SPOT pins window widening (session_count 5, active_days 4)",
+    "GOLDEN_CAP2_SPOT pins the recency cap (session_count 2)"
+  ]
+}

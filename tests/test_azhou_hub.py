@@ -138,6 +138,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "llm-wiki",
                 "prose-standard",
                 "repo-pedant",
+                "session-insights",
                 "super-caveman",
             ],
             payload["installable_skills"],

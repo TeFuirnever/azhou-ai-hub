@@ -2,33 +2,133 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-10T03:21:22Z",
+  "approved_at": "2026-09-10T12:35:58Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "562c4dbf2c4754233fe80987059e9e3442f6391f",
-  "path_set_sha256": "978f146854c585a708b4adb3820f80c5643786e5c16f8bdbcac5686ec4b06813",
-  "staged_patch_sha256": "9a1fab404e45e81c9b369d0353eecdd022eadf76f6df21918d653139d1a1ce0f",
+  "base_commit": "c2cd6ab061fff1e644097be46c9f1e62043135fa",
+  "path_set_sha256": "226205dd6b804b9c653f67cd0f96060188145a66cec5a700dcac48c8efd4e36e",
+  "staged_patch_sha256": "5cc3ada6476ca954355bbbceedcc4d41dec1a6612fe4487beacb30c5c235a3f3",
   "reviewed_blobs": [
     {
+      "path": ".github/workflows/ci.yml",
+      "old_oid": "c81d40b32782f53a7ceeae9e97110dd83b553aff",
+      "new_oid": "895ad147ca1fbf86eab3252873646064553caff8"
+    },
+    {
+      "path": "AGENTS.md",
+      "old_oid": "dd60af6972b24f64e5c951298b0b038f3a8c1736",
+      "new_oid": "e61ebcedf4edd6e60dc1ff4d74ee2e611dc418a6"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "old_oid": "d2119c9c65468756ddb38dd3b792726508b4bfbd",
+      "new_oid": "60135b509ca55c527acf7a23bd86d79f98de8145"
+    },
+    {
       "path": "README.md",
-      "old_oid": "19273a44b2ba04f8f29fe3b35ccca3a3bf2435a1",
-      "new_oid": "943032539fa5f02399a395bf80a2310addb8e81b"
+      "old_oid": "943032539fa5f02399a395bf80a2310addb8e81b",
+      "new_oid": "9b3ec3e5fe7b31093ae6edd23dfa424b647af582"
     },
     {
       "path": "README.zh-CN.md",
-      "old_oid": "2d45d84e94a16a16f5d64d05ff33dd04e57d414a",
-      "new_oid": "fd17ee477c42362d6fe99d904b3d97d85c7ef2bb"
+      "old_oid": "fd17ee477c42362d6fe99d904b3d97d85c7ef2bb",
+      "new_oid": "6562a1c11c0d70b068f295f3dd2d06404b7b945c"
     },
     {
-      "path": "assets/github/readme-proof.png",
+      "path": "benchmarks/session-insights/README.md",
       "old_oid": "<deleted>",
-      "new_oid": "9cb38eb9e87b2183ba4e64b8ff0337132c9f7ee7"
+      "new_oid": "de8abd52a2e5115785f8716ef24681acd806c6f4"
     },
     {
-      "path": "assets/github/social-preview.png",
-      "old_oid": "d3731295c2dc05d4dc7a4b80590b79fa4e6eb9c8",
-      "new_oid": "eba8d9adec34dc7514fcf8abb4f132068a27a20b"
+      "path": "benchmarks/session-insights/benchmark.py",
+      "old_oid": "<deleted>",
+      "new_oid": "dcabbfad941978a06769ffcae140a4b319359d8d"
+    },
+    {
+      "path": "benchmarks/session-insights/manifest.json",
+      "old_oid": "<deleted>",
+      "new_oid": "90320351a8fdd984d5753bb88bcd14d137d0e98b"
+    },
+    {
+      "path": "docs/skill-standard.md",
+      "old_oid": "defcebe359d69d44441fbf71631f55e6b39d1546",
+      "new_oid": "c170efb59c4994fbdda0b71d29d616e0e320e470"
+    },
+    {
+      "path": "docs/support-matrix.md",
+      "old_oid": "bb8bdb623821b08091a8d1a6c8913cc88d14c6a7",
+      "new_oid": "d45c210ccc6219d9fd007fcf4434d418df53c36d"
+    },
+    {
+      "path": "evidence/session-insights-m1-receipt-2026-09-10.md",
+      "old_oid": "<deleted>",
+      "new_oid": "b5055d4bd52a3981e7007ba861049e41c7b9172b"
+    },
+    {
+      "path": "scripts/check_repository.py",
+      "old_oid": "e5b719cc7afbee0e7c1620ba091727cbe2f806d5",
+      "new_oid": "c4d44017a307bf3e7dad03a54a950b707de7d1fd"
+    },
+    {
+      "path": "scripts/verify.py",
+      "old_oid": "19fef72a323424bfeabe71b65b534a9b53def1f2",
+      "new_oid": "4b7ca1953cd5083b3bc833547535df589452728f"
+    },
+    {
+      "path": "skills/ask-azhou/SKILL.md",
+      "old_oid": "d23ba2f8f75b0726525ecccc261c390eb5584bc6",
+      "new_oid": "24f1df2d77e7b1911dd9fe8c0cc6014904791781"
+    },
+    {
+      "path": "skills/session-insights/SKILL.md",
+      "old_oid": "<deleted>",
+      "new_oid": "ccafb6970459121a3771aa6ba04c8ddb8b45c20f"
+    },
+    {
+      "path": "skills/session-insights/references/brand-layer.md",
+      "old_oid": "<deleted>",
+      "new_oid": "9dbe4c7636f62cf6923a8c2f6afeb8a1cbec0c26"
+    },
+    {
+      "path": "skills/session-insights/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "1d55cd4f8fddfa477bcffb873a3c951ddd66707f"
+    },
+    {
+      "path": "skills/session-insights/references/report-contract.md",
+      "old_oid": "<deleted>",
+      "new_oid": "7a115ddbc3f4b8ac77ee26b04323ac36a0085262"
+    },
+    {
+      "path": "skills/session-insights/scripts/session_insights.py",
+      "old_oid": "<deleted>",
+      "new_oid": "616344e6f919ec1385fb96ec3e5218f62e75197a"
+    },
+    {
+      "path": "tests/test_azhou_hub.py",
+      "old_oid": "735ec142519cf48690e4fa4bf8b43fb9578f7488",
+      "new_oid": "e09b439a03254e27b6006e3d1b46c99f96bf2365"
+    },
+    {
+      "path": "tests/test_check_repository.py",
+      "old_oid": "9abfbf764fc9e774d6c8b9554b6786d5e4fae265",
+      "new_oid": "2e83fcb2a7b6846af3b59fc40c345fea216ae37a"
+    },
+    {
+      "path": "tests/test_llm_wiki_repository.py",
+      "old_oid": "8d7781f40f41f25ea6407427f827701d89d46add",
+      "new_oid": "139ebdc7636e4e5282a1df9e150d494c3c986659"
+    },
+    {
+      "path": "tests/test_session_insights_benchmark.py",
+      "old_oid": "<deleted>",
+      "new_oid": "afcb3d9c59bbff3702a800298e09dcd2b10a8984"
+    },
+    {
+      "path": "tests/test_skill_package.py",
+      "old_oid": "96eb9d1166b4142dd0f7ddf8ef74185f111185f7",
+      "new_oid": "1bf9865d6b77fccd3b341535d1ac5d8830c0eacd"
     }
   ],
-  "raw_approval_record_sha256": "76881bba812d378fc90781021a6c8f654eabecaff7ac084ffd337aa14fc2b183",
+  "raw_approval_record_sha256": "738af8db6f811e29ce115b5be75922c509766d6ed2b45476f3619cf81c3eac10",
   "raw_approval_storage": "Git-external"
 }

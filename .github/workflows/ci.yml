@@ -60,6 +60,8 @@ jobs:
         run: python benchmarks/super-caveman/benchmark.py check
       - name: Excalidraw Diagram
         run: python benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py check
+      - name: Session Insights
+        run: python benchmarks/session-insights/benchmark.py check
 
   policy:
     name: Repository policy

@@ -2,7 +2,7 @@
   "schema": "super-caveman-evaluation-result.v1",
   "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
   "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
-  "model_limitation": "Producer-context invariance rebind for the approved bilingual README image links and two GitHub PNG assets. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+  "model_limitation": "Producer-context invariance rebind for the session-insights M1 atomic catalog landing (#161/#163). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
@@ -95,7 +95,7 @@
   "high_risk_failed": 0,
   "format_failed": 0,
   "limitations": [
-    "This rebind changes only two README image references and two image assets, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
+    "This rebind adds the sixteenth canonical skill (session-insights), its wiring-integrity benchmark suite, gate registrations, catalog documentation, tests and one evidence receipt, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
     "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence."
   ],
   "status": "pass",
@@ -115,8 +115,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "codex-native-verifier/pv07_invariance_review/2026-09-10",
-    "review_sha256": "d5f136f1703a1356592cb37bdb90de04d04816d8b49f624734d56736224daed3"
+    "identity": "kimi-code/si-m1-invariance-review/2026-09-10",
+    "review_sha256": "b710702092ea7e2afb6072667ba27ffcbb48c8190ce616632368760ce20612c4"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -146,13 +146,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "562c4dbf2c4754233fe80987059e9e3442f6391f",
-      "path_set_sha256": "978f146854c585a708b4adb3820f80c5643786e5c16f8bdbcac5686ec4b06813",
-      "staged_patch_sha256": "9a1fab404e45e81c9b369d0353eecdd022eadf76f6df21918d653139d1a1ce0f",
+      "base_commit": "c2cd6ab061fff1e644097be46c9f1e62043135fa",
+      "path_set_sha256": "226205dd6b804b9c653f67cd0f96060188145a66cec5a700dcac48c8efd4e36e",
+      "staged_patch_sha256": "5cc3ada6476ca954355bbbceedcc4d41dec1a6612fe4487beacb30c5c235a3f3",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-10T03:21:22Z",
+      "approved_at": "2026-09-10T12:35:58Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "62976c98297e11fcc6efb899aec2cf72959daf499f4c7202d00d18e380e474c3",
+      "record_sha256": "1aca350f98e343df62b4450707588d6fe1c1c6169f0964778c1df5ea08c7f8e0",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

@@ -84,6 +84,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/prose-standard/SKILL.md",
     "skills/ask-azhou/SKILL.md",
     "skills/arch-doc/SKILL.md",
+    "skills/session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/llm-wiki/SKILL.md",
@@ -176,6 +177,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先读上游，再写契约，声称不越证据。",
         "startup": "🦊 阿舟 · Arch Doc 启动｜mode=<draft|calibrate|review|sequence>｜scope=<repo-or-document>",
         "brand_path": "skills/arch-doc/references/brand-layer.md",
+    },
+    "skills/session-insights/SKILL.md": {
+        "display_name": "Session Insights",
+        "motto": "先有数字，再有故事。",
+        "startup": "🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>",
+        "brand_path": "skills/session-insights/references/brand-layer.md",
     },
 }
 
@@ -274,7 +281,7 @@ GATE_HELD_INVOCATIONS = {
 def check_invocation_axis(root: Path) -> list[str]:
     """Require the invocation class for every canonical skill.
 
-    Fourteen packages declare the class in SKILL.md frontmatter;
+    Fifteen packages declare the class in SKILL.md frontmatter;
     super-caveman's class is held in GATE_HELD_INVOCATIONS because its
     promotion digest freezes the whole skill tree. Values outside the
     docs/skill-standard.md enum fail closed.

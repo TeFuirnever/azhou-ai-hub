@@ -30,6 +30,10 @@ def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str
             "prose-standard benchmark wiring",
             [python, "benchmarks/prose-standard/benchmark.py"],
         ),
+        (
+            "session-insights benchmark wiring",
+            [python, "benchmarks/session-insights/benchmark.py", "check"],
+        ),
         ("working-tree whitespace", ["git", "diff", "--check"]),
         ("staged whitespace", ["git", "diff", "--cached", "--check"]),
     ]

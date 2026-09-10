@@ -12,7 +12,7 @@ invocation: user-invoked orchestrator
 
 Invocation class: user-invoked orchestrator, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — invoked by name or by an explicit "which skill" request; it recommends and never invokes another skill on the user's behalf.
 
-It is guidance, not a script. This is the hub's front door: fifteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
+It is guidance, not a script. This is the hub's front door: sixteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
 
 ## Brand protocol
 
@@ -49,6 +49,7 @@ Ask which family the request belongs to, then the branch question.
 - "Reconcile docs, rules, and memory at task close" → `repo-pedant` — the closeout protocol with inventory proof.
 - "Write or trim prose without losing facts / audit it for leaked reasoning" → `prose-standard` — the complete-proposition rule and the leakage taxonomy.
 - "Make my tests reliable under real CI concurrency / diagnose a flake" → `ci-test-reliability` — topology-aware design guidance and the flake-masking blacklist.
+- "How am I actually using my agent / give me a usage report from my local session history" → `session-insights` — fact-bound aggregate reports from local session stores (Claude Code adapter; Codex and zcode fail closed until verified); it analyzes local stores only, never monitors, never sends anything out.
 - "Which skill for this?" → this skill, `ask-azhou`.
 
 ### Long-running experiments
