@@ -2,43 +2,33 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-09T16:31:23Z",
-  "base_commit": "db2c4727bac45864191b21cd8b91e882fe5281e9",
+  "approved_at": "2026-09-10T03:21:22Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "30fbeb51ab790f3d8e3f3cd83090f0cf6d3cbfe89361579d0cf2287f935fdb48",
-  "staged_patch_sha256": "4b555a29113014c74476b347014ac04eab337f4677dcc0497209935a8c00fddb",
+  "base_commit": "562c4dbf2c4754233fe80987059e9e3442f6391f",
+  "path_set_sha256": "978f146854c585a708b4adb3820f80c5643786e5c16f8bdbcac5686ec4b06813",
+  "staged_patch_sha256": "9a1fab404e45e81c9b369d0353eecdd022eadf76f6df21918d653139d1a1ce0f",
   "reviewed_blobs": [
     {
-      "path": ".github/workflows/ci.yml",
-      "old_oid": "a460368f59500560db3c6b86698c9e7e5a4a7bfb",
-      "new_oid": "c81d40b32782f53a7ceeae9e97110dd83b553aff"
-    },
-    {
-      "path": "AGENTS.md",
-      "old_oid": "1263513056e2d803c2f7fef1ebb232a70db5ccdd",
-      "new_oid": "dd60af6972b24f64e5c951298b0b038f3a8c1736"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "old_oid": "140e6ce89fbead0c1b4f861f5101fcb3d2dee4ab",
-      "new_oid": "d2119c9c65468756ddb38dd3b792726508b4bfbd"
-    },
-    {
       "path": "README.md",
-      "old_oid": "60e6f74f28fa266a0a21afa4c44cdf041a318c96",
-      "new_oid": "19273a44b2ba04f8f29fe3b35ccca3a3bf2435a1"
+      "old_oid": "19273a44b2ba04f8f29fe3b35ccca3a3bf2435a1",
+      "new_oid": "943032539fa5f02399a395bf80a2310addb8e81b"
     },
     {
       "path": "README.zh-CN.md",
-      "old_oid": "506a628b671017926bf20ff547692202b4bb9060",
-      "new_oid": "2d45d84e94a16a16f5d64d05ff33dd04e57d414a"
+      "old_oid": "2d45d84e94a16a16f5d64d05ff33dd04e57d414a",
+      "new_oid": "fd17ee477c42362d6fe99d904b3d97d85c7ef2bb"
     },
     {
-      "path": "docs/support-matrix.md",
-      "old_oid": "c23f35f6eeb18f429758824539881df6e2de5340",
-      "new_oid": "bb8bdb623821b08091a8d1a6c8913cc88d14c6a7"
+      "path": "assets/github/readme-proof.png",
+      "old_oid": "<deleted>",
+      "new_oid": "9cb38eb9e87b2183ba4e64b8ff0337132c9f7ee7"
+    },
+    {
+      "path": "assets/github/social-preview.png",
+      "old_oid": "d3731295c2dc05d4dc7a4b80590b79fa4e6eb9c8",
+      "new_oid": "eba8d9adec34dc7514fcf8abb4f132068a27a20b"
     }
   ],
-  "raw_approval_record_sha256": "9905c109a4e3a8bd31d00e1313fd11114363ef58f8d2525801109774b121c4bf",
+  "raw_approval_record_sha256": "76881bba812d378fc90781021a6c8f654eabecaff7ac084ffd337aa14fc2b183",
   "raw_approval_storage": "Git-external"
 }
