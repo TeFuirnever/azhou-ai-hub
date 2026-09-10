@@ -42,6 +42,20 @@
 
 `SKILL.md` frontmatter 合同：`name`、`description` 与 `invocation` 必填，`invocation` 值限前述三个枚举。十五个 canonical skill 在 frontmatter 声明（判定记录在 #156 与各包 frontmatter）；super-caveman 因晋升摘要绑定整树，其调用类（`user-invoked orchestrator`）暂由 `check_invocation_axis` 的声明表持有，随下一次 super-caveman promotion ride 迁入 frontmatter。`scripts/check_repository.py` 对全部 canonical skill 强制校验声明存在与取值。
 
+### 2.3 Fidelity 轴与命名规则
+
+fidelity 轴按与上游 skill 的血缘关系把 canonical skill 分为三类，判定标准是**能力是否被改造**，与包装层无关：
+
+| 分类 | 定义 | 命名结果 |
+|---|---|---|
+| `original` | 无上游 skill 血缘：Azhou 原创、仅借用模式零上游字节、或包装未修改的外部运行时 | 保留原名 |
+| `faithful` | 原版能力原样保留；本地新增仅限包装/交互层（身份锚点、收据、provenance、setup、边界、frontmatter 规范化） | 保留原名 |
+| `adapted` | 原版能力被换栈/换语言重表达、合并、重写，或被扩展增强（在原流程上新增模式、路由、行为超集） | 加 `super-` 前缀 |
+
+品牌锚点、收据、provenance 记录、setup 文档与授权 checkpoint 本身永远不构成 `adapted`；不改变原版承诺行为的输出形态约束属于包装层。
+
+每个 skill 的分类记录在自己的 provenance 记录中（`references/provenance.md`，无上游血缘的 `original` 同样建档），与已锁定的上游证据并列；分类统一写作 `Classification: \`<值>\`` 单行，后接引证。super-caveman 因晋升摘要绑定整树，其分类（`adapted`，已正确带前缀）暂由 `check_repository.py` 的 `GATE_HELD_FIDELITY` 声明表持有，随下一次 promotion ride 迁入树内 provenance 记录——与 §2.2 调用类的持表安排同一先例。新 skill 引入时分类是 provenance 合同的必备项；仓库 gate 的“前缀 ⟺ 分类”机械强制与改名残留检查随后续里程碑落地。
+
 ## 3. 阿舟交互层
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：

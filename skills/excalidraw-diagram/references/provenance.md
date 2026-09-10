@@ -53,3 +53,7 @@ Before refresh, compare the selected baseline to the checked-in snapshot; if it 
 ## Excluded upstream surfaces
 
 Store, room, playground, analytics, hosted library services and archived desktop/embed clients are not runtime dependencies. Stub or empty upstream docs are also excluded. The skill creates local files and does not need Excalidraw cloud infrastructure.
+
+## Fidelity classification
+
+Classification: `original` — no upstream skill lineage: the skill layer (entry, brand lifecycle, palette, fragments, checks, renderer, benchmark protocol) is Azhou-maintained; `coleam00/excalidraw-diagram-skill` was unlicensed prior art and is not distributed; the Agents365 and awesome-copilot entries are comparison baselines, and the Excalidraw engine, converters, fonts and component libraries are vendored runtime dependencies recorded above, not an upstream skill being re-expressed. Skill-standard §2.3.

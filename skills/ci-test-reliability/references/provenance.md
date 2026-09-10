@@ -19,3 +19,7 @@
 1. Diff the pinned upstream skill against the current pin: `git -C <deepseek-harness-checkout> show 0a53fb55bea101816fa226bb964ae2bed71c343b:.agents/skills/dsh-ci-test-reliability/SKILL.md` (and the diagnosis reference).
 2. Map every methodology change onto the sections of this package's `SKILL.md` and `references/ci-flake-diagnosis.md`; keep examples in the Python stack.
 3. Update the pin and the SHA-256 above only after the mapped change lands, in the same commit.
+
+## Fidelity classification
+
+Classification: `adapted` — the upstream methodology (pinned commit `0a53fb55bea101816fa226bb964ae2bed71c343b`) is re-expressed for a different stack: TypeScript/Vitest examples become a Python standard-library and unittest/pytest stack, and the diagnosis reference is collapsed and re-expressed rather than translated, per the adaptation boundary above. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.

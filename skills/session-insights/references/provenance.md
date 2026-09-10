@@ -9,3 +9,7 @@
 | [atani/codex-insights](https://github.com/atani/codex-insights) | Codex 会话分析器的指标面参考 | URL pin，2026-09-07 访问；未记录 commit，因为未复制任何字节 | 未复制字节，许可证不影响本包 |
 
 更新路径：若未来需要逐行对照上游实现，先在研究笔记中记录不可变 commit 与许可证，再评估是否仍维持零 vendor；复制任何字节都必须同步进入 `THIRD_PARTY_NOTICES.md` 与本表。
+
+## Fidelity classification
+
+Classification: `original` — no upstream skill lineage: Azhou-authored package; the three prior-art sources pinned above are mechanism references only, with zero vendored bytes (pattern-inspired, nothing copied). Skill-standard §2.3.
