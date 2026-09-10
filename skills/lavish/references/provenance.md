@@ -45,3 +45,7 @@ On platforms without `shasum` (e.g. Windows), the standard-library equivalent:
 curl -fsSL https://raw.githubusercontent.com/kunchenguid/lavish-axi/232972beba9e0e4e75682c98f2aeb2cf01532122/skills/lavish/SKILL.md \
   | python -c "import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())"
 ```
+
+## Fidelity classification
+
+Classification: `adapted` — boundary case, decided by cited evidence: the upstream workflow is preserved (pinned commit `232972beba9e0e4e75682c98f2aeb2cf01532122`, source SHA-256 `7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857`), and the local layer adds the entire Spec Relay mode (relay packets, `data-review-id`s, disposition updates, optimistic revision guards, relay receipt) — a new capability route on top of the original's flow, which is a capability extension, not packaging. Precedent: preserving the upstream workflow while adding a new mode decides `adapted`. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.

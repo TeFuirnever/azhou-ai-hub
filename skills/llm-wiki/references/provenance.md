@@ -22,3 +22,7 @@ The upstream comments credit the persistent self-maintained wiki concept to Andr
 4. Update `design.md` and production regressions before changing the neutral core.
 5. Add a deterministic regression for each behavior change, then run repository verification.
 6. Retain the MIT notice and record any compatibility loss or safety replacement explicitly.
+
+## Fidelity classification
+
+Classification: `adapted` — the pinned upstream implementation (commit `deee3a446dadc9bfea31cdc8b19b00b16718082e`, hooks, tools, registries, MCP transport) is rewritten from scratch in the Python standard library rather than copied, per the adaptation statement above. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.

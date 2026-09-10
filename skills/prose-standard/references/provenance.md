@@ -21,3 +21,7 @@ Three upstream capabilities from one repository, merged into one package because
 1. Diff the pinned upstream skills against the current pin (the two SKILL.md files, trim-cot-leakage's references, and dsh-doc's fact-check section).
 2. Map every methodology change onto this package's entry and references; keep probe patterns in sync with the taxonomy section by section.
 3. Update the pin above only after the mapped change lands, in the same commit.
+
+## Fidelity classification
+
+Classification: `adapted` — three upstream capabilities (editorial standard, chain-of-thought leakage taxonomy, fact-check procedure; pinned commit `0a53fb55bea101816fa226bb964ae2bed71c343b`) are merged into one package and re-expressed, with the recall batteries ported from ripgrep one-liners to a standard-library Python probe, per the capability baseline above. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.

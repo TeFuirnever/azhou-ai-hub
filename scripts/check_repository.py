@@ -278,6 +278,19 @@ GATE_HELD_INVOCATIONS = {
 }
 
 
+GATE_HELD_FIDELITY = {
+    # Same frozen-tree arrangement for the skill-standard §2.3 fidelity
+    # classification: super-caveman is `adapted` (merged Caveman core, six
+    # companions and the i-have-adhd contract with local derivative deltas,
+    # already correctly prefixed). It migrates into the tree's
+    # references/provenance.md on the next promotion ride. Every other skill
+    # records its own classification in its provenance record; the
+    # prefix-classification enforcement check lands with the audit's
+    # enforcement milestone (#176 M4).
+    "skills/super-caveman/SKILL.md": "adapted",
+}
+
+
 def check_invocation_axis(root: Path) -> list[str]:
     """Require the invocation class for every canonical skill.
 

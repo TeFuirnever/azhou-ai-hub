@@ -2,133 +2,103 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-10T12:35:58Z",
+  "approved_at": "2026-09-10T15:11:11Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "c2cd6ab061fff1e644097be46c9f1e62043135fa",
-  "path_set_sha256": "226205dd6b804b9c653f67cd0f96060188145a66cec5a700dcac48c8efd4e36e",
-  "staged_patch_sha256": "5cc3ada6476ca954355bbbceedcc4d41dec1a6612fe4487beacb30c5c235a3f3",
+  "base_commit": "47b5c525d97c906b94cb5de75d7c3112bc9a3ad2",
+  "path_set_sha256": "6a010ce15f58ca3c509f373fbe8940e9a2666acbc609b17d401431f5a61ee9a8",
+  "staged_patch_sha256": "bcf2aa9522868a760eb909743407255bf350906347659c961d5cee2352e79e32",
   "reviewed_blobs": [
     {
-      "path": ".github/workflows/ci.yml",
-      "old_oid": "c81d40b32782f53a7ceeae9e97110dd83b553aff",
-      "new_oid": "895ad147ca1fbf86eab3252873646064553caff8"
-    },
-    {
       "path": "AGENTS.md",
-      "old_oid": "dd60af6972b24f64e5c951298b0b038f3a8c1736",
-      "new_oid": "e61ebcedf4edd6e60dc1ff4d74ee2e611dc418a6"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "old_oid": "d2119c9c65468756ddb38dd3b792726508b4bfbd",
-      "new_oid": "60135b509ca55c527acf7a23bd86d79f98de8145"
-    },
-    {
-      "path": "README.md",
-      "old_oid": "943032539fa5f02399a395bf80a2310addb8e81b",
-      "new_oid": "9b3ec3e5fe7b31093ae6edd23dfa424b647af582"
-    },
-    {
-      "path": "README.zh-CN.md",
-      "old_oid": "fd17ee477c42362d6fe99d904b3d97d85c7ef2bb",
-      "new_oid": "6562a1c11c0d70b068f295f3dd2d06404b7b945c"
-    },
-    {
-      "path": "benchmarks/session-insights/README.md",
-      "old_oid": "<deleted>",
-      "new_oid": "de8abd52a2e5115785f8716ef24681acd806c6f4"
-    },
-    {
-      "path": "benchmarks/session-insights/benchmark.py",
-      "old_oid": "<deleted>",
-      "new_oid": "dcabbfad941978a06769ffcae140a4b319359d8d"
-    },
-    {
-      "path": "benchmarks/session-insights/manifest.json",
-      "old_oid": "<deleted>",
-      "new_oid": "90320351a8fdd984d5753bb88bcd14d137d0e98b"
+      "old_oid": "e61ebcedf4edd6e60dc1ff4d74ee2e611dc418a6",
+      "new_oid": "d49c44062fe2761483d3007251a77068347ab525"
     },
     {
       "path": "docs/skill-standard.md",
-      "old_oid": "defcebe359d69d44441fbf71631f55e6b39d1546",
-      "new_oid": "c170efb59c4994fbdda0b71d29d616e0e320e470"
-    },
-    {
-      "path": "docs/support-matrix.md",
-      "old_oid": "bb8bdb623821b08091a8d1a6c8913cc88d14c6a7",
-      "new_oid": "d45c210ccc6219d9fd007fcf4434d418df53c36d"
-    },
-    {
-      "path": "evidence/session-insights-m1-receipt-2026-09-10.md",
-      "old_oid": "<deleted>",
-      "new_oid": "b5055d4bd52a3981e7007ba861049e41c7b9172b"
+      "old_oid": "c170efb59c4994fbdda0b71d29d616e0e320e470",
+      "new_oid": "046dedd8f19269a66f77f92f865074162cd8c95e"
     },
     {
       "path": "scripts/check_repository.py",
-      "old_oid": "e5b719cc7afbee0e7c1620ba091727cbe2f806d5",
-      "new_oid": "c4d44017a307bf3e7dad03a54a950b707de7d1fd"
+      "old_oid": "c4d44017a307bf3e7dad03a54a950b707de7d1fd",
+      "new_oid": "bdd805116eee27d1af07a9cf9bd70211f1abf850"
     },
     {
-      "path": "scripts/verify.py",
-      "old_oid": "19fef72a323424bfeabe71b65b534a9b53def1f2",
-      "new_oid": "4b7ca1953cd5083b3bc833547535df589452728f"
-    },
-    {
-      "path": "skills/ask-azhou/SKILL.md",
-      "old_oid": "d23ba2f8f75b0726525ecccc261c390eb5584bc6",
-      "new_oid": "24f1df2d77e7b1911dd9fe8c0cc6014904791781"
-    },
-    {
-      "path": "skills/session-insights/SKILL.md",
+      "path": "skills/arch-doc/references/provenance.md",
       "old_oid": "<deleted>",
-      "new_oid": "ccafb6970459121a3771aa6ba04c8ddb8b45c20f"
+      "new_oid": "bcc2c4195872244b97982053e74ea06b6dbc531a"
     },
     {
-      "path": "skills/session-insights/references/brand-layer.md",
+      "path": "skills/ask-azhou/references/provenance.md",
+      "old_oid": "e7d992b2e9827ae2073358ea7828460edc27e2ca",
+      "new_oid": "20e2ca1abcc3f6fe94ae1819150816c10427b21d"
+    },
+    {
+      "path": "skills/autoresearch/references/provenance.md",
+      "old_oid": "80d3e866e61c31eccef38ceddb3120c09a512f9c",
+      "new_oid": "085d33700f70b99ee894ef6f1438f3bb386073fe"
+    },
+    {
+      "path": "skills/azhou-doctor/references/provenance.md",
       "old_oid": "<deleted>",
-      "new_oid": "9dbe4c7636f62cf6923a8c2f6afeb8a1cbec0c26"
+      "new_oid": "78c83e7ff8b3cae7fa096ed47125f7e16d3cc7c6"
+    },
+    {
+      "path": "skills/azhou-info/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "63e1e2a4e4890584615e0402b940ad47e6ecf738"
+    },
+    {
+      "path": "skills/azhou-setup/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "122b0894bf792f32974b360caca59930b4f3f748"
+    },
+    {
+      "path": "skills/azhou-verify/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "3ef75b755177d0376036ee66c592439082583d29"
+    },
+    {
+      "path": "skills/ci-test-reliability/references/provenance.md",
+      "old_oid": "bbceb9eb7a9fa60fbf106f475bfd80e4d791c9bc",
+      "new_oid": "52ecb4c245ca55331200009df4c4d98e0c06075d"
+    },
+    {
+      "path": "skills/eli5/references/provenance.md",
+      "old_oid": "f3093fec949672e26c43e9d30d754b8dc412ad62",
+      "new_oid": "1efa3f35b8af48d5691054b8c82f79aaa52c5f1c"
+    },
+    {
+      "path": "skills/excalidraw-diagram/references/provenance.md",
+      "old_oid": "e54a001a9878f78192599ebbd0aeadd5b325f844",
+      "new_oid": "b1624fe5c0c5fbc4a51b0adbbe874b512f7c6cf1"
+    },
+    {
+      "path": "skills/lavish/references/provenance.md",
+      "old_oid": "18510bd42a5013f1e510527759ac454ccda60f69",
+      "new_oid": "49105d6096a272ff35a98ee471838407938fbe91"
+    },
+    {
+      "path": "skills/llm-wiki/references/provenance.md",
+      "old_oid": "fa9b0b0ddfe20cb1302b236c4ab53879c9658128",
+      "new_oid": "6d7fa61a22bbee2899e301a4d3a8026fc72b0906"
+    },
+    {
+      "path": "skills/prose-standard/references/provenance.md",
+      "old_oid": "848c757b073c295b320547abd9c694f6885d4c7f",
+      "new_oid": "10be02fc70482316fb570b0d72ae49e8f00aea05"
+    },
+    {
+      "path": "skills/repo-pedant/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "090b6b903da29e8003b72d00b94e90ef1b905b32"
     },
     {
       "path": "skills/session-insights/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "1d55cd4f8fddfa477bcffb873a3c951ddd66707f"
-    },
-    {
-      "path": "skills/session-insights/references/report-contract.md",
-      "old_oid": "<deleted>",
-      "new_oid": "7a115ddbc3f4b8ac77ee26b04323ac36a0085262"
-    },
-    {
-      "path": "skills/session-insights/scripts/session_insights.py",
-      "old_oid": "<deleted>",
-      "new_oid": "616344e6f919ec1385fb96ec3e5218f62e75197a"
-    },
-    {
-      "path": "tests/test_azhou_hub.py",
-      "old_oid": "735ec142519cf48690e4fa4bf8b43fb9578f7488",
-      "new_oid": "e09b439a03254e27b6006e3d1b46c99f96bf2365"
-    },
-    {
-      "path": "tests/test_check_repository.py",
-      "old_oid": "9abfbf764fc9e774d6c8b9554b6786d5e4fae265",
-      "new_oid": "2e83fcb2a7b6846af3b59fc40c345fea216ae37a"
-    },
-    {
-      "path": "tests/test_llm_wiki_repository.py",
-      "old_oid": "8d7781f40f41f25ea6407427f827701d89d46add",
-      "new_oid": "139ebdc7636e4e5282a1df9e150d494c3c986659"
-    },
-    {
-      "path": "tests/test_session_insights_benchmark.py",
-      "old_oid": "<deleted>",
-      "new_oid": "afcb3d9c59bbff3702a800298e09dcd2b10a8984"
-    },
-    {
-      "path": "tests/test_skill_package.py",
-      "old_oid": "96eb9d1166b4142dd0f7ddf8ef74185f111185f7",
-      "new_oid": "1bf9865d6b77fccd3b341535d1ac5d8830c0eacd"
+      "old_oid": "1d55cd4f8fddfa477bcffb873a3c951ddd66707f",
+      "new_oid": "542164aa57a558e20bce6225ad44887ba126553f"
     }
   ],
-  "raw_approval_record_sha256": "738af8db6f811e29ce115b5be75922c509766d6ed2b45476f3619cf81c3eac10",
+  "raw_approval_record_sha256": "10630fea4e951e00d6f08ba0c976c226f4afe184d3fed4f798e287defd7b234e",
   "raw_approval_storage": "Git-external"
 }

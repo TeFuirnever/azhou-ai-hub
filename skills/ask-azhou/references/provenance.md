@@ -19,3 +19,7 @@
 1. Diff the pinned upstream router against the current pin: `git -C <mattpocock-skills-checkout> show 3cca18b368ae95cdbdebbff572ccafa662551015:skills/engineering/ask-matt/SKILL.md`.
 2. Map structural changes (new routing conventions, composability rule updates) onto this package; keep the catalog map generated from this repository's own skill set.
 3. Update the pin above only after the mapped change lands, in the same commit.
+
+## Fidelity classification
+
+Classification: `original` — no upstream skill lineage: the ask-matt pattern (pinned commit `3cca18b368ae95cdbdebbff572ccafa662551015`, MIT) is borrowed with zero upstream bytes copied, and the router map is written for this hub's own catalog. Skill-standard §2.3.

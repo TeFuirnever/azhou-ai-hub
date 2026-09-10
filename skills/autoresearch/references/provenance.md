@@ -28,3 +28,7 @@ git ls-remote https://github.com/karpathy/autoresearch refs/heads/master
 ```
 
 At absorption time this returned `228791fb499afffb54b46200aca536f79142f117`; later heads are expected and do not change the recorded baseline.
+
+## Fidelity classification
+
+Classification: `original` — a wrapper around an unmodified external runtime (karpathy/autoresearch pinned at `228791fb499afffb54b46200aca536f79142f117`); zero upstream bytes are vendored and every file here is Azhou-authored wrapper text, as the license-status section above records. Skill-standard §2.3.
