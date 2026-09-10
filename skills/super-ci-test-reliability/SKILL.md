@@ -1,12 +1,12 @@
 ---
-name: ci-test-reliability
-description: Use when writing or changing tests that own resources (ports, temp paths, subprocesses, clocks, process-global state), when tests run under concurrent CI workers or a platform matrix, when reviewing test isolation, or when diagnosing a flaky CI failure; covers topology-aware allocation, quiescent teardown, timeout budgeting, regression negative controls, and the flake-masking blacklist.
+name: super-ci-test-reliability
+description: Renamed from ci-test-reliability (the old name still triggers this skill). Use when writing or changing tests that own resources (ports, temp paths, subprocesses, clocks, process-global state), when tests run under concurrent CI workers or a platform matrix, when reviewing test isolation, or when diagnosing a flaky CI failure; covers topology-aware allocation, quiescent teardown, timeout budgeting, regression negative controls, and the flake-masking blacklist.
 invocation: model-invoked discipline
 ---
 
-# CI Test Reliability
+# Super CI Test Reliability
 
-**🦊 阿舟 · CI Test Reliability**
+**🦊 阿舟 · Super CI Test Reliability**
 
 > 🧪 测试自己可靠，才配当证据。
 
@@ -19,7 +19,7 @@ It is guidance, not a script. Build tests that stay correct under the repository
 Emit this exact display event once:
 
 ```text
-🦊 阿舟 · CI Test Reliability 启动｜mode=<design|review|diagnose>｜scope=<test-or-suite>
+🦊 阿舟 · Super CI Test Reliability 启动｜mode=<design|review|diagnose>｜scope=<test-or-suite>
 ```
 
 Use `✅ 验证通过` only after the selected regression actually runs green and its negative control runs red. Use `❌ 验证失败` for a red regression or a failed negative control and `🔒 阿舟暂停这一项` when a required fact (the CI topology, the owning lane, the awaited readiness signal) cannot be established. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values. Raw evidence such as failing runs, queue logs, and worker traces stays out of receipts unless the user supplied it.

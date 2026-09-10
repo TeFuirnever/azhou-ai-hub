@@ -29,7 +29,7 @@ SKILL_DIRS = (
     LAVISH_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
-    ROOT / "skills" / "ci-test-reliability",
+    ROOT / "skills" / "super-ci-test-reliability",
     ROOT / "skills" / "prose-standard",
     ROOT / "skills" / "ask-azhou",
     ROOT / "skills" / "arch-doc",
