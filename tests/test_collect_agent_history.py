@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "skills" / "repo-pedant" / "scripts" / "collect_agent_history.py"
+SCRIPT = Path(__file__).parents[1] / "skills" / "super-repo-pedant" / "scripts" / "collect_agent_history.py"
 SPEC = importlib.util.spec_from_file_location("collect_agent_history", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

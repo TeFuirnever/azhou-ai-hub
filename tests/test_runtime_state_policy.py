@@ -40,7 +40,7 @@ class RuntimeStatePolicyTest(unittest.TestCase):
         authority = (ROOT / "scripts" / "azhou_runtime_state.py").read_bytes()
         for relative in (
             "skills/llm-wiki/scripts/azhou_runtime_state.py",
-            "skills/repo-pedant/scripts/azhou_runtime_state.py",
+            "skills/super-repo-pedant/scripts/azhou_runtime_state.py",
         ):
             with self.subTest(path=relative):
                 self.assertEqual(authority, (ROOT / relative).read_bytes())

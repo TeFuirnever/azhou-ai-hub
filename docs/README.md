@@ -5,7 +5,7 @@
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
-| Try the Repo Pedant reference demo | [Repo Pedant demo](demos/repo-pedant.md) |
+| Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
 | Try the Lavish review-loop and relay reference demo | [Lavish demo](demos/lavish.md) |
 | Try the LLM Wiki reference demo | [LLM Wiki demo](demos/llm-wiki.md) |

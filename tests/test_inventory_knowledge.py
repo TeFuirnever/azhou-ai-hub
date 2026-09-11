@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "skills" / "repo-pedant" / "scripts" / "inventory_knowledge.py"
+SCRIPT = Path(__file__).parents[1] / "skills" / "super-repo-pedant" / "scripts" / "inventory_knowledge.py"
 SPEC = importlib.util.spec_from_file_location("inventory_knowledge", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -68,6 +68,13 @@ class InventoryKnowledgeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             project = self.make_project(Path(directory))
             inventory = self.complete(MODULE.build_inventory([project], [], []))
+            self.assertEqual([], MODULE.validate_inventory(inventory))
+
+    def test_legacy_inventory_schema_remains_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = self.make_project(Path(directory))
+            inventory = self.complete(MODULE.build_inventory([project], [], []))
+            inventory["schema_version"] = MODULE.LEGACY_SCHEMA_VERSION
             self.assertEqual([], MODULE.validate_inventory(inventory))
 
     def test_consumer_class_enum_is_validated(self) -> None:

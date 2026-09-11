@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skills" / "repo-pedant" / "scripts" / "manage_evolution.py"
+SCRIPT = ROOT / "skills" / "super-repo-pedant" / "scripts" / "manage_evolution.py"
 SPEC = importlib.util.spec_from_file_location("manage_evolution", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -95,7 +95,7 @@ class ManageEvolutionTest(unittest.TestCase):
             payload = json.loads(result.stdout)
             candidate = Path(payload["candidate"])
             self.assertTrue(candidate.is_file())
-            self.assertIn(".azhou/repo-pedant/evolution/candidates", candidate.as_posix())
+            self.assertIn(".azhou/super-repo-pedant/evolution/candidates", candidate.as_posix())
             self.assertFalse(payload["live_skill_modified"])
             self.assertEqual(2, payload["independent_sessions"])
 
@@ -112,7 +112,7 @@ class ManageEvolutionTest(unittest.TestCase):
             project = Path(directory)
             self.add_signal(project, session="one")
             self.add_signal(project, session="two")
-            signals = project / ".azhou" / "repo-pedant" / "evolution" / "signals.jsonl"
+            signals = project / ".azhou" / "super-repo-pedant" / "evolution" / "signals.jsonl"
             before = signals.read_text(encoding="utf-8")
             invalid = project / "invalid.json"
             invalid.write_text("{}", encoding="utf-8")
@@ -134,7 +134,7 @@ class ManageEvolutionTest(unittest.TestCase):
             self.add_signal(project, session="one")
             self.add_signal(project, session="two")
             proposal = json.loads(self.propose(project).stdout)
-            link = project / ".azhou" / "repo-pedant" / "evolution" / "candidates" / "linked.json"
+            link = project / ".azhou" / "super-repo-pedant" / "evolution" / "candidates" / "linked.json"
             link.symlink_to(Path(proposal["candidate"]))
             result = self.run_cli("archive", "--project", str(project), "--candidate", str(link))
             self.assertEqual(2, result.returncode)
@@ -152,7 +152,7 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(2, one_project.returncode)
 
             self.add_signal(second, session="two", category="safety", severity="critical")
-            second_signals = second / ".azhou" / "repo-pedant" / "evolution" / "signals.jsonl"
+            second_signals = second / ".azhou" / "super-repo-pedant" / "evolution" / "signals.jsonl"
             two_projects = self.propose(first, "--scope", "global", "--include-signal-file", str(second_signals))
             self.assertEqual(0, two_projects.returncode, two_projects.stdout + two_projects.stderr)
             self.assertEqual(2, json.loads(two_projects.stdout)["projects"])
@@ -203,6 +203,47 @@ class ManageEvolutionTest(unittest.TestCase):
         self.assertEqual([], MODULE.validate_promotion(candidate, approved))
         approved["human_approval"]["diff_sha256"] = "c" * 64
         self.assertTrue(any("exact diff" in error for error in MODULE.validate_promotion(candidate, approved)))
+
+    def test_legacy_schema_versions_remain_accepted(self) -> None:
+        candidate = {
+            "schema_version": MODULE.LEGACY_CANDIDATE_SCHEMA,
+            "candidate_id": "a" * 24,
+            "created_at": "2026-08-23T00:00:00+00:00",
+            "status": "proposed",
+            "scope": "project",
+            "mechanism": "missed-memory",
+            "change_summary": "Require project memory classification",
+            "regression_id": "multi-surface-handoff",
+            "signal_ids": ["d" * 64],
+            "independent_sessions": 2,
+            "projects": 1,
+            "severe_trigger": False,
+            "parse_errors": 0,
+            "origin": "learned",
+            "live_skill_modified": False,
+        }
+        diff_sha = "b" * 64
+        approved = self.evaluation(candidate["candidate_id"], diff_sha, approved=True)
+        approved["schema_version"] = MODULE.LEGACY_EVALUATION_SCHEMA
+        self.assertEqual([], MODULE.validate_promotion(candidate, approved))
+
+        signal = {
+            "schema_version": MODULE.LEGACY_SIGNAL_SCHEMA,
+            "signal_id": "a" * 64,
+            "observed_at": "2026-08-23T00:00:00+00:00",
+            "project_id": "b" * 24,
+            "runtime": "codex",
+            "session_digest": "c" * 24,
+            "source": "hook",
+            "provenance": "learned",
+            "category": "privacy",
+            "mechanism": "raw-capture",
+            "severity": "high",
+            "outcome": "failure",
+            "user_feedback": "none",
+            "evidence_digest": "d" * 64,
+        }
+        self.assertEqual([], MODULE.validate_signal(signal))
 
     def test_raw_fields_are_rejected(self) -> None:
         signal = {

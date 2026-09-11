@@ -49,20 +49,20 @@ Use `--help` on the root command or any subcommand for current options.
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 python scripts/azhou_hub.py setup \
-  --skill repo-pedant \
+  --skill super-repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --json
 
 python scripts/azhou_hub.py setup \
-  --skill repo-pedant \
+  --skill super-repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --apply --plan-id '<reviewed-planId>' \
   --json
 
 python scripts/azhou_hub.py doctor \
-  --skill repo-pedant \
+  --skill super-repo-pedant \
   --target "$SKILLS_HOME" \
   --json
 ~~~
@@ -76,12 +76,12 @@ The normal JSON setup result names the source, destination, mode, applied state 
 Use managed mode only when this CLI should later repair, switch or remove the exact artifact it installed. Managed mode accepts one skill, requires an explicit receipt path, and still defaults to a dry-run:
 
 ~~~bash
-RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
+RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/super-repo-pedant.json"
 
 python scripts/azhou_hub.py setup \
   --managed \
   --receipt "$RECEIPT" \
-  --skill repo-pedant \
+  --skill super-repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --json
@@ -89,7 +89,7 @@ python scripts/azhou_hub.py setup \
 python scripts/azhou_hub.py setup \
   --managed \
   --receipt "$RECEIPT" \
-  --skill repo-pedant \
+  --skill super-repo-pedant \
   --target "$SKILLS_HOME" \
   --mode link \
   --apply \

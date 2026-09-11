@@ -65,7 +65,7 @@ REQUIRED_PATHS = (
     "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
     "skills/llm-wiki/SKILL.md",
-    "skills/repo-pedant/SKILL.md",
+    "skills/super-repo-pedant/SKILL.md",
     "skills/lavish/SKILL.md",
 )
 
@@ -76,7 +76,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-info/SKILL.md",
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
-    "skills/repo-pedant/SKILL.md",
+    "skills/super-repo-pedant/SKILL.md",
     "skills/lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
@@ -160,11 +160,11 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
         "brand_path": "skills/llm-wiki/references/brand-layer.md",
     },
-    "skills/repo-pedant/SKILL.md": {
-        "display_name": "Repo Pedant",
+    "skills/super-repo-pedant/SKILL.md": {
+        "display_name": "Super Repo Pedant",
         "motto": "代码是唯一现役答案，其他都要对齐。",
-        "startup": "🦊 阿舟 · Repo Pedant 启动｜mode=<mode>｜scope=<repo>",
-        "brand_path": "skills/repo-pedant/references/brand-layer.md",
+        "startup": "🦊 阿舟 · Super Repo Pedant 启动｜mode=<mode>｜scope=<repo>",
+        "brand_path": "skills/super-repo-pedant/references/brand-layer.md",
     },
     "skills/super-caveman/SKILL.md": {
         "display_name": "Super Caveman",
@@ -187,9 +187,9 @@ SKILL_BRAND_CONTRACTS = {
 }
 
 BASELINE_HASHES = {
-    "benchmarks/repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "dfa7ba124e896ae16d8cec21071fbeb10841f2d1b497a46c85c6bed6fc89bbf5",
-    "benchmarks/repo-pedant/upstream/neat-freak/references/agent-paths.md": "7e739076a005599463cd77e4b2deff22502c8cb1f97d258bc02c115ceafbe50f",
-    "benchmarks/repo-pedant/upstream/neat-freak/references/sync-matrix.md": "0dc219f53695d722e69b82e3c1e5573937c110ec625311f78f1e811c049079eb",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "dfa7ba124e896ae16d8cec21071fbeb10841f2d1b497a46c85c6bed6fc89bbf5",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "7e739076a005599463cd77e4b2deff22502c8cb1f97d258bc02c115ceafbe50f",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "0dc219f53695d722e69b82e3c1e5573937c110ec625311f78f1e811c049079eb",
 }
 
 

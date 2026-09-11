@@ -27,7 +27,7 @@
 每条命令安装一个包：
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
+npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
@@ -64,7 +64,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 python scripts/azhou_hub.py info --json
 python scripts/azhou_hub.py version --json
 python scripts/azhou_hub.py doctor --json
-python scripts/azhou_hub.py setup --skill repo-pedant --target /absolute/path/to/harness/skills --json
+python scripts/azhou_hub.py setup --skill super-repo-pedant --target /absolute/path/to/harness/skills --json
 python scripts/azhou_hub.py verify
 ~~~
 
@@ -80,7 +80,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke 和 fail-closed target 检查。 |
 | [Azhou Setup](skills/azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行公开全仓完整性 gate，或显式执行维护者 promotion 回放。 | 委派给仓库策略、单元测试、benchmark integrity 和空白检查；promotion 模式额外要求 Git-external 证据。 |
-| [Repo Pedant](skills/repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
+| [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。仓库 reference 只证明接线，不冒充模型效果。 |
 | [LLM Wiki](skills/llm-wiki/SKILL.md) | 构建私有、持久的 Markdown 项目知识库，让 Agent 跨会话摄取、检索、读取和检查知识。 | 标准本地目录、8 个 MCP 工具与决策生命周期、原子迁移、隐私默认值和专项确定性合同测试。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
@@ -99,7 +99,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 | Skill | 复制给 Agent | 必须返回什么 |
 |---|---|---|
-| Repo Pedant | <code>这个阶段做完了，跑一次 repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/repo-pedant.md)。 |
+| Super Repo Pedant | <code>这个阶段做完了，跑一次 super-repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/super-repo-pedant.md)。 |
 | Excalidraw Diagram | <code>用 excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/excalidraw-diagram.md)。 |
 | Super Caveman | <code>使用 /super-caveman full，再为这份 diff 写 commit message。</code> | 行动优先精简模式和可直接粘贴的 Conventional Commit；不暂存、不提交。 |
 | LLM Wiki | <code>用 llm-wiki 保存这条已验证的架构决策，再检索回来并检查 wiki。</code> | 私有本地页面、来源与置信度、检索结果、健康报告和稳定收据。[运行 demo](docs/demos/llm-wiki.md)。 |
@@ -111,26 +111,26 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、4-case Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、Super Prose Standard recall-battery 接线套件、Session Insights 合成会话存储接线完整性套件、JSON/链接/来源/凭据策略和空白检查。
+- **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、4-case Super Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、Super Prose Standard recall-battery 接线套件、Session Insights 合成会话存储接线完整性套件、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
-## Repo Pedant
+## Super Repo Pedant
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 
 任务确实结束时显式调用：
 
 ~~~text
-这个阶段做完了，跑一次 repo-pedant reconcile。
+这个阶段做完了，跑一次 super-repo-pedant reconcile。
 ~~~
 
 只推测 milestone 时，skill 只提醒一次，不静默写仓库。明确 reconcile/handoff 默认覆盖三层项目知识：用户文档、<code>AGENTS.md</code>/<code>CLAUDE.md</code>、已证明属于当前项目的 memory。全局指令、归属不明 memory、整文件删除、发布和部署继续保留 checkpoint。
 
-[兼容合同](skills/repo-pedant/references/neat-freak-compatibility.md) · [执行协议](skills/repo-pedant/references/execution-protocol.md)
+[兼容合同](skills/super-repo-pedant/references/neat-freak-compatibility.md) · [执行协议](skills/super-repo-pedant/references/execution-protocol.md)
 
-![Repo Pedant 效果图](assets/skills/repo-pedant-effect.png)
+![Repo Pedant 效果图](assets/skills/super-repo-pedant-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成。机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。
 

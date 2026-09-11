@@ -47,13 +47,13 @@ class AzhouRuntimeStateTest(unittest.TestCase):
 
             first = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
             second = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
@@ -64,7 +64,7 @@ class AzhouRuntimeStateTest(unittest.TestCase):
             self.assertFalse((root / ".azhou").exists())
 
             applied = azhou_runtime_state.apply_directory_migration(first)
-            target = root / ".azhou" / "repo-pedant"
+            target = root / ".azhou" / "super-repo-pedant"
             self.assertEqual("migrated", applied["status"])
             self.assertTrue((source / "execution.json").is_file())
             self.assertEqual((source / "execution.json").read_bytes(), (target / "execution.json").read_bytes())
@@ -75,7 +75,7 @@ class AzhouRuntimeStateTest(unittest.TestCase):
 
             repeated = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
@@ -91,7 +91,7 @@ class AzhouRuntimeStateTest(unittest.TestCase):
             payload.write_text("one\n", encoding="utf-8")
             plan = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
@@ -103,7 +103,7 @@ class AzhouRuntimeStateTest(unittest.TestCase):
 
             current = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
@@ -119,8 +119,8 @@ class AzhouRuntimeStateTest(unittest.TestCase):
                 with self.assertRaises(OSError):
                     azhou_runtime_state.apply_directory_migration(current)
 
-            self.assertFalse((root / ".azhou" / "repo-pedant").exists())
-            self.assertEqual([], list((root / ".azhou").glob(".repo-pedant-migration-*")))
+            self.assertFalse((root / ".azhou" / "super-repo-pedant").exists())
+            self.assertEqual([], list((root / ".azhou").glob(".super-repo-pedant-migration-*")))
 
     def test_apply_rejects_source_change_during_copy_before_publication(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -131,7 +131,7 @@ class AzhouRuntimeStateTest(unittest.TestCase):
             payload.write_text("one\n", encoding="utf-8")
             plan = azhou_runtime_state.plan_directory_migration(
                 root,
-                namespace="repo-pedant",
+                namespace="super-repo-pedant",
                 source=".repo-pedant",
                 allowed_sources=(".repo-pedant",),
             )
@@ -149,8 +149,8 @@ class AzhouRuntimeStateTest(unittest.TestCase):
                 ):
                     azhou_runtime_state.apply_directory_migration(plan)
 
-            self.assertFalse((root / ".azhou" / "repo-pedant").exists())
-            self.assertEqual([], list((root / ".azhou").glob(".repo-pedant-migration-*")))
+            self.assertFalse((root / ".azhou" / "super-repo-pedant").exists())
+            self.assertEqual([], list((root / ".azhou").glob(".super-repo-pedant-migration-*")))
 
 
 if __name__ == "__main__":

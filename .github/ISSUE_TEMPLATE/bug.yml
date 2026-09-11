@@ -13,7 +13,7 @@ body:
     attributes:
       label: Affected surface
       options:
-        - repo-pedant
+        - super-repo-pedant
         - excalidraw-diagram
         - benchmarks or tests
         - installation or documentation
