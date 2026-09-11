@@ -38,6 +38,42 @@ class AzhouRuntimeStateTest(unittest.TestCase):
             with self.assertRaises(azhou_runtime_state.StateError):
                 azhou_runtime_state.state_path(root, "repo-pedant")
 
+    def test_chained_migration_skips_the_prior_receipt_as_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / ".repo-pedant"
+            legacy.mkdir()
+            (legacy / "execution.json").write_text('{"status":"pass"}\n', encoding="utf-8")
+
+            first = azhou_runtime_state.plan_directory_migration(
+                root,
+                namespace="repo-pedant",
+                source=".repo-pedant",
+                allowed_sources=(".repo-pedant",),
+            )
+            azhou_runtime_state.apply_directory_migration(first)
+            prior_receipt = (root / ".azhou" / "repo-pedant" / azhou_runtime_state.MIGRATION_RECEIPT).read_bytes()
+
+            second = azhou_runtime_state.plan_directory_migration(
+                root,
+                namespace="super-repo-pedant",
+                source=".azhou/repo-pedant",
+                allowed_sources=(".repo-pedant", ".azhou/repo-pedant"),
+            )
+            self.assertEqual("planned", second["status"])
+            self.assertNotIn(
+                azhou_runtime_state.MIGRATION_RECEIPT,
+                {row["path"] for row in second["contents"]},
+            )
+            applied = azhou_runtime_state.apply_directory_migration(second)
+            self.assertEqual("verified", azhou_runtime_state.verify_directory_migration(applied)["status"])
+
+            target = root / ".azhou" / "super-repo-pedant"
+            self.assertEqual((legacy / "execution.json").read_bytes(), (target / "execution.json").read_bytes())
+            receipt = json.loads((target / azhou_runtime_state.MIGRATION_RECEIPT).read_text(encoding="utf-8"))
+            self.assertEqual(second["planId"], receipt["planId"])
+            self.assertEqual(prior_receipt, (root / ".azhou" / "repo-pedant" / azhou_runtime_state.MIGRATION_RECEIPT).read_bytes())
+
     def test_migration_is_stable_atomic_idempotent_and_preserves_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

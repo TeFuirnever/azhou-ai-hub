@@ -175,7 +175,9 @@ def plan_directory_migration(
     if source_relative not in allowed:
         raise StateError(f"unrecognized compatibility source: {source_relative}")
     source_directory = _contained_path(canonical_root, source_parts)
-    contents = _inventory(source_directory)
+    # A source that was itself a migration target carries its own receipt; the
+    # receipt is metadata of that earlier migration, not content to move.
+    contents = _inventory(source_directory, omit_receipt=True)
     target_part_values = tuple(target_parts)
     target = state_path(canonical_root, namespace, *target_part_values)
     if target == source_directory:
@@ -270,8 +272,8 @@ def apply_directory_migration(plan: dict[str, Any]) -> dict[str, Any]:
     stage = Path(tempfile.mkdtemp(prefix=f".{current['namespace']}-migration-", dir=target.parent))
     try:
         shutil.rmtree(stage)
-        shutil.copytree(source, stage, symlinks=False)
-        if _inventory(stage) != current["contents"] or _inventory(source) != current["contents"]:
+        shutil.copytree(source, stage, symlinks=False, ignore=shutil.ignore_patterns(MIGRATION_RECEIPT))
+        if _inventory(stage) != current["contents"] or _inventory(source, omit_receipt=True) != current["contents"]:
             raise StateError("runtime-state migration source changed while copying; run dry-run again")
         for path in stage.rglob("*"):
             path.chmod(0o700 if path.is_dir() else 0o600)
