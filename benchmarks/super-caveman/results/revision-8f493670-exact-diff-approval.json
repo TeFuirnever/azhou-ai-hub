@@ -2,43 +2,223 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-11T19:05:00Z",
+  "approved_at": "2026-09-11T19:58:00Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "17eb0c835e4eb83a4efe0c5f4f99eb6b2337911b",
-  "path_set_sha256": "c91d42caefb48c9595f92cb4e33520d37e2c28b681b5508f9289b62e32d66a2f",
-  "staged_patch_sha256": "42b193f0159438bf67941ef2901a9bb367e961bec37e7f109cff7b5cfc60f2e7",
+  "base_commit": "53329a48e18b6a8b64158c15820894e3a91c87c7",
+  "path_set_sha256": "ed012e04634a9d61da5af4722de58b47b309b6c8619b6780781fb71b10f8c866",
+  "staged_patch_sha256": "8c22fd91e63d9ee7f5b1aab04a8de134ca6cde566512a2093f7e8fbfb01f3411",
   "reviewed_blobs": [
     {
+      "path": ".github/workflows/fuzz.yml",
+      "old_oid": "043cf38b8488954002a7e18db2b3a9cca0b61f8f",
+      "new_oid": "fe4b6f00a7ad241b658de67283ba621e97d6b504"
+    },
+    {
       "path": "AGENTS.md",
-      "old_oid": "4a0ef1f03d9c6e042e09e2e449c2d2796caa1788",
-      "new_oid": "ec8f5c5e5cee5217b000220a73ae408149273fa3"
+      "old_oid": "ec8f5c5e5cee5217b000220a73ae408149273fa3",
+      "new_oid": "cbc33e604c5a80debee1f33b9d29759e4942a5d4"
     },
     {
       "path": "CHANGELOG.md",
-      "old_oid": "4507e7a4e498b301dfb87d49b50aa875662f51c8",
-      "new_oid": "d16f939e8837ce30e55932c7cdead7ef1d43d970"
+      "old_oid": "d16f939e8837ce30e55932c7cdead7ef1d43d970",
+      "new_oid": "80de5da18676779a1ca622a1f4eabfff045addd3"
     },
     {
-      "path": "scripts/azhou_runtime_state.py",
-      "old_oid": "05f84ef7623df668b3c9fd52ae005fa69eab18fe",
-      "new_oid": "9e70afc2d3cb2c545ce9aa1b0e38a9354746ed82"
+      "path": "README.md",
+      "old_oid": "1465f02f2b0830a50b97b52fc25aaaa75e25c5f8",
+      "new_oid": "090f2be8ebdb1ead4ea31ad219f08fb0b4df03ac"
     },
     {
-      "path": "skills/llm-wiki/scripts/azhou_runtime_state.py",
-      "old_oid": "05f84ef7623df668b3c9fd52ae005fa69eab18fe",
-      "new_oid": "9e70afc2d3cb2c545ce9aa1b0e38a9354746ed82"
+      "path": "README.zh-CN.md",
+      "old_oid": "9230d6a1e03ca5eece7a3a811e573e9797fb2d3e",
+      "new_oid": "c998f118ffa85e300054c00071523c90f5f7cee5"
     },
     {
-      "path": "skills/super-repo-pedant/scripts/azhou_runtime_state.py",
-      "old_oid": "05f84ef7623df668b3c9fd52ae005fa69eab18fe",
-      "new_oid": "9e70afc2d3cb2c545ce9aa1b0e38a9354746ed82"
+      "path": "THIRD_PARTY_NOTICES.md",
+      "old_oid": "aecaac5c23575ee016ad1aabb6de27e77e07d4af",
+      "new_oid": "a08a174c8b86442b51f42ea9fdc283dd3884254a"
     },
     {
-      "path": "tests/test_azhou_runtime_state.py",
-      "old_oid": "34387aec812561d29385cecb68d3519131591273",
-      "new_oid": "15408336820a5419ad1d56a527982c8b36917136"
+      "path": "docs/README.md",
+      "old_oid": "0bb94234e5fab1ace8d286fc0aebf56f5b015ac9",
+      "new_oid": "bcb9b4e280a5e6ef3396719db53086e4ce647700"
+    },
+    {
+      "path": "docs/demos/lavish.md",
+      "old_oid": "2f98d2089013bec0efab3f397d8631dfa1959ad6",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "docs/demos/super-lavish.md",
+      "old_oid": "<deleted>",
+      "new_oid": "a6a6f28a8f9e622ebb91dbaadbbf59674253f504"
+    },
+    {
+      "path": "docs/installation.md",
+      "old_oid": "7308b2a8808c16cf570a5e048eb7c060173d5ae5",
+      "new_oid": "da318fb75a3b046fd8abe3ca76465d0efa6bcb4a"
+    },
+    {
+      "path": "docs/research/2026-09-07-skill-cross-platform-macos-windows.md",
+      "old_oid": "070dc5d2fe1ace219a4565616cae1b8331342638",
+      "new_oid": "8ba1c40b3bef4150bca08caae1cf9dd5c131f997"
+    },
+    {
+      "path": "docs/support-matrix.md",
+      "old_oid": "c022497130113626943da67022cccfa204a4aef7",
+      "new_oid": "3392cb7fa4367a11a6f997249d08d09841aa880a"
+    },
+    {
+      "path": "scripts/check_repository.py",
+      "old_oid": "f851e0cd3ccc0be714b5da93f524c5cc3d618ff4",
+      "new_oid": "7f11843a8185901993adbc27bfc8f8c1de0d6cc7"
+    },
+    {
+      "path": "scripts/fuzz_relay_state.py",
+      "old_oid": "11903998a724e38c790e145d3bdeef90a9976225",
+      "new_oid": "09a37442998788fe02e4ee62b74b1d0952bf8e77"
+    },
+    {
+      "path": "skills/ask-azhou/SKILL.md",
+      "old_oid": "95c2f865db139ae8399845726a869c884c5faa22",
+      "new_oid": "cd143bfa76fa70abbff79a0453bb505875ff602f"
+    },
+    {
+      "path": "skills/lavish/SKILL.md",
+      "old_oid": "4e81be6c9f8d0acab46191541d0c756916a64323",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/artifact-mode.md",
+      "old_oid": "2783e04f9f5c1e0573cb6412e5ac16d2ca948020",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/brand-layer.md",
+      "old_oid": "3bc1c45bba2dec6df9dab3b6f6a9093c511e4430",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/provenance.md",
+      "old_oid": "49105d6096a272ff35a98ee471838407938fbe91",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/setup.md",
+      "old_oid": "18b5d7d24768e83133d1f61294a8607557c5743e",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/spec-relay.md",
+      "old_oid": "a30f57792a3e76658e90c12899ea48d584620568",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/references/upstream-compatibility.md",
+      "old_oid": "b7d162c9a748e8ba6a060eb80090499cefd5a8a0",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/lavish/scripts/relay_state.py",
+      "old_oid": "67f6db47932c593d26a6da65a6cf0eccb2fe6e22",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/super-lavish/SKILL.md",
+      "old_oid": "<deleted>",
+      "new_oid": "3d6e676e0dddd5f477945456bbaafa3569c97a89"
+    },
+    {
+      "path": "skills/super-lavish/references/artifact-mode.md",
+      "old_oid": "<deleted>",
+      "new_oid": "2783e04f9f5c1e0573cb6412e5ac16d2ca948020"
+    },
+    {
+      "path": "skills/super-lavish/references/brand-layer.md",
+      "old_oid": "<deleted>",
+      "new_oid": "b01699e4c9a6beba21b84fd92346436f5dd2fdb9"
+    },
+    {
+      "path": "skills/super-lavish/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "4d990b7991d4313a830c3a39c64f023a9b7cec6a"
+    },
+    {
+      "path": "skills/super-lavish/references/setup.md",
+      "old_oid": "<deleted>",
+      "new_oid": "efdf7ceb2abc8a5bc027fd3f8312d242b84894b9"
+    },
+    {
+      "path": "skills/super-lavish/references/spec-relay.md",
+      "old_oid": "<deleted>",
+      "new_oid": "a30f57792a3e76658e90c12899ea48d584620568"
+    },
+    {
+      "path": "skills/super-lavish/references/upstream-compatibility.md",
+      "old_oid": "<deleted>",
+      "new_oid": "b7d162c9a748e8ba6a060eb80090499cefd5a8a0"
+    },
+    {
+      "path": "skills/super-lavish/scripts/relay_state.py",
+      "old_oid": "<deleted>",
+      "new_oid": "67f6db47932c593d26a6da65a6cf0eccb2fe6e22"
+    },
+    {
+      "path": "tests/test_azhou_hub.py",
+      "old_oid": "d1c7a786339f1c7c5cab2655c2131f39b40e54b9",
+      "new_oid": "9a655c235ee77e3989fbbb72f78e2117f325df13"
+    },
+    {
+      "path": "tests/test_check_repository.py",
+      "old_oid": "768606047645b2c3f46d8b884a398e49c1606d95",
+      "new_oid": "0ab214a170bd299482ea2eb2866ec93c0863354b"
+    },
+    {
+      "path": "tests/test_docs_code_contract.py",
+      "old_oid": "0dbb1188b0027aceeb4cabb837b11532ae0b5c4f",
+      "new_oid": "2ed8c6f42c24df732dcf7afe5819b2db3d4bf136"
+    },
+    {
+      "path": "tests/test_lavish_entry_budget.py",
+      "old_oid": "0c2ddf39110d941bb21541d9310bf37d22d079cb",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/test_lavish_relay_fuzz_regressions.py",
+      "old_oid": "003d4efb764fa37cbdbdde1cc64ea3f3f841cc08",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/test_lavish_relay_state.py",
+      "old_oid": "0a94281d020140790d53a648c12a42d15f665e4d",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/test_llm_wiki_repository.py",
+      "old_oid": "b08162ceff95bb7584e476d12f8d8e7e74720d26",
+      "new_oid": "3aa4f0049e5dc4c8cecafe8ff3ddc213353d6e89"
+    },
+    {
+      "path": "tests/test_skill_package.py",
+      "old_oid": "be858378714a0a74060276da06ed3a755f2a851f",
+      "new_oid": "3bbfb01596cd8b71dccd8a12be670759af2a25bc"
+    },
+    {
+      "path": "tests/test_super_lavish_entry_budget.py",
+      "old_oid": "<deleted>",
+      "new_oid": "437566e84ffd21693eb8e87c1e6f3e56e47b7a79"
+    },
+    {
+      "path": "tests/test_super_lavish_relay_fuzz_regressions.py",
+      "old_oid": "<deleted>",
+      "new_oid": "5c49290eea2108781684cdbc17fb216b61731ccd"
+    },
+    {
+      "path": "tests/test_super_lavish_relay_state.py",
+      "old_oid": "<deleted>",
+      "new_oid": "ff6cecaa58d0d72d3791a793cc865e688f45f9b1"
     }
   ],
-  "raw_approval_record_sha256": "f7acc55b3a9cc290aca7bfc5607fd5c9f6fc856fd3266361a83caffa94c2ba95",
+  "raw_approval_record_sha256": "85fee2edefcfa2deaf93f493dbece627bfc2092784c43feaa0abf1dbf532a47d",
   "raw_approval_storage": "Git-external"
 }

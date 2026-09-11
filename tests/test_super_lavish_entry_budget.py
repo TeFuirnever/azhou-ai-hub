@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-ENTRY = ROOT / "skills" / "lavish" / "SKILL.md"
-REFERENCE = ROOT / "skills" / "lavish" / "references" / "artifact-mode.md"
+ENTRY = ROOT / "skills" / "super-lavish" / "SKILL.md"
+REFERENCE = ROOT / "skills" / "super-lavish" / "references" / "artifact-mode.md"
 
 # Frozen 2026-09-05: the 15,479-byte monolith entry is the only entry size
 # associated with recorded context-overflow sessions on the zcode host; the

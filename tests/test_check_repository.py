@@ -218,7 +218,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "azhou-setup" / "SKILL.md",
                 root / "skills" / "azhou-verify" / "SKILL.md",
                 root / "skills" / "super-repo-pedant" / "SKILL.md",
-                root / "skills" / "lavish" / "SKILL.md",
+                root / "skills" / "super-lavish" / "SKILL.md",
                 root / "skills" / "eli5" / "SKILL.md",
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "super-ci-test-reliability" / "SKILL.md",

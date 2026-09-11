@@ -54,7 +54,7 @@ npx -y lavish-axi@0.1.47 --version
 npx -y lavish-axi@0.1.47 playbook table
 npx -y lavish-axi@0.1.47 design
 python <skill-dir>/scripts/relay_state.py --help
-python -m unittest tests.test_lavish_relay_state -v
+python -m unittest tests.test_super_lavish_relay_state -v
 ```
 
 Do not open, share, or publish a real artifact merely to prove package installation. A share requires separate publication authorization because it uploads the artifact to a third-party service.

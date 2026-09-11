@@ -48,7 +48,7 @@ The upstream comments credit the persistent self-maintained wiki concept to Andr
 
 ## Lavish Editor (Spec Relay relay mode)
 
-`skills/lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`232972beba9e0e4e75682c98f2aeb2cf01532122`](https://github.com/kunchenguid/lavish-axi/commit/232972beba9e0e4e75682c98f2aeb2cf01532122). The unmodified upstream baseline is hash-locked for reproducibility; the local Skill intentionally diverges by adding the documented Spec Relay relay mode on top of the upstream review runtime.
+`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`232972beba9e0e4e75682c98f2aeb2cf01532122`](https://github.com/kunchenguid/lavish-axi/commit/232972beba9e0e4e75682c98f2aeb2cf01532122). The unmodified upstream baseline is hash-locked for reproducibility; the local Skill intentionally diverges by adding the documented Spec Relay relay mode on top of the upstream review runtime.
 
 - Copyright: Kun Chen, 2026
 - License: [MIT](LICENSES/Lavish-AXI-MIT.txt)

@@ -2,7 +2,7 @@
   "schema": "super-caveman-evaluation-result.v1",
   "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
   "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
-  "model_limitation": "Producer-context invariance rebind for the runtime-state chained-migration fix (a migration source that is itself a prior target no longer travels its receipt as content; all three byte-identical azhou_runtime_state.py copies plus the regression test). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+  "model_limitation": "Producer-context invariance rebind for the fourth super-prefix rename (#176/#181, lavish to super-lavish, including its relay test modules and the artifact-mode receipt schema string). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
   "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
   "tool_permissions": {
     "network": false,
@@ -115,8 +115,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "kimi-code/sp-m2-182b-invariance-review/2026-09-12",
-    "review_sha256": "b0b6214be94165f6de4b70589df8f143a9bba1fc60b11ffdf3a24cb36031d470"
+    "identity": "kimi-code/sp-m2-181-invariance-review/2026-09-12",
+    "review_sha256": "db9ab2f1fbb2b7ae537311af6a0e94f66c96a03be454386341a91a85a1970d71"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -146,13 +146,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "17eb0c835e4eb83a4efe0c5f4f99eb6b2337911b",
-      "path_set_sha256": "c91d42caefb48c9595f92cb4e33520d37e2c28b681b5508f9289b62e32d66a2f",
-      "staged_patch_sha256": "42b193f0159438bf67941ef2901a9bb367e961bec37e7f109cff7b5cfc60f2e7",
+      "base_commit": "53329a48e18b6a8b64158c15820894e3a91c87c7",
+      "path_set_sha256": "ed012e04634a9d61da5af4722de58b47b309b6c8619b6780781fb71b10f8c866",
+      "staged_patch_sha256": "8c22fd91e63d9ee7f5b1aab04a8de134ca6cde566512a2093f7e8fbfb01f3411",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-11T19:05:00Z",
+      "approved_at": "2026-09-11T19:58:00Z",
       "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "e32dee18e1e58288e92567777e2207fbe3ed1eacbc18807bc5c5f807ebe50be4",
+      "record_sha256": "e68e0cea6f68f8e2c62f2985ae9d1b81f3dcba36cef776a5e16d6fdcdeb1e80c",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }

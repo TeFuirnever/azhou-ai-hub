@@ -10,7 +10,7 @@ under-tested after the 2026-09-05/06 evolution batches:
 - ``AGENTS.md`` names the latest super-caveman promotion record; the pin keeps
   that pointer mechanically fresh instead of relying on manual reconciles.
 - The completion-criteria additions (excalidraw SKILL.md sections 1-3,
-  super-repo-pedant SKILL.md sections 2-3, lavish ``artifact-mode.md`` steps 1-7)
+  super-repo-pedant SKILL.md sections 2-3, super-lavish ``artifact-mode.md`` steps 1-7)
   stay present; deleting a marker fails here.
 """
 
@@ -28,7 +28,7 @@ AGENTS_MD = ROOT / "AGENTS.md"
 RESULTS = ROOT / "benchmarks" / "super-caveman" / "results"
 EXCALIDRAW_SKILL = ROOT / "skills" / "excalidraw-diagram" / "SKILL.md"
 REPO_PEDANT_SKILL = ROOT / "skills" / "super-repo-pedant" / "SKILL.md"
-ARTIFACT_MODE = ROOT / "skills" / "lavish" / "references" / "artifact-mode.md"
+ARTIFACT_MODE = ROOT / "skills" / "super-lavish" / "references" / "artifact-mode.md"
 
 
 def documented_snapshot_flags(setup_text: str) -> set[str]:

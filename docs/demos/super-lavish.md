@@ -5,7 +5,7 @@ This demo shows the review-loop contract: one local HTML artifact, one locked CL
 ## 1. Ask the agent
 
 ```text
-Use lavish to turn this comparison into a rich HTML artifact I can review.
+Use super-lavish to turn this comparison into a rich HTML artifact I can review.
 ```
 
 Point the agent at real material. The skill builds the artifact locally, opens the browser review surface and stays in the loop until the user's feedback lands.
@@ -19,7 +19,7 @@ The agent must return:
 3. a foreground long-poll (or a verified harness wake callback) so user annotations and queued prompts reach the agent;
 4. user feedback applied to the artifact before polling again;
 5. session end (`end` / `Send & End`) honored: no uninvited reopening;
-6. a `lavish.receipt.v1` receipt with `complete` / `complete_with_holds` / `hold` / `failed` kept distinct — a local artifact or open session never proves publication.
+6. a `super-lavish.receipt.v1` receipt with `complete` / `complete_with_holds` / `hold` / `failed` kept distinct — a local artifact or open session never proves publication.
 
 ## 3. Verify the development contract
 
@@ -58,7 +58,7 @@ v24.15.0
 }
 ```
 
-The registry integrity matches the `sha512-…` value recorded in [provenance](../../skills/lavish/references/provenance.md) byte-for-byte. Passing proves the locked-baseline, provenance, brand-layer and receipt wiring. It does not prove that a real browser session connected, that a user returned meaningful feedback, that `export` produced a portable file, or that a share succeeded. A share is a third-party publication action on `ht-ml.app`; without an explicit authorization and its own receipt, the demo records `publication: not_requested`.
+The registry integrity matches the `sha512-…` value recorded in [provenance](../../skills/super-lavish/references/provenance.md) byte-for-byte. Passing proves the locked-baseline, provenance, brand-layer and receipt wiring. It does not prove that a real browser session connected, that a user returned meaningful feedback, that `export` produced a portable file, or that a share succeeded. A share is a third-party publication action on `ht-ml.app`; without an explicit authorization and its own receipt, the demo records `publication: not_requested`.
 
 ## 4. Evidence receipts
 
@@ -81,7 +81,7 @@ Recorded per the [skill standard evidence stage](../skill-standard.md) for the r
 Ask the agent:
 
 ```text
-Use lavish in relay mode to package this spec and its review comments into one transferable HTML.
+Use super-lavish in relay mode to package this spec and its review comments into one transferable HTML.
 ```
 
 Point the agent at the real source spec and review goal. The packet keeps the source's own branding: the skill never injects Azhou identity, emoji or colors into the HTML.
@@ -117,7 +117,7 @@ OK
 Then drive the CLI once end to end on a disposable fixture packet:
 
 ```bash
-SKILL_DIR=/absolute/path/to/skills/lavish
+SKILL_DIR=/absolute/path/to/skills/super-lavish
 PACKET="$(mktemp -d)/packet.html"
 printf '%s' '<!doctype html><html><body><main data-review-id="REQ-001">Requirement</main></body></html>' > "$PACKET"
 python3 "$SKILL_DIR/scripts/relay_state.py" init "$PACKET" \

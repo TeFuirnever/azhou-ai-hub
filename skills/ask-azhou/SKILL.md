@@ -39,7 +39,7 @@ Ask which family the request belongs to, then the branch question.
 
 - "Explain this to someone who knows nothing, with pictures" → `eli5` — one self-contained HTML, big pictures, few words; refuses precision-critical asks.
 - "Draw an accurate, editable diagram (architecture, flow, sequence)" → `excalidraw-diagram` — real render, deterministic style and layout gates.
-- "Turn this complex result into a rich, reviewable HTML artifact" → `lavish` — artifact, relay, review, export, or share mode.
+- "Turn this complex result into a rich, reviewable HTML artifact" → `super-lavish` — artifact, relay, review, export, or share mode.
 - "Make my agent's replies terse / action-first / commit-message-ready" → `super-caveman` — output-behavior modes, explicit enable/disable.
 - "Write an architecture design document from upstream sources" → `arch-doc` — end-to-end authoring with calibration and review gates.
 
