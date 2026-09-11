@@ -1,21 +1,21 @@
 ---
-name: lavish
-description: Turn complex or visual agent responses into rich, reviewable HTML artifacts that users can annotate and send feedback on through the Lavish Editor CLI, and relay a PRD, RFC, design spec, or technical plan with comments, selected-text annotations, feedback disposition, and next-owner state inside one portable HTML file. Use for visual artifacts, HTML explainers, interactive prototypes, review surfaces, product or technical plans, team spec review or transfer, comparisons, diagrams, tables, code views, reports, slides, or browser-based feedback loops.
+name: super-lavish
+description: Renamed from lavish (the old name still triggers this skill). Turn complex or visual agent responses into rich, reviewable HTML artifacts that users can annotate and send feedback on through the Lavish Editor CLI, and relay a PRD, RFC, design spec, or technical plan with comments, selected-text annotations, feedback disposition, and next-owner state inside one portable HTML file. Use for visual artifacts, HTML explainers, interactive prototypes, review surfaces, product or technical plans, team spec review or transfer, comparisons, diagrams, tables, code views, reports, slides, or browser-based feedback loops.
 invocation: user-invoked orchestrator
 ---
 
-# Lavish Editor
+# Super Lavish Editor
 
-Lavish Editor turns rich HTML artifacts into collaborative human review surfaces. First generate an interactive HTML artifact for the request, then run `npx -y lavish-axi@0.1.47 <html-file>` so the user can inspect it, annotate elements or selected text, queue prompts, and send feedback.
+Super Lavish Editor turns rich HTML artifacts into collaborative human review surfaces. First generate an interactive HTML artifact for the request, then run `npx -y lavish-axi@0.1.47 <html-file>` so the user can inspect it, annotate elements or selected text, queue prompts, and send feedback.
 
-**🦊 阿舟 · Lavish**
+**🦊 阿舟 · Super Lavish**
 
 > 把复杂结果变成可审阅的界面。In relay mode, the HTML itself is the handoff packet.
 
 Emit once when the skill starts:
 
 ```text
-🦊 阿舟 · Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
+🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
 ```
 
 Pick exactly one mode for each request:
@@ -35,7 +35,7 @@ In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits 
 
 $ARGUMENTS
 
-If the request above is non-empty, the user invoked `/lavish` explicitly. Use relay mode when it asks to package, relay, or hand off a spec or plan for team review; otherwise build an HTML artifact for that request now.
+If the request above is non-empty, the user invoked `/super-lavish` (or the compatibility name `/lavish`) explicitly. Use relay mode when it asks to package, relay, or hand off a spec or plan for team review; otherwise build an HTML artifact for that request now.
 If it is empty, infer from the conversation. Relay mode is for PRDs, RFCs, design specs, technical specs, implementation plans, and team handoffs; artifact mode is for every other complex or visual response.
 ## Artifact mode workflow
 
@@ -55,7 +55,7 @@ Follow the five material stages in order; each completion condition is a named c
    Completion: every returned item keeps its original text, target, disposition, rationale, and unresolved owner; the complete visible ledger is the exact projection of the embedded state.
 5. Validate, close, and hand off. Run `end` when the review finishes and process one final `Send & End` return. After the last write, run `python <skill-dir>/scripts/relay_state.py validate <html-file>`. Run `export` when a portable file is requested and validate the export too. Run `share` only with explicit publication authorization; sharing sends the embedded comments to the third-party `ht-ml.app`.
    Completion: the [brand-layer](references/brand-layer.md) relay receipt names the source and revision, artifact, state schema, session, feedback counts, unresolved owners, transport, publication, named checks, and one next action.
-   Resolve `<skill-dir>` to the installed `skills/lavish/` directory when driving `relay_state.py`.
+   Resolve `<skill-dir>` to the installed `skills/super-lavish/` directory when driving `relay_state.py`.
 ## Authorization boundaries
 
 - Create local artifacts and open local review sessions when they are in scope.
@@ -66,4 +66,4 @@ Follow the five material stages in order; each completion condition is a named c
 - Do not reopen a session the user ended from the browser unless the user asks; when important new material requires reopening, explain why first.
 ## Completion
 
-End with the stable receipt defined in [brand-layer.md](references/brand-layer.md): `lavish.receipt.v1` for artifact mode, `spec-relay.receipt.v1` for relay mode. Keep `complete`, `complete_with_holds`, `hold`, and `failed` distinct; none substitutes for another. A local artifact or open session does not prove human review, export portability, or publication. Browser feedback is only deliverable after the poll returns and the relay packet persists it; an open session does not prove feedback was persisted.
+End with the stable receipt defined in [brand-layer.md](references/brand-layer.md): `super-lavish.receipt.v1` for artifact mode, `spec-relay.receipt.v1` for relay mode. Keep `complete`, `complete_with_holds`, `hold`, and `failed` distinct; none substitutes for another. A local artifact or open session does not prove human review, export portability, or publication. Browser feedback is only deliverable after the poll returns and the relay packet persists it; an open session does not prove feedback was persisted.

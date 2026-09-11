@@ -66,7 +66,7 @@ REQUIRED_PATHS = (
     "skills/excalidraw-diagram/SKILL.md",
     "skills/llm-wiki/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
-    "skills/lavish/SKILL.md",
+    "skills/super-lavish/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
@@ -77,7 +77,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/azhou-setup/SKILL.md",
     "skills/azhou-verify/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
-    "skills/lavish/SKILL.md",
+    "skills/super-lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
     "skills/super-ci-test-reliability/SKILL.md",
@@ -148,11 +148,11 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>",
         "brand_path": "skills/excalidraw-diagram/references/brand-layer.md",
     },
-    "skills/lavish/SKILL.md": {
-        "display_name": "Lavish",
+    "skills/super-lavish/SKILL.md": {
+        "display_name": "Super Lavish",
         "motto": "把复杂结果变成可审阅的界面。",
-        "startup": "🦊 阿舟 · Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>",
-        "brand_path": "skills/lavish/references/brand-layer.md",
+        "startup": "🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>",
+        "brand_path": "skills/super-lavish/references/brand-layer.md",
     },
     "skills/llm-wiki/SKILL.md": {
         "display_name": "LLM Wiki",

@@ -4,7 +4,7 @@ Keep brand in status output, never in file paths, commands, schema keys, or raw 
 
 ## Identity and boundaries
 
-- 身份与口号：`🦊 阿舟 · Lavish` — 把复杂结果变成可审阅的界面。relay 模式下，HTML 本身就是交接包。
+- 身份与口号：`🦊 阿舟 · Super Lavish` — 把复杂结果变成可审阅的界面。relay 模式下，HTML 本身就是交接包。
 - 密度：每条过程锚点最多一个前导 emoji；每个物质阶段最多一次。
 - Emoji 只属于展示层：schema keys、枚举、digest、路径、命令、测试名与原始证据（raw evidence）保持稳定纯文本。
 - HTML 中立：不向 HTML 正文、内嵌状态、路径、命令或证据注入阿舟名称、emoji、角色资产或专属配色；来源内容自己的品牌与设计系统保持权威。
@@ -15,7 +15,7 @@ Keep brand in status output, never in file paths, commands, schema keys, or raw 
 Emit once when the skill starts, with the selected mode:
 
 ```text
-🦊 阿舟 · Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
+🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
 ```
 
 The `｜` separator is part of the protocol and must be followed by a verifiable fact or an explicit action; fixed prefixes are never replaced with near synonyms.
@@ -57,7 +57,7 @@ Missing human feedback is not a functional failure; the receipt must record `rev
 End the completed artifact-mode workflow with these fields in this order:
 
 ```text
-schema: lavish.receipt.v1
+schema: super-lavish.receipt.v1
 status: complete | complete_with_holds | hold | failed
 mode: artifact | review | export | share
 scope: <short scope>

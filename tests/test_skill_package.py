@@ -19,7 +19,7 @@ AZHOU_SKILL_NAMES = (
 )
 SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
 LLM_WIKI_DIR = ROOT / "skills" / "llm-wiki"
-LAVISH_DIR = ROOT / "skills" / "lavish"
+LAVISH_DIR = ROOT / "skills" / "super-lavish"
 TASK_SKILL_NAMES = ("eli5", "autoresearch")
 SKILL_DIRS = (
     SKILL_DIR,
@@ -371,17 +371,17 @@ class SkillPackageTest(unittest.TestCase):
         compatibility = (LAVISH_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
         brand = (LAVISH_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
 
-        self.assertEqual("lavish", re.search(r"^name:\s*([^\n]+)$", skill, re.MULTILINE).group(1).strip())
+        self.assertEqual("super-lavish", re.search(r"^name:\s*([^\n]+)$", skill, re.MULTILINE).group(1).strip())
         for surface in (skill, setup, provenance):
             self.assertIn("0.1.47", surface)
         self.assertIn("232972beba9e0e4e75682c98f2aeb2cf01532122", provenance)
         self.assertIn("7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857", provenance)
         self.assertIn("No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored", provenance)
-        self.assertIn("lavish.receipt.v1", brand)
+        self.assertIn("super-lavish.receipt.v1", brand)
         self.assertIn("spec-relay.receipt.v1", brand)
         self.assertIn("spec-relay.html-state.v1", (LAVISH_DIR / "references" / "spec-relay.md").read_text(encoding="utf-8"))
         for anchor in (
-            "🦊 阿舟 · Lavish 启动",
+            "🦊 阿舟 · Super Lavish 启动",
             "🧭 方向锁定",
             "🧱 产物就绪",
             "🧭 范围锁定",

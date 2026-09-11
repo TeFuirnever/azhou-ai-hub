@@ -7,12 +7,12 @@
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
-| Try the Lavish review-loop and relay reference demo | [Lavish demo](demos/lavish.md) |
+| Try the Super Lavish review-loop and relay reference demo | [Super Lavish demo](demos/super-lavish.md) |
 | Try the LLM Wiki reference demo | [LLM Wiki demo](demos/llm-wiki.md) |
 | Try the Arch Doc reference demo | [Arch Doc demo](demos/arch-doc.md) |
 | Use action-first terse response, commit, review or compression workflows | [Super Caveman package](../skills/super-caveman/SKILL.md) |
 | Build or inspect persistent project knowledge | [LLM Wiki package](../skills/llm-wiki/SKILL.md) |
-| Relay a spec and its review history in one HTML | [Lavish package, Spec Relay relay mode](../skills/lavish/SKILL.md) |
+| Relay a spec and its review history in one HTML | [Super Lavish package, Spec Relay relay mode](../skills/super-lavish/SKILL.md) |
 | Know what each harness really supports | [Support matrix](support-matrix.md) |
 | Understand repository boundaries | [Architecture](architecture.md) |
 | Build or evolve a skill | [Azhou Skill Standard](skill-standard.md) |
