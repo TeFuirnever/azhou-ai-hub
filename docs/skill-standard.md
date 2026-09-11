@@ -54,7 +54,7 @@ fidelity 轴按与上游 skill 的血缘关系把 canonical skill 分为三类�
 
 品牌锚点、收据、provenance 记录、setup 文档与授权 checkpoint 本身永远不构成 `adapted`；不改变原版承诺行为的输出形态约束属于包装层。
 
-每个 skill 的分类记录在自己的 provenance 记录中（`references/provenance.md`，无上游血缘的 `original` 同样建档），与已锁定的上游证据并列；分类统一写作 `Classification: \`<值>\`` 单行，后接引证。super-caveman 因晋升摘要绑定整树，其分类（`adapted`，已正确带前缀）暂由 `check_repository.py` 的 `GATE_HELD_FIDELITY` 声明表持有，随下一次 promotion ride 迁入树内 provenance 记录——与 §2.2 调用类的持表安排同一先例。新 skill 引入时分类是 provenance 合同的必备项；仓库 gate 的“前缀 ⟺ 分类”机械强制与改名残留检查随后续里程碑落地。
+每个 skill 的分类记录在自己的 provenance 记录中（`references/provenance.md`，无上游血缘的 `original` 同样建档），与已锁定的上游证据并列；分类统一写作 `Classification: \`<值>\`` 单行，后接引证。super-caveman 因晋升摘要绑定整树，其分类（`adapted`，已正确带前缀）暂由 `check_repository.py` 的 `GATE_HELD_FIDELITY` 声明表持有，随下一次 promotion ride 迁入树内 provenance 记录——与 §2.2 调用类的持表安排同一先例。新 skill 引入时分类是 provenance 合同的必备项；仓库 gate 由 `check_fidelity_axis` 机械强制“前缀 ⟺ 分类”（未声明分类即失败），并由 `check_rename_residue` 拒绝改名旧名出现在兼容触发、迁移源、provenance 与历史记录之外的 surface（#176 M4 / #183）。
 
 ## 3. 阿舟交互层
 

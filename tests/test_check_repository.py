@@ -11,13 +11,16 @@ from scripts.check_repository import (
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
     check_command_surface,
+    check_fidelity_axis,
     check_invocation_axis,
     check_markdown_links,
+    check_rename_residue,
     check_secret_patterns,
     check_skill_brand_contract,
     check_skill_discovery,
     check_router_coverage,
     check_treehouse_config,
+    public_files,
     relative_markdown_targets,
 )
 
@@ -85,6 +88,101 @@ class InvocationAxisTest(unittest.TestCase):
                 [],
                 [e for e in check_invocation_axis(root) if "super-caveman" in e],
             )
+
+
+class FidelityAxisTest(unittest.TestCase):
+    def test_every_canonical_skill_matches_the_prefix_rule(self) -> None:
+        self.assertEqual([], check_fidelity_axis(ROOT))
+
+    def write_skill(self, root: Path, relative: str, classification: str | None) -> None:
+        skill = root / relative
+        skill.parent.mkdir(parents=True, exist_ok=True)
+        skill.write_text("---\nname: probe\ndescription: probe\ninvocation: both\n---\n# Probe\n", encoding="utf-8")
+        if classification is not None:
+            provenance = root / relative.replace("SKILL.md", "references/provenance.md")
+            provenance.parent.mkdir(parents=True, exist_ok=True)
+            provenance.write_text(f"# Provenance\n\nClassification: `{classification}` — probe.\n", encoding="utf-8")
+
+    def test_new_skill_without_a_classification_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_skill(root, "skills/eli5/SKILL.md", None)
+            self.assertEqual(
+                ["skill fidelity classification missing: skills/eli5/SKILL.md"],
+                check_fidelity_axis(root),
+            )
+
+    def test_unknown_classification_value_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_skill(root, "skills/eli5/SKILL.md", "forked")
+            self.assertEqual(
+                ["skill fidelity classification enum invalid: skills/eli5/SKILL.md: forked"],
+                check_fidelity_axis(root),
+            )
+
+    def test_prefix_mismatch_fails_in_both_directions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_skill(root, "skills/eli5/SKILL.md", "adapted")
+            self.assertEqual(
+                ["fidelity prefix mismatch: skills/eli5/SKILL.md classified adapted"],
+                check_fidelity_axis(root),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_skill(root, "skills/super-prose-standard/SKILL.md", "original")
+            self.assertEqual(
+                ["fidelity prefix mismatch: skills/super-prose-standard/SKILL.md classified original"],
+                check_fidelity_axis(root),
+            )
+
+    def test_gate_held_classification_satisfies_the_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_skill(root, "skills/super-caveman/SKILL.md", None)
+            self.assertEqual([], check_fidelity_axis(root))
+
+
+class RenameResidueTest(unittest.TestCase):
+    def test_renamed_catalog_has_no_residue_outside_allowed_surfaces(self) -> None:
+        self.assertEqual([], check_rename_residue(public_files(ROOT), ROOT))
+
+    def test_old_name_outside_allowed_surfaces_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            leaked = root / "docs" / "new-guide.md"
+            leaked.parent.mkdir(parents=True)
+            leaked.write_text("Run repo-pedant reconcile at close.\n", encoding="utf-8")
+            self.assertEqual(
+                ["rename residue outside allowed surfaces: docs/new-guide.md: repo-pedant -> super-repo-pedant"],
+                check_rename_residue([leaked], root),
+            )
+
+    def test_old_name_inside_allowed_surfaces_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            allowed = root / "skills" / "super-repo-pedant" / "SKILL.md"
+            allowed.parent.mkdir(parents=True)
+            allowed.write_text(
+                "description: Renamed from repo-pedant (the old name still triggers this skill).\n",
+                encoding="utf-8",
+            )
+            history = root / "docs" / "research" / "note.md"
+            history.parent.mkdir(parents=True)
+            history.write_text("The repo-pedant package was renamed.\n", encoding="utf-8")
+            self.assertEqual([], check_rename_residue([allowed, history], root))
+
+    def test_compound_and_prefixed_forms_are_not_residue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            doc = root / "docs" / "new-guide.md"
+            doc.parent.mkdir(parents=True)
+            doc.write_text(
+                "super-repo-pedant, .repo-pedant/, .azhou/repo-pedant, lavish-axi, .lavish/, super-lavish\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_rename_residue([doc], root))
 
 
 def copy_skill_brand_surfaces(root: Path) -> None:
