@@ -47,7 +47,7 @@ Ask which family the request belongs to, then the branch question.
 
 - "Persist this verified decision / debug fact / convention for future sessions" → `llm-wiki` — private local store; decisions carry a lifecycle and archived pages are tamper-evident.
 - "Reconcile docs, rules, and memory at task close" → `repo-pedant` — the closeout protocol with inventory proof.
-- "Write or trim prose without losing facts / audit it for leaked reasoning" → `prose-standard` — the complete-proposition rule and the leakage taxonomy.
+- "Write or trim prose without losing facts / audit it for leaked reasoning" → `super-prose-standard` — the complete-proposition rule and the leakage taxonomy.
 - "Make my tests reliable under real CI concurrency / diagnose a flake" → `super-ci-test-reliability` — topology-aware design guidance and the flake-masking blacklist.
 - "How am I actually using my agent / give me a usage report from my local session history" → `session-insights` — fact-bound aggregate reports from local session stores (Claude Code adapter; Codex and zcode fail closed until verified); it analyzes local stores only, never monitors, never sends anything out.
 - "Which skill for this?" → this skill, `ask-azhou`.

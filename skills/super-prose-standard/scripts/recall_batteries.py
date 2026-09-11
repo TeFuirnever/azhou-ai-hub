@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-SCHEMA = "prose-standard.batteries.v1"
+SCHEMA = "super-prose-standard.batteries.v1"
 DEFAULT_EXCLUDES = {".git", ".azhou", ".omc", ".omx", "node_modules", "vendor", "__pycache__"}
 
 # (probe id, compiled pattern, applies-to) — applies-to "zh" restricts a probe

@@ -1,12 +1,12 @@
 ---
-name: prose-standard
-description: Use when writing, reviewing, trimming, or auditing prose on current-state surfaces — Markdown docs, SKILL.md bodies, references, READMEs, comments, commit messages — when a cleanup pass must compress without losing facts, when prose reads like a leaked reasoning transcript (dead citations, change narration, PR vantage, review choreography, hedges), or when documentation claims an operation that must be verified by running it.
+name: super-prose-standard
+description: Renamed from prose-standard (the old name still triggers this skill). Use when writing, reviewing, trimming, or auditing prose on current-state surfaces — Markdown docs, SKILL.md bodies, references, READMEs, comments, commit messages — when a cleanup pass must compress without losing facts, when prose reads like a leaked reasoning transcript (dead citations, change narration, PR vantage, review choreography, hedges), or when documentation claims an operation that must be verified by running it.
 invocation: model-invoked discipline
 ---
 
-# Prose Standard
+# Super Prose Standard
 
-**🦊 阿舟 · Prose Standard**
+**🦊 阿舟 · Super Prose Standard**
 
 > ✂️ 每个事实都活着，才动手删字。
 
@@ -19,7 +19,7 @@ It is guidance, not a script. One package owns two branches of the same craft: t
 Emit this exact display event once:
 
 ```text
-🦊 阿舟 · Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>
+🦊 阿舟 · Super Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>
 ```
 
 Use `✅ 验证通过` only after the scope was read back and every deliberate keep or trim is accounted for. Use `❌ 验证失败` when a check fails or the scope cannot be resolved and `🔒 阿舟暂停这一项` when the requested scope is missing or the request needs precision-critical judgment this skill does not own. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values. Raw evidence stays out of receipts unless the user supplied it.

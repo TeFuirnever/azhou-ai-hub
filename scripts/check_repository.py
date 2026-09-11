@@ -81,7 +81,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
     "skills/super-ci-test-reliability/SKILL.md",
-    "skills/prose-standard/SKILL.md",
+    "skills/super-prose-standard/SKILL.md",
     "skills/ask-azhou/SKILL.md",
     "skills/arch-doc/SKILL.md",
     "skills/session-insights/SKILL.md",
@@ -107,10 +107,10 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "测试自己可靠，才配当证据。",
         "startup": "🦊 阿舟 · Super CI Test Reliability 启动｜mode=<design|review|diagnose>｜scope=<test-or-suite>",
     },
-    "skills/prose-standard/SKILL.md": {
-        "display_name": "Prose Standard",
+    "skills/super-prose-standard/SKILL.md": {
+        "display_name": "Super Prose Standard",
         "motto": "每个事实都活着，才动手删字。",
-        "startup": "🦊 阿舟 · Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>",
+        "startup": "🦊 阿舟 · Super Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>",
     },
     "skills/ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",

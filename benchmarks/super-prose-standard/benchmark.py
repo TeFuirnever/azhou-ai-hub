@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark integrity check for the prose-standard recall batteries.
+"""Benchmark integrity check for the super-prose-standard recall batteries.
 
 Fixtures prove probe wiring only: every leakage fixture must hit at least one
 probe, and the keep corpus may hit only the documented false-positive families.
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "skills" / "prose-standard" / "scripts" / "recall_batteries.py"
+SCRIPT = ROOT / "skills" / "super-prose-standard" / "scripts" / "recall_batteries.py"
 MANIFEST = Path(__file__).resolve().parent / "manifest.json"
 DOCUMENTED_FALSE_POSITIVES = {
     ("external-standard.md", "stamp"),
@@ -34,12 +34,12 @@ def run_check() -> int:
             errors.append(f"manifest.corpus.{group}: expected fixture names")
             continue
         for name in names:
-            if not (ROOT / "tests" / "fixtures" / "prose-standard" / group / name).is_file():
+            if not (ROOT / "tests" / "fixtures" / "super-prose-standard" / group / name).is_file():
                 errors.append(f"manifest.corpus.{group}: missing fixture {name}")
 
     def probe(group: str) -> dict:
         completed = subprocess.run(
-            [sys.executable, str(SCRIPT), str(ROOT / "tests" / "fixtures" / "prose-standard" / group)],
+            [sys.executable, str(SCRIPT), str(ROOT / "tests" / "fixtures" / "super-prose-standard" / group)],
             capture_output=True,
             text=True,
             check=False,
