@@ -21,16 +21,16 @@ class LLMWikiRepositoryTest(unittest.TestCase):
     def test_llm_wiki_is_a_canonical_runtime_skill(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "skills" / "llm-wiki"
+            package = root / "skills" / "super-llm-wiki"
             package.mkdir(parents=True)
-            (package / "SKILL.md").write_text("llm-wiki\n", encoding="utf-8")
+            (package / "SKILL.md").write_text("super-llm-wiki\n", encoding="utf-8")
             expected = [
                 root / "skills" / "arch-doc" / "SKILL.md",
                 root / "skills" / "super-caveman" / "SKILL.md",
                 root / "skills" / "excalidraw-diagram" / "SKILL.md",
                 root / "skills" / "azhou-doctor" / "SKILL.md",
                 root / "skills" / "azhou-info" / "SKILL.md",
-                root / "skills" / "llm-wiki" / "SKILL.md",
+                root / "skills" / "super-llm-wiki" / "SKILL.md",
                 root / "skills" / "azhou-setup" / "SKILL.md",
                 root / "skills" / "azhou-verify" / "SKILL.md",
                 root / "skills" / "super-repo-pedant" / "SKILL.md",

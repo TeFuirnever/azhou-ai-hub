@@ -1,11 +1,11 @@
-# LLM Wiki reference demo
+# Super LLM Wiki reference demo
 
 This demo shows the branded interaction, machine receipt, and private storage boundary. It proves the shipped runtime contract, not the quality of unreviewed knowledge.
 
 ## 1. Ask the agent
 
 ```text
-Use llm-wiki to store this verified architecture decision, query it back, and lint the wiki.
+Use super-llm-wiki to store this verified architecture decision, query it back, and lint the wiki.
 ```
 
 Provide the decision, its source, and an honest confidence level. Do not include secrets, raw transcripts, or unrelated personal data.
@@ -15,7 +15,7 @@ Provide the decision, its source, and an honest confidence level. Do not include
 The interaction uses one restrained Azhou anchor per completed stage:
 
 ```text
-🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
 🧭 知识范围锁定｜topic=architecture｜sources=1｜privacy=checked
 🔎 Wiki 检索完成｜operation=query｜matches=0｜read_only=true
 📝 Wiki 更新完成｜action=created｜page=auth-decision.md｜confidence=high
@@ -23,14 +23,14 @@ The interaction uses one restrained Azhou anchor per completed stage:
 ✅ 验证通过｜checks=readback,lint
 ```
 
-The CLI JSON stays emoji-free and returns `llm-wiki.receipt.v3`, including `currentTruth`, exact changes and verification, holds, one next action, and `learningSignal`. A success anchor is invalid after `fail`, `hold`, or `skipped`.
+The CLI JSON stays emoji-free and returns `super-llm-wiki.receipt.v3`, including `currentTruth`, exact changes and verification, holds, one next action, and `learningSignal`. A success anchor is invalid after `fail`, `hold`, or `skipped`.
 
 ## 3. Verify the runtime contract
 
 Use an isolated project directory:
 
 ```bash
-SKILL_DIR=/absolute/path/to/skills/llm-wiki
+SKILL_DIR=/absolute/path/to/skills/super-llm-wiki
 PROJECT_ROOT="$(mktemp -d)"
 
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
@@ -42,7 +42,7 @@ python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" query auth --no-
 python3 "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" lint --no-log
 ```
 
-Every normal entrypoint must use only `$PROJECT_ROOT/.azhou/llm-wiki/`. The focused development checks are:
+Every normal entrypoint must use only `$PROJECT_ROOT/.azhou/super-llm-wiki/`. The focused development checks are:
 
 ```bash
 python3 -m unittest \

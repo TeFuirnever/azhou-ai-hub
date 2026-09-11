@@ -12,7 +12,7 @@ import unittest
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skills" / "llm-wiki" / "scripts" / "llm_wiki.py"
+SCRIPT = ROOT / "skills" / "super-llm-wiki" / "scripts" / "llm_wiki.py"
 SPEC = importlib.util.spec_from_file_location("llm_wiki", SCRIPT)
 assert SPEC and SPEC.loader
 llm_wiki = importlib.util.module_from_spec(SPEC)
@@ -47,7 +47,7 @@ class LlmWikiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialized = self.run_cli(root, "init")
-            self.assertEqual("llm-wiki.receipt.v3", initialized["schema"])
+            self.assertEqual("super-llm-wiki.receipt.v3", initialized["schema"])
             self.assertEqual(
                 {
                     "schema",
@@ -65,7 +65,7 @@ class LlmWikiTest(unittest.TestCase):
                 set(initialized),
             )
             self.assertEqual("none", initialized["learningSignal"])
-            self.assertTrue((root / ".azhou" / "llm-wiki" / ".gitignore").is_file())
+            self.assertTrue((root / ".azhou" / "super-llm-wiki" / ".gitignore").is_file())
 
             added = self.run_cli(
                 root,
@@ -180,7 +180,7 @@ class LlmWikiTest(unittest.TestCase):
     def test_page_reads_and_internal_logs_reject_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            wiki = root / ".azhou" / "llm-wiki"
+            wiki = root / ".azhou" / "super-llm-wiki"
             wiki.parent.mkdir()
             wiki.mkdir()
             outside = root / "outside.md"
@@ -199,7 +199,7 @@ class LlmWikiTest(unittest.TestCase):
     def test_invalid_frontmatter_is_a_lint_error(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = root / ".azhou" / "llm-wiki"
+            store = root / ".azhou" / "super-llm-wiki"
             store.mkdir(parents=True)
             broken = store / "broken.md"
             broken.write_text("not frontmatter\n", encoding="utf-8")
@@ -231,7 +231,7 @@ class LlmWikiTest(unittest.TestCase):
             )
             planned = self.run_cli(root, "migrate", "--from-store", ".llm-wiki")
             self.assertEqual("planned", planned["result"]["status"])
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
             applied = self.run_cli(
                 root,
                 "migrate",
@@ -252,14 +252,14 @@ class LlmWikiTest(unittest.TestCase):
             event = json.dumps({"cwd": str(root), "session_id": "session-123"})
             skipped = self.run_cli(root, "hook", "session-end", input_text=event)
             self.assertEqual("skipped", skipped["status"])
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
 
             configured = self.run_cli(root, "config", "--auto-capture", "true")
             self.assertTrue(configured["result"]["autoCapture"])
             captured = self.run_cli(root, "hook", "session-end", input_text=event)
             self.assertEqual("pass", captured["status"])
             self.assertEqual(1, self.run_cli(root, "list", "--category", "session-log")["result"]["count"])
-            page = next((root / ".azhou" / "llm-wiki").glob("session-log-*.md"))
+            page = next((root / ".azhou" / "super-llm-wiki").glob("session-log-*.md"))
             self.assertNotIn("session-123", page.read_text(encoding="utf-8"))
 
     def test_title_resolution_is_collision_safe_and_preserves_compatibility_pages(self) -> None:
@@ -281,7 +281,7 @@ class LlmWikiTest(unittest.TestCase):
     def test_invalid_config_is_rejected_without_capture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            config = root / ".azhou" / "llm-wiki" / "config.json"
+            config = root / ".azhou" / "super-llm-wiki" / "config.json"
             config.parent.mkdir(parents=True)
             config.write_text('{"autoCapture":"false","staleDays":true}\n', encoding="utf-8")
             result = self.run_cli(root, "hook", "session-end", input_text=json.dumps({"cwd": str(root)}), expected_code=2)
@@ -473,7 +473,7 @@ class LlmWikiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.run_cli(root, "add", "--title", "One", "--content", "First fact.")
-            log = root / ".azhou" / "llm-wiki" / "log.md"
+            log = root / ".azhou" / "super-llm-wiki" / "log.md"
             before = log.read_bytes()
             event = json.dumps({"cwd": str(root)})
             result = self.run_cli(root, "hook", "session-start", "--limit", "4", input_text=event)
@@ -524,7 +524,7 @@ class LlmWikiTest(unittest.TestCase):
 
 
     def _write_page(self, root: Path, filename: str, frontmatter: str, body: str) -> None:
-        store = root / ".azhou" / "llm-wiki"
+        store = root / ".azhou" / "super-llm-wiki"
         store.mkdir(parents=True, exist_ok=True)
         (store / filename).write_text(f"---\n{frontmatter}\n---\n\n{body}\n", encoding="utf-8")
 
@@ -546,7 +546,7 @@ class LlmWikiTest(unittest.TestCase):
                 "proposed",
             )
             self.assertEqual("pass", created["status"])
-            page_file = (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8")
+            page_file = (root / ".azhou" / "super-llm-wiki" / "auth-decision.md").read_text(encoding="utf-8")
             self.assertIn("lifecycle: proposed", page_file)
             appended = self.run_cli(
                 root,
@@ -560,7 +560,7 @@ class LlmWikiTest(unittest.TestCase):
             self.assertEqual("pass", appended["status"])
             self.assertIn(
                 "lifecycle: proposed",
-                (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
+                (root / ".azhou" / "super-llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
             )
             self._write_page(
                 root,
@@ -581,7 +581,7 @@ class LlmWikiTest(unittest.TestCase):
                 expected_code=0,
             )
             self.assertEqual("pass", updated["status"])
-            prior_text = (root / ".azhou" / "llm-wiki" / "prior-decision.md").read_text(encoding="utf-8")
+            prior_text = (root / ".azhou" / "super-llm-wiki" / "prior-decision.md").read_text(encoding="utf-8")
             self.assertNotIn("lifecycle:", prior_text)
             refused = self.run_cli(
                 root,
@@ -597,7 +597,7 @@ class LlmWikiTest(unittest.TestCase):
             self.assertEqual("fail", refused["status"])
             self.assertIn(
                 "lifecycle: proposed",
-                (root / ".azhou" / "llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
+                (root / ".azhou" / "super-llm-wiki" / "auth-decision.md").read_text(encoding="utf-8"),
             )
 
     def test_invalid_lifecycle_is_an_invalid_page(self) -> None:
@@ -708,7 +708,7 @@ class LlmWikiTest(unittest.TestCase):
                 expected_code=2,
             )
             self.assertEqual("fail", rejected["status"])
-            self.assertFalse((root / ".azhou" / "llm-wiki" / "pattern-page.md").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki" / "pattern-page.md").exists())
 
 
     def _add_implemented_decision(self, root: Path, title: str) -> None:
@@ -734,10 +734,10 @@ class LlmWikiTest(unittest.TestCase):
             archived = self.run_cli(root, "archive", "--title", "Auth decision")
             self.assertEqual("pass", archived["status"])
             self.assertEqual("lifecycle", archived["learningSignal"])
-            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_path = root / ".azhou" / "super-llm-wiki" / "auth-decision.md"
             page_text = page_path.read_text(encoding="utf-8")
             self.assertIn("lifecycle: archived", page_text)
-            lock = json.loads((root / ".azhou" / "llm-wiki" / ".archive-lock.json").read_text(encoding="utf-8"))
+            lock = json.loads((root / ".azhou" / "super-llm-wiki" / ".archive-lock.json").read_text(encoding="utf-8"))
             entry = lock["entries"]["auth-decision.md"]
             self.assertEqual(
                 hashlib.sha256(page_path.read_bytes()).hexdigest(),
@@ -753,7 +753,7 @@ class LlmWikiTest(unittest.TestCase):
             root = Path(directory)
             self._add_implemented_decision(root, "Auth decision")
             self.run_cli(root, "archive", "--title", "Auth decision")
-            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_path = root / ".azhou" / "super-llm-wiki" / "auth-decision.md"
             page_path.write_text(page_path.read_text(encoding="utf-8") + " ", encoding="utf-8")
             linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
             self.assertEqual("fail", linted["status"])
@@ -775,7 +775,7 @@ class LlmWikiTest(unittest.TestCase):
             root = Path(directory)
             self._add_implemented_decision(root, "Auth decision")
             self.run_cli(root, "archive", "--title", "Auth decision")
-            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_path = root / ".azhou" / "super-llm-wiki" / "auth-decision.md"
             before = page_path.read_bytes()
             refused = self.run_cli(
                 root,
@@ -839,7 +839,7 @@ class LlmWikiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._add_implemented_decision(root, "Auth decision")
-            page_path = root / ".azhou" / "llm-wiki" / "auth-decision.md"
+            page_path = root / ".azhou" / "super-llm-wiki" / "auth-decision.md"
             before_lines = page_path.read_text(encoding="utf-8").splitlines()
             self.run_cli(root, "archive", "--title", "Auth decision")
             after_lines = page_path.read_text(encoding="utf-8").splitlines()
@@ -864,7 +864,7 @@ class LlmWikiTest(unittest.TestCase):
                 expected_code=2,
             )
             self.assertEqual("fail", deleted["status"])
-            self.assertTrue((root / ".azhou" / "llm-wiki" / "auth-decision.md").is_file())
+            self.assertTrue((root / ".azhou" / "super-llm-wiki" / "auth-decision.md").is_file())
 
     def test_add_rejects_archived_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -883,7 +883,7 @@ class LlmWikiTest(unittest.TestCase):
                 expected_code=2,
             )
             self.assertEqual("fail", rejected["status"])
-            self.assertFalse((root / ".azhou" / "llm-wiki" / "preset-archive.md").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki" / "preset-archive.md").exists())
 
     def test_corrupt_archive_lock_is_a_lint_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -894,7 +894,7 @@ class LlmWikiTest(unittest.TestCase):
                 "title: Plain\ncategory: reference\nconfidence: medium",
                 "# Plain",
             )
-            (root / ".azhou" / "llm-wiki" / ".archive-lock.json").write_text("{not json", encoding="utf-8")
+            (root / ".azhou" / "super-llm-wiki" / ".archive-lock.json").write_text("{not json", encoding="utf-8")
             linted = self.run_cli(root, "lint", "--no-log", expected_code=1)
             self.assertEqual("fail", linted["status"])
             self.assertEqual(1, linted["result"]["stats"]["archiveTamperCount"])
@@ -1004,7 +1004,7 @@ class LlmWikiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialized = self.run_cli(root, "init")
-            self.assertEqual("llm-wiki.receipt.v3", initialized["schema"])
+            self.assertEqual("super-llm-wiki.receipt.v3", initialized["schema"])
 
     def test_migration_half_state_is_never_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1017,7 +1017,7 @@ class LlmWikiTest(unittest.TestCase):
             )
             planned = self.run_cli(root, "migrate", "--from-store", ".llm-wiki")
             plan_id = planned["result"]["planId"]
-            partial = root / ".azhou" / "llm-wiki"
+            partial = root / ".azhou" / "super-llm-wiki"
             partial.mkdir(parents=True)
             (partial / "prior-page.md").write_text(
                 "---\ntitle: Prior page\ncategory: reference\n---\n\n# Prior page\n",

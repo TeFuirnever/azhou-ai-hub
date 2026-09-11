@@ -26,10 +26,10 @@ import azhou_runtime_state
 
 
 SCHEMA_VERSION = 1
-RECEIPT_SCHEMA = "llm-wiki.receipt.v3"
+RECEIPT_SCHEMA = "super-llm-wiki.receipt.v3"
 SUPERCESSION_LIMIT = 8
-DEFAULT_STORE = ".azhou/llm-wiki"
-COMPATIBILITY_STORES = {".llm-wiki", ".omc/wiki"}
+DEFAULT_STORE = ".azhou/super-llm-wiki"
+COMPATIBILITY_STORES = {".llm-wiki", ".omc/wiki", ".azhou/llm-wiki"}
 INDEX_FILE = "index.md"
 LOG_FILE = "log.md"
 CONFIG_FILE = "config.json"
@@ -278,7 +278,7 @@ class WikiStore:
         store_path = Path(store)
         try:
             self.directory = (
-                azhou_runtime_state.state_path(self.root, "llm-wiki")
+                azhou_runtime_state.state_path(self.root, "super-llm-wiki")
                 if store == DEFAULT_STORE
                 else azhou_runtime_state.relative_path(self.root, store_path)
             )
@@ -933,7 +933,7 @@ def context_summary(store: WikiStore, limit: int) -> str:
         [
             f"[LLM Wiki: {len(pages)} pages at {store.store}/]",
             "",
-            "Use the llm-wiki skill to query, list, read, ingest, and lint this store.",
+            "Use the super-llm-wiki skill to query, list, read, ingest, and lint this store.",
             "",
             *lines,
         ]
@@ -1226,7 +1226,7 @@ def migration_plan(
         for name, content in sorted(payload.items())
     ]
     binding = {
-        "schemaVersion": "llm-wiki.migration.v1",
+        "schemaVersion": "super-llm-wiki.migration.v1",
         "source": source_directory.as_posix(),
         "target": target_directory.as_posix(),
         "contents": contents,

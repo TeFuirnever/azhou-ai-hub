@@ -18,7 +18,7 @@ AZHOU_SKILL_NAMES = (
     "azhou-verify",
 )
 SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
-LLM_WIKI_DIR = ROOT / "skills" / "llm-wiki"
+LLM_WIKI_DIR = ROOT / "skills" / "super-llm-wiki"
 LAVISH_DIR = ROOT / "skills" / "super-lavish"
 TASK_SKILL_NAMES = ("eli5", "autoresearch")
 SKILL_DIRS = (
@@ -320,9 +320,9 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("Canonical store", design)
         self.assertIn("Production gates", design)
         self.assertIn("deee3a446dadc9bfea31cdc8b19b00b16718082e", provenance)
-        self.assertIn("llm-wiki.receipt.v3", brand)
+        self.assertIn("super-llm-wiki.receipt.v3", brand)
         self.assertIn("autoCapture` defaults to false", skill)
-        self.assertIn('DEFAULT_STORE = ".azhou/llm-wiki"', script)
+        self.assertIn('DEFAULT_STORE = ".azhou/super-llm-wiki"', script)
 
     def test_llm_wiki_license_and_notice_are_retained(self) -> None:
         license_text = (ROOT / "LICENSES" / "llm-wiki-source-MIT.txt").read_text(encoding="utf-8")
@@ -336,7 +336,7 @@ class SkillPackageTest(unittest.TestCase):
         brand = (LLM_WIKI_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
         script = (LLM_WIKI_DIR / "scripts" / "llm_wiki.py").read_text(encoding="utf-8")
         anchors = (
-            "🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
+            "🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
             "🧭 知识范围锁定｜topic=<topic>｜sources=<n|none>｜privacy=<checked|hold>",
             "🔎 Wiki 检索完成｜operation=<query|list|read>｜matches=<n>｜read_only=<true|false>",
             "📝 Wiki 更新完成｜action=<created|updated|deleted>｜page=<filename>｜confidence=<level|none>",
@@ -359,8 +359,8 @@ class SkillPackageTest(unittest.TestCase):
             self.assertIn(section, brand)
         self.assertIn("知识要留得住，也要经得起查证。", skill)
         self.assertIn("知识要留得住，也要经得起查证。", brand)
-        self.assertIn("llm-wiki.receipt.v3", brand)
-        self.assertIn('RECEIPT_SCHEMA = "llm-wiki.receipt.v3"', script)
+        self.assertIn("super-llm-wiki.receipt.v3", brand)
+        self.assertIn('RECEIPT_SCHEMA = "super-llm-wiki.receipt.v3"', script)
         self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
         self.assertIn("Unicode", brand)
 

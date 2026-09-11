@@ -34,7 +34,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
-npx skills add TeFuirnever/azhou-ai-hub --skill llm-wiki
+npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ci-test-reliability
@@ -82,7 +82,7 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | Run the public full-repository integrity gate or an explicit maintainer promotion replay. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates; promotion mode additionally requires Git-external evidence. |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
-| [LLM Wiki](skills/llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, eight MCP tools with decision lifecycle, atomic migration, privacy defaults and focused deterministic contract tests. |
+| [Super LLM Wiki](skills/super-llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, eight MCP tools with decision lifecycle, atomic migration, privacy defaults and focused deterministic contract tests. |
 | [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, a current 19/19-case and 44/44-criterion behavior run, three independent paired judges voting 3/3 for the candidate with zero high-risk regressions, and a neutral recoverable compression guard. Evidence is limited to the recorded Codex Desktop harness/model. |
 | [Super Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual agent responses into rich, reviewable HTML artifacts users can annotate and answer through the Lavish Editor CLI; in Spec Relay relay mode, package a PRD, RFC, design spec or technical plan with comments, selected-text annotations, disposition and next-owner state inside one portable HTML file. | Upstream baseline hash-locked for reproducibility at the locked CLI <code>0.1.47</code>, with the documented local relay layer on top; provenance records the immutable upstream commit and the reproducible source check. Relay mode embeds <code>spec-relay.html-state.v1</code> with optimistic revision guards; deterministic checks cover feedback updates, stale-copy rejection, exact visible-state projection and responsive layout. Local review is not publication; <code>share</code> requires separate authorization. No hosted-share receipt is claimed. |
 | [Eli5](skills/eli5/SKILL.md) | Explain a topic like the reader knows nothing about it: one self-contained HTML artifact of big pictures and few words, refusing precision-critical asks instead of degrading them to pictures. | Upstream behavior sentence retained verbatim at the locked upstream commit with a reproducible SHA-256 source check; the local layer adds the topic boundary, self-contained artifact contract, brand protocol and stable receipt, covered by deterministic package-surface checks. No behavior benchmark yet. |
@@ -102,7 +102,7 @@ All sixteen packages are independently installable and discoverable as package s
 | Super Repo Pedant | <code>This phase is done. Run super-repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/super-repo-pedant.md). |
 | Excalidraw Diagram | <code>Use excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/excalidraw-diagram.md). |
 | Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
-| LLM Wiki | <code>Use llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/llm-wiki.md). |
+| Super LLM Wiki | <code>Use super-llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/super-llm-wiki.md). |
 | Super Lavish | <code>Use super-lavish in relay mode to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. [Run the demo](docs/demos/super-lavish.md). |
 | Arch Doc | <code>Use arch-doc to draft this repository's architecture document from its upstream design docs.</code> | Research notes with per-fact provenance, a template scaffold with accounted diagram captions, PlantUML-only diagrams, deterministic closing gates and a stable receipt. [Run the demo](docs/demos/arch-doc.md). |
 
@@ -158,17 +158,17 @@ Super Caveman keeps original Caveman's persistent terse modes as its core, absor
 
 [Read the package](skills/super-caveman/SKILL.md) · [Read setup](skills/super-caveman/references/setup.md) · [Read provenance](skills/super-caveman/references/provenance.md) · [Read compression safety](skills/super-caveman/references/compression.md)
 
-## LLM Wiki
+## Super LLM Wiki
 
 > 📚 Knowledge should persist—and stand up to verification.
 
-LLM Wiki stores Markdown pages only under `<project>/.azhou/llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, eight-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
+Super LLM Wiki stores Markdown pages only under `<project>/.azhou/super-llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, eight-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
 
-![LLM Wiki end-to-end evidence preview](assets/skills/llm-wiki-effect.png)
+![Super LLM Wiki end-to-end evidence preview](assets/skills/super-llm-wiki-effect.png)
 
 > 🦊 Evidence preview built from one real isolated CLI, MCP `tools/list`, and `SessionStart` run. Bundle, render, and visual inspection passed; final public visual approval remains a human checkpoint.
 
-[Run the demo](docs/demos/llm-wiki.md) · [Read the package](skills/llm-wiki/SKILL.md) · [Read brand contract](skills/llm-wiki/references/brand-layer.md) · [Read design](skills/llm-wiki/references/design.md) · [Read setup](skills/llm-wiki/references/setup.md) · [Read provenance](skills/llm-wiki/references/provenance.md)
+[Run the demo](docs/demos/super-llm-wiki.md) · [Read the package](skills/super-llm-wiki/SKILL.md) · [Read brand contract](skills/super-llm-wiki/references/brand-layer.md) · [Read design](skills/super-llm-wiki/references/design.md) · [Read setup](skills/super-llm-wiki/references/setup.md) · [Read provenance](skills/super-llm-wiki/references/provenance.md)
 
 ## Lavish Editor
 

@@ -39,7 +39,7 @@ class RuntimeStatePolicyTest(unittest.TestCase):
     def test_independently_installable_packages_ship_identical_state_core(self) -> None:
         authority = (ROOT / "scripts" / "azhou_runtime_state.py").read_bytes()
         for relative in (
-            "skills/llm-wiki/scripts/azhou_runtime_state.py",
+            "skills/super-llm-wiki/scripts/azhou_runtime_state.py",
             "skills/super-repo-pedant/scripts/azhou_runtime_state.py",
         ):
             with self.subTest(path=relative):

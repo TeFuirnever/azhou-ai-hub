@@ -139,10 +139,10 @@ class RepositoryPolicyTest(unittest.TestCase):
             )
 
     def test_skill_brand_contract_rejects_missing_required_markers(self) -> None:
-        relative = "skills/llm-wiki/SKILL.md"
+        relative = "skills/super-llm-wiki/SKILL.md"
         contract = SKILL_BRAND_CONTRACTS[relative]
         cases = (
-            ("identity", ("🦊 阿舟 · LLM Wiki",), "identity missing"),
+            ("identity", ("🦊 阿舟 · Super LLM Wiki",), "identity missing"),
             ("motto", (contract["motto"],), "motto missing"),
             ("success", ("✅ 验证通过",), "success marker missing"),
             ("failure", ("❌ 验证失败",), "failure marker missing"),
@@ -176,7 +176,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 )
 
     def test_skill_brand_contract_rejects_a_missing_brand_layer(self) -> None:
-        relative = "skills/llm-wiki/SKILL.md"
+        relative = "skills/super-llm-wiki/SKILL.md"
         contract = SKILL_BRAND_CONTRACTS[relative]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

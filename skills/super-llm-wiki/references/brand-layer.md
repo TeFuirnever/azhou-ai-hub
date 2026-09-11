@@ -1,10 +1,10 @@
 # 阿舟品牌层
 
-LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。品牌层只标注阶段、判断和边界；不改写机器收据，不复述私有内容，不把展示状态冒充运行结果。
+Super LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。品牌层只标注阶段、判断和边界；不改写机器收据，不复述私有内容，不把展示状态冒充运行结果。
 
 ## 固定锚点
 
-- 名称：`阿舟 · LLM Wiki`
+- 名称：`阿舟 · Super LLM Wiki`
 - 口号：`知识要留得住，也要经得起查证。`
 - 语气：温暖、直接、重视来源；不卖萌，不庆功，不用 emoji 掩盖失败。
 - 密度：每个完成阶段最多播报一次；每条最多一个前导 emoji；同一工具调用不重复播报。
@@ -15,7 +15,7 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>` | operation + absolute project root |
+| 启动 | `🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>` | operation + absolute project root |
 | 范围锁定 | `🧭 知识范围锁定｜topic=<topic>｜sources=<n\|none>｜privacy=<checked\|hold>` | topic + source count + privacy decision |
 | 检索完成 | `🔎 Wiki 检索完成｜operation=<query\|list\|read>｜matches=<n>｜read_only=<true\|false>` | operation + result count + log behavior |
 | 更新完成 | `📝 Wiki 更新完成｜action=<created\|updated\|deleted>｜page=<filename>｜confidence=<level\|none>` | action + safe filename + confidence |
@@ -28,7 +28,7 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 精确协议如下；实现和测试按这些行逐字匹配：
 
 ```text
-🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
+🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
 🧭 知识范围锁定｜topic=<topic>｜sources=<n|none>｜privacy=<checked|hold>
 🔎 Wiki 检索完成｜operation=<query|list|read>｜matches=<n>｜read_only=<true|false>
 📝 Wiki 更新完成｜action=<created|updated|deleted>｜page=<filename>｜confidence=<level|none>
@@ -42,7 +42,7 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 启动示例：
 
 ```text
-🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
 ```
 
 更新示例：
@@ -60,8 +60,8 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 - 示例（锁定前后各一）：
 
 ```text
-🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=unresolved
-🦊 阿舟 · LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=unresolved
+🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
 ```
 
 ## 操作顺序
@@ -76,7 +76,7 @@ LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过程。�
 
 ## 状态词典
 
-Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v3` 的稳定机器状态。
+Emoji 是展示映射；右侧值才是 `super-llm-wiki.receipt.v3` 的稳定机器状态。
 
 | 显示 | `status` |
 |---|---|
@@ -98,14 +98,14 @@ Emoji 是展示映射；右侧值才是 `llm-wiki.receipt.v3` 的稳定机器状
 机器 JSON 是事实权威；交互结束时按同一字段输出以下可读收据，不改变字段含义：
 
 ```markdown
-## 🦊 阿舟 · LLM Wiki receipt
+## 🦊 阿舟 · Super LLM Wiki receipt
 
 > 📚 知识要留得住，也要经得起查证。
 
-- Schema: llm-wiki.receipt.v3
+- Schema: super-llm-wiki.receipt.v3
 - Status: pass | hold | skipped | fail
 - Operation: <operation>
-- Store: .azhou/llm-wiki | none
+- Store: .azhou/super-llm-wiki | none
 
 ### 🧭 Current truth
 - Current truth: <currentTruth from the machine receipt plus verified readback>

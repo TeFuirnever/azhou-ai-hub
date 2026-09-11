@@ -14,9 +14,9 @@ class AzhouRuntimeStateTest(unittest.TestCase):
     def test_namespace_resolution_and_private_creation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            state = azhou_runtime_state.state_path(root, "llm-wiki")
+            state = azhou_runtime_state.state_path(root, "super-llm-wiki")
 
-            self.assertEqual(root.resolve() / ".azhou" / "llm-wiki", state)
+            self.assertEqual(root.resolve() / ".azhou" / "super-llm-wiki", state)
             azhou_runtime_state.ensure_private_directory(state, root=root)
 
             self.assertTrue(state.is_dir())

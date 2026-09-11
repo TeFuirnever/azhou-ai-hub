@@ -1,11 +1,11 @@
-# LLM Wiki schema
+# Super LLM Wiki schema
 
 ## Storage
 
-The default store is `<project>/.azhou/llm-wiki/`:
+The default store is `<project>/.azhou/super-llm-wiki/`:
 
 ~~~text
-.azhou/llm-wiki/
+.azhou/super-llm-wiki/
 ├── .gitignore     private-by-default boundary
 ├── config.json    optional lifecycle configuration
 ├── project-context.json  optional reviewed lifecycle input
@@ -49,7 +49,7 @@ Lint reports orphan, stale, broken-reference, low-confidence, oversized, structu
 
 ## Receipt
 
-Every command emits one JSON object with schema `llm-wiki.receipt.v3`:
+Every command emits one JSON object with schema `super-llm-wiki.receipt.v3`:
 
 ~~~text
 schema, status, operation, store, currentTruth, result,

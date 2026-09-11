@@ -14,7 +14,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "llm-wiki"
+SKILL = ROOT / "skills" / "super-llm-wiki"
 SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -47,7 +47,7 @@ def llm_wiki_public_fragments(path: Path) -> str:
             for index, line in enumerate(lines)
             if "LLM Wiki" in line
         )
-    return "\n".join(line for line in text.splitlines() if "llm-wiki" in line.lower())
+    return "\n".join(line for line in text.splitlines() if "super-llm-wiki" in line.lower())
 
 
 def mcp_call_request(identifier: int, name: str, arguments: dict[str, object]) -> str:
@@ -130,8 +130,8 @@ class LLMWikiProductionTests(unittest.TestCase):
             event = json.dumps({"cwd": str(root)})
             started = llm_wiki_adapter.run_host_hook("session-start", event)
             self.assertEqual("SessionStart", started["hookSpecificOutput"]["hookEventName"])
-            self.assertEqual(".azhou/llm-wiki", llm_wiki.DEFAULT_STORE)
-            self.assertTrue((root / ".azhou" / "llm-wiki" / "canonical-store.md").is_file())
+            self.assertEqual(".azhou/super-llm-wiki", llm_wiki.DEFAULT_STORE)
+            self.assertTrue((root / ".azhou" / "super-llm-wiki" / "canonical-store.md").is_file())
             self.assertEqual(
                 [root / ".azhou"],
                 [path for path in root.iterdir() if path.is_dir()],
@@ -225,7 +225,7 @@ class LLMWikiProductionTests(unittest.TestCase):
 
             planned = llm_wiki.migrate_store(root, ".llm-wiki", apply=False)
             self.assertEqual("planned", planned["status"])
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
             self.assertRegex(planned["planId"], r"^[a-f0-9]{64}$")
 
             source_page = source.directory / "migrated-decision.md"
@@ -241,7 +241,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                     apply=True,
                     expected_plan_id=planned["planId"],
                 )
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
             self.assertEqual(changed_source, source_page.read_bytes())
 
             planned = llm_wiki.migrate_store(root, ".llm-wiki", apply=False)
@@ -295,7 +295,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 (source.directory / entry).write_text("blocked\n", encoding="utf-8")
                 with self.assertRaises(llm_wiki.WikiError):
                     llm_wiki.migrate_store(root, ".llm-wiki", apply=True)
-                self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+                self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
 
             root = parent / "interrupted"
             root.mkdir()
@@ -308,7 +308,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 sources=[],
                 confidence="high",
             )
-            target = root.resolve() / ".azhou" / "llm-wiki"
+            target = root.resolve() / ".azhou" / "super-llm-wiki"
             real_replace = llm_wiki.os.replace
 
             def fail_publish(source_path: Path | str, target_path: Path | str) -> None:
@@ -327,9 +327,9 @@ class LLMWikiProductionTests(unittest.TestCase):
         hooks = llm_wiki_adapter.render_hooks(SKILL, Path(sys.executable))
         self.assertEqual({"SessionStart", "PreCompact", "SessionEnd"}, set(hooks["hooks"]))
         mcp = llm_wiki_adapter.render_mcp_config(SKILL, Path(sys.executable))
-        self.assertEqual(str(SCRIPTS / "llm_wiki_mcp.py"), mcp["mcpServers"]["llm-wiki"]["args"][0])
+        self.assertEqual(str(SCRIPTS / "llm_wiki_mcp.py"), mcp["mcpServers"]["super-llm-wiki"]["args"][0])
         command = (SKILL / "assets" / "host" / "commands" / "wiki.md").read_text(encoding="utf-8")
-        self.assertIn("/llm-wiki", command)
+        self.assertIn("/super-llm-wiki", command)
 
         output = io.StringIO()
         with redirect_stdout(output):
@@ -387,7 +387,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             responses = [json.loads(line) for line in completed.stdout.splitlines()]
             self.assertEqual(7, len(responses))
             self.assertTrue(all("isError" not in response["result"] for response in responses))
-            self.assertFalse((root / ".azhou" / "llm-wiki" / "process-page.md").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki" / "process-page.md").exists())
 
             subprocess.run(
                 [
@@ -421,7 +421,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             self.assertIn("hookSpecificOutput", run_event("session-start"))
             self.assertIn("systemMessage", run_event("pre-compact"))
             self.assertEqual({"continue": True}, run_event("session-end"))
-            self.assertEqual([], list((root / ".azhou" / "llm-wiki").glob("session-log-*.md")))
+            self.assertEqual([], list((root / ".azhou" / "super-llm-wiki").glob("session-log-*.md")))
 
             subprocess.run(
                 [
@@ -438,7 +438,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 check=True,
             )
             self.assertEqual({"continue": True}, run_event("session-end"))
-            session_page = next((root / ".azhou" / "llm-wiki").glob("session-log-*.md"))
+            session_page = next((root / ".azhou" / "super-llm-wiki").glob("session-log-*.md"))
             self.assertNotIn("private-process-id", session_page.read_text(encoding="utf-8"))
             self.assertEqual([root / ".azhou"], [path for path in root.iterdir() if path.is_dir()])
 
@@ -487,7 +487,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             self.assertTrue(responses[3]["result"]["isError"])
             self.assertTrue(responses[4]["result"]["isError"])
             self.assertNotIn("SYNTHETIC-SECRET-SENTINEL", completed.stdout)
-            page = root / ".azhou" / "llm-wiki" / "untrusted-prompt.md"
+            page = root / ".azhou" / "super-llm-wiki" / "untrusted-prompt.md"
             self.assertIn("SYNTHETIC UNTRUSTED CONTENT", page.read_text(encoding="utf-8"))
             self.assertFalse(marker.exists())
 
@@ -522,7 +522,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 )
                 self.assertEqual(returncode, completed.returncode)
                 receipt = json.loads(completed.stdout)
-                self.assertEqual("llm-wiki.receipt.v3", receipt["schema"])
+                self.assertEqual("super-llm-wiki.receipt.v3", receipt["schema"])
                 self.assertEqual(status, receipt["status"])
                 self.assertTrue(receipt["currentTruth"])
                 self.assertEqual(learning_signal, receipt["learningSignal"])
