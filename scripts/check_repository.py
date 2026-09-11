@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
@@ -285,8 +285,7 @@ GATE_HELD_FIDELITY = {
     # already correctly prefixed). It migrates into the tree's
     # references/provenance.md on the next promotion ride. Every other skill
     # records its own classification in its provenance record; the
-    # prefix-classification enforcement check lands with the audit's
-    # enforcement milestone (#176 M4).
+    # prefix-classification enforcement check is check_fidelity_axis (#183).
     "skills/super-caveman/SKILL.md": "adapted",
 }
 
@@ -324,6 +323,131 @@ def check_invocation_axis(root: Path) -> list[str]:
             errors.append(f"skill invocation declaration missing: {relative}")
         elif declared not in INVOCATION_CLASSES:
             errors.append(f"skill invocation enum invalid: {relative}: {declared}")
+    return errors
+
+
+FIDELITY_CLASSES = ("original", "faithful", "adapted")
+FIDELITY_DECLARATION_PATTERN = re.compile(r"^Classification: `(?P<value>[^`]+)`", re.MULTILINE)
+
+RENAMED_AWAY_SKILLS = {
+    "ci-test-reliability": "super-ci-test-reliability",
+    "prose-standard": "super-prose-standard",
+    "repo-pedant": "super-repo-pedant",
+    "lavish": "super-lavish",
+    "llm-wiki": "super-llm-wiki",
+}
+
+# Surfaces where a renamed-away canonical name is legal, by category:
+# - compatibility triggers (entry descriptions, explicit command entries)
+# - migration sources and dual-accepted legacy spellings (the compatibility
+#   machinery and its coverage)
+# - provenance and upstream records
+# - changelog, ride bookkeeping and dated history
+# A hit anywhere else is residue from an incomplete rename.
+RESIDUE_COMPATIBILITY_TRIGGER_PATHS = {
+    relative for relative in INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
+} | {"skills/super-llm-wiki/assets/host/commands/wiki.md"}
+RESIDUE_MIGRATION_SOURCE_PATHS = {
+    ".gitignore",
+    "scripts/azhou_hub.py",
+    "scripts/check_repository.py",
+    "docs/skill-standard.md",
+    "skills/super-repo-pedant/scripts/migrate_state.py",
+    "skills/super-llm-wiki/scripts/llm_wiki.py",
+}
+RESIDUE_PROVENANCE_PATH_PATTERNS = (
+    re.compile(r"^skills/[^/]+/references/(provenance|upstream-compatibility|neat-freak-compatibility)\.md$"),
+    re.compile(r"^THIRD_PARTY_NOTICES\.md$"),
+)
+RESIDUE_COMPATIBILITY_COVERAGE_PATTERNS = (
+    re.compile(r"^skills/[^/]+/scripts/[^/]+\.py$"),
+    re.compile(r"^skills/[^/]+/assets/"),
+    re.compile(r"^skills/[^/]+/references/[^/]+\.md$"),
+    re.compile(r"^tests/[^/]+\.py$"),
+    re.compile(r"^benchmarks/[^/]+/(trigger-cases\.json|results\.tsv|README\.md)$"),
+    re.compile(r"^benchmarks/[^/]+/(cases|protocol|history|fixtures|results)/"),
+)
+RESIDUE_HISTORY_PREFIXES = (
+    "docs/research/",
+    "docs/specs/",
+    "evidence/",
+    "benchmarks/super-caveman/results/",
+)
+RESIDUE_HISTORY_FILES = {
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "done-archive.md",
+    "note-archive.md",
+}
+
+
+def _residue_allowed(relative: str) -> bool:
+    if relative in RESIDUE_COMPATIBILITY_TRIGGER_PATHS | RESIDUE_MIGRATION_SOURCE_PATHS | RESIDUE_HISTORY_FILES:
+        return True
+    if relative.startswith(RESIDUE_HISTORY_PREFIXES):
+        return True
+    return any(
+        pattern.search(relative)
+        for pattern in RESIDUE_PROVENANCE_PATH_PATTERNS + RESIDUE_COMPATIBILITY_COVERAGE_PATTERNS
+    )
+
+
+def check_fidelity_axis(root: Path) -> list[str]:
+    """Bind the canonical-name prefix to the recorded fidelity classification.
+
+    Skill-standard §2.3: `adapted` skills carry the `super-` prefix;
+    `original` and `faithful` skills do not. super-caveman's classification
+    is held in GATE_HELD_FIDELITY because its promotion digest freezes the
+    whole tree; every other skill declares its own `Classification: `<value>``
+    line in references/provenance.md. A skill without a declared
+    classification fails closed.
+    """
+    errors: list[str] = []
+    for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
+        if not (root / relative).is_file():
+            continue
+        package = PurePosixPath(relative).parent.name
+        declared = GATE_HELD_FIDELITY.get(relative)
+        if declared is None:
+            provenance = root / PurePosixPath(relative).parent / "references" / "provenance.md"
+            try:
+                text = provenance.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                text = ""
+            match = FIDELITY_DECLARATION_PATTERN.search(text)
+            if match is None:
+                errors.append(f"skill fidelity classification missing: {relative}")
+                continue
+            declared = match.group("value")
+            if declared not in FIDELITY_CLASSES:
+                errors.append(f"skill fidelity classification enum invalid: {relative}: {declared}")
+                continue
+        if (package.startswith("super-")) != (declared == "adapted"):
+            errors.append(f"fidelity prefix mismatch: {relative} classified {declared}")
+    return errors
+
+
+def check_rename_residue(files: list[Path], root: Path) -> list[str]:
+    """Fail when a renamed-away canonical name leaks outside allowed surfaces."""
+    errors: list[str] = []
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        if _residue_allowed(relative):
+            continue
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        if b"\0" in data[:8192]:
+            continue
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        for old_name, new_name in sorted(RENAMED_AWAY_SKILLS.items()):
+            token = re.compile(rf"(?<![\w./-]){re.escape(old_name)}(?![\w-])")
+            if token.search(text):
+                errors.append(f"rename residue outside allowed surfaces: {relative}: {old_name} -> {new_name}")
     return errors
 
 
@@ -587,6 +711,8 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_router_coverage(root))
     errors.extend(check_invocation_axis(root))
+    errors.extend(check_fidelity_axis(root))
+    errors.extend(check_rename_residue(files, root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
     errors.extend(check_command_surface(files, root))
