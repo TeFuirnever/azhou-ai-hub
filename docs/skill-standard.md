@@ -100,7 +100,7 @@ Skill 变更完成前必须：
 1. 读回修改后的入口、references、setup、provenance、项目文档和 agent 规则，消除第二权威。
 2. 运行相关脚本测试、benchmark integrity、链接/JSON 解析、skill validator 和 `git diff --check`。
 3. 对新增或变化行为记录 current truth、验证命令、限制和一个具体 next action。
-4. 明确任务结束时运行 `repo-pedant`，同步 docs、项目规则和已证明绑定当前项目的 memory；推测结束只提醒，不写入。
-5. `repo-pedant` closeout 为每个受影响项目记录 memory inventory：绑定路径、已检查但未发现的具体 surface，或带原因的 hold；`unresolved` 不能完成。
+4. 明确任务结束时运行 `super-repo-pedant`（旧名 `repo-pedant` 仍是兼容触发），同步 docs、项目规则和已证明绑定当前项目的 memory；推测结束只提醒，不写入。
+5. `super-repo-pedant` closeout 为每个受影响项目记录 memory inventory：绑定路径、已检查但未发现的具体 surface，或带原因的 hold；`unresolved` 不能完成。
 
 未通过的外部或既存限制可以成为具名 hold；本次修改制造的失败不能包装成完成。

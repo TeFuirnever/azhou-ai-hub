@@ -65,9 +65,9 @@ temp/
 /done-archive.md
 
 # Agent-history and benchmark workspace state; checked-in fixtures/results stay public.
-benchmarks/repo-pedant/history/raw/
-benchmarks/repo-pedant/history/local/
-benchmarks/repo-pedant/workspace/
+benchmarks/super-repo-pedant/history/raw/
+benchmarks/super-repo-pedant/history/local/
+benchmarks/super-repo-pedant/workspace/
 benchmarks/excalidraw-diagram/history/raw/
 benchmarks/excalidraw-diagram/history/local/
 benchmarks/excalidraw-diagram/workspace/

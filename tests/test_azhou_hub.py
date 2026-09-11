@@ -118,11 +118,11 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
-            ["hub", "llm-wiki", "repo-pedant"],
+            ["hub", "llm-wiki", "super-repo-pedant"],
             payload["runtime_state"]["namespaces"],
         )
         self.assertEqual(
-            [".azhou-ai-hub/receipts", ".llm-wiki", ".omc/wiki", ".repo-pedant"],
+            [".azhou-ai-hub/receipts", ".azhou/repo-pedant", ".llm-wiki", ".omc/wiki", ".repo-pedant"],
             payload["runtime_state"]["compatibility_sources"],
         )
         self.assertEqual(
@@ -135,11 +135,11 @@ class AzhouHubCliTest(unittest.TestCase):
                 "excalidraw-diagram",
                 "lavish",
                 "llm-wiki",
-                "repo-pedant",
                 "session-insights",
                 "super-caveman",
                 "super-ci-test-reliability",
                 "super-prose-standard",
+                "super-repo-pedant",
             ],
             payload["installable_skills"],
         )
@@ -177,7 +177,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
     def test_task_skill_real_packages_complete_managed_lifecycle(self) -> None:
-        for name in ("repo-pedant", "super-caveman", "excalidraw-diagram"):
+        for name in ("super-repo-pedant", "super-caveman", "excalidraw-diagram"):
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
                 target = Path(directory) / "skills"
                 receipt = target / ".azhou/hub" / "receipts" / f"{name}.json"
@@ -262,21 +262,21 @@ class AzhouHubCliTest(unittest.TestCase):
             first = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 mode="link",
                 dry_run=False,
             )
             second = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 mode="link",
                 dry_run=False,
             )
 
-            installed = target / "repo-pedant"
+            installed = target / "super-repo-pedant"
             self.assertTrue(installed.is_symlink())
-            self.assertEqual((azhou_hub.ROOT / "skills/repo-pedant").resolve(), installed.resolve())
+            self.assertEqual((azhou_hub.ROOT / "skills/super-repo-pedant").resolve(), installed.resolve())
             self.assertEqual("pass", first["status"])
             self.assertEqual("installed", first["skills"][0]["status"])
             self.assertEqual("pass", second["status"])
@@ -350,7 +350,7 @@ class AzhouHubCliTest(unittest.TestCase):
             receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 mode="link",
                 dry_run=True,
             )
@@ -360,7 +360,7 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertFalse(target.exists())
 
     def test_setup_cli_rejects_relative_target(self) -> None:
-        result, payload = self._json_main(["setup", "--skill", "repo-pedant", "--target", "relative", "--json"])
+        result, payload = self._json_main(["setup", "--skill", "super-repo-pedant", "--target", "relative", "--json"])
         self.assertEqual(1, result)
         self.assertEqual("fail", payload["status"])
         self.assertIn("absolute path", payload["error"])
@@ -379,7 +379,7 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_setup_collision_is_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
-            collision = target / "repo-pedant"
+            collision = target / "super-repo-pedant"
             collision.mkdir(parents=True)
             marker = collision / "keep.txt"
             marker.write_text("user owned\n", encoding="utf-8")
@@ -387,7 +387,7 @@ class AzhouHubCliTest(unittest.TestCase):
             receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 mode="link",
                 dry_run=False,
             )
@@ -427,7 +427,7 @@ class AzhouHubCliTest(unittest.TestCase):
             receipt = self._setup_skills(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 mode="link",
                 dry_run=False,
             )
@@ -513,18 +513,18 @@ class AzhouHubCliTest(unittest.TestCase):
             wrong = Path(directory) / "wrong"
             wrong.mkdir()
             target.mkdir()
-            (target / "repo-pedant").symlink_to(wrong, target_is_directory=True)
+            (target / "super-repo-pedant").symlink_to(wrong, target_is_directory=True)
 
             report = azhou_hub.run_doctor(
                 root=azhou_hub.ROOT,
                 target=target,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 run_verification=False,
             )
 
             self.assertFalse(report["valid"])
             self.assertEqual("unhealthy", report["status"])
-            target_check = next(check for check in report["checks"] if check["name"] == "target:repo-pedant")
+            target_check = next(check for check in report["checks"] if check["name"] == "target:super-repo-pedant")
             self.assertEqual("fail", target_check["status"])
 
     def test_doctor_rejects_a_target_with_a_file_ancestor(self) -> None:
@@ -535,7 +535,7 @@ class AzhouHubCliTest(unittest.TestCase):
             report = azhou_hub.run_doctor(
                 root=azhou_hub.ROOT,
                 target=blocked_parent / "skills",
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 run_verification=False,
             )
 
@@ -551,7 +551,7 @@ class AzhouHubCliTest(unittest.TestCase):
             report = azhou_hub.run_doctor(
                 root=azhou_hub.ROOT,
                 target=None,
-                skills=["repo-pedant"],
+                skills=["super-repo-pedant"],
                 run_verification=True,
             )
 

@@ -20,7 +20,7 @@ def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str
     return [
         ("repository policy", [python, "scripts/check_repository.py"]),
         ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests"]),
-        ("repo-pedant benchmark", [python, "benchmarks/repo-pedant/benchmark.py", "check"]),
+        ("super-repo-pedant benchmark", [python, "benchmarks/super-repo-pedant/benchmark.py", "check"]),
         ("super-caveman benchmark", super_caveman),
         (
             "excalidraw benchmark wiring",

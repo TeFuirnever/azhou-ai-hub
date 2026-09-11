@@ -9,8 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skills" / "repo-pedant" / "scripts" / "validate_execution_protocol.py"
-FIXTURES = ROOT / "benchmarks" / "repo-pedant" / "protocol"
+SCRIPT = ROOT / "skills" / "super-repo-pedant" / "scripts" / "validate_execution_protocol.py"
+FIXTURES = ROOT / "benchmarks" / "super-repo-pedant" / "protocol"
 
 
 class ValidateExecutionProtocolTest(unittest.TestCase):
@@ -38,10 +38,10 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
         self.assertTrue(json.loads(result.stdout)["valid"])
 
-    def test_default_protocol_uses_repo_pedant_namespace(self) -> None:
+    def test_default_protocol_uses_super_repo_pedant_namespace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
-            protocol = project / ".azhou" / "repo-pedant" / "execution.json"
+            protocol = project / ".azhou" / "super-repo-pedant" / "execution.json"
             protocol.parent.mkdir(parents=True)
             protocol.write_bytes((FIXTURES / "valid.execution.json").read_bytes())
             result = subprocess.run(

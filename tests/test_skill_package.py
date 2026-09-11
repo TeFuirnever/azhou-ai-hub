@@ -9,7 +9,7 @@ from scripts.check_repository import INVOCATION_CLASSES
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_DIR = ROOT / "skills" / "repo-pedant"
+SKILL_DIR = ROOT / "skills" / "super-repo-pedant"
 SKILL = SKILL_DIR / "SKILL.md"
 AZHOU_SKILL_NAMES = (
     "azhou-doctor",
@@ -407,7 +407,7 @@ class SkillPackageTest(unittest.TestCase):
         brand = (SKILL_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
         hook = (SKILL_DIR / "scripts" / "closeout_hook.py").read_text(encoding="utf-8")
         anchors = (
-            "🦊 阿舟 · Repo Pedant 启动",
+            "🦊 阿舟 · Super Repo Pedant 启动",
             "🧭 范围锁定",
             "🗂️ 清单完成",
             "🕸️ 影响确认",
@@ -421,7 +421,8 @@ class SkillPackageTest(unittest.TestCase):
         for anchor in anchors:
             self.assertIn(anchor, brand)
         self.assertIn("[brand-layer.md](references/brand-layer.md)", skill)
-        self.assertIn("## 🦊 阿舟 · Repo Pedant receipt", skill)
+        self.assertIn("## 🦊 阿舟 · Super Repo Pedant receipt", skill)
+        self.assertNotIn("## 🦊 阿舟 · Repo Pedant receipt", skill)
         self.assertNotIn("## 🦊 阿舟 · Repo-pedant receipt", skill)
         self.assertIn('REMINDER = "🟡 阿舟提醒｜', hook)
         self.assertIn('PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜', hook)
@@ -496,7 +497,7 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "CONTRIBUTING.md",
             ROOT / "docs" / "skill-standard.md",
             ROOT / "docs" / "excalidraw-diagram.md",
-            ROOT / "benchmarks" / "repo-pedant" / "README.md",
+            ROOT / "benchmarks" / "super-repo-pedant" / "README.md",
             ROOT / "benchmarks" / "excalidraw-diagram" / "README.md",
             ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "README.md",
             ROOT / "evidence" / "README.md",
@@ -517,13 +518,13 @@ class SkillPackageTest(unittest.TestCase):
             SKILL_DIR / "assets" / "evolution-signal.schema.json",
             SKILL_DIR / "assets" / "evolution-candidate.schema.json",
             SKILL_DIR / "assets" / "execution-protocol.schema.json",
-            ROOT / "benchmarks" / "repo-pedant" / "manifest.json",
-            ROOT / "benchmarks" / "repo-pedant" / "neat-freak-parity.json",
-            ROOT / "benchmarks" / "repo-pedant" / "regression-map.json",
-            ROOT / "benchmarks" / "repo-pedant" / "trigger-cases.json",
-            ROOT / "benchmarks" / "repo-pedant" / "history" / "baseline-2026-08-23.json",
-            ROOT / "benchmarks" / "repo-pedant" / "protocol" / "valid.execution.json",
-            ROOT / "benchmarks" / "repo-pedant" / "protocol" / "prior-drift.execution.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "manifest.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "neat-freak-parity.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "regression-map.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "trigger-cases.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "history" / "baseline-2026-08-23.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "protocol" / "valid.execution.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "protocol" / "prior-drift.execution.json",
             ROOT / "benchmarks" / "super-caveman" / "manifest.json",
             ROOT / "benchmarks" / "super-caveman" / "capability-map.json",
             ROOT / "benchmarks" / "super-caveman" / "trigger-cases.json",
@@ -534,7 +535,7 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "benchmarks" / "super-caveman" / "results" / "revision-de6b836a-attempt-1-summary.json",
             ROOT / "benchmarks" / "super-caveman" / "results" / "revision-e1eef218-attempt-1-summary.json",
             ROOT / "benchmarks" / "super-caveman" / "results" / "revision-f3ab4d37-attempt-1-summary.json",
-            *(ROOT / "benchmarks" / "repo-pedant" / "cases").glob("*.case.json"),
+            *(ROOT / "benchmarks" / "super-repo-pedant" / "cases").glob("*.case.json"),
             ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "manifest.json",
             *(ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "cases").glob("*.case.json"),
         ]

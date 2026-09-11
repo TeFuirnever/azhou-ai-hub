@@ -2,278 +2,1163 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-11T01:07:25Z",
+  "approved_at": "2026-09-11T18:33:00Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "3bce6d997e5813d8d2dfce65b94586e558d1f02c",
-  "path_set_sha256": "2e037a91b4bf1edacdead6f944642faac878ca49a2e94081569c54cf2750b02d",
-  "staged_patch_sha256": "ade73a7361b038e48ccd16b5661e9f3169f3a55897dad80f0d3810c3c354e926",
+  "base_commit": "bc1f37246993babd2f99c0a633c6f04b8c15cf3b",
+  "path_set_sha256": "fc676d93de4ed4f8192e8f4d7bc20f4da151821ef4a67da301650b410f6dc23b",
+  "staged_patch_sha256": "f20639f107adce67b3d7b80e4dade75b9ac43c31fa7f99bd10428534ff1862a4",
   "reviewed_blobs": [
     {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "old_oid": "1a92689811a38adbf352c24c234f57119ef3ee60",
+      "new_oid": "aa8a08ac5da7041b97a110ea85af870e38f9cc58"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "old_oid": "895ad147ca1fbf86eab3252873646064553caff8",
+      "new_oid": "cafdb955c90592f8c304f747ac722e11894eaf27"
+    },
+    {
+      "path": ".gitignore",
+      "old_oid": "23ca6700a100a53471664bac44f19a108bd4b2d7",
+      "new_oid": "5f902c01bf3e76ded0f1e3e27a59fc0f225e0e48"
+    },
+    {
       "path": "AGENTS.md",
-      "old_oid": "f5a3690cbd24e93d33cd5d0fbe324c464dba4063",
-      "new_oid": "edcbc60e4c9bc2a827efab484744970d372732d8"
+      "old_oid": "edcbc60e4c9bc2a827efab484744970d372732d8",
+      "new_oid": "4a0ef1f03d9c6e042e09e2e449c2d2796caa1788"
     },
     {
       "path": "CHANGELOG.md",
-      "old_oid": "5c5f20c3925091e9c115417b9ec52468ab112ed1",
-      "new_oid": "cc3f7d40de3d644463f7c82ed3b5c292c71e287e"
+      "old_oid": "cc3f7d40de3d644463f7c82ed3b5c292c71e287e",
+      "new_oid": "4507e7a4e498b301dfb87d49b50aa875662f51c8"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "old_oid": "96def485757153f6041e9f761e388f237f8997d2",
+      "new_oid": "1274e3ce148bda4c0a59ef6c66c2e3501162a21b"
     },
     {
       "path": "README.md",
-      "old_oid": "06b7ae8dfaef1e08770f4f050e5659ce72c05b39",
-      "new_oid": "cbc6e29efe662cd00504cc4026040ceff6b79dad"
+      "old_oid": "cbc6e29efe662cd00504cc4026040ceff6b79dad",
+      "new_oid": "1465f02f2b0830a50b97b52fc25aaaa75e25c5f8"
     },
     {
       "path": "README.zh-CN.md",
-      "old_oid": "fd2a03e2e8141b9df4c14a01049db7b0db0bbc05",
-      "new_oid": "80f75ee190a2e0cac9b345392d87e3eb5bccc34e"
+      "old_oid": "80f75ee190a2e0cac9b345392d87e3eb5bccc34e",
+      "new_oid": "9230d6a1e03ca5eece7a3a811e573e9797fb2d3e"
     },
     {
-      "path": "benchmarks/prose-standard/README.md",
-      "old_oid": "1100e80e800a2d823b3be2eef07957358f89b1db",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "old_oid": "31a2248890aef1eb5fa5d2fe8edddba3be1cb918",
+      "new_oid": "aecaac5c23575ee016ad1aabb6de27e77e07d4af"
+    },
+    {
+      "path": "assets/skills/repo-pedant-effect.png",
+      "old_oid": "a14277e9928694d661a2557188d599a0117ab512",
       "new_oid": "<deleted>"
     },
     {
-      "path": "benchmarks/prose-standard/benchmark.py",
-      "old_oid": "522cc6b65a24ca9228f30be62d903b27f8719c66",
+      "path": "assets/skills/super-repo-pedant-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "a14277e9928694d661a2557188d599a0117ab512"
+    },
+    {
+      "path": "benchmarks/repo-pedant/README.md",
+      "old_oid": "32fc4b33f583c277503d77d572b113e4dc31890a",
       "new_oid": "<deleted>"
     },
     {
-      "path": "benchmarks/prose-standard/manifest.json",
-      "old_oid": "a4f162af33967471fbaf63a5af9a65388a64aebd",
+      "path": "benchmarks/repo-pedant/benchmark.py",
+      "old_oid": "14760e5d1c11437f322c1207eb6bad7cdf17745f",
       "new_oid": "<deleted>"
     },
     {
-      "path": "benchmarks/super-prose-standard/README.md",
-      "old_oid": "<deleted>",
-      "new_oid": "eb010bd2f329e7d55216e6acf6787b1ee95b3816"
+      "path": "benchmarks/repo-pedant/cases/code-spec-conflict.case.json",
+      "old_oid": "16cc0821be22e058ce58e324b95ba7c1715c8ae7",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "benchmarks/super-prose-standard/benchmark.py",
-      "old_oid": "<deleted>",
-      "new_oid": "55ce987bbaffdc916cef230a934f6546018fc121"
+      "path": "benchmarks/repo-pedant/cases/consumer-classification.case.json",
+      "old_oid": "a932c4271834148fbc79e7f7f49ba71e2f4cc1df",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "benchmarks/super-prose-standard/manifest.json",
+      "path": "benchmarks/repo-pedant/cases/cross-runtime-evolution.case.json",
+      "old_oid": "f43010bfa7fd65ec0083f2dfb651cd6d1130d536",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/cases/multi-surface-handoff.case.json",
+      "old_oid": "0fd5b7d55ae9a74770e0adea68559ac5c3cc496d",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/README.md",
+      "old_oid": "266daf8e83dd127892c7ce2fffc4e91c2bcb7ef1",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/STATUS.md",
+      "old_oid": "5c06e22c8d9351fa8c95acf639d6f36e5ac9d797",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/spec.md",
+      "old_oid": "fe215510eb9069964afa7fb35480a2d057b2141c",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/src/routes.ts",
+      "old_oid": "f23578f7bbe2ea4d6291aee53ef3cd26a68e0bb9",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/tests/routes.test.ts",
+      "old_oid": "a10f946ec9962b3acfa25ccb296a7ab24b259b58",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/code-spec-conflict/verify.sh",
+      "old_oid": "a902336a2699d38b9804c37999975c0f03571987",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/README.md",
+      "old_oid": "89b3cca0432e9c707b9e9766ae9378a1fa23f19e",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/config/migration-steps.txt",
+      "old_oid": "1c12cf9bd499b2d2756b7d3b800f790f0c9cdc87",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/docs/guide.md",
+      "old_oid": "acd7302545c1205e68931de13138b4a818a13310",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/docs/migration.md",
+      "old_oid": "5419c9e4b9ac3a6f88304a18d8ff0465ee991180",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/src/format.py",
+      "old_oid": "d8fd7183d6e95206a1ba08cd31103e2d26c5bb08",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/src/legacy.py",
+      "old_oid": "4ba769a08209f404461b80ec606dd1df37bd236e",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/src/migrate.py",
+      "old_oid": "d708bb0a59346eb834b7c37ee271eae1e518a71a",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/src/retry.py",
+      "old_oid": "d1f7557ba7d7aeed26f461dbe99e07625837bc59",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/src/server.py",
+      "old_oid": "b524c8069cda70913d93032011121ffc9f84a3c6",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/tests/test_format.py",
+      "old_oid": "7250baa15d6db2a4a28198d76515bd33fe22e880",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/tests/test_legacy.py",
+      "old_oid": "69e85760e822755181145a5eb98fabbc7758c1c3",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/consumer-classification/verify.sh",
+      "old_oid": "1d8398426ae409c5194a6c1fdffa847cc49b133a",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/README.md",
+      "old_oid": "2f8a22ebb1b106628585d9f04e2420c906505817",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/STATUS.md",
+      "old_oid": "da058ec8672ce96bf2cfd4c2774d355ae3069f03",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/evidence/sources.md",
+      "old_oid": "fe24dbd2ef63550dbdf1a39ce98c139e26da93c5",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/ideas/backlog.md",
+      "old_oid": "5d04efaac0240f754c39c3c27caf8e63848ed4a4",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/release/package.md",
+      "old_oid": "c14f5f143c476458118d5e2ac2f71e0924b1138d",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/research/findings.md",
+      "old_oid": "5701c222fe2c6e3e401d1fd006233b019468ece3",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/content-research/verify.sh",
+      "old_oid": "80d39bdc8636160cb6e6c447870415eb94cfaee9",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/README.md",
+      "old_oid": "df669c2ca37693515588f2ffd96202c4417b2f02",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/claude-home/projects/project-a/session-synthetic.jsonl",
+      "old_oid": "479b302fb0677704cd62322d289e8849cd14fb3b",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/codex-home/sessions/2026/08/23/rollout-synthetic.jsonl",
+      "old_oid": "f88331bae0df683791bbea29a5b1a74d2aa469e1",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/effect-receipts.json",
+      "old_oid": "b64e8a219b1f1784dc48af4784eb09b198e66b32",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/verify.sh",
+      "old_oid": "4bf20b55c5626a42a1dc7e5028edb21868f67ff7",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/cross-runtime-evolution/zcode-home/v2/sessions/workspace-a/session-synthetic.json",
+      "old_oid": "8a4bec74d1b41fac52db3614c5b1d423e02fdc96",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/.env.example",
+      "old_oid": "0177d5abc44f4091bbc6bb5e4b25a44e29277511",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/AGENTS.md",
+      "old_oid": "2269aa633144a7e621635f09c543d073f7acf499",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/CHANGELOG.md",
+      "old_oid": "f0c30299afd299c552361c43498af89afac53ff2",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/HANDOFF.md",
+      "old_oid": "9ed5e5ffe679a76a0635bcfa75011f5717ea543f",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/README.md",
+      "old_oid": "d963a3de98cea3ec0e9246f020944bb670f54347",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/agent-memory/MEMORY.md",
+      "old_oid": "31e68bf70dfd00be17ca3b0e34f10f13b9b4de74",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/deploy.sh",
+      "old_oid": "93a6d8941f7e29c67d5c37150ff28966cb7b0b01",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/docs/integration.md",
+      "old_oid": "af7bdbb21a46b52d64bab689f69eab3cbfd954b2",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/docs/runbook.md",
+      "old_oid": "c5e7936eb4a382fccb0d8c0e702def51075e4371",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/spec.md",
+      "old_oid": "9b1aadf08b588c2e1af794d4e2f42d331c12ddc4",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/src/routes.ts",
+      "old_oid": "b2b8b964e2a5154382a1644f8ed1bc5309dca3bf",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/fixtures/software-handoff/verify.sh",
+      "old_oid": "9a8e168071a9924095f97aef478d69391bcb7660",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/history/baseline-2026-08-23.json",
+      "old_oid": "2d53ec91de3532f18d22e6900d15dcb0790bf371",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/history/darwin-paired-2026-08-23.json",
+      "old_oid": "6ed49ac32f37191d6a4c4a4d16ad0d70a8b67a05",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/history/darwin-phase1-2026-08-23.json",
+      "old_oid": "fa5aa089536446c0ccc1ff57e021903f065745af",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/manifest.json",
+      "old_oid": "9d9762df92402f691823d60996cc1aa4874f4a7e",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/neat-freak-parity.json",
+      "old_oid": "f82db14626378e501f6b2398c5bcb4ab7f77d03c",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/protocol/prior-drift.execution.json",
+      "old_oid": "9db79f269982695b90e2a72a3daa4736f0913f6b",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/protocol/valid.execution.json",
+      "old_oid": "754f4b9df13511e4e754599efb19cae7eecc1d4c",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/regression-map.json",
+      "old_oid": "f6c61fc8e7f53b646e6b5715461bcca0ca0208f9",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/results.tsv",
+      "old_oid": "d8cdfab26c9b9c0b162fcc5401225323cc95e2d5",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/results/repo-pedant-darwin-card.html",
+      "old_oid": "ab4ce3dd1b893bd4256dc636264e4f681b963b08",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/results/repo-pedant-darwin-card.png",
+      "old_oid": "a41f83ef7bde834a4b471da61cc7df47f49d5b06",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/trigger-cases.json",
+      "old_oid": "e288e8e9a2d2747df012a04ee2939aa19fa821fb",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/upstream/neat-freak/SKILL.snapshot.md",
+      "old_oid": "054c4b8073eeaade556c8c7abe8a6d054c824b14",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/upstream/neat-freak/references/agent-paths.md",
+      "old_oid": "ab833dbdd6a4a239b1ecc7dd917fb6eb95fc4110",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/repo-pedant/upstream/neat-freak/references/sync-matrix.md",
+      "old_oid": "cb293c317f0d6056b12cbe3bdead55db85ba99d9",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/README.md",
       "old_oid": "<deleted>",
-      "new_oid": "17eafa491fbd2fcf015a5c68637f38d9b7b72eee"
+      "new_oid": "3cc2883b78a7321a93a72d797b511b181e5d7031"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/benchmark.py",
+      "old_oid": "<deleted>",
+      "new_oid": "70f19bbcb6f47a5143f4fb5f24c0fc7891b2ef88"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/cases/code-spec-conflict.case.json",
+      "old_oid": "<deleted>",
+      "new_oid": "16cc0821be22e058ce58e324b95ba7c1715c8ae7"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/cases/consumer-classification.case.json",
+      "old_oid": "<deleted>",
+      "new_oid": "a932c4271834148fbc79e7f7f49ba71e2f4cc1df"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/cases/cross-runtime-evolution.case.json",
+      "old_oid": "<deleted>",
+      "new_oid": "f43010bfa7fd65ec0083f2dfb651cd6d1130d536"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/cases/multi-surface-handoff.case.json",
+      "old_oid": "<deleted>",
+      "new_oid": "0fd5b7d55ae9a74770e0adea68559ac5c3cc496d"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "266daf8e83dd127892c7ce2fffc4e91c2bcb7ef1"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/STATUS.md",
+      "old_oid": "<deleted>",
+      "new_oid": "5c06e22c8d9351fa8c95acf639d6f36e5ac9d797"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/spec.md",
+      "old_oid": "<deleted>",
+      "new_oid": "fe215510eb9069964afa7fb35480a2d057b2141c"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/src/routes.ts",
+      "old_oid": "<deleted>",
+      "new_oid": "f23578f7bbe2ea4d6291aee53ef3cd26a68e0bb9"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/tests/routes.test.ts",
+      "old_oid": "<deleted>",
+      "new_oid": "a10f946ec9962b3acfa25ccb296a7ab24b259b58"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/code-spec-conflict/verify.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "a902336a2699d38b9804c37999975c0f03571987"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "89b3cca0432e9c707b9e9766ae9378a1fa23f19e"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/config/migration-steps.txt",
+      "old_oid": "<deleted>",
+      "new_oid": "1c12cf9bd499b2d2756b7d3b800f790f0c9cdc87"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/docs/guide.md",
+      "old_oid": "<deleted>",
+      "new_oid": "acd7302545c1205e68931de13138b4a818a13310"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/docs/migration.md",
+      "old_oid": "<deleted>",
+      "new_oid": "5419c9e4b9ac3a6f88304a18d8ff0465ee991180"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/src/format.py",
+      "old_oid": "<deleted>",
+      "new_oid": "d8fd7183d6e95206a1ba08cd31103e2d26c5bb08"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/src/legacy.py",
+      "old_oid": "<deleted>",
+      "new_oid": "4ba769a08209f404461b80ec606dd1df37bd236e"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/src/migrate.py",
+      "old_oid": "<deleted>",
+      "new_oid": "d708bb0a59346eb834b7c37ee271eae1e518a71a"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/src/retry.py",
+      "old_oid": "<deleted>",
+      "new_oid": "d1f7557ba7d7aeed26f461dbe99e07625837bc59"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/src/server.py",
+      "old_oid": "<deleted>",
+      "new_oid": "b524c8069cda70913d93032011121ffc9f84a3c6"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/tests/test_format.py",
+      "old_oid": "<deleted>",
+      "new_oid": "7250baa15d6db2a4a28198d76515bd33fe22e880"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/tests/test_legacy.py",
+      "old_oid": "<deleted>",
+      "new_oid": "69e85760e822755181145a5eb98fabbc7758c1c3"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/consumer-classification/verify.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "1d8398426ae409c5194a6c1fdffa847cc49b133a"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "2f8a22ebb1b106628585d9f04e2420c906505817"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/STATUS.md",
+      "old_oid": "<deleted>",
+      "new_oid": "da058ec8672ce96bf2cfd4c2774d355ae3069f03"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/evidence/sources.md",
+      "old_oid": "<deleted>",
+      "new_oid": "fe24dbd2ef63550dbdf1a39ce98c139e26da93c5"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/ideas/backlog.md",
+      "old_oid": "<deleted>",
+      "new_oid": "5d04efaac0240f754c39c3c27caf8e63848ed4a4"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/release/package.md",
+      "old_oid": "<deleted>",
+      "new_oid": "c14f5f143c476458118d5e2ac2f71e0924b1138d"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/research/findings.md",
+      "old_oid": "<deleted>",
+      "new_oid": "5701c222fe2c6e3e401d1fd006233b019468ece3"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/content-research/verify.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "80d39bdc8636160cb6e6c447870415eb94cfaee9"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "df669c2ca37693515588f2ffd96202c4417b2f02"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/claude-home/projects/project-a/session-synthetic.jsonl",
+      "old_oid": "<deleted>",
+      "new_oid": "479b302fb0677704cd62322d289e8849cd14fb3b"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/codex-home/sessions/2026/08/23/rollout-synthetic.jsonl",
+      "old_oid": "<deleted>",
+      "new_oid": "f88331bae0df683791bbea29a5b1a74d2aa469e1"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/effect-receipts.json",
+      "old_oid": "<deleted>",
+      "new_oid": "b64e8a219b1f1784dc48af4784eb09b198e66b32"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/verify.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "4bf20b55c5626a42a1dc7e5028edb21868f67ff7"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/cross-runtime-evolution/zcode-home/v2/sessions/workspace-a/session-synthetic.json",
+      "old_oid": "<deleted>",
+      "new_oid": "8a4bec74d1b41fac52db3614c5b1d423e02fdc96"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/.env.example",
+      "old_oid": "<deleted>",
+      "new_oid": "0177d5abc44f4091bbc6bb5e4b25a44e29277511"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/AGENTS.md",
+      "old_oid": "<deleted>",
+      "new_oid": "2269aa633144a7e621635f09c543d073f7acf499"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/CHANGELOG.md",
+      "old_oid": "<deleted>",
+      "new_oid": "f0c30299afd299c552361c43498af89afac53ff2"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/HANDOFF.md",
+      "old_oid": "<deleted>",
+      "new_oid": "9ed5e5ffe679a76a0635bcfa75011f5717ea543f"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "d963a3de98cea3ec0e9246f020944bb670f54347"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/agent-memory/MEMORY.md",
+      "old_oid": "<deleted>",
+      "new_oid": "31e68bf70dfd00be17ca3b0e34f10f13b9b4de74"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/deploy.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "93a6d8941f7e29c67d5c37150ff28966cb7b0b01"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/docs/integration.md",
+      "old_oid": "<deleted>",
+      "new_oid": "af7bdbb21a46b52d64bab689f69eab3cbfd954b2"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/docs/runbook.md",
+      "old_oid": "<deleted>",
+      "new_oid": "c5e7936eb4a382fccb0d8c0e702def51075e4371"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/spec.md",
+      "old_oid": "<deleted>",
+      "new_oid": "9b1aadf08b588c2e1af794d4e2f42d331c12ddc4"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/src/routes.ts",
+      "old_oid": "<deleted>",
+      "new_oid": "b2b8b964e2a5154382a1644f8ed1bc5309dca3bf"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/fixtures/software-handoff/verify.sh",
+      "old_oid": "<deleted>",
+      "new_oid": "9a8e168071a9924095f97aef478d69391bcb7660"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/history/baseline-2026-08-23.json",
+      "old_oid": "<deleted>",
+      "new_oid": "2d53ec91de3532f18d22e6900d15dcb0790bf371"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/history/darwin-paired-2026-08-23.json",
+      "old_oid": "<deleted>",
+      "new_oid": "6ed49ac32f37191d6a4c4a4d16ad0d70a8b67a05"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/history/darwin-phase1-2026-08-23.json",
+      "old_oid": "<deleted>",
+      "new_oid": "fa5aa089536446c0ccc1ff57e021903f065745af"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/manifest.json",
+      "old_oid": "<deleted>",
+      "new_oid": "9d9762df92402f691823d60996cc1aa4874f4a7e"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/neat-freak-parity.json",
+      "old_oid": "<deleted>",
+      "new_oid": "7f99fcd7cdb284372640f5e46375c127ab3d3d49"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/protocol/prior-drift.execution.json",
+      "old_oid": "<deleted>",
+      "new_oid": "9db79f269982695b90e2a72a3daa4736f0913f6b"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/protocol/valid.execution.json",
+      "old_oid": "<deleted>",
+      "new_oid": "d401d0f6991bbe01ac4f6687bd2da457201d51cc"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/regression-map.json",
+      "old_oid": "<deleted>",
+      "new_oid": "a49cf1f2ec0726f52a6bf47b7d317032c2590468"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/results.tsv",
+      "old_oid": "<deleted>",
+      "new_oid": "d8cdfab26c9b9c0b162fcc5401225323cc95e2d5"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/results/repo-pedant-darwin-card.html",
+      "old_oid": "<deleted>",
+      "new_oid": "ab4ce3dd1b893bd4256dc636264e4f681b963b08"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/results/repo-pedant-darwin-card.png",
+      "old_oid": "<deleted>",
+      "new_oid": "a41f83ef7bde834a4b471da61cc7df47f49d5b06"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/trigger-cases.json",
+      "old_oid": "<deleted>",
+      "new_oid": "86c3d3c6612e6889e6744b2c44a9bdc17772ff49"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md",
+      "old_oid": "<deleted>",
+      "new_oid": "054c4b8073eeaade556c8c7abe8a6d054c824b14"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md",
+      "old_oid": "<deleted>",
+      "new_oid": "ab833dbdd6a4a239b1ecc7dd917fb6eb95fc4110"
+    },
+    {
+      "path": "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md",
+      "old_oid": "<deleted>",
+      "new_oid": "cb293c317f0d6056b12cbe3bdead55db85ba99d9"
+    },
+    {
+      "path": "docs/README.md",
+      "old_oid": "07ec26232b38c440ca65a5e6a4a339e827e674ac",
+      "new_oid": "0bb94234e5fab1ace8d286fc0aebf56f5b015ac9"
+    },
+    {
+      "path": "docs/demos/repo-pedant.md",
+      "old_oid": "bb8862b74b516fe09dc91230710403f71d3eaed3",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "docs/demos/super-repo-pedant.md",
+      "old_oid": "<deleted>",
+      "new_oid": "8e344f1770386d672c6d107c7b02d963062ff477"
+    },
+    {
+      "path": "docs/foundations.md",
+      "old_oid": "bd31e6f7b23ce056476e24768ff70b5506e6f76c",
+      "new_oid": "62553d09b94d03b56632b9162a83f74cb548d0a3"
+    },
+    {
+      "path": "docs/installation.md",
+      "old_oid": "2f83f234c92d9fd398d46403cbd615f63e8bcbf1",
+      "new_oid": "7308b2a8808c16cf570a5e048eb7c060173d5ae5"
+    },
+    {
+      "path": "docs/research/2026-08-28-skill-brand-paradigm-audit.md",
+      "old_oid": "5b57faf53c13b7ec4d7d54d7b262c122f4e9f186",
+      "new_oid": "ff146651ea3755c84b67ac4e08be32f6f6f117be"
+    },
+    {
+      "path": "docs/research/2026-09-07-skill-cross-platform-macos-windows.md",
+      "old_oid": "8234954b5adefe959094cf497536267b1c04dcc0",
+      "new_oid": "070dc5d2fe1ace219a4565616cae1b8331342638"
+    },
+    {
+      "path": "docs/skill-standard.md",
+      "old_oid": "046dedd8f19269a66f77f92f865074162cd8c95e",
+      "new_oid": "f365216d0d7b5a47e5112c610cc7d33a9a0ee83b"
+    },
+    {
+      "path": "docs/support-matrix.md",
+      "old_oid": "d45c210ccc6219d9fd007fcf4434d418df53c36d",
+      "new_oid": "c022497130113626943da67022cccfa204a4aef7"
+    },
+    {
+      "path": "scripts/azhou_hub.py",
+      "old_oid": "cb090b36a8d02b362e9cefa6f37f49b89edf79b3",
+      "new_oid": "0f4fd619e939a477134d2fae5b769aac0f426829"
     },
     {
       "path": "scripts/check_repository.py",
-      "old_oid": "ed910a26b404860d90df9f775e81657c04bfbe2e",
-      "new_oid": "b77337d3226fade467bd8a5e7fc16d5acd56481f"
+      "old_oid": "b77337d3226fade467bd8a5e7fc16d5acd56481f",
+      "new_oid": "f851e0cd3ccc0be714b5da93f524c5cc3d618ff4"
     },
     {
       "path": "scripts/verify.py",
-      "old_oid": "4b7ca1953cd5083b3bc833547535df589452728f",
-      "new_oid": "b3933abb35463a9ba61e42e8f3fdf458d5590d0b"
+      "old_oid": "b3933abb35463a9ba61e42e8f3fdf458d5590d0b",
+      "new_oid": "303ee336a07a1033941cb5fc9578f5bc6e6d9541"
     },
     {
       "path": "skills/ask-azhou/SKILL.md",
-      "old_oid": "044d093925fae08597f33100b4dd890272beb06a",
-      "new_oid": "588f1429ff1f64fadc48bbaa0243eada16760da7"
+      "old_oid": "588f1429ff1f64fadc48bbaa0243eada16760da7",
+      "new_oid": "95c2f865db139ae8399845726a869c884c5faa22"
     },
     {
-      "path": "skills/prose-standard/SKILL.md",
-      "old_oid": "71d3b21c247ee97d631327eb35bf36b1c355c490",
+      "path": "skills/repo-pedant/SKILL.md",
+      "old_oid": "4ef03f670aa18ae90025f5f801fce134182dfbff",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/prose-standard/references/cot-leakage.md",
-      "old_oid": "ee3c98ac7a33f165f8236548f5cca117dade9ae6",
+      "path": "skills/repo-pedant/assets/closeout-state.schema.json",
+      "old_oid": "4e03b6b9e16cfaaae622a943a831b76976db7759",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/prose-standard/references/fact-check.md",
-      "old_oid": "d8465864f2eee59b6011c7bfa23ebd345bd7caa2",
+      "path": "skills/repo-pedant/assets/evolution-candidate.schema.json",
+      "old_oid": "b96e94f2aade22f3f695773dda98bc8f0a97c039",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/prose-standard/references/provenance.md",
-      "old_oid": "10be02fc70482316fb570b0d72ae49e8f00aea05",
+      "path": "skills/repo-pedant/assets/evolution-evaluation.schema.json",
+      "old_oid": "2a1c1c04ddb75a3a6d4d7de127f33213a33e2e05",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/prose-standard/scripts/recall_batteries.py",
-      "old_oid": "23be5727ce73dac6ba535843419ad22bfc8206e4",
+      "path": "skills/repo-pedant/assets/evolution-signal.schema.json",
+      "old_oid": "69dba639cc79a10783c172c795ad1bb8439f9f57",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/super-prose-standard/SKILL.md",
-      "old_oid": "<deleted>",
-      "new_oid": "60b20eaafa7da81ac5a11aab34953106f9824ae8"
-    },
-    {
-      "path": "skills/super-prose-standard/references/cot-leakage.md",
-      "old_oid": "<deleted>",
-      "new_oid": "ee3c98ac7a33f165f8236548f5cca117dade9ae6"
-    },
-    {
-      "path": "skills/super-prose-standard/references/fact-check.md",
-      "old_oid": "<deleted>",
-      "new_oid": "d8465864f2eee59b6011c7bfa23ebd345bd7caa2"
-    },
-    {
-      "path": "skills/super-prose-standard/references/provenance.md",
-      "old_oid": "<deleted>",
-      "new_oid": "691219d5d9ffc83d99762c7fd4019366d6c0b700"
-    },
-    {
-      "path": "skills/super-prose-standard/scripts/recall_batteries.py",
-      "old_oid": "<deleted>",
-      "new_oid": "2865e8ab6ab1ad9a28f26d77c43c0ee6d9224140"
-    },
-    {
-      "path": "tests/fixtures/prose-standard/keep/counterfactual.md",
-      "old_oid": "3f74ad4ff0da251a89e3ab5912f8e82718dcc203",
+      "path": "skills/repo-pedant/assets/execution-protocol.schema.json",
+      "old_oid": "c5e62db14c17fb020cef348d1d53ca213d87d440",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/keep/external-standard.md",
-      "old_oid": "7f85f8fb5cae1f3407d8b6aa2a1f133f0f6647eb",
+      "path": "skills/repo-pedant/assets/history-report.schema.json",
+      "old_oid": "46532bc253320dd45fa2191afbebefb24263da1d",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/keep/issue-references.md",
-      "old_oid": "e0de8ccb21f3ea878f7b6a3b2f57ff5d9397b697",
+      "path": "skills/repo-pedant/assets/hooks/project-rule.md",
+      "old_oid": "53ca6cd79af9ffa8dd29e9cc40aa43d3059ac2ce",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/keep/measured-bound.md",
-      "old_oid": "8e7ede0cf1c60c961192f9da74ae26e4dd35f308",
+      "path": "skills/repo-pedant/assets/inventory.schema.json",
+      "old_oid": "e9c611552dc6ee7dd491b99dc33b609fc7048438",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/keep/runtime-lifecycle.md",
-      "old_oid": "cc859c8f0f45c4999b7cb9da752beb44b8e97a9a",
+      "path": "skills/repo-pedant/references/brand-layer.md",
+      "old_oid": "d3db8ba2043f99ab2e204c48365509abe3872549",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/change-narration.md",
-      "old_oid": "ffe5b4d85d2de057630ddf4b1fda3ce89bc15329",
+      "path": "skills/repo-pedant/references/evidence-contract.md",
+      "old_oid": "44b16ec2f9071ba88d7b6c77cb94e3b4c1c472b9",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/dead-citation.md",
-      "old_oid": "e1eeef79ef06006e80b03abb6feab43b303a11be",
+      "path": "skills/repo-pedant/references/evolution-contract.md",
+      "old_oid": "4b13afd983c6845f25462f21c5d8b7d7f77f540b",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/draft-section.md",
-      "old_oid": "8db3bf53d616c89747aa27aa3d686de212b0dfc5",
+      "path": "skills/repo-pedant/references/execution-protocol.md",
+      "old_oid": "db0f5be7abb09d728d0aa8e56a91be47201a2e10",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/hedge.md",
-      "old_oid": "f4186f0e46d129b13b75ffdcfaaca8ebe8905ea0",
+      "path": "skills/repo-pedant/references/history-evolution.md",
+      "old_oid": "d084950e8be011d8d833c85a162278d8086c3d0e",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/review-choreography.md",
-      "old_oid": "d74a82e844b5d807cb805aff89e97182e5dc20c5",
+      "path": "skills/repo-pedant/references/impact-matrix.md",
+      "old_oid": "b21cf3dff55c51073b3ec6f4c378737fe397ded9",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/stack-vantage.md",
-      "old_oid": "1de3f7f4cefae37f6725ca1eae6e27567574e319",
+      "path": "skills/repo-pedant/references/knowledge-surfaces.md",
+      "old_oid": "d25155dac45f6e5224255fed78b8b703095c5fd9",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/prose-standard/leakage/zh-narration.zh-CN.md",
-      "old_oid": "6855044a7fe5c2d5ece996058dcf1da6a78ecdd4",
+      "path": "skills/repo-pedant/references/neat-freak-compatibility.md",
+      "old_oid": "2d5c4f2f017f5b8a2920a0b14bf4c5aa563ce5a2",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/keep/counterfactual.md",
-      "old_oid": "<deleted>",
-      "new_oid": "3f74ad4ff0da251a89e3ab5912f8e82718dcc203"
+      "path": "skills/repo-pedant/references/provenance.md",
+      "old_oid": "090b6b903da29e8003b72d00b94e90ef1b905b32",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/keep/external-standard.md",
-      "old_oid": "<deleted>",
-      "new_oid": "7f85f8fb5cae1f3407d8b6aa2a1f133f0f6647eb"
+      "path": "skills/repo-pedant/references/runtime-history.md",
+      "old_oid": "dfce02a864cda11027f6697908e48a358c4f6c7e",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/keep/issue-references.md",
-      "old_oid": "<deleted>",
-      "new_oid": "e0de8ccb21f3ea878f7b6a3b2f57ff5d9397b697"
+      "path": "skills/repo-pedant/references/setup.md",
+      "old_oid": "dd40e50d39cefb306528ac106ad4513f04157d0c",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/keep/measured-bound.md",
-      "old_oid": "<deleted>",
-      "new_oid": "8e7ede0cf1c60c961192f9da74ae26e4dd35f308"
+      "path": "skills/repo-pedant/references/trigger-hooks.md",
+      "old_oid": "85fd59a1c8ae2319819b70b3e6242ddd6b48b2b3",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/keep/runtime-lifecycle.md",
-      "old_oid": "<deleted>",
-      "new_oid": "cc859c8f0f45c4999b7cb9da752beb44b8e97a9a"
+      "path": "skills/repo-pedant/scripts/azhou_runtime_state.py",
+      "old_oid": "05f84ef7623df668b3c9fd52ae005fa69eab18fe",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/change-narration.md",
-      "old_oid": "<deleted>",
-      "new_oid": "ffe5b4d85d2de057630ddf4b1fda3ce89bc15329"
+      "path": "skills/repo-pedant/scripts/closeout_hook.py",
+      "old_oid": "06e0a8a4e89d3dad853a6dc665958b5b83013b30",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/dead-citation.md",
-      "old_oid": "<deleted>",
-      "new_oid": "e1eeef79ef06006e80b03abb6feab43b303a11be"
+      "path": "skills/repo-pedant/scripts/collect_agent_history.py",
+      "old_oid": "97dd6f411b2dd0e185d1c51c1ab4444ca304ccfb",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/draft-section.md",
-      "old_oid": "<deleted>",
-      "new_oid": "8db3bf53d616c89747aa27aa3d686de212b0dfc5"
+      "path": "skills/repo-pedant/scripts/inventory_knowledge.py",
+      "old_oid": "6ffdacbea2d24b2456e8599a5cd4b0bcddc29647",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/hedge.md",
-      "old_oid": "<deleted>",
-      "new_oid": "f4186f0e46d129b13b75ffdcfaaca8ebe8905ea0"
+      "path": "skills/repo-pedant/scripts/manage_evolution.py",
+      "old_oid": "fa6d5116b3195c08c7760389e052135d869a607a",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/review-choreography.md",
-      "old_oid": "<deleted>",
-      "new_oid": "d74a82e844b5d807cb805aff89e97182e5dc20c5"
+      "path": "skills/repo-pedant/scripts/migrate_state.py",
+      "old_oid": "43b421e8c388910218723aac5901c61ef918dcd2",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/stack-vantage.md",
-      "old_oid": "<deleted>",
-      "new_oid": "1de3f7f4cefae37f6725ca1eae6e27567574e319"
+      "path": "skills/repo-pedant/scripts/validate_evidence_bundle.py",
+      "old_oid": "161bbe64e9fd76a572cd8ce27b6d42ed4a95291d",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/fixtures/super-prose-standard/leakage/zh-narration.zh-CN.md",
+      "path": "skills/repo-pedant/scripts/validate_execution_protocol.py",
+      "old_oid": "a1a2ec8e739b0c596a293f3b68f80e9f64d9b7a0",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "skills/super-repo-pedant/SKILL.md",
       "old_oid": "<deleted>",
-      "new_oid": "6855044a7fe5c2d5ece996058dcf1da6a78ecdd4"
+      "new_oid": "cbd6b4c4503f617ba62d0956360e9a3e31d4f8e6"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/closeout-state.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "d0b47493e22d729830578d22480abc9a02dfe844"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/evolution-candidate.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "954b2fd8dedf5292e8df82ffa089bdf66aaccb64"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/evolution-evaluation.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "747986dffe68b642cbad656bcd8a0a921e5585e2"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/evolution-signal.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "4e4d15e329e3579a425869e9ad0483889a3980ed"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/execution-protocol.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "9acaa73994bdb2feb186a5ae783ed9b3aa4e56f7"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/history-report.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "80e0b6a102a6c0d5df5c338e46c43d1078c7c5c7"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/hooks/project-rule.md",
+      "old_oid": "<deleted>",
+      "new_oid": "442043b7b3505173833156006cd0ee1de697c049"
+    },
+    {
+      "path": "skills/super-repo-pedant/assets/inventory.schema.json",
+      "old_oid": "<deleted>",
+      "new_oid": "a5a7f2a093499d470166d9112ea3a01349809e8b"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/brand-layer.md",
+      "old_oid": "<deleted>",
+      "new_oid": "3e8a8c7557840522a320169979387b116196ae55"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/evidence-contract.md",
+      "old_oid": "<deleted>",
+      "new_oid": "e456160fea7945c1438029bf99dc8986de62a9c1"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/evolution-contract.md",
+      "old_oid": "<deleted>",
+      "new_oid": "9982142e62438ba5e6e6e41c9645f34c556a2d8a"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/execution-protocol.md",
+      "old_oid": "<deleted>",
+      "new_oid": "f6d0d8b2e5a0bd0cede5bca3b64d3efc8bfd7443"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/history-evolution.md",
+      "old_oid": "<deleted>",
+      "new_oid": "4dee356d148dca3665c57183d4ab0fb823ef0e4c"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/impact-matrix.md",
+      "old_oid": "<deleted>",
+      "new_oid": "b21cf3dff55c51073b3ec6f4c378737fe397ded9"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/knowledge-surfaces.md",
+      "old_oid": "<deleted>",
+      "new_oid": "b5eb0ee833561e0f16c39ea6daf0e9f0acb04917"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/neat-freak-compatibility.md",
+      "old_oid": "<deleted>",
+      "new_oid": "6b7b54b85c9e22e45dcf37cf95f299bcbfcbc276"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "2f2978ebba911d4616e47ed43a395f29f66b2e30"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/runtime-history.md",
+      "old_oid": "<deleted>",
+      "new_oid": "dfce02a864cda11027f6697908e48a358c4f6c7e"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/setup.md",
+      "old_oid": "<deleted>",
+      "new_oid": "717227e608bf2fa5243c0811511cbd337707e026"
+    },
+    {
+      "path": "skills/super-repo-pedant/references/trigger-hooks.md",
+      "old_oid": "<deleted>",
+      "new_oid": "e0e88f344fad852507266eaa8ffc83e82a61fc42"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/azhou_runtime_state.py",
+      "old_oid": "<deleted>",
+      "new_oid": "05f84ef7623df668b3c9fd52ae005fa69eab18fe"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/closeout_hook.py",
+      "old_oid": "<deleted>",
+      "new_oid": "5b53971312c5c2f54f69ed5caa64a40c1bd1dbc5"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/collect_agent_history.py",
+      "old_oid": "<deleted>",
+      "new_oid": "b0023390236586dfd9ec153e007d4bfa4843a759"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/inventory_knowledge.py",
+      "old_oid": "<deleted>",
+      "new_oid": "a20ce6fa3f4e7897d9a63458b3f6f0046881f521"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/manage_evolution.py",
+      "old_oid": "<deleted>",
+      "new_oid": "6f6958a9056756eab187904e8eea18089216deb6"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/migrate_state.py",
+      "old_oid": "<deleted>",
+      "new_oid": "2701bcb779df4303ee678df2be07d3a6ebc4c4fe"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/validate_evidence_bundle.py",
+      "old_oid": "<deleted>",
+      "new_oid": "a7c67f0d450069629c79275e6c7089dc31f345f1"
+    },
+    {
+      "path": "skills/super-repo-pedant/scripts/validate_execution_protocol.py",
+      "old_oid": "<deleted>",
+      "new_oid": "b90623395050af1a50c3c4ef77befdbf9c486c3d"
     },
     {
       "path": "tests/test_azhou_hub.py",
-      "old_oid": "0c8035996b33ddd62eb12893ec4e9ab327b0d4c2",
-      "new_oid": "a91027e054044afc5984c4eec903b96dbce4101d"
+      "old_oid": "a91027e054044afc5984c4eec903b96dbce4101d",
+      "new_oid": "d1c7a786339f1c7c5cab2655c2131f39b40e54b9"
+    },
+    {
+      "path": "tests/test_azhou_runtime_state.py",
+      "old_oid": "54f75a46bdbd4acc81b00138be4c63e747a68f1e",
+      "new_oid": "34387aec812561d29385cecb68d3519131591273"
+    },
+    {
+      "path": "tests/test_brand_startup_discipline.py",
+      "old_oid": "b423c89855284de916e05b66c13837e896712bfc",
+      "new_oid": "cefa38093b2150940de76b6ed5b0507dbb6d49a1"
     },
     {
       "path": "tests/test_check_repository.py",
-      "old_oid": "623f42aa62fbbaf39845b1fc7c3340f7b36ccb13",
-      "new_oid": "b741a2c1b5efaf9d5cb481dd74253875832df70f"
+      "old_oid": "b741a2c1b5efaf9d5cb481dd74253875832df70f",
+      "new_oid": "768606047645b2c3f46d8b884a398e49c1606d95"
+    },
+    {
+      "path": "tests/test_closeout_hook.py",
+      "old_oid": "e14d7deb223dae9aff71462f2d6d28056925ad92",
+      "new_oid": "4bf987ddd1b4dbe3bc71656a845cfeedb30f6d7e"
+    },
+    {
+      "path": "tests/test_collect_agent_history.py",
+      "old_oid": "9afcc94cf23e504f90582705be133a9e942ced3b",
+      "new_oid": "2b6e81f2f33902f8d83bbb7a993a489609419a36"
+    },
+    {
+      "path": "tests/test_docs_code_contract.py",
+      "old_oid": "b36bf434e5d4c77bbc5d1877ee83def8fb0f7b54",
+      "new_oid": "0dbb1188b0027aceeb4cabb837b11532ae0b5c4f"
+    },
+    {
+      "path": "tests/test_inventory_knowledge.py",
+      "old_oid": "debf3258c80219094b7d0515d4595c4021b42d59",
+      "new_oid": "5029e71768e0babfc9e7b4520ce8e4b192e0a568"
     },
     {
       "path": "tests/test_llm_wiki_repository.py",
-      "old_oid": "a0835ae446f1be51edf1ddd421b93cdd5b363048",
-      "new_oid": "91ab06108a71aeb205cc267998c5f511587d88f2"
+      "old_oid": "91ab06108a71aeb205cc267998c5f511587d88f2",
+      "new_oid": "b08162ceff95bb7584e476d12f8d8e7e74720d26"
     },
     {
-      "path": "tests/test_prose_standard.py",
-      "old_oid": "91c68e03c3f0eeeda3aa28b2da6edf25b90a361c",
+      "path": "tests/test_manage_evolution.py",
+      "old_oid": "799dbe21000296dc6046e33a0d20ac32f4a14e9a",
+      "new_oid": "55b3902637788bd009ffe7f92777b7106fc9ef1c"
+    },
+    {
+      "path": "tests/test_repo_pedant_benchmark.py",
+      "old_oid": "97e9e2f2049aae6e0f35eba99007f0c430904618",
       "new_oid": "<deleted>"
     },
     {
-      "path": "tests/test_skill_package.py",
-      "old_oid": "294bf3436920afa9999fcf2e8c621319880daa80",
-      "new_oid": "6b9a65072c6f7af082422d02dd29b27a036696f5"
+      "path": "tests/test_repo_pedant_parity.py",
+      "old_oid": "326dbdf5a7a7a6ded9151982e4c1f2528a1c66cb",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "tests/test_super_prose_standard.py",
+      "path": "tests/test_repo_pedant_runtime_state.py",
+      "old_oid": "f04b65c40a5fbade8680614c235ebf8c628fa872",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/test_runtime_state_policy.py",
+      "old_oid": "5c04dfb35aa6f6fd013d06e074e712342df8e675",
+      "new_oid": "c32edade64c1f2b4239568fac645752e532a45d8"
+    },
+    {
+      "path": "tests/test_skill_package.py",
+      "old_oid": "6b9a65072c6f7af082422d02dd29b27a036696f5",
+      "new_oid": "be858378714a0a74060276da06ed3a755f2a851f"
+    },
+    {
+      "path": "tests/test_super_repo_pedant_benchmark.py",
       "old_oid": "<deleted>",
-      "new_oid": "09cbe16768c411d8473ffa32de7702944cf5f379"
+      "new_oid": "f36e70f486bfad5ad129bac6c06032f03d823271"
+    },
+    {
+      "path": "tests/test_super_repo_pedant_parity.py",
+      "old_oid": "<deleted>",
+      "new_oid": "7a413178609a930e8b156d824052d0e1dbab9165"
+    },
+    {
+      "path": "tests/test_super_repo_pedant_runtime_state.py",
+      "old_oid": "<deleted>",
+      "new_oid": "5b85a47749c3897b85fa4077c6a5a066a3266935"
+    },
+    {
+      "path": "tests/test_validate_evidence_bundle.py",
+      "old_oid": "5f4ad50f3863ab34561a495c80bdb009918e9f69",
+      "new_oid": "32ef469247d4757e37de855242bc782d42cac291"
+    },
+    {
+      "path": "tests/test_validate_execution_protocol.py",
+      "old_oid": "832f43a9ccb68ff0d64f198c4a19eea96fed0ac6",
+      "new_oid": "0d99f1c83bb4f85f023894b88841b79d01b05ac4"
     }
   ],
-  "raw_approval_record_sha256": "e434c9cb5bcca5b76c1e5b2c199b3804a8284b057ed74b8fe29ee07192ddf323",
+  "raw_approval_record_sha256": "573b681add6ede28d6de3d463ee06b44f424e440de2a582a81c20e4ba061a0b5",
   "raw_approval_storage": "Git-external"
 }

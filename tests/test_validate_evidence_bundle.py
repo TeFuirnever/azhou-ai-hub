@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "skills" / "repo-pedant" / "scripts" / "validate_evidence_bundle.py"
+SCRIPT = Path(__file__).parents[1] / "skills" / "super-repo-pedant" / "scripts" / "validate_evidence_bundle.py"
 SPEC = importlib.util.spec_from_file_location("validate_evidence_bundle", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -42,7 +42,7 @@ def report() -> dict:
             }
         )
     return {
-        "schema_version": "repo-pedant.history.v1",
+        "schema_version": "super-repo-pedant.history.v1",
         "generated_at": "2026-08-23T00:00:00+00:00",
         "skill_names": ["neat-freak", "repo-pedant"],
         "privacy": {
@@ -61,11 +61,11 @@ def report() -> dict:
     }
 
 
-RECEIPT = """## 🦊 阿舟 · Repo Pedant receipt
+RECEIPT = """## 🦊 阿舟 · Super Repo Pedant receipt
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 
-- Schema: repo-pedant.receipt.v2
+- Schema: super-repo-pedant.receipt.v2
 - Status: complete_with_holds
 - Mode: evolve
 - Scope: synthetic fixture
@@ -90,7 +90,14 @@ RECEIPT = """## 🦊 阿舟 · Repo Pedant receipt
 - Learning signal: stale_fact — synthetic evidence
 """
 PRIOR_BRANDED_RECEIPT = RECEIPT.replace(
+    "## 🦊 阿舟 · Super Repo Pedant receipt",
     "## 🦊 阿舟 · Repo Pedant receipt",
+).replace(
+    "- Schema: super-repo-pedant.receipt.v2",
+    "- Schema: repo-pedant.receipt.v2",
+)
+OLDER_PRIOR_BRANDED_RECEIPT = RECEIPT.replace(
+    "## 🦊 阿舟 · Super Repo Pedant receipt",
     "## 🦊 阿舟 · Repo-pedant receipt",
 )
 
@@ -134,6 +141,12 @@ class ValidateEvidenceBundleTest(unittest.TestCase):
 
     def test_prior_branded_receipt_remains_valid(self) -> None:
         self.assertEqual([], MODULE.validate_receipt(PRIOR_BRANDED_RECEIPT))
+        self.assertEqual([], MODULE.validate_receipt(OLDER_PRIOR_BRANDED_RECEIPT))
+
+    def test_legacy_report_schema_remains_accepted(self) -> None:
+        value = report()
+        value["schema_version"] = MODULE.LEGACY_SCHEMA_VERSION
+        self.assertEqual([], MODULE.validate_report(value, required_runtimes=MODULE.RUNTIMES))
 
     def test_branded_receipt_enforces_machine_status_invariants(self) -> None:
         emoji_status = RECEIPT.replace("- Status: complete_with_holds", "- Status: 🟡 收齐，但有挂起")

@@ -3,14 +3,14 @@
 These are characterization pins for surfaces the coverage audit found
 under-tested after the 2026-09-05/06 evolution batches:
 
-- ``skills/repo-pedant/references/setup.md`` documents ``inventory_knowledge.py``
+- ``skills/super-repo-pedant/references/setup.md`` documents ``inventory_knowledge.py``
   snapshot flags; the audit requires every documented flag to exist in the
   script's argparse (the repo already hit doc-code drift twice via dead script
   pointers).
 - ``AGENTS.md`` names the latest super-caveman promotion record; the pin keeps
   that pointer mechanically fresh instead of relying on manual reconciles.
 - The completion-criteria additions (excalidraw SKILL.md sections 1-3,
-  repo-pedant SKILL.md sections 2-3, lavish ``artifact-mode.md`` steps 1-7)
+  super-repo-pedant SKILL.md sections 2-3, lavish ``artifact-mode.md`` steps 1-7)
   stay present; deleting a marker fails here.
 """
 
@@ -22,12 +22,12 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-SETUP_MD = ROOT / "skills" / "repo-pedant" / "references" / "setup.md"
-INVENTORY_PY = ROOT / "skills" / "repo-pedant" / "scripts" / "inventory_knowledge.py"
+SETUP_MD = ROOT / "skills" / "super-repo-pedant" / "references" / "setup.md"
+INVENTORY_PY = ROOT / "skills" / "super-repo-pedant" / "scripts" / "inventory_knowledge.py"
 AGENTS_MD = ROOT / "AGENTS.md"
 RESULTS = ROOT / "benchmarks" / "super-caveman" / "results"
 EXCALIDRAW_SKILL = ROOT / "skills" / "excalidraw-diagram" / "SKILL.md"
-REPO_PEDANT_SKILL = ROOT / "skills" / "repo-pedant" / "SKILL.md"
+REPO_PEDANT_SKILL = ROOT / "skills" / "super-repo-pedant" / "SKILL.md"
 ARTIFACT_MODE = ROOT / "skills" / "lavish" / "references" / "artifact-mode.md"
 
 

@@ -57,10 +57,10 @@ Maintainer and coding-agent workflows that need parallel local checkouts follow 
 Use Conventional Commit style:
 
 ~~~text
-feat(repo-pedant): add memory inventory proof
+feat(super-repo-pedant): add memory inventory proof
 fix(excalidraw): preserve editable arrow bindings
 docs(readme): clarify one-path installation
-test(repo-pedant): cover closeout trigger boundary
+test(super-repo-pedant): cover closeout trigger boundary
 ci: pin actions and require benchmark gates
 ~~~
 

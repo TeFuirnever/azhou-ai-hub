@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 
-SCRIPT = Path(__file__).parents[1] / "skills" / "repo-pedant" / "scripts" / "closeout_hook.py"
+SCRIPT = Path(__file__).parents[1] / "skills" / "super-repo-pedant" / "scripts" / "closeout_hook.py"
 SPEC = importlib.util.spec_from_file_location("closeout_hook", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -23,7 +23,7 @@ SPEC.loader.exec_module(MODULE)
 
 class CloseoutHookTest(unittest.TestCase):
     def write_state(self, workspace: Path, **overrides: object) -> Path:
-        path = workspace / ".azhou" / "repo-pedant" / "closeout-state.json"
+        path = workspace / ".azhou" / "super-repo-pedant" / "closeout-state.json"
         path.parent.mkdir(parents=True)
         value = {
             "schema_version": MODULE.SCHEMA_VERSION,
@@ -41,11 +41,11 @@ class CloseoutHookTest(unittest.TestCase):
     def args(self, workspace: Path, runtime: Path, **overrides: object) -> Namespace:
         value = {
             "workspace": workspace,
-            "state": ".azhou/repo-pedant/closeout-state.json",
+            "state": ".azhou/super-repo-pedant/closeout-state.json",
             "event": "stop",
             "mode": "advisory",
             "format": "plain",
-            "runtime_state_dir": workspace / ".azhou" / "repo-pedant" / "hooks",
+            "runtime_state_dir": workspace / ".azhou" / "super-repo-pedant" / "hooks",
             "block_cap": 3,
         }
         value.update(overrides)
@@ -75,7 +75,7 @@ class CloseoutHookTest(unittest.TestCase):
             workspace.mkdir()
             outside = base / "outside.json"
             outside.write_text("{}", encoding="utf-8")
-            state = workspace / ".azhou" / "repo-pedant" / "closeout-state.json"
+            state = workspace / ".azhou" / "super-repo-pedant" / "closeout-state.json"
             state.parent.mkdir(parents=True)
             state.symlink_to(outside)
             output, diagnostic = MODULE.evaluate_event(self.args(workspace, base / "cache"), {})
@@ -166,7 +166,7 @@ class CloseoutHookTest(unittest.TestCase):
     def test_render_hooks_codex_keeps_status_message_and_optional_windows_command(self) -> None:
         fragment = self.render_hooks(format="codex", python_windows="C:\\Tools\\python.exe")
         precompact_hook = fragment["hooks"]["PreCompact"][0]["hooks"][0]
-        self.assertIn("阿舟 · Repo Pedant", precompact_hook["statusMessage"])
+        self.assertIn("阿舟 · Super Repo Pedant", precompact_hook["statusMessage"])
         self.assertTrue(precompact_hook["commandWindows"].startswith('"C:\\Tools\\python.exe"'))
         plain = self.render_hooks(format="claude")
         self.assertNotIn("commandWindows", plain["hooks"]["PreCompact"][0]["hooks"][0])

@@ -217,7 +217,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "azhou-info" / "SKILL.md",
                 root / "skills" / "azhou-setup" / "SKILL.md",
                 root / "skills" / "azhou-verify" / "SKILL.md",
-                root / "skills" / "repo-pedant" / "SKILL.md",
+                root / "skills" / "super-repo-pedant" / "SKILL.md",
                 root / "skills" / "lavish" / "SKILL.md",
                 root / "skills" / "eli5" / "SKILL.md",
                 root / "skills" / "autoresearch" / "SKILL.md",
@@ -228,9 +228,9 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
-            legacy = root / "benchmarks" / "repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
+            legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
             errors = check_skill_discovery([*expected, legacy], root)
-            self.assertEqual(["unexpected installable skill: benchmarks/repo-pedant/upstream/neat-freak/SKILL.md"], errors)
+            self.assertEqual(["unexpected installable skill: benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.md"], errors)
 
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"

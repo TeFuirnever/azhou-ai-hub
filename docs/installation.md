@@ -5,7 +5,7 @@
 Install only the skill you need:
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill repo-pedant
+npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
@@ -32,9 +32,9 @@ For a local checkout, the foundation CLI can plan and reconcile a manual copy or
 ~~~bash
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-python scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
-python scripts/azhou_hub.py setup --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
-python scripts/azhou_hub.py doctor --skill repo-pedant --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py setup --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --json
+python scripts/azhou_hub.py setup --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
+python scripts/azhou_hub.py doctor --skill super-repo-pedant --target "$SKILLS_HOME" --json
 ~~~
 
 Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a package-manager installation or rewrites harness configuration.
@@ -42,15 +42,15 @@ Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails close
 To let this checkout later repair, switch or remove exactly what it installed, opt into a single-skill managed receipt:
 
 ~~~bash
-RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/repo-pedant.json"
+RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/super-repo-pedant.json"
 
 python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
-  --skill repo-pedant --target "$SKILLS_HOME" --mode link --json
+  --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --json
 
 python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
-  --skill repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
+  --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
 ~~~
 
 The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).
@@ -73,7 +73,7 @@ Copy the complete runtime directory into a skill root supported by the active ha
 REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-cp -R "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
+cp -R "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
 cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 cp -R "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
 cp -R "$REPO_ROOT/skills/lavish" "$SKILLS_HOME/lavish"
@@ -89,7 +89,7 @@ A symlink makes edits visible immediately:
 REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-ln -s "$REPO_ROOT/skills/repo-pedant" "$SKILLS_HOME/repo-pedant"
+ln -s "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
 ln -s "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
 ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ln -s "$REPO_ROOT/skills/llm-wiki" "$SKILLS_HOME/llm-wiki"
@@ -111,7 +111,7 @@ All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows,
 - Checkout-assisted `setup` defaults to `--mode link`, which creates a symlink. Windows requires Developer Mode or an elevated prompt for symlink creation; without it, use `--mode copy`, which needs no special privilege and produces a standalone snapshot.
 - Development symlinks follow the same privilege premise as `--mode link`; without Developer Mode prefer `--mode copy`.
 - Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
-- Hook commands rendered by repo-pedant, super-caveman and LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
+- Hook commands rendered by super-repo-pedant, super-caveman and LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
 
 A checked-in Windows full-flow receipt (info → setup → verify) is not yet available; it is tracked by the `win-05-rerun-receipt` ticket.
 
@@ -128,7 +128,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 
 ## Skill-specific dependencies
 
-- Repo Pedant uses Python standard library for its deterministic scripts. See [repo-pedant setup](../skills/repo-pedant/references/setup.md).
+- Repo Pedant uses Python standard library for its deterministic scripts. See [super-repo-pedant setup](../skills/super-repo-pedant/references/setup.md).
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
@@ -152,6 +152,6 @@ python scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOM
 
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
 
-Remove the legacy <code>neat-freak</code> name only after confirming <code>repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.
+Remove the legacy <code>neat-freak</code> name only after confirming <code>super-repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.
 
 LLM Wiki normal operations use only <code>.azhou/llm-wiki/</code>. Import a recognized prior store through the dry-run-first <code>migrate --from-store</code> command, then bind apply to the emitted <code>planId</code>. Migration never deletes the source; contraction remains separately authorized.
