@@ -12,7 +12,7 @@ from typing import Any, Sequence
 import llm_wiki
 
 
-SERVER_NAME = "llm-wiki"
+SERVER_NAME = "super-llm-wiki"
 SERVER_VERSION = "1.0.0"
 PROTOCOL_VERSION = "2025-06-18"
 CATEGORY_VALUES = [

@@ -8,9 +8,9 @@
 - License: MIT; retained at [`LICENSES/llm-wiki-source-MIT.txt`](../../../LICENSES/llm-wiki-source-MIT.txt)
 - Upstream implementation: `src/hooks/wiki/`, `src/tools/wiki-tools.ts`, their tests, lifecycle wrappers, hook/tool registries, standalone MCP transport, keyword detector, and wiki command/skill entry
 
-The Azhou implementation is a Python standard-library adaptation, not a byte-identical copy. `llm_wiki.py` owns storage and migration semantics; `llm_wiki_mcp.py` exposes eight tools over stdio; `llm_wiki_adapter.py` renders explicit protocol configuration and translates lifecycle/trigger contracts; `assets/host/commands/wiki.md` provides the explicit command entry. Current product behavior uses one `.azhou/llm-wiki/` store and a reviewed `project-context.json` input.
+The Azhou implementation is a Python standard-library adaptation, not a byte-identical copy. `llm_wiki.py` owns storage and migration semantics; `llm_wiki_mcp.py` exposes eight tools over stdio; `llm_wiki_adapter.py` renders explicit protocol configuration and translates lifecycle/trigger contracts; `assets/host/commands/wiki.md` provides the explicit command entry. Current product behavior uses one `.azhou/super-llm-wiki/` store and a reviewed `project-context.json` input.
 
-Compatibility is deliberately narrow: `.llm-wiki/` and `.omc/wiki/` are explicit migration sources only. Neither is read, written, deleted, or treated as a fallback during normal operation.
+Compatibility is deliberately narrow: `.llm-wiki/`, `.omc/wiki/` and the pre-rename `.azhou/llm-wiki/` namespace are explicit migration sources only. Neither is read, written, deleted, or treated as a fallback during normal operation.
 
 The upstream comments credit the persistent self-maintained wiki concept to Andrej Karpathy. No Karpathy-authored code or text is redistributed here.
 
@@ -25,4 +25,4 @@ The upstream comments credit the persistent self-maintained wiki concept to Andr
 
 ## Fidelity classification
 
-Classification: `adapted` — the pinned upstream implementation (commit `deee3a446dadc9bfea31cdc8b19b00b16718082e`, hooks, tools, registries, MCP transport) is rewritten from scratch in the Python standard library rather than copied, per the adaptation statement above. The `super-` prefix rename rides the audit's rename milestone (#176), not the classification ticket. Skill-standard §2.3.
+Classification: `adapted` — the pinned upstream implementation (commit `deee3a446dadc9bfea31cdc8b19b00b16718082e`, hooks, tools, registries, MCP transport) is rewritten from scratch in the Python standard library rather than copied, per the adaptation statement above. The canonical name is `super-llm-wiki` (renamed from `llm-wiki` in #180 under the audit's rename milestone #176); the old name survives only as a compatibility trigger in the entry description. Skill-standard §2.3.

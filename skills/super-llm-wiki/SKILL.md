@@ -1,12 +1,12 @@
 ---
-name: llm-wiki
-description: Build, query, lint, migrate, and maintain a private project Markdown wiki when verified architecture, decisions, debugging facts, or conventions must persist across sessions. Do not use it for global memory, ephemeral scratch notes, secrets, or unreviewed transcripts.
+name: super-llm-wiki
+description: Renamed from llm-wiki (the old name still triggers this skill). Build, query, lint, migrate, and maintain a private project Markdown wiki when verified architecture, decisions, debugging facts, or conventions must persist across sessions. Do not use it for global memory, ephemeral scratch notes, secrets, or unreviewed transcripts.
 invocation: both
 ---
 
-# LLM Wiki
+# Super LLM Wiki
 
-**🦊 阿舟 · LLM Wiki**
+**🦊 阿舟 · Super LLM Wiki**
 
 > 📚 知识要留得住，也要经得起查证。
 
@@ -17,12 +17,12 @@ Use a project-local Markdown knowledge base for verified architecture, decisions
 For an interactive run, read [brand-layer.md](references/brand-layer.md), then start exactly once:
 
 ```text
-🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
+🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
 ```
 
 Use one fixed anchor per completed material stage. Keep machine JSON, paths, commands, schema values, page content, and raw evidence emoji-free. Never emit `✅ 验证通过` after a `fail`, `hold`, or `skipped` machine receipt. A host without Unicode may remove emoji without changing prefixes, separators, fields, or values.
 
-Every runtime entry uses the canonical `<project>/.azhou/llm-wiki/` store. The CLI is `scripts/llm_wiki.py`; the optional stdio MCP server is `scripts/llm_wiki_mcp.py`.
+Every runtime entry uses the canonical `<project>/.azhou/super-llm-wiki/` store. The CLI is `scripts/llm_wiki.py`; the optional stdio MCP server is `scripts/llm_wiki_mcp.py`.
 
 ## Operating contract
 
@@ -31,7 +31,7 @@ Every runtime entry uses the canonical `<project>/.azhou/llm-wiki/` store. The C
 3. Record evidence in `--source`, choose an honest confidence, and exclude secrets, raw private transcripts, tokens, and unrelated personal data.
 4. Run `lint --no-log` after mutations. Broken references, invalid pages, and `implemented`/`rejected` decision pages without an `## Alternatives considered` section keep status `fail`; warnings remain visible. Decision pages may carry a `lifecycle` (`proposed`, `implemented`, `archived`, `rejected`), set at creation via `--lifecycle`; ingest never changes an existing page's lifecycle.
 5. Freeze a settled decision with `archive`; the page becomes byte-frozen under a recorded content hash, and `ingest` and `delete` both refuse it afterwards. Any later byte change, a missing archived page, or a corrupt archive lock fails lint.
-6. Return the script's `llm-wiki.receipt.v3` fields, including `currentTruth` and `learningSignal`. Do not claim a lifecycle event, migration, or deletion succeeded without its receipt.
+6. Return the script's `super-llm-wiki.receipt.v3` fields, including `currentTruth` and `learningSignal`. Do not claim a lifecycle event, migration, or deletion succeeded without its receipt.
 
 `query` writes an operation log by default. Add `--no-log` for a strictly read-only task. `delete` is destructive: require direct user authorization immediately before running it, then pass `--yes`.
 

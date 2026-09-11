@@ -174,7 +174,7 @@ def render_mcp_config(skill_dir: Path, python_path: Path) -> dict[str, Any]:
     python_path = python_path.expanduser().resolve()
     return {
         "mcpServers": {
-            "llm-wiki": {
+            "super-llm-wiki": {
                 "command": str(python_path),
                 "args": [str(skill_dir / "scripts" / "llm_wiki_mcp.py")],
             }
@@ -205,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "trigger":
         payload = {
             "matched": matches_wiki_trigger(" ".join(args.prompt)),
-            "skill": "llm-wiki",
+            "skill": "super-llm-wiki",
         }
     elif args.command == "host-hook":
         payload = run_host_hook(args.event, sys.stdin.read())

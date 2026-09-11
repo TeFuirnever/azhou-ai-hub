@@ -1,12 +1,12 @@
-# LLM Wiki production design
+# Super LLM Wiki production design
 
 ## Canonical store
 
-All normal entrypoints resolve one project-local store: `<project>/.azhou/llm-wiki/`. CLI, MCP, lifecycle events, project context, generated index, operation log, and configuration share the same `WikiStore` core. Alternate paths exist only as explicit migration sources.
+All normal entrypoints resolve one project-local store: `<project>/.azhou/super-llm-wiki/`. CLI, MCP, lifecycle events, project context, generated index, operation log, and configuration share the same `WikiStore` core. Alternate paths exist only as explicit migration sources.
 
 ~~~text
 CLI ───────────────┐
-MCP stdio ─────────┼──> WikiStore ──> .azhou/llm-wiki/
+MCP stdio ─────────┼──> WikiStore ──> .azhou/super-llm-wiki/
 lifecycle adapter ─┘        │
                             ├── atomic page writes
                             ├── store-wide lock
@@ -44,7 +44,7 @@ Migration uses expand, verify, then contract:
 
 1. `migrate --from-store <recognized-path>` inventories and validates without writing, then emits a stable `planId`.
 2. `--apply --plan-id <reviewed-planId>` rejects changed plans before copying approved text files into a private staging directory.
-3. Session capture is reset to false, the index is rebuilt, and the staged directory is atomically renamed to `.azhou/llm-wiki/`.
+3. Session capture is reset to false, the index is rebuilt, and the staged directory is atomically renamed to `.azhou/super-llm-wiki/`.
 4. Repeating the same migration returns `already-current`; divergent targets fail.
 5. The source is never deleted. It is the rollback copy until separately authorized contraction.
 
@@ -54,6 +54,6 @@ Release requires all of these:
 
 1. Product-surface negative scan contains no historical path, brand, or host-specific term outside mandatory legal provenance.
 2. Fixed Azhou stage anchors map honestly to receipt v3; machine outputs contain no brand emoji.
-3. CLI, eight MCP tools, and three lifecycle events pass real-process integration tests against `.azhou/llm-wiki/`.
+3. CLI, eight MCP tools, and three lifecycle events pass real-process integration tests against `.azhou/super-llm-wiki/`.
 4. Migration proves dry-run, atomic apply, idempotent retry, conflict rejection, privacy reset, and source preservation.
 5. Repository policy, unit tests, benchmark-integrity suites, whitespace checks, and knowledge-graph coverage pass with no unreviewed code gaps.

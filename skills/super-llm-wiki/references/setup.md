@@ -1,4 +1,4 @@
-# LLM Wiki setup
+# Super LLM Wiki setup
 
 ## Runtime
 
@@ -11,7 +11,7 @@ No Node package, hosted database, model API, or global configuration is required
 ## Smoke check
 
 ~~~bash
-SKILL_DIR=/absolute/path/to/llm-wiki
+SKILL_DIR=/absolute/path/to/super-llm-wiki
 PROJECT_ROOT=/absolute/path/to/project
 
 python "$SKILL_DIR/scripts/llm_wiki.py" --help
@@ -19,18 +19,18 @@ python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" init
 python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" list
 ~~~
 
-`init` creates `<project>/.azhou/llm-wiki/`, secures the directory to the current user, and writes its private-by-default `.gitignore` and generated `index.md`.
+`init` creates `<project>/.azhou/super-llm-wiki/`, secures the directory to the current user, and writes its private-by-default `.gitignore` and generated `index.md`.
 
 ## MCP server
 
-`scripts/llm_wiki_mcp.py` exposes eight tools over newline-delimited JSON-RPC stdio; `wiki_add` and `wiki_ingest` accept an optional decision `lifecycle`, and `wiki_archive` freezes an implemented decision page. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.azhou/llm-wiki/`.
+`scripts/llm_wiki_mcp.py` exposes eight tools over newline-delimited JSON-RPC stdio; `wiki_add` and `wiki_ingest` accept an optional decision `lifecycle`, and `wiki_archive` freezes an implemented decision page. Every call accepts an optional `workingDirectory`; every operation resolves `<workingDirectory>/.azhou/super-llm-wiki/`.
 
 ~~~bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \
   python "$SKILL_DIR/scripts/llm_wiki_mcp.py"
 ~~~
 
-Render a configuration fragment, review absolute paths, then merge only the emitted `llm-wiki` entry into the active MCP client configuration:
+Render a configuration fragment, review absolute paths, then merge only the emitted `super-llm-wiki` entry into the active MCP client configuration:
 
 ~~~bash
 python "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-mcp \
@@ -59,7 +59,7 @@ python "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-hooks \
 
 Host shell premise: rendered hook commands are POSIX shell syntax executed by the host shell — on Windows this requires Git Bash; a PowerShell fallback is outside the supported claim.
 
-Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.azhou/llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
+Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.azhou/super-llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
 
 ~~~bash
 python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" config --auto-capture true
@@ -77,7 +77,7 @@ python "$SKILL_DIR/scripts/llm_wiki_adapter.py" trigger "wiki query"
 
 ## Migration and rollback
 
-Dry-run a recognized prior store:
+Dry-run a recognized prior store (compatibility sources include the pre-rename `.azhou/llm-wiki/` namespace):
 
 ~~~bash
 python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
@@ -91,8 +91,8 @@ python "$SKILL_DIR/scripts/llm_wiki.py" --root "$PROJECT_ROOT" \
   migrate --from-store .llm-wiki --apply --plan-id '<reviewed-planId>'
 ~~~
 
-Migration refuses symlinks, active locks, unknown entries, invalid pages, invalid configuration, and target conflicts. It restores the private ignore rule, disables session capture, stages the full copy, rebuilds the index, then atomically publishes `.azhou/llm-wiki/`. The source remains untouched. Rollback means stop using the canonical store and return to the preserved source; deleting either directory is a separate destructive action.
+Migration refuses symlinks, active locks, unknown entries, invalid pages, invalid configuration, and target conflicts. It restores the private ignore rule, disables session capture, stages the full copy, rebuilds the index, then atomically publishes `.azhou/super-llm-wiki/`. The source remains untouched. Rollback means stop using the canonical store and return to the preserved source; deleting either directory is a separate destructive action.
 
 ## Environment snapshot
 
-`capture-environment` accepts reviewed JSON and stores its SHA-256 digest in page sources. Inspect and redact the file first. For automatic local refresh, write the smaller reviewed context to `.azhou/llm-wiki/project-context.json`.
+`capture-environment` accepts reviewed JSON and stores its SHA-256 digest in page sources. Inspect and redact the file first. For automatic local refresh, write the smaller reviewed context to `.azhou/super-llm-wiki/project-context.json`.

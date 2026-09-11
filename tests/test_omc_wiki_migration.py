@@ -7,7 +7,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "llm-wiki" / "scripts"
+SCRIPTS = ROOT / "skills" / "super-llm-wiki" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import llm_wiki  # noqa: E402
@@ -31,7 +31,7 @@ class OMCWikiMigrationTest(unittest.TestCase):
             planned = llm_wiki.migrate_store(root, ".omc/wiki", apply=False)
             self.assertEqual("planned", planned["status"])
             self.assertTrue(planned["sourcePreserved"])
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
 
             migrated = llm_wiki.migrate_store(root, ".omc/wiki", apply=True)
             self.assertEqual("migrated", migrated["status"])

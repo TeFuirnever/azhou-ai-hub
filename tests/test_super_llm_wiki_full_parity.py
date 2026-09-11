@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "llm-wiki"
+SKILL = ROOT / "skills" / "super-llm-wiki"
 SCRIPTS = SKILL / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -79,10 +79,10 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 {**common, "title": "MCP Page", "content": "Initial fact.", "tags": ["mcp"]},
             )
             self.assertNotIn("isError", added)
-            self.assertTrue((root / ".azhou" / "llm-wiki" / "mcp-page.md").is_file())
+            self.assertTrue((root / ".azhou" / "super-llm-wiki" / "mcp-page.md").is_file())
             self.assertIn(
                 "] add",
-                (root / ".azhou" / "llm-wiki" / "log.md").read_text(encoding="utf-8"),
+                (root / ".azhou" / "super-llm-wiki" / "log.md").read_text(encoding="utf-8"),
             )
 
             ingested = llm_wiki_mcp.call_tool(
@@ -141,7 +141,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
                     lifecycle="implemented",
                 )
                 store.archive(title="Freeze this decision")
-            store_root = root / ".azhou" / "llm-wiki"
+            store_root = root / ".azhou" / "super-llm-wiki"
             lock = json.loads((store_root / ".archive-lock.json").read_text(encoding="utf-8"))
             entry = lock["entries"]["freeze-this-decision.md"]
             digest = hashlib.sha256((store_root / "freeze-this-decision.md").read_bytes()).hexdigest()
@@ -307,7 +307,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 check=True,
             )
             responses = [json.loads(line) for line in completed.stdout.splitlines()]
-            self.assertEqual("llm-wiki", responses[0]["result"]["serverInfo"]["name"])
+            self.assertEqual("super-llm-wiki", responses[0]["result"]["serverInfo"]["name"])
             self.assertEqual(EXPECTED_TOOLS, [tool["name"] for tool in responses[1]["result"]["tools"]])
             self.assertIn("Wiki page created", responses[2]["result"]["content"][0]["text"])
 
@@ -380,7 +380,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
             root = Path(directory)
             event = json.dumps({"cwd": str(root), "session_id": "blocked-12345678"})
             self.assertEqual({"continue": True}, llm_wiki_adapter.run_host_hook("session-end", event))
-            self.assertFalse((root / ".azhou" / "llm-wiki").exists())
+            self.assertFalse((root / ".azhou" / "super-llm-wiki").exists())
 
             store = llm_wiki.WikiStore(root)
             store.init()
@@ -414,7 +414,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
         ]
         self.assertTrue(all(str(SKILL) in command for command in commands))
         mcp = llm_wiki_adapter.render_mcp_config(SKILL, Path(sys.executable))
-        self.assertEqual(str(SCRIPTS / "llm_wiki_mcp.py"), mcp["mcpServers"]["llm-wiki"]["args"][0])
+        self.assertEqual(str(SCRIPTS / "llm_wiki_mcp.py"), mcp["mcpServers"]["super-llm-wiki"]["args"][0])
 
     def test_trigger_and_command_entry_are_explicit(self) -> None:
         for prompt in ("wiki", "wiki this", "wiki add", "wiki lint", "wiki query"):
@@ -430,8 +430,8 @@ class LLMWikiFullParityTests(unittest.TestCase):
         ):
             self.assertFalse(llm_wiki_adapter.matches_wiki_trigger(prompt), prompt)
         command = (SKILL / "assets" / "host" / "commands" / "wiki.md").read_text(encoding="utf-8")
-        self.assertIn("/llm-wiki", command)
-        self.assertIn("llm-wiki/SKILL.md", command)
+        self.assertIn("/super-llm-wiki", command)
+        self.assertIn("super-llm-wiki/SKILL.md", command)
 
     def test_adapter_cli_outputs_json_only(self) -> None:
         output = io.StringIO()

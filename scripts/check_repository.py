@@ -52,7 +52,7 @@ REQUIRED_PATHS = (
     "LICENSE",
     "README.md",
     "README.zh-CN.md",
-    "assets/skills/llm-wiki-effect.png",
+    "assets/skills/super-llm-wiki-effect.png",
     "assets/skills/super-caveman-effect.png",
     "SECURITY.md",
     "SUPPORT.md",
@@ -64,7 +64,7 @@ REQUIRED_PATHS = (
     "scripts/azhou_hub.py",
     "skills/super-caveman/SKILL.md",
     "skills/excalidraw-diagram/SKILL.md",
-    "skills/llm-wiki/SKILL.md",
+    "skills/super-llm-wiki/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-lavish/SKILL.md",
 )
@@ -87,7 +87,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
-    "skills/llm-wiki/SKILL.md",
+    "skills/super-llm-wiki/SKILL.md",
 }
 INVOCATION_CLASSES = (
     "user-invoked orchestrator",
@@ -154,11 +154,11 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>",
         "brand_path": "skills/super-lavish/references/brand-layer.md",
     },
-    "skills/llm-wiki/SKILL.md": {
-        "display_name": "LLM Wiki",
+    "skills/super-llm-wiki/SKILL.md": {
+        "display_name": "Super LLM Wiki",
         "motto": "知识要留得住，也要经得起查证。",
-        "startup": "🦊 阿舟 · LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
-        "brand_path": "skills/llm-wiki/references/brand-layer.md",
+        "startup": "🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
+        "brand_path": "skills/super-llm-wiki/references/brand-layer.md",
     },
     "skills/super-repo-pedant/SKILL.md": {
         "display_name": "Super Repo Pedant",

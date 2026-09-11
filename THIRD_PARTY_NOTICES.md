@@ -38,7 +38,7 @@ Upstream README files, installers, status-line integration and separate alias pa
 
 ## LLM Wiki
 
-`skills/llm-wiki/` is a Python standard-library adaptation of the LLM Wiki implementation in [Yeachan-Heo/oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) at commit [`deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/commit/deee3a446dadc9bfea31cdc8b19b00b16718082e), audited as package version `4.14.6`.
+`skills/super-llm-wiki/` is a Python standard-library adaptation of the LLM Wiki implementation in [Yeachan-Heo/oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) at commit [`deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/commit/deee3a446dadc9bfea31cdc8b19b00b16718082e), audited as package version `4.14.6`.
 
 - Copyright: Yeachan Heo
 - License: [MIT](LICENSES/llm-wiki-source-MIT.txt)

@@ -45,7 +45,7 @@ Ask which family the request belongs to, then the branch question.
 
 ### Keep knowledge and quality honest across sessions (工程纪律)
 
-- "Persist this verified decision / debug fact / convention for future sessions" → `llm-wiki` — private local store; decisions carry a lifecycle and archived pages are tamper-evident.
+- "Persist this verified decision / debug fact / convention for future sessions" → `super-llm-wiki` — private local store; decisions carry a lifecycle and archived pages are tamper-evident.
 - "Reconcile docs, rules, and memory at task close" → `super-repo-pedant` — the closeout protocol with inventory proof.
 - "Write or trim prose without losing facts / audit it for leaked reasoning" → `super-prose-standard` — the complete-proposition rule and the leakage taxonomy.
 - "Make my tests reliable under real CI concurrency / diagnose a flake" → `super-ci-test-reliability` — topology-aware design guidance and the flake-masking blacklist.
