@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "skill": "prose-standard",
+  "skill": "super-prose-standard",
   "purpose": "recall-battery wiring integrity: every leakage fixture hits at least one probe; the keep corpus hits only the documented false-positive families",
   "corpus": {
     "leakage": [

@@ -2,93 +2,278 @@
   "schema": "super-caveman-exact-diff-approval-record.v2",
   "decision": "approved",
   "approver": "workspace-owner",
-  "approved_at": "2026-09-10T17:23:10Z",
+  "approved_at": "2026-09-11T01:07:25Z",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "c1adee66e652bf6805d2935abaa848add69fe5a6",
-  "path_set_sha256": "8defb04160262f57009deb0445ca4c2c788dea1b0afee342e9a81fc011bd5a38",
-  "staged_patch_sha256": "fd3686eab583500fdec34cb2a353ffe7a4fb4c8fbdd9cca150f88be01822057b",
+  "base_commit": "3bce6d997e5813d8d2dfce65b94586e558d1f02c",
+  "path_set_sha256": "2e037a91b4bf1edacdead6f944642faac878ca49a2e94081569c54cf2750b02d",
+  "staged_patch_sha256": "ade73a7361b038e48ccd16b5661e9f3169f3a55897dad80f0d3810c3c354e926",
   "reviewed_blobs": [
     {
       "path": "AGENTS.md",
-      "old_oid": "d49c44062fe2761483d3007251a77068347ab525",
-      "new_oid": "f5a3690cbd24e93d33cd5d0fbe324c464dba4063"
+      "old_oid": "f5a3690cbd24e93d33cd5d0fbe324c464dba4063",
+      "new_oid": "edcbc60e4c9bc2a827efab484744970d372732d8"
     },
     {
       "path": "CHANGELOG.md",
-      "old_oid": "60135b509ca55c527acf7a23bd86d79f98de8145",
-      "new_oid": "5c5f20c3925091e9c115417b9ec52468ab112ed1"
+      "old_oid": "5c5f20c3925091e9c115417b9ec52468ab112ed1",
+      "new_oid": "cc3f7d40de3d644463f7c82ed3b5c292c71e287e"
     },
     {
       "path": "README.md",
-      "old_oid": "9b3ec3e5fe7b31093ae6edd23dfa424b647af582",
-      "new_oid": "06b7ae8dfaef1e08770f4f050e5659ce72c05b39"
+      "old_oid": "06b7ae8dfaef1e08770f4f050e5659ce72c05b39",
+      "new_oid": "cbc6e29efe662cd00504cc4026040ceff6b79dad"
     },
     {
       "path": "README.zh-CN.md",
-      "old_oid": "6562a1c11c0d70b068f295f3dd2d06404b7b945c",
-      "new_oid": "fd2a03e2e8141b9df4c14a01049db7b0db0bbc05"
+      "old_oid": "fd2a03e2e8141b9df4c14a01049db7b0db0bbc05",
+      "new_oid": "80f75ee190a2e0cac9b345392d87e3eb5bccc34e"
+    },
+    {
+      "path": "benchmarks/prose-standard/README.md",
+      "old_oid": "1100e80e800a2d823b3be2eef07957358f89b1db",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/prose-standard/benchmark.py",
+      "old_oid": "522cc6b65a24ca9228f30be62d903b27f8719c66",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/prose-standard/manifest.json",
+      "old_oid": "a4f162af33967471fbaf63a5af9a65388a64aebd",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "benchmarks/super-prose-standard/README.md",
+      "old_oid": "<deleted>",
+      "new_oid": "eb010bd2f329e7d55216e6acf6787b1ee95b3816"
+    },
+    {
+      "path": "benchmarks/super-prose-standard/benchmark.py",
+      "old_oid": "<deleted>",
+      "new_oid": "55ce987bbaffdc916cef230a934f6546018fc121"
+    },
+    {
+      "path": "benchmarks/super-prose-standard/manifest.json",
+      "old_oid": "<deleted>",
+      "new_oid": "17eafa491fbd2fcf015a5c68637f38d9b7b72eee"
     },
     {
       "path": "scripts/check_repository.py",
-      "old_oid": "bdd805116eee27d1af07a9cf9bd70211f1abf850",
-      "new_oid": "ed910a26b404860d90df9f775e81657c04bfbe2e"
+      "old_oid": "ed910a26b404860d90df9f775e81657c04bfbe2e",
+      "new_oid": "b77337d3226fade467bd8a5e7fc16d5acd56481f"
+    },
+    {
+      "path": "scripts/verify.py",
+      "old_oid": "4b7ca1953cd5083b3bc833547535df589452728f",
+      "new_oid": "b3933abb35463a9ba61e42e8f3fdf458d5590d0b"
     },
     {
       "path": "skills/ask-azhou/SKILL.md",
-      "old_oid": "24f1df2d77e7b1911dd9fe8c0cc6014904791781",
-      "new_oid": "044d093925fae08597f33100b4dd890272beb06a"
+      "old_oid": "044d093925fae08597f33100b4dd890272beb06a",
+      "new_oid": "588f1429ff1f64fadc48bbaa0243eada16760da7"
     },
     {
-      "path": "skills/ci-test-reliability/SKILL.md",
-      "old_oid": "ce5a378108bf9b126a1c8b69e0d120fbd51d998f",
+      "path": "skills/prose-standard/SKILL.md",
+      "old_oid": "71d3b21c247ee97d631327eb35bf36b1c355c490",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/ci-test-reliability/references/ci-flake-diagnosis.md",
-      "old_oid": "f419915c8cb43bbd3f85495ca9fb872bc67b2906",
+      "path": "skills/prose-standard/references/cot-leakage.md",
+      "old_oid": "ee3c98ac7a33f165f8236548f5cca117dade9ae6",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/ci-test-reliability/references/provenance.md",
-      "old_oid": "52ecb4c245ca55331200009df4c4d98e0c06075d",
+      "path": "skills/prose-standard/references/fact-check.md",
+      "old_oid": "d8465864f2eee59b6011c7bfa23ebd345bd7caa2",
       "new_oid": "<deleted>"
     },
     {
-      "path": "skills/super-ci-test-reliability/SKILL.md",
-      "old_oid": "<deleted>",
-      "new_oid": "74c8ca2a4ba9669514b7aef6880fc16d85fbbc35"
+      "path": "skills/prose-standard/references/provenance.md",
+      "old_oid": "10be02fc70482316fb570b0d72ae49e8f00aea05",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "skills/super-ci-test-reliability/references/ci-flake-diagnosis.md",
-      "old_oid": "<deleted>",
-      "new_oid": "f419915c8cb43bbd3f85495ca9fb872bc67b2906"
+      "path": "skills/prose-standard/scripts/recall_batteries.py",
+      "old_oid": "23be5727ce73dac6ba535843419ad22bfc8206e4",
+      "new_oid": "<deleted>"
     },
     {
-      "path": "skills/super-ci-test-reliability/references/provenance.md",
+      "path": "skills/super-prose-standard/SKILL.md",
       "old_oid": "<deleted>",
-      "new_oid": "8bd2794b8559761745d767dad5140cbf2391244d"
+      "new_oid": "60b20eaafa7da81ac5a11aab34953106f9824ae8"
+    },
+    {
+      "path": "skills/super-prose-standard/references/cot-leakage.md",
+      "old_oid": "<deleted>",
+      "new_oid": "ee3c98ac7a33f165f8236548f5cca117dade9ae6"
+    },
+    {
+      "path": "skills/super-prose-standard/references/fact-check.md",
+      "old_oid": "<deleted>",
+      "new_oid": "d8465864f2eee59b6011c7bfa23ebd345bd7caa2"
+    },
+    {
+      "path": "skills/super-prose-standard/references/provenance.md",
+      "old_oid": "<deleted>",
+      "new_oid": "691219d5d9ffc83d99762c7fd4019366d6c0b700"
+    },
+    {
+      "path": "skills/super-prose-standard/scripts/recall_batteries.py",
+      "old_oid": "<deleted>",
+      "new_oid": "2865e8ab6ab1ad9a28f26d77c43c0ee6d9224140"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/keep/counterfactual.md",
+      "old_oid": "3f74ad4ff0da251a89e3ab5912f8e82718dcc203",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/keep/external-standard.md",
+      "old_oid": "7f85f8fb5cae1f3407d8b6aa2a1f133f0f6647eb",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/keep/issue-references.md",
+      "old_oid": "e0de8ccb21f3ea878f7b6a3b2f57ff5d9397b697",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/keep/measured-bound.md",
+      "old_oid": "8e7ede0cf1c60c961192f9da74ae26e4dd35f308",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/keep/runtime-lifecycle.md",
+      "old_oid": "cc859c8f0f45c4999b7cb9da752beb44b8e97a9a",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/change-narration.md",
+      "old_oid": "ffe5b4d85d2de057630ddf4b1fda3ce89bc15329",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/dead-citation.md",
+      "old_oid": "e1eeef79ef06006e80b03abb6feab43b303a11be",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/draft-section.md",
+      "old_oid": "8db3bf53d616c89747aa27aa3d686de212b0dfc5",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/hedge.md",
+      "old_oid": "f4186f0e46d129b13b75ffdcfaaca8ebe8905ea0",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/review-choreography.md",
+      "old_oid": "d74a82e844b5d807cb805aff89e97182e5dc20c5",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/stack-vantage.md",
+      "old_oid": "1de3f7f4cefae37f6725ca1eae6e27567574e319",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/prose-standard/leakage/zh-narration.zh-CN.md",
+      "old_oid": "6855044a7fe5c2d5ece996058dcf1da6a78ecdd4",
+      "new_oid": "<deleted>"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/keep/counterfactual.md",
+      "old_oid": "<deleted>",
+      "new_oid": "3f74ad4ff0da251a89e3ab5912f8e82718dcc203"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/keep/external-standard.md",
+      "old_oid": "<deleted>",
+      "new_oid": "7f85f8fb5cae1f3407d8b6aa2a1f133f0f6647eb"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/keep/issue-references.md",
+      "old_oid": "<deleted>",
+      "new_oid": "e0de8ccb21f3ea878f7b6a3b2f57ff5d9397b697"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/keep/measured-bound.md",
+      "old_oid": "<deleted>",
+      "new_oid": "8e7ede0cf1c60c961192f9da74ae26e4dd35f308"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/keep/runtime-lifecycle.md",
+      "old_oid": "<deleted>",
+      "new_oid": "cc859c8f0f45c4999b7cb9da752beb44b8e97a9a"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/change-narration.md",
+      "old_oid": "<deleted>",
+      "new_oid": "ffe5b4d85d2de057630ddf4b1fda3ce89bc15329"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/dead-citation.md",
+      "old_oid": "<deleted>",
+      "new_oid": "e1eeef79ef06006e80b03abb6feab43b303a11be"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/draft-section.md",
+      "old_oid": "<deleted>",
+      "new_oid": "8db3bf53d616c89747aa27aa3d686de212b0dfc5"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/hedge.md",
+      "old_oid": "<deleted>",
+      "new_oid": "f4186f0e46d129b13b75ffdcfaaca8ebe8905ea0"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/review-choreography.md",
+      "old_oid": "<deleted>",
+      "new_oid": "d74a82e844b5d807cb805aff89e97182e5dc20c5"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/stack-vantage.md",
+      "old_oid": "<deleted>",
+      "new_oid": "1de3f7f4cefae37f6725ca1eae6e27567574e319"
+    },
+    {
+      "path": "tests/fixtures/super-prose-standard/leakage/zh-narration.zh-CN.md",
+      "old_oid": "<deleted>",
+      "new_oid": "6855044a7fe5c2d5ece996058dcf1da6a78ecdd4"
     },
     {
       "path": "tests/test_azhou_hub.py",
-      "old_oid": "e09b439a03254e27b6006e3d1b46c99f96bf2365",
-      "new_oid": "0c8035996b33ddd62eb12893ec4e9ab327b0d4c2"
+      "old_oid": "0c8035996b33ddd62eb12893ec4e9ab327b0d4c2",
+      "new_oid": "a91027e054044afc5984c4eec903b96dbce4101d"
     },
     {
       "path": "tests/test_check_repository.py",
-      "old_oid": "2e83fcb2a7b6846af3b59fc40c345fea216ae37a",
-      "new_oid": "623f42aa62fbbaf39845b1fc7c3340f7b36ccb13"
+      "old_oid": "623f42aa62fbbaf39845b1fc7c3340f7b36ccb13",
+      "new_oid": "b741a2c1b5efaf9d5cb481dd74253875832df70f"
     },
     {
       "path": "tests/test_llm_wiki_repository.py",
-      "old_oid": "139ebdc7636e4e5282a1df9e150d494c3c986659",
-      "new_oid": "a0835ae446f1be51edf1ddd421b93cdd5b363048"
+      "old_oid": "a0835ae446f1be51edf1ddd421b93cdd5b363048",
+      "new_oid": "91ab06108a71aeb205cc267998c5f511587d88f2"
+    },
+    {
+      "path": "tests/test_prose_standard.py",
+      "old_oid": "91c68e03c3f0eeeda3aa28b2da6edf25b90a361c",
+      "new_oid": "<deleted>"
     },
     {
       "path": "tests/test_skill_package.py",
-      "old_oid": "1bf9865d6b77fccd3b341535d1ac5d8830c0eacd",
-      "new_oid": "294bf3436920afa9999fcf2e8c621319880daa80"
+      "old_oid": "294bf3436920afa9999fcf2e8c621319880daa80",
+      "new_oid": "6b9a65072c6f7af082422d02dd29b27a036696f5"
+    },
+    {
+      "path": "tests/test_super_prose_standard.py",
+      "old_oid": "<deleted>",
+      "new_oid": "09cbe16768c411d8473ffa32de7702944cf5f379"
     }
   ],
-  "raw_approval_record_sha256": "31d034394d53607938f9c57cc971f40355ddedd1a6aaf47eb8f9b5b76dcf1103",
+  "raw_approval_record_sha256": "e434c9cb5bcca5b76c1e5b2c199b3804a8284b057ed74b8fe29ee07192ddf323",
   "raw_approval_storage": "Git-external"
 }

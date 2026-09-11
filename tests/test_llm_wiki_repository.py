@@ -38,7 +38,7 @@ class LLMWikiRepositoryTest(unittest.TestCase):
                 root / "skills" / "eli5" / "SKILL.md",
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "super-ci-test-reliability" / "SKILL.md",
-                root / "skills" / "prose-standard" / "SKILL.md",
+                root / "skills" / "super-prose-standard" / "SKILL.md",
                 root / "skills" / "ask-azhou" / "SKILL.md",
                 root / "skills" / "session-insights" / "SKILL.md",
             ]

@@ -30,7 +30,7 @@ SKILL_DIRS = (
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
     ROOT / "skills" / "super-ci-test-reliability",
-    ROOT / "skills" / "prose-standard",
+    ROOT / "skills" / "super-prose-standard",
     ROOT / "skills" / "ask-azhou",
     ROOT / "skills" / "arch-doc",
     ROOT / "skills" / "session-insights",

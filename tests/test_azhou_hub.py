@@ -135,11 +135,11 @@ class AzhouHubCliTest(unittest.TestCase):
                 "excalidraw-diagram",
                 "lavish",
                 "llm-wiki",
-                "prose-standard",
                 "repo-pedant",
                 "session-insights",
                 "super-caveman",
                 "super-ci-test-reliability",
+                "super-prose-standard",
             ],
             payload["installable_skills"],
         )

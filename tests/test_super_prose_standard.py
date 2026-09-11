@@ -10,8 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skills" / "prose-standard" / "scripts" / "recall_batteries.py"
-FIXTURES = ROOT / "tests" / "fixtures" / "prose-standard"
+SCRIPT = ROOT / "skills" / "super-prose-standard" / "scripts" / "recall_batteries.py"
+FIXTURES = ROOT / "tests" / "fixtures" / "super-prose-standard"
 
 # Findings inside the keep corpus that are the documented false-positive
 # families (probe over-match is by design; these stay judged-keep).
