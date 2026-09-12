@@ -14,9 +14,11 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TeFuirnever/azhou-ai-hub)
 
-<img src="assets/github/readme-proof.png" alt="Azhou AI Hub: the documented verification command and a recorded local result." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 16 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
 
 </div>
+
+> 🦊 Hero composed with the Azhou Covers skill under the `github_readme_image_16_9` profile: cream paper, the registered four-colour palette, and the canonical character composited at exact pixels. Thumbnail review passed at 120/240/360 px; final public visual approval remains a human checkpoint.
 
 Most skill repositories stop at prompts. Azhou AI Hub treats each skill as a product: a precise trigger, a portable runtime package, reproducible setup, deterministic gates, honest evaluation, provenance, and a human-controlled evolution path.
 
@@ -91,9 +93,11 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Ask Azhou](skills/ask-azhou/SKILL.md) | Router for the whole catalog: describe the intent, get the skill, its mode, and its boundary. Recommendation-only; gate-enforced coverage of every canonical skill. | Router pattern adapted from a pinned upstream; routing-map parity is a repository-gate check with a negative control. No behavior benchmark yet. |
 | [Autoresearch](skills/autoresearch/SKILL.md) | Wrap a user-owned pinned <code>karpathy/autoresearch</code> checkout so an agent can prepare, run, resume and report automatic nanochat training experiments, holding before any unattended GPU run. | Azhou-authored wrapper vendors zero upstream bytes because the upstream publishes no license; fail-closed setup checks the CUDA GPU, uv and the pinned commit, covered by deterministic package-surface checks. No behavior benchmark yet. |
 | [Arch Doc](skills/arch-doc/SKILL.md) | Draft, calibrate and review an architecture design document from upstream sources: reading notes with per-fact provenance, a baseline skeleton with controlled evidence vocabulary, PlantUML-only diagram discipline (four-part captions, sequence-diagram rules), source cross-calibration and two-line best-practice review gates. | Distilled from the MCC ARCH-2026-001 v0.1-v0.17 pipeline (upstream team research, readability audit, best-practice review and an architect-approved 20-item backlog); five validated sequence diagrams and two registered review guides ship as references; deterministic scaffold (`new_doc.py`), closing-gate checker (`verify_doc.py`) and a golden scaffold case in `benchmarks/arch-doc/`. |
-| [Session Insights](skills/session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code adapter; Codex and zcode adapters fail closed until their formats are verified); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates, window/cap trimming, receipt-digest stability, and privacy plus fail-closed negative controls. No behavior benchmark yet. |
+| [Session Insights](skills/session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code adapter; Codex and zcode adapters fail closed until their formats are verified); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates, window/cap trimming, receipt-digest stability, and privacy plus fail-closed negative controls. Excerpts-off aggregate runs reuse a disposable per-file metadata cache whose cold, warm, deleted and corrupt states yield byte-identical results. No behavior benchmark yet. |
 
 All sixteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/ask-azhou/SKILL.md) is the user-invoked front door, `super-prose-standard` and `super-ci-test-reliability` are model-invoked disciplines reachable without being named, and every package declares its class — fifteen in `SKILL.md` frontmatter, and super-caveman's in the repository gate's held-declaration table until its promotion-frozen tree next rides — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+
+Canonical names carry their provenance: `super-` marks a skill adapted from pinned upstream material, and a bare name marks original or faithfully adopted work. The repository gate enforces that prefix-fidelity rule in both directions and fails on residue from renamed-away names outside the documented compatibility surfaces.
 
 ## Try six task skills
 
@@ -115,6 +119,8 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 - **Harness differences stay visible.** Codex, Claude Code and zcode share the same runtime packages, but hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md).
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).
+
+![Azhou AI Hub: the documented verification command and a recorded local result.](assets/github/readme-proof.png)
 
 ## Super Repo Pedant
 
