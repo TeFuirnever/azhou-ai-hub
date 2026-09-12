@@ -1,44 +1,54 @@
 {
-  "schema": "super-caveman-exact-diff-approval-record.v2",
-  "decision": "approved",
-  "approver": "workspace-owner",
-  "approved_at": "2026-09-11T21:15:00Z",
-  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "base_commit": "a00c2cf9b71775acb1c1a5dc1b0becfda7da0186",
-  "path_set_sha256": "b4b1770e314e0b0acc122f36f4384028863b1affc7af79f66310e2085740c7ee",
-  "staged_patch_sha256": "c50792b8b4acdb8b8e019c22dbc5dace17e2bcfa4af8358f6c16872b63a9d810",
-  "reviewed_blobs": [
-    {
-      "path": "AGENTS.md",
-      "old_oid": "0528903ea1678a5ebb6be9535f22ca04a3b4d413",
-      "new_oid": "7d2df79a17d495512a2b3815841fd8f7b3907e8c"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "old_oid": "dc051bd87e1cfe0ebad81e2027abfcd85a1624f7",
-      "new_oid": "158e66eee448f8af029c626610259e2f2841fadd"
-    },
-    {
-      "path": "README.zh-CN.md",
-      "old_oid": "5fbb4b6c8d62e8be20cb89f4fd595666e992bfc6",
-      "new_oid": "98c70c6fda74ef8f81dfa46eafa8f8be1196e575"
-    },
-    {
-      "path": "docs/skill-standard.md",
-      "old_oid": "f365216d0d7b5a47e5112c610cc7d33a9a0ee83b",
-      "new_oid": "b306dddaef99f09f5e8c6d795cb8e9557962646b"
-    },
-    {
-      "path": "scripts/check_repository.py",
-      "old_oid": "81551c1c9f50f37c3b1a108bb852269fc9e22f53",
-      "new_oid": "f1ee68637a91fb0fc6296661c8857393c299c8ba"
-    },
-    {
-      "path": "tests/test_check_repository.py",
-      "old_oid": "5c9c7ce9222155f13229643a635531af79e3efb0",
-      "new_oid": "e5f4af467ea722e5747a18838ae5aa549e46ed96"
-    }
-  ],
-  "raw_approval_record_sha256": "23a81dabd3c0680a4670eeb11d8775b321d429060d1f62f88c598a95f8d4cf98",
-  "raw_approval_storage": "Git-external"
+ "schema": "super-caveman-exact-diff-approval-record.v2",
+ "decision": "approved",
+ "approver": "workspace-owner",
+ "approved_at": "2026-09-12T01:57:00Z",
+ "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+ "base_commit": "7c824082cb7a8b954ec0382bc3081dc240920cf6",
+ "path_set_sha256": "331bef2d8e32e0a38732b105f5e609229454999ededef95f153f1e4dfffb6156",
+ "staged_patch_sha256": "4d7e89f6945a7cc2bf25b5365ac76bdd68bdc9f3b8614b77403791063ef6dbf6",
+ "reviewed_blobs": [
+  {
+   "path": "AGENTS.md",
+   "old_oid": "7d2df79a17d495512a2b3815841fd8f7b3907e8c",
+   "new_oid": "62cc404280ca7c19d9be3ce3bdc9ef804d2531e9"
+  },
+  {
+   "path": "CHANGELOG.md",
+   "old_oid": "158e66eee448f8af029c626610259e2f2841fadd",
+   "new_oid": "3ce224be90627b27a1fc9416a86a13e2e79d95ee"
+  },
+  {
+   "path": "benchmarks/session-insights/benchmark.py",
+   "old_oid": "dcabbfad941978a06769ffcae140a4b319359d8d",
+   "new_oid": "0b205b8f334ef3fea7d81951594516df58994b08"
+  },
+  {
+   "path": "benchmarks/session-insights/manifest.json",
+   "old_oid": "90320351a8fdd984d5753bb88bcd14d137d0e98b",
+   "new_oid": "55750d79f81278d71602690662281c4ea37479e8"
+  },
+  {
+   "path": "skills/session-insights/SKILL.md",
+   "old_oid": "ccafb6970459121a3771aa6ba04c8ddb8b45c20f",
+   "new_oid": "c326fba2f450b720d4eb906ae8b17582a474d48f"
+  },
+  {
+   "path": "skills/session-insights/references/report-contract.md",
+   "old_oid": "7a115ddbc3f4b8ac77ee26b04323ac36a0085262",
+   "new_oid": "1f8d189af4ad07022dd897d03e027c9c6786e75f"
+  },
+  {
+   "path": "skills/session-insights/scripts/session_insights.py",
+   "old_oid": "616344e6f919ec1385fb96ec3e5218f62e75197a",
+   "new_oid": "26dd5d6cc31b3e5819d4db9ca5d9e6e26ad989e6"
+  },
+  {
+   "path": "tests/test_session_insights_benchmark.py",
+   "old_oid": "afcb3d9c59bbff3702a800298e09dcd2b10a8984",
+   "new_oid": "a18b69d281e7b144fde138897e9823192c413692"
+  }
+ ],
+ "raw_approval_record_sha256": "2150174d47ff9a89197882174a04953bf3dfaefcd42fe90499da39331d65ad16",
+ "raw_approval_storage": "Git-external"
 }

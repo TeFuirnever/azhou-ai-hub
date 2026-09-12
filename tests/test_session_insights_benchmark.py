@@ -158,5 +158,116 @@ class SessionInsightsCliTest(unittest.TestCase):
         self.assertIn("aggregate schema must be", result.stderr)
 
 
+class SessionInsightsCacheTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.benchmark = load_benchmark_module()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.work = Path(self.tempdir.name)
+        self.store = self.work / "store"
+        self.benchmark.build_store(self.store)
+        self.cwd = self.work / "cwd"
+        self.cwd.mkdir()
+
+    @property
+    def cache_file(self) -> Path:
+        return self.cwd / ".azhou" / "session-insights" / "metadata-cache.json"
+
+    def aggregate(self, *extra: str) -> dict:
+        result = run_cli(
+            "aggregate", "--harness", "claude-code", "--store-root", str(self.store),
+            *extra, cwd=self.cwd,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        return json.loads(result.stdout)
+
+    def claude(self, payload: dict) -> dict:
+        return payload["harnesses"]["claude-code"]
+
+    def test_warm_and_deleted_cache_match_cold_output(self) -> None:
+        cold = self.aggregate()
+        self.assertTrue(self.cache_file.is_file())
+        warm = self.aggregate()
+        self.assertEqual(cold, warm)
+        self.cache_file.unlink()
+        rebuilt = self.aggregate()
+        self.assertEqual(cold, rebuilt)
+
+    def test_corrupt_cache_is_rebuilt(self) -> None:
+        cold = self.aggregate()
+        self.cache_file.write_text("{corrupt", encoding="utf-8")
+        rebuilt = self.aggregate()
+        self.assertEqual(cold, rebuilt)
+        self.assertEqual(
+            "session-insights.metadata-cache.v1", json.loads(self.cache_file.read_text(encoding="utf-8"))["schema"]
+        )
+
+    def test_cache_carries_no_transcript_text(self) -> None:
+        self.aggregate()
+        blob = self.cache_file.read_text(encoding="utf-8")
+        self.assertNotIn('"first_prompt"', blob)
+        needles = [
+            self.benchmark.FIRST_PROMPT_SHARED,
+            self.benchmark.EXCERPT_SENTINEL,
+            *self.benchmark.SEEDED_SECRETS,
+            self.benchmark.ALPHA,
+            self.benchmark.BETA,
+        ]
+        home = str(Path.home())
+        if home != "/":
+            needles.append(home)
+        for needle in needles:
+            self.assertNotIn(needle, blob)
+
+    def test_changed_added_removed_sessions_rescan(self) -> None:
+        base = self.claude(self.aggregate())
+
+        alpha = self.store / "projects" / self.benchmark.ALPHA
+        s1 = alpha / f"{self.benchmark.S1}.jsonl"
+        with s1.open("a", encoding="utf-8") as handle:
+            handle.write(
+                self.benchmark.line(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-09-08T10:04:00Z",
+                        "message": {"role": "user", "content": "cache invalidation probe"},
+                    }
+                )
+                + "\n"
+            )
+        changed = self.claude(self.aggregate())
+        self.assertEqual(base["turns"] + 1, changed["turns"])
+
+        s7_id = "77777777-7777-7777-7777-777777777777"
+        added_file = self.store / "projects" / self.benchmark.BETA / f"{s7_id}.jsonl"
+        added_file.write_text(
+            self.benchmark.session_lines(
+                s7_id,
+                [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-09-08T12:00:00Z",
+                        "message": {"role": "user", "content": "added session probe"},
+                    }
+                ],
+            ),
+            encoding="utf-8",
+        )
+        added = self.claude(self.aggregate())
+        self.assertEqual(base["session_count"] + 1, added["session_count"])
+
+        (alpha / f"{self.benchmark.S4}.jsonl").unlink()
+        removed = self.claude(self.aggregate())
+        self.assertEqual(base["session_count"], removed["session_count"])
+
+    def test_excerpt_runs_bypass_cache(self) -> None:
+        payload = self.aggregate("--include-excerpts")
+        self.assertFalse(self.cache_file.exists())
+        excerpts = self.claude(payload)["excerpts"]
+        self.assertTrue(
+            any(self.benchmark.FIRST_PROMPT_SHARED in entry["first_prompt"] for entry in excerpts)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
