@@ -14,9 +14,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TeFuirnever/azhou-ai-hub)
 
-<img src="assets/github/readme-proof.png" alt="Azhou AI Hub：公开的验证命令与一次本地验证结果。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸旁边写着三条主张——16 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 </div>
+
+> 🦊 主视觉由 Azhou Covers skill 按 `github_readme_image_16_9` profile 确定性合成：米色纸面、注册四色、canonical 角色按原像素合成。120/240/360 px 缩略图复核已通过；最终公开视觉批准仍保留为人工 checkpoint。
 
 很多 skill 仓库停在提示词。Azhou AI Hub 把每个 skill 当成产品：触发准确、运行包可移植、依赖可复现、检查可执行、评测不造假、来源可追踪、演化受人类控制。
 
@@ -91,9 +93,11 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Ask Azhou](skills/ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用；路由覆盖由仓库门禁强制。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。 |
 | [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。 |
 | [Arch Doc](skills/arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与两份评审指南作为 references 随包交付；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/arch-doc/` 黄金用例。 |
-| [Session Insights](skills/session-insights/SKILL.md) | 从本机 agent 会话存储产出事实绑定的使用洞察报告（Claude Code 适配器；Codex 与 zcode 适配器在格式验证前 fail closed）；只做聚合，原始转写永不出本机。 | 合成存储上的接线完整性套件：golden 聚合、窗口/上限裁剪、收据摘要稳定性、隐私与 fail-closed 负控。尚无行为 benchmark。 |
+| [Session Insights](skills/session-insights/SKILL.md) | 从本机 agent 会话存储产出事实绑定的使用洞察报告（Claude Code 适配器；Codex 与 zcode 适配器在格式验证前 fail closed）；只做聚合，原始转写永不出本机。 | 合成存储上的接线完整性套件：golden 聚合、窗口/上限裁剪、收据摘要稳定性、隐私与 fail-closed 负控。不含摘录的聚合运行复用可丢弃的逐文件元数据缓存，冷、热、删除、损坏四种缓存状态产出字节一致的结果。尚无行为 benchmark。 |
 
-十六个包都能作为独立 package surface 安装和发现。目录按[技能标准](docs/skill-standard.md) §2.2 的调用类轴组合：[Ask Azhou](skills/ask-azhou/SKILL.md) 是 user-invoked 前门，`super-prose-standard` 和 `super-ci-test-reliability` 是不点名即可到达的 model-invoked discipline，每个包都声明调用类——十五个在各自 `SKILL.md` frontmatter，super-caveman 的在仓库门禁的持表声明中直至其晋升冻结树下次 ride————orchestrator 可以指向 discipline，任何东西不得链入另一个 orchestrator，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+十六个包都能作为独立 package surface 安装和发现。目录按[技能标准](docs/skill-standard.md) §2.2 的调用类轴组合：[Ask Azhou](skills/ask-azhou/SKILL.md) 是 user-invoked 前门，`super-prose-standard` 和 `super-ci-test-reliability` 是不点名即可到达的 model-invoked discipline，每个包都声明调用类——十五个在各自 `SKILL.md` frontmatter，super-caveman 的在仓库门禁的持表声明中直至其晋升冻结树下次 ride——orchestrator 可以指向 discipline，任何东西不得链入另一个 orchestrator，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+
+Canonical 名字本身携带来源信息：`super-` 前缀表示该 skill 改编自锁定上游材料，无前缀表示原创或忠实承接。仓库门禁双向强制执行这条 prefix-fidelity 规则，并对已改名旧名字在文档兼容面之外的残留直接 fail。
 
 ## 试用六个任务型 Skill
 
@@ -115,6 +119,8 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
+
+![Azhou AI Hub：公开的验证命令与一次本地验证结果。](assets/github/readme-proof.png)
 
 ## Super Repo Pedant
 
