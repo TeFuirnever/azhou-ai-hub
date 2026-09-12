@@ -2,53 +2,18 @@
  "schema": "super-caveman-exact-diff-approval-record.v2",
  "decision": "approved",
  "approver": "workspace-owner",
- "approved_at": "2026-09-12T01:57:00Z",
+ "approved_at": "2026-09-12T12:37:46Z",
+ "base_commit": "28a25eb31c2355372e151dc0e892f9ba20b946c4",
  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
- "base_commit": "7c824082cb7a8b954ec0382bc3081dc240920cf6",
- "path_set_sha256": "331bef2d8e32e0a38732b105f5e609229454999ededef95f153f1e4dfffb6156",
- "staged_patch_sha256": "4d7e89f6945a7cc2bf25b5365ac76bdd68bdc9f3b8614b77403791063ef6dbf6",
+ "path_set_sha256": "d9f6b5e215de9d19f8720e535e235d627191885c46ef2fb30712595b92316211",
+ "staged_patch_sha256": "78c8dcad342b8c194e61962504e5b5de4ee8f5861b94249a4b37fd4ac4b9644d",
  "reviewed_blobs": [
   {
-   "path": "AGENTS.md",
-   "old_oid": "7d2df79a17d495512a2b3815841fd8f7b3907e8c",
-   "new_oid": "62cc404280ca7c19d9be3ce3bdc9ef804d2531e9"
-  },
-  {
    "path": "CHANGELOG.md",
-   "old_oid": "158e66eee448f8af029c626610259e2f2841fadd",
-   "new_oid": "3ce224be90627b27a1fc9416a86a13e2e79d95ee"
-  },
-  {
-   "path": "benchmarks/session-insights/benchmark.py",
-   "old_oid": "dcabbfad941978a06769ffcae140a4b319359d8d",
-   "new_oid": "0b205b8f334ef3fea7d81951594516df58994b08"
-  },
-  {
-   "path": "benchmarks/session-insights/manifest.json",
-   "old_oid": "90320351a8fdd984d5753bb88bcd14d137d0e98b",
-   "new_oid": "55750d79f81278d71602690662281c4ea37479e8"
-  },
-  {
-   "path": "skills/session-insights/SKILL.md",
-   "old_oid": "ccafb6970459121a3771aa6ba04c8ddb8b45c20f",
-   "new_oid": "c326fba2f450b720d4eb906ae8b17582a474d48f"
-  },
-  {
-   "path": "skills/session-insights/references/report-contract.md",
-   "old_oid": "7a115ddbc3f4b8ac77ee26b04323ac36a0085262",
-   "new_oid": "1f8d189af4ad07022dd897d03e027c9c6786e75f"
-  },
-  {
-   "path": "skills/session-insights/scripts/session_insights.py",
-   "old_oid": "616344e6f919ec1385fb96ec3e5218f62e75197a",
-   "new_oid": "26dd5d6cc31b3e5819d4db9ca5d9e6e26ad989e6"
-  },
-  {
-   "path": "tests/test_session_insights_benchmark.py",
-   "old_oid": "afcb3d9c59bbff3702a800298e09dcd2b10a8984",
-   "new_oid": "a18b69d281e7b144fde138897e9823192c413692"
+   "old_oid": "3ce224be90627b27a1fc9416a86a13e2e79d95ee",
+   "new_oid": "a1819a57652a87e2ddd6922dce92afc473e6ea67"
   }
  ],
- "raw_approval_record_sha256": "2150174d47ff9a89197882174a04953bf3dfaefcd42fe90499da39331d65ad16",
+ "raw_approval_record_sha256": "e7829cf607e4f75ecb996f577e54df5eaf760f35bc8d352a807016756ade9eb7",
  "raw_approval_storage": "Git-external"
 }
