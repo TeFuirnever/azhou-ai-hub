@@ -41,6 +41,10 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 
 唯一新增的 seam 是每个子命令的 `--store-root <path>`，用于把宿主存储重定向到测试 fixture；没有其他隐藏开关。
 
+## 增量缓存
+
+`aggregate`（未开摘录时）把逐文件解析元数据缓存到 `<当前项目>/.azhou/session-insights/metadata-cache.json`：条目按（harness、store 根摘要、文件相对路径摘要）寻址，以 mtime+大小判活；只存元数据与聚合级字段——首条提示文本永不入缓存，只留其 SHA-256（重复首条提示检测据此进行，数值与全量解析一致）。改动、新增、删除的会话文件下一轮自动重扫；缓存完全可丢弃，删除后重建且聚合输出逐字节不变。损坏的缓存按空缓存处理并就地重建。`metadata`、`discover` 与 `--include-excerpts` 运行绕过缓存（它们需要真实文本）。缓存永不写入会话 store 内部——只读观察者边界不变。
+
 ## 输出与产物
 
 - 默认产物 `<当前项目>/.azhou/session-insights/report-<日期>.md`（自动建目录）；`--out` 指向用户自选的交付物位置。

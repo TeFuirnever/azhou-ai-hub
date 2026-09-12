@@ -7,7 +7,9 @@ into them, and never contacts the network. The Claude Code adapter parses
 fail closed with an ``unsupported`` hold until their transcript formats are
 verified. All metrics are UTC; the scan window and recency cap anchor to the
 newest observed session timestamp in the store, never to wall-clock now, so a
-static store always yields the same aggregate.
+static store always yields the same aggregate. Excerpts-off aggregate runs
+reuse a disposable per-file metadata cache (mtime+size keyed, no transcript
+text) under the invoking project's gitignored runtime-state namespace.
 
 Exit codes: 0 success, 1 gate/validation failure, 2 usage error.
 """
@@ -17,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -28,6 +31,7 @@ DISCOVER_SCHEMA = "session-insights.discover.v1"
 METADATA_SCHEMA = "session-insights.metadata.v1"
 AGGREGATE_SCHEMA = "session-insights.aggregate.v1"
 RECEIPT_SCHEMA = "session-insights.report.v1"
+CACHE_SCHEMA = "session-insights.metadata-cache.v1"
 
 DEFAULT_DAYS = 30
 DEFAULT_MAX_SESSIONS = 200
@@ -45,6 +49,7 @@ DEFAULT_HOME_DIRS = {
 }
 
 OUTPUT_NAMESPACE = Path(".azhou") / "session-insights"
+CACHE_FILENAME = "metadata-cache.json"
 
 REVIEW_FOOTER = (
     "Review before sharing: this report aggregates local session metadata; when "
@@ -148,6 +153,81 @@ def harness_store_present(harness: str, root: Path) -> bool:
         "zcode": root / "v2" / "sessions",
     }
     return markers[harness].is_dir()
+
+
+# --- metadata cache ------------------------------------------------------
+#
+# The cache makes the second aggregate run fast. It lives in the invoking
+# project's gitignored runtime-state namespace (never inside the read-only
+# session store), keys entries by per-file mtime+size, and stores only
+# metadata and aggregate-grade fields: the first-prompt text (transcript
+# text) is replaced by its SHA-256, which still pins repeated-prompt
+# detection. Deleting the cache rebuilds it without changing any report.
+
+
+def empty_metadata_cache() -> dict[str, Any]:
+    return {"schema": CACHE_SCHEMA, "stores": {}}
+
+
+def load_metadata_cache(base: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads((base / OUTPUT_NAMESPACE / CACHE_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return empty_metadata_cache()
+    if not isinstance(payload, dict) or payload.get("schema") != CACHE_SCHEMA:
+        return empty_metadata_cache()
+    if not isinstance(payload.get("stores"), dict):
+        return empty_metadata_cache()
+    return payload
+
+
+def save_metadata_cache(base: Path, cache: dict[str, Any]) -> None:
+    """Best-effort atomic publish; the cache is disposable, so write failure is silent."""
+    target = base / OUTPUT_NAMESPACE / CACHE_FILENAME
+    temporary = target.with_name(target.name + ".tmp")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with temporary.open("x", encoding="utf-8") as handle:
+            json.dump(cache, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+
+
+def cache_store_key(harness: str, root: Path) -> str:
+    try:
+        resolved = str(root.resolve())
+    except OSError:
+        resolved = str(root)
+    return hashlib.sha256(f"{harness}\n{resolved}".encode("utf-8")).hexdigest()
+
+
+def cache_store_section(cache: dict[str, Any], harness: str, root: Path) -> dict[str, Any]:
+    key = cache_store_key(harness, root)
+    section = cache["stores"].get(key)
+    if not isinstance(section, dict) or not isinstance(section.get("files"), dict):
+        section = {"files": {}}
+        cache["stores"][key] = section
+    return section
+
+
+def cached_metadata(entry: Any, mtime_ns: int, size: int) -> dict[str, Any] | None:
+    if not isinstance(entry, dict):
+        return None
+    if entry.get("mtime_ns") != mtime_ns or entry.get("size") != size:
+        return None
+    metadata = entry.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    return dict(metadata)
+
+
+def cache_entry(metadata: dict[str, Any], mtime_ns: int, size: int) -> dict[str, Any]:
+    stored = {key: value for key, value in metadata.items() if key not in ("project", "first_prompt")}
+    return {"mtime_ns": mtime_ns, "size": size, "metadata": stored}
 
 
 # --- Claude Code adapter -------------------------------------------------
@@ -262,34 +342,50 @@ def parse_session_file(path: Path) -> dict[str, Any]:
                                 parsed["tool_calls"][name] = parsed["tool_calls"].get(name, 0) + 1
     parsed["start"] = iso(first_seen) if first_seen else None
     parsed["end"] = iso(last_seen) if last_seen else None
+    first_prompt = parsed["first_prompt"]
+    parsed["first_prompt_sha256"] = (
+        hashlib.sha256(first_prompt.encode("utf-8")).hexdigest() if first_prompt else None
+    )
     return parsed
 
 
 def scan_claude_store(
     root: Path,
     project: str | None,
+    cache_store: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Parse every session file once; window/cap trimming happens afterwards so
-    the anchor (newest observed timestamp) always reflects the whole store."""
+    the anchor (newest observed timestamp) always reflects the whole store.
+
+    When ``cache_store`` is given, files whose mtime+size still match their
+    cache entry reuse the cached metadata instead of re-parsing, and the
+    section is rewritten to exactly the files seen in this scan."""
     files = claude_session_files(root, project)
+    cached_files = cache_store.get("files", {}) if cache_store is not None else {}
     sessions: list[dict[str, Any]] = []
     skipped_subagent = 0
     malformed_lines = 0
     digest = hashlib.sha256()
     tuples: list[str] = []
+    used_entries: dict[str, Any] = {}
     for path, project_name in files:
-        parsed = parse_session_file(path)
+        stat = path.stat()
+        relative = path.relative_to(root).as_posix()
+        path_hash = hashlib.sha256(relative.encode("utf-8")).hexdigest()
+        tuples.append(f"{path_hash}:{stat.st_mtime_ns}:{stat.st_size}")
+        parsed = cached_metadata(cached_files.get(path_hash), stat.st_mtime_ns, stat.st_size)
+        if parsed is None:
+            parsed = parse_session_file(path)
         parsed["project"] = project_label(project_name)
+        if cache_store is not None:
+            used_entries[path_hash] = cache_entry(parsed, stat.st_mtime_ns, stat.st_size)
         malformed_lines += parsed["malformed_lines"]
         if parsed["message_lines"] == 0:
             skipped_subagent += 1
             continue
         sessions.append(parsed)
-    for path, _project_name in files:
-        stat = path.stat()
-        relative = path.relative_to(root).as_posix()
-        path_hash = hashlib.sha256(relative.encode("utf-8")).hexdigest()
-        tuples.append(f"{path_hash}:{stat.st_mtime_ns}:{stat.st_size}")
+    if cache_store is not None:
+        cache_store["files"] = used_entries
     for entry in sorted(tuples):
         digest.update(entry.encode("utf-8"))
         digest.update(b"\n")
@@ -359,9 +455,9 @@ def aggregate_sessions(
                 continue
             hour_histogram[moment.hour] += 1
             active_days.add(moment.date().isoformat())
-        prompt = session.get("first_prompt")
-        if prompt:
-            prompt_counts[prompt] = prompt_counts.get(prompt, 0) + 1
+        prompt_hash = session.get("first_prompt_sha256")
+        if prompt_hash:
+            prompt_counts[prompt_hash] = prompt_counts.get(prompt_hash, 0) + 1
     repeated = sum(count - 1 for count in prompt_counts.values() if count > 1)
     section: dict[str, Any] = {
         "status": "ok",
@@ -405,6 +501,9 @@ def aggregate_sessions(
 def build_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     harnesses: dict[str, Any] = {}
     holds: list[str] = []
+    # Excerpt runs bypass the cache: they need the first-prompt text, which
+    # the cache deliberately never stores.
+    cache = load_metadata_cache(Path.cwd()) if not args.include_excerpts else None
     for harness in selected_harnesses(args.harness):
         root = store_root(harness, args.store_root)
         if harness not in SUPPORTED_HARNESSES:
@@ -415,10 +514,13 @@ def build_aggregate(args: argparse.Namespace) -> dict[str, Any]:
         if not harness_store_present(harness, root):
             harnesses[harness] = {"status": "missing"}
             continue
-        sessions, scan = scan_claude_store(root, args.project)
+        cache_store = cache_store_section(cache, harness, root) if cache is not None else None
+        sessions, scan = scan_claude_store(root, args.project, cache_store)
         harnesses[harness] = aggregate_sessions(
             sessions, scan, args.days, args.max_sessions, args.include_excerpts
         )
+    if cache is not None and cache["stores"]:
+        save_metadata_cache(Path.cwd(), cache)
     aggregate: dict[str, Any] = {
         "schema": AGGREGATE_SCHEMA,
         "window_days": args.days,

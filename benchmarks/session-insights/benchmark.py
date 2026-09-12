@@ -400,6 +400,120 @@ def cmd_check(_: argparse.Namespace) -> int:
         if digest_third == digest_first:
             errors.append("composite digest did not change after a fixture file content change")
 
+        # --- incremental metadata cache (#167) ----------------------------
+        cache_cwd = Path(directory) / "cache-cwd"
+        cache_cwd.mkdir()
+        cache_path = cache_cwd / ".azhou" / "session-insights" / "metadata-cache.json"
+
+        def cached_aggregate(*extra: str) -> tuple[str, dict]:
+            completed = subprocess.run(
+                [
+                    sys.executable, str(CLI), "aggregate",
+                    "--harness", "claude-code", "--store-root", str(store), *extra,
+                ],
+                cwd=cache_cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise AssertionError(f"cached aggregate exit {completed.returncode}: {completed.stderr.strip()}")
+            return completed.stdout, json.loads(completed.stdout)
+
+        cold_out, cold = cached_aggregate()
+        cold_section = cold["harnesses"]["claude-code"]
+        if not cache_path.is_file():
+            errors.append("cache: excerpts-off aggregate did not write the metadata cache")
+        else:
+            blob = cache_path.read_text(encoding="utf-8")
+            try:
+                cached_schema = json.loads(blob).get("schema")
+            except ValueError:
+                cached_schema = None
+            if cached_schema != "session-insights.metadata-cache.v1":
+                errors.append(f"cache: schema drift: {cached_schema}")
+            if '"first_prompt"' in blob:
+                errors.append("cache: stores the raw first-prompt text key")
+            for needle in (FIRST_PROMPT_SHARED, EXCERPT_SENTINEL, *SEEDED_SECRETS, ALPHA, BETA):
+                if needle in blob:
+                    errors.append("cache: contains transcript text or store-identifying names")
+                    break
+            home_path = str(Path.home())
+            if home_path != "/" and home_path in blob:
+                errors.append("cache: contains the absolute home path")
+
+        warm_out, _warm = cached_aggregate()
+        if warm_out != cold_out:
+            errors.append("cache: warm-cache output differs from the cold run")
+        cache_path.unlink(missing_ok=True)
+        rebuilt_out, _rebuilt = cached_aggregate()
+        if rebuilt_out != cold_out:
+            errors.append("cache: deleted-cache output differs from the cold run")
+        cache_path.write_text("{corrupt", encoding="utf-8")
+        corrupt_out, _corrupt = cached_aggregate()
+        if corrupt_out != cold_out:
+            errors.append("cache: a corrupt cache file changed the aggregate output")
+
+        s2 = store / "projects" / ALPHA / f"{S2}.jsonl"
+        with s2.open("a", encoding="utf-8") as handle:
+            handle.write(
+                line(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-09-09T09:05:00Z",
+                        "message": {"role": "user", "content": "cache invalidation probe"},
+                    }
+                )
+                + "\n"
+            )
+        _out, changed = cached_aggregate()
+        if changed["harnesses"]["claude-code"]["turns"] != cold_section["turns"] + 1:
+            errors.append("cache: a changed session file was not re-scanned")
+
+        s7_id = "77777777-7777-7777-7777-777777777777"
+        (store / "projects" / BETA / f"{s7_id}.jsonl").write_text(
+            session_lines(
+                s7_id,
+                [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-09-08T12:00:00Z",
+                        "message": {"role": "user", "content": "added session probe"},
+                    }
+                ],
+            ),
+            encoding="utf-8",
+        )
+        _out, added = cached_aggregate()
+        if added["harnesses"]["claude-code"]["session_count"] != cold_section["session_count"] + 1:
+            errors.append("cache: an added session file was not picked up")
+
+        (store / "projects" / ALPHA / f"{S4}.jsonl").unlink()
+        _out, removed = cached_aggregate()
+        if removed["harnesses"]["claude-code"]["session_count"] != cold_section["session_count"]:
+            errors.append("cache: a removed session file still affects the aggregate")
+
+        excerpt_cwd = Path(directory) / "excerpt-cwd"
+        excerpt_cwd.mkdir()
+        excerpt_run = subprocess.run(
+            [
+                sys.executable, str(CLI), "aggregate",
+                "--harness", "claude-code", "--store-root", str(store), "--include-excerpts",
+            ],
+            cwd=excerpt_cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if excerpt_run.returncode != 0:
+            errors.append(f"cache: excerpts aggregate failed: {excerpt_run.stderr.strip()}")
+        elif (excerpt_cwd / ".azhou" / "session-insights" / "metadata-cache.json").exists():
+            errors.append("cache: an excerpts-on run wrote the metadata cache")
+        else:
+            excerpts = json.loads(excerpt_run.stdout)["harnesses"]["claude-code"].get("excerpts", [])
+            if not any(FIRST_PROMPT_SHARED in entry.get("first_prompt", "") for entry in excerpts):
+                errors.append("cache: excerpts-on run lost the first-prompt text")
+
         out_dir = Path(directory) / "out"
         plain_aggregate = out_dir / "aggregate.json"
         completed = run_cli(

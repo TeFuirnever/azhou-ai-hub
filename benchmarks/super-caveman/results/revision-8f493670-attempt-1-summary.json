@@ -1,159 +1,159 @@
 {
-  "schema": "super-caveman-evaluation-result.v1",
-  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
-  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
-  "model_limitation": "Producer-context invariance rebind for the super-prefix gate enforcement (#176/#183, check_fidelity_axis and check_rename_residue with negative controls). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
-  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
-  "tool_permissions": {
-    "network": false,
-    "repository_write": "disposable agent-owned-edit fixture only (/tmp/super-caveman-agent-owned-edit)",
-    "shell": "read-only verification commands inside the disposable fixture only (agent-owned-edit case)",
-    "external_apps": false
+ "schema": "super-caveman-evaluation-result.v1",
+ "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
+ "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
+ "model_limitation": "Producer-context invariance rebind for the session-insights incremental metadata cache (#161/#167: mtime+size-keyed per-file metadata cache, no transcript text, disposable and rebuild-safe). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+ "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
+ "tool_permissions": {
+  "network": false,
+  "repository_write": "disposable agent-owned-edit fixture only (/tmp/super-caveman-agent-owned-edit)",
+  "shell": "read-only verification commands inside the disposable fixture only (agent-owned-edit case)",
+  "external_apps": false
+ },
+ "attempt": 1,
+ "output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
+ "case_results": [
+  {
+   "id": "direct-answer",
+   "status": "pass"
   },
-  "attempt": 1,
-  "output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
-  "case_results": [
-    {
-      "id": "direct-answer",
-      "status": "pass"
-    },
-    {
-      "id": "agent-owned-edit",
-      "status": "pass"
-    },
-    {
-      "id": "debugging-cause",
-      "status": "pass"
-    },
-    {
-      "id": "concept-explanation",
-      "status": "pass"
-    },
-    {
-      "id": "destructive-action",
-      "status": "pass"
-    },
-    {
-      "id": "real-ambiguity",
-      "status": "pass"
-    },
-    {
-      "id": "multi-step-progress",
-      "status": "pass"
-    },
-    {
-      "id": "long-form-request",
-      "status": "pass"
-    },
-    {
-      "id": "error-report",
-      "status": "pass"
-    },
-    {
-      "id": "casual-message",
-      "status": "pass"
-    },
-    {
-      "id": "code-answer",
-      "status": "pass"
-    },
-    {
-      "id": "complex-plan",
-      "status": "pass"
-    },
-    {
-      "id": "partial-success",
-      "status": "pass"
-    },
-    {
-      "id": "medical-boundary",
-      "status": "pass"
-    },
-    {
-      "id": "under-two-minute-next-action",
-      "status": "pass"
-    },
-    {
-      "id": "host-plan-tool-state",
-      "status": "pass"
-    },
-    {
-      "id": "task-wins-options",
-      "status": "pass"
-    },
-    {
-      "id": "stop-mode-default-style",
-      "status": "pass"
-    },
-    {
-      "id": "uncertainty-and-idiom",
-      "status": "pass"
-    }
-  ],
-  "passed": 19,
-  "failed": 0,
-  "high_risk_failed": 0,
-  "format_failed": 0,
-  "limitations": [
-    "This rebind renames one unrelated canonical skill with its benchmark suite and fixtures and syncs its reference surfaces, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
-    "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence."
-  ],
-  "status": "pass",
-  "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
-  "skill_tree_sha256": "8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
-  "automatic_checks": {
-    "raw_schema": "pass (reused raw set, schema super-caveman-raw-output-set.v1)",
-    "raw_digest": "pass (56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034)",
-    "skill_tree_digest": "unchanged full skill tree: 8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
-    "case_count": "19/19",
-    "criteria_count": "44/44",
-    "unique_case_ids": "19/19",
-    "byte_reuse": "19/19 reused under the producer-context invariance pathway (producer context byte-identical; contract clause)",
-    "maximum_observed_concurrency": 1,
-    "fixture_side_effect": "verified by harness after the ride-v2 baseline production run: README.md == 'Super Caveman'",
-    "plan_tool_state": "verified: responder instructed to call TodoWrite exactly once with 3 items and exactly 1 in_progress; agent reported 5 tool uses",
-    "repository_scope": "pass (no writes outside the disposable fixture during response production)"
+  {
+   "id": "agent-owned-edit",
+   "status": "pass"
   },
-  "reviewer": {
-    "identity": "kimi-code/sp-m3-183-invariance-review/2026-09-12",
-    "review_sha256": "84d97235befbb45093d2ff5d3aede7b901a7401ffd71d5a84c7de731dd8de687"
+  {
+   "id": "debugging-cause",
+   "status": "pass"
   },
-  "promotion_review": {
-    "paired_status": "invariant",
-    "invariance_pathway_allowed": true,
-    "invariance_proof": {
-      "schema": "super-caveman-producer-context-invariance.v1",
-      "producer_context_files": {
-        "SKILL.md": {
-          "base_blob_sha256": "b361cf52cb9a91024d10899a18ff455f49339aaf",
-          "candidate_blob_sha256": "b361cf52cb9a91024d10899a18ff455f49339aaf"
-        },
-        "references/modes.md": {
-          "base_blob_sha256": "55aa36f9b8f2412d5f9bff47663fb6c6ca2f7993",
-          "candidate_blob_sha256": "55aa36f9b8f2412d5f9bff47663fb6c6ca2f7993"
-        },
-        "references/brand-layer.md": {
-          "base_blob_sha256": "4aaea19d22e29d6105e0b1de1da827aeb67d5ae4",
-          "candidate_blob_sha256": "4aaea19d22e29d6105e0b1de1da827aeb67d5ae4"
-        }
-      },
-      "capsule_rules_digest": "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17"
-    },
-    "candidate_output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
-    "baseline_output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
-    "high_risk_regressions": 0,
-    "exact_diff_human_approval": {
-      "schema": "super-caveman-exact-diff-approval.v2",
-      "status": "approved",
-      "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "a00c2cf9b71775acb1c1a5dc1b0becfda7da0186",
-      "path_set_sha256": "b4b1770e314e0b0acc122f36f4384028863b1affc7af79f66310e2085740c7ee",
-      "staged_patch_sha256": "c50792b8b4acdb8b8e019c22dbc5dace17e2bcfa4af8358f6c16872b63a9d810",
-      "approver": "workspace-owner",
-      "approved_at": "2026-09-11T21:15:00Z",
-      "record_path": "results/revision-8f493670-exact-diff-approval.json",
-      "record_sha256": "cdc5835242f5a762a8c6148efea568eb97025a7f38a7e2ff3307c36f4025e5f2",
-      "record_storage": "Git aggregate receipt; raw approval Git-external"
-    }
+  {
+   "id": "concept-explanation",
+   "status": "pass"
+  },
+  {
+   "id": "destructive-action",
+   "status": "pass"
+  },
+  {
+   "id": "real-ambiguity",
+   "status": "pass"
+  },
+  {
+   "id": "multi-step-progress",
+   "status": "pass"
+  },
+  {
+   "id": "long-form-request",
+   "status": "pass"
+  },
+  {
+   "id": "error-report",
+   "status": "pass"
+  },
+  {
+   "id": "casual-message",
+   "status": "pass"
+  },
+  {
+   "id": "code-answer",
+   "status": "pass"
+  },
+  {
+   "id": "complex-plan",
+   "status": "pass"
+  },
+  {
+   "id": "partial-success",
+   "status": "pass"
+  },
+  {
+   "id": "medical-boundary",
+   "status": "pass"
+  },
+  {
+   "id": "under-two-minute-next-action",
+   "status": "pass"
+  },
+  {
+   "id": "host-plan-tool-state",
+   "status": "pass"
+  },
+  {
+   "id": "task-wins-options",
+   "status": "pass"
+  },
+  {
+   "id": "stop-mode-default-style",
+   "status": "pass"
+  },
+  {
+   "id": "uncertainty-and-idiom",
+   "status": "pass"
   }
+ ],
+ "passed": 19,
+ "failed": 0,
+ "high_risk_failed": 0,
+ "format_failed": 0,
+ "limitations": [
+  "This rebind adds the session-insights metadata cache with its docs, tests and benchmark registration, plus these aggregate receipts. The producer context and full skill tree remain unchanged.",
+  "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence."
+ ],
+ "status": "pass",
+ "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
+ "skill_tree_sha256": "8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
+ "automatic_checks": {
+  "raw_schema": "pass (reused raw set, schema super-caveman-raw-output-set.v1)",
+  "raw_digest": "pass (56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034)",
+  "skill_tree_digest": "unchanged full skill tree: 8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
+  "case_count": "19/19",
+  "criteria_count": "44/44",
+  "unique_case_ids": "19/19",
+  "byte_reuse": "19/19 reused under the producer-context invariance pathway (producer context byte-identical; contract clause)",
+  "maximum_observed_concurrency": 1,
+  "fixture_side_effect": "verified by harness after the ride-v2 baseline production run: README.md == 'Super Caveman'",
+  "plan_tool_state": "verified: responder instructed to call TodoWrite exactly once with 3 items and exactly 1 in_progress; agent reported 5 tool uses",
+  "repository_scope": "pass (no writes outside the disposable fixture during response production)"
+ },
+ "reviewer": {
+  "identity": "kimi-code/si-167-invariance-review/2026-09-12",
+  "review_sha256": "3f687d6af45bb33351293089e0bd4c6b4e2fbe18d61a4901b0d9c0e2a04b8e17"
+ },
+ "promotion_review": {
+  "paired_status": "invariant",
+  "invariance_pathway_allowed": true,
+  "invariance_proof": {
+   "schema": "super-caveman-producer-context-invariance.v1",
+   "producer_context_files": {
+    "SKILL.md": {
+     "base_blob_sha256": "b361cf52cb9a91024d10899a18ff455f49339aaf",
+     "candidate_blob_sha256": "b361cf52cb9a91024d10899a18ff455f49339aaf"
+    },
+    "references/modes.md": {
+     "base_blob_sha256": "55aa36f9b8f2412d5f9bff47663fb6c6ca2f7993",
+     "candidate_blob_sha256": "55aa36f9b8f2412d5f9bff47663fb6c6ca2f7993"
+    },
+    "references/brand-layer.md": {
+     "base_blob_sha256": "4aaea19d22e29d6105e0b1de1da827aeb67d5ae4",
+     "candidate_blob_sha256": "4aaea19d22e29d6105e0b1de1da827aeb67d5ae4"
+    }
+   },
+   "capsule_rules_digest": "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17"
+  },
+  "candidate_output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
+  "baseline_output_set_sha256": "56f033b64a57cc4d8d3d05ea50c7247ea570ba3f3c89f7d8e81853999ac45034",
+  "high_risk_regressions": 0,
+  "exact_diff_human_approval": {
+   "schema": "super-caveman-exact-diff-approval.v2",
+   "status": "approved",
+   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+   "base_commit": "7c824082cb7a8b954ec0382bc3081dc240920cf6",
+   "path_set_sha256": "331bef2d8e32e0a38732b105f5e609229454999ededef95f153f1e4dfffb6156",
+   "staged_patch_sha256": "4d7e89f6945a7cc2bf25b5365ac76bdd68bdc9f3b8614b77403791063ef6dbf6",
+   "approver": "workspace-owner",
+   "approved_at": "2026-09-12T01:57:00Z",
+   "record_path": "results/revision-8f493670-exact-diff-approval.json",
+   "record_sha256": "fce024775b32c981dd2e4f249308aa52def98cc32e7fc91285569cd8ec1756ae",
+   "record_storage": "Git aggregate receipt; raw approval Git-external"
+  }
+ }
 }
