@@ -3,6 +3,8 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and repository-level [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+- Removed the `super-ci-test-reliability` canonical skill (maintainer retirement): one atomic commit deletes the package and its install surface, drops its gate discovery/brand/residue-map entries, the ask-azhou router row, the catalog row in both READMEs and the `SKILL_DIRS`/discovery test expectations, taking the hub to fourteen canonical skills. Existing local installs keep working as frozen copies; the old `ci-test-reliability` name stops being a compatibility trigger and the retirement is recorded only here and in dated history.
+- Removed the `super-prose-standard` canonical skill (maintainer retirement): one atomic commit deletes the package, the `benchmarks/super-prose-standard/` recall-battery wiring suite with its calibration fixtures, the gate wiring registration in `verify.py`, the brand/discovery/residue-map entries, the ask-azhou router row, the catalog row in both READMEs and the fixture references in the gate tests. Existing local installs keep working as frozen copies; the old `prose-standard` name stops being a compatibility trigger and the retirement is recorded only here and in dated history.
 
 ## [0.9.0] - 2026-09-12
 

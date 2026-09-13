@@ -54,28 +54,28 @@ class InvocationAxisTest(unittest.TestCase):
     def test_unknown_invocation_value_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            skill = root / "skills" / "super-prose-standard" / "SKILL.md"
+            skill = root / "skills" / "super-lavish" / "SKILL.md"
             skill.parent.mkdir(parents=True)
             skill.write_text(
-                "---\nname: super-prose-standard\ndescription: probe\ninvocation: sometimes\n---\n# Super Prose Standard\n",
+                "---\nname: super-lavish\ndescription: probe\ninvocation: sometimes\n---\n# Super Lavish\n",
                 encoding="utf-8",
             )
             self.assertEqual(
-                ["skill invocation enum invalid: skills/super-prose-standard/SKILL.md: sometimes"],
+                ["skill invocation enum invalid: skills/super-lavish/SKILL.md: sometimes"],
                 check_invocation_axis(root),
             )
 
     def test_missing_invocation_declaration_fails_except_the_held_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            skill = root / "skills" / "super-prose-standard" / "SKILL.md"
+            skill = root / "skills" / "super-lavish" / "SKILL.md"
             skill.parent.mkdir(parents=True)
             skill.write_text(
-                "---\nname: super-prose-standard\ndescription: probe\n---\n# Super Prose Standard\n",
+                "---\nname: super-lavish\ndescription: probe\n---\n# Super Lavish\n",
                 encoding="utf-8",
             )
             self.assertEqual(
-                ["skill invocation declaration missing: skills/super-prose-standard/SKILL.md"],
+                ["skill invocation declaration missing: skills/super-lavish/SKILL.md"],
                 check_invocation_axis(root),
             )
             held = root / "skills" / "super-caveman" / "SKILL.md"
@@ -131,9 +131,9 @@ class FidelityAxisTest(unittest.TestCase):
             )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_skill(root, "skills/super-prose-standard/SKILL.md", "original")
+            self.write_skill(root, "skills/super-lavish/SKILL.md", "original")
             self.assertEqual(
-                ["fidelity prefix mismatch: skills/super-prose-standard/SKILL.md classified original"],
+                ["fidelity prefix mismatch: skills/super-lavish/SKILL.md classified original"],
                 check_fidelity_axis(root),
             )
 
@@ -319,8 +319,6 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-lavish" / "SKILL.md",
                 root / "skills" / "eli5" / "SKILL.md",
                 root / "skills" / "autoresearch" / "SKILL.md",
-                root / "skills" / "super-ci-test-reliability" / "SKILL.md",
-                root / "skills" / "super-prose-standard" / "SKILL.md",
                 root / "skills" / "ask-azhou" / "SKILL.md",
                 root / "skills" / "arch-doc" / "SKILL.md",
                 root / "skills" / "session-insights" / "SKILL.md",

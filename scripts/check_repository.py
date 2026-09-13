@@ -80,8 +80,6 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-lavish/SKILL.md",
     "skills/eli5/SKILL.md",
     "skills/autoresearch/SKILL.md",
-    "skills/super-ci-test-reliability/SKILL.md",
-    "skills/super-prose-standard/SKILL.md",
     "skills/ask-azhou/SKILL.md",
     "skills/arch-doc/SKILL.md",
     "skills/session-insights/SKILL.md",
@@ -101,16 +99,6 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Autoresearch",
         "motto": "实验通宵跑，边界先说清。",
         "startup": "🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>",
-    },
-    "skills/super-ci-test-reliability/SKILL.md": {
-        "display_name": "Super CI Test Reliability",
-        "motto": "测试自己可靠，才配当证据。",
-        "startup": "🦊 阿舟 · Super CI Test Reliability 启动｜mode=<design|review|diagnose>｜scope=<test-or-suite>",
-    },
-    "skills/super-prose-standard/SKILL.md": {
-        "display_name": "Super Prose Standard",
-        "motto": "每个事实都活着，才动手删字。",
-        "startup": "🦊 阿舟 · Super Prose Standard 启动｜mode=<write|review|audit>｜scope=<surface>",
     },
     "skills/ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",
@@ -330,8 +318,6 @@ FIDELITY_CLASSES = ("original", "faithful", "adapted")
 FIDELITY_DECLARATION_PATTERN = re.compile(r"^Classification: `(?P<value>[^`]+)`", re.MULTILINE)
 
 RENAMED_AWAY_SKILLS = {
-    "ci-test-reliability": "super-ci-test-reliability",
-    "prose-standard": "super-prose-standard",
     "repo-pedant": "super-repo-pedant",
     "lavish": "super-lavish",
     "llm-wiki": "super-llm-wiki",
