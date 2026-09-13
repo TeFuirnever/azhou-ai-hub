@@ -2,28 +2,28 @@
  "schema": "super-caveman-exact-diff-approval-record.v2",
  "decision": "approved",
  "approver": "workspace-owner",
- "approved_at": "2026-09-13T08:46:52Z",
- "base_commit": "59d4db8ab3094505a7625c640d5b910408e53632",
+ "approved_at": "2026-09-13T09:15:01Z",
+ "base_commit": "6f351f24f8bdf07579df765d64340997ac6023f4",
  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
- "path_set_sha256": "311ff426b6460495189b71c084f8ab88f8796fdf90b4391d971a7818f4bcd8b0",
- "staged_patch_sha256": "6dff049b96918064852293faa92c2fadc8245c15c9a08b386b55a116f633f353",
+ "path_set_sha256": "ae9d428e7ff746b28678b43d575fc1125bbba4cc91f53c7676a520cbd2785df0",
+ "staged_patch_sha256": "73e1bbefae029b1e295b3399e40c717c8b4bd33cc0ffc04f78c852abf1c665d7",
  "reviewed_blobs": [
   {
    "path": "README.md",
-   "old_oid": "f4768773f1d6da06e823c0371e69267da391696f",
-   "new_oid": "477a6635855e6511f7bf1fcabe92adb5ba86ca02"
+   "old_oid": "477a6635855e6511f7bf1fcabe92adb5ba86ca02",
+   "new_oid": "fabc8510d4dcb2f847658c3afa497016c3b804d2"
   },
   {
    "path": "README.zh-CN.md",
-   "old_oid": "befb750de6d7577c323a9881ea771d7c336abfe8",
-   "new_oid": "e42aa6af35c5464f27587c48eb522b63fac37a5d"
+   "old_oid": "e42aa6af35c5464f27587c48eb522b63fac37a5d",
+   "new_oid": "b2039fc8d0dba811adf2b704258b669079d3a047"
   },
   {
-   "path": "docs/installation.md",
-   "old_oid": "5526a6d52ec4d035d58705deeb8eb20c54794538",
-   "new_oid": "8f78406239a9da1b8fa51dc28967a8c866e93579"
+   "path": "docs/eval-case-contract.md",
+   "old_oid": "<deleted>",
+   "new_oid": "92faccfea26c0fb5bdd4729abb93ed068894c4ea"
   }
  ],
- "raw_approval_record_sha256": "5d476f3079886a43d94ed154c5c4f192c16869b6148f4fd60e07c227b1d2eca9",
+ "raw_approval_record_sha256": "cce261be1b1c88e0419bef7832f33558fd4c3d51ed2b96ca6d2cdc320e4a3c52",
  "raw_approval_storage": "Git-external"
 }
