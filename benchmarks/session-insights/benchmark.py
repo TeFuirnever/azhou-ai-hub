@@ -398,6 +398,13 @@ def build_store(root: Path) -> None:
         json.dumps({"meta": {"status": "done"}, "messages": []}, ensure_ascii=False),
         encoding="utf-8",
     )
+    # populated-but-unrecognized zcode shapes (#168): the fail-closed hold
+    # must not move even when the store looks richer
+    (zcode_dir / "session-data.json").write_text(
+        json.dumps({"meta": {"status": "done"}, "messages": []}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (root / "v2" / "sessions" / "otherworkspace").mkdir(parents=True)
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
@@ -535,6 +542,22 @@ def cmd_check(_: argparse.Namespace) -> int:
             errors.append(f"fail-closed section drift for zcode: {zcode_section}")
         if aggregate["holds"] != ["zcode unsupported"]:
             errors.append(f"holds drift: {aggregate['holds']}")
+        # zcode fail-closed delivery (#168): the hold stays regardless of how
+        # populated or plausible the unrecognized store looks
+        zcode_detect = cli_json("detect", "--harness", "zcode", "--store-root", str(store))
+        zcode_detect_entry = zcode_detect["harnesses"]["zcode"]
+        if (
+            zcode_detect_entry.get("store_present") is not True
+            or zcode_detect_entry.get("status") != "unsupported"
+            or zcode_detect_entry.get("hold") != "zcode unsupported"
+        ):
+            errors.append(f"zcode fail-closed detect drift: {zcode_detect_entry}")
+        zcode_discover = cli_json("discover", "--harness", "zcode", "--store-root", str(store))
+        if zcode_discover.get("status") != "unsupported" or zcode_discover.get("hold") != "zcode unsupported":
+            errors.append(f"zcode fail-closed discover drift: {zcode_discover.get('status')}")
+        zcode_metadata = cli_json("metadata", "--harness", "zcode", "--store-root", str(store))
+        if zcode_metadata.get("status") != "unsupported" or zcode_metadata.get("hold") != "zcode unsupported":
+            errors.append(f"zcode fail-closed metadata drift: {zcode_metadata.get('status')}")
 
         days60 = cli_json(
             "aggregate", "--harness", "claude-code", "--store-root", str(store),

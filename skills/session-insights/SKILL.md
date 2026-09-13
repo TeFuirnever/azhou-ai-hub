@@ -49,7 +49,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 
 - 默认产物 `<当前项目>/.azhou/session-insights/report-<日期>.md`（自动建目录）；`--out` 指向用户自选的交付物位置。
 - 摘录默认关闭；`--include-excerpts` 时摘录先脱敏（家目录替换为 `~`、`sk-`/`ghp_`/`github_pat_`/`AKIA`/`AIza`/PEM 等密钥样式打码），报告页脚固定提醒分享前人工审查。
-- zcode 适配器 fail closed（#162 侦察结论：3.11.2 无明文会话转写存储）：任何 aggregate/report 尝试只记录 `unsupported` hold，绝不产出猜测数字。Codex 适配器只解析 `sessions/YYYY/MM/DD/rollout-*.jsonl`：`thread_source != "user"` 的 rollout、developer 消息与注入型 user 文本一律跳过；Codex 无已核实的 API 错误标记，`error_count` 恒为 0。
+- zcode 适配器 fail closed 且为最终交付态（#162 侦察结论：3.11.2 无明文会话转写存储；#168 交付确认）：任何 aggregate/report 尝试只记录 `unsupported` hold，绝不产出猜测数字；即使存储出现更丰富但未核实的形状，hold 也不移动，将来格式变化需新的只读侦察才能重启。Codex 适配器只解析 `sessions/YYYY/MM/DD/rollout-*.jsonl`：`thread_source != "user"` 的 rollout、developer 消息与注入型 user 文本一律跳过；Codex 无已核实的 API 错误标记，`error_count` 恒为 0。
 
 ## roast 红线
 

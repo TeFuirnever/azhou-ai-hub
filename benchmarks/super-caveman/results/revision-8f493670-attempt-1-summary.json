@@ -2,7 +2,7 @@
  "schema": "super-caveman-evaluation-result.v1",
  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
- "model_limitation": "Producer-context invariance rebind for the session-insights-166-codex-adapter-rebind landing: the reviewed receipt set is re-derived over the staged landing diff. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+ "model_limitation": "Producer-context invariance rebind for the session-insights-168-zcode-hold-rebind landing: the reviewed receipt set is re-derived over the staged landing diff. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
  "tool_permissions": {
   "network": false,
@@ -95,7 +95,7 @@
  "high_risk_failed": 0,
  "format_failed": 0,
  "limitations": [
-  "This rebind re-derives the reviewed set over the session-insights-166-codex-adapter-rebind staged landing so the receipt replays as one exact diff.",
+  "This rebind re-derives the reviewed set over the session-insights-168-zcode-hold-rebind staged landing so the receipt replays as one exact diff.",
   "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence.",
   "Workspace-owner approval for the re-bind was granted in-session by the standing directive to execute the open session-insights issues autonomously (do not ask); the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
  ],
@@ -116,8 +116,8 @@
   "repository_scope": "pass (no writes outside the disposable fixture during response production)"
  },
  "reviewer": {
-  "identity": "zcode-agent/session-insights-166-codex-adapter-rebind/2026-09-13",
-  "review_sha256": "b43b1a4a7d03612ef7c12f14f4d900e21b391d58c1efbc84599cf3edeb641317"
+  "identity": "zcode-agent/session-insights-168-zcode-hold-rebind/2026-09-13",
+  "review_sha256": "9b84f628f5c2c409cc92d650e12e973a25a948ce428b88acc2ddb0dc8284bece"
  },
  "promotion_review": {
   "paired_status": "invariant",
@@ -147,13 +147,13 @@
    "schema": "super-caveman-exact-diff-approval.v2",
    "status": "approved",
    "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-   "base_commit": "950a8d52e8ade75e02ba9b7895f3ecdc969a016b",
-   "path_set_sha256": "46f770ad722ca3e40cfa39b01f76660c6ac5f5fcc8baae03e2473fb01eab594d",
-   "staged_patch_sha256": "c2cfa7c4e3808f9a329b093f26e6ceb8ee070d8e60fbf7c088d2c3c05dbeaea2",
+   "base_commit": "b6cffd71d90f715164f5e4dd50f725ada17277c3",
+   "path_set_sha256": "b729f7693d922ac4850f3ebe5cdb980be91a7053dc38e747b6f6efcdc6c0af63",
+   "staged_patch_sha256": "013d730903d653ec977cd2204c8ae4d3761907ddda69c6f4f02e4f7ac6b810db",
    "approver": "workspace-owner",
-   "approved_at": "2026-09-13T01:44:43Z",
+   "approved_at": "2026-09-13T01:50:11Z",
    "record_path": "results/revision-8f493670-exact-diff-approval.json",
-   "record_sha256": "815c0b5b178aa9f7f628c04c6260bd5b64f18dd92bb9f5459cf907338ef57e33",
+   "record_sha256": "40856b384ca6ead8d559d44cdedec1d93f44b584f2459ce62c1a98e876c25d65",
    "record_storage": "Git aggregate receipt; raw approval Git-external"
   }
  }
