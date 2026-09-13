@@ -136,7 +136,7 @@ All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows,
 - Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
 - Hook commands rendered by super-repo-pedant, super-caveman and Super LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
 
-A checked-in Windows full-flow receipt (info → setup → verify) is not yet available; it is tracked by the `win-05-rerun-receipt` ticket.
+A checked-in Windows full-flow receipt exists (evidence/windows-full-flow-receipt-2026-09-13.md): the managed flow (info → setup → doctor) passes on a real Windows runner, while the receipt's gate section records a console-encoding divergence (cp1252 under Git Bash) filed as issue #236 — treat that section as green once #236 closes.
 
 ## One-path rule
 
