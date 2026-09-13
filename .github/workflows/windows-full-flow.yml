@@ -1,0 +1,83 @@
+name: Windows full-flow receipt
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-flow-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-flow:
+    name: info → setup → doctor on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      SKILLS_HOME: ${{ runner.temp }}\skills-home
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Start the receipt summary
+        run: |
+          {
+            echo "# Windows full-flow receipt (info → setup → doctor)"
+            echo
+            echo "- Runner: windows-latest"
+            echo "- Commit: ${{ github.sha }}"
+            echo
+            echo "## 1. info"
+            echo
+            echo '```json'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python scripts/azhou_hub.py info --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+          {
+            echo '```'
+            echo
+            echo "## 2. setup plan (dry run)"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Plan the managed install
+        run: |
+          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --json | tee plan.json
+          echo
+          echo "## 3. setup apply"
+          echo
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+      - name: Apply the managed install
+        run: |
+          PLAN_ID=$(python -c "import json;print(json.load(open('plan.json'))['planId'])")
+          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+          {
+            echo '```'
+            echo
+            echo "## 4. doctor (receipt-backed verification)"
+            echo
+            echo '```json'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Doctor the installed skill
+        run: |
+          python scripts/azhou_hub.py doctor --skill session-insights --target "$SKILLS_HOME" --verify --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+          {
+            echo '```'
+            echo
+            echo "## 5. repository gate"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Repository gate
+        run: |
+          python scripts/verify.py >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
