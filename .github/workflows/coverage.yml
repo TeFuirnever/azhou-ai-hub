@@ -1,0 +1,56 @@
+name: Coverage baseline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    name: Coverage and regression-rate baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned coverage
+        run: pip install "coverage==7.6.1"
+      - name: Run the unit suite under coverage
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          coverage run --source=scripts,skills -m unittest discover -s tests
+      - name: Publish the baseline to the job summary
+        if: always()
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          {
+            echo "## Coverage baseline (measurement only — not a Required gate)"
+            echo
+            echo '```'
+            coverage report --include="scripts/*,skills/*/scripts/*"
+            echo '```'
+            echo
+            echo "## Regression-rate signal (trailing 30 days)"
+            echo
+            echo '```'
+            python scripts/regression_rate.py --window 30
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
