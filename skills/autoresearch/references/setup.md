@@ -6,9 +6,22 @@ All upstream dependencies are external. This package ships no upstream code; it 
 
 | Requirement | Check | Failure boundary |
 |---|---|---|
-| NVIDIA CUDA GPU; the upstream README documents a single-GPU setup tested on H100, and other GPUs are unverified | `nvidia-smi` | fail closed with `❌ 验证失败`; do not start a CPU fallback run |
+| NVIDIA CUDA GPU; the upstream README documents a single-GPU setup tested on H100, and other GPUs are unverified | `nvidia-smi`; when missing, identify the present accelerator with the [named unsupported probe](#named-unsupported-probe) | fail closed with `❌ 验证失败` and a named hold; do not start a CPU fallback run |
 | `uv` package manager | `uv --version` | fail closed; do not install implicitly |
 | Pinned upstream checkout | `git -C <checkout> rev-parse HEAD` equals `228791fb499afffb54b46200aca536f79142f117` | fail closed; request the pin, never advance or rewrite the user's checkout |
+
+## Named unsupported probe
+
+When `nvidia-smi` is missing, identify what the host does have before reporting the failure, so the hold names the accelerator instead of the missing tool:
+
+| Order | Check | Detects |
+|---|---|---|
+| 1 | `system_profiler SPDisplaysDataType` (macOS) | Apple Silicon / AMD / Intel GPUs via the `Chipset Model` line |
+| 2 | `rocm-smi` or `amd-smi` | AMD ROCm accelerators |
+| 3 | `xpu-smi` | Intel XPU accelerators |
+| 4 | none of the above | no accelerator detected |
+
+Record the hold as `unsupported: detected <kind> accelerator; upstream supports NVIDIA CUDA only`, or `unsupported: no accelerator detected by probe` when the probe finds nothing — a probe-result statement, not a hardware inventory. Permitted `<kind>` tokens are `apple-silicon`, `amd-rocm`, and `intel-xpu`, matching the Detects column above. The named hold changes only the failure report: the run still stops fail-closed exactly as before, a CPU fallback run is never started, and a named hold never upgrades to ready.
 
 ## Locate and verify the source
 

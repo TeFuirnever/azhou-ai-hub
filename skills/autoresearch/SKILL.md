@@ -25,7 +25,7 @@ Use `✅ 验证通过` only after every declared check has run and its output wa
 ## Workflow
 
 1. Resolve the checkout from a user-supplied path only. Verify that `git rev-parse HEAD` inside it equals the pinned commit recorded in [setup](references/setup.md), and refuse to continue on any mismatch. Never scan unrelated directories and never clone into any Git repository.
-2. `mode=prepare` verifies the environment per setup: uv present, CUDA GPU visible, `uv sync` clean, data prepared, and one baseline training run possible. Every missing check fails closed; no partial state is reported as ready.
+2. `mode=prepare` verifies the environment per setup: uv present, CUDA GPU visible, `uv sync` clean, data prepared, and one baseline training run possible. Every missing check fails closed; no partial state is reported as ready. A missing CUDA GPU records a named hold per the [named unsupported probe](references/setup.md) — `unsupported: detected <kind> accelerator; upstream supports NVIDIA CUDA only` when a kind is identified, `unsupported: no accelerator detected by probe` otherwise — never a bare tool-missing error.
 3. `mode=run` and `mode=resume` read `program.md` from the checkout and follow it inside that checkout. Before any unattended sequence, hold with `🔒 阿舟暂停这一项` until the user confirms the GPU hours and disk cost. Results stay in the checkout; this skill never pushes, publishes, or copies results into any repository.
 4. `mode=report` aggregates experiment results that already exist in the checkout. Conversation excerpts, machine paths, and other raw evidence stay out of any committed surface.
 5. End with a receipt containing `schema`, `status`, `current_truth`, `artifacts`, `verification`, `holds`, `next_action`, and `learning_signal`:
