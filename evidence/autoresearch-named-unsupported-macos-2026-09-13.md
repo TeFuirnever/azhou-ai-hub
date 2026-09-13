@@ -2,6 +2,8 @@
 
 > 日期：2026-09-13（Asia/Shanghai）· 环境：本机 macOS（Apple Silicon），Python 3（标准库）· 对象：`skills/autoresearch` 的 prepare 探测契约（issue #219，parent #218）· 上游 pin：`karpathy/autoresearch@228791fb499afffb54b46200aca536f79142f117`
 > 隐私口径：只记录探测命令的存在性结果与芯片型号；不记录序列号、磁盘卷名或任何会话内容。
+> 载体内容：`codex/t1-autoresearch-named-unsupported` 分支（PR #226）所引入的 named unsupported probe——main 上尚无此级联，本回据锚定该分支的 `skills/autoresearch/references/setup.md` 与 `SKILL.md`。
+> 执行器：本仓库工作会话内直接 shell 探测（attempt-1，未借道任何 harness 的 prepare 全流程）。
 
 ## 探测执行与结果（当日实跑）
 

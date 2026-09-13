@@ -21,7 +21,7 @@ When `nvidia-smi` is missing, identify what the host does have before reporting 
 | 3 | `xpu-smi` | Intel XPU accelerators |
 | 4 | none of the above | no accelerator detected |
 
-Record the hold as `unsupported: detected <kind> accelerator; upstream supports NVIDIA CUDA only`, or `unsupported: no accelerator detected` when the probe finds nothing. The named hold changes only the failure report: the run still stops fail-closed exactly as before, a CPU fallback run is never started, and a named hold never upgrades to ready.
+Record the hold as `unsupported: detected <kind> accelerator; upstream supports NVIDIA CUDA only`, or `unsupported: no accelerator detected by probe` when the probe finds nothing — a probe-result statement, not a hardware inventory. Permitted `<kind>` tokens are `apple-silicon`, `amd-rocm`, and `intel-xpu`, matching the Detects column above. The named hold changes only the failure report: the run still stops fail-closed exactly as before, a CPU fallback run is never started, and a named hold never upgrades to ready.
 
 ## Locate and verify the source
 
