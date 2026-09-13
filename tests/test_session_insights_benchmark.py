@@ -90,6 +90,22 @@ class SessionInsightsCliTest(unittest.TestCase):
         self.assertEqual("unsupported", zcode["status"])
         self.assertNotIn("session_count", zcode)
 
+    def test_zcode_hold_survives_populated_unrecognized_shapes(self) -> None:
+        # #168: populated-but-unrecognized store shapes must not move the hold
+        detected = run_cli("detect", "--harness", "zcode", "--store-root", str(self.store))
+        self.assertEqual(0, detected.returncode, detected.stderr)
+        entry = json.loads(detected.stdout)["harnesses"]["zcode"]
+        self.assertTrue(entry["store_present"])
+        self.assertEqual("unsupported", entry["status"])
+        aggregate = self.aggregate()
+        self.assertEqual(
+            {"status": "unsupported", "hold": "zcode unsupported"},
+            aggregate["harnesses"]["zcode"],
+        )
+        discover = run_cli("discover", "--harness", "zcode", "--store-root", str(self.store))
+        self.assertEqual(0, discover.returncode, discover.stderr)
+        self.assertEqual("unsupported", json.loads(discover.stdout)["status"])
+
     def test_codex_golden_spot_checks(self) -> None:
         aggregate = self.aggregate()
         codex = aggregate["harnesses"]["codex"]
