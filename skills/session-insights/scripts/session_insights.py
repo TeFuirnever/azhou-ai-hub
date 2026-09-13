@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import os
 import re
@@ -786,8 +787,7 @@ def report_date(aggregate: dict[str, Any]) -> str:
     return moment.date().isoformat() if moment else "empty"
 
 
-def cmd_report(args: argparse.Namespace) -> int:
-    aggregate = read_aggregate(args.aggregate)
+def build_markdown_report(aggregate: dict[str, Any], include_excerpts: bool, tone: str) -> str:
     holds = [str(hold) for hold in aggregate.get("holds", [])]
     lines: list[str] = [
         "# 🦊 阿舟 · Session Insights 报告",
@@ -801,13 +801,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     for harness, section in aggregate["harnesses"].items():
         status = section.get("status")
         if status == "ok":
-            render_ok_section(lines, harness, section, args.include_excerpts)
+            render_ok_section(lines, harness, section, include_excerpts)
         elif status == "missing":
             lines.append(f"## {harness}")
             lines.append("")
             lines.append("- store missing; no metrics.")
             lines.append("")
-    if args.tone == "roast":
+    if tone == "roast":
         lines.append("## 🔥 roast")
         lines.append("")
         roasted = False
@@ -831,6 +831,123 @@ def cmd_report(args: argparse.Namespace) -> int:
     lines.append("")
     lines.append(f"> {REVIEW_FOOTER}")
     lines.append("")
+    return "\n".join(lines)
+
+
+HTML_STYLE = """body{font-family:-apple-system,'Segoe UI','Noto Sans',sans-serif;margin:2rem auto;max-width:52rem;padding:0 1rem;color:#111;background:#fff;line-height:1.5}
+h1{font-size:1.4rem}
+h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+h3{font-size:1rem;margin-bottom:.2rem}
+ul,ol{padding-left:1.4rem}
+code{background:#f4f4f4;padding:0 .25rem;border-radius:3px}
+pre{background:#f7f7f7;padding:.6rem;overflow-x:auto;border:1px solid #eee}
+.receipt pre{white-space:pre-wrap}
+.footer{border-top:1px solid #ddd;margin-top:2rem;padding-top:.6rem;font-size:.85rem;color:#444}
+@media print{body{margin:0;max-width:none}h2{break-after:avoid}pre{overflow:visible;border:none}}
+"""
+
+
+def _html_list(items: list[str]) -> str:
+    if not items:
+        return "<ul>\n<li>(none)</li>\n</ul>\n"
+    return "<ul>\n" + "\n".join(f"<li>{item}</li>" for item in items) + "\n</ul>\n"
+
+
+def build_html_report(aggregate: dict[str, Any], include_excerpts: bool, tone: str) -> str:
+    """Render the same aggregate into a self-contained offline HTML artifact:
+    inlined CSS, no external resources, no scripts, print-friendly."""
+    holds = [str(hold) for hold in aggregate.get("holds", [])]
+    parts: list[str] = [
+        "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        "<title>Session Insights</title>\n<style>\n" + HTML_STYLE + "</style>\n</head>\n<body>\n",
+        "<h1>🦊 阿舟 · Session Insights 报告</h1>\n",
+        "<p><em>先有数字，再有故事。每个数字都来自 <code>session-insights.aggregate.v1</code>，报告不重算任何指标。</em></p>\n",
+        "<ul>\n"
+        f"<li>window: 最近 {aggregate['window_days']} 天，锚定 store 内最新会话时间（非墙钟）</li>\n"
+        f"<li>session cap: {aggregate['max_sessions']}（最近优先）</li>\n</ul>\n",
+    ]
+    for harness, section in aggregate["harnesses"].items():
+        status = section.get("status")
+        if status == "ok":
+            parts.append(f"<h2>📊 概览（{html.escape(harness)}）</h2>\n")
+            parts.append(_html_list([
+                f"会话数: {section['session_count']}",
+                f"活跃天数（UTC）: {section['active_days']}",
+                f"用户轮次: {section['turns']}",
+                f"用户消息 / 助手消息: {section['user_messages']} / {section['assistant_messages']}",
+                f"扫描文件: {section['files_scanned']}（malformed 行 {section['malformed_lines']}）",
+                f"跳过的 subagent 会话: {section['skipped_subagent_sessions']}",
+                f"最新会话: {html.escape(str(section['newest_session_at']))}",
+                f"窗口起点: {html.escape(str(section['window_start']))}",
+            ]))
+            histogram = section["hour_histogram_utc"]
+            peak = max(histogram) if histogram else 0
+            parts.append("<h2>🕒 时段分布（UTC）</h2>\n")
+            if any(histogram):
+                parts.append(_html_list([
+                    f"{hour:02d}:00 {bar(count, peak=peak)} {count}"
+                    for hour, count in enumerate(histogram)
+                    if count
+                ]))
+            else:
+                parts.append(_html_list(["(no message timestamps)"]))
+            parts.append("<h2>🗂️ 项目分布</h2>\n")
+            parts.append(_html_list([
+                f"<code>{html.escape(project)}</code>: {count} 个会话"
+                for project, count in section["project_distribution"].items()
+            ]))
+            parts.append("<h2>🔧 工具调用排行</h2>\n")
+            tool_items = [
+                f"<code>{html.escape(name)}</code> — {count}"
+                for name, count in section["tool_calls"].items()
+            ]
+            if tool_items:
+                parts.append("<ol>\n" + "\n".join(f"<li>{item}</li>" for item in tool_items) + "\n</ol>\n")
+            else:
+                parts.append(_html_list([]))
+            parts.append("<h2>🧯 摩擦信号</h2>\n")
+            parts.append(_html_list([
+                f"中断: {section['interruptions']}（interruption_rate {section['interruption_rate']}）",
+                f"API 错误: {section['error_count']}",
+                f"重复首条提示: {section['repeated_first_prompt_count']}",
+            ]))
+            if include_excerpts:
+                excerpts = section.get("excerpts")
+                if excerpts is None:
+                    raise UsageFailure("aggregate was built without --include-excerpts; rebuild it first")
+                parts.append("<h2>📎 首条提示摘录（已脱敏）</h2>\n")
+                parts.append(_html_list([
+                    f"<code>{html.escape(excerpt['project'])}</code> / {html.escape(excerpt['session_id'])}: "
+                    f"{html.escape(excerpt['first_prompt'])}"
+                    for excerpt in excerpts
+                ]))
+        elif status == "missing":
+            parts.append(f"<h2>{html.escape(harness)}</h2>\n<p>store missing; no metrics.</p>\n")
+    if tone == "roast":
+        parts.append("<h2>🔥 roast</h2>\n")
+        roasted = False
+        for harness, section in aggregate["harnesses"].items():
+            if section.get("status") != "ok":
+                continue
+            parts.append(f"<h3>{html.escape(harness)}</h3>\n")
+            parts.append(_html_list([html.escape(line[2:]) for line in roast_lines(section)]))
+            roasted = True
+        if not roasted:
+            parts.append(_html_list(["(nothing to roast: no verified sessions)"]))
+    parts.append("<h2>🔒 Holds</h2>\n")
+    parts.append(_html_list([html.escape(hold) for hold in holds] if holds else ["none"]))
+    parts.append(f"<p class=\"footer\">{html.escape(REVIEW_FOOTER)}</p>\n")
+    return "".join(parts)
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    aggregate = read_aggregate(args.aggregate)
+    holds = [str(hold) for hold in aggregate.get("holds", [])]
+    if args.format == "html":
+        body = build_html_report(aggregate, args.include_excerpts, args.tone)
+    else:
+        body = build_markdown_report(aggregate, args.include_excerpts, args.tone)
 
     inputs = [
         {
@@ -841,10 +958,11 @@ def cmd_report(args: argparse.Namespace) -> int:
         for harness, section in aggregate["harnesses"].items()
         if section.get("status") == "ok"
     ]
-    body = "\n".join(lines)
     artifact_digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     if args.out is not None:
         out = Path(args.out)
+    elif args.format == "html":
+        out = Path.cwd() / OUTPUT_NAMESPACE / f"report-{report_date(aggregate)}.html"
     else:
         out = Path.cwd() / OUTPUT_NAMESPACE / f"report-{report_date(aggregate)}.md"
     receipt = {
@@ -861,15 +979,21 @@ def cmd_report(args: argparse.Namespace) -> int:
         "verification": "rendered from session-insights.aggregate.v1 input; no metric recomputed",
         "holds": holds,
         "next_action": (
-            "verify codex/zcode transcript formats before claiming cross-harness coverage"
+            "resolve remaining holds before claiming cross-harness coverage"
             if holds
             else "review before sharing"
         ),
         "learning_signal": learning_signal(aggregate),
     }
-    document = body + "\n## 🧾 Receipt\n\n```json\n" + json.dumps(
-        receipt, ensure_ascii=False, indent=2
-    ) + "\n```\n"
+    receipt_text = json.dumps(receipt, ensure_ascii=False, indent=2)
+    if args.format == "html":
+        document = body + (
+            "<section class=\"receipt\">\n<h2>🧾 Receipt</h2>\n<pre>"
+            + html.escape(receipt_text)
+            + "</pre>\n</section>\n</body>\n</html>\n"
+        )
+    else:
+        document = body + "\n## 🧾 Receipt\n\n```json\n" + receipt_text + "\n```\n"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(document, encoding="utf-8")
     emit_json(receipt)
@@ -942,6 +1066,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("report", "roast"),
         default="report",
         help="presentation tone; both tones render the same machine values (default: report)",
+    )
+    report.add_argument(
+        "--format",
+        choices=("markdown", "html"),
+        default="markdown",
+        help="artifact format; html renders a self-contained offline single file (default: markdown)",
     )
     report.add_argument(
         "--out",

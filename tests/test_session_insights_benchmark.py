@@ -249,6 +249,105 @@ class SessionInsightsRoastTest(unittest.TestCase):
         self.assertEqual(2, result.returncode)
 
 
+class SessionInsightsHtmlTest(unittest.TestCase):
+    """Offline HTML artifact (#165): same numbers, self-contained single file."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.work = Path(self.tempdir.name)
+        aggregate_path = self.work / "aggregate.json"
+        result = run_cli(
+            "aggregate", "--harness", "all", "--store-root",
+            str(self.build_store()), "--out", str(aggregate_path),
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.aggregate_path = aggregate_path
+
+    def build_store(self) -> Path:
+        benchmark = load_benchmark_module()
+        store = self.work / "store"
+        benchmark.build_store(store)
+        return store
+
+    def render_html(self, *extra: str) -> tuple[subprocess.CompletedProcess[str], str]:
+        out = self.work / f"report-{len(list(self.work.glob('report-*.html'))) or 0}.html"
+        result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--out", str(out),
+            "--format", "html", *extra,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        return result, out.read_text(encoding="utf-8")
+
+    def test_html_artifact_is_self_contained(self) -> None:
+        _receipt, text = self.render_html()
+        lowered = text.lower()
+        self.assertTrue(lowered.startswith("<!doctype html>"))
+        self.assertIn("<style>", lowered)
+        self.assertNotIn("<script", lowered)
+        for marker in ("http://", "https://", "src=", "href="):
+            self.assertNotIn(marker, lowered)
+        self.assertTrue(lowered.rstrip().endswith("</html>"))
+        self.assertIn("Review before sharing", text)
+
+    def test_html_numbers_match_markdown(self) -> None:
+        markdown_path = self.work / "report.md"
+        result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--out", str(markdown_path)
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        markdown_text = markdown_path.read_text(encoding="utf-8")
+        _receipt, html_text = self.render_html()
+        for fact in ("会话数: 4", "活跃天数（UTC）: 3", "interruption_rate 0.4"):
+            self.assertIn(fact, html_text)
+            self.assertIn(fact, markdown_text)
+        self.assertIn("1. `Read` — 3", markdown_text)
+        self.assertIn("<code>Read</code> — 3", html_text)
+        for hold in ("codex unsupported", "zcode unsupported"):
+            self.assertIn(hold, html_text)
+
+    def test_html_privacy_controls(self) -> None:
+        benchmark = load_benchmark_module()
+        _receipt, text = self.render_html()
+        home = str(Path.home())
+        if home != "/":
+            self.assertNotIn(home, text)
+        for secret in benchmark.SEEDED_SECRETS:
+            self.assertNotIn(secret, text)
+        self.assertNotIn(benchmark.EXCERPT_SENTINEL, text)
+        for encoded in (benchmark.ALPHA, benchmark.BETA):
+            self.assertNotIn(encoded, text)
+
+    def test_html_receipt_machine_fields_match_markdown(self) -> None:
+        markdown_path = self.work / "report.md"
+        markdown_result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--out", str(markdown_path)
+        )
+        self.assertEqual(0, markdown_result.returncode, markdown_result.stderr)
+        html_result, _text = self.render_html()
+        machine = lambda receipt: {key: value for key, value in receipt.items() if key != "artifacts"}
+        self.assertEqual(
+            machine(json.loads(markdown_result.stdout)),
+            machine(json.loads(html_result.stdout)),
+        )
+
+    def test_html_default_output_lands_in_azhou_namespace(self) -> None:
+        result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--format", "html",
+            cwd=self.work,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        expected = self.work / ".azhou" / "session-insights" / "report-2026-09-09.html"
+        self.assertTrue(expected.is_file())
+
+    def test_invalid_format_is_a_usage_error(self) -> None:
+        result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--out", str(self.work / "x.md"),
+            "--format", "pdf",
+        )
+        self.assertEqual(2, result.returncode)
+
+
 class SessionInsightsCacheTest(unittest.TestCase):
     def setUp(self) -> None:
         self.benchmark = load_benchmark_module()

@@ -37,7 +37,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 - `discover`：列出会话清单（id、项目、起止），不含指标。
 - `metadata`：流式逐行解析，输出逐会话元数据 JSON；跳过 malformed 行、`isSidechain`/`isMeta` 行与非消息簿记类型；全为 sidechain/meta 的会话计为 skipped-subagent。
 - `aggregate`：产出 `session-insights.aggregate.v1`，唯一事实源；默认 `--days 30`、`--max-sessions 200`（最近优先），`--project <path>` 缩到单项目。窗口与上限锚定 store 内最新会话时间戳，不是墙钟——静态 store 结果必然确定。
-- `report`：只从 aggregate JSON 渲染 Markdown，绝不重算数字；`--tone roast` 切换 roast 语气，机器小节逐字节不变。
+- `report`：只从 aggregate JSON 渲染 Markdown，绝不重算数字；`--tone roast` 切换 roast 语气，机器小节逐字节不变；`--format html` 产出自包含离线单文件 HTML（内联 CSS，无外部资源、无 JS），数字与 Markdown 版同源。
 
 唯一新增的 seam 是每个子命令的 `--store-root <path>`，用于把宿主存储重定向到测试 fixture；没有其他隐藏开关。
 
@@ -47,7 +47,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 
 ## 输出与产物
 
-- 默认产物 `<当前项目>/.azhou/session-insights/report-<日期>.md`（自动建目录）；`--out` 指向用户自选的交付物位置。
+- 默认产物 `<当前项目>/.azhou/session-insights/report-<日期>.md`（自动建目录）；`--format html` 时为 `report-<日期>.html`；`--out` 指向用户自选的交付物位置。HTML 产物与 Markdown 版从同一 aggregate 渲染，数字逐一对应；隐私扫描与固定页脚同样覆盖 HTML。
 - 摘录默认关闭；`--include-excerpts` 时摘录先脱敏（家目录替换为 `~`、`sk-`/`ghp_`/`github_pat_`/`AKIA`/`AIza`/PEM 等密钥样式打码），报告页脚固定提醒分享前人工审查。
 - Codex 与 zcode 适配器 fail closed：任何 aggregate/report 尝试只记录 `unsupported` hold，绝不产出猜测数字。
 
