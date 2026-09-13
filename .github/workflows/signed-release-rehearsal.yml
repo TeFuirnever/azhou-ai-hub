@@ -1,0 +1,79 @@
+name: Signed release rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rehearsal tag for the draft release, e.g. signing-rehearsal-2026-09-13"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: signing-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rehearsal:
+    name: keyless-sign a skill manifest and attach it to a draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Generate the per-skill manifest
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          lines = []
+          for skill in sorted(Path("skills").iterdir()):
+              if not skill.is_dir():
+                  continue
+              digest = hashlib.sha256()
+              for file in sorted(p for p in skill.rglob("*") if p.is_file()):
+                  digest.update(f"{file.relative_to(skill.parent).as_posix()}:{hashlib.sha256(file.read_bytes()).hexdigest()}\n".encode("utf-8"))
+              lines.append(f"{digest.hexdigest()}  skills/{skill.name}")
+          Path("SKILL_SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(Path("SKILL_SHA256SUMS.txt").read_text(encoding="utf-8"))
+          PY
+      - name: Keyless-sign the manifest
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: SKILL_SHA256SUMS.txt
+      - name: Verify the signature identity
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: SKILL_SHA256SUMS.txt
+          verify: true
+          verify-cert-identity: "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
+          verify-oidc-issuer: "https://token.actions.githubusercontent.com"
+      - name: Attach the signed manifest to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+            --title "$TAG (signing rehearsal — draft)" \
+            --notes "Keyless sigstore signing rehearsal (#225). Draft: not announced, not published. Assets: the per-skill SHA-256 manifest plus its sigstore bundle (keyless, OIDC-bound to this workflow)." \
+            SKILL_SHA256SUMS.txt SKILL_SHA256SUMS.txt.sigstore
+      - name: Receipt summary
+        run: |
+          {
+            echo "# Signed-release rehearsal receipt"
+            echo
+            echo "- Manifest: SKILL_SHA256SUMS.txt (per-skill tree digests)"
+            echo "- Signature: keyless sigstore (Fulcio OIDC, Rekor bundle SKILL_SHA256SUMS.txt.sigstore)"
+            echo "- Identity bound to: this workflow file on refs/heads/main"
+            echo "- Draft release tag: ${{ inputs.tag }} (unpublished)"
+            echo "- Verify command: sigstore verify-identity --bundle SKILL_SHA256SUMS.txt.sigstore --certificate-identity '<workflow uri>' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
