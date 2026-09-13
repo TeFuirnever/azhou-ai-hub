@@ -45,6 +45,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 ~~~
 
+Package-manager installs resolve the mutable default branch; [verify what you installed](docs/installation.md#verify-what-you-installed) against a published tag, or use the receipt-backed checkout-assisted path.
+
 These commands are the documented package-manager path; completion time and host discovery are harness-dependent and are not promised here.
 
 Choose one installation method. Do not stack a package-manager install, a checkout-managed install, a manual copy, and a development symlink under the same canonical skill name. The four `azhou-*` packages make their `SKILL.md` workflow discoverable; they do not bundle the Foundation CLI and still require an explicit local checkout. See the [installation guide](docs/installation.md) for the complete paths and dependencies.

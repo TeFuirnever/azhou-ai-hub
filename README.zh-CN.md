@@ -45,6 +45,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 ~~~
 
+包管理器安装解析的是可变默认分支；请按[安装指南](docs/installation.md#verify-what-you-installed)对照已发布 tag 校验安装内容，或改用带回据的 checkout 托管路径。
+
 以上是文档化的包管理器路径；完成时间和 harness 发现能力取决于宿主，这里不承诺固定秒数。
 
 只选一种安装方式。同一 canonical name 下，不要叠加包管理器安装、checkout 托管安装、手工复制和开发软链接。四个 `azhou-*` 包负责让 harness 发现对应的 `SKILL.md` 工作流；它们不内置 Foundation CLI，仍需要显式本地 checkout。完整安装路径和依赖见[安装指南](docs/installation.md)。
