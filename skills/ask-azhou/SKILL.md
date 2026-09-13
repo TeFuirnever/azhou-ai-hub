@@ -47,7 +47,7 @@ Ask which family the request belongs to, then the branch question.
 
 - "Persist this verified decision / debug fact / convention for future sessions" → `super-llm-wiki` — private local store; decisions carry a lifecycle and archived pages are tamper-evident.
 - "Reconcile docs, rules, and memory at task close" → `super-repo-pedant` — the closeout protocol with inventory proof.
-- "How am I actually using my agent / give me a usage report from my local session history" → `session-insights` — fact-bound aggregate reports from local session stores (Claude Code adapter; Codex and zcode fail closed until verified); it analyzes local stores only, never monitors, never sends anything out.
+- "How am I actually using my agent / give me a usage report from my local session history" → `session-insights` — fact-bound aggregate reports from local session stores (Claude Code and Codex adapters; zcode fails closed — no plaintext transcript store); it analyzes local stores only, never monitors, never sends anything out.
 - "Which skill for this?" → this skill, `ask-azhou`.
 
 ### Long-running experiments

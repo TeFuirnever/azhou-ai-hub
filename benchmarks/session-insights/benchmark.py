@@ -53,6 +53,33 @@ def session_lines(session_id: str, records: list[dict]) -> str:
     return "\n".join(line(record) for record in records) + "\n"
 
 
+def codex_record(timestamp: str, record_type: str, payload: dict) -> str:
+    return line({"timestamp": timestamp, "type": record_type, "payload": payload})
+
+
+def codex_meta(timestamp: str, session_id: str, cwd: str, thread_source: str | None) -> str:
+    payload = {"session_id": session_id, "cwd": cwd}
+    if thread_source is not None:
+        payload["thread_source"] = thread_source
+    return codex_record(timestamp, "session_meta", payload)
+
+
+def codex_message(timestamp: str, role: str, text: str) -> str:
+    item_type = "output_text" if role == "assistant" else "input_text"
+    return codex_record(
+        timestamp,
+        "response_item",
+        {"type": "message", "role": role, "content": [{"type": item_type, "text": text}]},
+    )
+
+
+def codex_call(timestamp: str, name: str, namespace: str | None = None) -> str:
+    payload = {"type": "function_call", "name": name, "arguments": "{}", "call_id": f"call_{name}"}
+    if namespace is not None:
+        payload["namespace"] = namespace
+    return codex_record(timestamp, "response_item", payload)
+
+
 def build_store(root: Path) -> None:
     """Build the synthetic multi-harness store declared in manifest.json."""
     alpha = root / "projects" / ALPHA
@@ -253,10 +280,115 @@ def build_store(root: Path) -> None:
         encoding="utf-8",
     )
 
-    codex_dir = root / "sessions" / "2026" / "09" / "01"
-    codex_dir.mkdir(parents=True)
-    (codex_dir / "rollout-2026-09-01T00-00-00-aaaaaaaa.jsonl").write_text(
+    codex_store = root / "sessions"
+    (codex_store / "2026" / "09" / "01").mkdir(parents=True)
+    (codex_store / "2026" / "09" / "01" / "rollout-2026-09-01T00-00-00-aaaaaaaa.jsonl").write_text(
         line({"type": "turn_context", "timestamp": "2026-09-01T00:00:00Z"}) + "\n",
+        encoding="utf-8",
+    )
+
+    c1 = "c11111111-1111-1111-1111-111111111111"
+    c1_file = codex_store / "2026" / "09" / "05" / "rollout-2026-09-05T08-00-00-bbbbbbbb.jsonl"
+    c1_file.parent.mkdir(parents=True)
+    c1_lines = [
+        codex_meta("2026-09-05T08:00:00Z", c1, "/Users/test/dev/alpha", "user"),
+        codex_record("2026-09-05T08:00:05Z", "turn_context", {"cwd": "/Users/test/dev/alpha"}),
+        codex_message("2026-09-05T08:00:10Z", "user", "<environment_context>cwd info</environment_context>"),
+        codex_record(
+            "2026-09-05T08:00:20Z",
+            "response_item",
+            {
+                "type": "message",
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "injected instructions"}],
+            },
+        ),
+        codex_message("2026-09-05T08:01:00Z", "user", "查一下失败的测试"),
+        codex_message("2026-09-05T08:01:30Z", "assistant", "我来看一下"),
+        codex_call("2026-09-05T08:02:00Z", "Read"),
+        codex_call("2026-09-05T08:02:30Z", "click", namespace="browser"),
+        codex_message("2026-09-05T08:03:00Z", "user", "再跑一遍"),
+        codex_record(
+            "2026-09-05T08:03:30Z",
+            "event_msg",
+            {"type": "turn_aborted", "reason": "interrupted"},
+        ),
+        codex_message("2026-09-05T08:04:00Z", "assistant", "已确认"),
+    ]
+    c1_file.write_text("\n".join(c1_lines) + "\n{this codex line is not json\n", encoding="utf-8")
+
+    c2 = "c22222222-2222-2222-2222-222222222222"
+    c2_file = codex_store / "2026" / "09" / "05" / "rollout-2026-09-05T09-30-00-cccccccc.jsonl"
+    c2_file.write_text(
+        "\n".join(
+            [
+                codex_meta("2026-09-05T09:30:00Z", c2, "/Users/test/dev/alpha", "subagent"),
+                codex_message("2026-09-05T09:30:10Z", "user", "subagent rollout task"),
+                codex_message("2026-09-05T09:30:20Z", "assistant", "subagent done"),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    c3 = "c33333333-3333-3333-3333-333333333333"
+    c3_file = codex_store / "2026" / "09" / "06" / "rollout-2026-09-06T20-15-00-dddddddd.jsonl"
+    c3_file.parent.mkdir(parents=True)
+    c3_file.write_text(
+        "\n".join(
+            [
+                codex_meta("2026-09-06T20:15:00Z", c3, "/Users/test/dev/beta", "user"),
+                codex_message("2026-09-06T20:15:00Z", "user", "晚上跑个周报脚本"),
+                codex_message("2026-09-06T20:16:00Z", "assistant", "已排好"),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    c4 = "c44444444-4444-4444-4444-444444444444"
+    (codex_store / "2026" / "09" / "04").mkdir(parents=True)
+    (codex_store / "2026" / "09" / "04" / "rollout-2026-09-04T12-00-00-eeeeeeee.jsonl").write_text(
+        "\n".join(
+            [
+                codex_meta("2026-09-04T12:00:00Z", c4, "/Users/test/dev/alpha", "user"),
+                codex_record("2026-09-04T12:00:05Z", "turn_context", {"cwd": "/Users/test/dev/alpha"}),
+                codex_record("2026-09-04T12:00:10Z", "turn_context", {"cwd": "/Users/test/dev/alpha"}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    c5 = "c55555555-5555-5555-5555-555555555555"
+    (codex_store / "2026" / "09" / "03").mkdir(parents=True)
+    (codex_store / "2026" / "09" / "03" / "rollout-2026-09-03T10-00-00-ffffffff.jsonl").write_text(
+        "\n".join(
+            [
+                codex_meta("2026-09-03T10:00:00Z", c5, "/Users/test/dev/alpha", None),
+                codex_message("2026-09-03T10:00:10Z", "user", "old-format rollout without thread_source"),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    c6 = "c66666666-6666-6666-6666-666666666666"
+    (codex_store / "2026" / "08" / "01").mkdir(parents=True)
+    (codex_store / "2026" / "08" / "01" / "rollout-2026-08-01T10-00-00-0aaaaaaa.jsonl").write_text(
+        "\n".join(
+            [
+                codex_meta("2026-08-01T10:00:00Z", c6, "/Users/test/dev/alpha", "user"),
+                codex_message("2026-08-01T10:00:10Z", "user", "八月的旧 codex 会话"),
+                codex_message("2026-08-01T10:00:20Z", "assistant", "好"),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    (codex_store / "2026" / "09" / "06" / "not-a-rollout.jsonl").write_text(
+        line({"type": "unknown_store_shape"}) + "\n",
         encoding="utf-8",
     )
 
@@ -312,6 +444,34 @@ GOLDEN_AGGREGATE: dict = {
 }
 GOLDEN_DAYS60_SPOT = {"session_count": 5, "active_days": 4}
 GOLDEN_CAP2_SPOT = {"session_count": 2}
+GOLDEN_CODEX_AGGREGATE: dict = {
+    "status": "ok",
+    "newest_session_at": "2026-09-06T20:16:00+00:00",
+    "window_start": "2026-08-07T20:16:00+00:00",
+    "session_count": 2,
+    "skipped_subagent_sessions": 4,
+    "files_scanned": 7,
+    "malformed_lines": 1,
+    "active_days": 2,
+    "hour_histogram_utc": [
+        0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0,
+    ],
+    "project_distribution": {
+        ".../dev-alpha": 1,
+        ".../dev-beta": 1,
+    },
+    "tool_calls": {"Read": 1, "browser.click": 1},
+    "turns": 3,
+    "user_messages": 3,
+    "assistant_messages": 3,
+    "interruptions": 1,
+    "interruption_rate": 0.3333,
+    "error_count": 0,
+    "repeated_first_prompt_count": 0,
+    "inputs": {"file_count": 7},
+}
+GOLDEN_CODEX_DAYS60_SPOT = {"session_count": 3, "active_days": 3}
+GOLDEN_CODEX_CAP1_SPOT = {"session_count": 1}
 
 
 def check_manifest(errors: list[str]) -> None:
@@ -361,11 +521,19 @@ def cmd_check(_: argparse.Namespace) -> int:
                 "golden aggregate drift:\n"
                 + json.dumps({"expected": GOLDEN_AGGREGATE, "actual": claude}, ensure_ascii=False, indent=2)
             )
-        for harness in ("codex", "zcode"):
-            section = aggregate["harnesses"][harness]
-            if section != {"status": "unsupported", "hold": f"{harness} unsupported"}:
-                errors.append(f"fail-closed section drift for {harness}: {section}")
-        if sorted(aggregate["holds"]) != ["codex unsupported", "zcode unsupported"]:
+        codex = aggregate["harnesses"]["codex"]
+        codex_digest_value = codex.get("inputs", {}).pop("composite_sha256", None)
+        if not (isinstance(codex_digest_value, str) and len(codex_digest_value) == 64):
+            errors.append("codex inputs.composite_sha256 missing or malformed")
+        if codex != GOLDEN_CODEX_AGGREGATE:
+            errors.append(
+                "codex golden aggregate drift:\n"
+                + json.dumps({"expected": GOLDEN_CODEX_AGGREGATE, "actual": codex}, ensure_ascii=False, indent=2)
+            )
+        zcode_section = aggregate["harnesses"]["zcode"]
+        if zcode_section != {"status": "unsupported", "hold": "zcode unsupported"}:
+            errors.append(f"fail-closed section drift for zcode: {zcode_section}")
+        if aggregate["holds"] != ["zcode unsupported"]:
             errors.append(f"holds drift: {aggregate['holds']}")
 
         days60 = cli_json(
@@ -383,6 +551,22 @@ def cmd_check(_: argparse.Namespace) -> int:
         for key, expected in GOLDEN_CAP2_SPOT.items():
             if capped.get(key) != expected:
                 errors.append(f"--max-sessions 2 spot check failed: {key}={capped.get(key)} != {expected}")
+
+        codex_days60 = cli_json(
+            "aggregate", "--harness", "codex", "--store-root", str(store),
+            "--days", "60",
+        )["harnesses"]["codex"]
+        for key, expected in GOLDEN_CODEX_DAYS60_SPOT.items():
+            if codex_days60.get(key) != expected:
+                errors.append(f"codex --days 60 spot check failed: {key}={codex_days60.get(key)} != {expected}")
+
+        codex_capped = cli_json(
+            "aggregate", "--harness", "codex", "--store-root", str(store),
+            "--max-sessions", "1",
+        )["harnesses"]["codex"]
+        for key, expected in GOLDEN_CODEX_CAP1_SPOT.items():
+            if codex_capped.get(key) != expected:
+                errors.append(f"codex --max-sessions 1 spot check failed: {key}={codex_capped.get(key)} != {expected}")
 
         digest_first = digest_value
         digest_second = cli_json(
@@ -406,11 +590,11 @@ def cmd_check(_: argparse.Namespace) -> int:
         cache_cwd.mkdir()
         cache_path = cache_cwd / ".azhou" / "session-insights" / "metadata-cache.json"
 
-        def cached_aggregate(*extra: str) -> tuple[str, dict]:
+        def cached_aggregate(*extra: str, harness: str = "claude-code") -> tuple[str, dict]:
             completed = subprocess.run(
                 [
                     sys.executable, str(CLI), "aggregate",
-                    "--harness", "claude-code", "--store-root", str(store), *extra,
+                    "--harness", harness, "--store-root", str(store), *extra,
                 ],
                 cwd=cache_cwd,
                 capture_output=True,
@@ -454,6 +638,18 @@ def cmd_check(_: argparse.Namespace) -> int:
         corrupt_out, _corrupt = cached_aggregate()
         if corrupt_out != cold_out:
             errors.append("cache: a corrupt cache file changed the aggregate output")
+
+        codex_cold_out, codex_cold = cached_aggregate(harness="codex")
+        codex_section_cache = codex_cold["harnesses"]["codex"]
+        if codex_section_cache.get("session_count") != 2:
+            errors.append("cache: codex cold run lost the golden session count")
+        codex_blob = cache_path.read_text(encoding="utf-8")
+        for needle in ("/Users/test", "-Users-test", "查一下失败的测试"):
+            if needle in codex_blob:
+                errors.append("cache: codex entries contain a plaintext path or transcript text")
+        codex_warm_out, _ = cached_aggregate(harness="codex")
+        if codex_warm_out != codex_cold_out:
+            errors.append("cache: warm codex output differs from the cold run")
 
         s2 = store / "projects" / ALPHA / f"{S2}.jsonl"
         with s2.open("a", encoding="utf-8") as handle:
@@ -529,6 +725,8 @@ def cmd_check(_: argparse.Namespace) -> int:
         )
         if receipt.get("schema") != "session-insights.report.v1":
             errors.append(f"receipt schema drift: {receipt.get('schema')}")
+        if len(receipt.get("inputs", [])) != 2:
+            errors.append("receipt: expected per-store inputs for both verified harnesses")
         text = plain_report.read_text(encoding="utf-8")
         home = str(Path.home())
         if home != "/" and home in text:
@@ -543,9 +741,8 @@ def cmd_check(_: argparse.Namespace) -> int:
                 errors.append("privacy: plain report contains a seeded secret-shaped string")
         if EXCERPT_SENTINEL in text or FIRST_PROMPT_SHARED in text:
             errors.append("privacy: excerpts-off report contains transcript text")
-        for hold in ("codex unsupported", "zcode unsupported"):
-            if hold not in text:
-                errors.append(f"report missing hold line: {hold}")
+        if "zcode unsupported" not in text:
+            errors.append("report missing hold line: zcode unsupported")
 
         rich_aggregate = out_dir / "aggregate-excerpts.json"
         completed = run_cli(
@@ -577,11 +774,11 @@ def cmd_check(_: argparse.Namespace) -> int:
             if encoded in rich_text:
                 errors.append("privacy: excerpts-on report contains an encoded project directory name")
 
-        codex_only = cli_json("aggregate", "--harness", "codex", "--store-root", str(store))
-        codex_section = codex_only["harnesses"]["codex"]
-        numeric_keys = {"session_count", "active_days", "tool_calls", "turns"} & set(codex_section)
+        zcode_only = cli_json("aggregate", "--harness", "zcode", "--store-root", str(store))
+        zcode_probe = zcode_only["harnesses"]["zcode"]
+        numeric_keys = {"session_count", "active_days", "tool_calls", "turns"} & set(zcode_probe)
         if numeric_keys:
-            errors.append(f"codex fail-closed section carries speculative metrics: {sorted(numeric_keys)}")
+            errors.append(f"zcode fail-closed section carries speculative metrics: {sorted(numeric_keys)}")
 
         # --- roast tone (#164): presentation-only tone over one number set --
         roast_report = out_dir / "report-roast.md"
@@ -646,67 +843,6 @@ def cmd_check(_: argparse.Namespace) -> int:
             errors.append("roast: receipt machine fields drifted across tones")
         if any(line.startswith("## ") and line.rstrip("\n").endswith("roast") for line in plain_lines):
             errors.append("roast: the default report rendered a roast section")
-
-        # --- offline HTML artifact (#165): same numbers, self-contained file -
-        parity_aggregate = out_dir / "aggregate-parity.json"
-        completed = run_cli(
-            "aggregate", "--harness", "all", "--store-root", str(store),
-            "--out", str(parity_aggregate),
-        )
-        if completed.returncode != 0:
-            raise AssertionError(f"html: parity aggregate failed: {completed.stderr.strip()}")
-        html_report = out_dir / "report-parity.html"
-        html_receipt = cli_json(
-            "report", "--aggregate", str(parity_aggregate), "--out", str(html_report), "--format", "html"
-        )
-        parity_markdown = out_dir / "report-parity.md"
-        cli_json("report", "--aggregate", str(parity_aggregate), "--out", str(parity_markdown))
-        html_text = html_report.read_text(encoding="utf-8")
-        markdown_lines = parity_markdown.read_text(encoding="utf-8").splitlines()
-        lowered = html_text.lower()
-        if not lowered.startswith("<!doctype html>"):
-            errors.append("html: artifact does not start with the doctype")
-        if "<style>" not in lowered or "</style>" not in lowered:
-            errors.append("html: CSS is not inlined")
-        if "<script" in lowered:
-            errors.append("html: artifact contains a script element")
-        for marker in ("http://", "https://", "src=", "href="):
-            if marker in lowered:
-                errors.append(f"html: artifact contains an external resource marker: {marker}")
-        if not lowered.rstrip().endswith("</html>"):
-            errors.append("html: artifact is not a closed document")
-        if "Review before sharing" not in html_text:
-            errors.append("html: missing the fixed review-before-sharing footer")
-        parity_bullets = 0
-        for md_line in markdown_lines:
-            if md_line.startswith("- "):
-                content = md_line[2:]
-            elif re.match(r"^\d+\. ", md_line):
-                content = re.sub(r"^\d+\. ", "", md_line)
-            else:
-                continue
-            converted = re.sub(r"`([^`]*)`", r"<code>\1</code>", content)
-            if converted.startswith("(none)"):
-                continue
-            if f"<li>{converted}</li>" not in html_text:
-                errors.append(f"html: markdown fact missing from the html artifact: {content}")
-            parity_bullets += 1
-        if parity_bullets < 10:
-            errors.append(f"html: parity sweep covered too few markdown facts: {parity_bullets}")
-        home_path = str(Path.home())
-        if home_path != "/" and home_path in html_text:
-            errors.append("privacy: html report contains the absolute home path")
-        for secret in SEEDED_SECRETS:
-            if secret in html_text:
-                errors.append("privacy: html report contains a seeded secret-shaped string")
-        for encoded in (ALPHA, BETA):
-            if encoded in html_text:
-                errors.append("privacy: html report contains an encoded project directory name")
-        if EXCERPT_SENTINEL in html_text or FIRST_PROMPT_SHARED in html_text:
-            errors.append("privacy: excerpts-off html report contains transcript text")
-        html_machine = {key: value for key, value in html_receipt.items() if key != "artifacts"}
-        if html_machine != plain_machine:
-            errors.append("html: receipt machine fields drifted across formats")
 
     verdict = {"valid": not errors, "errors": errors}
     print(json.dumps(verdict, ensure_ascii=False, indent=2))

@@ -33,7 +33,9 @@
 - `repeated_first_prompt_count`：trim 后完全相同的首条提示，每组只计首次之外的部分之和。
 - `inputs`：`file_count` 与复合 SHA-256——排序后的（`sha256(相对路径)`、`mtime_ns`、`size`）元组；永不含文件内容，永不含明文绝对路径。
 
-Codex 与 zcode 分节恒为 `{"status": "unsupported", "hold": "<harness> unsupported"}`：可检测，不解析，不产出任何猜测数字。store 目录不存在时 Claude Code 分节为 `{"status": "missing"}`。
+Codex 适配器（已接入）：只扫描 `sessions/YYYY/MM/DD/rollout-*.jsonl`；`session_meta.thread_source != "user"` 的 rollout（subagent、guardian review、缺失该字段的旧形状）整体计入 `skipped_subagent_sessions`；developer 角色消息与注入型 user 文本（含 `<environment_context>`、以标签开头的簿记通知）计入 `skipped_lines`；工具调用取 `function_call` 的 `name`（带 `namespace` 时记 `namespace.name`）；中断取 `event_msg` 的 `turn_aborted{reason: interrupted}`；Codex 无已核实的 API 错误标记，`error_count` 恒为 0。项目脱敏标签与 narrowing 比较值由 `session_meta.cwd` 现算，明文 cwd 与可逆编码名不入任何产物或缓存。
+
+zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：可检测，不解析，不产出任何猜测数字（#162 侦察结论：3.11.2 无明文会话转写存储）。store 目录不存在时 Claude Code 分节为 `{"status": "missing"}`。
 
 ## 增量缓存（`session-insights.metadata-cache.v1`）
 
@@ -47,7 +49,6 @@ Codex 与 zcode 分节恒为 `{"status": "unsupported", "hold": "<harness> unsup
 
 - `report` 只读 aggregate JSON（文件或 stdin），schema 不符即 exit 1；绝不重算任何指标。
 - `--tone report|roast`（默认 `report`）：两种语气从同一份 aggregate 渲染，机器小节逐字节一致；`roast` 只追加一个展示层小节，每条断言必须引用机器小节中出现的一个统计值——无派生数值、无虚构事件、路径与对话。收据机器字段跨语气一致，仅 artifact 摘要随正文变化。
-- `--format markdown|html`（默认 `markdown`）：HTML 产物是自包含离线单文件——内联 CSS，无外部资源、无脚本、无链接引用，打印友好；所有事实条目与 Markdown 版逐一对应（由 benchmark 的逐行 parity 负控钉死）；隐私扫描与固定页脚同样覆盖 HTML 产物。
 - 默认输出 `<cwd>/.azhou/session-insights/report-<date>.md`；`<date>` 取聚合内最新会话日期（无会话时 `empty`），保证静态 store 下产物名确定。`--out` 为用户自选交付物。
 - 小节：概览、时段分布（UTC）、项目分布、工具调用排行、摩擦信号、可选摘录、Holds、Receipt。emoji 只出现在这些人读小节标题。
 - **摘录默认关闭**。`aggregate --include-excerpts` 才把脱敏后的首条提示存进 aggregate；`report --include-excerpts` 渲染之。脱敏规则：家目录明文替换为 `~`；密钥样式（`sk-`、`ghp_`、`github_pat_`、`AKIA`、`AIza`、PEM 标记）替换为 `[redacted-secret]`。
