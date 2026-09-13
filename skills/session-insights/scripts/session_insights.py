@@ -666,6 +666,41 @@ def bar(count: int, width: int = 20, peak: int = 1) -> str:
     return "█" * max(1, round(width * count / peak))
 
 
+def roast_lines(section: dict[str, Any]) -> list[str]:
+    """Deterministic roast lines over one ``ok`` aggregate section.
+
+    Tone contract: roast lives only in the presentation layer, so every line
+    interpolates values that appear verbatim in the machine sections — no
+    derived numbers, no invented events, paths, or quotes."""
+    lines: list[str] = []
+    lines.append(
+        f"- {section['session_count']} 个会话摊在 {section['active_days']} 个活跃日里，"
+        f"{section['turns']} 轮对话，interruption_rate {section['interruption_rate']}——数字不会陪你演戏。"
+    )
+    if section["session_count"] < 3:
+        lines.append(f"- 样本只有 {section['session_count']} 个会话：这个体量连 roast 都得省着用。")
+    tool_calls = section.get("tool_calls") or {}
+    if tool_calls:
+        top_tool, top_count = next(iter(tool_calls.items()))
+        lines.append(f"- 工具排行冠军是「{top_tool}」：{top_count} 次调用。它不动手，你就是个旁观的人。")
+    histogram = section.get("hour_histogram_utc") or []
+    if any(histogram):
+        peak_hour = max(range(24), key=lambda hour: histogram[hour])
+        lines.append(
+            f"- UTC {peak_hour:02d}:00 是你的主场——那个小时 {histogram[peak_hour]} 条消息，生物钟已被 agent 驯化。"
+        )
+    repeated = section.get("repeated_first_prompt_count", 0)
+    if repeated > 0:
+        lines.append(f"- 同一句首条提示你原样多发过 {repeated} 次（超出首次的部分）：换个问法，也许答案会换。")
+    if section.get("error_count", 0) > 0:
+        lines.append(f"- API 错误 {section['error_count']} 次。这不是运气差，这是证据。")
+    projects = section.get("project_distribution") or {}
+    if len(projects) > 1:
+        top_project, project_count = next(iter(projects.items()))
+        lines.append(f"- 精力最集中的项目是「{top_project}」：{project_count} 个会话，其余项目都是路人。")
+    return lines
+
+
 def render_ok_section(lines: list[str], harness: str, section: dict[str, Any], include_excerpts: bool) -> None:
     lines.append(f"## 📊 概览（{harness}）")
     lines.append("")
@@ -771,6 +806,21 @@ def cmd_report(args: argparse.Namespace) -> int:
             lines.append(f"## {harness}")
             lines.append("")
             lines.append("- store missing; no metrics.")
+            lines.append("")
+    if args.tone == "roast":
+        lines.append("## 🔥 roast")
+        lines.append("")
+        roasted = False
+        for harness, section in aggregate["harnesses"].items():
+            if section.get("status") != "ok":
+                continue
+            lines.append(f"### {harness}")
+            lines.append("")
+            lines.extend(roast_lines(section))
+            lines.append("")
+            roasted = True
+        if not roasted:
+            lines.append("- (nothing to roast: no verified sessions)")
             lines.append("")
     lines.append("## 🔒 Holds")
     lines.append("")
@@ -887,6 +937,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     report = subparsers.add_parser("report", help="render a Markdown report from an aggregate JSON")
     report.add_argument("--aggregate", default=None, help="aggregate JSON path (default: stdin)")
+    report.add_argument(
+        "--tone",
+        choices=("report", "roast"),
+        default="report",
+        help="presentation tone; both tones render the same machine values (default: report)",
+    )
     report.add_argument(
         "--out",
         default=None,

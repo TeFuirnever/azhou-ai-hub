@@ -2,7 +2,7 @@
  "schema": "super-caveman-evaluation-result.v1",
  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
- "model_limitation": "Producer-context invariance rebind (second derivation): the retirement landing's receipts re-bound after a reconcile-found count fix (docs/support-matrix.md sixteen -> fourteen) and its pinned test assertion, both touching reviewed paths. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+ "model_limitation": "Producer-context invariance rebind for the session-insights-164-roast-rebind landing: the reviewed receipt set is re-derived over the staged landing diff. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
  "tool_permissions": {
   "network": false,
@@ -95,9 +95,9 @@
  "high_risk_failed": 0,
  "format_failed": 0,
  "limitations": [
-  "This re-bind extends the reviewed set to 37 cumulative paths (adding docs/support-matrix.md, updating tests/test_skill_package.py) so the landing plus its count fix validate as one exact diff.",
+  "This rebind re-derives the reviewed set over the session-insights-164-roast-rebind staged landing so the receipt replays as one exact diff.",
   "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence.",
-  "Workspace-owner approval for the re-bind was granted interactively in the landing session (AskUserQuestion); the underlying retirement was separately approved at 2026-09-13T00:17:54Z; the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
+  "Workspace-owner approval for the re-bind was granted in-session by the standing directive to execute the open session-insights issues autonomously (do not ask); the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
  ],
  "status": "pass",
  "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
@@ -116,8 +116,8 @@
   "repository_scope": "pass (no writes outside the disposable fixture during response production)"
  },
  "reviewer": {
-  "identity": "zcode-subagent/retire-two-disciplines-rebind-review/2026-09-13",
-  "review_sha256": "044670528e1dad3afbccf303ff1697349b79f05455d648c96a649c1ca018335e"
+  "identity": "zcode-agent/session-insights-164-roast-rebind/2026-09-13",
+  "review_sha256": "74a8b7909c11f31d07ae25fe11347119be1cb22a2fa7a91a6683b3e91f60f542"
  },
  "promotion_review": {
   "paired_status": "invariant",
@@ -147,13 +147,13 @@
    "schema": "super-caveman-exact-diff-approval.v2",
    "status": "approved",
    "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-   "base_commit": "4c2f17eb4d7ff7d57f5183e87cc49750aed0869a",
-   "path_set_sha256": "9ec24ba2e989684b5a117bcc99404e90b939eb87f12663d596a674a7f074a9df",
-   "staged_patch_sha256": "456f6203794320dfbab2648a5c6bf5c29819e5ffb9fddf23aa8703d3b6d1a7b3",
+   "base_commit": "c62ae57c9d6258f24514c4e7c4acc1236ceccf33",
+   "path_set_sha256": "987ecc8fda7993b93072f413067412a461abdfa1faf778b4214648ca5a1c66b5",
+   "staged_patch_sha256": "fa75fce7ae4db2ac89fa72cfbb4704fa9518f0b572f74b6a44304ab9aa1cc67b",
    "approver": "workspace-owner",
-   "approved_at": "2026-09-13T00:44:03Z",
+   "approved_at": "2026-09-13T01:17:39Z",
    "record_path": "results/revision-8f493670-exact-diff-approval.json",
-   "record_sha256": "6f66757858baabe344a10cee118d5ba53fba7a1a708c14316539a0b4bc0ec2ab",
+   "record_sha256": "9816cdd45f4cfaa1ef56f3129a6dfe9b0b17816836520dac6f3f1bff66354764",
    "record_storage": "Git aggregate receipt; raw approval Git-external"
   }
  }

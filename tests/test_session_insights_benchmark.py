@@ -158,6 +158,97 @@ class SessionInsightsCliTest(unittest.TestCase):
         self.assertIn("aggregate schema must be", result.stderr)
 
 
+class SessionInsightsRoastTest(unittest.TestCase):
+    """Roast tone (#164): presentation layer only, machine values byte-identical."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.work = Path(self.tempdir.name)
+        aggregate_path = self.work / "aggregate.json"
+        result = run_cli(
+            "aggregate", "--harness", "all", "--store-root",
+            str(self.build_store()), "--out", str(aggregate_path),
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.aggregate_path = aggregate_path
+
+    def build_store(self) -> Path:
+        benchmark = load_benchmark_module()
+        store = self.work / "store"
+        benchmark.build_store(store)
+        return store
+
+    def render(self, *extra: str) -> tuple[subprocess.CompletedProcess[str], str]:
+        out = self.work / f"report-{len(list(self.work.glob('report-*.md')))}.md"
+        result = run_cli("report", "--aggregate", str(self.aggregate_path), "--out", str(out), *extra)
+        self.assertEqual(0, result.returncode, result.stderr)
+        return result, out.read_text(encoding="utf-8")
+
+    def body(self, text: str) -> str:
+        lines = text.splitlines(keepends=True)
+        receipt_at = next(
+            (index for index, line in enumerate(lines) if line.startswith("## ") and line.rstrip("\n").endswith("Receipt")),
+            len(lines),
+        )
+        return "".join(lines[:receipt_at])
+
+    def test_roast_section_keeps_machine_body_byte_identical(self) -> None:
+        _plain_receipt, plain_text = self.render()
+        _roast_receipt, roast_text = self.render("--tone", "roast")
+        plain_lines = plain_text.splitlines(keepends=True)
+        roast_lines = roast_text.splitlines(keepends=True)
+        roast_start = next(
+            index for index, line in enumerate(roast_lines)
+            if line.startswith("## ") and line.rstrip("\n").endswith("roast")
+        )
+        roast_end = next(
+            (index for index in range(roast_start + 1, len(roast_lines)) if roast_lines[index].startswith("## ")),
+            len(roast_lines),
+        )
+        stripped = "".join(roast_lines[:roast_start] + roast_lines[roast_end:])
+        self.assertEqual(self.body(plain_text), self.body(stripped))
+        self.assertFalse(
+            any(line.startswith("## ") and line.rstrip("\n").endswith("roast") for line in plain_lines)
+        )
+
+    def test_every_roast_line_cites_a_statistic_from_the_machine_body(self) -> None:
+        import re
+
+        _plain_receipt, plain_text = self.render()
+        _roast_receipt, roast_text = self.render("--tone", "roast")
+        roast_lines = roast_text.splitlines(keepends=True)
+        roast_start = next(
+            index for index, line in enumerate(roast_lines)
+            if line.startswith("## ") and line.rstrip("\n").endswith("roast")
+        )
+        roast_end = next(
+            (index for index in range(roast_start + 1, len(roast_lines)) if roast_lines[index].startswith("## ")),
+            len(roast_lines),
+        )
+        rendered = [line for line in roast_lines[roast_start:roast_end] if line.startswith("- ")]
+        self.assertTrue(rendered)
+        plain_body = self.body(plain_text)
+        for roast_line in rendered:
+            numbers = re.findall(r"\d+(?:\.\d+)?", roast_line)
+            self.assertTrue(numbers, f"roast line cites no statistic: {roast_line}")
+            for number in numbers:
+                self.assertIn(number, plain_body)
+
+    def test_roast_receipt_machine_fields_match_report_tone(self) -> None:
+        plain_result, _plain_text = self.render()
+        roast_result, _roast_text = self.render("--tone", "roast")
+        machine = lambda receipt: {key: value for key, value in receipt.items() if key != "artifacts"}
+        self.assertEqual(machine(json.loads(plain_result.stdout)), machine(json.loads(roast_result.stdout)))
+
+    def test_invalid_tone_is_a_usage_error(self) -> None:
+        result = run_cli(
+            "report", "--aggregate", str(self.aggregate_path), "--out", str(self.work / "x.md"),
+            "--tone", "scream",
+        )
+        self.assertEqual(2, result.returncode)
+
+
 class SessionInsightsCacheTest(unittest.TestCase):
     def setUp(self) -> None:
         self.benchmark = load_benchmark_module()

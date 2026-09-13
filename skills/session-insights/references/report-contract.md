@@ -46,6 +46,7 @@ Codex 与 zcode 分节恒为 `{"status": "unsupported", "hold": "<harness> unsup
 ## 报告产物
 
 - `report` 只读 aggregate JSON（文件或 stdin），schema 不符即 exit 1；绝不重算任何指标。
+- `--tone report|roast`（默认 `report`）：两种语气从同一份 aggregate 渲染，机器小节逐字节一致；`roast` 只追加一个展示层小节，每条断言必须引用机器小节中出现的一个统计值——无派生数值、无虚构事件、路径与对话。收据机器字段跨语气一致，仅 artifact 摘要随正文变化。
 - 默认输出 `<cwd>/.azhou/session-insights/report-<date>.md`；`<date>` 取聚合内最新会话日期（无会话时 `empty`），保证静态 store 下产物名确定。`--out` 为用户自选交付物。
 - 小节：概览、时段分布（UTC）、项目分布、工具调用排行、摩擦信号、可选摘录、Holds、Receipt。emoji 只出现在这些人读小节标题。
 - **摘录默认关闭**。`aggregate --include-excerpts` 才把脱敏后的首条提示存进 aggregate；`report --include-excerpts` 渲染之。脱敏规则：家目录明文替换为 `~`；密钥样式（`sk-`、`ghp_`、`github_pat_`、`AKIA`、`AIza`、PEM 标记）替换为 `[redacted-secret]`。

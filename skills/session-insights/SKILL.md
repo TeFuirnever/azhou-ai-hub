@@ -37,7 +37,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 - `discover`：列出会话清单（id、项目、起止），不含指标。
 - `metadata`：流式逐行解析，输出逐会话元数据 JSON；跳过 malformed 行、`isSidechain`/`isMeta` 行与非消息簿记类型；全为 sidechain/meta 的会话计为 skipped-subagent。
 - `aggregate`：产出 `session-insights.aggregate.v1`，唯一事实源；默认 `--days 30`、`--max-sessions 200`（最近优先），`--project <path>` 缩到单项目。窗口与上限锚定 store 内最新会话时间戳，不是墙钟——静态 store 结果必然确定。
-- `report`：只从 aggregate JSON 渲染 Markdown，绝不重算数字。
+- `report`：只从 aggregate JSON 渲染 Markdown，绝不重算数字；`--tone roast` 切换 roast 语气，机器小节逐字节不变。
 
 唯一新增的 seam 是每个子命令的 `--store-root <path>`，用于把宿主存储重定向到测试 fixture；没有其他隐藏开关。
 
@@ -53,7 +53,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/session
 
 ## roast 红线
 
-roast 只是展示层 tone（M2，尚未发布，本版本不出 roast 报告）。红线已定：每条 roast 断言必须引用报告内出现的一个统计；禁止虚构事件、路径与对话。
+roast 是展示层 tone（`report --tone roast`，已发布）：`report` 与 `roast` 从同一份 aggregate JSON 渲染，机器小节逐字节一致，roast 只是追加的展示层小节。红线：每条 roast 断言必须引用机器小节中出现的一个统计值；禁止派生数值、虚构事件、路径与对话。收据合同与机器字段跨语气一致（仅 artifact 摘要随正文变化）。
 
 ## Brand protocol
 

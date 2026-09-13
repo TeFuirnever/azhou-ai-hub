@@ -2,198 +2,53 @@
  "schema": "super-caveman-exact-diff-approval-record.v2",
  "decision": "approved",
  "approver": "workspace-owner",
- "approved_at": "2026-09-13T00:44:03Z",
- "base_commit": "4c2f17eb4d7ff7d57f5183e87cc49750aed0869a",
+ "approved_at": "2026-09-13T01:17:39Z",
+ "base_commit": "c62ae57c9d6258f24514c4e7c4acc1236ceccf33",
  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
- "path_set_sha256": "9ec24ba2e989684b5a117bcc99404e90b939eb87f12663d596a674a7f074a9df",
- "staged_patch_sha256": "456f6203794320dfbab2648a5c6bf5c29819e5ffb9fddf23aa8703d3b6d1a7b3",
+ "path_set_sha256": "987ecc8fda7993b93072f413067412a461abdfa1faf778b4214648ca5a1c66b5",
+ "staged_patch_sha256": "fa75fce7ae4db2ac89fa72cfbb4704fa9518f0b572f74b6a44304ab9aa1cc67b",
  "reviewed_blobs": [
   {
-   "path": "AGENTS.md",
-   "old_oid": "3ea19307da78d28e6e59b71d38d48b0a3e9f5a52",
-   "new_oid": "1d8369507d689a3930049f112a57244e92f709b3"
-  },
-  {
    "path": "CHANGELOG.md",
-   "old_oid": "a1819a57652a87e2ddd6922dce92afc473e6ea67",
-   "new_oid": "0a7573a0e808dc97d910ff5c6bcfe7d9b0d11183"
+   "old_oid": "0a7573a0e808dc97d910ff5c6bcfe7d9b0d11183",
+   "new_oid": "7bcc075aa661b9a6d4e402ff6fc8f21cb1939920"
   },
   {
-   "path": "README.md",
-   "old_oid": "cc485eb1bc4108e67421dad9b6d2463d212d749f",
-   "new_oid": "ab94e6f9d80acaf102ecf6595a94e79d7a38e3d9"
+   "path": "benchmarks/session-insights/benchmark.py",
+   "old_oid": "0b205b8f334ef3fea7d81951594516df58994b08",
+   "new_oid": "89f7bdfb6c5ebe4f219ddca6c8094fc55b74529b"
   },
   {
-   "path": "README.zh-CN.md",
-   "old_oid": "fa0bc3220ed79a5d17b97036f8ecafe511891e57",
-   "new_oid": "c7b53e0fa04c55ad53c7afbead2a63d47d3510f7"
+   "path": "benchmarks/session-insights/manifest.json",
+   "old_oid": "55750d79f81278d71602690662281c4ea37479e8",
+   "new_oid": "1141955fe326d5fafb6107f7053e0970011cb9c3"
   },
   {
-   "path": "benchmarks/super-prose-standard/README.md",
-   "old_oid": "eb010bd2f329e7d55216e6acf6787b1ee95b3816",
-   "new_oid": "<deleted>"
+   "path": "skills/session-insights/SKILL.md",
+   "old_oid": "c326fba2f450b720d4eb906ae8b17582a474d48f",
+   "new_oid": "f6b3e6c53ced0539c1e0f8a89218da29180426d5"
   },
   {
-   "path": "benchmarks/super-prose-standard/benchmark.py",
-   "old_oid": "55ce987bbaffdc916cef230a934f6546018fc121",
-   "new_oid": "<deleted>"
+   "path": "skills/session-insights/references/brand-layer.md",
+   "old_oid": "9dbe4c7636f62cf6923a8c2f6afeb8a1cbec0c26",
+   "new_oid": "6ceec3200ed0f67b5531b3b5458967cbc1dcf5df"
   },
   {
-   "path": "benchmarks/super-prose-standard/manifest.json",
-   "old_oid": "17eafa491fbd2fcf015a5c68637f38d9b7b72eee",
-   "new_oid": "<deleted>"
+   "path": "skills/session-insights/references/report-contract.md",
+   "old_oid": "1f8d189af4ad07022dd897d03e027c9c6786e75f",
+   "new_oid": "a8906692f13165a76f5386d1ee989abb941051f4"
   },
   {
-   "path": "docs/skill-standard.md",
-   "old_oid": "b306dddaef99f09f5e8c6d795cb8e9557962646b",
-   "new_oid": "2ba93ca55a849ad4836ead535a09cfc5b6632cc4"
+   "path": "skills/session-insights/scripts/session_insights.py",
+   "old_oid": "26dd5d6cc31b3e5819d4db9ca5d9e6e26ad989e6",
+   "new_oid": "bda8b1fd2a9ff06b05d3fefb0d7ed818b9f927fc"
   },
   {
-   "path": "docs/support-matrix.md",
-   "old_oid": "269fcf19e42f2e47bf43dd15c532059b10d9c7ae",
-   "new_oid": "6251fb972700487e28c91929cf0b9bc936d332fe"
-  },
-  {
-   "path": "scripts/check_repository.py",
-   "old_oid": "f1ee68637a91fb0fc6296661c8857393c299c8ba",
-   "new_oid": "49fd859700514fa6b111d790c0af93e652628efa"
-  },
-  {
-   "path": "scripts/verify.py",
-   "old_oid": "303ee336a07a1033941cb5fc9578f5bc6e6d9541",
-   "new_oid": "9b1ebf687742edd73e051360660741b23c6daf3e"
-  },
-  {
-   "path": "skills/ask-azhou/SKILL.md",
-   "old_oid": "2aecef97e3a5128e9aabf0a7642941f536f45dba",
-   "new_oid": "079235c816c207b845de5188aef395dc4d71546d"
-  },
-  {
-   "path": "skills/super-ci-test-reliability/SKILL.md",
-   "old_oid": "74c8ca2a4ba9669514b7aef6880fc16d85fbbc35",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-ci-test-reliability/references/ci-flake-diagnosis.md",
-   "old_oid": "f419915c8cb43bbd3f85495ca9fb872bc67b2906",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-ci-test-reliability/references/provenance.md",
-   "old_oid": "8bd2794b8559761745d767dad5140cbf2391244d",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-prose-standard/SKILL.md",
-   "old_oid": "60b20eaafa7da81ac5a11aab34953106f9824ae8",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-prose-standard/references/cot-leakage.md",
-   "old_oid": "ee3c98ac7a33f165f8236548f5cca117dade9ae6",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-prose-standard/references/fact-check.md",
-   "old_oid": "d8465864f2eee59b6011c7bfa23ebd345bd7caa2",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-prose-standard/references/provenance.md",
-   "old_oid": "691219d5d9ffc83d99762c7fd4019366d6c0b700",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "skills/super-prose-standard/scripts/recall_batteries.py",
-   "old_oid": "2865e8ab6ab1ad9a28f26d77c43c0ee6d9224140",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/keep/counterfactual.md",
-   "old_oid": "3f74ad4ff0da251a89e3ab5912f8e82718dcc203",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/keep/external-standard.md",
-   "old_oid": "7f85f8fb5cae1f3407d8b6aa2a1f133f0f6647eb",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/keep/issue-references.md",
-   "old_oid": "e0de8ccb21f3ea878f7b6a3b2f57ff5d9397b697",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/keep/measured-bound.md",
-   "old_oid": "8e7ede0cf1c60c961192f9da74ae26e4dd35f308",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/keep/runtime-lifecycle.md",
-   "old_oid": "cc859c8f0f45c4999b7cb9da752beb44b8e97a9a",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/change-narration.md",
-   "old_oid": "ffe5b4d85d2de057630ddf4b1fda3ce89bc15329",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/dead-citation.md",
-   "old_oid": "e1eeef79ef06006e80b03abb6feab43b303a11be",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/draft-section.md",
-   "old_oid": "8db3bf53d616c89747aa27aa3d686de212b0dfc5",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/hedge.md",
-   "old_oid": "f4186f0e46d129b13b75ffdcfaaca8ebe8905ea0",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/review-choreography.md",
-   "old_oid": "d74a82e844b5d807cb805aff89e97182e5dc20c5",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/stack-vantage.md",
-   "old_oid": "1de3f7f4cefae37f6725ca1eae6e27567574e319",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/fixtures/super-prose-standard/leakage/zh-narration.zh-CN.md",
-   "old_oid": "6855044a7fe5c2d5ece996058dcf1da6a78ecdd4",
-   "new_oid": "<deleted>"
-  },
-  {
-   "path": "tests/test_azhou_hub.py",
-   "old_oid": "52c5bdf3eeaff3cfd78221600afbfa7439aa2e46",
-   "new_oid": "8887b6fa0db79fcf618df0b8f88173abf92cd80c"
-  },
-  {
-   "path": "tests/test_check_repository.py",
-   "old_oid": "e5f4af467ea722e5747a18838ae5aa549e46ed96",
-   "new_oid": "fada11408da0b8e676974c52fcdb01a880ce679f"
-  },
-  {
-   "path": "tests/test_skill_package.py",
-   "old_oid": "7a6e1aa78fa101cb074a85abdb3d72c59a0bba08",
-   "new_oid": "c97dcb1512de4097c1a77115c73a1bcec275c3f0"
-  },
-  {
-   "path": "tests/test_super_llm_wiki_repository.py",
-   "old_oid": "9473b5e5259a478074745a63ff1cb1168ae8144b",
-   "new_oid": "4ce2877230d07ba34e0687b54a4bc71430fe4644"
-  },
-  {
-   "path": "tests/test_super_prose_standard.py",
-   "old_oid": "09cbe16768c411d8473ffa32de7702944cf5f379",
-   "new_oid": "<deleted>"
+   "path": "tests/test_session_insights_benchmark.py",
+   "old_oid": "a18b69d281e7b144fde138897e9823192c413692",
+   "new_oid": "c0629fbc48e66078db837feb85dec0a72b79e16f"
   }
  ],
- "raw_approval_record_sha256": "03117d7aed00c1c171248ed0c8b0f4695ae29588f26f2b69d563c080af3e43b0",
+ "raw_approval_record_sha256": "bae5bd78d3b39df0d2b811c0f34b1c8fc810a8de432de0fd81dc1b2d1a3698d7",
  "raw_approval_storage": "Git-external"
 }
