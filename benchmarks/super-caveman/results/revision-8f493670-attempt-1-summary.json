@@ -2,7 +2,7 @@
  "schema": "super-caveman-evaluation-result.v1",
  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
- "model_limitation": "Producer-context invariance rebind for the 0.9.0 changelog cut (docs(changelog): move the thirteen Unreleased entries under a dated 0.9.0 section header; entry text byte-identical). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+ "model_limitation": "Producer-context invariance rebind for the retirement of the super-ci-test-reliability and super-prose-standard canonical skills (maintainer-approved removal taking the hub to fourteen packages: packages, recall-battery benchmark suite, fixtures, gate tables, router rows, catalog docs). The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
  "tool_permissions": {
   "network": false,
@@ -95,9 +95,9 @@
  "high_risk_failed": 0,
  "format_failed": 0,
  "limitations": [
-  "This rebind moves the thirteen Unreleased changelog entries under the 0.9.0 section header and re-binds the CHANGELOG blob in these aggregate receipts. The producer context and full skill tree remain unchanged.",
+  "This rebind deletes the two retired canonical skills with their benchmark and gate surfaces and re-binds every touched path in these aggregate receipts. The producer context and full skill tree remain unchanged.",
   "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence.",
-  "Workspace-owner exact-diff approval was granted interactively in the landing session (AskUserQuestion, answer text mirrored in the landing commit message); the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
+  "Workspace-owner exact-diff approval was granted interactively in the landing session (AskUserQuestion); an independent-context review pass caught a missed install-example row in both READMEs before landing and the fix is part of the reviewed diff; the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
  ],
  "status": "pass",
  "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
@@ -116,8 +116,8 @@
   "repository_scope": "pass (no writes outside the disposable fixture during response production)"
  },
  "reviewer": {
-  "identity": "zcode-subagent/release-090-cut-invariance-review/2026-09-12",
-  "review_sha256": "6e75ddceceda7ea6d31469de2813a8e985a75fbc7829842838ac682f41557c55"
+  "identity": "zcode-subagent/retire-two-disciplines-review/2026-09-13",
+  "review_sha256": "a6e6676cdcbbe572b55ea5d46ed3b0be6f8f24a5566d99ccf35f010c4e9a0ca5"
  },
  "promotion_review": {
   "paired_status": "invariant",
@@ -147,13 +147,13 @@
    "schema": "super-caveman-exact-diff-approval.v2",
    "status": "approved",
    "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-   "base_commit": "28a25eb31c2355372e151dc0e892f9ba20b946c4",
-   "path_set_sha256": "d9f6b5e215de9d19f8720e535e235d627191885c46ef2fb30712595b92316211",
-   "staged_patch_sha256": "78c8dcad342b8c194e61962504e5b5de4ee8f5861b94249a4b37fd4ac4b9644d",
+   "base_commit": "4c2f17eb4d7ff7d57f5183e87cc49750aed0869a",
+   "path_set_sha256": "a861bc382ec2608dba6df78e25e4144230e93ab3d9f5d8e81dd0e749edc96aea",
+   "staged_patch_sha256": "2187059964c72b7dc33e818513711f0ea5703c5a49c0139837901e9dabc6fd67",
    "approver": "workspace-owner",
-   "approved_at": "2026-09-12T12:37:46Z",
+   "approved_at": "2026-09-13T00:17:54Z",
    "record_path": "results/revision-8f493670-exact-diff-approval.json",
-   "record_sha256": "98442c1fdf106413c7f3b0f6a135acf6ceb9cb7df3881ed9684a0a026c6cc66d",
+   "record_sha256": "df968b1104652e058b547be134a56f834e6088fdcd40dd19df28796b6cc2c0d8",
    "record_storage": "Git aggregate receipt; raw approval Git-external"
   }
  }

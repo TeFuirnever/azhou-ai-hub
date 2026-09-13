@@ -27,10 +27,6 @@ def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str
             [python, "benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],
         ),
         (
-            "super-prose-standard benchmark wiring",
-            [python, "benchmarks/super-prose-standard/benchmark.py"],
-        ),
-        (
             "session-insights benchmark wiring",
             [python, "benchmarks/session-insights/benchmark.py", "check"],
         ),
