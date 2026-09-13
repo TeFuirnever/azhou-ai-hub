@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -1022,7 +1023,7 @@ def feed_project_context(store: WikiStore) -> str | None:
     return page.filename
 
 
-def lifecycle_session_context(store: WikiStore, limit: int) -> str:
+def lifecycle_session_context(store: WikiStore) -> str:
     # The store directory is project-controllable, so none of its text
     # (index.md, page bodies, filenames) may cross into the session
     # context: any of it could be a prompt-injection payload. Only
@@ -1045,7 +1046,11 @@ def precompact_summary(store: WikiStore) -> str:
     if not pages:
         return ""
     categories = unique([page.category for page in pages])
-    latest = max((page.updated for page in pages), default="unknown")
+    # Page frontmatter is project-controllable: only render `updated`
+    # values that parse as timestamps, so arbitrary strings can never
+    # cross into hook context (threat-review F-P1 sibling, #230).
+    stamps = [value for value in (page.updated for page in pages) if not math.isnan(parse_timestamp(value))]
+    latest = max(stamps) if stamps else "unknown"
     return f"[Wiki: {len(pages)} pages | categories: {', '.join(categories)} | last updated: {latest}]"
 
 
@@ -1053,8 +1058,6 @@ def run_hook_event(
     event: str,
     base_store: WikiStore,
     data: dict[str, Any],
-    *,
-    limit: int = 30,
 ) -> tuple[WikiStore, dict[str, Any]]:
     if event not in {"session-start", "pre-compact", "session-end"}:
         raise WikiError(f"unsupported lifecycle event: {event}")
@@ -1071,7 +1074,7 @@ def run_hook_event(
                 changes.append(INDEX_FILE)
             if feed_project_context(store):
                 changes.append("environment.md")
-            summary = lifecycle_session_context(store, limit)
+            summary = lifecycle_session_context(store)
         else:
             summary = ""
         return store, {
@@ -1401,7 +1404,7 @@ def build_parser() -> argparse.ArgumentParser:
     lint.add_argument("--max-page-size", type=int)
     lint.add_argument("--no-log", action="store_true", help="keep lint read-only")
 
-    context = subparsers.add_parser("context", help="render bounded session context")
+    context = subparsers.add_parser("context", help="render raw index text (project-controllable; explicit operator use only)")
     context.add_argument("--limit", type=int, default=30)
 
     config = subparsers.add_parser("config", help="configure optional lifecycle behavior")
@@ -1413,7 +1416,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     hook = subparsers.add_parser("hook", help="neutral stdin/stdout lifecycle adapter")
     hook.add_argument("event", choices=("session-start", "session-end", "pre-compact"))
-    hook.add_argument("--limit", type=int, default=30)
 
     migrate = subparsers.add_parser("migrate", help="copy a prior store into the canonical store")
     migrate.add_argument("--from-store", required=True, help="project-relative source store")
@@ -1443,7 +1445,6 @@ def handle_hook(args: argparse.Namespace, base_store: WikiStore) -> int:
         args.event,
         base_store,
         data,
-        limit=args.limit,
     )
     emit(
         "hook",

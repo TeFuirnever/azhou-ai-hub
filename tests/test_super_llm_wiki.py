@@ -476,10 +476,17 @@ class LlmWikiTest(unittest.TestCase):
             log = root / ".azhou" / "super-llm-wiki" / "log.md"
             before = log.read_bytes()
             event = json.dumps({"cwd": str(root)})
-            result = self.run_cli(root, "hook", "session-start", "--limit", "4", input_text=event)
+            result = self.run_cli(root, "hook", "session-start", input_text=event)
             context = result["result"]["additionalContext"]
-            self.assertIn("[LLM Wiki: 1 pages", context)
-            self.assertLessEqual(len(context.splitlines()), 8)
+            # Threat-review F-P1 (#230): the hook renders only first-party
+            # text and the page count — never index.md content — so the
+            # output is bounded no matter how large the store grows.
+            self.assertEqual(
+                "[LLM Wiki: 1 pages at .azhou/super-llm-wiki/]\n"
+                "\n"
+                "Use wiki_query to search, wiki_list to browse, wiki_read to view pages.",
+                context,
+            )
             self.assertEqual(before, log.read_bytes())
 
     def test_environment_capture_records_source_digest(self) -> None:
