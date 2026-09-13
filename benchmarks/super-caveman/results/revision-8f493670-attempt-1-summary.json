@@ -2,7 +2,7 @@
  "schema": "super-caveman-evaluation-result.v1",
  "runtime": "frozen Super Caveman skill runtime (staged tree, SessionStart full-mode capsule rendered by skills/super-caveman/scripts/claude_adapter.py; rules_digest b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17)",
  "model": "GLM (builtin:bigmodel-coding-plan/GLM-5.3-Flash)",
- "model_limitation": "Producer-context invariance rebind for the t2-install-guide-rebind landing: the reviewed receipt set is re-derived over the staged landing diff. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
+ "model_limitation": "Producer-context invariance rebind for the t4-evalcase-contract-rebind2 landing: the reviewed receipt set is re-derived over the staged landing diff. The complete Super Caveman skill tree and all three producer context files are byte-identical to the base. Reuses the previously recorded output set; no new model run or cross-harness claim.",
  "cases_sha256": "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9",
  "tool_permissions": {
   "network": false,
@@ -95,7 +95,7 @@
  "high_risk_failed": 0,
  "format_failed": 0,
  "limitations": [
-  "This rebind re-derives the reviewed set over the t2-install-guide-rebind staged landing so the receipt replays as one exact diff.",
+  "This rebind re-derives the reviewed set over the t4-evalcase-contract-rebind2 staged landing so the receipt replays as one exact diff.",
   "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence.",
   "Workspace-owner approval for the re-bind was granted in-session by the standing directive to execute the open session-insights issues autonomously (do not ask); the raw approval record carries no notes field by schema, so this line is the checked-in delegation provenance."
  ],
@@ -116,8 +116,8 @@
   "repository_scope": "pass (no writes outside the disposable fixture during response production)"
  },
  "reviewer": {
-  "identity": "zcode-agent/t2-install-guide-rebind/2026-09-13",
-  "review_sha256": "c07a4460f4e9e2be82c16c9af8a64d7e141e79f83701cd7591e2f756969533a4"
+  "identity": "zcode-agent/t4-evalcase-contract-rebind2/2026-09-13",
+  "review_sha256": "3e9df212901122be3f787af611e061066ae4b254df5cb27a19ba478919455d72"
  },
  "promotion_review": {
   "paired_status": "invariant",
@@ -147,13 +147,13 @@
    "schema": "super-caveman-exact-diff-approval.v2",
    "status": "approved",
    "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-   "base_commit": "59d4db8ab3094505a7625c640d5b910408e53632",
-   "path_set_sha256": "311ff426b6460495189b71c084f8ab88f8796fdf90b4391d971a7818f4bcd8b0",
-   "staged_patch_sha256": "6dff049b96918064852293faa92c2fadc8245c15c9a08b386b55a116f633f353",
+   "base_commit": "6f351f24f8bdf07579df765d64340997ac6023f4",
+   "path_set_sha256": "ae9d428e7ff746b28678b43d575fc1125bbba4cc91f53c7676a520cbd2785df0",
+   "staged_patch_sha256": "73e1bbefae029b1e295b3399e40c717c8b4bd33cc0ffc04f78c852abf1c665d7",
    "approver": "workspace-owner",
-   "approved_at": "2026-09-13T08:46:52Z",
+   "approved_at": "2026-09-13T09:15:01Z",
    "record_path": "results/revision-8f493670-exact-diff-approval.json",
-   "record_sha256": "0eff9ac4ee99618951b5e0afab38453e5ff56934761e6006d92d6accbc653c52",
+   "record_sha256": "86195928f7db82487aa88773ce8a97e644c2816c3017291cd62c242ffcb2cd48",
    "record_storage": "Git aggregate receipt; raw approval Git-external"
   }
  }
