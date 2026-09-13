@@ -24,6 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -41,26 +42,38 @@ jobs:
             echo
             echo '```json'
           } >> "$GITHUB_STEP_SUMMARY"
-          python scripts/azhou_hub.py info --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+      - name: info
+        run: |
+          python scripts/azhou_hub.py info --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || echo "exit=$?" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: End of info section, start setup plan
+        run: |
           {
             echo '```'
             echo
             echo "## 2. setup plan (dry run)"
             echo
+            echo '```json'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Plan the managed install
         run: |
           SKILLS_HOME="$RUNNER_TEMP/skills-home"
-          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --json | tee plan.json
-          echo
-          echo "## 3. setup apply"
-          echo
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --json 2>&1 | tee plan.json | tee -a "$GITHUB_STEP_SUMMARY" || echo "exit=$?" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: End of plan section, start setup apply
+        run: |
+          {
+            echo '```'
+            echo
+            echo "## 3. setup apply"
+            echo
+            echo '```json'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Apply the managed install
         run: |
           SKILLS_HOME="$RUNNER_TEMP/skills-home"
           PLAN_ID=$(python -c "import json;print(json.load(open('plan.json'))['planId'])")
-          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || echo "exit=$?" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: End of apply section, start doctor
+        run: |
           {
             echo '```'
             echo
@@ -71,7 +84,9 @@ jobs:
       - name: Doctor the installed skill
         run: |
           SKILLS_HOME="$RUNNER_TEMP/skills-home"
-          python scripts/azhou_hub.py doctor --skill session-insights --target "$SKILLS_HOME" --verify --json >> "$GITHUB_STEP_SUMMARY" 2>&1
+          python scripts/azhou_hub.py doctor --skill session-insights --target "$SKILLS_HOME" --verify --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || echo "exit=$?" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: End of doctor section, start repository gate
+        run: |
           {
             echo '```'
             echo
@@ -81,5 +96,4 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Repository gate
         run: |
-          python scripts/verify.py >> "$GITHUB_STEP_SUMMARY" 2>&1
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          python scripts/verify.py 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || echo "exit=$?" | tee -a "$GITHUB_STEP_SUMMARY"
