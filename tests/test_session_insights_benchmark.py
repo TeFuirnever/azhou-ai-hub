@@ -83,15 +83,40 @@ class SessionInsightsCliTest(unittest.TestCase):
         capped = self.aggregate("--max-sessions", "2")["harnesses"]["claude-code"]
         self.assertEqual(2, capped["session_count"])
 
-    def test_fail_closed_holds_for_codex_and_zcode(self) -> None:
+    def test_fail_closed_hold_for_zcode_only(self) -> None:
         aggregate = self.aggregate()
-        self.assertEqual(
-            ["codex unsupported", "zcode unsupported"], sorted(aggregate["holds"])
-        )
-        for harness in ("codex", "zcode"):
-            section = aggregate["harnesses"][harness]
-            self.assertEqual("unsupported", section["status"])
-            self.assertNotIn("session_count", section)
+        self.assertEqual(["zcode unsupported"], aggregate["holds"])
+        zcode = aggregate["harnesses"]["zcode"]
+        self.assertEqual("unsupported", zcode["status"])
+        self.assertNotIn("session_count", zcode)
+
+    def test_codex_golden_spot_checks(self) -> None:
+        aggregate = self.aggregate()
+        codex = aggregate["harnesses"]["codex"]
+        self.assertEqual("ok", codex["status"])
+        self.assertEqual(2, codex["session_count"])
+        self.assertEqual(2, codex["active_days"])
+        self.assertEqual({"Read": 1, "browser.click": 1}, codex["tool_calls"])
+        self.assertEqual(1, codex["interruptions"])
+        self.assertEqual(0.3333, codex["interruption_rate"])
+        self.assertEqual(0, codex["error_count"])
+        self.assertEqual(4, codex["skipped_subagent_sessions"])
+        self.assertEqual(7, codex["files_scanned"])
+        self.assertEqual(1, codex["malformed_lines"])
+        self.assertEqual({".../dev-alpha": 1, ".../dev-beta": 1}, codex["project_distribution"])
+        widened = self.aggregate("--harness", "codex", "--days", "60")["harnesses"]["codex"]
+        self.assertEqual(3, widened["session_count"])
+        capped = self.aggregate("--harness", "codex", "--max-sessions", "1")["harnesses"]["codex"]
+        self.assertEqual(1, capped["session_count"])
+
+    def test_mixed_run_keeps_per_harness_accounting_separate(self) -> None:
+        aggregate = self.aggregate()
+        claude = aggregate["harnesses"]["claude-code"]
+        codex = aggregate["harnesses"]["codex"]
+        self.assertEqual("2026-09-09T18:05:00+00:00", claude["newest_session_at"])
+        self.assertEqual("2026-09-06T20:16:00+00:00", codex["newest_session_at"])
+        self.assertNotIn("browser.click", claude["tool_calls"])
+        self.assertNotIn("Grep", codex["tool_calls"])
 
     def test_detect_and_metadata_surfaces(self) -> None:
         detected = run_cli("detect", "--harness", "all", "--store-root", str(self.store))
@@ -99,7 +124,9 @@ class SessionInsightsCliTest(unittest.TestCase):
         payload = json.loads(detected.stdout)
         self.assertEqual("available", payload["harnesses"]["claude-code"]["status"])
         self.assertEqual(6, payload["harnesses"]["claude-code"]["session_files"])
-        self.assertEqual("unsupported", payload["harnesses"]["codex"]["status"])
+        self.assertEqual("available", payload["harnesses"]["codex"]["status"])
+        self.assertEqual(7, payload["harnesses"]["codex"]["session_files"])
+        self.assertEqual("unsupported", payload["harnesses"]["zcode"]["status"])
 
         metadata = run_cli(
             "metadata", "--harness", "claude-code", "--store-root", str(self.store)
@@ -111,6 +138,18 @@ class SessionInsightsCliTest(unittest.TestCase):
             prompt = session.get("first_prompt")
             if prompt:
                 self.assertLessEqual(len(prompt), 200)
+
+        codex_metadata = run_cli(
+            "metadata", "--harness", "codex", "--store-root", str(self.store)
+        )
+        self.assertEqual(0, codex_metadata.returncode, codex_metadata.stderr)
+        codex_payload = json.loads(codex_metadata.stdout)
+        self.assertEqual("ok", codex_payload["status"])
+        # metadata lists every parsed session without window trimming
+        self.assertEqual(3, len(codex_payload["sessions"]))
+        for session in codex_payload["sessions"]:
+            self.assertNotIn("cwd", session)
+            self.assertNotIn("thread_source", session)
 
     def test_report_privacy_and_fail_closed_rendering(self) -> None:
         aggregate_path = self.work / "aggregate.json"
@@ -133,8 +172,8 @@ class SessionInsightsCliTest(unittest.TestCase):
         for secret in self.benchmark.SEEDED_SECRETS:
             self.assertNotIn(secret, text)
         self.assertNotIn(self.benchmark.EXCERPT_SENTINEL, text)
-        self.assertIn("codex unsupported", text)
         self.assertIn("zcode unsupported", text)
+        self.assertNotIn("codex unsupported", text)
 
     def test_report_default_output_lands_in_azhou_namespace(self) -> None:
         aggregate_path = self.work / "aggregate.json"
@@ -245,105 +284,6 @@ class SessionInsightsRoastTest(unittest.TestCase):
         result = run_cli(
             "report", "--aggregate", str(self.aggregate_path), "--out", str(self.work / "x.md"),
             "--tone", "scream",
-        )
-        self.assertEqual(2, result.returncode)
-
-
-class SessionInsightsHtmlTest(unittest.TestCase):
-    """Offline HTML artifact (#165): same numbers, self-contained single file."""
-
-    def setUp(self) -> None:
-        self.tempdir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tempdir.cleanup)
-        self.work = Path(self.tempdir.name)
-        aggregate_path = self.work / "aggregate.json"
-        result = run_cli(
-            "aggregate", "--harness", "all", "--store-root",
-            str(self.build_store()), "--out", str(aggregate_path),
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.aggregate_path = aggregate_path
-
-    def build_store(self) -> Path:
-        benchmark = load_benchmark_module()
-        store = self.work / "store"
-        benchmark.build_store(store)
-        return store
-
-    def render_html(self, *extra: str) -> tuple[subprocess.CompletedProcess[str], str]:
-        out = self.work / f"report-{len(list(self.work.glob('report-*.html'))) or 0}.html"
-        result = run_cli(
-            "report", "--aggregate", str(self.aggregate_path), "--out", str(out),
-            "--format", "html", *extra,
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        return result, out.read_text(encoding="utf-8")
-
-    def test_html_artifact_is_self_contained(self) -> None:
-        _receipt, text = self.render_html()
-        lowered = text.lower()
-        self.assertTrue(lowered.startswith("<!doctype html>"))
-        self.assertIn("<style>", lowered)
-        self.assertNotIn("<script", lowered)
-        for marker in ("http://", "https://", "src=", "href="):
-            self.assertNotIn(marker, lowered)
-        self.assertTrue(lowered.rstrip().endswith("</html>"))
-        self.assertIn("Review before sharing", text)
-
-    def test_html_numbers_match_markdown(self) -> None:
-        markdown_path = self.work / "report.md"
-        result = run_cli(
-            "report", "--aggregate", str(self.aggregate_path), "--out", str(markdown_path)
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        markdown_text = markdown_path.read_text(encoding="utf-8")
-        _receipt, html_text = self.render_html()
-        for fact in ("会话数: 4", "活跃天数（UTC）: 3", "interruption_rate 0.4"):
-            self.assertIn(fact, html_text)
-            self.assertIn(fact, markdown_text)
-        self.assertIn("1. `Read` — 3", markdown_text)
-        self.assertIn("<code>Read</code> — 3", html_text)
-        for hold in ("codex unsupported", "zcode unsupported"):
-            self.assertIn(hold, html_text)
-
-    def test_html_privacy_controls(self) -> None:
-        benchmark = load_benchmark_module()
-        _receipt, text = self.render_html()
-        home = str(Path.home())
-        if home != "/":
-            self.assertNotIn(home, text)
-        for secret in benchmark.SEEDED_SECRETS:
-            self.assertNotIn(secret, text)
-        self.assertNotIn(benchmark.EXCERPT_SENTINEL, text)
-        for encoded in (benchmark.ALPHA, benchmark.BETA):
-            self.assertNotIn(encoded, text)
-
-    def test_html_receipt_machine_fields_match_markdown(self) -> None:
-        markdown_path = self.work / "report.md"
-        markdown_result = run_cli(
-            "report", "--aggregate", str(self.aggregate_path), "--out", str(markdown_path)
-        )
-        self.assertEqual(0, markdown_result.returncode, markdown_result.stderr)
-        html_result, _text = self.render_html()
-        machine = lambda receipt: {key: value for key, value in receipt.items() if key != "artifacts"}
-        self.assertEqual(
-            machine(json.loads(markdown_result.stdout)),
-            machine(json.loads(html_result.stdout)),
-        )
-
-    def test_html_default_output_lands_in_azhou_namespace(self) -> None:
-        result = run_cli(
-            "report", "--aggregate", str(self.aggregate_path), "--format", "html",
-            cwd=self.work,
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        expected = self.work / ".azhou" / "session-insights" / "report-2026-09-09.html"
-        self.assertTrue(expected.is_file())
-
-    def test_invalid_format_is_a_usage_error(self) -> None:
-        result = run_cli(
-            "report", "--aggregate", str(self.aggregate_path), "--out", str(self.work / "x.md"),
-            "--format", "pdf",
         )
         self.assertEqual(2, result.returncode)
 

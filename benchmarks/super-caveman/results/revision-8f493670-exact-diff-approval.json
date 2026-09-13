@@ -2,48 +2,68 @@
  "schema": "super-caveman-exact-diff-approval-record.v2",
  "decision": "approved",
  "approver": "workspace-owner",
- "approved_at": "2026-09-13T01:29:04Z",
- "base_commit": "4ddc8758dc04766267971e119db4f7faa9c59e21",
+ "approved_at": "2026-09-13T01:44:43Z",
+ "base_commit": "950a8d52e8ade75e02ba9b7895f3ecdc969a016b",
  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
- "path_set_sha256": "a1ce24ad1e720b9be63ffcf5221b97f823e3259a91a4d6c1f1bce112dfe8c1bd",
- "staged_patch_sha256": "16ed619acdfbf42fd25e7166f4e00f19c18f081c8aee8281a1a4bf1a84dc4f47",
+ "path_set_sha256": "46f770ad722ca3e40cfa39b01f76660c6ac5f5fcc8baae03e2473fb01eab594d",
+ "staged_patch_sha256": "c2cfa7c4e3808f9a329b093f26e6ceb8ee070d8e60fbf7c088d2c3c05dbeaea2",
  "reviewed_blobs": [
   {
    "path": "CHANGELOG.md",
-   "old_oid": "7bcc075aa661b9a6d4e402ff6fc8f21cb1939920",
-   "new_oid": "510bcb338e9ee90731c229ac16d9f09fa87aafa7"
+   "old_oid": "510bcb338e9ee90731c229ac16d9f09fa87aafa7",
+   "new_oid": "b73087715f58292c085dedd16d5f1871354a88bc"
+  },
+  {
+   "path": "README.md",
+   "old_oid": "ab94e6f9d80acaf102ecf6595a94e79d7a38e3d9",
+   "new_oid": "a9723fa8da85fb978fa50881454e66d851eb68a8"
+  },
+  {
+   "path": "README.zh-CN.md",
+   "old_oid": "c7b53e0fa04c55ad53c7afbead2a63d47d3510f7",
+   "new_oid": "f5a7b07aa8556fd64cb2a102dd49870e2915c8cb"
   },
   {
    "path": "benchmarks/session-insights/benchmark.py",
-   "old_oid": "89f7bdfb6c5ebe4f219ddca6c8094fc55b74529b",
-   "new_oid": "fb207e3a6c513288fa6e80fc94bf457c11934d05"
+   "old_oid": "fb207e3a6c513288fa6e80fc94bf457c11934d05",
+   "new_oid": "c8e40358ebdfab7d8ec7923d103c6af4df27be7e"
   },
   {
    "path": "benchmarks/session-insights/manifest.json",
-   "old_oid": "1141955fe326d5fafb6107f7053e0970011cb9c3",
-   "new_oid": "80355e8bc939e8a699239a9ee8ebbd96e41d3361"
+   "old_oid": "80355e8bc939e8a699239a9ee8ebbd96e41d3361",
+   "new_oid": "f5c6b41e1a19ef36c497dfc1a6afc9f791d1eead"
+  },
+  {
+   "path": "docs/support-matrix.md",
+   "old_oid": "6251fb972700487e28c91929cf0b9bc936d332fe",
+   "new_oid": "a488e8105c6a13ada3fc64d469f77b5bb727573b"
+  },
+  {
+   "path": "skills/ask-azhou/SKILL.md",
+   "old_oid": "079235c816c207b845de5188aef395dc4d71546d",
+   "new_oid": "89b4ba82e5e283441d1a7025a9452cec71474bad"
   },
   {
    "path": "skills/session-insights/SKILL.md",
-   "old_oid": "f6b3e6c53ced0539c1e0f8a89218da29180426d5",
-   "new_oid": "6728f91c9e93d90a04dd224c11f88bc9c47deb44"
+   "old_oid": "6728f91c9e93d90a04dd224c11f88bc9c47deb44",
+   "new_oid": "b5c0d829be90042de663e6ff48ebf5fcf60f55f7"
   },
   {
    "path": "skills/session-insights/references/report-contract.md",
-   "old_oid": "a8906692f13165a76f5386d1ee989abb941051f4",
-   "new_oid": "f82f1fe0ec8c677c35bbd3053b056b372845b03c"
+   "old_oid": "f82f1fe0ec8c677c35bbd3053b056b372845b03c",
+   "new_oid": "f823ac094bad6cdef1e1010c2bc0e1cc0f8645e7"
   },
   {
    "path": "skills/session-insights/scripts/session_insights.py",
-   "old_oid": "bda8b1fd2a9ff06b05d3fefb0d7ed818b9f927fc",
-   "new_oid": "8093e4b4e89dd24b1bc4feabd1298df4154d45ed"
+   "old_oid": "8093e4b4e89dd24b1bc4feabd1298df4154d45ed",
+   "new_oid": "f3121f0f7b877e5714fcfbaa0808c1f2075bd24c"
   },
   {
    "path": "tests/test_session_insights_benchmark.py",
-   "old_oid": "c0629fbc48e66078db837feb85dec0a72b79e16f",
-   "new_oid": "e73ac6934d31225205868fa15ed1362bee6165db"
+   "old_oid": "e73ac6934d31225205868fa15ed1362bee6165db",
+   "new_oid": "d49d5b6ef55d0f97288b7b609d20764d2b27109a"
   }
  ],
- "raw_approval_record_sha256": "f4246a6ac41c41c5824afc61c9f244e399d231679b7db2c1bcb020d41ff34c50",
+ "raw_approval_record_sha256": "8e179232188fd6a3830adfcf2e68b4314de12e43f72f25b669c16061fc2617ca",
  "raw_approval_storage": "Git-external"
 }

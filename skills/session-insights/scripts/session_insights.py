@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import html
 import json
 import os
 import re
@@ -40,7 +39,7 @@ FIRST_PROMPT_LIMIT = 200
 INTERRUPTION_MARKER = "[Request interrupted by user]"
 
 HARNESSES = ("claude-code", "codex", "zcode")
-SUPPORTED_HARNESSES = ("claude-code",)
+SUPPORTED_HARNESSES = ("claude-code", "codex")
 UNSUPPORTED_HOLD = {name: f"{name} unsupported" for name in HARNESSES if name not in SUPPORTED_HARNESSES}
 
 DEFAULT_HOME_DIRS = {
@@ -350,6 +349,223 @@ def parse_session_file(path: Path) -> dict[str, Any]:
     return parsed
 
 
+# --- Codex adapter --------------------------------------------------------
+#
+# Store layout verified locally (2026-09): dated rollout files under
+# ``<store-root>/sessions/YYYY/MM/DD/rollout-*.jsonl``. Each line is one
+# JSON record (``session_meta`` / ``response_item`` / ``event_msg`` /
+# ``turn_context`` / ...). Only user-authored activity enters the
+# statistics: subagent rollouts (``thread_source != "user"``), developer
+# messages and injected user text (environment context, tag-wrapped
+# bookkeeping notifications) are skipped. Codex exposes no verified
+# API-error marker, so ``errors`` stays 0 for this adapter.
+
+
+def codex_session_files(root: Path, project: str | None) -> list[Path]:
+    sessions_dir = root / "sessions"
+    if not sessions_dir.is_dir():
+        raise UsageFailure("codex store has no sessions directory: sessions missing")
+    return [path for path in sorted(sessions_dir.rglob("rollout-*.jsonl")) if path.is_file()]
+
+
+def codex_user_text(content: Any) -> str | None:
+    if not isinstance(content, list):
+        return None
+    parts = [
+        item.get("text", "")
+        for item in content
+        if isinstance(item, dict) and item.get("type") == "input_text" and isinstance(item.get("text"), str)
+    ]
+    joined = "\n".join(part for part in parts if part.strip())
+    return joined if joined.strip() else None
+
+
+def codex_text_is_injected(text: str) -> bool:
+    if "<environment_context>" in text:
+        return True
+    stripped = text.lstrip()
+    return bool(re.match(r"^<[A-Za-z0-9_.-]+>", stripped))
+
+
+def parse_codex_session_file(path: Path) -> dict[str, Any]:
+    parsed: dict[str, Any] = {
+        "session_id": path.stem,
+        "start": None,
+        "end": None,
+        "turns": 0,
+        "user_messages": 0,
+        "assistant_messages": 0,
+        "tool_calls": {},
+        "interruptions": 0,
+        "errors": 0,
+        "first_prompt": None,
+        "message_timestamps": [],
+        "message_lines": 0,
+        "malformed_lines": 0,
+        "skipped_lines": 0,
+        "thread_source": None,
+        "project_label": None,
+        "project_match": None,
+    }
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+    def track(moment: datetime | None) -> None:
+        nonlocal first_seen, last_seen
+        if moment is None:
+            return
+        parsed["message_timestamps"].append(iso(moment))
+        first_seen = moment if first_seen is None else min(first_seen, moment)
+        last_seen = moment if last_seen is None else max(last_seen, moment)
+
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                parsed["malformed_lines"] += 1
+                continue
+            if not isinstance(record, dict):
+                parsed["skipped_lines"] += 1
+                continue
+            record_type = record.get("type")
+            payload = record.get("payload")
+            moment = parse_timestamp(record.get("timestamp"))
+            if record_type == "session_meta":
+                if isinstance(payload, dict):
+                    parsed["thread_source"] = payload.get("thread_source")
+                    session_id = payload.get("session_id")
+                    if isinstance(session_id, str) and session_id:
+                        parsed["session_id"] = session_id
+                    cwd = payload.get("cwd")
+                    if isinstance(cwd, str) and cwd:
+                        encoded = encode_project_path(cwd)
+                        parsed["project_label"] = project_label(encoded)
+                        parsed["project_match"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+                parsed["skipped_lines"] += 1
+                continue
+            if record_type == "response_item" and isinstance(payload, dict):
+                item_type = payload.get("type")
+                if item_type == "message":
+                    role = payload.get("role")
+                    if role == "assistant":
+                        parsed["assistant_messages"] += 1
+                        parsed["message_lines"] += 1
+                        track(moment)
+                        continue
+                    if role == "user":
+                        text = codex_user_text(payload.get("content"))
+                        if text is None or codex_text_is_injected(text):
+                            parsed["skipped_lines"] += 1
+                            continue
+                        parsed["user_messages"] += 1
+                        parsed["turns"] += 1
+                        parsed["message_lines"] += 1
+                        if parsed["first_prompt"] is None:
+                            parsed["first_prompt"] = text.strip()[:FIRST_PROMPT_LIMIT]
+                        track(moment)
+                        continue
+                    parsed["skipped_lines"] += 1
+                    continue
+                if item_type == "function_call":
+                    name = payload.get("name")
+                    if isinstance(name, str) and name:
+                        namespace = payload.get("namespace")
+                        tool_name = (
+                            f"{namespace}.{name}" if isinstance(namespace, str) and namespace else name
+                        )
+                        parsed["tool_calls"][tool_name] = parsed["tool_calls"].get(tool_name, 0) + 1
+                    parsed["message_lines"] += 1
+                    track(moment)
+                    continue
+                parsed["skipped_lines"] += 1
+                continue
+            if record_type == "event_msg" and isinstance(payload, dict):
+                if payload.get("type") == "turn_aborted":
+                    if payload.get("reason") == "interrupted":
+                        parsed["interruptions"] += 1
+                        parsed["message_lines"] += 1
+                        track(moment)
+                    else:
+                        parsed["skipped_lines"] += 1
+                    continue
+                parsed["skipped_lines"] += 1
+                continue
+            parsed["skipped_lines"] += 1
+    parsed["start"] = iso(first_seen) if first_seen else None
+    parsed["end"] = iso(last_seen) if last_seen else None
+    first_prompt = parsed["first_prompt"]
+    parsed["first_prompt_sha256"] = (
+        hashlib.sha256(first_prompt.encode("utf-8")).hexdigest() if first_prompt else None
+    )
+    return parsed
+
+
+def scan_codex_store(
+    root: Path,
+    project: str | None,
+    cache_store: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Parse every rollout file once; window/cap trimming happens afterwards so
+    the section anchor always reflects this store's own newest session.
+
+    Rollouts whose ``thread_source`` is not ``user`` (subagent, guardian
+    review, or a missing field on an unrecognized shape) fail closed into the
+    skipped-subagent bucket; a rollout carrying no admitted signal records is
+    skipped the same way."""
+    files = codex_session_files(root, project)
+    cached_files = cache_store.get("files", {}) if cache_store is not None else {}
+    sessions: list[dict[str, Any]] = []
+    skipped_subagent = 0
+    malformed_lines = 0
+    digest = hashlib.sha256()
+    tuples: list[str] = []
+    used_entries: dict[str, Any] = {}
+    for path in files:
+        stat = path.stat()
+        relative = path.relative_to(root).as_posix()
+        path_hash = hashlib.sha256(relative.encode("utf-8")).hexdigest()
+        tuples.append(f"{path_hash}:{stat.st_mtime_ns}:{stat.st_size}")
+        parsed = cached_metadata(cached_files.get(path_hash), stat.st_mtime_ns, stat.st_size)
+        if parsed is None:
+            parsed = parse_codex_session_file(path)
+        if cache_store is not None:
+            used_entries[path_hash] = cache_entry(parsed, stat.st_mtime_ns, stat.st_size)
+        malformed_lines += parsed["malformed_lines"]
+        if parsed.get("thread_source") != "user":
+            skipped_subagent += 1
+            continue
+        if parsed["message_lines"] == 0:
+            skipped_subagent += 1
+            continue
+        if project is not None:
+            expected_match = hashlib.sha256(
+                encode_project_path(project).encode("utf-8")
+            ).hexdigest()[:16]
+            if parsed.get("project_match") != expected_match:
+                continue
+        parsed.pop("thread_source", None)
+        parsed.pop("project_match", None)
+        parsed["project"] = parsed.pop("project_label") or "project"
+        sessions.append(parsed)
+    if cache_store is not None:
+        cache_store["files"] = used_entries
+    for entry in sorted(tuples):
+        digest.update(entry.encode("utf-8"))
+        digest.update(b"\n")
+    scan = {
+        "files_scanned": len(files),
+        "malformed_lines": malformed_lines,
+        "skipped_subagent_sessions": skipped_subagent,
+        "file_count": len(files),
+        "composite_sha256": digest.hexdigest(),
+    }
+    return sessions, scan
+
+
 def scan_claude_store(
     root: Path,
     project: str | None,
@@ -402,6 +618,12 @@ def scan_claude_store(
 
 def session_recency(session: dict[str, Any]) -> str:
     return session.get("end") or session.get("start") or ""
+
+
+STORE_SCANNERS = {
+    "claude-code": scan_claude_store,
+    "codex": scan_codex_store,
+}
 
 
 def trim_sessions(
@@ -516,7 +738,7 @@ def build_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             harnesses[harness] = {"status": "missing"}
             continue
         cache_store = cache_store_section(cache, harness, root) if cache is not None else None
-        sessions, scan = scan_claude_store(root, args.project, cache_store)
+        sessions, scan = STORE_SCANNERS[harness](root, args.project, cache_store)
         harnesses[harness] = aggregate_sessions(
             sessions, scan, args.days, args.max_sessions, args.include_excerpts
         )
@@ -551,7 +773,10 @@ def cmd_detect(args: argparse.Namespace) -> int:
             continue
         entry: dict[str, Any] = {"status": "available" if present else "missing"}
         if present:
-            entry["session_files"] = len(claude_session_files(root, args.project))
+            if harness == "codex":
+                entry["session_files"] = len(codex_session_files(root, args.project))
+            else:
+                entry["session_files"] = len(claude_session_files(root, args.project))
         harnesses[harness] = entry
     emit_json({"schema": DETECT_SCHEMA, "harnesses": harnesses})
     return 0
@@ -575,7 +800,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     if not harness_store_present(harness, root):
         emit_json({"schema": DISCOVER_SCHEMA, "harness": harness, "status": "missing", "sessions": []})
         return 0
-    sessions, scan = scan_claude_store(root, args.project)
+    sessions, scan = STORE_SCANNERS[harness](root, args.project)
     rows = [
         {
             "session_id": session["session_id"],
@@ -616,7 +841,7 @@ def cmd_metadata(args: argparse.Namespace) -> int:
     if not harness_store_present(harness, root):
         emit_json({"schema": METADATA_SCHEMA, "harness": harness, "status": "missing", "sessions": []})
         return 0
-    sessions, scan = scan_claude_store(root, args.project)
+    sessions, scan = STORE_SCANNERS[harness](root, args.project)
     emit_json(
         {
             "schema": METADATA_SCHEMA,
@@ -787,7 +1012,8 @@ def report_date(aggregate: dict[str, Any]) -> str:
     return moment.date().isoformat() if moment else "empty"
 
 
-def build_markdown_report(aggregate: dict[str, Any], include_excerpts: bool, tone: str) -> str:
+def cmd_report(args: argparse.Namespace) -> int:
+    aggregate = read_aggregate(args.aggregate)
     holds = [str(hold) for hold in aggregate.get("holds", [])]
     lines: list[str] = [
         "# 🦊 阿舟 · Session Insights 报告",
@@ -801,13 +1027,13 @@ def build_markdown_report(aggregate: dict[str, Any], include_excerpts: bool, ton
     for harness, section in aggregate["harnesses"].items():
         status = section.get("status")
         if status == "ok":
-            render_ok_section(lines, harness, section, include_excerpts)
+            render_ok_section(lines, harness, section, args.include_excerpts)
         elif status == "missing":
             lines.append(f"## {harness}")
             lines.append("")
             lines.append("- store missing; no metrics.")
             lines.append("")
-    if tone == "roast":
+    if args.tone == "roast":
         lines.append("## 🔥 roast")
         lines.append("")
         roasted = False
@@ -831,123 +1057,6 @@ def build_markdown_report(aggregate: dict[str, Any], include_excerpts: bool, ton
     lines.append("")
     lines.append(f"> {REVIEW_FOOTER}")
     lines.append("")
-    return "\n".join(lines)
-
-
-HTML_STYLE = """body{font-family:-apple-system,'Segoe UI','Noto Sans',sans-serif;margin:2rem auto;max-width:52rem;padding:0 1rem;color:#111;background:#fff;line-height:1.5}
-h1{font-size:1.4rem}
-h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
-h3{font-size:1rem;margin-bottom:.2rem}
-ul,ol{padding-left:1.4rem}
-code{background:#f4f4f4;padding:0 .25rem;border-radius:3px}
-pre{background:#f7f7f7;padding:.6rem;overflow-x:auto;border:1px solid #eee}
-.receipt pre{white-space:pre-wrap}
-.footer{border-top:1px solid #ddd;margin-top:2rem;padding-top:.6rem;font-size:.85rem;color:#444}
-@media print{body{margin:0;max-width:none}h2{break-after:avoid}pre{overflow:visible;border:none}}
-"""
-
-
-def _html_list(items: list[str]) -> str:
-    if not items:
-        return "<ul>\n<li>(none)</li>\n</ul>\n"
-    return "<ul>\n" + "\n".join(f"<li>{item}</li>" for item in items) + "\n</ul>\n"
-
-
-def build_html_report(aggregate: dict[str, Any], include_excerpts: bool, tone: str) -> str:
-    """Render the same aggregate into a self-contained offline HTML artifact:
-    inlined CSS, no external resources, no scripts, print-friendly."""
-    holds = [str(hold) for hold in aggregate.get("holds", [])]
-    parts: list[str] = [
-        "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-        "<title>Session Insights</title>\n<style>\n" + HTML_STYLE + "</style>\n</head>\n<body>\n",
-        "<h1>🦊 阿舟 · Session Insights 报告</h1>\n",
-        "<p><em>先有数字，再有故事。每个数字都来自 <code>session-insights.aggregate.v1</code>，报告不重算任何指标。</em></p>\n",
-        "<ul>\n"
-        f"<li>window: 最近 {aggregate['window_days']} 天，锚定 store 内最新会话时间（非墙钟）</li>\n"
-        f"<li>session cap: {aggregate['max_sessions']}（最近优先）</li>\n</ul>\n",
-    ]
-    for harness, section in aggregate["harnesses"].items():
-        status = section.get("status")
-        if status == "ok":
-            parts.append(f"<h2>📊 概览（{html.escape(harness)}）</h2>\n")
-            parts.append(_html_list([
-                f"会话数: {section['session_count']}",
-                f"活跃天数（UTC）: {section['active_days']}",
-                f"用户轮次: {section['turns']}",
-                f"用户消息 / 助手消息: {section['user_messages']} / {section['assistant_messages']}",
-                f"扫描文件: {section['files_scanned']}（malformed 行 {section['malformed_lines']}）",
-                f"跳过的 subagent 会话: {section['skipped_subagent_sessions']}",
-                f"最新会话: {html.escape(str(section['newest_session_at']))}",
-                f"窗口起点: {html.escape(str(section['window_start']))}",
-            ]))
-            histogram = section["hour_histogram_utc"]
-            peak = max(histogram) if histogram else 0
-            parts.append("<h2>🕒 时段分布（UTC）</h2>\n")
-            if any(histogram):
-                parts.append(_html_list([
-                    f"{hour:02d}:00 {bar(count, peak=peak)} {count}"
-                    for hour, count in enumerate(histogram)
-                    if count
-                ]))
-            else:
-                parts.append(_html_list(["(no message timestamps)"]))
-            parts.append("<h2>🗂️ 项目分布</h2>\n")
-            parts.append(_html_list([
-                f"<code>{html.escape(project)}</code>: {count} 个会话"
-                for project, count in section["project_distribution"].items()
-            ]))
-            parts.append("<h2>🔧 工具调用排行</h2>\n")
-            tool_items = [
-                f"<code>{html.escape(name)}</code> — {count}"
-                for name, count in section["tool_calls"].items()
-            ]
-            if tool_items:
-                parts.append("<ol>\n" + "\n".join(f"<li>{item}</li>" for item in tool_items) + "\n</ol>\n")
-            else:
-                parts.append(_html_list([]))
-            parts.append("<h2>🧯 摩擦信号</h2>\n")
-            parts.append(_html_list([
-                f"中断: {section['interruptions']}（interruption_rate {section['interruption_rate']}）",
-                f"API 错误: {section['error_count']}",
-                f"重复首条提示: {section['repeated_first_prompt_count']}",
-            ]))
-            if include_excerpts:
-                excerpts = section.get("excerpts")
-                if excerpts is None:
-                    raise UsageFailure("aggregate was built without --include-excerpts; rebuild it first")
-                parts.append("<h2>📎 首条提示摘录（已脱敏）</h2>\n")
-                parts.append(_html_list([
-                    f"<code>{html.escape(excerpt['project'])}</code> / {html.escape(excerpt['session_id'])}: "
-                    f"{html.escape(excerpt['first_prompt'])}"
-                    for excerpt in excerpts
-                ]))
-        elif status == "missing":
-            parts.append(f"<h2>{html.escape(harness)}</h2>\n<p>store missing; no metrics.</p>\n")
-    if tone == "roast":
-        parts.append("<h2>🔥 roast</h2>\n")
-        roasted = False
-        for harness, section in aggregate["harnesses"].items():
-            if section.get("status") != "ok":
-                continue
-            parts.append(f"<h3>{html.escape(harness)}</h3>\n")
-            parts.append(_html_list([html.escape(line[2:]) for line in roast_lines(section)]))
-            roasted = True
-        if not roasted:
-            parts.append(_html_list(["(nothing to roast: no verified sessions)"]))
-    parts.append("<h2>🔒 Holds</h2>\n")
-    parts.append(_html_list([html.escape(hold) for hold in holds] if holds else ["none"]))
-    parts.append(f"<p class=\"footer\">{html.escape(REVIEW_FOOTER)}</p>\n")
-    return "".join(parts)
-
-
-def cmd_report(args: argparse.Namespace) -> int:
-    aggregate = read_aggregate(args.aggregate)
-    holds = [str(hold) for hold in aggregate.get("holds", [])]
-    if args.format == "html":
-        body = build_html_report(aggregate, args.include_excerpts, args.tone)
-    else:
-        body = build_markdown_report(aggregate, args.include_excerpts, args.tone)
 
     inputs = [
         {
@@ -958,11 +1067,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         for harness, section in aggregate["harnesses"].items()
         if section.get("status") == "ok"
     ]
+    body = "\n".join(lines)
     artifact_digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
     if args.out is not None:
         out = Path(args.out)
-    elif args.format == "html":
-        out = Path.cwd() / OUTPUT_NAMESPACE / f"report-{report_date(aggregate)}.html"
     else:
         out = Path.cwd() / OUTPUT_NAMESPACE / f"report-{report_date(aggregate)}.md"
     receipt = {
@@ -979,21 +1087,15 @@ def cmd_report(args: argparse.Namespace) -> int:
         "verification": "rendered from session-insights.aggregate.v1 input; no metric recomputed",
         "holds": holds,
         "next_action": (
-            "resolve remaining holds before claiming cross-harness coverage"
+            "verify codex/zcode transcript formats before claiming cross-harness coverage"
             if holds
             else "review before sharing"
         ),
         "learning_signal": learning_signal(aggregate),
     }
-    receipt_text = json.dumps(receipt, ensure_ascii=False, indent=2)
-    if args.format == "html":
-        document = body + (
-            "<section class=\"receipt\">\n<h2>🧾 Receipt</h2>\n<pre>"
-            + html.escape(receipt_text)
-            + "</pre>\n</section>\n</body>\n</html>\n"
-        )
-    else:
-        document = body + "\n## 🧾 Receipt\n\n```json\n" + receipt_text + "\n```\n"
+    document = body + "\n## 🧾 Receipt\n\n```json\n" + json.dumps(
+        receipt, ensure_ascii=False, indent=2
+    ) + "\n```\n"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(document, encoding="utf-8")
     emit_json(receipt)
@@ -1066,12 +1168,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("report", "roast"),
         default="report",
         help="presentation tone; both tones render the same machine values (default: report)",
-    )
-    report.add_argument(
-        "--format",
-        choices=("markdown", "html"),
-        default="markdown",
-        help="artifact format; html renders a self-contained offline single file (default: markdown)",
     )
     report.add_argument(
         "--out",

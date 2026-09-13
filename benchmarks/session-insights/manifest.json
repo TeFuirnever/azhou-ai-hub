@@ -32,7 +32,14 @@
       }
     ],
     "codex": [
-      "sessions/2026/09/01/rollout-2026-09-01T00-00-00-aaaaaaaa.jsonl (present and detectable; adapter must fail closed)"
+      "sessions/2026/09/01/rollout-2026-09-01T00-00-00-aaaaaaaa.jsonl (turn_context-only rollout with no session_meta: thread_source unknown, fails closed into skipped-subagent)",
+      "sessions/2026/09/05/rollout-2026-09-05T08-00-00-bbbbbbbb.jsonl (baseline user rollout: injected environment_context user text and a developer message are skipped, two real turns, Read plus namespaced browser.click calls, one turn_aborted interruption, one malformed line)",
+      "sessions/2026/09/05/rollout-2026-09-05T09-30-00-cccccccc.jsonl (subagent rollout: thread_source=subagent, excluded entirely)",
+      "sessions/2026/09/06/rollout-2026-09-06T20-15-00-dddddddd.jsonl (newest user rollout in the beta project, anchors the codex window at 2026-09-06T20:16:00Z)",
+      "sessions/2026/09/04/rollout-2026-09-04T12-00-00-eeeeeeee.jsonl (user rollout carrying no admitted signal records: skipped-subagent bucket)",
+      "sessions/2026/09/03/rollout-2026-09-03T10-00-00-ffffffff.jsonl (rollout whose session_meta lacks thread_source: unrecognized shape, fails closed)",
+      "sessions/2026/08/01/rollout-2026-08-01T10-00-00-0aaaaaaa.jsonl (stale user rollout at 2026-08-01: trimmed by the default 30-day window, included at --days 60)",
+      "sessions/2026/09/06/not-a-rollout.jsonl (unrecognized file name outside the rollout-*.jsonl pattern: never scanned)"
     ],
     "zcode": [
       "v2/sessions/deadbeefworkspace/claude-import-0123456789abcdef01234567.json (present and detectable; adapter must fail closed)"
@@ -44,6 +51,6 @@
     "GOLDEN_CAP2_SPOT pins the recency cap (session_count 2)",
     "cache checks (#167): excerpts-off aggregate writes session-insights.metadata-cache.v1 under the invoking cwd's .azhou namespace; warm, deleted, and corrupt cache states return output byte-identical to the cold run; changed, added, and removed session files re-scan; cache bytes carry no transcript text (first prompts survive only as SHA-256), no encoded project directory names, and no absolute home path; excerpts-on runs bypass the cache",
     "roast tone checks (#164): --tone roast renders an added presentation-only section; stripping it restores the machine body byte-identically; every roast line cites at least one statistic and every cited value appears verbatim in the machine body; receipt machine fields are equal across tones; the default tone renders no roast section",
-    "offline HTML checks (#165): --format html renders a self-contained single file (doctype, inlined CSS, no script, no external resource markers, closed document, print-friendly footer); every markdown bullet fact appears as the matching list item in the HTML artifact; privacy scans and the fixed footer cover the HTML form; receipt machine fields are equal across formats"
+    "codex adapter checks (#166): GOLDEN_CODEX_AGGREGATE pins the full codex section except the mtime-dependent composite digest (2 in-window sessions, 4 skipped subagent/no-shape rollouts across 7 scanned files, Read plus browser.click ranking, one turn_aborted interruption, error_count 0); --days 60 widens to 3 sessions and --max-sessions 1 caps to 1; the mixed all-harness run keeps per-harness accounting separate and the report receipt carries per-store inputs for both verified harnesses; codex cache entries stay warm-cold identical and never contain plaintext cwd or transcript text"
   ]
 }
