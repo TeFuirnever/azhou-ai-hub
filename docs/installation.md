@@ -15,8 +15,10 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill eli5
+npx skills add TeFuirnever/azhou-ai-hub --skill ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
 npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
+npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.

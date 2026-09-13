@@ -7,7 +7,7 @@
 ## 结论
 
 - **Passing 档当前即可全部作答**：唯一成组 N/A 的是密码学条款（本仓库与其分发物不实现、不调用、不强依赖任何密码学组件）。
-- **Silver 档有真实差距**：`bus_factor`、`access_continuity`、`dco`、`governance`、`roles_responsibilities`、`code_of_conduct`、`documentation_roadmap`、`signed_releases` 等——与 #27 其余 checkbox 同源（第二维护者、签名发布），不为了分数硬凑。
+- **Silver 档有真实差距**：`bus_factor`、`access_continuity`、`dco`、`signed_releases`，以及覆盖率度量（`test_statement_coverage80`、`regression_tests_added50`）——与 #27 其余 checkbox 同源（第二维护者、签名发布），不为了分数硬凑。`code_of_conduct`（根目录 `CODE_OF_CONDUCT.md`）、`governance` 与 `roles_responsibilities`（`GOVERNANCE.md`）、`documentation_roadmap`（`docs/roadmap.md`）已有现役文档可作答。
 - **Scorecard 与 #27 清单的差异**（快照见下文）：`Fuzzing` 检查项为 0——PR #91 的 fuzzer 是仓库自带的标准库确定性变异 fuzzer，Scorecard 只识别 OSS-Fuzz/语言原生等已知模式，这一分不是"没做"而是"启发式不识别"；`CII-Best-Practices` 为 0——即本文针对的注册项。
 
 ## 注册 runbook（maintainer，约 15–30 分钟）
@@ -85,10 +85,10 @@
 
 | Criterion | 差距 | 归属 |
 |---|---|---|
-| bus_factor / access_continuity / roles_responsibilities / governance / dco | 单维护者 | #27 "require one approving review after a second trusted maintainer" 同源；有第二维护者后一并补治理文档 |
-| code_of_conduct | 未发布 CoC | 低成本可补：采纳 Contributor Covenant 放 `.github/CODE_OF_CONDUCT.md`（maintainer 认可后落地） |
-| documentation_roadmap | 无正式 roadmap 文档 | 可从 #161/#27 等现存计划提炼（maintainer 审定目标即可写） |
-| signed_releases / version_tags_signed | release 无签名产物 | 需要签名密钥管理与维护者决策；当前为纯源码分发，可先在表单如实说明 |
+| bus_factor / access_continuity | 单维护者 | #27 "require one approving review after a second trusted maintainer" 同源 |
+| dco | CONTRIBUTING 无 DCO 机制 | 低成本可补：贡献者证书签署说明或 CLA（maintainer 选型后落地） |
+| signed_releases / version_tags_signed | release 无签名产物 | 需要签名密钥管理与维护者决策；当前为纯源码分发，可先在表单如实说明（docs/roadmap.md 已声明 SBOM/provenance 在有可下载产物后才做） |
+| test_statement_coverage80 / regression_tests_added50 | 无覆盖率度量 | 可后续引入 coverage 统计再作答，不预先承诺 |
 | test_statement_coverage80 / regression_tests_added50 | 无覆盖率度量 | 可后续引入 coverage 统计再作答，不预先承诺 |
 
 ## 边界
