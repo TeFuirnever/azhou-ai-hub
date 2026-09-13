@@ -20,7 +20,6 @@ jobs:
         shell: bash
     env:
       PYTHONDONTWRITEBYTECODE: "1"
-      SKILLS_HOME: ${{ runner.temp }}\skills-home
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +50,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Plan the managed install
         run: |
+          SKILLS_HOME="$RUNNER_TEMP/skills-home"
           python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --json | tee plan.json
           echo
           echo "## 3. setup apply"
@@ -58,6 +58,7 @@ jobs:
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
       - name: Apply the managed install
         run: |
+          SKILLS_HOME="$RUNNER_TEMP/skills-home"
           PLAN_ID=$(python -c "import json;print(json.load(open('plan.json'))['planId'])")
           python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json >> "$GITHUB_STEP_SUMMARY" 2>&1
           {
@@ -69,6 +70,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Doctor the installed skill
         run: |
+          SKILLS_HOME="$RUNNER_TEMP/skills-home"
           python scripts/azhou_hub.py doctor --skill session-insights --target "$SKILLS_HOME" --verify --json >> "$GITHUB_STEP_SUMMARY" 2>&1
           {
             echo '```'
