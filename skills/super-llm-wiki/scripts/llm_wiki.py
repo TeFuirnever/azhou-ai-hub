@@ -1050,7 +1050,7 @@ def precompact_summary(store: WikiStore) -> str:
     # values that parse as timestamps, so arbitrary strings can never
     # cross into hook context (threat-review F-P1 sibling, #230).
     stamps = [value for value in (page.updated for page in pages) if not math.isnan(parse_timestamp(value))]
-    latest = max(stamps) if stamps else "unknown"
+    latest = max(stamps, key=parse_timestamp) if stamps else "unknown"
     return f"[Wiki: {len(pages)} pages | categories: {', '.join(categories)} | last updated: {latest}]"
 
 
