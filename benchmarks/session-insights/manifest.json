@@ -42,6 +42,7 @@
     "GOLDEN_AGGREGATE in benchmark.py pins the full claude-code aggregate section except the mtime-dependent composite digest",
     "GOLDEN_DAYS60_SPOT pins window widening (session_count 5, active_days 4)",
     "GOLDEN_CAP2_SPOT pins the recency cap (session_count 2)",
-    "cache checks (#167): excerpts-off aggregate writes session-insights.metadata-cache.v1 under the invoking cwd's .azhou namespace; warm, deleted, and corrupt cache states return output byte-identical to the cold run; changed, added, and removed session files re-scan; cache bytes carry no transcript text (first prompts survive only as SHA-256), no encoded project directory names, and no absolute home path; excerpts-on runs bypass the cache"
+    "cache checks (#167): excerpts-off aggregate writes session-insights.metadata-cache.v1 under the invoking cwd's .azhou namespace; warm, deleted, and corrupt cache states return output byte-identical to the cold run; changed, added, and removed session files re-scan; cache bytes carry no transcript text (first prompts survive only as SHA-256), no encoded project directory names, and no absolute home path; excerpts-on runs bypass the cache",
+    "roast tone checks (#164): --tone roast renders an added presentation-only section; stripping it restores the machine body byte-identically; every roast line cites at least one statistic and every cited value appears verbatim in the machine body; receipt machine fields are equal across tones; the default tone renders no roast section"
   ]
 }

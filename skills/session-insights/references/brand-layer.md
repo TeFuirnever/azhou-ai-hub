@@ -51,4 +51,4 @@ Session Insights 的品牌感来自"先有数字，再有故事"的纪律：品�
 - 原始证据（原始转写、未脱敏摘录、用户路径明文）不进入播报、报告或收据。
 - 不用 `✅` 表示未运行、跳过或仅人工目测的检查。
 - host 不支持 Unicode 时可去掉前导 emoji；稳定英文状态、机器字段和事实内容不得改变。
-- roast tone 属于 M2，尚未发布；本版本只产出中性 report。
+- roast tone 已发布（M2）：`report --tone roast` 渲染同一组数字的 roast 版；机器小节与收据合同不变，红线见 SKILL.md。

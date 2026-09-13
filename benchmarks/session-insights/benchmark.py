@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -581,6 +582,70 @@ def cmd_check(_: argparse.Namespace) -> int:
         numeric_keys = {"session_count", "active_days", "tool_calls", "turns"} & set(codex_section)
         if numeric_keys:
             errors.append(f"codex fail-closed section carries speculative metrics: {sorted(numeric_keys)}")
+
+        # --- roast tone (#164): presentation-only tone over one number set --
+        roast_report = out_dir / "report-roast.md"
+        roast_receipt = cli_json(
+            "report", "--aggregate", str(plain_aggregate), "--out", str(roast_report), "--tone", "roast"
+        )
+        roast_text = roast_report.read_text(encoding="utf-8")
+        plain_lines = plain_report.read_text(encoding="utf-8").splitlines(keepends=True)
+
+        def heading_index(lines: list[str], suffix: str) -> int | None:
+            return next(
+                (index for index, line in enumerate(lines) if line.startswith("## ") and line.rstrip("\n").endswith(suffix)),
+                None,
+            )
+
+        roast_start = heading_index(roast_text.splitlines(keepends=True), "roast")
+        plain_receipt_at = heading_index(plain_lines, "Receipt")
+        plain_body = "".join(plain_lines[:plain_receipt_at]) if plain_receipt_at is not None else ""
+        roast_heading = next(
+            (line for line in roast_text.splitlines(keepends=True) if line.startswith("## ") and line.rstrip("\n").endswith("roast")),
+            None,
+        )
+        if roast_heading is None or plain_receipt_at is None:
+            errors.append("roast: the roast section is missing from the roast report")
+        else:
+            roast_lines_all = roast_text.splitlines(keepends=True)
+            roast_start = roast_lines_all.index(roast_heading)
+            roast_end = next(
+                (
+                    index
+                    for index in range(roast_start + 1, len(roast_lines_all))
+                    if roast_lines_all[index].startswith("## ")
+                ),
+                len(roast_lines_all),
+            )
+            stripped = "".join(roast_lines_all[:roast_start] + roast_lines_all[roast_end:])
+            stripped_receipt_at = heading_index(stripped.splitlines(keepends=True), "Receipt")
+            stripped_body = (
+                "".join(stripped.splitlines(keepends=True)[:stripped_receipt_at])
+                if stripped_receipt_at is not None
+                else ""
+            )
+            if stripped_body != plain_body:
+                errors.append("roast: stripping the roast section changed the machine body")
+            rendered_lines = [
+                line
+                for line in roast_lines_all[roast_start:roast_end]
+                if line.startswith("- ")
+            ]
+            if not rendered_lines:
+                errors.append("roast: no roast lines rendered")
+            for roast_line in rendered_lines:
+                numbers = re.findall(r"\d+(?:\.\d+)?", roast_line)
+                if not numbers:
+                    errors.append(f"roast: line cites no statistic: {roast_line}")
+                for number in numbers:
+                    if number not in plain_body:
+                        errors.append(f"roast: line cites a value absent from the machine body: {number}")
+        roast_machine = {key: value for key, value in roast_receipt.items() if key != "artifacts"}
+        plain_machine = {key: value for key, value in receipt.items() if key != "artifacts"}
+        if roast_machine != plain_machine:
+            errors.append("roast: receipt machine fields drifted across tones")
+        if any(line.startswith("## ") and line.rstrip("\n").endswith("roast") for line in plain_lines):
+            errors.append("roast: the default report rendered a roast section")
 
     verdict = {"valid": not errors, "errors": errors}
     print(json.dumps(verdict, ensure_ascii=False, indent=2))
