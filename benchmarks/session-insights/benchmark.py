@@ -647,6 +647,67 @@ def cmd_check(_: argparse.Namespace) -> int:
         if any(line.startswith("## ") and line.rstrip("\n").endswith("roast") for line in plain_lines):
             errors.append("roast: the default report rendered a roast section")
 
+        # --- offline HTML artifact (#165): same numbers, self-contained file -
+        parity_aggregate = out_dir / "aggregate-parity.json"
+        completed = run_cli(
+            "aggregate", "--harness", "all", "--store-root", str(store),
+            "--out", str(parity_aggregate),
+        )
+        if completed.returncode != 0:
+            raise AssertionError(f"html: parity aggregate failed: {completed.stderr.strip()}")
+        html_report = out_dir / "report-parity.html"
+        html_receipt = cli_json(
+            "report", "--aggregate", str(parity_aggregate), "--out", str(html_report), "--format", "html"
+        )
+        parity_markdown = out_dir / "report-parity.md"
+        cli_json("report", "--aggregate", str(parity_aggregate), "--out", str(parity_markdown))
+        html_text = html_report.read_text(encoding="utf-8")
+        markdown_lines = parity_markdown.read_text(encoding="utf-8").splitlines()
+        lowered = html_text.lower()
+        if not lowered.startswith("<!doctype html>"):
+            errors.append("html: artifact does not start with the doctype")
+        if "<style>" not in lowered or "</style>" not in lowered:
+            errors.append("html: CSS is not inlined")
+        if "<script" in lowered:
+            errors.append("html: artifact contains a script element")
+        for marker in ("http://", "https://", "src=", "href="):
+            if marker in lowered:
+                errors.append(f"html: artifact contains an external resource marker: {marker}")
+        if not lowered.rstrip().endswith("</html>"):
+            errors.append("html: artifact is not a closed document")
+        if "Review before sharing" not in html_text:
+            errors.append("html: missing the fixed review-before-sharing footer")
+        parity_bullets = 0
+        for md_line in markdown_lines:
+            if md_line.startswith("- "):
+                content = md_line[2:]
+            elif re.match(r"^\d+\. ", md_line):
+                content = re.sub(r"^\d+\. ", "", md_line)
+            else:
+                continue
+            converted = re.sub(r"`([^`]*)`", r"<code>\1</code>", content)
+            if converted.startswith("(none)"):
+                continue
+            if f"<li>{converted}</li>" not in html_text:
+                errors.append(f"html: markdown fact missing from the html artifact: {content}")
+            parity_bullets += 1
+        if parity_bullets < 10:
+            errors.append(f"html: parity sweep covered too few markdown facts: {parity_bullets}")
+        home_path = str(Path.home())
+        if home_path != "/" and home_path in html_text:
+            errors.append("privacy: html report contains the absolute home path")
+        for secret in SEEDED_SECRETS:
+            if secret in html_text:
+                errors.append("privacy: html report contains a seeded secret-shaped string")
+        for encoded in (ALPHA, BETA):
+            if encoded in html_text:
+                errors.append("privacy: html report contains an encoded project directory name")
+        if EXCERPT_SENTINEL in html_text or FIRST_PROMPT_SHARED in html_text:
+            errors.append("privacy: excerpts-off html report contains transcript text")
+        html_machine = {key: value for key, value in html_receipt.items() if key != "artifacts"}
+        if html_machine != plain_machine:
+            errors.append("html: receipt machine fields drifted across formats")
+
     verdict = {"valid": not errors, "errors": errors}
     print(json.dumps(verdict, ensure_ascii=False, indent=2))
     return 0 if not errors else 1
