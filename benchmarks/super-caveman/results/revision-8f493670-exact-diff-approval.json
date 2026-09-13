@@ -2,11 +2,11 @@
  "schema": "super-caveman-exact-diff-approval-record.v2",
  "decision": "approved",
  "approver": "workspace-owner",
- "approved_at": "2026-09-13T00:17:54Z",
+ "approved_at": "2026-09-13T00:44:03Z",
  "base_commit": "4c2f17eb4d7ff7d57f5183e87cc49750aed0869a",
  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
- "path_set_sha256": "a861bc382ec2608dba6df78e25e4144230e93ab3d9f5d8e81dd0e749edc96aea",
- "staged_patch_sha256": "2187059964c72b7dc33e818513711f0ea5703c5a49c0139837901e9dabc6fd67",
+ "path_set_sha256": "9ec24ba2e989684b5a117bcc99404e90b939eb87f12663d596a674a7f074a9df",
+ "staged_patch_sha256": "456f6203794320dfbab2648a5c6bf5c29819e5ffb9fddf23aa8703d3b6d1a7b3",
  "reviewed_blobs": [
   {
    "path": "AGENTS.md",
@@ -47,6 +47,11 @@
    "path": "docs/skill-standard.md",
    "old_oid": "b306dddaef99f09f5e8c6d795cb8e9557962646b",
    "new_oid": "2ba93ca55a849ad4836ead535a09cfc5b6632cc4"
+  },
+  {
+   "path": "docs/support-matrix.md",
+   "old_oid": "269fcf19e42f2e47bf43dd15c532059b10d9c7ae",
+   "new_oid": "6251fb972700487e28c91929cf0b9bc936d332fe"
   },
   {
    "path": "scripts/check_repository.py",
@@ -176,7 +181,7 @@
   {
    "path": "tests/test_skill_package.py",
    "old_oid": "7a6e1aa78fa101cb074a85abdb3d72c59a0bba08",
-   "new_oid": "f4d41b33b597f8945050f99a653aa8175d4ac21c"
+   "new_oid": "c97dcb1512de4097c1a77115c73a1bcec275c3f0"
   },
   {
    "path": "tests/test_super_llm_wiki_repository.py",
@@ -189,6 +194,6 @@
    "new_oid": "<deleted>"
   }
  ],
- "raw_approval_record_sha256": "6ebf5dfeb6f06ec5cc2865d54ae22b2bc83b3e4aa9b3ba99dd94b9c19e0e1460",
+ "raw_approval_record_sha256": "03117d7aed00c1c171248ed0c8b0f4695ae29588f26f2b69d563c080af3e43b0",
  "raw_approval_storage": "Git-external"
 }
