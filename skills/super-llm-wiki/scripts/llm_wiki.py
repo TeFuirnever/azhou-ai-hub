@@ -1023,18 +1023,19 @@ def feed_project_context(store: WikiStore) -> str | None:
 
 
 def lifecycle_session_context(store: WikiStore, limit: int) -> str:
+    # The store directory is project-controllable, so none of its text
+    # (index.md, page bodies, filenames) may cross into the session
+    # context: any of it could be a prompt-injection payload. Only
+    # first-party sentences and the page count cross the boundary; the
+    # agent discovers page content through wiki_query/wiki_list/wiki_read.
     pages = store.pages()
-    index = store.directory / INDEX_FILE
-    if not pages or not index.is_file() or index.is_symlink():
+    if not pages:
         return ""
-    lines = index.read_text(encoding="utf-8").splitlines()[:limit]
     return "\n".join(
         [
             f"[LLM Wiki: {len(pages)} pages at {store.store}/]",
             "",
             "Use wiki_query to search, wiki_list to browse, wiki_read to view pages.",
-            "",
-            *lines,
         ]
     )
 
