@@ -23,6 +23,27 @@ npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
 
+## Verify what you installed
+
+Package-manager installs resolve the mutable default branch and carry no repository receipt, so verify the installed content instead of trusting the install step.
+
+**Tag-snapshot comparison (works on every host).** Compare the installed skill directory against the version you intended, at a published tag:
+
+~~~bash
+git clone --depth 1 --branch v0.9.0 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
+diff -r /tmp/azhou-tag/skills/<skill-name> <installed-skills-root>/<skill-name> && echo identical
+~~~
+
+`<installed-skills-root>` is wherever your harness placed the skill (the package manager prints the destination). Any drift — including extra files — prints as a diff. Release notes list which skills a release touches; per-skill content digests are not published yet, so the tag snapshot is the reference.
+
+**Receipt-backed verification (checkout-assisted path only).** The checkout-assisted `setup --apply` writes a managed receipt whose digests `doctor` re-checks on demand:
+
+~~~bash
+python scripts/azhou_hub.py doctor --skill <skill-name> --target "$SKILLS_HOME" --json
+~~~
+
+`doctor` fails closed when the source, target or installed content has drifted from the receipt. The receipt integrity digest detects accidental corruption, not malicious rewriting.
+
 The four Foundation Skills are portable UX wrappers around a local checkout. They do not bundle the repository CLI or infer a harness home. Invoke them while working in an Azhou AI Hub checkout or provide that checkout path explicitly; the Skill then runs the checkout's `scripts/azhou_hub.py`.
 
 ## Checkout-assisted setup
