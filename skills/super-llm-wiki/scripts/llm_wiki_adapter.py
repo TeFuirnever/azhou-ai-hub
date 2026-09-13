@@ -101,7 +101,6 @@ def run_host_hook(event: str, raw: str) -> dict[str, Any]:
             canonical,
             store,
             data,
-            limit=30,
         )
     except Exception:
         return fallback

@@ -59,6 +59,8 @@ python "$SKILL_DIR/scripts/llm_wiki_adapter.py" render-hooks \
 
 Host shell premise: rendered hook commands are POSIX shell syntax executed by the host shell — on Windows this requires Git Bash; a PowerShell fallback is outside the supported claim.
 
+Hook context boundary: `SessionStart` and `PreCompact` render only first-party text, store counts, and format-validated metadata (category enum values and ISO timestamps) — never unconstrained store content such as `index.md`, page bodies, or free-form frontmatter strings, because the store directory is project-controllable and any of it could be a prompt-injection payload. The explicit `context` command is the one surface that renders raw store text, and only for the operator who invoked it; it must never be wired into an automated context feed.
+
 Append each emitted group to the matching event array. Preserve unrelated hooks. `SessionStart` repairs a missing index and refreshes reserved `environment.md` from optional `.azhou/super-llm-wiki/project-context.json`. `PreCompact` emits a bounded reminder. `SessionEnd` does nothing until `autoCapture` is explicitly enabled:
 
 ~~~bash
