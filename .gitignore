@@ -76,3 +76,9 @@ benchmarks/excalidraw-diagram/workspace/
 /.claude/
 /.local/
 /.treehouse/
+
+# Scene-image generation scratch (azhou-scenes working state: candidates,
+# run receipts, prompts, local generator scripts). Curated picks land in
+# assets/skills/ and stay public.
+/assets/_gen/
+/assets/*-effect-azhou-scenes/
