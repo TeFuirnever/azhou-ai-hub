@@ -1,0 +1,69 @@
+{
+  "schema": "super-caveman-exact-diff-approval-record.v2",
+  "decision": "approved",
+  "approver": "workspace-owner",
+  "approved_at": "2026-09-15T02:33:00Z",
+  "base_commit": "49e7f5f23ae80aeb56c713a8c1008f450c68e05c",
+  "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
+  "path_set_sha256": "7c7c0f356dd7e5b524d45ba9b0d7fe659b2dcc1b670d027de85bd4988a57b9aa",
+  "staged_patch_sha256": "5e39723c94cbf65d1bb3bb1ce4c875f190b312dc57a663bc839178e8a7c37989",
+  "reviewed_blobs": [
+    {
+      "path": "README.md",
+      "old_oid": "fabc8510d4dcb2f847658c3afa497016c3b804d2",
+      "new_oid": "56e10de42ea655a7f62218c1e330c41637f978c6"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "old_oid": "b2039fc8d0dba811adf2b704258b669079d3a047",
+      "new_oid": "ede869db3c42e92b4a08530a6e55006f6200db74"
+    },
+    {
+      "path": "assets/skills/arch-doc-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "4c9dcb8d8704b7230d385a3cde80ebb0cb0e7452"
+    },
+    {
+      "path": "assets/skills/ask-azhou-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "4f2a701e1d92abf7ae343d18e98b01b9d6ab4359"
+    },
+    {
+      "path": "assets/skills/autoresearch-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "d7111ab483f44288c6993d956a947295685497b0"
+    },
+    {
+      "path": "assets/skills/eli5-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "63ba83a8088c012df3215a124caf9dbb937789cb"
+    },
+    {
+      "path": "assets/skills/session-insights-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "57a0a117e9b2f30f4667474bec40a34ae76fd7a1"
+    },
+    {
+      "path": "assets/skills/super-lavish-effect.png",
+      "old_oid": "<deleted>",
+      "new_oid": "fda8b85cf20b6b5f10b7b98d950d9a2e26b44bae"
+    },
+    {
+      "path": "assets/skills/super-llm-wiki-effect.png",
+      "old_oid": "a6e2a141f2abafc49fd6f514108edee6a85e72c3",
+      "new_oid": "82552c072059632ff3a91bd459475c2e56b3ac56"
+    },
+    {
+      "path": "assets/skills/super-llm-wiki-evidence-card.png",
+      "old_oid": "<deleted>",
+      "new_oid": "a6e2a141f2abafc49fd6f514108edee6a85e72c3"
+    },
+    {
+      "path": "benchmarks/super-caveman/manifest.json",
+      "old_oid": "a93ba89a97009b78c1d958b96204d9286fa9acf3",
+      "new_oid": "460f085ee34f225321ef3960582922f90eccf67f"
+    }
+  ],
+  "raw_approval_record_sha256": "0053aa448cb76a2f18fcc4a35e3b7704cacf317593943f6ff2de6ba1cb5ea6dd",
+  "raw_approval_storage": "Git-external"
+}
