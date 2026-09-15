@@ -168,9 +168,9 @@ Super Caveman keeps original Caveman's persistent terse modes as its core, absor
 
 Super LLM Wiki stores Markdown pages only under `<project>/.azhou/super-llm-wiki/`, keeps a generated catalog and operation log, and offers deterministic keyword, tag and CJK search plus health checks. CLI, eight-tool stdio MCP, lifecycle events, project context and migration share one Python core. Prior directories require an explicit dry-run and atomic copy; source data is preserved and session capture resets to false. Configuration is rendered for review and never installed implicitly.
 
-![Super LLM Wiki end-to-end evidence preview](assets/skills/super-llm-wiki-effect.png)
+![Super LLM Wiki effect preview](assets/skills/super-llm-wiki-effect.png)
 
-> 🦊 Evidence preview built from one real isolated CLI, MCP `tools/list`, and `SessionStart` run. Bundle, render, and visual inspection passed; final public visual approval remains a human checkpoint.
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit. The retired end-to-end evidence card is preserved at <code>assets/skills/super-llm-wiki-evidence-card.png</code>.
 
 [Run the demo](docs/demos/super-llm-wiki.md) · [Read the package](skills/super-llm-wiki/SKILL.md) · [Read brand contract](skills/super-llm-wiki/references/brand-layer.md) · [Read design](skills/super-llm-wiki/references/design.md) · [Read setup](skills/super-llm-wiki/references/setup.md) · [Read provenance](skills/super-llm-wiki/references/provenance.md)
 
@@ -180,7 +180,71 @@ Super LLM Wiki stores Markdown pages only under `<project>/.azhou/super-llm-wiki
 
 Lavish Editor is the general rich-HTML review surface: an artifact mode for complex or visual responses plus the Azhou-maintained Spec Relay relay mode for spec handoff. Both keep the upstream review runtime, focused playbooks, editable Mermaid/Excalidraw whiteboard review, portable export and optional sharing. Azhou appears only in agent progress anchors and receipts; the transferable HTML never receives Azhou identity, emoji, character assets or colors from the skill. Relay mode writes complete comments, selected-text annotations, targets, dispositions and ownership into an HTML-safe <code>spec-relay.html-state.v1</code> block. Reviewers can resolve feedback and move the packet to its next owner without losing the original record; packet revisions reject stale-copy overwrites. The responsive visible ledger is validated as the exact projection of embedded state, so the same file carries the Spec and its review history to the next teammate or agent. Local review is not publication; <code>share</code> still requires separate authorization and transfers the embedded comments too.
 
+![Super Lavish effect preview](assets/skills/super-lavish-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
 [Read the package](skills/super-lavish/SKILL.md) · [Read the relay contract](skills/super-lavish/references/spec-relay.md) · [Read setup](skills/super-lavish/references/setup.md) · [Read provenance](skills/super-lavish/references/provenance.md) · [Read compatibility](skills/super-lavish/references/upstream-compatibility.md)
+
+## Arch Doc
+
+> 🏛️ Every fact cites its source; every diagram earns its caption.
+
+Arch Doc drafts, calibrates and reviews an architecture design document from upstream sources: per-fact provenance notes, a controlled-evidence baseline skeleton, PlantUML-only diagram discipline, source cross-calibration and two-line best-practice review gates.
+
+![Arch Doc effect preview](assets/skills/arch-doc-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/arch-doc/SKILL.md) · [Run the demo](docs/demos/arch-doc.md)
+
+## Eli5
+
+> 🖼️ Big pictures, few words — or an honest refusal.
+
+Eli5 explains a topic like the reader knows nothing about it: one self-contained HTML artifact of big pictures and few words, refusing precision-critical asks instead of degrading them to pictures.
+
+![Eli5 effect preview](assets/skills/eli5-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/eli5/SKILL.md)
+
+## Ask Azhou
+
+> 🧭 Describe the intent, get the skill, its mode and its boundary.
+
+Ask Azhou is the user-invoked front door of the catalog: describe the intent, get one skill recommendation with its mode and its boundary. Recommendation-only; gate-enforced coverage of every canonical skill.
+
+![Ask Azhou effect preview](assets/skills/ask-azhou-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/ask-azhou/SKILL.md)
+
+## Autoresearch
+
+> 🧪 No verified environment, no unattended GPU run.
+
+Autoresearch wraps a user-owned pinned <code>karpathy/autoresearch</code> checkout so an agent can prepare, run, resume and report automatic nanochat training experiments, holding before any unattended GPU run.
+
+![Autoresearch effect preview](assets/skills/autoresearch-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/autoresearch/SKILL.md)
+
+## Session Insights
+
+> 🔢 Aggregates leave the machine; raw transcripts never do.
+
+Session Insights turns local agent session stores into fact-bound usage insight reports: aggregates only, reproducible numbers, and a fail-closed adapter when a store exposes no plaintext transcripts.
+
+![Session Insights effect preview](assets/skills/session-insights-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/session-insights/SKILL.md)
 
 ## One architecture
 
