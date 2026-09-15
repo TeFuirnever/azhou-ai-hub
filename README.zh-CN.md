@@ -168,9 +168,9 @@ Super Caveman 保留原版 Caveman 的持续精简模式作为核心，把六个
 
 Super LLM Wiki 只把 Markdown 页面保存在 `<project>/.azhou/super-llm-wiki/`，维护自动索引和操作日志，并提供确定性的关键词、标签、CJK 检索与健康检查。CLI、8 工具 stdio MCP、生命周期事件、项目上下文和迁移共用同一 Python 核心。其他目录必须先 dry-run 再原子复制，源数据保留，会话采集重置为关闭。配置只生成供人工审核，不会静默安装。
 
-![LLM Wiki 端到端证据效果图](assets/skills/super-llm-wiki-effect.png)
+![LLM Wiki 效果图](assets/skills/super-llm-wiki-effect.png)
 
-> 🦊 效果图来自同一隔离项目的真实 CLI、MCP `tools/list` 与 `SessionStart` 运行。证据包、渲染和实际看图检查已通过；最终公开视觉批准仍保留为人工 checkpoint。
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。退役的端到端证据卡保留在 <code>assets/skills/super-llm-wiki-evidence-card.png</code>。
 
 [运行 demo](docs/demos/super-llm-wiki.md) · [运行包](skills/super-llm-wiki/SKILL.md) · [品牌协议](skills/super-llm-wiki/references/brand-layer.md) · [生产设计](skills/super-llm-wiki/references/design.md) · [依赖安装](skills/super-llm-wiki/references/setup.md) · [来源说明](skills/super-llm-wiki/references/provenance.md)
 
@@ -180,7 +180,71 @@ Super LLM Wiki 只把 Markdown 页面保存在 `<project>/.azhou/super-llm-wiki/
 
 Lavish Editor 是通用富 HTML 审阅面：artifact 模式服务复杂或视觉化回复，阿舟维护的 Spec Relay relay 模式服务 Spec 交接。两者共用上游浏览器审阅、专用 playbook、Mermaid/Excalidraw 可编辑审阅、单文件导出和可选分享。阿舟只出现在 Agent 进度锚点与收据中；可传递 HTML 不会被 Skill 注入阿舟身份、emoji、角色资产或配色。relay 模式把完整评论、选中文字批注、定位目标、处置状态和责任人写入 HTML-safe 的 <code>spec-relay.html-state.v1</code>。审阅者可以在保留原记录的同时改判反馈并把交接包移交下一责任人；状态修订号会拒绝旧副本静默覆盖。响应式可见台账必须与内嵌状态精确一致，同一份文件即可把 Spec 和审阅历史传给下一位队友或 Agent。本地审阅不等于发布；<code>share</code> 仍需单独授权，并会一并传递内嵌评论。
 
+![Super Lavish 效果图](assets/skills/super-lavish-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
 [运行包](skills/super-lavish/SKILL.md) · [Relay 协议](skills/super-lavish/references/spec-relay.md) · [依赖安装](skills/super-lavish/references/setup.md) · [来源说明](skills/super-lavish/references/provenance.md) · [上游兼容映射](skills/super-lavish/references/upstream-compatibility.md)
+
+## Arch Doc
+
+> 🏛️ 每个事实都标出处，每张图都配得上注。
+
+Arch Doc 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律、回源交叉校准和两条最佳实践评审线。
+
+![Arch Doc 效果图](assets/skills/arch-doc-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
+[运行包](skills/arch-doc/SKILL.md) · [运行 demo](docs/demos/arch-doc.md)
+
+## Eli5
+
+> 🖼️ 大图、少字——讲不清楚就老实说不能画。
+
+Eli5 把主题讲到读者零门槛：一份自包含 HTML，只有大图和极少文字；对精度关键的请求宁可拒绝，也不降级成画。
+
+![Eli5 效果图](assets/skills/eli5-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
+[运行包](skills/eli5/SKILL.md)
+
+## Ask Azhou
+
+> 🧭 说意图，拿 skill、模式和边界。
+
+Ask Azhou 是目录的用户入口：描述意图，得到一个 skill 推荐及其模式和边界。只做推荐，不代执行；全 canonical skill 覆盖由仓库门禁强制。
+
+![Ask Azhou 效果图](assets/skills/ask-azhou-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
+[运行包](skills/ask-azhou/SKILL.md)
+
+## Autoresearch
+
+> 🧪 环境没核验完， unattended GPU 运行就不许开始。
+
+Autoresearch 包装用户持有的锁定版 <code>karpathy/autoresearch</code> checkout，让 Agent 可以准备、运行、续跑和汇报 nanochat 训练实验，并在任何无人看管的 GPU 运行前先停住。
+
+![Autoresearch 效果图](assets/skills/autoresearch-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
+[运行包](skills/autoresearch/SKILL.md)
+
+## Session Insights
+
+> 🔢 汇总出得了机器，原始 transcript 出不了。
+
+Session Insights 把本地 Agent 会话存储变成事实约束的使用洞察报告：只出聚合，数字可复验；存储没有明文 transcript 时适配器 fail-closed。
+
+![Session Insights 效果图](assets/skills/session-insights-effect.png)
+
+> 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
+
+[运行包](skills/session-insights/SKILL.md)
 
 ## 一套架构
 
