@@ -77,6 +77,7 @@ Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令�
 - 比较不同模型、harness 或 skill revision 时冻结 prompt、runtime package、时限和工具权限；reference fixture 只证明 verifier 接线，不算模型效果。
 - 原始对话、用户路径、身份、URL、token、私有素材和未脱敏产物留在 Git 外。仓库只提交合成 case、聚合统计、失败机制、脱敏 receipt、paired 决策和覆盖限制。
 - 自动 gate 负责能机械证明的事实；语义、视觉、权限或产品判断由具名 reviewer 负责。收据不能把 `skipped`、`pending` 或缺失证据升级成 pass。
+- README（`README.md` 与 `README.zh-CN.md`）的 skill showcase 与场景图保持 1:1：每个 showcase 章节恰好对应一个 canonical skill 和一张 `assets/skills/<name>-effect.png`；新增、替换或删除 showcase 时三个面同步变更，不允许有的 skill 有图、有的没有。场景图必须来自治理内的 azhou-scenes 生成流水线，逐张经具名人工视觉 P0 审视并 Git-external 留档；caption 只陈述已实际通过的 gate（例如人工 P0 通过但正式四色审计未跑时如实写明），不得预支未执行的机器门禁。生成候选、prompt、原始大图等中间产物是 raw agent 历史，留在 Git 外（由 ignore 规则挡住），仓库只落定型展示图与晋级记录。
 
 ## 5. 受控演化
 
