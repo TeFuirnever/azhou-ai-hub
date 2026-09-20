@@ -82,3 +82,6 @@ benchmarks/excalidraw-diagram/workspace/
 # assets/skills/ and stay public.
 /assets/_gen/
 /assets/*-effect-azhou-scenes/
+
+# Project-local tool skills are installations, not public skill packages.
+/.agents/skills/

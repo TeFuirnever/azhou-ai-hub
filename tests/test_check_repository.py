@@ -14,6 +14,7 @@ from scripts.check_repository import (
     check_fidelity_axis,
     check_invocation_axis,
     check_markdown_links,
+    check_public_boundaries,
     check_rename_residue,
     check_secret_patterns,
     check_skill_brand_contract,
@@ -209,6 +210,36 @@ def release_workflow_script() -> str:
             break
         script.append(line[10:] if line else "")
     return "\n".join(script) + "\n"
+
+
+class LocalSkillInstallationTest(unittest.TestCase):
+    def test_local_install_is_excluded_but_forced_publication_is_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            shutil.copy2(ROOT / ".gitignore", root / ".gitignore")
+            skill = root / ".agents/skills/example/SKILL.md"
+            metadata = root / ".agents/skills/example/agents/openai.yaml"
+            metadata.parent.mkdir(parents=True)
+            skill.write_text("# Local tool skill\n", encoding="utf-8")
+            metadata.write_text("interface: {}\n", encoding="utf-8")
+            self.assertNotIn(skill, public_files(root))
+            self.assertNotIn(metadata, public_files(root))
+
+            subprocess.run(
+                ["git", "add", "-f", ".agents/skills/example"], cwd=root, check=True,
+            )
+            files = public_files(root)
+            self.assertIn(skill, files)
+            self.assertIn(metadata, files)
+            self.assertIn(
+                "unexpected installable skill: .agents/skills/example/SKILL.md",
+                check_skill_discovery(files, root),
+            )
+            self.assertIn(
+                "vendor-specific package metadata is forbidden: .agents/skills/example/agents/openai.yaml",
+                check_public_boundaries(files, root),
+            )
 
 
 class RepositoryPolicyTest(unittest.TestCase):
