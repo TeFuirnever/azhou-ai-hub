@@ -19,6 +19,10 @@ The repository gate requires Python 3.11+. Excalidraw render/export work also fo
 
 Maintainer and coding-agent workflows that need parallel local checkouts follow the [Treehouse worktree policy](docs/worktree-policy.md). Ordinary contributors can continue to use a normal fork and focused task branch.
 
+## Local tools and production files
+
+Third-party tools installed in `.agents/skills/` are local installations, separate from the published packages in `skills/`. They may retain upstream metadata such as `agents/openai.yaml`. The directory is Git-ignored, along with `hypit.runtime.json`, `.hypit/` and `productions/`; keep these files on disk when running repository verification. Files forced into Git still undergo the public-package checks. See the [package boundary](docs/skill-standard.md#2-包结构与运行边界).
+
 ## Choose the change type
 
 ### Add a skill
