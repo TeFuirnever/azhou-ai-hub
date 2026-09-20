@@ -27,6 +27,8 @@
 
 开发期 prompts、expected outputs、fixtures、judge records、真实运行聚合和 benchmark runner 统一放在仓库级 `benchmarks/<skill>/`。运行时包不包含 `benchmarks/`、`agents/openai.yaml` 或其他模型专用身份；Codex、Claude、zcode 和其他 harness 共享同一个 neutral core。
 
+项目内通过工具安装的第三方 Skill 可保留在 `.agents/skills/`，该目录默认由 Git 忽略，不属于本仓库发布包，也不适用发布包的 canonical 登记与模型专用元数据限制。公开文件检查仍包含已跟踪文件；强制加入 Git 的本地安装不会因此豁免发布规则。
+
 ### 2.1 运行状态命名空间
 
 - 可安装包继续位于 `skills/<canonical-name>/`；Azhou 自有的项目内运行状态统一位于 `<authorized-root>/.azhou/<canonical-name>/`。

@@ -19,7 +19,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 - Keep every skill independently installable under `skills/<canonical-name>/`; keep development-only evaluation material under repository-level `benchmarks/`.
 - `README.md` is the English public entry and `README.zh-CN.md` its Chinese reader mirror. Material product, install, evidence, compatibility, security, or license changes update both in one commit.
 - Public support claims must match `docs/support-matrix.md`. Portable runtime does not imply identical hooks, memory APIs, or tool access across harnesses.
-- Do not add `agents/openai.yaml` or other model-specific package identity. Harness adapters must call a neutral core or stay in documented examples.
+- Do not add `agents/openai.yaml` or other model-specific package identity. Harness adapters must call a neutral core or stay in documented examples. This restriction applies to public repository files; Git-ignored local tool installations under `.agents/skills/` may retain their upstream metadata.
 - Interactive skills use one restrained Azhou anchor per material stage and a stable receipt. Emoji stays out of schema keys, enums, digests, paths, commands, tests, and raw evidence.
 - Historical runs may create isolated regression candidates. Observers and hooks never mutate live skills; promotion requires deterministic gates, paired majority, no safety regression, and exact-diff human approval.
 - Adapted or vendored material requires an immutable source, license, retained notice, local boundary and reproducible update path. Public code without a license is not reusable source.
