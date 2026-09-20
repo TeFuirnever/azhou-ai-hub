@@ -85,3 +85,8 @@ benchmarks/excalidraw-diagram/workspace/
 
 # Project-local tool skills are installations, not public skill packages.
 /.agents/skills/
+
+# Local video-production configuration, runtime data and working assets.
+/hypit.runtime.json
+/.hypit/
+/productions/
