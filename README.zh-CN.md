@@ -16,6 +16,9 @@
 
 <img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸旁边写着三条主张——16 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
+
+https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
+
 </div>
 
 > 🦊 主视觉由 Azhou Covers skill 按 `github_readme_image_16_9` profile 确定性合成：米色纸面、注册四色、canonical 角色按原像素合成。120/240/360 px 缩略图复核已通过；最终公开视觉批准仍保留为人工 checkpoint。
