@@ -16,6 +16,9 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 <img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 16 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
 
+
+https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
+
 </div>
 
 > 🦊 Hero composed with the Azhou Covers skill under the `github_readme_image_16_9` profile: cream paper, the registered four-colour palette, and the canonical character composited at exact pixels. Thumbnail review passed at 120/240/360 px; final public visual approval remains a human checkpoint.
