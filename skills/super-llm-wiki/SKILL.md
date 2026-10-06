@@ -1,6 +1,6 @@
 ---
 name: super-llm-wiki
-description: Renamed from llm-wiki (the old name still triggers this skill). Build, query, lint, migrate, and maintain a private project Markdown wiki when verified architecture, decisions, debugging facts, or conventions must persist across sessions. Do not use it for global memory, ephemeral scratch notes, secrets, or unreviewed transcripts.
+description: Renamed from llm-wiki (the old name still triggers this skill). Build, query, lint, migrate, and maintain a private project Markdown wiki when verified architecture, decisions, debugging facts, or conventions must persist across sessions. Also for 记到 wiki, 把这个决定存下来, or "save this for future sessions". Do not use it for global memory, ephemeral scratch notes, secrets, or unreviewed transcripts.
 invocation: both
 ---
 

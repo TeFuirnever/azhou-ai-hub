@@ -1,6 +1,6 @@
 ---
 name: azhou-doctor
-description: Diagnose Azhou AI Hub checkout, package, explicit install-target, or Treehouse lease health without mutation. Use for health checks, broken installs, environment diagnostics, or support verification.
+description: Diagnose Azhou AI Hub checkout, package, explicit install-target, or Treehouse lease health without mutation. Use for health checks, broken installs, environment diagnostics, or support verification; also for "is my checkout healthy", "what broke", 仓库体检, 哪里坏了, or a stuck-lease question.
 invocation: user-invoked orchestrator
 ---
 

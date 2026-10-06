@@ -1,6 +1,6 @@
 ---
 name: azhou-verify
-description: Run and report the authoritative Azhou AI Hub repository verification gate. Use before completion, handoff, commit, pull request, release, or when full-codebase evidence is requested.
+description: Run and report the authoritative Azhou AI Hub repository verification gate. Use before completion, handoff, commit, pull request, release, or when full-codebase evidence is requested; also for 跑一遍完整门禁, 交付前验证, or "prove it passes before I claim done".
 invocation: both
 ---
 

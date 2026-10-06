@@ -9,9 +9,9 @@
 ## Adaptation boundary
 
 - The pattern is borrowed, not the file: no upstream text is copied. This package's map is written for this hub's catalog and organized by intent across the three families (hub infrastructure, content production, engineering discipline) plus a standalone long-running-experiments branch.
-- The upstream's hand-maintained currency weakness is deliberately closed here: the repository gate enforces that this map names every canonical skill, so adding, removing, or renaming a skill without updating the router fails `scripts/check_repository.py`.
+- The upstream's hand-maintained currency weakness is deliberately closed here, structurally: the routing catalog block in `SKILL.md` is generated from every canonical `skills/*/SKILL.md` frontmatter description by this package's `scripts/generate_routing_index.py`, and the repository gate (`scripts/check_repository.py`) fails on both router coverage and generated-index parity when a skill is added, removed, renamed, or re-described without regenerating.
 - The upstream `disable-model-invocation` frontmatter key is not used: this repository's package contract pins frontmatter to exactly `name` and `description`; the invocation class is declared in the entry body, and the formal axis belongs to the skill-standard proposal (spec #126 ID-9).
-- No model-specific package identity is shipped; the description is human-facing with trigger lists stripped, per the upstream user-invoked discipline.
+- No model-specific package identity is shipped. The description originally shipped trigger-list-free, per the upstream user-invoked discipline; on 2026-10-06 (u4, after cross-harness execution evidence showed zero router invocations across 137 catalog enumerations and routing questions answered by bare models) that stance was reversed for the router itself: which-skill trigger phrases now live in the description, while the package identity stays harness-neutral.
 - MIT notice: the upstream repository is MIT-licensed; only the pattern (flow-map form, recommendation-only contract, composability rule) is retained, which the upstream license permits with attribution recorded here.
 
 ## Reproducible update path

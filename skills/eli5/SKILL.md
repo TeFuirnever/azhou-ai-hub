@@ -1,6 +1,6 @@
 ---
 name: eli5
-description: Explain a topic like I'm 5 with one HTML artifact of big pictures and few words. Use when the user types /eli5 <topic> or asks for a dead-simple picture explainer of how something works.
+description: Explain a topic like I'm 5 with one HTML artifact of big pictures and few words. MUST trigger for /eli5 <topic>, explain like I'm 5, ELI5, a dead-simple picture explainer, 给我讲明白, 用大白话讲, 讲给零基础的人, 通俗易懂地解释, or any request to make a hard topic click for a total beginner. Precision-critical asks (spec review, security analysis, migration plans, numerical or contractual claims) stay ordinary work and never degrade into eli5.
 invocation: user-invoked orchestrator
 ---
 
