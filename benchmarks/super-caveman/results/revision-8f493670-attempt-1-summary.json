@@ -116,8 +116,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "zcode-agent/u0-promotion-rebind/2026-10-06",
-    "review_sha256": "34d022dd3d14eb53c35a2558625b8d5c0d90568e1efdfbbe0ca718fba0c9274e"
+    "identity": "zcode-agent/release-rebind/2026-10-06",
+    "review_sha256": "5c6f196d658e209d6ccd1a0b2c2c41b752ceeee1a4f4e07d2bec7e50bff2138f"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -147,13 +147,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "76431a4c995be908a88448a8cda3a289f19038e3",
+      "base_commit": "00b2367f339fd77f101fa7f68f37063180815767",
       "path_set_sha256": "09f8c86245e99de40dc4d30350cf440d8b5bf5343fd608e09291970177e3ec1f",
-      "staged_patch_sha256": "7cf221b9cac94987ac925ffe3bca65a1db9fa38b02eb0ecf2b8f9acb4ed298e8",
+      "staged_patch_sha256": "bf3618dacca65113f8fa24bc5997238575a2b2d1cb2d1b39ef88509c92114033",
       "approver": "workspace-owner",
-      "approved_at": "2026-10-06T01:42:18Z",
-      "record_path": "results/revision-c317608b-exact-diff-approval.json",
-      "record_sha256": "a2b6f4cd8619e8c06bc43afacda0a1f0511b5f87ea76ff310430f97b2df66c76",
+      "approved_at": "2026-10-06T14:15:25Z",
+      "record_path": "results/revision-0cb1a693-exact-diff-approval.json",
+      "record_sha256": "d0d11aad2be9c4286a59a6cec470bc5a4e3cba8a2414ad95513f5f0328fd2344",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }
