@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import hashlib
 import io
 import json
@@ -592,12 +592,20 @@ class AzhouHubCliTest(unittest.TestCase):
 
     def test_authoritative_verify_scopes_promotion_evidence_to_the_promotion_gate(self) -> None:
         completed = mock.Mock(returncode=0)
+        # Redirect the gate's own output: an unredirected main() here used to
+        # leak "verification passed" into the suite stream, which is exactly
+        # the captured-block contradiction issue #252 u8 removes.
+        stdout, stderr = io.StringIO(), io.StringIO()
         with mock.patch("scripts.verify.subprocess.run", return_value=completed) as run:
-            result = verify_script.main(
-                ["--python", "/custom/python", "--promotion-evidence"]
-            )
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                result = verify_script.main(
+                    ["--python", "/custom/python", "--promotion-evidence"]
+                )
 
         self.assertEqual(0, result)
+        self.assertEqual(
+            "verification passed", stdout.getvalue().strip().splitlines()[-1]
+        )
         commands = [call.args[0] for call in run.call_args_list]
         self.assertIn(
             [
