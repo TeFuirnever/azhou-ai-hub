@@ -27,6 +27,9 @@ class AzhouVerifyGateReportTest(unittest.TestCase):
     The contradiction case replays the anonymized shape of a captured block
     observed on 2026-08-31 where a unittest failure summary sat next to the
     gate's passing summary; the verdict rule must make that shape red.
+    Since issue #252 u8 the gate itself always ends on one aggregate verdict
+    line, so the current red fixture carries that line and the green fixture
+    also covers a capture that carries the machine summary JSON.
     """
 
     def test_green_on_clean_pass(self) -> None:
@@ -39,11 +42,35 @@ class AzhouVerifyGateReportTest(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertIn("verdict: red", out)
 
+    def test_red_on_current_aggregate_verdict_shape(self) -> None:
+        captured = (
+            "OK (476 tests)\n"
+            "FAILED (failures=2)\n"
+            "FAILED: unit tests (exit 1)\n"
+            "verification FAILED (1 of 8 gates failed: unit tests)\n"
+        )
+        code, out = run_validator(1, captured)
+        self.assertEqual(1, code)
+        self.assertIn("verdict: red", out)
+        self.assertIn("failure verdict line: FAILED (failures=2)", out)
+
     def test_red_on_contradiction_shape(self) -> None:
         code, out = run_validator(0, "FAILED (failures=2)\nverification passed\n")
         self.assertEqual(1, code)
         self.assertIn("verdict: red", out)
         self.assertIn("failure verdict line: FAILED (failures=2)", out)
+
+    def test_green_capture_with_machine_summary_stays_green(self) -> None:
+        captured = (
+            "==> repository policy\n"
+            '  "schema": "azhou-hub.verify-summary.v1",\n'
+            '  "verdict": "passed",\n'
+            '  "failed_gates": [],\n'
+            "verification passed\n"
+        )
+        code, out = run_validator(0, captured)
+        self.assertEqual(0, code)
+        self.assertIn("verdict: green", out)
 
     def test_skip_lines_are_quoted_not_upgraded(self) -> None:
         code, out = run_validator(0, "skipped: benchmark not run\nverification passed\n")
