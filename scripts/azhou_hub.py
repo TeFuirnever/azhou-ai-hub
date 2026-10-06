@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,8 @@ COMMANDS = ["doctor", "info", "setup", "verify", "version"]
 RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v2"
 LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
 IGNORED_PACKAGE_PARTS = {".git", ".omc", ".omx", ".venv", "__pycache__", "node_modules"}
+HOST_CONFIG_SUFFIXES = {".json", ".toml"}
+HOST_SKILL_PATH_PATTERN = re.compile(r"skills/([A-Za-z0-9][A-Za-z0-9_.-]*)/")
 
 
 class PackageError(RuntimeError):
@@ -1067,6 +1070,69 @@ def migrate_receipt(*, receipt_path: Path, target: Path, root: Path, mode: str, 
     return _lifecycle_report("pass", new_items, receipt=str(receipt_path))
 
 
+def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
+    """Read-only probe for host installs left behind by a canonical rename.
+
+    Scans the explicit host root's skills directory and its depth-1
+    ``*.json``/``*.toml`` config files, compares every observed skill name
+    against the canonical list, and reports findings without mutating any
+    host file. Returns a doctor ``(status, details)`` pair: a stale hook
+    path fails (the recorded failure mode is a startup hook error), residual
+    installs alone warn, and a clean host passes.
+    """
+    canonical = set(canonical_skills(root))
+    findings: list[str] = []
+    notes: list[str] = []
+
+    skills_dir = host_root / "skills"
+    scanned_skills = False
+    if not skills_dir.exists():
+        notes.append(f"host skills directory not found: {skills_dir}")
+    elif not skills_dir.is_dir():
+        notes.append(f"host skills path is not a directory: {skills_dir}")
+    else:
+        scanned_skills = True
+        for entry in sorted(skills_dir.iterdir(), key=lambda item: item.name):
+            name = entry.name
+            if name.startswith(".") or name in IGNORED_PACKAGE_PARTS or name in canonical:
+                continue
+            if entry.is_symlink():
+                try:
+                    resolved: str | None = str(entry.resolve())
+                except OSError:
+                    resolved = None
+                findings.append(f"residual install: {name} (symlink -> {resolved or 'unresolvable'})")
+            elif entry.is_dir():
+                findings.append(f"residual install: {name} (directory copy)")
+            else:
+                findings.append(f"residual install: {name} (file)")
+
+    scanned_configs = 0
+    for config in sorted(host_root.iterdir(), key=lambda item: item.name):
+        if config.suffix not in HOST_CONFIG_SUFFIXES or config.is_symlink() or not config.is_file():
+            continue
+        try:
+            text = config.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            notes.append(f"cannot read host config: {config.name}")
+            continue
+        scanned_configs += 1
+        for match in HOST_SKILL_PATH_PATTERN.finditer(text):
+            if match.group(1) in canonical:
+                continue
+            findings.append(f"stale hook path: {config.name}: {match.group(0)}")
+
+    if findings:
+        status = "fail" if any(item.startswith("stale hook path:") for item in findings) else "warn"
+        return status, "; ".join(findings + notes)
+    if not scanned_skills and scanned_configs == 0:
+        return "warn", "nothing scanned: " + "; ".join(notes)
+    details = f"no stale hook paths or residual installs under {host_root}"
+    if notes:
+        details += "; " + "; ".join(notes)
+    return "pass", details
+
+
 def run_doctor(
     *,
     root: Path,
@@ -1074,6 +1140,7 @@ def run_doctor(
     skills: Iterable[str],
     run_verification: bool,
     treehouse_root: Path | None = None,
+    host_root: Path | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
     required = [root / "README.md", root / "docs/skill-standard.md", root / "scripts/verify.py"]
@@ -1158,6 +1225,16 @@ def run_doctor(
             receipt_status, receipt_details = _doctor_hub_receipts(root, resolved_target)
             checks.append(_check("target:hub-receipts", receipt_status, receipt_details))
 
+    if host_root is None:
+        checks.append(_check("host_migration", "skip", "no --host-root supplied"))
+    else:
+        resolved_host_root = host_root.expanduser().resolve()
+        if not resolved_host_root.is_dir():
+            checks.append(_check("host_migration", "fail", f"host root is not a directory: {resolved_host_root}"))
+        else:
+            migration_status, migration_details = _doctor_host_migration(root, resolved_host_root)
+            checks.append(_check("host_migration", migration_status, migration_details))
+
     if run_verification:
         try:
             result = subprocess.run(
@@ -1193,7 +1270,6 @@ def run_doctor(
                 check=False,
             )
             status = (version.stdout or version.stderr).strip()
-            import re
             match = re.search(r"(\d+)\.(\d+)\.(\d+)", status)
             if version.returncode or not match or tuple(map(int, match.groups())) < (2, 3, 0):
                 raise RuntimeError("treehouse executable missing or version below 2.3.0")
@@ -1325,6 +1401,7 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     doctor.add_argument("--skill", action="append", choices=skill_names, help="Limit checks to one skill; repeatable")
     doctor.add_argument("--verify", action="store_true", help="Run the complete repository verification gate")
     doctor.add_argument("--treehouse-root", type=Path, help="Explicit Treehouse pool root for read-only lease diagnostics")
+    doctor.add_argument("--host-root", type=Path, help="Explicit host harness root for read-only stale-install migration diagnostics")
     doctor.add_argument("--json", action="store_true", help="Emit stable JSON")
 
     setup = subcommands.add_parser("setup", help="Plan or apply an explicit skill installation")
@@ -1397,6 +1474,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             skills=skills,
             run_verification=args.verify,
             treehouse_root=args.treehouse_root,
+            host_root=args.host_root,
         )
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
