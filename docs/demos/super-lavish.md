@@ -15,7 +15,7 @@ Point the agent at real material. The skill builds the artifact locally, opens t
 The agent must return:
 
 1. one local HTML artifact, by default under `.lavish/`, written in a chosen design source and matching Lavish playbooks;
-2. a review session opened with the locked baseline `npx -y lavish-axi@0.1.47 <html-file>`;
+2. a review session opened with the locked baseline `npx -y lavish-axi@0.1.83 <html-file>`;
 3. a foreground long-poll (or a verified harness wake callback) so user annotations and queued prompts reach the agent;
 4. user feedback applied to the artifact before polling again;
 5. session end (`end` / `Send & End`) honored: no uninvited reopening;
@@ -44,7 +44,7 @@ Then inspect the locked npm baseline before first execution:
 
 ```bash
 node --version
-npm view lavish-axi@0.1.47 version dist.integrity license --json
+npm view lavish-axi@0.1.83 version dist.integrity license --json
 ```
 
 Real output:
@@ -52,8 +52,8 @@ Real output:
 ```text
 v24.15.0
 {
-  "version": "0.1.47",
-  "dist.integrity": "sha512-zB1kEUSgyvi6sC3I/nBPCGZwO8Z5pt8I2/ltFcovC8R+PuzRwJUb5V4BWMWnaPdXVBPH07B7XoBKKBf28733kg==",
+  "version": "0.1.83",
+  "dist.integrity": "sha512-cs6hfWReEPrGjySrEsPWm/Qg0ESKfRpH3t0dFRpsQiC0WSatkTA85LwRZngAwbJEDVSA2AmCf2p4+NlcVerzZA==",
   "license": "MIT"
 }
 ```
