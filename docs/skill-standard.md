@@ -96,6 +96,14 @@ observed -> corroborated -> regression_ready -> isolated_candidate
 - 每次重绑仓内收据的骑行（含 re-bind 落地）必须在同一提交刷新 Git-external raw approval 与 review 记录的绑定（raw 的摘要字段、summary 的 `reviewer.review_sha256`），并在落地前用 `python scripts/verify.py --promotion-evidence`（或 `benchmarks/super-caveman/benchmark.py check --promotion-evidence`）做一次认证回放；回放失败不得落地。invariant 通路的 review 记录绑定复用的 `candidate_output_set_sha256`。
 - 后台 observer、hook、历史采集器和健康趋势都不能静默修改 live skill。失败批次保留；成功只归档已验证批次。
 
+### 5.1 中断与配额恢复
+
+跨工单长批次由 orchestrator 与后台 subagent 协作执行，配额、网络或 harness 故障可能在任务中途打死 subagent；恢复必须是机械动作，不能依赖被打死 agent 的对话记忆。用户要求的全程自主以可续跑为前提：
+
+- subagent 任务拆分为可重入步骤。每个步骤有具名完成状态与幂等落点，重复执行已完成步骤不产生第二份权威或脏状态；中断只停在步骤边界，半途输出不得冒充完成结论。
+- 中间产物在生成时即落盘到任务状态声明的稳定路径，每个产物标注产生它的步骤与校验信息；只存在于 worktree 的产物随租约生灭，需要跨租约存续的状态写到租约之外。接手者先读回已落盘产物再选续跑点，不凭记忆重放。
+- task json 是恢复入口的事实来源：`failed` 或中断工单按原 ticket id 续跑，接手者先在目标分支核实已落地事实（提交、PR、`python scripts/verify.py`），已落地部分不重做、不平行另起，只补齐缺失步骤；恢复不新开工单冒充续跑。
+
 ## 6. 收尾与完成定义
 
 Skill 变更完成前必须：
