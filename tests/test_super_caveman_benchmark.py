@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -680,6 +681,411 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
                             require_external_evidence=False,
                         )
                     )
+
+    def _exact_diff_fixture(self, benchmark, benchmark_root: Path) -> dict:
+        results = benchmark_root / "results"
+        results.mkdir()
+        reviewed_blobs = [
+            {
+                "path": "README.md",
+                "old_oid": "a" * 40,
+                "new_oid": "b" * 40,
+            }
+        ]
+        reviewed_tuple = b"README.md\0" + b"a" * 40 + b"\0" + b"b" * 40 + b"\0"
+        path_set_sha256 = hashlib.sha256(b"README.md\0").hexdigest()
+        staged_patch_sha256 = hashlib.sha256(reviewed_tuple).hexdigest()
+        raw_path = benchmark_root / "raw-human-approval.json"
+        record_path = results / "revision-1234abcd-exact-diff-approval.json"
+        review_path = benchmark_root / "review.json"
+        result_path = results / "revision-test-summary.json"
+
+        def write_raw(payload: dict) -> str:
+            raw_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            return hashlib.sha256(raw_path.read_bytes()).hexdigest()
+
+        def rebind(raw_sha256: str) -> dict:
+            record = {
+                "schema": "super-caveman-exact-diff-approval-record.v2",
+                "decision": "approved",
+                "approver": "workspace-owner",
+                "approved_at": "2026-08-24T12:00:00+08:00",
+                "base_commit": "1" * 40,
+                "review_scope": benchmark.APPROVAL_SCOPE,
+                "path_set_sha256": path_set_sha256,
+                "staged_patch_sha256": staged_patch_sha256,
+                "reviewed_blobs": reviewed_blobs,
+                "raw_approval_record_sha256": raw_sha256,
+                "raw_approval_storage": "Git-external",
+            }
+            record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+            return record
+
+        raw_record = {
+            "schema": benchmark.RAW_APPROVAL_SCHEMA,
+            "decision": "approved",
+            "approver": "workspace-owner",
+            "approved_at": "2026-08-24T12:00:00+08:00",
+            "base_commit": "1" * 40,
+            "review_scope": benchmark.APPROVAL_SCOPE,
+            "path_set_sha256": path_set_sha256,
+            "staged_patch_sha256": staged_patch_sha256,
+        }
+        record = rebind(write_raw(raw_record))
+        review_record = {
+            "schema": "super-caveman-spec-review.v1",
+            "identity": "/root/reviewer",
+            "candidate_raw_sha256": "7" * 64,
+            "cases_sha256": "8" * 64,
+        }
+        review_path.write_text(json.dumps(review_record, indent=2) + "\n", encoding="utf-8")
+        result_path.write_text(
+            json.dumps(
+                {
+                    "reviewer": {
+                        "identity": review_record["identity"],
+                        "review_sha256": hashlib.sha256(review_path.read_bytes()).hexdigest(),
+                    },
+                    "promotion_review": {
+                        "candidate_raw_sha256": review_record["candidate_raw_sha256"]
+                    },
+                    "cases_sha256": review_record["cases_sha256"],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        approval = {
+            "schema": "super-caveman-exact-diff-approval.v2",
+            "status": "approved",
+            "review_scope": benchmark.APPROVAL_SCOPE,
+            "base_commit": "1" * 40,
+            "path_set_sha256": path_set_sha256,
+            "staged_patch_sha256": staged_patch_sha256,
+            "approver": "workspace-owner",
+            "approved_at": "2026-08-24T12:00:00+08:00",
+            "record_path": "results/revision-1234abcd-exact-diff-approval.json",
+            "record_sha256": hashlib.sha256(record_path.read_bytes()).hexdigest(),
+            "record_storage": "Git aggregate receipt; raw approval Git-external",
+        }
+        return {
+            "approval": approval,
+            "raw_record": raw_record,
+            "review_record": review_record,
+            "record": record,
+            "raw_path": raw_path,
+            "record_path": record_path,
+            "review_path": review_path,
+            "result_path": result_path,
+            "staged": {
+                "base_commit": "1" * 40,
+                "path_set_sha256": path_set_sha256,
+                "staged_patch_sha256": staged_patch_sha256,
+            },
+            "write_raw": write_raw,
+            "rebind": rebind,
+        }
+
+    def _exact_diff_environment(self, benchmark, fixture: dict) -> dict:
+        return {
+            benchmark.RAW_APPROVAL_ENV: str(fixture["raw_path"]),
+            benchmark.REVIEW_RECORD_ENV: str(fixture["review_path"]),
+        }
+
+    def _exact_diff_replay_patches(self, benchmark, fixture: dict):
+        return (
+            mock.patch.object(
+                benchmark, "staged_review_digests", return_value=fixture["staged"]
+            ),
+            mock.patch.object(benchmark, "committed_review_digests", return_value=None),
+            mock.patch.object(
+                benchmark, "committed_review_digests_from_blobs", return_value=None
+            ),
+        )
+
+    def _enter_exact_diff_replay(self, stack, benchmark, fixture: dict) -> None:
+        stack.enter_context(
+            mock.patch.dict(
+                benchmark.os.environ, self._exact_diff_environment(benchmark, fixture)
+            )
+        )
+        for replay_patch in self._exact_diff_replay_patches(benchmark, fixture):
+            stack.enter_context(replay_patch)
+
+    def test_promotion_evidence_hints_name_stale_reviewer_rederive(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark_root = Path(directory)
+            with mock.patch.object(benchmark, "BENCHMARK", benchmark_root):
+                fixture = self._exact_diff_fixture(benchmark, benchmark_root)
+                approval = fixture["approval"]
+                result_path = fixture["result_path"]
+                stale_reviewer_sha256 = "c" * 64
+                result_payload = json.loads(result_path.read_text(encoding="utf-8"))
+                result_payload["reviewer"]["review_sha256"] = stale_reviewer_sha256
+                result_path.write_text(
+                    json.dumps(result_payload, indent=2) + "\n", encoding="utf-8"
+                )
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    self.assertFalse(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+                    hints = benchmark.promotion_evidence_hints(approval, result_path)
+                expected_review_sha256 = hashlib.sha256(
+                    fixture["review_path"].read_bytes()
+                ).hexdigest()
+                self.assertIn(
+                    "promotion derive hint: result.reviewer.review_sha256: "
+                    f"{stale_reviewer_sha256} -> {expected_review_sha256}",
+                    hints,
+                )
+                self.assertTrue(
+                    all(hint.startswith("promotion derive hint: ") for hint in hints)
+                )
+                # Repairing the binding turns the gate green and stays quiet.
+                result_payload["reviewer"]["review_sha256"] = expected_review_sha256
+                result_path.write_text(
+                    json.dumps(result_payload, indent=2) + "\n", encoding="utf-8"
+                )
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    self.assertTrue(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+                    self.assertEqual(
+                        [], benchmark.promotion_evidence_hints(approval, result_path)
+                    )
+
+    def test_promotion_evidence_hints_name_stale_raw_approval_fields(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark_root = Path(directory)
+            with mock.patch.object(benchmark, "BENCHMARK", benchmark_root):
+                fixture = self._exact_diff_fixture(benchmark, benchmark_root)
+                approval = fixture["approval"]
+                result_path = fixture["result_path"]
+                # Drift the raw record without rebinding: the byte binding must
+                # be named with both digests and the issue #170 repair pointer.
+                fixture["write_raw"]({**fixture["raw_record"], "approver": "different-owner"})
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    self.assertFalse(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+                    hints = benchmark.promotion_evidence_hints(approval, result_path)
+                bound_sha256 = fixture["record"]["raw_approval_record_sha256"]
+                actual_sha256 = hashlib.sha256(
+                    fixture["raw_path"].read_bytes()
+                ).hexdigest()
+                self.assertTrue(
+                    any(
+                        hint.startswith("promotion derive hint: raw-approval: ")
+                        and bound_sha256 in hint
+                        and actual_sha256 in hint
+                        and "issue #170" in hint
+                        for hint in hints
+                    )
+                )
+                # Now rebind honestly: the field drift itself must be named as
+                # old -> new against the receipt values.
+                raw_sha256 = fixture["write_raw"](
+                    {**fixture["raw_record"], "staged_patch_sha256": "6" * 64}
+                )
+                fixture["rebind"](raw_sha256)
+                approval = {
+                    **approval,
+                    "record_sha256": hashlib.sha256(
+                        fixture["record_path"].read_bytes()
+                    ).hexdigest(),
+                }
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    self.assertFalse(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+                    hints = benchmark.promotion_evidence_hints(approval, result_path)
+                self.assertIn(
+                    "promotion derive hint: raw-approval.staged_patch_sha256: "
+                    f"{'6' * 64} -> {fixture['staged']['staged_patch_sha256']}",
+                    hints,
+                )
+
+    def test_raw_approval_record_schema_versions_and_migration(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        digest_bound = {
+            "schema": benchmark.RAW_APPROVAL_SCHEMA,
+            "decision": "approved",
+            "approver": "workspace-owner",
+            "approved_at": "2026-08-24T12:00:00+08:00",
+            "base_commit": "1" * 40,
+            "review_scope": benchmark.APPROVAL_SCOPE,
+            "path_set_sha256": "5" * 64,
+            "staged_patch_sha256": "6" * 64,
+        }
+        notes_record = {
+            "schema": benchmark.RAW_APPROVAL_SCHEMA,
+            "decision": "approved",
+            "approver": "workspace-owner",
+            "approved_at": "2026-08-24T12:00:00+08:00",
+            "base_commit": "1" * 40,
+            "review_scope": benchmark.APPROVAL_SCOPE,
+            "notes": "workspace-owner authorized the exact diff in session",
+        }
+        self.assertEqual("digest-bound", benchmark.raw_approval_record_shape(digest_bound))
+        self.assertEqual(
+            "authorization-notes", benchmark.raw_approval_record_shape(notes_record)
+        )
+        self.assertIsNone(
+            benchmark.raw_approval_record_shape({**digest_bound, "notes": "extra key"})
+        )
+        self.assertIsNone(
+            benchmark.raw_approval_record_shape(
+                {key: value for key, value in notes_record.items() if key != "decision"}
+            )
+        )
+        self.assertIsNone(benchmark.raw_approval_record_shape(None))
+        self.assertIsNone(benchmark.raw_approval_record_shape([]))
+        self.assertIsNone(benchmark.raw_approval_record_shape("approved"))
+
+        migrated = benchmark.migrate_raw_approval_record(
+            notes_record, digest_bound["path_set_sha256"], digest_bound["staged_patch_sha256"]
+        )
+        self.assertEqual("digest-bound", benchmark.raw_approval_record_shape(migrated))
+        self.assertEqual(digest_bound, migrated)
+        self.assertNotIn("notes", migrated)
+        self.assertEqual(
+            list(benchmark.RAW_APPROVAL_DIGEST_BOUND_FIELDS), list(migrated)
+        )
+        with self.assertRaises(ValueError):
+            benchmark.migrate_raw_approval_record(
+                digest_bound,
+                digest_bound["path_set_sha256"],
+                digest_bound["staged_patch_sha256"],
+            )
+        with self.assertRaises(ValueError):
+            benchmark.migrate_raw_approval_record(notes_record, "z" * 64, "6" * 64)
+        with self.assertRaises(ValueError):
+            benchmark.migrate_raw_approval_record(notes_record, "5" * 64, None)
+        with self.assertRaises(ValueError):
+            benchmark.migrate_raw_approval_record(None, "5" * 64, "6" * 64)
+
+    def test_gate_still_rejects_notes_records_and_names_the_migration_path(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with tempfile.TemporaryDirectory() as directory:
+            benchmark_root = Path(directory)
+            with mock.patch.object(benchmark, "BENCHMARK", benchmark_root):
+                fixture = self._exact_diff_fixture(benchmark, benchmark_root)
+                approval = fixture["approval"]
+                result_path = fixture["result_path"]
+                notes_record = {
+                    "schema": benchmark.RAW_APPROVAL_SCHEMA,
+                    "decision": "approved",
+                    "approver": "workspace-owner",
+                    "approved_at": "2026-08-24T12:00:00+08:00",
+                    "base_commit": "1" * 40,
+                    "review_scope": benchmark.APPROVAL_SCOPE,
+                    "notes": "workspace-owner authorized the exact diff in session",
+                }
+                raw_sha256 = fixture["write_raw"](notes_record)
+                fixture["rebind"](raw_sha256)
+                approval = {
+                    **approval,
+                    "record_sha256": hashlib.sha256(
+                        fixture["record_path"].read_bytes()
+                    ).hexdigest(),
+                }
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    # The historical 7-key authorization-notes shape stays
+                    # rejected: the gate only accepts the digest-bound shape.
+                    self.assertFalse(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+                    hints = benchmark.promotion_evidence_hints(approval, result_path)
+                self.assertTrue(
+                    any(
+                        "authorization-notes raw record shape is recognized" in hint
+                        and "digest-bound" in hint
+                        and "benchmark.migrate_raw_approval_record" in hint
+                        and "issue #170" in hint
+                        for hint in hints
+                    )
+                )
+                # The explicit migration path: migrate, store, rebind, replay.
+                migrated = benchmark.migrate_raw_approval_record(
+                    notes_record,
+                    fixture["staged"]["path_set_sha256"],
+                    fixture["staged"]["staged_patch_sha256"],
+                )
+                migrated_sha256 = fixture["write_raw"](migrated)
+                fixture["rebind"](migrated_sha256)
+                approval = {
+                    **approval,
+                    "record_sha256": hashlib.sha256(
+                        fixture["record_path"].read_bytes()
+                    ).hexdigest(),
+                }
+                with contextlib.ExitStack() as stack:
+                    self._enter_exact_diff_replay(stack, benchmark, fixture)
+                    self.assertTrue(
+                        benchmark.is_approved_exact_diff(approval, result_path)
+                    )
+
+    def test_check_surfaces_promotion_derive_hints_next_to_the_gate_error(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        with mock.patch.object(
+            benchmark, "is_approved_exact_diff", return_value=False
+        ), mock.patch.object(
+            benchmark,
+            "promotion_evidence_hints",
+            return_value=[
+                "promotion derive hint: result.reviewer.review_sha256: a -> b"
+            ],
+        ) as hints_mock:
+            errors = benchmark.check()
+        self.assertTrue(
+            any(
+                error.startswith(
+                    "passing evaluation result lacks valid paired promotion evidence: "
+                )
+                for error in errors
+            )
+        )
+        self.assertIn(
+            "  promotion derive hint: result.reviewer.review_sha256: a -> b", errors
+        )
+        self.assertTrue(hints_mock.called)
+        self.assertIs(
+            False, hints_mock.call_args.kwargs["require_external_evidence"]
+        )
+        # Negative control: the green repository emits no derive hints at all.
+        errors = benchmark.check()
+        self.assertFalse(any("promotion derive hint:" in error for error in errors))
+        self.assertFalse(
+            any("lacks valid paired promotion evidence" in error for error in errors)
+        )
 
     def test_invariance_pathway_review_binding(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))

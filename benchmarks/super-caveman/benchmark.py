@@ -116,6 +116,39 @@ APPROVAL_SCOPE = "all staged task paths except the aggregate result and aggregat
 APPROVAL_STORAGE = "Git aggregate receipt; raw approval Git-external"
 RAW_APPROVAL_ENV = "SUPER_CAVEMAN_APPROVAL_RECORD"
 REVIEW_RECORD_ENV = "SUPER_CAVEMAN_REVIEW_RECORD"
+# The Git-external raw approval record carries one schema string but two
+# explicit shapes: the canonical digest-bound form self-carries the reviewed
+# path-set and staged-patch digests, while the #184/#185-era
+# authorization-notes form carried a free-form notes field instead and had
+# both digests derived by tooling from the exact diff (research doc section
+# 3.6; issue #170). Shape identity is the schema-versioning mechanism: the
+# replay gate still accepts only the digest-bound shape, and
+# migrate_raw_approval_record provides the explicit notes-to-canonical
+# migration path. Regenerating or re-binding Git-external stock records stays
+# issue #170's separate maintainer-signed repair.
+RAW_APPROVAL_DIGEST_BOUND_FIELDS = (
+    "schema",
+    "decision",
+    "approver",
+    "approved_at",
+    "base_commit",
+    "review_scope",
+    "path_set_sha256",
+    "staged_patch_sha256",
+)
+RAW_APPROVAL_AUTHORIZATION_NOTES_FIELDS = (
+    "schema",
+    "decision",
+    "approver",
+    "approved_at",
+    "base_commit",
+    "review_scope",
+    "notes",
+)
+RAW_APPROVAL_RECORD_SHAPES = {
+    "digest-bound": RAW_APPROVAL_DIGEST_BOUND_FIELDS,
+    "authorization-notes": RAW_APPROVAL_AUTHORIZATION_NOTES_FIELDS,
+}
 CONTRACT_FIELDS = {
     "runtime",
     "harness",
@@ -554,12 +587,130 @@ def committed_review_digests_from_blobs(
     return _review_digests(resolved_base, tuples)
 
 
+def raw_approval_record_shape(value: object) -> str | None:
+    """Return the declared shape name of a Git-external raw approval record.
+
+    Returns "digest-bound" for the canonical form, "authorization-notes" for
+    the recognized historical form, and None for anything else, including a
+    non-object payload. Recognizing a shape never approves it: the replay gate
+    still binds every record byte-for-byte and accepts only the digest-bound
+    shape as promotion evidence.
+    """
+    if not isinstance(value, dict):
+        return None
+    for name, fields in RAW_APPROVAL_RECORD_SHAPES.items():
+        if set(value) == set(fields):
+            return name
+    return None
+
+
+def migrate_raw_approval_record(
+    value: object,
+    path_set_sha256: str,
+    staged_patch_sha256: str,
+) -> dict:
+    """Explicitly migrate an authorization-notes record to digest-bound shape.
+
+    Returns the canonical digest-bound raw approval record with the re-derived
+    path-set and staged-patch digests filled in and the notes field dropped.
+    The original Git-external bytes stay authoritative for every receipt that
+    binds them; turning a migration output into live promotion evidence
+    requires the maintainer to sign and store it Git-externally and re-bind
+    raw_approval_record_sha256 in the same promotion-covered commit. The stock
+    re-binding repair itself remains issue #170's scope, not this helper's.
+    """
+    if raw_approval_record_shape(value) != "authorization-notes":
+        raise ValueError(
+            "migration source must be an authorization-notes raw approval record"
+        )
+    if not is_sha256(path_set_sha256) or not is_sha256(staged_patch_sha256):
+        raise ValueError(
+            "migration requires re-derived SHA-256 digests for both binding fields"
+        )
+    migrated = {
+        field: value[field]
+        for field in RAW_APPROVAL_DIGEST_BOUND_FIELDS
+        if field not in ("path_set_sha256", "staged_patch_sha256")
+    }
+    migrated["path_set_sha256"] = path_set_sha256
+    migrated["staged_patch_sha256"] = staged_patch_sha256
+    return migrated
+
+
+def _format_hint_value(value: object) -> str:
+    if isinstance(value, str) and (
+        SHA256.fullmatch(value) is not None or GIT_BLOB_OID.fullmatch(value) is not None
+    ):
+        return value
+    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
+    if len(text) > 96:
+        text = text[:93] + "..."
+    return text
+
+
+class _DeriveHints:
+    """Collects old -> new field hints while the promotion gate re-derives."""
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+
+    def stale(self, surface: str, field: str, current: object, expected: object) -> None:
+        self.lines.append(
+            f"promotion derive hint: {surface}.{field}: "
+            f"{_format_hint_value(current)} -> {_format_hint_value(expected)}"
+        )
+
+    def structural(self, surface: str, message: str) -> None:
+        self.lines.append(f"promotion derive hint: {surface}: {message}")
+
+
 def is_approved_exact_diff(
     value: object,
     result_path: Path,
     *,
     require_external_evidence: bool = True,
 ) -> bool:
+    return _approved_exact_diff(
+        value,
+        result_path,
+        require_external_evidence=require_external_evidence,
+        hints=None,
+    )
+
+
+def promotion_evidence_hints(
+    value: object,
+    result_path: Path,
+    *,
+    require_external_evidence: bool = True,
+) -> list[str]:
+    """Re-run the exact-diff promotion gate and return per-field stale hints.
+
+    Every hint names the surface and field found out of sync as
+    "current value -> expected value", so a missed re-derive (for example a
+    stale reviewer.review_sha256 binding) is reported precisely instead of
+    being discovered only as a red replay (research doc section 3.6). The
+    verdict is computed by the same code path as `is_approved_exact_diff`;
+    hints are diagnostics only and can never turn a failing gate green.
+    """
+    hints = _DeriveHints()
+    _approved_exact_diff(
+        value,
+        result_path,
+        require_external_evidence=require_external_evidence,
+        hints=hints,
+    )
+    return hints.lines
+
+
+def _approved_exact_diff(
+    value: object,
+    result_path: Path,
+    *,
+    require_external_evidence: bool,
+    hints: _DeriveHints | None,
+) -> bool:
+    trace = hints if hints is not None else _DeriveHints()
     required = {
         "schema",
         "status",
@@ -573,48 +724,110 @@ def is_approved_exact_diff(
         "record_sha256",
         "record_storage",
     }
-    if not isinstance(value, dict) or set(value) != required:
+    if not isinstance(value, dict):
+        trace.structural("receipt", "promotion receipt is not a JSON object")
         return False
-    if (
-        value.get("schema") != APPROVAL_SCHEMA
-        or value.get("status") != "approved"
-        or value.get("review_scope") != APPROVAL_SCOPE
-        or value.get("record_storage") != APPROVAL_STORAGE
-        or re.fullmatch(r"[0-9a-f]{40}", str(value.get("base_commit"))) is None
-        or not is_sha256(value.get("path_set_sha256"))
-        or not is_sha256(value.get("staged_patch_sha256"))
-        or not is_sha256(value.get("record_sha256"))
-        or not isinstance(value.get("approver"), str)
-        or not value.get("approver", "").strip()
-        or not isinstance(value.get("approved_at"), str)
-    ):
+    if set(value) != required:
+        missing = sorted(required - set(value))
+        unexpected = sorted(set(value) - required)
+        trace.structural(
+            "receipt",
+            f"key set mismatch; missing {missing}; unexpected {unexpected}; "
+            f"expected exactly {sorted(required)}",
+        )
+        return False
+    problems: list[str] = []
+    if value["schema"] != APPROVAL_SCHEMA:
+        problems.append("schema")
+        trace.stale("receipt", "schema", value["schema"], APPROVAL_SCHEMA)
+    if value["status"] != "approved":
+        problems.append("status")
+        trace.stale("receipt", "status", value["status"], "approved")
+    if value["review_scope"] != APPROVAL_SCOPE:
+        problems.append("review_scope")
+        trace.stale("receipt", "review_scope", value["review_scope"], APPROVAL_SCOPE)
+    if value["record_storage"] != APPROVAL_STORAGE:
+        problems.append("record_storage")
+        trace.stale("receipt", "record_storage", value["record_storage"], APPROVAL_STORAGE)
+    if re.fullmatch(r"[0-9a-f]{40}", str(value["base_commit"])) is None:
+        problems.append("base_commit")
+        trace.structural(
+            "receipt",
+            f"base_commit must be a 40-hex Git commit SHA, got {_format_hint_value(value['base_commit'])}",
+        )
+    if not is_sha256(value["path_set_sha256"]):
+        problems.append("path_set_sha256")
+        trace.structural(
+            "receipt",
+            f"path_set_sha256 must be a SHA-256 digest, got {_format_hint_value(value['path_set_sha256'])}",
+        )
+    if not is_sha256(value["staged_patch_sha256"]):
+        problems.append("staged_patch_sha256")
+        trace.structural(
+            "receipt",
+            f"staged_patch_sha256 must be a SHA-256 digest, got {_format_hint_value(value['staged_patch_sha256'])}",
+        )
+    if not is_sha256(value["record_sha256"]):
+        problems.append("record_sha256")
+        trace.structural(
+            "receipt",
+            f"record_sha256 must be a SHA-256 digest, got {_format_hint_value(value['record_sha256'])}",
+        )
+    if not isinstance(value["approver"], str) or not value["approver"].strip():
+        problems.append("approver")
+        trace.structural("receipt", "approver must be a non-empty string")
+    if not isinstance(value["approved_at"], str):
+        problems.append("approved_at")
+        trace.structural("receipt", "approved_at must be an ISO-8601 string")
+    if problems:
         return False
     try:
         approved_at = datetime.fromisoformat(value["approved_at"].replace("Z", "+00:00"))
     except ValueError:
+        trace.structural(
+            "receipt",
+            f"approved_at is not parseable ISO-8601: {_format_hint_value(value['approved_at'])}",
+        )
         return False
     if approved_at.tzinfo is None:
+        trace.structural(
+            "receipt",
+            f"approved_at must carry a timezone: {_format_hint_value(value['approved_at'])}",
+        )
         return False
 
-    record_relative = value.get("record_path")
-    if not isinstance(record_relative, str):
-        return False
+    record_relative = value["record_path"]
     record_relative_path = Path(record_relative)
     if (
         record_relative_path.is_absolute()
         or ".." in record_relative_path.parts
         or re.fullmatch(r"results/revision-[0-9a-f]{8}-exact-diff-approval\.json", record_relative) is None
     ):
+        trace.structural(
+            "receipt",
+            "record_path must match results/revision-<8hex>-exact-diff-approval.json, "
+            f"got {_format_hint_value(record_relative)}",
+        )
         return False
     record_path = BENCHMARK / record_relative_path
     if record_path.is_symlink() or not record_path.is_file():
+        trace.structural(
+            "approval-record",
+            f"approval record is missing or a symlink: {record_relative}",
+        )
         return False
     try:
         record_bytes = record_path.read_bytes()
         record = json.loads(record_bytes.decode("utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        trace.structural(
+            "approval-record",
+            f"approval record is unreadable or not valid JSON: {record_relative}",
+        )
         return False
-    if hashlib.sha256(record_bytes).hexdigest() != value["record_sha256"]:
+    record_sha256 = hashlib.sha256(record_bytes).hexdigest()
+    if record_sha256 != value["record_sha256"]:
+        trace.stale("receipt", "record_sha256", value["record_sha256"], record_sha256)
         return False
     expected_record_keys = {
         "schema",
@@ -629,34 +842,69 @@ def is_approved_exact_diff(
         "raw_approval_record_sha256",
         "raw_approval_storage",
     }
-    if (
-        not isinstance(record, dict)
-        or set(record) != expected_record_keys
-        or record.get("schema") != APPROVAL_RECORD_SCHEMA
-        or record.get("decision") != "approved"
-        or record.get("approver") != value["approver"]
-        or record.get("approved_at") != value["approved_at"]
-        or record.get("base_commit") != value["base_commit"]
-        or record.get("review_scope") != value["review_scope"]
-        or record.get("path_set_sha256") != value["path_set_sha256"]
-        or record.get("staged_patch_sha256") != value["staged_patch_sha256"]
-        or record.get("raw_approval_storage") != "Git-external"
-        or not is_sha256(record.get("raw_approval_record_sha256"))
-    ):
+    if not isinstance(record, dict):
+        trace.structural("approval-record", "approval record is not a JSON object")
         return False
-    reviewed_tuples = reviewed_blob_tuples(record.get("reviewed_blobs"))
+    if set(record) != expected_record_keys:
+        missing = sorted(expected_record_keys - set(record))
+        unexpected = sorted(set(record) - expected_record_keys)
+        trace.structural(
+            "approval-record",
+            f"key set mismatch; missing {missing}; unexpected {unexpected}",
+        )
+        return False
+    mismatched: list[tuple[str, object, object]] = []
+    if record["schema"] != APPROVAL_RECORD_SCHEMA:
+        mismatched.append(("schema", record["schema"], APPROVAL_RECORD_SCHEMA))
+    if record["decision"] != "approved":
+        mismatched.append(("decision", record["decision"], "approved"))
+    for field in (
+        "approver",
+        "approved_at",
+        "base_commit",
+        "review_scope",
+        "path_set_sha256",
+        "staged_patch_sha256",
+    ):
+        if record[field] != value[field]:
+            mismatched.append((field, record[field], value[field]))
+    if record["raw_approval_storage"] != "Git-external":
+        mismatched.append(("raw_approval_storage", record["raw_approval_storage"], "Git-external"))
+    raw_binding_declared = record["raw_approval_record_sha256"]
+    if mismatched or not is_sha256(raw_binding_declared):
+        for field, current, expected in mismatched:
+            trace.stale("approval-record", field, current, expected)
+        if not is_sha256(raw_binding_declared):
+            trace.structural(
+                "approval-record",
+                f"raw_approval_record_sha256 must be a SHA-256 digest, got {_format_hint_value(raw_binding_declared)}",
+            )
+        return False
+    reviewed_tuples = reviewed_blob_tuples(record["reviewed_blobs"])
     if reviewed_tuples is None:
+        trace.structural(
+            "approval-record",
+            "reviewed_blobs must be a sorted list of path/old_oid/new_oid blob tuples",
+        )
         return False
     declared_review = _review_digests(value["base_commit"], reviewed_tuples)
-    if not all(
-        declared_review[key] == value[key]
+    declared_mismatched = [
+        (key, value[key], declared_review[key])
         for key in ("base_commit", "path_set_sha256", "staged_patch_sha256")
-    ):
+        if declared_review[key] != value[key]
+    ]
+    if declared_mismatched:
+        for field, current, expected in declared_mismatched:
+            trace.stale("receipt", field, current, expected)
         return False
 
     try:
         result_relative = result_path.relative_to(BENCHMARK).as_posix()
     except ValueError:
+        trace.structural(
+            "replay",
+            f"aggregate result must live under {BENCHMARK.name}/results: {result_path}",
+        )
         return False
     exclusions = {result_relative, record_relative}
     try:
@@ -669,7 +917,8 @@ def is_approved_exact_diff(
                 reviewed_tuples,
             )
         )
-    except (OSError, subprocess.CalledProcessError, ValueError):
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        trace.structural("replay", f"git replay failed: {type(exc).__name__}: {exc}")
         return False
     exact_replay = any(
         candidate is not None
@@ -692,6 +941,18 @@ def is_approved_exact_diff(
         )
         _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
         if require_external_evidence or not snap:
+            candidate_summary = "; ".join(
+                "None"
+                if candidate is None
+                else f"path_set={candidate['path_set_sha256'][:12]} patch={candidate['staged_patch_sha256'][:12]}"
+                for candidate in candidates
+            )
+            trace.structural(
+                "replay",
+                f"receipt path_set={value['path_set_sha256'][:12]} "
+                f"patch={value['staged_patch_sha256'][:12]} does not replay from any candidate "
+                f"(staged, committed, from_blobs): {candidate_summary}",
+            )
             return False
 
     if not require_external_evidence:
@@ -703,37 +964,111 @@ def is_approved_exact_diff(
     raw_path_value = os.environ.get(RAW_APPROVAL_ENV)
     review_path_value = os.environ.get(REVIEW_RECORD_ENV)
     if not raw_path_value or not review_path_value:
+        for surface, environment, env_value in (
+            ("raw-approval", RAW_APPROVAL_ENV, raw_path_value),
+            ("review", REVIEW_RECORD_ENV, review_path_value),
+        ):
+            if not env_value:
+                trace.structural(
+                    surface,
+                    f"{environment} is not set; both Git-external records are "
+                    "required on every promotion replay",
+                )
         return False
     raw_candidate = Path(raw_path_value)
-    if (
-        not raw_candidate.is_absolute()
-        or raw_candidate.is_symlink()
-        or not raw_candidate.is_file()
-    ):
+    if not raw_candidate.is_absolute():
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} must name an absolute path, got {_format_hint_value(raw_path_value)}",
+        )
+    elif raw_candidate.is_symlink():
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} must name a regular file, not a symlink: {raw_path_value}",
+        )
+    elif not raw_candidate.is_file():
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} file is missing: {raw_path_value}",
+        )
+    if not raw_candidate.is_absolute() or raw_candidate.is_symlink() or not raw_candidate.is_file():
         return False
 
     try:
         raw_path = raw_candidate.resolve(strict=True)
         raw_path.relative_to(ROOT.resolve())
     except FileNotFoundError:
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} file does not exist: {raw_path_value}",
+        )
         return False
     except ValueError:
         pass
     else:
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} must live Git-external, outside the repository: {raw_path_value}",
+        )
         return False
     try:
         raw_bytes = raw_path.read_bytes()
         raw_record = json.loads(raw_bytes.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        trace.structural(
+            "raw-approval",
+            f"{RAW_APPROVAL_ENV} file is unreadable or not valid JSON: {raw_path_value}",
+        )
         return False
-    raw_keys = {
-        "schema", "decision", "approver", "approved_at", "base_commit",
-        "review_scope", "path_set_sha256", "staged_patch_sha256",
-    }
+    raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    shape = raw_approval_record_shape(raw_record)
+    if raw_sha256 != record["raw_approval_record_sha256"]:
+        trace.structural(
+            "raw-approval",
+            f"file digest {raw_sha256} does not match the bound "
+            f"approval-record.raw_approval_record_sha256 {record['raw_approval_record_sha256']}; "
+            "re-sign the raw record from the receipt values or re-bind the receipt (issue #170)",
+        )
+    if shape is None:
+        accepted = " or ".join(
+            f"{name} ({len(fields)} keys: {', '.join(fields)})"
+            for name, fields in RAW_APPROVAL_RECORD_SHAPES.items()
+        )
+        trace.structural(
+            "raw-approval",
+            f"unknown raw approval record shape; accepted shapes are {accepted}; "
+            "migrate an authorization-notes record with benchmark.migrate_raw_approval_record",
+        )
+    elif raw_record["schema"] != RAW_APPROVAL_SCHEMA:
+        trace.stale("raw-approval", "schema", raw_record["schema"], RAW_APPROVAL_SCHEMA)
+    if shape == "authorization-notes":
+        trace.structural(
+            "raw-approval",
+            "the authorization-notes raw record shape is recognized but the "
+            "promotion gate binds only the digest-bound shape; migrate with "
+            "benchmark.migrate_raw_approval_record, store the result "
+            "Git-externally, and re-bind raw_approval_record_sha256 (issue #170)",
+        )
+    if isinstance(raw_record, dict) and raw_record.get("decision") != "approved":
+        trace.stale("raw-approval", "decision", raw_record.get("decision"), "approved")
+    if shape == "digest-bound":
+        raw_parity_fields = (
+            "approver",
+            "approved_at",
+            "base_commit",
+            "review_scope",
+            "path_set_sha256",
+            "staged_patch_sha256",
+        )
+    else:
+        raw_parity_fields = ("approver", "approved_at", "base_commit", "review_scope")
+    if isinstance(raw_record, dict):
+        for field in raw_parity_fields:
+            if raw_record.get(field) != value[field]:
+                trace.stale("raw-approval", field, raw_record.get(field), value[field])
     if (
-        hashlib.sha256(raw_bytes).hexdigest() != record["raw_approval_record_sha256"]
-        or not isinstance(raw_record, dict)
-        or set(raw_record) != raw_keys
+        raw_sha256 != record["raw_approval_record_sha256"]
+        or shape != "digest-bound"
         or raw_record.get("schema") != RAW_APPROVAL_SCHEMA
         or raw_record.get("decision") != "approved"
         or any(raw_record.get(key) != value[key] for key in (
@@ -749,21 +1084,38 @@ def is_approved_exact_diff(
         or review_candidate.is_symlink()
         or not review_candidate.is_file()
     ):
+        trace.structural(
+            "review",
+            f"{REVIEW_RECORD_ENV} must name an absolute Git-external regular file, "
+            f"got {_format_hint_value(review_path_value)}",
+        )
         return False
     try:
         review_path = review_candidate.resolve(strict=True)
         review_path.relative_to(ROOT.resolve())
     except FileNotFoundError:
+        trace.structural(
+            "review",
+            f"{REVIEW_RECORD_ENV} file does not exist: {review_path_value}",
+        )
         return False
     except ValueError:
         pass
     else:
+        trace.structural(
+            "review",
+            f"{REVIEW_RECORD_ENV} must live Git-external, outside the repository: {review_path_value}",
+        )
         return False
     try:
         review_bytes = review_path.read_bytes()
         review_record = json.loads(review_bytes.decode("utf-8"))
         result_record = json.loads(result_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        trace.structural(
+            "review",
+            "review record or aggregate result is unreadable or not valid JSON",
+        )
         return False
     reviewer = result_record.get("reviewer") if isinstance(result_record, dict) else None
     promotion = result_record.get("promotion_review") if isinstance(result_record, dict) else None
@@ -774,16 +1126,62 @@ def is_approved_exact_diff(
         candidate_raw_sha256 = promotion.get("candidate_output_set_sha256")
     else:
         candidate_raw_sha256 = promotion.get("candidate_raw_sha256") if isinstance(promotion, dict) else None
-    if (
-        not isinstance(review_record, dict)
-        or not isinstance(reviewer, dict)
-        or not isinstance(candidate_raw_sha256, str)
-        or review_record.get("schema") != REVIEW_RECORD_SCHEMA
-        or hashlib.sha256(review_bytes).hexdigest() != reviewer.get("review_sha256")
-        or review_record.get("identity") != reviewer.get("identity")
-        or review_record.get("candidate_raw_sha256") != candidate_raw_sha256
-        or review_record.get("cases_sha256") != result_record.get("cases_sha256")
-    ):
+    binding_problems = 0
+    if not isinstance(review_record, dict):
+        trace.structural("review", "review record is not a JSON object")
+        binding_problems += 1
+    if not isinstance(reviewer, dict):
+        trace.structural(
+            "result.reviewer",
+            "aggregate result must carry a reviewer binding object with identity and review_sha256",
+        )
+        binding_problems += 1
+    if not isinstance(candidate_raw_sha256, str):
+        trace.structural(
+            "result.promotion_review",
+            "promotion_review must carry the candidate output digest the review record binds",
+        )
+        binding_problems += 1
+    if binding_problems:
+        return False
+    review_sha256 = hashlib.sha256(review_bytes).hexdigest()
+    review_failures = False
+    if review_record["schema"] != REVIEW_RECORD_SCHEMA:
+        trace.stale("review", "schema", review_record["schema"], REVIEW_RECORD_SCHEMA)
+        review_failures = True
+    if reviewer.get("review_sha256") != review_sha256:
+        trace.stale(
+            "result.reviewer",
+            "review_sha256",
+            reviewer.get("review_sha256"),
+            review_sha256,
+        )
+        review_failures = True
+    if review_record.get("identity") != reviewer.get("identity"):
+        trace.stale(
+            "result.reviewer",
+            "identity",
+            reviewer.get("identity"),
+            review_record.get("identity"),
+        )
+        review_failures = True
+    if review_record.get("candidate_raw_sha256") != candidate_raw_sha256:
+        trace.stale(
+            "review",
+            "candidate_raw_sha256",
+            review_record.get("candidate_raw_sha256"),
+            candidate_raw_sha256,
+        )
+        review_failures = True
+    if review_record.get("cases_sha256") != result_record.get("cases_sha256"):
+        trace.stale(
+            "review",
+            "cases_sha256",
+            review_record.get("cases_sha256"),
+            result_record.get("cases_sha256"),
+        )
+        review_failures = True
+    if review_failures:
         return False
     return True
 
@@ -1253,6 +1651,18 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
             )
             if not ((pairing_classical or pairing_invariant) and approval_valid):
                 errors.append(f"passing evaluation result lacks valid paired promotion evidence: {result_path.name}")
+                if isinstance(approval, dict):
+                    # The re-derive walk produces per-field stale hints naming
+                    # the exact "current value -> expected value" binding, so a
+                    # missed field update is reported precisely instead of
+                    # being discovered only as a red replay. Hints are
+                    # diagnostics; the verdict above is unchanged.
+                    for hint in promotion_evidence_hints(
+                        approval,
+                        result_path,
+                        require_external_evidence=require_promotion_evidence,
+                    ):
+                        errors.append(f"  {hint}")
 
     if len(current_passing_results) != 1:
         errors.append(
