@@ -61,7 +61,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 | Agent Skill | CLI 权威命令 | 修改边界 |
 |---|---|---|
 | `azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
-| `azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 |
+| `azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移。 |
 | `azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
 | `azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate；维护者可显式追加 promotion evidence 回放。 |
 
@@ -82,7 +82,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | Skill | 解决的真实任务 | 验证依据 |
 |---|---|---|
 | [Azhou Info](skills/azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
-| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target 和可选 Treehouse lease。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke 和 fail-closed target 检查。 |
+| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移健康。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke、fail-closed target 检查和只读宿主迁移探测。 |
 | [Azhou Setup](skills/azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行公开全仓完整性 gate，或显式执行维护者 promotion 回放。 | 委派给仓库策略、单元测试、benchmark integrity 和空白检查；promotion 模式额外要求 Git-external 证据。 |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
@@ -118,6 +118,7 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
 - **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、4-case Super Repo Pedant 套件、8-route 加 19-response-case Super Caveman 完整性套件、5-case Excalidraw benchmark 完整性检查、Session Insights 合成会话存储接线完整性套件、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装跨平台完全等价。** Codex、Claude Code、zcode 共用运行包，但 hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写。
+- **逐 skill 平台汇总。** [docs/skill-platform-view.md](docs/skill-platform-view.md) 从支持矩阵派生出每个 skill 在各 harness 与操作系统上的汇总表；支持矩阵仍是唯一权威。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
