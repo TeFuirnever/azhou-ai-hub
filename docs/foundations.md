@@ -69,6 +69,8 @@ python scripts/azhou_hub.py doctor \
 
 Use `link` for checked-out contributor work and `copy` for an isolated package snapshot. Omit `--skill` to plan all canonical packages. Repeating the same setup converges to `current`. If a destination contains a different symlink, file or directory, setup returns `conflict` and does not overwrite it.
 
+A destination symlink that already resolves to identical canonical package content from another checkout of this repository reports `conflict-same-source` instead of `conflict`: the destination is not foreign, it is the same package linked by a different checkout. A dry-run in that state still emits its `planId`, reports `dry_run_same_source`, and exits `3` so acceptance pipelines can distinguish it from a real failure; `--apply` keeps refusing until the duplicate checkout is resolved or a different target is chosen.
+
 The normal JSON setup result names the source, destination, mode, applied state and per-skill outcome. It is emitted to stdout and does not establish durable ownership.
 
 ## Managed checkout lifecycle: explicit opt-in
@@ -139,6 +141,7 @@ python scripts/azhou_hub.py uninstall \
 |---|---:|
 | Healthy doctor, including warnings | `0` |
 | Setup or lifecycle dry-run; successful apply; already current/absent | `0` |
+| Setup dry-run blocked only by `conflict-same-source` (`dry_run_same_source`) | `3` |
 | Failed doctor; conflict, invalid receipt, rollback failure or other mutation error | `1` |
 | Invalid command or option | `2` |
 | `verify` failure | underlying verifier exit code |

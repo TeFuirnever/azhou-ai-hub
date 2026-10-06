@@ -407,13 +407,28 @@ def canonical_source(root: Path, name: str) -> Path:
     return source
 
 
+def _links_identical_package(source: Path, resolved: Path) -> bool:
+    """True when a destination symlink already points at canonical package content identical to the source."""
+    if _same_resolved_path(source, resolved):
+        return True
+    try:
+        if not (resolved / "SKILL.md").is_file():
+            return False
+        return package_digest(resolved) == package_digest(source)
+    except (OSError, PackageError):
+        return False
+
+
 def inspect_installation(source: Path, destination: Path, mode: str) -> tuple[str, str]:
     if not (source / "SKILL.md").is_file():
         return "conflict", "canonical source package is missing SKILL.md"
     if destination.is_symlink():
         if mode == "link" and _same_resolved_path(source, destination):
             return "current", "canonical symlink already installed"
-        return "conflict", f"destination symlink resolves to {destination.resolve()}"
+        resolved = destination.resolve()
+        if _links_identical_package(source, resolved):
+            return "conflict-same-source", f"destination symlink already links an identical canonical package at {resolved}"
+        return "conflict", f"destination symlink resolves to {resolved}"
     if not destination.exists():
         return "planned", f"will {mode} canonical package"
     if not destination.is_dir():
@@ -622,7 +637,9 @@ def setup_skills(
     if not dry_run and plan_id is not None and plan_id != computed_plan_id:
         return _setup_failure(target, mode, "setup plan changed; run dry-run again") | {"planId": computed_plan_id}
 
-    if any(row["status"] == "conflict" for row in rows):
+    real_conflict = any(row["status"] == "conflict" for row in rows)
+    same_source_conflict = any(row["status"] == "conflict-same-source" for row in rows)
+    if real_conflict or (same_source_conflict and not dry_run):
         payload = {
             "schema_version": "azhou-ai-hub.setup.v1",
             "status": "fail",
@@ -634,6 +651,16 @@ def setup_skills(
         payload["planId"] = computed_plan_id
         return payload
 
+    if same_source_conflict:
+        return {
+            "schema_version": "azhou-ai-hub.setup.v1",
+            "status": "dry_run_same_source",
+            "mode": mode,
+            "target": str(target),
+            "applied": False,
+            "skills": rows,
+            "planId": computed_plan_id,
+        }
 
     if dry_run:
         return {
@@ -1364,6 +1391,8 @@ def _print_setup(payload: dict[str, Any]) -> None:
         print(f"[{row['status'].upper()}] {row['name']}: {row['details']}")
     if payload["status"] == "dry_run":
         print("No files changed. Re-run with --apply --plan-id <reviewed-planId> to execute this plan.")
+    elif payload["status"] == "dry_run_same_source":
+        print("No files changed. The destination already links an identical canonical package from another checkout; resolve the duplicate checkout or choose a different target before applying.")
 
 
 def run_verifier(root: Path, python: str, *, promotion_evidence: bool = False) -> int:
@@ -1550,6 +1579,8 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             _print_setup(payload)
+        if payload["status"] == "dry_run_same_source":
+            return 3
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command in {"repair", "uninstall"}:

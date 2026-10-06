@@ -73,7 +73,7 @@ python scripts/azhou_hub.py setup --skill super-repo-pedant --target /absolute/p
 python scripts/azhou_hub.py verify
 ~~~
 
-`setup`、`repair`、`migrate` 和 `uninstall` 在出现 `--apply` 前保持只读。Setup 可重复收敛，遇到不同安装会拒绝覆盖。Receipt-owned 生命周期命令要求再次提供同一显式 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。各 harness 共用同一批包，但发现、调用、权限和可选集成仍由宿主负责；完整边界见[支持矩阵](docs/support-matrix.md)与[基础 CLI 合同](docs/foundations.md)。
+`setup`、`repair`、`migrate` 和 `uninstall` 在出现 `--apply` 前保持只读。Setup 可重复收敛，遇到不同安装会拒绝覆盖；当目标符号链接已解析到另一 checkout 的相同 canonical 包内容时，dry-run 会报告 `conflict-same-source` 并以退出码 `3` 结束而不是失败，`--apply` 仍会拒绝执行。Receipt-owned 生命周期命令要求再次提供同一显式 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。各 harness 共用同一批包，但发现、调用、权限和可选集成仍由宿主负责；完整边界见[支持矩阵](docs/support-matrix.md)与[基础 CLI 合同](docs/foundations.md)。
 
 Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--apply --plan-id <reviewed-planId>`，源、目标、模式或执行前状态发生变化都会拒绝执行。
 
@@ -90,7 +90,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 | [Super LLM Wiki](skills/super-llm-wiki/SKILL.md) | 构建私有、持久的 Markdown 项目知识库，让 Agent 跨会话摄取、检索、读取和检查知识。 | 标准本地目录、8 个 MCP 工具与决策生命周期、原子迁移、隐私默认值和专项确定性合同测试。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、当前 19/19 case 与 44/44 criterion 行为运行、三名独立配对评审 3/3 选择 candidate 且高风险回归为 0，以及可恢复压缩门禁。证据仅适用于记录的 Codex Desktop 宿主/模型。 |
 | [Super Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉化的 Agent 回复变成富 HTML 产物，用户可以标注、排队 prompt 并通过 Lavish Editor CLI 反馈；Spec Relay relay 模式把 PRD、RFC、设计或技术 Spec 连同评论、选区批注、处置与下一责任人状态打包进一份可传递 HTML。 | 上游基线哈希锁定用于复现，CLI 锁定 <code>0.1.47</code>，本地层在其上加入 relay 模式；provenance 记录不可变上游 commit 与可复现源校验。relay 模式内嵌 <code>spec-relay.html-state.v1</code> 与乐观修订守卫；确定性检查覆盖反馈更新、旧副本拒绝、可见状态精确投影与响应式布局。本地审阅不是发布；<code>share</code> 需要单独授权。不主张 hosted-share receipt。 |
-| [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、自包含产物合同、品牌协议和稳定收据，并有确定性包面检查覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、带固定受众声明与词量预算的自包含产物合同、品牌协议和稳定收据，收据判定层带确定性的受众与风格读回断言，并有正负例测试覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
 | [Ask Azhou](skills/ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用；路由覆盖由仓库门禁强制。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
 | [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
 | [Arch Doc](skills/arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与两份评审指南作为 references 随包交付；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/arch-doc/` 黄金用例。 |
@@ -275,7 +275,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 python scripts/verify.py
 ~~~
 
-同一条命令不依赖私有输入，检查仓库策略、全部单元测试、五套公开 benchmark 完整性和 Git 空白。它在 CI 的 Ubuntu 与 windows-latest runner 上强制执行，并在维护者的 macOS checkout 上验证，因此 [docs/support-matrix.md](docs/support-matrix.md) 中的 OS 支持主张始终有据可查。Super Caveman 的公开完整性检查仍会针对当前 staged 或 committed tree 重算已批准的 exact diff，因此已批准路径一旦变化，就必须取得新的 promotion evidence，不能静默通过。发布维护者在物化 Git-external 的 Super Caveman approval/review 记录后，额外运行 `python scripts/verify.py --promotion-evidence`；该模式验证原始 promotion evidence 的真实性，默认公开 gate 只验证仓内 receipt 和 exact diff，不声称完成外部认证。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
+同一条命令不依赖私有输入，检查仓库策略、全部单元测试、五套公开 benchmark 完整性和 Git 空白。门禁会把每个检查跑完，并始终以单一聚合终判行收尾，因此管道或 tail 消费不会在运行实际失败时读到通过措辞；`python scripts/verify.py --print-summary` 会在终判行前输出机器可读的 JSON 汇总（`azhou-hub.verify-summary.v1`）。它在 CI 的 Ubuntu 与 windows-latest runner 上强制执行，并在维护者的 macOS checkout 上验证，因此 [docs/support-matrix.md](docs/support-matrix.md) 中的 OS 支持主张始终有据可查。Super Caveman 的公开完整性检查仍会针对当前 staged 或 committed tree 重算已批准的 exact diff，因此已批准路径一旦变化，就必须取得新的 promotion evidence，不能静默通过。发布维护者在物化 Git-external 的 Super Caveman approval/review 记录后，额外运行 `python scripts/verify.py --promotion-evidence`；该模式验证原始 promotion evidence 的真实性，默认公开 gate 只验证仓内 receipt 和 exact diff，不声称完成外部认证。Excalidraw 真渲染需要额外锁定的 Python/Node 依赖，按自己的 setup 文档安装。
 
 ## 项目入口
 

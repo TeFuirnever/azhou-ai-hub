@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import hashlib
 import io
 import json
@@ -417,6 +417,95 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("fail", receipt["status"])
             self.assertFalse((target / "planned").exists())
 
+    def _second_checkout_with_identical_package(self, directory: Path) -> Path:
+        root = directory / "second-checkout"
+        source = root / "skills" / "sample"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text("sample\n", encoding="utf-8")
+        return root
+
+    def test_setup_dry_run_reports_same_source_link_with_distinct_semantics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first_root, _source, target = self._fixture_repo(directory)
+            installed = self._setup_skills(
+                root=first_root,
+                target=target,
+                skills=["sample"],
+                mode="link",
+                dry_run=False,
+            )
+            self.assertEqual("pass", installed["status"], installed)
+            second_root = self._second_checkout_with_identical_package(Path(directory))
+
+            dry = self._setup_skills(
+                root=second_root,
+                target=target,
+                skills=["sample"],
+                mode="link",
+                dry_run=True,
+            )
+
+            self.assertEqual("dry_run_same_source", dry["status"])
+            self.assertFalse(dry["applied"])
+            self.assertTrue(dry.get("planId"))
+            self.assertEqual("conflict-same-source", dry["skills"][0]["status"])
+            self.assertIn("identical canonical package", dry["skills"][0]["details"])
+            self.assertTrue((target / "sample").is_symlink())
+            self.assertEqual((first_root / "skills" / "sample").resolve(), (target / "sample").resolve())
+
+    def test_setup_cli_exit_code_separates_same_source_dry_run_from_apply_and_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first_root, _source, target = self._fixture_repo(directory)
+            result, installed = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--apply", "--json"],
+                root=first_root,
+            )
+            self.assertEqual(0, result, installed)
+            second_root = self._second_checkout_with_identical_package(Path(directory))
+
+            result, dry = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--json"],
+                root=second_root,
+            )
+            self.assertEqual(3, result)
+            self.assertEqual("dry_run_same_source", dry["status"])
+            self.assertEqual("conflict-same-source", dry["skills"][0]["status"])
+            self.assertTrue(dry.get("planId"))
+
+            result, applied = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--apply", "--json"],
+                root=second_root,
+            )
+            self.assertEqual(1, result)
+            self.assertEqual("fail", applied["status"])
+            self.assertEqual("conflict-same-source", applied["skills"][0]["status"])
+            self.assertFalse(applied["applied"])
+            self.assertTrue((target / "sample").is_symlink())
+            self.assertEqual((first_root / "skills" / "sample").resolve(), (target / "sample").resolve())
+
+    def test_setup_symlink_to_different_content_remains_a_real_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first_root, _source, target = self._fixture_repo(directory)
+            result, installed = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--apply", "--json"],
+                root=first_root,
+            )
+            self.assertEqual(0, result, installed)
+            other_root = Path(directory) / "other-checkout"
+            other_source = other_root / "skills" / "sample"
+            other_source.mkdir(parents=True)
+            (other_source / "SKILL.md").write_text("different content\n", encoding="utf-8")
+
+            result, dry = self._json_main(
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--json"],
+                root=other_root,
+            )
+
+            self.assertEqual(1, result)
+            self.assertEqual("fail", dry["status"])
+            self.assertEqual("conflict", dry["skills"][0]["status"])
+            self.assertIn("destination symlink resolves to", dry["skills"][0]["details"])
+
     def test_setup_rejects_a_target_root_that_is_a_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
@@ -592,12 +681,20 @@ class AzhouHubCliTest(unittest.TestCase):
 
     def test_authoritative_verify_scopes_promotion_evidence_to_the_promotion_gate(self) -> None:
         completed = mock.Mock(returncode=0)
+        # Redirect the gate's own output: an unredirected main() here used to
+        # leak "verification passed" into the suite stream, which is exactly
+        # the captured-block contradiction issue #252 u8 removes.
+        stdout, stderr = io.StringIO(), io.StringIO()
         with mock.patch("scripts.verify.subprocess.run", return_value=completed) as run:
-            result = verify_script.main(
-                ["--python", "/custom/python", "--promotion-evidence"]
-            )
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                result = verify_script.main(
+                    ["--python", "/custom/python", "--promotion-evidence"]
+                )
 
         self.assertEqual(0, result)
+        self.assertEqual(
+            "verification passed", stdout.getvalue().strip().splitlines()[-1]
+        )
         commands = [call.args[0] for call in run.call_args_list]
         self.assertIn(
             [
