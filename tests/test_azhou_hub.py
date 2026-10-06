@@ -710,6 +710,122 @@ class AzhouHubCliTest(unittest.TestCase):
                 check = next(item for item in report["checks"] if item["name"] == "treehouse")
                 self.assertEqual("fail", check["status"])
 
+    def _host_tree_snapshot(self, root: Path) -> dict[str, tuple]:
+        snapshot: dict[str, tuple] = {}
+        for path in sorted(root.rglob("*")):
+            relative = str(path.relative_to(root))
+            if path.is_symlink():
+                snapshot[relative] = ("symlink", os.readlink(path))
+            elif path.is_dir():
+                snapshot[relative] = ("dir",)
+            else:
+                snapshot[relative] = ("file", path.stat().st_size, path.read_bytes())
+        return snapshot
+
+    def _stale_host_fixture(self, directory: Path) -> tuple[Path, Path]:
+        root, source, _ = self._fixture_repo(str(directory))
+        host = directory / "host"
+        (host / "skills" / "llm-wiki" / "scripts").mkdir(parents=True)
+        (host / "skills" / "llm-wiki" / "SKILL.md").write_text("stale\n", encoding="utf-8")
+        (host / "skills" / "llm-wiki" / "scripts" / "llm_wiki.py").write_text("stale hook\n", encoding="utf-8")
+        (host / "skills" / "wiki-target").mkdir()
+        (host / "skills" / "wiki").symlink_to(host / "skills" / "wiki-target", target_is_directory=True)
+        (host / "settings.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [{"command": f"python {host}/skills/llm-wiki/scripts/llm_wiki.py"}],
+                        "SessionEnd": [{"command": f"python {host}/skills/sample/scripts/sample.py"}],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        (host / "config.toml").write_text(
+            'pre_compact_command = "python /somewhere/else/bin --root /x/skills/llm-wiki/store"\n',
+            encoding="utf-8",
+        )
+        return root, host
+
+    def test_doctor_reports_stale_host_hooks_and_residual_installs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, host = self._stale_host_fixture(Path(directory))
+            before = self._host_tree_snapshot(host)
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("fail", check["status"])
+            self.assertIn("residual install: llm-wiki (directory copy)", check["details"])
+            self.assertIn("residual install: wiki (symlink -> ", check["details"])
+            self.assertIn("stale hook path: settings.json: skills/llm-wiki/", check["details"])
+            self.assertIn("stale hook path: config.toml: skills/llm-wiki/", check["details"])
+            self.assertNotIn("skills/sample/", check["details"])
+            self.assertFalse(report["valid"])
+            self.assertEqual("unhealthy", report["status"])
+
+            self.assertEqual(before, self._host_tree_snapshot(host), "host migration probe must not mutate the host")
+
+    def test_doctor_cli_forwards_host_root_and_fails_on_stale_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, host = self._stale_host_fixture(Path(directory))
+
+            result, payload = self._json_main(["doctor", "--host-root", str(host), "--json"], root=root)
+
+            self.assertEqual(1, result)
+            check = next(item for item in payload["checks"] if item["name"] == "host_migration")
+            self.assertEqual("fail", check["status"])
+            self.assertIn("stale hook path: settings.json: skills/llm-wiki/", check["details"])
+
+    def test_doctor_host_migration_passes_on_clean_host(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, _ = self._fixture_repo(directory)
+            host = Path(directory) / "host"
+            (host / "skills").mkdir(parents=True)
+            (host / "skills" / "sample").symlink_to(source, target_is_directory=True)
+            (host / "settings.json").write_text(
+                json.dumps({"hooks": {"SessionStart": [{"command": f"python {host}/skills/sample/scripts/sample.py"}]}}),
+                encoding="utf-8",
+            )
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("pass", check["status"])
+            self.assertIn("no stale hook paths or residual installs", check["details"])
+            self.assertTrue(report["valid"])
+
+    def test_doctor_host_migration_edge_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, _ = self._fixture_repo(directory)
+            empty_host = Path(directory) / "empty"
+            empty_host.mkdir()
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=empty_host)
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("warn", check["status"])
+            self.assertIn("nothing scanned", check["details"])
+
+            residual_only = Path(directory) / "residual"
+            (residual_only / "skills").mkdir(parents=True)
+            (residual_only / "skills" / "llm-wiki").mkdir()
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=residual_only)
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("warn", check["status"])
+            self.assertIn("residual install: llm-wiki (directory copy)", check["details"])
+            self.assertTrue(report["valid"])
+
+            not_a_directory = Path(directory) / "blocked"
+            not_a_directory.write_text("not a directory\n", encoding="utf-8")
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=not_a_directory)
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("fail", check["status"])
+            self.assertIn("host root is not a directory", check["details"])
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False)
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("skip", check["status"])
+            self.assertEqual("no --host-root supplied", check["details"])
+
     def test_managed_dry_run_writes_no_target_or_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)

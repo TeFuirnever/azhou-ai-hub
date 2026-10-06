@@ -61,7 +61,7 @@ Four portable Azhou Agent Skills expose the checkout workflow without duplicatin
 | Agent Skill | CLI authority | Change boundary |
 |---|---|---|
 | `azhou-info` | `info`, `version` | Read-only project, runtime, Git revision and dirty-state facts. |
-| `azhou-doctor` | `doctor` | Read-only repository, explicit install-target and optional Treehouse lease diagnostics. |
+| `azhou-doctor` | `doctor` | Read-only repository, explicit install-target, optional Treehouse lease and host stale-install migration diagnostics. |
 | `azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first; only an exact reviewed plan with `--apply` may mutate its explicit target. |
 | `azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate; maintainers can explicitly add promotion-evidence replay. |
 
@@ -82,7 +82,7 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | Skill | Real job | Verification basis |
 |---|---|---|
 | [Azhou Info](skills/azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
-| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | Diagnose repository, explicit install target and optional Treehouse lease health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke and fail-closed target checks. |
+| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | Diagnose repository, explicit install target, optional Treehouse lease and host stale-install migration health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke, fail-closed target checks and the read-only host migration probe. |
 | [Azhou Setup](skills/azhou-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
 | [Azhou Verify](skills/azhou-verify/SKILL.md) | Run the public full-repository integrity gate or an explicit maintainer promotion replay. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates; promotion mode additionally requires Git-external evidence. |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for; 3 registered behavior cases; fixed execution protocol and inventory proof. |
