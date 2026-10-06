@@ -12,6 +12,12 @@ SKILL_TEXT = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
 PARITY = json.loads((ROOT / "benchmarks" / "super-repo-pedant" / "neat-freak-parity.json").read_text(encoding="utf-8"))
 REGRESSIONS = json.loads((ROOT / "benchmarks" / "super-repo-pedant" / "regression-map.json").read_text(encoding="utf-8"))["regressions"]
 TRIGGER_CASES = json.loads((ROOT / "benchmarks" / "super-repo-pedant" / "trigger-cases.json").read_text(encoding="utf-8"))
+CONTRACT_TEXT = (SKILL_DIR / "references" / "neat-freak-compatibility.md").read_text(encoding="utf-8")
+PROVENANCE_TEXT = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+AUDIT_TEXT = (ROOT / "docs" / "research" / "2026-10-07-neat-freak-v3-capability-audit.md").read_text(encoding="utf-8")
+PIN_COMMIT = "bab178311a65f93ffd073e4fdebc9911eae35791"
+V3_OBSERVATION_COMMIT = "322346ded8129436b3f64707789a73e732ae24d9"
+AUDIT_DOC_RELPATH = "docs/research/2026-10-07-neat-freak-v3-capability-audit.md"
 
 
 class RepoPedantParityTest(unittest.TestCase):
@@ -103,6 +109,34 @@ class RepoPedantParityTest(unittest.TestCase):
         self.assertTrue((SKILL_DIR / "scripts" / "validate_evidence_bundle.py").is_file())
         self.assertTrue((SKILL_DIR / "scripts" / "closeout_hook.py").is_file())
         self.assertTrue((SKILL_DIR / "scripts" / "manage_evolution.py").is_file())
+
+    def test_contract_v2_records_upstream_v3_delta_without_rebaselining(self) -> None:
+        # Positive controls: contract v2 documents the audited upstream v3 delta.
+        self.assertIn("Contract version: v2 (2026-10-07)", CONTRACT_TEXT)
+        self.assertIn("## Baseline and upstream v3 delta", CONTRACT_TEXT)
+        self.assertIn(V3_OBSERVATION_COMMIT, CONTRACT_TEXT)
+        self.assertIn("equivalent evolution", CONTRACT_TEXT)
+        self.assertIn(AUDIT_DOC_RELPATH, CONTRACT_TEXT)
+        self.assertIn(V3_OBSERVATION_COMMIT, PROVENANCE_TEXT)
+        self.assertIn(AUDIT_DOC_RELPATH, PROVENANCE_TEXT)
+        # The audit document exists and carries the per-capability ledger the contract cites.
+        self.assertTrue((ROOT / AUDIT_DOC_RELPATH).is_file())
+        self.assertIn("pin `bab17831` 语义", AUDIT_TEXT)
+        for verdict_count in ("kept 20", "changed 8", "removed 0"):
+            self.assertIn(verdict_count, AUDIT_TEXT)
+        self.assertIn(V3_OBSERVATION_COMMIT, AUDIT_TEXT)
+        # Negative controls: the ledger stays bound to the pinned baseline; v3 is
+        # recorded as an observation baseline, never adopted as the implementation baseline.
+        self.assertIn(PIN_COMMIT, CONTRACT_TEXT)
+        self.assertIn("Every ledger row below is judged against this baseline", CONTRACT_TEXT)
+        self.assertIn("not new mandatory rows", CONTRACT_TEXT)
+        self.assertIn(PIN_COMMIT, PROVENANCE_TEXT)
+        self.assertIn("The implementation baseline stays at the pin above", PROVENANCE_TEXT)
+        self.assertEqual(28, len(PARITY["capabilities"]))
+        self.assertIn("## Required original behavior", CONTRACT_TEXT)
+        # The bare-tidy trigger divergence is recorded, not silently adopted from v3.
+        self.assertEqual("reconcile", {case["id"]: case["expected"] for case in TRIGGER_CASES["cases"]}["bare-tidy"])
+        self.assertIn("bare-tidy", CONTRACT_TEXT)
 
 
 if __name__ == "__main__":

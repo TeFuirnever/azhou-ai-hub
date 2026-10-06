@@ -1,6 +1,16 @@
 # Neat-freak compatibility contract
 
-`super-repo-pedant` is an enhancement of `neat-freak`, not a replacement. Every original capability remains mandatory unless this contract records a direct safety conflict or a demonstrated implementation disadvantage.
+Contract version: v2 (2026-10-07). The v1 ledger below remains bound to the pinned upstream baseline; the v2 revision adds the upstream v3 delta section. `super-repo-pedant` is an enhancement of `neat-freak`, not a replacement. Every original capability remains mandatory unless this contract records a direct safety conflict or a demonstrated implementation disadvantage.
+
+## Baseline and upstream v3 delta
+
+- Implementation baseline: upstream `neat-freak` at immutable commit `bab178311a65f93ffd073e4fdebc9911eae35791` (pre-v3 line), hash-locked by `scripts/check_repository.py`. Every ledger row below is judged against this baseline, and the parity claim stays scoped to it.
+- Upstream observation baseline: `322346ded8129436b3f64707789a73e732ae24d9` (2026-10-07 snapshot; upstream HEAD of `main`; self-declared `metadata.version: "3.0.0"` in frontmatter, no matching git tag or release). The pin→v3 range is 50 commits / 117 changed files; all `neat-freak/` surface changes are covered by the per-capability audit in [`docs/research/2026-10-07-neat-freak-v3-capability-audit.md`](../../../docs/research/2026-10-07-neat-freak-v3-capability-audit.md).
+- Audit verdict (2026-10-07): **equivalent evolution** — of the 28 baseline rows, 20 are `kept`, 8 are `changed` in mappable ways (trigger framing, size-limit tables replaced by platform-derived budgets, the 30-line red-flag threshold generalized, per-file judgment narrowed to affected files, conversation review implied, report restructured), and 0 are removed. No row below is invalidated: wherever v3 wording weakened, this package's own implementation still enforces the stronger baseline form.
+- Upstream convergence: v3 independently adopted the same safer semantics this contract chose for all three replacement rows — deletion candidates now require explicit user confirmation (baseline row `whole-file-deletion`), memory defaults to read-only unless authorized (row `trigger-inferred-milestone`), and concrete path tables are declared non-permanent with verify-current checks (row `concrete-cross-runtime-paths`).
+- Upstream-additive capabilities (12, e.g. completion fact-face matrix, lightweight path, release-closeout state machine, cleanup confirmation gate, governance rule-chain audit, generated-memory read-only boundary, eval surface) are recorded with dispositions in the audit document; they are observations, not new mandatory rows. Adopting any of them changes skill behavior and requires its own evidence path through this repository's gates and tests.
+- One recorded local divergence: the local trigger contract keeps bare `tidy`/`整理` as a positive trigger in development context (`benchmarks/super-repo-pedant/trigger-cases.json` `bare-tidy` → `reconcile`), while v3 makes a zero-context bare `整理` a negative trigger. The local stricter do-not-under-trigger design is retained; aligning it would be a trigger-behavior change requiring the local trigger regression.
+- Monitoring: the next routine upstream freshness scan re-runs the pin→HEAD compare and re-judges this delta table; any future upstream change to `neat-freak/SKILL.md` or `evals/` triggers a same-shaped re-audit before any pin or contract move.
 
 ## Classification
 
