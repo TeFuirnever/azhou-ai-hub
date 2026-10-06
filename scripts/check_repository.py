@@ -258,6 +258,190 @@ def check_router_coverage(root: Path) -> list[str]:
     ]
 
 
+SUPPORT_MATRIX_RELATIVE = "docs/support-matrix.md"
+SKILL_PLATFORM_VIEW_RELATIVE = "docs/skill-platform-view.md"
+SUPPORT_MATRIX_OS_HEADING = "## Operating system support"
+PLATFORM_VIEW_MAIN_HEADER = (
+    "Skill",
+    "Codex",
+    "Claude Code",
+    "zcode",
+    "Other compatible harnesses",
+    "Linux",
+    "macOS",
+    "Windows",
+)
+PLATFORM_VIEW_MAP_HEADER = ("Skill", "Governing support-matrix rows")
+PLATFORM_VIEW_STATUS_VOCABULARY = frozenset({"supported", "host-dependent", "not claimed"})
+PLATFORM_VIEW_FRAGMENT_SEPARATOR = "<br>"
+PLATFORM_VIEW_SHARED_OS_ROWS = (
+    "Repository gate scripts/verify.py",
+    "Host lifecycle hooks, MCP transports and memory APIs",
+)
+# OS-gate rows whose title names a skill govern only that skill's row.
+PLATFORM_VIEW_SKILL_SCOPED_OS_ROWS = {
+    "Super Caveman harness adapters and gate machinery": frozenset({"super-caveman"}),
+}
+TABLE_SEPARATOR_CELL = re.compile(r":?-{3,}:?")
+
+
+def _normalize_claim(text: str) -> str:
+    text = text.replace("<code>", "").replace("</code>", "").replace("`", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _markdown_table_rows(text: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            continue
+        cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+        if all(TABLE_SEPARATOR_CELL.fullmatch(cell) for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def check_skill_platform_view(root: Path) -> list[str]:
+    """Keep the derived per-skill platform view 1:1 with the support matrix.
+
+    docs/skill-platform-view.md is a summary, never a second authority: it must
+    cover exactly the canonical skill set one row per skill, and every cell
+    fragment must be either a status token from the matrix vocabulary or a
+    verbatim (whitespace-normalized) fragment of its governing support-matrix
+    rows. Harness cells draw from the capability rows named in that skill's
+    derivation-map entry; OS cells draw from the matrix OS-section rows, with
+    skill-scoped rows restricted to the skill their title names. Anything else
+    is an unaudited claim and fails here.
+    """
+    errors: list[str] = []
+    matrix_path = root / SUPPORT_MATRIX_RELATIVE
+    view_path = root / SKILL_PLATFORM_VIEW_RELATIVE
+    if not matrix_path.is_file():
+        return [f"support matrix missing: {SUPPORT_MATRIX_RELATIVE}"]
+    if not view_path.is_file():
+        return [f"skill platform view missing: {SKILL_PLATFORM_VIEW_RELATIVE}"]
+    try:
+        matrix_text = matrix_path.read_text(encoding="utf-8")
+        view_text = view_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"cannot read skill platform view inputs: {exc}"]
+
+    heading_index = matrix_text.find(SUPPORT_MATRIX_OS_HEADING)
+    if heading_index < 0:
+        return [f"support matrix OS section missing: {SUPPORT_MATRIX_OS_HEADING}"]
+    capability_rows = _markdown_table_rows(matrix_text[:heading_index])
+    os_rows = _markdown_table_rows(matrix_text[heading_index:])
+    if len(capability_rows) < 2 or len(os_rows) < 2:
+        return ["support matrix tables are missing expected data rows"]
+    capability_by_title = {
+        _normalize_claim(row[0]): _normalize_claim(" | ".join(row))
+        for row in capability_rows[1:]
+        if len(row) >= 2
+    }
+    os_row_text: dict[str, str] = {}
+    for row in os_rows[1:]:
+        if len(row) < 2:
+            continue
+        os_row_text[_normalize_claim(row[0])] = _normalize_claim(" | ".join(row))
+    known_os_titles = set(PLATFORM_VIEW_SHARED_OS_ROWS) | set(PLATFORM_VIEW_SKILL_SCOPED_OS_ROWS)
+    for title in os_row_text:
+        if title not in known_os_titles:
+            errors.append(f"skill platform view os row not mapped: {title}")
+
+    tables = _markdown_table_rows(view_text)
+    grouped: list[list[list[str]]] = []
+    for row in tables:
+        if not grouped or len(grouped[-1][0]) != len(row):
+            grouped.append([row])
+            continue
+        grouped[-1].append(row)
+    main_tables = [table for table in grouped if len(table[0]) == len(PLATFORM_VIEW_MAIN_HEADER)]
+    map_tables = [table for table in grouped if len(table[0]) == len(PLATFORM_VIEW_MAP_HEADER)]
+    if len(main_tables) != 1 or len(map_tables) != 1:
+        errors.append(
+            "skill platform view table structure invalid: expected exactly one "
+            f"{len(PLATFORM_VIEW_MAIN_HEADER)}-column summary table and one "
+            f"{len(PLATFORM_VIEW_MAP_HEADER)}-column derivation-map table"
+        )
+        return errors
+    main_table, map_table = main_tables[0], map_tables[0]
+    if tuple(main_table[0]) != PLATFORM_VIEW_MAIN_HEADER:
+        errors.append(f"skill platform view header invalid: {main_table[0]}")
+    if tuple(map_table[0]) != PLATFORM_VIEW_MAP_HEADER:
+        errors.append(f"skill platform view map header invalid: {map_table[0]}")
+
+    canonical_skills = {
+        PurePosixPath(relative).parent.name
+        for relative in INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
+    }
+
+    view_rows: dict[str, list[str]] = {}
+    for cells in main_table[1:]:
+        if len(cells) != len(PLATFORM_VIEW_MAIN_HEADER) or not cells[0]:
+            errors.append(f"skill platform view row malformed: {cells}")
+            continue
+        if cells[0] in view_rows:
+            errors.append(f"skill platform view row duplicated: {cells[0]}")
+        view_rows[cells[0]] = cells
+    for name in sorted(canonical_skills - set(view_rows)):
+        errors.append(f"skill platform view row missing: {name}")
+    for name in sorted(set(view_rows) - canonical_skills):
+        errors.append(f"skill platform view row unexpected: {name}")
+
+    map_rows: dict[str, list[str]] = {}
+    for cells in map_table[1:]:
+        if len(cells) != len(PLATFORM_VIEW_MAP_HEADER) or not cells[0]:
+            errors.append(f"skill platform view map row malformed: {cells}")
+            continue
+        map_rows[cells[0]] = cells
+    for name in sorted(canonical_skills - set(map_rows)):
+        errors.append(f"skill platform view map row missing: {name}")
+    for name in sorted(set(map_rows) - canonical_skills):
+        errors.append(f"skill platform view map row unexpected: {name}")
+
+    for name in sorted(set(view_rows) & set(map_rows) & canonical_skills):
+        governing_titles: list[str] = []
+        for fragment in map_rows[name][1].split(PLATFORM_VIEW_FRAGMENT_SEPARATOR):
+            fragment = _normalize_claim(fragment)
+            if not fragment:
+                continue
+            if fragment not in capability_by_title:
+                errors.append(
+                    f"skill platform view map row not found in support matrix: {name}: {fragment}"
+                )
+            else:
+                governing_titles.append(fragment)
+        allowed_capability_text = " ".join(capability_by_title[title] for title in governing_titles)
+
+        os_allowed = [
+            os_row_text[title]
+            for title in PLATFORM_VIEW_SHARED_OS_ROWS
+            if title in os_row_text
+        ]
+        for title, scoped in PLATFORM_VIEW_SKILL_SCOPED_OS_ROWS.items():
+            if name in scoped and title in os_row_text:
+                os_allowed.append(os_row_text[title])
+        os_allowed_text = " ".join(os_allowed)
+
+        for column, cell in enumerate(view_rows[name][1:], start=1):
+            is_os_column = column > len(PLATFORM_VIEW_MAIN_HEADER) - 4
+            allowed_text = os_allowed_text if is_os_column else allowed_capability_text
+            for fragment in cell.split(PLATFORM_VIEW_FRAGMENT_SEPARATOR):
+                fragment = _normalize_claim(fragment)
+                if not fragment:
+                    continue
+                if fragment.lower() in PLATFORM_VIEW_STATUS_VOCABULARY:
+                    continue
+                if fragment not in allowed_text:
+                    errors.append(
+                        "skill platform view claim not derived from its governing rows: "
+                        f"{name}: {fragment}"
+                    )
+    return errors
+
+
 GATE_HELD_INVOCATIONS = {
     # super-caveman's whole tree is frozen by its promotion digest
     # (93f38a6b...), so its invocation class is held here until the next
@@ -696,6 +880,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_router_coverage(root))
+    errors.extend(check_skill_platform_view(root))
     errors.extend(check_invocation_axis(root))
     errors.extend(check_fidelity_axis(root))
     errors.extend(check_rename_residue(files, root))

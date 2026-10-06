@@ -118,6 +118,7 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
 - **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, an 8-route and 19-response-case Super Caveman integrity suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
 - **Harness differences stay visible.** Codex, Claude Code and zcode share the same runtime packages, but hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md).
+- **Per-skill platform view.** A derived summary of the support matrix shows each canonical skill across harnesses and operating systems in [docs/skill-platform-view.md](docs/skill-platform-view.md); the support matrix stays the single authority.
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).
 
