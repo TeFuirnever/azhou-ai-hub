@@ -679,6 +679,31 @@ class AzhouHubCliTest(unittest.TestCase):
             check=False,
         )
 
+    def test_promotion_derive_hints_stay_visible_through_the_authoritative_gate(self) -> None:
+        completed = mock.Mock(returncode=0)
+        with mock.patch("scripts.azhou_hub.subprocess.run", return_value=completed) as run:
+            result = azhou_hub.main(
+                ["verify", "--python", "/custom/python", "--promotion-evidence"]
+            )
+
+        self.assertEqual(0, result)
+        self.assertEqual(
+            [
+                "/custom/python",
+                str(azhou_hub.ROOT / "scripts/verify.py"),
+                "--python",
+                "/custom/python",
+                "--promotion-evidence",
+            ],
+            run.call_args.args[0],
+        )
+        # No output capture: the promotion gate's "promotion derive hint:"
+        # lines must reach the caller's stream unchanged, so a stale field is
+        # named where it happens instead of surfacing only as an exit code.
+        self.assertEqual({"cwd", "check"}, set(run.call_args.kwargs))
+        self.assertEqual(azhou_hub.ROOT, run.call_args.kwargs["cwd"])
+        self.assertFalse(run.call_args.kwargs["check"])
+
     def test_authoritative_verify_scopes_promotion_evidence_to_the_promotion_gate(self) -> None:
         completed = mock.Mock(returncode=0)
         # Redirect the gate's own output: an unredirected main() here used to
