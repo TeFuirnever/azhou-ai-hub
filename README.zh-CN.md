@@ -54,6 +54,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 
 只选一种安装方式。同一 canonical name 下，不要叠加包管理器安装、checkout 托管安装、手工复制和开发软链接。四个 `azhou-*` 包负责让 harness 发现对应的 `SKILL.md` 工作流；它们不内置 Foundation CLI，仍需要显式本地 checkout。完整安装路径和依赖见[安装指南](docs/installation.md)。
 
+当主机必须在无网络环境下安装时，[离线恢复](docs/installation.md#offline-recovery)手册给出从本地副本恢复 uv、npm 与 Playwright 浏览器缓存的步骤。
+
 ## 检查、配置或验证当前 checkout
 
 四个可移植阿舟 Agent Skills 提供 checkout 工作流入口，但不复制执行逻辑。通过当前 harness 原生的 Skill 入口调用它们，并在 Azhou AI Hub checkout 中运行，或显式提供 checkout 路径。每个适配器都委派给该 checkout 的零依赖 Foundation CLI：
