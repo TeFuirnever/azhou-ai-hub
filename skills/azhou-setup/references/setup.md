@@ -17,6 +17,8 @@ python scripts/azhou_hub.py setup --skill <name> --target <absolute-root> --mode
 
 Managed operations use a receipt directly below `<target>/.azhou/hub/receipts/`. Run every `repair`, `migrate`, or `uninstall` command once without `--apply`, review the exact plan, then apply only with authorization.
 
+Setup distinguishes two destination conflicts. A `conflict` row is foreign content: an unowned directory, a file, or a symlink resolving to different package content; it fails with exit code `1`. A `conflict-same-source` row means the destination symlink already resolves to canonical package content identical to this checkout, typically a link owned by another checkout of the same repository. A dry-run blocked only by `conflict-same-source` reports `dry_run_same_source` and exits `3` while still emitting the `planId`; `--apply` keeps refusing until the duplicate checkout is resolved or a different target is chosen.
+
 Receipts under the prior metadata root are not read as a fallback. Use `migrate-receipts --target <absolute-root> --json`, review the emitted `planId`, then rerun with `--apply --plan-id <reviewed-planId>`. The source remains intact.
 
 Current managed installs write `azhou-ai-hub.install-receipt.v2`, including the installed object's filesystem identity and executable-aware package digest. Legacy v1 receipts cannot authorize migration or deletion; an explicit `repair --apply` validates their original byte digests, records the current object identity, and recomputes source and installed v2 digests. Byte drift remains blocked.
