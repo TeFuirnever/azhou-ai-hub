@@ -37,6 +37,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 - Record the returned path, lease ID and holder in task evidence. Use one task, one lease and one `codex/<task>` branch; verify the leased path belongs to this repository before writing.
 - Direct `git worktree add` is reserved for an explicitly approved, long-lived manual worktree. If Treehouse is unavailable, do not install or upgrade it implicitly; report the blocker or obtain approval for the fallback.
 - Never return a dirty, unmerged, unverified or in-use worktree. Never prune or destroy dirty, unlanded, in-use or leased work. Keep the lease until work is landed or preserved by a separately verified recovery point.
+- Before returning a lease, `cd` the host shell out of the worktree and have persistent agent shells do the same; a shell left inside the deleted directory fails `getcwd` afterward.
 - Automated return requires both `--if-lease-id` and `--if-lease-holder`. Do not use path-only automation or `treehouse return --force`.
 - Destructive Treehouse operations stay dry-run-first. `--include-unlanded`, `--include-in-use` and `--include-leased` require explicit user authorization for the exact path.
 - Treehouse provides workspace and lifecycle isolation, not a security sandbox, identity proof or approval boundary. Follow [`docs/worktree-policy.md`](docs/worktree-policy.md) for acquisition, migration, recovery and closeout.
