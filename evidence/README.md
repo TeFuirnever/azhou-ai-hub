@@ -8,6 +8,7 @@
 - [2026-09-01 Foundation discovery/invocation on Claude Code](foundation-discovery-invocation-claude-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、headless 主机发现与文档化只读调用；不升级为个人根安装、交互会话或跨 harness 一致性证明。
 - [2026-09-01 Foundation discovery/invocation on zcode](foundation-discovery-invocation-zcode-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、`skills list` 主机发现与文档化只读调用；调用依赖已授权的最小用户级 model provider 配置；不升级为 GUI 行为或跨 harness 一致性证明。
 - [2026-09-04 Foundation discovery/invocation on Codex](foundation-discovery-invocation-codex-2026-09-04.md)：一次性检出上的 headless 会话列出全部四个 package 并执行文档化只读调用与完整 verify 门禁（setup 干跑对已管理根按契约 fail-closed）；不升级为交互 TUI 行为或跨 harness 一致性证明。
+- [2026-10-06 Foundation discovery/invocation on Kimi Code](foundation-discovery-invocation-kimi-2026-10-06.md)：一次性检出上的 headless 会话在模型可见 skill 发现面列出十四个 canonical package 中的十三个（ask-azhou 记录为未出现的原因未诊断缺失），并执行文档化只读 info 调用（直跑复核一致）；不升级为交互 TUI、hook 面、MCP 传输或 doctor/setup/verify 调用证明。
 
 ## 可进入 Git
 
