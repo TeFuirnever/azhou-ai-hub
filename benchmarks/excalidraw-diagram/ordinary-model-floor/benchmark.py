@@ -11,10 +11,18 @@ A run is firstPassUsable only when all three gates pass:
   3. Visual review — an identified reviewer inspected the rendered artifact and
                   reported `passed` with no defects. `skipped` can NEVER produce
                   firstPassUsable; failures are reported truthfully, never upgraded.
+                  A skipped review must be explicit: run.json may carry
+                  visual_review.holds (for example ["sandbox blocked preview"],
+                  copied from the visual-check.py schema-2 receipt); verify
+                  surfaces the holds verbatim, and a skipped review without any
+                  holds gets the explicit "visual review not recorded" hold —
+                  a silent skip cannot pass through unnoticed.
 
 Commands:
   benchmark.py check [--manifest manifest.json]
-      Validate suite integrity: manifest shape + the reference fixture verifies.
+      Validate suite integrity: manifest shape, the reference fixture verifies,
+      and the sandbox-blocked fixture holds explicitly with firstPassUsable
+      false.
   benchmark.py verify --case <case.json> --candidate <scene.excalidraw> --run <run.json>
       One machine-readable receipt to stdout. Exit 0 = first-pass usable,
       1 = a gate failed, 2 = invalid invocation/inputs.
@@ -22,14 +30,16 @@ Commands:
       Truthful operational-failure receipt; quality gates stay not_run.
   benchmark.py report --results <results.jsonl> --manifest manifest.json
       Aggregate a complete matrix; separates operational / semantic /
-      deterministic / visual-review failure clusters. evidenceEligible is true
-      only when every case has exactly one attempt-1 receipt.
+      deterministic / visual-review failure clusters and lists the distinct
+      visual-review holds. evidenceEligible is true only when every case has
+      exactly one attempt-1 receipt.
 
 Fair-run protocol lives in README.md — same prompt, same skill tree, same time
 limit, frozen attempt-1, no post-hoc edits (including human ones).
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -129,6 +139,9 @@ def cmd_verify(args) -> int:
 
     vr = run.get("visual_review", {})
     vr_status = vr.get("status", "skipped")
+    holds = [str(h) for h in (vr.get("holds") or []) if str(h)]
+    if not holds and vr_status == "skipped":
+        holds = ["visual review not recorded"]
     vr_ok = vr_status == "passed" and bool(vr.get("reviewer"))
 
     receipt = {
@@ -142,7 +155,7 @@ def cmd_verify(args) -> int:
                 "overlap_exit": geo.returncode,
             },
             "visual_review": {"status": vr_status, "reviewer": vr.get("reviewer"),
-                              "defects": vr.get("defects", [])},
+                              "defects": vr.get("defects", []), "holds": holds},
         },
     }
     receipt["firstPassUsable"] = (
@@ -192,7 +205,42 @@ def cmd_check(args) -> int:
          "--run", str(ref / "reference.run.json")],
         capture_output=True, text=True)
     assert rc.returncode == 0, f"reference fixture failed verify:\n{rc.stdout}\n{rc.stderr}"
-    print(f"OK — {len(ids)} cases, unique ids, reference fixture verifies green "
+
+    # sandbox-blocked fixture must hold explicitly — a silent skip cannot wire
+    rc = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()),
+         "verify",
+         "--case", str(Path(__file__).parent / "cases" / "layered-architecture.case.json"),
+         "--candidate", str(ref / "reference.architecture.excalidraw"),
+         "--run", str(ref / "reference.sandbox-blocked.run.json")],
+        capture_output=True, text=True)
+    assert rc.returncode == 1, (
+        f"sandbox-blocked fixture must not verify usable:\n{rc.stdout}\n{rc.stderr}")
+    receipt = json.loads(rc.stdout)
+    holds = receipt["gates"]["visual_review"]["holds"]
+    assert holds == ["sandbox blocked preview"], f"holds drift: {holds}"
+    assert receipt["firstPassUsable"] is False
+
+    # the sandbox-friendly visual-check fallback receipt must bind the exact
+    # fixture bytes and a clean geometry audit
+    fallback_svg = ref / "reference.architecture.svg"
+    fallback_receipt_path = ref / "reference.architecture.svg.visual-check.json"
+    assert fallback_svg.exists(), "missing sandbox fallback fixture SVG"
+    fallback = json.loads(fallback_receipt_path.read_text(encoding="utf-8"))
+    assert fallback["schema"] == 2, f"fallback receipt schema drift: {fallback.get('schema')}"
+    assert fallback["status"] == "skipped", f"fallback receipt status drift: {fallback.get('status')}"
+    assert fallback["holds"] == ["sandbox blocked preview"], f"fallback holds drift: {fallback.get('holds')}"
+    assert fallback["visual_review"] == "pending"
+    assert fallback["artifact"]["sha256"] == hashlib.sha256(fallback_svg.read_bytes()).hexdigest(), \
+        "fallback receipt artifact digest does not bind the fixture SVG"
+    assert fallback["fallback"]["scene"]["sha256"] == \
+        hashlib.sha256((ref / "reference.architecture.excalidraw").read_bytes()).hexdigest(), \
+        "fallback receipt scene digest does not bind the fixture scene"
+    assert fallback["fallback"]["geometry_audit"] == {"exit": 0, "issues": 0}, \
+        f"fallback geometry audit drift: {fallback['fallback']['geometry_audit']}"
+
+    print(f"OK — {len(ids)} cases, unique ids, reference fixture verifies green, "
+          "sandbox-blocked fixture holds explicitly "
           "(fixtures prove wiring only; they are never benchmark evidence)")
     return 0
 
@@ -202,6 +250,7 @@ def cmd_report(args) -> int:
     rows = [json.loads(l) for l in Path(args.results).read_text(encoding="utf-8").splitlines() if l.strip()]
     clusters = {"operational": 0, "semantic": 0, "deterministic": 0, "visual-review": 0}
     usable = 0
+    holds = set()
     seen = {}
     for r in rows:
         seen.setdefault(r["case_id"], []).append(r)
@@ -209,6 +258,7 @@ def cmd_report(args) -> int:
             clusters["operational"] += 1
             continue
         g = r["gates"]
+        holds.update(str(h) for h in (g.get("visual_review", {}).get("holds") or []))
         if not g["semantic"]["pass"]:
             clusters["semantic"] += 1
         elif not g["deterministic"]["pass"]:
@@ -222,7 +272,7 @@ def cmd_report(args) -> int:
     print(json.dumps({
         "schema": 1, "cases": len(expected), "receipts": len(rows),
         "firstPassUsable": usable, "failureClusters": clusters,
-        "evidenceEligible": eligible,
+        "holds": sorted(holds), "evidenceEligible": eligible,
     }, ensure_ascii=False))
     return 0
 
