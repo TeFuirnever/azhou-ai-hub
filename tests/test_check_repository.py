@@ -20,6 +20,7 @@ from scripts.check_repository import (
     check_skill_brand_contract,
     check_skill_discovery,
     check_router_coverage,
+    check_skill_platform_view,
     check_treehouse_config,
     public_files,
     relative_markdown_targets,
@@ -46,6 +47,99 @@ class RouterCoverageTest(unittest.TestCase):
             )
             self.assertIn("router coverage missing: arch-doc", errors)
             self.assertNotIn("router coverage missing: eli5", errors)
+
+
+class SkillPlatformViewTest(unittest.TestCase):
+    """The per-skill platform view is a derivation, never a second authority."""
+
+    def test_view_is_derived_from_the_support_matrix(self) -> None:
+        self.assertEqual([], check_skill_platform_view(ROOT))
+
+    def write_fixture(self, root: Path, view_text: str) -> None:
+        docs = root / "docs"
+        docs.mkdir(parents=True)
+        shutil.copy(ROOT / "docs" / "support-matrix.md", docs / "support-matrix.md")
+        (docs / "skill-platform-view.md").write_text(view_text, encoding="utf-8")
+
+    def real_view(self) -> str:
+        return (ROOT / "docs" / "skill-platform-view.md").read_text(encoding="utf-8")
+
+    def test_new_claim_in_the_view_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            view = self.real_view()
+            mutated = view.replace(
+                "supported with filesystem tools<br>supported after package dependencies",
+                "supported everywhere out of the box<br>supported after package dependencies",
+                1,
+            )
+            self.assertNotEqual(view, mutated)
+            self.write_fixture(root, mutated)
+            errors = check_skill_platform_view(root)
+            self.assertTrue(
+                any(
+                    "claim not derived from its governing rows" in error
+                    and "supported everywhere out of the box" in error
+                    for error in errors
+                ),
+                errors,
+            )
+
+    def test_skill_set_drift_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mutated = self.real_view().replace(
+                "| ask-azhou | supported by a configured skill root |",
+                "| retired-skill | supported by a configured skill root |",
+                1,
+            )
+            self.assertNotIn("| retired-skill |", self.real_view())
+            self.assertIn("| retired-skill |", mutated)
+            self.write_fixture(root, mutated)
+            errors = check_skill_platform_view(root)
+            self.assertIn("skill platform view row missing: ask-azhou", errors)
+            self.assertIn("skill platform view row unexpected: retired-skill", errors)
+
+    def test_map_entry_without_a_matrix_row_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mutated = self.real_view().replace(
+                "Eli5 zero-background picture explainer |",
+                "Eli5 fictional capability row |",
+                1,
+            )
+            self.assertNotIn("Eli5 fictional capability row", self.real_view())
+            self.write_fixture(root, mutated)
+            errors = check_skill_platform_view(root)
+            self.assertTrue(
+                any(
+                    "map row not found in support matrix" in error and "eli5" in error
+                    for error in errors
+                ),
+                errors,
+            )
+
+    def test_fragment_outside_governing_rows_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mutated = self.real_view().replace(
+                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | host-dependent",
+                "(evidence/super-caveman-zcode-adapter-live-gui-2026-09-04.md) | host-dependent",
+                1,
+            )
+            self.assertNotIn(
+                "super-caveman-zcode-adapter-live-gui-2026-09-04.md) | host-dependent",
+                self.real_view(),
+            )
+            self.write_fixture(root, mutated)
+            errors = check_skill_platform_view(root)
+            self.assertTrue(
+                any(
+                    "claim not derived from its governing rows" in error and "eli5:" in error
+                    for error in errors
+                ),
+                errors,
+            )
 
 
 class InvocationAxisTest(unittest.TestCase):
