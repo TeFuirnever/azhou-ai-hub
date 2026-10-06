@@ -15,6 +15,7 @@ from scripts.check_repository import (
     check_invocation_axis,
     check_markdown_links,
     check_public_boundaries,
+    check_reference_script_paths,
     check_rename_residue,
     check_secret_patterns,
     check_skill_brand_contract,
@@ -278,6 +279,76 @@ class RenameResidueTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], check_rename_residue([doc], root))
+
+
+class ReferenceScriptPathsTest(unittest.TestCase):
+    """Reference docs cite scripts mechanically: a `scripts/...` code span
+    must resolve at the repository root or, on a skill's own reference page,
+    inside the citing skill package (the arch-doc and excalidraw-diagram
+    doc-script drift mechanism, now gated)."""
+
+    def test_reference_docs_cite_existing_scripts(self) -> None:
+        self.assertEqual([], check_reference_script_paths(public_files(ROOT), ROOT))
+
+    def test_planted_broken_script_path_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            doc = root / "docs" / "workflow.md"
+            doc.parent.mkdir(parents=True)
+            doc.write_text("Render the hero with `scripts/does-not-exist.py`.\n", encoding="utf-8")
+            self.assertEqual(
+                ["reference script path missing: docs/workflow.md:1: scripts/does-not-exist.py"],
+                check_reference_script_paths([doc], root),
+            )
+
+    def test_skill_reference_pages_resolve_their_own_scripts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            packaged = root / "skills" / "eli5" / "scripts" / "check_audience.py"
+            packaged.parent.mkdir(parents=True)
+            packaged.write_text("print('ok')\n", encoding="utf-8")
+            reference = root / "skills" / "eli5" / "references" / "setup.md"
+            reference.parent.mkdir(parents=True)
+            reference.write_text("Assert with `scripts/check_audience.py`.\n", encoding="utf-8")
+            self.assertEqual([], check_reference_script_paths([reference], root))
+
+            docs_page = root / "docs" / "eli5.md"
+            docs_page.parent.mkdir(parents=True)
+            docs_page.write_text("Assert with `scripts/check_audience.py`.\n", encoding="utf-8")
+            self.assertEqual(
+                ["reference script path missing: docs/eli5.md:1: scripts/check_audience.py"],
+                check_reference_script_paths([docs_page], root),
+            )
+
+    def test_placeholders_and_non_path_spans_stay_out_of_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            doc = root / "docs" / "conventions.md"
+            doc.parent.mkdir(parents=True)
+            doc.write_text(
+                "Template `<skill-dir>/scripts/verify_doc.py` stays a placeholder. "
+                "Upstream source `packages/utils/src/export.ts` is not a repo path. "
+                "Command spans like `python scripts/unplanted.py --check` and the bare "
+                "`scripts/` directory mention are not path citations.\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_reference_script_paths([doc], root))
+
+    def test_historical_frozen_and_vendored_surfaces_stay_out_of_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            research = root / "docs" / "research" / "2026-01-01-note.md"
+            research.parent.mkdir(parents=True)
+            research.write_text("The survey recorded `scripts/gone.py`.\n", encoding="utf-8")
+            vendored = root / "skills" / "excalidraw-diagram" / "references" / ".venv" / "lib" / "note.md"
+            vendored.parent.mkdir(parents=True)
+            vendored.write_text("Upstream ships `scripts/gone.py`.\n", encoding="utf-8")
+            frozen = root / "skills" / "super-caveman" / "references" / "setup.md"
+            frozen.parent.mkdir(parents=True)
+            frozen.write_text("Ride-pinned citation `scripts/gone.py`.\n", encoding="utf-8")
+            self.assertEqual(
+                [], check_reference_script_paths([research, vendored, frozen], root)
+            )
 
 
 def copy_skill_brand_surfaces(root: Path) -> None:

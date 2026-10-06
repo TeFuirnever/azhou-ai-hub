@@ -758,6 +758,88 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+REFERENCE_DOC_DIRECTORIES = ("docs/",)
+REFERENCE_DOC_EXCLUDED_DIRECTORIES = (
+    # Dated research, spec and demo records are historical evidence, not live
+    # instructions; their citations are allowed to describe superseded trees.
+    "docs/research/",
+    "docs/specs/",
+    "docs/demos/",
+)
+SKILL_REFERENCES_SEGMENT = "/references/"
+REFERENCE_SCRIPT_EXCLUDED_SEGMENTS = (
+    # Vendored third-party trees are not this repository's reference surface.
+    "/.venv/",
+    "/node_modules/",
+    "/references/upstream/",
+)
+REFERENCE_SCRIPT_FROZEN_PREFIXES = (
+    # super-caveman is bound to its promotion skill-tree digest; its reference
+    # surface rides the pending promotion ride (see check_command_surface).
+    "skills/super-caveman/",
+)
+INLINE_CODE_SPAN = re.compile(r"`([^`\n]+)`")
+REFERENCE_SCRIPT_SPAN = re.compile(
+    r"scripts/[\w][\w./-]*\.(?:py|sh|bash|zsh|js|mjs|cjs|ts)"
+)
+
+
+def _reference_script_surface(relative: str) -> bool:
+    if not relative.endswith(".md"):
+        return False
+    if relative.startswith(REFERENCE_SCRIPT_FROZEN_PREFIXES):
+        return False
+    if any(segment in f"/{relative}" for segment in REFERENCE_SCRIPT_EXCLUDED_SEGMENTS):
+        return False
+    if relative.startswith(REFERENCE_DOC_DIRECTORIES):
+        return not relative.startswith(REFERENCE_DOC_EXCLUDED_DIRECTORIES)
+    return relative.startswith("skills/") and SKILL_REFERENCES_SEGMENT in f"/{relative}"
+
+
+def check_reference_script_paths(files: list[Path], root: Path) -> list[str]:
+    """Reference docs may only cite script paths that exist in the repository.
+
+    docs/ pages and skills/<skill>/references/ pages cite executable entry
+    points as bare repo-root code spans (`scripts/verify.py`). When a script
+    moves or is renamed, those citations silently rot: the arch-doc entry
+    pointing at a never-existing root verifier and the excalidraw-diagram
+    script drift were both this mechanism, with no gate covering it. The rule
+    stays mechanical to avoid false positives: only a code span whose entire
+    content is a `scripts/...` path with an executable suffix is checked, and
+    it must resolve at the repository root or - for skill reference pages,
+    where a skill cites its own packaged scripts - inside the citing skill's
+    directory. Placeholders like `<skill-dir>/scripts/...`, bare `scripts/`
+    directory mentions, command spans, and upstream source paths stay out of
+    scope.
+    """
+    errors: list[str] = []
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        if not _reference_script_surface(relative):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"cannot read reference surface {relative}: {exc}")
+            continue
+        skill_root = None
+        if relative.startswith("skills/"):
+            skill_root = root / PurePosixPath(*PurePosixPath(relative).parts[:2])
+        for line_number, line in enumerate(lines, 1):
+            for match in INLINE_CODE_SPAN.finditer(line):
+                candidate = match.group(1).strip()
+                if ".." in candidate or not REFERENCE_SCRIPT_SPAN.fullmatch(candidate):
+                    continue
+                if (root / candidate).is_file():
+                    continue
+                if skill_root is not None and (skill_root / candidate).is_file():
+                    continue
+                errors.append(
+                    f"reference script path missing: {relative}:{line_number}: {candidate}"
+                )
+    return errors
+
+
 COMMAND_SURFACE_FILES = ("README.md", "README.zh-CN.md")
 COMMAND_SURFACE_DIRECTORIES = ("docs/", "skills/")
 COMMAND_SURFACE_EXCLUDED_DIRECTORIES = (
@@ -916,6 +998,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_rename_residue(files, root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))
+    errors.extend(check_reference_script_paths(files, root))
     errors.extend(check_command_surface(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
