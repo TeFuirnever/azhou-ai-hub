@@ -18,7 +18,8 @@ The upstream baseline at the locked commit is a single 321-byte `SKILL.md`. Its 
 
 - keeps the upstream behavior sentence verbatim as the capability baseline;
 - keeps the upstream two-key `name` and `description` frontmatter shape and documents a harness-neutral topic argument instead of the slash-command-only `$ARGUMENTS` slot;
-- adds the topic boundary, the one self-contained artifact contract, the Azhou brand protocol, and a stable receipt;
+- adds the topic boundary, the one self-contained artifact contract with a fixed audience declaration and word budgets, the Azhou brand protocol, and a stable receipt;
+- adds the deterministic audience/style read-back assertion (`scripts/check_audience.py`) so receipt v2 catches model non-compliance before delivery;
 - adds this provenance record and the upstream compatibility map.
 
 ## Reproducible source check

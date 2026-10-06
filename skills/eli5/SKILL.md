@@ -26,20 +26,23 @@ Use `✅ 验证通过` only after the artifact is written to disk and read back.
 
 1. Resolve the topic from the user's request or the trailing argument after the `/eli5` trigger; do not require a specific harness command syntax.
 2. Check the boundary before writing. eli5 is for a zero-background picture explanation. If the user asks for precision-critical material such as spec review, security analysis, migration plans, or numerical claims, emit `🔒 阿舟暂停这一项` and answer in the requesting mode instead of degrading it to pictures.
-3. Produce exactly one self-contained HTML artifact: big pictures, few words, no network dependency at view time. Write it to an explicit user-visible path, `eli5-<topic-slug>.html` in the current working directory unless the user names one, and never overwrite an existing file without saying so.
-4. Read the artifact back and verify it opens as standalone HTML with the promised sections. The receipt's current truth may claim only what the read-back shows; raw evidence such as conversation excerpts or user paths stays out of the artifact unless the user supplied it.
-5. End with a receipt containing `schema`, `status`, `current_truth`, `artifacts`, `verification`, `holds`, `next_action`, and `learning_signal`:
+3. Produce exactly one self-contained HTML artifact: big pictures, few words, no network dependency at view time. The artifact declares its audience in the head with `<meta name="eli5-audience" content="zero-background">` and keeps visible text inside the fixed word budgets the assertion script enforces (at most 350 words overall, 45 per text block, 25 per sentence). Write it to an explicit user-visible path, `eli5-<topic-slug>.html` in the current working directory unless the user names one, and never overwrite an existing file without saying so.
+4. Read the artifact back and verify it opens as standalone HTML with the promised sections, then run the deterministic audience assertion from the skill package root: `python scripts/check_audience.py <artifact path>`. Exit `0` means the artifact is audience-compliant; exit `1` lists deterministic style violations and means the model did not comply; exit `2` means the artifact could not be read. The receipt's current truth may claim only what the read-back shows; raw evidence such as conversation excerpts or user paths stays out of the artifact unless the user supplied it.
+5. End with a receipt containing `schema`, `status`, `current_truth`, `artifacts`, `verification`, `audience_assertion`, `holds`, `next_action`, and `learning_signal`:
 
 ```text
 ## 🦊 阿舟 · Eli5 receipt
-- schema: eli5.receipt.v1
+- schema: eli5.receipt.v2
 - status: pass | fail | hold
 - current_truth: <one sentence the read-back actually proves>
 - artifacts: <path>
-- verification: <read-back command or check>
+- verification: <read-back command or check> ; <audience assertion command and its exit code>
+- audience_assertion: pass | fail (<deterministic violations from the script>)
 - holds: <none|fact>
 - next_action: <one concrete step>
 - learning_signal: <none|one line>
 ```
+
+Judgment rule: `status: pass` requires both a successful read-back and `audience_assertion: pass`. An assertion exit of `1` is model non-compliance caught before delivery: set `status: hold`, report the violations verbatim in `audience_assertion` and `holds`, and name revising the artifact as `next_action`; never deliver with a failing assertion. An artifact that could not be written or read back (assertion exit `2`) is `status: fail`.
 
 If the topic cannot be resolved, stop with `status=hold` and request one explicit topic.
