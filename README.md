@@ -54,6 +54,8 @@ These commands are the documented package-manager path; completion time and host
 
 Choose one installation method. Do not stack a package-manager install, a checkout-managed install, a manual copy, and a development symlink under the same canonical skill name. The four `azhou-*` packages make their `SKILL.md` workflow discoverable; they do not bundle the Foundation CLI and still require an explicit local checkout. See the [installation guide](docs/installation.md) for the complete paths and dependencies.
 
+When a host must install without network access, the [offline recovery](docs/installation.md#offline-recovery) runbook rebuilds the uv, npm and Playwright browser caches from local copies.
+
 ## Inspect, set up, or verify a checkout
 
 Four portable Azhou Agent Skills expose the checkout workflow without duplicating its mechanics. Invoke them through the active harness's native Skill surface while working in an Azhou AI Hub checkout, or provide that checkout path explicitly. Each adapter delegates to the checkout's zero-dependency Foundation CLI:

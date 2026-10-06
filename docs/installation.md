@@ -161,6 +161,62 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
+## Offline recovery
+
+Dependency installation is the only network-dependent step for the Excalidraw Diagram toolchain; rendering is offline afterwards. When the network is unavailable or a cache is incomplete — the recorded failure is a missing Playwright arm64 wheel during `uv sync --frozen` — recover from local caches instead of switching to an unlocked install.
+
+### Warm the caches once on a matching host
+
+Package caches are platform-specific. Fill them on an online host with the same OS and architecture as the offline target, using the same locked commands as a normal install:
+
+~~~bash
+uv cache dir
+# default: ~/.cache/uv
+
+npm config get cache
+# default: ~/.npm
+
+cd /absolute/path/to/excalidraw-diagram/references
+uv sync --frozen
+
+cd /absolute/path/to/excalidraw-diagram/scripts
+npm ci --ignore-scripts
+~~~
+
+Copy both cache directories to the same locations on the offline host.
+
+### Recover offline
+
+~~~bash
+cd /absolute/path/to/excalidraw-diagram/references
+uv sync --frozen --offline
+uv run python /absolute/path/to/excalidraw-diagram/scripts/check-playwright-runtime.py
+
+cd /absolute/path/to/excalidraw-diagram/scripts
+npm ci --offline --ignore-scripts
+~~~
+
+`uv sync --frozen --offline` installs exactly the locked versions from the local uv cache and fails instead of resolving anything new. `npm ci --offline --ignore-scripts` installs from `package-lock.json` out of the local npm cache with lifecycle scripts disabled — the same posture as the online install.
+
+If the runtime check exits `2`, the Chromium build for the locked Playwright version is absent. A browser cannot come from the package caches alone: on the online host, print the exact artifact and install location, install once, and copy the browser cache directory over.
+
+~~~bash
+cd /absolute/path/to/excalidraw-diagram/references
+uv run playwright install --dry-run chromium
+# prints the install location, e.g. ~/Library/Caches/ms-playwright/chromium-1234 on macOS arm64
+
+uv run playwright install chromium
+~~~
+
+Copy that directory to the same path on the offline host — or set `PLAYWRIGHT_BROWSERS_PATH` to the copied location on both hosts — and repeat the runtime check offline. Exit `0` means the browser is ready; exit `1` or `3` is a Playwright runtime or Python-package problem, not a missing browser, so fix that problem instead of copying browsers.
+
+### Hard-won rules
+
+- Copy, never move, a leased locked environment. A `uv sync --frozen` environment records absolute paths, and a treehouse worktree's path is recorded in its lease metadata. Moving either invalidates the recorded path; copy to the new location and keep the original until the copy verifies.
+- Warm the caches with the same lockfile the offline host uses (`--frozen`, `npm ci`). A cache warmed from a looser resolve misses the exact versions the offline install needs.
+- Stay on the declared seam: `uv sync --frozen`, `npm ci --ignore-scripts`, `uv run playwright install chromium`. Do not force an offline success with unlocked installs (`uv sync` without `--frozen`, `npm install`); that hides the drift the locks exist to prevent.
+- Verify a recovered environment with the same checks as a fresh install — the runtime checker and the skill's own verify steps — before trusting anything it renders.
+
 ## Upgrade or uninstall
 
 Package-manager installations follow the package manager's update/remove commands. For unmanaged manual copies, replace the whole skill directory only after reviewing local changes. For unmanaged symlinks, pull the repository and rerun verification.
