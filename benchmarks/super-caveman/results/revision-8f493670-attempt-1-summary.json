@@ -116,8 +116,8 @@
     "repository_scope": "pass (no writes outside the disposable fixture during response production)"
   },
   "reviewer": {
-    "identity": "zcode-agent/t4-evalcase-contract-rebind2/2026-09-13",
-    "review_sha256": "3e9df212901122be3f787af611e061066ae4b254df5cb27a19ba478919455d72"
+    "identity": "zcode-agent/u0-promotion-rebind/2026-10-06",
+    "review_sha256": "34d022dd3d14eb53c35a2558625b8d5c0d90568e1efdfbbe0ca718fba0c9274e"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -147,13 +147,13 @@
       "schema": "super-caveman-exact-diff-approval.v2",
       "status": "approved",
       "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-      "base_commit": "49e7f5f23ae80aeb56c713a8c1008f450c68e05c",
-      "path_set_sha256": "7c7c0f356dd7e5b524d45ba9b0d7fe659b2dcc1b670d027de85bd4988a57b9aa",
-      "staged_patch_sha256": "5e39723c94cbf65d1bb3bb1ce4c875f190b312dc57a663bc839178e8a7c37989",
+      "base_commit": "76431a4c995be908a88448a8cda3a289f19038e3",
+      "path_set_sha256": "09f8c86245e99de40dc4d30350cf440d8b5bf5343fd608e09291970177e3ec1f",
+      "staged_patch_sha256": "7cf221b9cac94987ac925ffe3bca65a1db9fa38b02eb0ecf2b8f9acb4ed298e8",
       "approver": "workspace-owner",
-      "approved_at": "2026-09-15T02:33:00Z",
-      "record_path": "results/revision-d266751c-exact-diff-approval.json",
-      "record_sha256": "12070d9832dfab2e767fcdca033b7d50cfc83cc8a04ed573a178b660db9201b6",
+      "approved_at": "2026-10-06T01:42:18Z",
+      "record_path": "results/revision-c317608b-exact-diff-approval.json",
+      "record_sha256": "a2b6f4cd8619e8c06bc43afacda0a1f0511b5f87ea76ff310430f97b2df66c76",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }
