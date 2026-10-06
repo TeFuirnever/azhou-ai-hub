@@ -309,7 +309,7 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
         "support_matrix": "docs/support-matrix.md",
         "runtime_state": {
             "root": ".azhou",
-            "namespaces": ["hub", "super-llm-wiki", "super-repo-pedant"],
+            "namespaces": ["ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
             "compatibility_sources": [
                 ".azhou-ai-hub/receipts",
                 ".azhou/llm-wiki",

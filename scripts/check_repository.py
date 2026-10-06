@@ -258,6 +258,36 @@ def check_router_coverage(root: Path) -> list[str]:
     ]
 
 
+ROUTER_INDEX_SCRIPT_RELATIVE = "skills/ask-azhou/scripts/generate_routing_index.py"
+
+
+def check_router_generated_index(root: Path) -> list[str]:
+    """The router's generated catalog must match the canonical skills manifest.
+
+    The catalog block in skills/ask-azhou/SKILL.md is produced by
+    skills/ask-azhou/scripts/generate_routing_index.py from every
+    skills/*/SKILL.md frontmatter description. Adding, renaming, or
+    re-describing a canonical skill without regenerating the block is
+    drift, and this check fails closed on it.
+    """
+    script = root / ROUTER_INDEX_SCRIPT_RELATIVE
+    if not script.is_file():
+        return [f"router index generator missing: {ROUTER_INDEX_SCRIPT_RELATIVE}"]
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "--root", str(root), "--check"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [f"router generated index check failed to run: {exc}"]
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip().splitlines()
+        message = detail[-1] if detail else f"exit {result.returncode}"
+        return [f"router generated index drift: {message}"]
+    return []
 SUPPORT_MATRIX_RELATIVE = "docs/support-matrix.md"
 SKILL_PLATFORM_VIEW_RELATIVE = "docs/skill-platform-view.md"
 SUPPORT_MATRIX_OS_HEADING = "## Operating system support"
@@ -440,7 +470,6 @@ def check_skill_platform_view(root: Path) -> list[str]:
                         f"{name}: {fragment}"
                     )
     return errors
-
 
 GATE_HELD_INVOCATIONS = {
     # super-caveman's whole tree is frozen by its promotion digest
@@ -880,6 +909,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_router_coverage(root))
+    errors.extend(check_router_generated_index(root))
     errors.extend(check_skill_platform_view(root))
     errors.extend(check_invocation_axis(root))
     errors.extend(check_fidelity_axis(root))
