@@ -1,6 +1,6 @@
 ---
 name: azhou-doctor
-description: Diagnose Azhou AI Hub checkout, package, explicit install-target, or Treehouse lease health without mutation. Use for health checks, broken installs, environment diagnostics, or support verification.
+description: Diagnose Azhou AI Hub checkout, package, explicit install-target, Treehouse lease, or host stale-install migration health without mutation. Use for health checks, broken installs, environment diagnostics, stale hook paths, residual installs after a canonical rename, or support verification.
 invocation: user-invoked orchestrator
 ---
 
@@ -29,8 +29,9 @@ Use `✅ 验证通过` only after the diagnostic command completes and its resul
    - `--target <skill-root>` for an exact install root.
    - `--skill <canonical-name>` for each requested package.
    - `--treehouse-root <pool-root>` for the explicit Treehouse boundary.
+   - `--host-root <host-root>` for the read-only stale-install migration probe (residual installs and stale hook paths left behind by a canonical rename).
    - `--verify` only when the user requests the complete repository gate or the claim requires it.
 3. Preserve the CLI distinction between `healthy`, `degraded`, and failed diagnostics. A warning is not a deterministic failure.
 4. Report findings and recommended next actions without applying them. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 
-If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and supported checks, read [setup and compatibility](references/setup.md).
+If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and supported checks, read [setup and compatibility](references/setup.md). For the operator-applied host migration after a canonical rename, read [host install migration](references/host-migration.md).

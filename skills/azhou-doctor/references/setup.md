@@ -15,4 +15,6 @@ This Skill is harness-neutral and does not bundle or install the repository-leve
 python scripts/azhou_hub.py doctor --json
 ~~~
 
+The optional `--host-root <host-root>` probe extends the doctor with a read-only migration scan for residual installs and stale hook paths that still use a renamed-away skill name. It scans the explicit host root's skills directory and its depth-1 `*.json`/`*.toml` config files against the canonical list, reports findings, and never mutates the host; the operator applies the migration steps in [host install migration](host-migration.md).
+
 The doctor is read-only. It never calls Treehouse `get`, `return`, `prune`, or `destroy`, and it never repairs package or harness state.
