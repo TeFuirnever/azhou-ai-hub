@@ -1,6 +1,6 @@
 ---
 name: azhou-info
-description: Report provable Azhou AI Hub checkout information or revision facts. Use for project info, installable repository inventory, support facts, version, commit, branch, or dirty-state questions.
+description: Report provable Azhou AI Hub checkout information or revision facts. Use for project info, installable repository inventory, support facts, version, commit, branch, or dirty-state questions; also for 这是什么版本, 现在装了哪些 skill, or "what revision is this checkout on".
 invocation: user-invoked orchestrator
 ---
 

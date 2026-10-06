@@ -118,7 +118,7 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
-            ["hub", "super-llm-wiki", "super-repo-pedant"],
+            ["ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
             payload["runtime_state"]["namespaces"],
         )
         self.assertEqual(

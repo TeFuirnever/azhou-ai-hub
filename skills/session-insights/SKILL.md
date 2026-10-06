@@ -1,6 +1,6 @@
 ---
 name: session-insights
-description: Analyze local agent session stores into fact-bound usage insight reports — session counts, active days, hour/project distribution, tool ranking, friction signals. Use when the user asks how they actually use their coding agent, wants a weekly report, or asks to be roasted on real numbers; read-only, aggregates only, raw transcripts never leave the machine.
+description: Analyze local agent session stores into fact-bound usage insight reports — session counts, active days, hour/project distribution, tool ranking, friction signals. Use when the user asks how they actually use their coding agent, wants a weekly report, or asks to be roasted on real numbers; also for 我的 agent 使用报告, 这周用得怎么样, or "which tools do I actually use"; read-only, aggregates only, raw transcripts never leave the machine.
 invocation: user-invoked orchestrator
 ---
 
