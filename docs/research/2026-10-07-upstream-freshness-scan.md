@@ -35,6 +35,16 @@
 
 **无需动作项(维持现状)**:eli5(行为句未动,仅上游 LICENSE 变更)、autoresearch(逐字节一致)、excalidraw 引擎(npm 最新仍 0.18.1,主线 430 commits 未发布)、ask-azhou(仅 pattern 参考,生成式路由表已结构性解决上游过时问题)。
 
+### Decision (2026-10-07): keep the pinned hard cap
+
+T1 决定(2026-10-07,workspace-owner 委托执行):**保留 pinned 硬截断合同,不采纳上游 i-have-adhd 规则 9 的呈现层放宽**。pin `b42a45a0`(ayghri/i-have-adhd,全 SHA `b42a45a068e080294924bfba19a7a2e8944c48ff`)与 super-caveman 的 44 条输出行为判据保持不变;本次决定不改任何 skill 文件、不改 pin。
+
+理由:现行 "Cap lists at 5 items" 硬截断是人工 P0 批准过的合同行为——现行 19/19 晋级案例与 44 条输出行为判据是在该合同上批准的;上游新语义(仅约束呈现层:分组+排序、每组 ≤5、"Never omit relevant items when completeness matters…")是对其中至少 1 条判据的行为反转,不是缺陷修复;采纳的确定成本是一轮完整晋级骑行(19 案例 + 3 judge + exact-diff P0),而收益未经请求评估;vendored-material 规则下 pin 在无回据支持前保持 immutable。
+
+采纳路径:采纳即改 skill-tree digest,必须先由维护者点名启动完整晋级骑行(19 案例 + 3 judge + exact-diff P0),骑行通过后再按 vendored-material 规则(immutable source、license、retained notice、reproducible update path)更新 pin 与本笔记。触发条件:维护者明确点名采纳上游规则 9 放宽;在此之前本决定持续有效,例行扫描只需复查上游是否再次触及引入面。
+
+同步:同一决定的英文版见 issue #272 的 T1 项。
+
 ## 方法与边界
 
 - 命令:`gh api repos/<repo>/commits/HEAD` + `gh api repos/<repo>/compare/<pin>...<head>`,npm 用 `npm view`。快照时间 2026-10-07,上游持续移动,结论有时效性。
