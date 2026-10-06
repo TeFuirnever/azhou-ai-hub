@@ -225,4 +225,4 @@ uv run python "$SKILL_DIR/scripts/visual-check.py" \
 | 连线漂移 | 修复双向 binding 与端点坐标，不补装饰线 |
 | CJK 乱码/tofu | 使用随包字体与 official export；不得用截图遮盖 |
 | overlap 脚本误报 | 查看成图和具体坐标；记录具名人工判定，不伪造脚本通过 |
-| 无视觉查看能力 | 交付源文件与机器结果，视觉 gate 保持 hold |
+| 无视觉查看能力 | 仍运行 `visual-check.py --scene`：schema-2 回执落显式 hold `sandbox blocked preview` 并附几何+哈希降级校验（见 [setup.md](references/setup.md) 沙箱章节）；交付源文件与机器结果，视觉 gate 保持 hold，状态用 `complete_with_holds` |

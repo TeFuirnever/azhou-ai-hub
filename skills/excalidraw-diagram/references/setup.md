@@ -102,12 +102,36 @@ The last command prints usage and exits `1`; that is the expected no-input smoke
 | Script | Additional requirement |
 |---|---|
 | `scripts/export-official-svg.py` | uv environment + Chromium |
-| `scripts/visual-check.py` | uv environment + Chromium; exit `2` means browser unavailable |
+| `scripts/visual-check.py` | uv environment + Chromium; exit `2` means browser unavailable; the exit-2 receipt carries the explicit `sandbox blocked preview` hold and the GUI-free fallback block |
 | `scripts/mermaid-to-excalidraw.py` | uv environment + Chromium |
 | `scripts/svg-to-excalidraw.py` | uv environment + Chromium |
 | `scripts/render-svg.mjs` | npm dependencies installed in `scripts/` |
 | `scripts/subset-xiaolai.py` | `uv run --with fonttools --with brotli python ...` |
 | `scripts/excalidraw_lib.py` | standard library; vendored libraries by default |
+
+## When the sandbox blocks the browser
+
+Some harness sandboxes deny the whole preview chain: Playwright import,
+Chromium launch, `file://` preview, or system image tools all fail. The chain
+degrades deterministically instead of ending in a silent skip:
+
+1. Keep the deterministic gates. `check-scene-hygiene.py`,
+   `check-handdrawn-style.py`, and `audit-overlaps.py` run on plain Python
+   with no GUI and no browser.
+2. Still run `visual-check.py` with `--scene` bound to the source scene. Exit
+   `2` means the browser path is unavailable; the schema-2 receipt then
+   records the explicit hold `sandbox blocked preview` plus a `fallback`
+   block — artifact and scene SHA-256 digests, the renderer's own
+   scene-envelope validation, and the geometry audit result. This is
+   geometry- and hash-level verification only; it never counts as a visual
+   review.
+3. Copy the hold into the delivery receipt (`excalidraw-diagram.receipt.v1`):
+   `Visual review: skipped — sandbox blocked preview` and a matching `Holds`
+   entry. The status is then `complete_with_holds`, never `complete`. A
+   skipped review without a stated reason is recorded as
+   `visual review not recorded`.
+4. Regenerate the pixel evidence later on an unsandboxed machine: the digests
+   in the receipt prove the bytes inspected then are the bytes delivered now.
 
 ## Upgrade vendored assets
 

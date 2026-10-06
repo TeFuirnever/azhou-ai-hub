@@ -65,6 +65,7 @@ Emoji 是显示映射；右侧英文值才是稳定机器状态。
 - `complete_with_holds`：可用产物已交付；`Holds` 列出不影响当前交付但仍未关闭的真实限制。
 - `failed`：没有把不可信产物包装成完成；`Next action` 给出一个可执行动作。
 - `Visual review` 为 `skipped`、`pending` 或缺少 reviewer 时，不能使用 `complete`。
+- `Visual review: skipped` 必须落为显式 `Holds` 项并写明原因与影响，不得静默跳过；沙箱拦截浏览器路径时，hold 值与机器回执 `visual-check.json` 的 `holds` 一致（`sandbox blocked preview`），`Visual review` 行写 `skipped — sandbox blocked preview`。
 - `complete` 要求 scope 已解析：启动行与收据 `Scope` 携带具体值，`unresolved` 只允许出现在需求锁定之前的阶段事件里。
 
 ## 稳定收据

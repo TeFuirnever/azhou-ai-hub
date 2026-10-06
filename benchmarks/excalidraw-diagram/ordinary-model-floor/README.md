@@ -17,13 +17,21 @@ A run is `firstPassUsable` only when all three gates pass:
 3. **Visual review** — an identified reviewer inspected the rendered artifact
    and reported `passed` with no defects. Use short defect tags (`clipping`,
    `node-overlap`, `label-overlap`, `unbalanced-whitespace`, `tofu`). A
-   `skipped` review can never produce `firstPassUsable: true`. A
+   `skipped` review can never produce `firstPassUsable: true`, and it must be
+   explicit: `run.json` carries `visual_review.holds` (for example
+   `["sandbox blocked preview"]`, copied from the `visual-check.py` schema-2
+   receipt). `verify` surfaces the holds verbatim; a skipped review without
+   any holds gets the explicit `visual review not recorded` hold, so a silent
+   skip cannot pass through unnoticed. `report` lists the distinct holds. A
    renderer-valid but semantically wrong diagram is a failure; a visually
    pleasing diagram that fails deterministic validation is also a failure.
 
-The checked-in reference fixture only proves the harness is wired correctly.
-**Reference fixtures are not benchmark evidence** and must never be published
-as model results.
+The checked-in reference fixtures only prove the harness is wired correctly:
+`reference.run.json` verifies green, and `reference.sandbox-blocked.run.json`
+plus the `visual-check.py` fallback receipt
+(`reference.architecture.svg.visual-check.json`) hold explicitly with
+`firstPassUsable: false`. **Reference fixtures are not benchmark evidence**
+and must never be published as model results.
 
 ## Suite
 
@@ -69,15 +77,32 @@ python3 benchmark.py report --results /path/to/results.jsonl   # aggregate matri
 }
 ```
 
+When the sandbox blocked the preview, the visual review records the hold from
+the `visual-check.py` schema-2 receipt instead of a bare skip:
+
+```json
+{
+  "schema_version": 1, "case_id": "layered-architecture",
+  "agent": "agent-name", "model": "model-name", "attempt": 1,
+  "visual_review": {"status": "skipped", "reviewer": "", "defects": [],
+                    "holds": ["sandbox blocked preview"]}
+}
+```
+
 `record-failure` reasons are allow-listed to `timeout`, `no_candidate`, and
 `provider_error`; those receipts count toward matrix coverage but keep every
 quality gate truthfully `not_run`. `report` separates operational, semantic,
-deterministic, and visual-review failure clusters, and `evidenceEligible` is
-true only when every case has exactly one attempt-1 receipt.
+deterministic, and visual-review failure clusters, lists the distinct
+visual-review `holds`, and `evidenceEligible` is true only when every case has
+exactly one attempt-1 receipt.
 
 ## Visual review honesty
 
 Review the rendered artifact (or the `--png` from `export-official-svg.py`),
 never the JSON alone: `passed` requires a non-empty reviewer identity,
 `failed` lists concrete defects, `skipped` admits no capable reviewer was
-available. Never upgrade a skipped review to a pass.
+available and names the reason as an explicit hold (for example
+`sandbox blocked preview` when the harness sandbox denied the browser path;
+the skill's GUI-free fallback — geometry plus hash verification — never
+substitutes for a review). Never upgrade a skipped review to a pass, and never
+leave a skip silent.
