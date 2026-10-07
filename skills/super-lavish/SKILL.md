@@ -6,7 +6,7 @@ invocation: user-invoked orchestrator
 
 # Super Lavish Editor
 
-Super Lavish Editor turns rich HTML artifacts into collaborative human review surfaces. First generate an interactive HTML artifact for the request, then run `npx -y lavish-axi@0.1.47 <html-file>` so the user can inspect it, annotate elements or selected text, queue prompts, and send feedback.
+Super Lavish Editor turns rich HTML artifacts into collaborative human review surfaces. First generate an interactive HTML artifact for the request, then run `npx -y lavish-axi@0.1.83 <html-file>` so the user can inspect it, annotate elements or selected text, queue prompts, and send feedback.
 
 **🦊 阿舟 · Super Lavish**
 
@@ -27,9 +27,9 @@ Azhou only hosts the agent process; it is not an HTML brand. Artifacts keep the 
 
 Before first use, read [setup](references/setup.md). Before changing the imported workflow, read [provenance](references/provenance.md) and [upstream compatibility](references/upstream-compatibility.md). For interactive sessions, follow the [Azhou interaction layer](references/brand-layer.md). In relay mode, also read the [Spec Relay contract](references/spec-relay.md) before generating the packet.
 
-You do not need `lavish-axi` installed globally. Invoke the locked baseline with `npx -y lavish-axi@0.1.47 <html-file>`.
-If `lavish-axi` output shows a follow-up command starting with `lavish-axi`, run it as `npx -y lavish-axi@0.1.47 ...` instead.
-In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits opaquely, use an already-installed copy directly: `node "$(npm root)/lavish-axi/dist/cli.mjs" <html-file>` for a local install, `node "$(npm root -g)/lavish-axi/dist/cli.mjs" <html-file>` for a global install, or the bare `lavish-axi <html-file>` bin after installing version `0.1.47` once.
+You do not need `lavish-axi` installed globally. Invoke the locked baseline with `npx -y lavish-axi@0.1.83 <html-file>`.
+If `lavish-axi` output shows a follow-up command starting with `lavish-axi`, run it as `npx -y lavish-axi@0.1.83 ...` instead.
+In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits opaquely, use an already-installed copy directly: `node "$(npm root)/lavish-axi/dist/cli.mjs" <html-file>` for a local install, `node "$(npm root -g)/lavish-axi/dist/cli.mjs" <html-file>` for a global install, or the bare `lavish-axi <html-file>` bin after installing version `0.1.83` once.
 
 ## Request
 

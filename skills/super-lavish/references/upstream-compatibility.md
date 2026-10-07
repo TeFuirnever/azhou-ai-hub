@@ -6,7 +6,7 @@ This map records the imported `lavish` baseline at commit `232972beba9e0e4e75682
 |---|---|---|
 | Explicit `/lavish` request and conversation inference | preserved | `SKILL.md` Request section |
 | Default `.lavish/<name>.html` artifact path | preserved | Artifact mode workflow step 1 |
-| Open or resume browser review | preserved | Artifact mode workflow step 2; CLI pinned to `0.1.47` |
+| Open or resume browser review | preserved | Artifact mode workflow step 2; CLI pinned to `0.1.83` |
 | Repair `self_paint_warning` before polling | preserved | Artifact mode workflow step 2 |
 | Foreground long-poll and verified callback rule | preserved | Artifact mode workflow step 3 |
 | Passive layout inbox; repair only queued warnings | preserved | Artifact mode workflow steps 3–4 |
@@ -15,8 +15,9 @@ This map records the imported `lavish` baseline at commit `232972beba9e0e4e75682
 | Never reopen browser-ended sessions uninvited | preserved and strengthened | Explicit authorization boundary |
 | Visual hierarchy and overflow guidance | preserved | Visual guidance |
 | Real UI screenshots over prose | preserved | Visual guidance |
-| Diagram/table/comparison/plan/code/input/slides playbooks | preserved | Playbooks |
-| Mermaid-to-editable-Excalidraw review | preserved | Commands and rules |
+| Diagram/table/comparison/plan/code/input/explanation/slides playbooks | preserved | Playbooks |
+| Mermaid-to-editable-Excalidraw review as the opt-in whiteboard | preserved | Commands and rules; diagrams default to hand-authored inline SVG at the `0.1.83` baseline |
+| One-shot agent reply without re-polling (`reply`) | preserved | CLI-native at the `0.1.83` baseline; the local loop keeps using `poll --agent-reply`, `reply` stays available |
 | Portable standalone export | preserved | Commands and rules |
 | `ht-ml.app` sharing | preserved with safety checkpoint | Explicit publication authorization required |
 | User/project/fallback design-source priority | preserved | Commands and rules |

@@ -371,7 +371,7 @@ class SkillPackageTest(unittest.TestCase):
 
         self.assertEqual("super-lavish", re.search(r"^name:\s*([^\n]+)$", skill, re.MULTILINE).group(1).strip())
         for surface in (skill, setup, provenance):
-            self.assertIn("0.1.47", surface)
+            self.assertIn("0.1.83", surface)
         self.assertIn("232972beba9e0e4e75682c98f2aeb2cf01532122", provenance)
         self.assertIn("7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857", provenance)
         self.assertIn("No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored", provenance)
@@ -395,8 +395,8 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("把复杂结果变成可审阅的界面。", brand)
         self.assertIn("A host without Unicode", brand)
         self.assertIn("Emoji", brand)
-        self.assertIn("lavish-axi@0.1.47", skill)
-        self.assertIn("lavish-axi@0.1.47", setup)
+        self.assertIn("lavish-axi@0.1.83", skill)
+        self.assertIn("lavish-axi@0.1.83", setup)
         self.assertIn("preserved", compatibility)
         self.assertIn("intentionally omitted", compatibility)
 

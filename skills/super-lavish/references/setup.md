@@ -7,7 +7,7 @@ Read this before first use or when the CLI, browser session, polling, export, or
 | Requirement | Locked baseline | Purpose |
 |---|---:|---|
 | Node.js + npm/npx | Node 22+ | Run `lavish-axi` |
-| `lavish-axi` | `0.1.47` | Open, poll, export, end, and optionally share review artifacts |
+| `lavish-axi` | `0.1.83` | Open, poll, export, end, and optionally share review artifacts |
 | Browser | host default | Local interactive review surface |
 | Python | 3.11+ | Initialize, persist, inspect, and validate embedded relay state |
 | Network | npm fetch; optional remote assets/share | Resolve the CLI when not installed and load explicitly remote resources |
@@ -20,8 +20,8 @@ The package contains the Skill instructions and a Python standard-library state 
 node --version
 npm --version
 python --version
-npm view lavish-axi@0.1.47 version dist.integrity repository.url license engines --json
-npx -y lavish-axi@0.1.47 --help
+npm view lavish-axi@0.1.83 version dist.integrity repository.url license engines --json
+npx -y lavish-axi@0.1.83 --help
 ```
 
 `npx -y` downloads and executes the locked npm package when it is absent from the local cache. Review the npm metadata before first execution in a sensitive environment.
@@ -29,7 +29,7 @@ npx -y lavish-axi@0.1.47 --help
 ## Run without a persistent install
 
 ```bash
-npx -y lavish-axi@0.1.47 <html-file>
+npx -y lavish-axi@0.1.83 <html-file>
 ```
 
 This writes Lavish session state outside the repository and starts a local server/browser flow. Relay mode also persists returned feedback inside the HTML packet. Keep `.lavish/` artifacts with private comments out of Git unless the user explicitly selects a sanitized packet for version control.
@@ -41,7 +41,7 @@ The relay state helper uses optimistic revisions and atomic replacement. Every m
 Use a project-local install when repeated downloads are undesirable:
 
 ```bash
-npm install --save-dev --ignore-scripts lavish-axi@0.1.47
+npm install --save-dev --ignore-scripts lavish-axi@0.1.83
 node "$(npm root)/lavish-axi/dist/cli.mjs" --help
 ```
 
@@ -50,9 +50,9 @@ A global install or `lavish-axi setup hooks` changes user-level state. Run eithe
 ## Verify
 
 ```bash
-npx -y lavish-axi@0.1.47 --version
-npx -y lavish-axi@0.1.47 playbook table
-npx -y lavish-axi@0.1.47 design
+npx -y lavish-axi@0.1.83 --version
+npx -y lavish-axi@0.1.83 playbook table
+npx -y lavish-axi@0.1.83 design
 python <skill-dir>/scripts/relay_state.py --help
 python -m unittest tests.test_super_lavish_relay_state -v
 ```
