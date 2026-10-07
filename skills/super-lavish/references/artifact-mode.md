@@ -11,7 +11,7 @@ Run artifact mode per this reference; the entry keeps the mode choice, authoriza
    Completion: the review session is live in the browser and its session output is recorded.
 3. Run `npx -y lavish-axi@0.1.83 poll <html-file>` to long-poll for the user's annotations and queued prompts.
    On the first poll, prefer `--agent-reply "<one-line summary of what you built and what to review first>"` so the conversation panel opens with context.
-   Browser-detected layout issues are filed passively in the user's Layout issues inbox and arrive as an ordinary `layout-warnings` prompt only when the user selects and queues them. Never edit an issue the user has not queued. The only response that arrives without user action is `artifact_failures`, when the review surface itself is unusable.
+   Browser-detected layout issues are filed passively in the user's Layout issues inbox and arrive as an ordinary `layout-warnings` prompt only when the user selects and queues them. Never edit an issue the user has not queued. Two responses can arrive without user action: `artifact_failures`, when the review surface itself is unusable, and — since CLI 0.1.83 — `browser_disconnected`, when every review browser has stayed closed past the reconnect grace period.
    The poll stays silent until the user acts or a fatal artifact failure makes the review surface unusable. Leave it running; never kill it.
    Cosmetic, intentional, transient, tiny, and uncertain observations remain silent.
    Keep the poll in the foreground by default and let it return the feedback directly to the agent.
@@ -20,6 +20,7 @@ Run artifact mode per this reference; the entry keeps the mode choice, authoriza
    If the harness has no completion-aware background facility, use the foreground poll or first wire a verified wake callback into the surrounding supervisor.
    Do not tell the user the artifact is being monitored until that wake path is live.
    If the poll gets killed or times out, re-run it. Queued feedback is not lost.
+   On `browser_disconnected`, do not treat the review as finished and do not reopen anything on your own: ask the user whether to reopen the review session or end it while it is still resumable, per the upstream CLI reference, and act only on their answer.
    Completion: a poll is attached under the foreground-or-verified-wake-path rule and its tracked reference is recorded.
 4. If polling returns feedback, apply the user's prompts. A `layout-warnings` prompt is an explicit repair request; apply every listed fix in one pass before saving, then let Lavish re-check it after a newer artifact load.
    Completion: every returned prompt is applied or explicitly dispositioned, and the artifact was saved after the last edit.
