@@ -35,15 +35,15 @@
 
 **无需动作项(维持现状)**:eli5(行为句未动,仅上游 LICENSE 变更)、autoresearch(逐字节一致)、excalidraw 引擎(npm 最新仍 0.18.1,主线 430 commits 未发布)、ask-azhou(仅 pattern 参考,生成式路由表已结构性解决上游过时问题)。
 
-### Decision (2026-10-07): keep the pinned hard cap
+### Decision (2026-10-07): keep the pinned contract; upstream rule-9 delta recorded as a wording-level strengthening
 
-T1 决定(2026-10-07,workspace-owner 委托执行):**保留 pinned 硬截断合同,不采纳上游 i-have-adhd 规则 9 的呈现层放宽**。pin `b42a45a0`(ayghri/i-have-adhd,全 SHA `b42a45a068e080294924bfba19a7a2e8944c48ff`)与 super-caveman 的 44 条输出行为判据保持不变;本次决定不改任何 skill 文件、不改 pin。
+Correction note (2026-10-07, after review): an earlier draft of this decision described the pinned rule 9 as a "hard truncation" and the upstream change as a behavior reversal. Both characterizations were wrong. The pinned contract (`b42a45a0` snapshot, `SKILL.snapshot.txt:103-105`) already requires splitting long lists into ranked groups ("do now" vs "later", "must" vs "nice to have"), the current enforced contract preserves that split-into-ranked-groups behavior (`references/modes.md:23`), and the complex-plan benchmark case already requires that all seven concern items survive across groups (`response-cases.json`). The upstream v3 wording keeps the same grouping principle and adds an explicit completeness guarantee — "Never omit relevant items when completeness matters… must not limit analysis, search, tool results, candidate generation, or retained information" — which strengthens presentation honesty without contradicting any current benchmark criterion.
 
-理由:现行 "Cap lists at 5 items" 硬截断是人工 P0 批准过的合同行为——现行 19/19 晋级案例与 44 条输出行为判据是在该合同上批准的;上游新语义(仅约束呈现层:分组+排序、每组 ≤5、"Never omit relevant items when completeness matters…")是对其中至少 1 条判据的行为反转,不是缺陷修复;采纳的确定成本是一轮完整晋级骑行(19 案例 + 3 judge + exact-diff P0),而收益未经请求评估;vendored-material 规则下 pin 在无回据支持前保持 immutable。
+T1 decision (2026-10-07, workspace-owner delegated execution): **keep the pinned `b42a45a0` i-have-adhd contract unchanged**. Rationale: the pinned split-into-ranked-groups behavior is the contract the 19/19 ride and 44 output-behavior criteria were approved against; the upstream delta is a wording-level strengthening with no identified criterion conflict, so there is no evidence-backed reason to spend a promotion ride now; under the vendored-material rule the pin stays immutable absent such evidence. This decision changes no skill file and no pin.
 
-采纳路径:采纳即改 skill-tree digest,必须先由维护者点名启动完整晋级骑行(19 案例 + 3 judge + exact-diff P0),骑行通过后再按 vendored-material 规则(immutable source、license、retained notice、reproducible update path)更新 pin 与本笔记。触发条件:维护者明确点名采纳上游规则 9 放宽;在此之前本决定持续有效,例行扫描只需复查上游是否再次触及引入面。
+Adoption path: adopting the v3 wording means a skill-tree digest change and requires a maintainer-initiated full promotion ride (19 cases + 3 judges + exact-diff P0), after which the pin update follows the vendored-material rule (immutable source, license, retained notice, reproducible update path). Until then this decision stands; routine scans only need to re-check whether the upstream touches the imported surface again.
 
-同步:同一决定的英文版见 issue #272 的 T1 项。
+Sync: the English version of this decision is posted on issue #272 (T1).
 
 ## 方法与边界
 
