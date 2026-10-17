@@ -87,6 +87,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the eli5 behavior sentence and trigger intent; no other upstream files exist
 - Local changes: harness-neutral description and topic argument, topic boundary, self-contained artifact contract, Azhou brand protocol, stable receipt, provenance and compatibility records
 
+## ASD-STE100
+
+`skills/asd-ste100/` imports the `asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
+
+- Copyright: Dustin Yuchen Teng, 2026
+- License: [MIT](LICENSES/asd-ste100-skill-MIT.txt)
+- Imported boundary: the controlled-English rewrite capability with its Strict and STE-flavored modes, the structural-rule linter `ste-lint.py`, the writing-rules summary and the worked examples
+- Local changes: frontmatter normalization to the hub contract, Azhou brand protocol, explicit hold boundary, stable receipt, provenance and compatibility records
+
 ## Autoresearch (referenced, not redistributed)
 
 `skills/autoresearch/` is an Azhou-authored wrapper around [karpathy/autoresearch](https://github.com/karpathy/autoresearch) pinned at commit `228791fb499afffb54b46200aca536f79142f117`. The upstream repository publishes no license file, so no upstream bytes are vendored: the runtime environment is the user's own pinned checkout, the experiment protocol stays in the upstream `program.md`, and this package ships wrapper, setup and provenance text only.
