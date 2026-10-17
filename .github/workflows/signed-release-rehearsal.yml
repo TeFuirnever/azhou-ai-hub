@@ -46,17 +46,19 @@ jobs:
           Path("SKILL_SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(Path("SKILL_SHA256SUMS.txt").read_text(encoding="utf-8"))
           PY
+      - name: Install the pinned sigstore CLI
+        run: |
+          python -m pip install --quiet "sigstore==4.5.0"
+          python -m sigstore --version
       - name: Keyless-sign the manifest
-        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
-        with:
-          inputs: SKILL_SHA256SUMS.txt
+        run: python -m sigstore sign --bundle SKILL_SHA256SUMS.txt SKILL_SHA256SUMS.txt
       - name: Verify the signature identity
-        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
-        with:
-          inputs: SKILL_SHA256SUMS.txt
-          verify: true
-          verify-cert-identity: "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
-          verify-oidc-issuer: "https://token.actions.githubusercontent.com"
+        run: >
+          python -m sigstore verify-identity
+          --bundle SKILL_SHA256SUMS.txt.sigstore
+          --certificate-identity "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          SKILL_SHA256SUMS.txt
       - name: Attach the signed manifest to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,5 +77,5 @@ jobs:
             echo "- Signature: keyless sigstore (Fulcio OIDC, Rekor bundle SKILL_SHA256SUMS.txt.sigstore)"
             echo "- Identity bound to: this workflow file on refs/heads/main"
             echo "- Draft release tag: ${{ inputs.tag }} (unpublished)"
-            echo "- Verify command: sigstore verify-identity --bundle SKILL_SHA256SUMS.txt.sigstore --certificate-identity '<workflow uri>' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
+            echo "- Verify command: python -m sigstore verify-identity --bundle SKILL_SHA256SUMS.txt.sigstore --certificate-identity '<workflow uri>' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
           } >> "$GITHUB_STEP_SUMMARY"
