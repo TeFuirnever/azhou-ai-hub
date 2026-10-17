@@ -11,8 +11,8 @@ Repository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICE
 | Upstream | `https://github.com/kunchenguid/lavish-axi` |
 | Immutable commit | `232972beba9e0e4e75682c98f2aeb2cf01532122` |
 | Upstream path | `skills/lavish/SKILL.md` |
-| CLI baseline | `lavish-axi@0.1.83` |
-| npm integrity | `sha512-cs6hfWReEPrGjySrEsPWm/Qg0ESKfRpH3t0dFRpsQiC0WSatkTA85LwRZngAwbJEDVSA2AmCf2p4+NlcVerzZA==` |
+| CLI baseline | `lavish-axi@0.1.89` |
+| npm integrity | `sha512-qPt10ej626zXv4uG1gMgv0btR2WLi5tO92jV0HfmjpZHk795OHF/AMC2WW0N5qJJhZyIG2l3T5Al9DZeBOADXw==` |
 | License | MIT, copyright 2026 Kun Chen |
 
 The recorded hash identifies the unmodified upstream skill baseline at the locked commit. The upstream repository generates its installable skill from its own source; this package imports that generated behavior rather than the Lavish application code. The package is not byte-identical to that baseline: the documented local layer turns the review artifact into a portable relay packet when the request needs one, while preserving the upstream review runtime.
@@ -22,7 +22,7 @@ The recorded hash identifies the unmodified upstream skill baseline at the locke
 Azhou AI Hub keeps the upstream workflow, visual guidance, playbooks, polling rules, editable-whiteboard behavior, export/share commands, design-source priority, and session-end semantics. The local layer:
 
 - narrows frontmatter to the neutral `name` and `description` contract;
-- pins npm execution to `0.1.83` for reproducibility;
+- pins npm execution to `0.1.89` for reproducibility;
 - adds the Spec Relay relay mode: source/revision metadata, stable `data-review-id`s, an embedded `spec-relay.html-state.v1` block, complete comment and annotation records, feedback disposition updates, next-owner handoff, optimistic revision guards, a responsive visible ledger, and a relay-specific receipt ([Spec Relay contract](spec-relay.md));
 - keeps Azhou identity, emoji, and stage language in the agent interaction layer while the transferable HTML remains brand-neutral;
 - adds setup, provenance, capability mapping, authorization checkpoints, and stable Azhou receipts;
@@ -48,6 +48,11 @@ curl -fsSL https://raw.githubusercontent.com/kunchenguid/lavish-axi/232972beba9e
 
 ## Update path
 
+- 2026-10-17 — CLI baseline `0.1.83` → `0.1.89` (npm releases 0.1.84–0.1.89, 6 versions, zero `BREAKING CHANGES` markers and no relay-surface vocabulary — spec/relay/export/init/serve/feedback/ledger/revision — in the upstream changelog). Upstream skill source and immutable commit are unchanged (`232972be`, SHA-256 unchanged). Evidence recorded before the pin moved:
+  - Relay contract regression on the local layer: `python -m unittest tests.test_super_lavish_relay_state tests.test_super_lavish_relay_fuzz_regressions tests.test_fuzz_relay_state tests.test_super_lavish_entry_budget` (16 tests, includes the optimistic `state_revision` stale-write rejection, visible-ledger tampering rejection, and exact visible-ledger projection) — all pass; `python scripts/fuzz_relay_state.py --seconds 120 --seed 20260902` — 174,939 inputs, 0 crashes.
+  - Isolated installs without global changes: `npm install lavish-axi@0.1.83 --prefix /tmp/lavish-083 --ignore-scripts` (plus the same for `0.1.89`); `npm view lavish-axi@0.1.89 dist.integrity` returned the integrity recorded above; the vendored `LICENSE` file is byte-identical between 0.1.83 and 0.1.89.
+  - Real artifact-mode smoke on a `relay_state.py init` packet, identical steps on both versions: `open --no-open` (exit 0, session URL served HTTP 200), bounded 8s `poll` (long-poll alive until the bounded stop, graceful interrupted-poll notice), `export --out` (exit 0, 4711 bytes, `unresolved_local_assets: 0`, `notices: 0`; export bodies byte-identical across the two versions, same SHA-256), `end` (exit 0, `status: ended`), and `relay_state.py validate` after the full lifecycle (`spec-relay.html-state.v1` valid, state block byte-identical to the pre-CLI copy). No browser annotation round-trip was exercised (no human in the loop), matching the disclosed boundary of the earlier receipts.
+  - Command-surface deltas across 0.1.84–0.1.89, none touching the documented loop: the changelog names 0.1.84 (server sessions and assets constrained to HTML artifact trees) and 0.1.87 (the CLI adopts a running server newer than itself, which lowers mixed-version breakage for the pinned-`npx` practice); both are covered by the smoke above; the remaining releases are whiteboard, SDK, and browser-input fixes.
 - 2026-10-07 — CLI baseline `0.1.47` → `0.1.83` (npm releases 0.1.48–0.1.83, 36 versions, zero `BREAKING CHANGES` markers per the upstream changelog scan in `docs/research/2026-10-07-upstream-freshness-scan.md`). Upstream skill source and immutable commit are unchanged (`232972be`, SHA-256 unchanged). Evidence recorded before the pin moved:
   - Relay contract regression on the local layer: `python tests/test_super_lavish_relay_state.py` (9 tests, includes the optimistic `state_revision` stale-write rejection, visible-ledger tampering rejection, exact visible-ledger projection, and the responsive-layout CSS assertions), `python tests/test_super_lavish_relay_fuzz_regressions.py` (4 tests), `python tests/test_fuzz_relay_state.py`, `python tests/test_super_lavish_entry_budget.py` — all pass.
   - Isolated install without global changes: `npm install lavish-axi@0.1.83 --prefix /tmp/lavish-083 --ignore-scripts` (plus the same for `0.1.47` as the comparison baseline); `npm view lavish-axi@0.1.83 dist.integrity` returned the integrity recorded above; the vendored `LICENSE` file is byte-identical between 0.1.47 and 0.1.83.
