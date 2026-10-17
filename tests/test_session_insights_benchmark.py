@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ def run_cli(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -61,6 +63,33 @@ class SessionInsightsCliTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr)
         return json.loads(result.stdout)
+
+    def test_aggregate_excerpts_print_utf8_under_cp1252_console(self) -> None:
+        # Git Bash piped stdio on windows-latest defaults to the cp1252 ANSI
+        # codec (T6 receipt, #236); excerpt text must survive the console
+        # locale instead of dying in print().
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(CLI),
+                "aggregate",
+                "--harness",
+                "all",
+                "--store-root",
+                str(self.store),
+                "--include-excerpts",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("UnicodeEncodeError", result.stderr)
+        self.assertIn(self.benchmark.FIRST_PROMPT_SHARED, result.stdout)
 
     def test_aggregate_golden_spot_checks(self) -> None:
         aggregate = self.aggregate()
