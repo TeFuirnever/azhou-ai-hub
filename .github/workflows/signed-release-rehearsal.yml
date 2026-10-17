@@ -51,7 +51,7 @@ jobs:
           python -m pip install --quiet "sigstore==4.5.0"
           python -m sigstore --version
       - name: Keyless-sign the manifest
-        run: python -m sigstore sign --bundle SKILL_SHA256SUMS.txt SKILL_SHA256SUMS.txt
+        run: python -m sigstore sign --bundle SKILL_SHA256SUMS.txt.sigstore SKILL_SHA256SUMS.txt
       - name: Verify the signature identity
         run: >
           python -m sigstore verify identity
