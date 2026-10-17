@@ -54,10 +54,10 @@ jobs:
         run: python -m sigstore sign --bundle SKILL_SHA256SUMS.txt SKILL_SHA256SUMS.txt
       - name: Verify the signature identity
         run: >
-          python -m sigstore verify-identity
+          python -m sigstore verify identity
           --bundle SKILL_SHA256SUMS.txt.sigstore
-          --certificate-identity "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
-          --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          --cert-identity "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
+          --cert-oidc-issuer "https://token.actions.githubusercontent.com"
           SKILL_SHA256SUMS.txt
       - name: Attach the signed manifest to a draft release
         env:
@@ -77,5 +77,5 @@ jobs:
             echo "- Signature: keyless sigstore (Fulcio OIDC, Rekor bundle SKILL_SHA256SUMS.txt.sigstore)"
             echo "- Identity bound to: this workflow file on refs/heads/main"
             echo "- Draft release tag: ${{ inputs.tag }} (unpublished)"
-            echo "- Verify command: python -m sigstore verify-identity --bundle SKILL_SHA256SUMS.txt.sigstore --certificate-identity '<workflow uri>' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
+            echo "- Verify command: python -m sigstore verify identity --bundle SKILL_SHA256SUMS.txt.sigstore --cert-identity '<workflow uri>' --cert-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
           } >> "$GITHUB_STEP_SUMMARY"
