@@ -1738,7 +1738,24 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _force_utf8_stdio() -> None:
+    # Console pipes inherit the host locale codec (cp1252 under Git Bash on
+    # Windows, #236); output is UTF-8 by contract, so the output streams are
+    # reconfigured before any I/O happens. stdin stays at the producer's
+    # codec: --content-file - consumes freeform text written in the active
+    # console encoding, unlike the machine UTF-8 pipe contracts elsewhere.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _force_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
