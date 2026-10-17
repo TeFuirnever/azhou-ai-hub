@@ -33,4 +33,4 @@ GitHub categories come from [.github/release.yml](../.github/release.yml). Every
 - known holds;
 - full changelog comparison.
 
-Signed tags remain a target until a maintainer signing key is configured and verified in a real release rehearsal. The repository must not claim a tag is signed before GitHub shows verifiable evidence.
+The signing mechanism is decided and rehearsed: keyless sigstore (Fulcio OIDC bound to the repository's own workflow identity, Rekor bundles), exercised end to end on 2026-10-17 via the "Signed release rehearsal" workflow — see [the rehearsal evidence](../evidence/signed-release-rehearsal-2026-10-17.md). Release artifacts are signed through this path once downloadable artifacts ship. The repository must not claim a tag or release is signed before GitHub shows verifiable signature evidence for that specific artifact; Git tags themselves remain unsigned until a tag-signing step is added and separately rehearsed.
