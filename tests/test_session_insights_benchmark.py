@@ -48,6 +48,25 @@ class SessionInsightsBenchmarkTest(unittest.TestCase):
         self.assertTrue(json.loads(result.stdout)["valid"])
 
 
+class SessionInsightsBenchmarkConsoleTest(unittest.TestCase):
+    def test_check_passes_under_cp1252_parent_locale(self) -> None:
+        # The benchmark harness pipes the CLI's UTF-8 output through its own
+        # locale decoder (T6 receipt follow-up, #236); the harness pipes are
+        # pinned to UTF-8 so a cp1252 parent cannot crash the reader thread.
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [sys.executable, str(BENCHMARK), "check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue(json.loads(result.stdout)["valid"])
+
+
 class SessionInsightsCliTest(unittest.TestCase):
     def setUp(self) -> None:
         self.benchmark = load_benchmark_module()

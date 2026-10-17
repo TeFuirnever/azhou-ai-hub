@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -37,6 +38,7 @@ class LlmWikiTest(unittest.TestCase):
             [sys.executable, str(SCRIPT), "--root", str(root), *arguments],
             input=input_text,
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -124,6 +126,37 @@ class LlmWikiTest(unittest.TestCase):
             deleted = self.run_cli(root, "delete", filename, "--yes")
             self.assertEqual("pass", deleted["status"])
             self.assertEqual(0, self.run_cli(root, "list")["result"]["count"])
+
+    def test_cjk_pages_print_utf8_under_cp1252_console(self) -> None:
+        # Git Bash piped stdio on windows-latest defaults to the cp1252 ANSI
+        # codec (T6 receipt, #236); the CLI's ensure_ascii=False payloads must
+        # survive the console locale.
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--root",
+                    str(root),
+                    "add",
+                    "--title",
+                    "认证架构",
+                    "--content",
+                    "登录令牌使用短期签名。",
+                    "--category",
+                    "architecture",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                check=False,
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertNotIn("UnicodeEncodeError", completed.stderr)
+            self.assertIn("认证架构", completed.stdout)
 
     def test_cjk_slug_and_bigram_query_are_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -642,6 +675,7 @@ class LlmWikiTest(unittest.TestCase):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 check=False,
             )
             self.assertEqual(2, completed.returncode, completed.stderr)

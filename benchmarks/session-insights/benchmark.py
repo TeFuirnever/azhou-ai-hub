@@ -412,6 +412,7 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, str(CLI), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -622,6 +623,7 @@ def cmd_check(_: argparse.Namespace) -> int:
                 cwd=cache_cwd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 check=False,
             )
             if completed.returncode != 0:
@@ -723,6 +725,7 @@ def cmd_check(_: argparse.Namespace) -> int:
             cwd=excerpt_cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
         if excerpt_run.returncode != 0:
