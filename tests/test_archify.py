@@ -27,14 +27,7 @@ UPSTREAM_COMMIT = "1c2b42d660e4a7571813fb43839c79e3e9ca7720"
 UPSTREAM_URL = "https://github.com/tt-a1i/archify"
 UPSTREAM_SKILL_SHA256 = "55c126d68c1fbef114ccdef8dd0e7f046419dc9203ac7f6dab1728f6bab3ca71"
 VENDORED_FILE_COUNT = 144
-PINNED_SHA256 = {
-    "bin/archify.mjs": "5737a0e720579722b167456b3eb4dd301699b8685ef8f3669975e3fd18c15408",
-    "bin/finalize.mjs": "fcdf818198f04b825e2a0f2892d0794768c16adac635482cbb8eb8ff61242484",
-    "bin/visual-check.mjs": "dfec28e3e6666c835cb60f4d34ccabc8a831915dbbfe363de8cffe11de6fae81",
-    "assets/template.html": "d41049723af445573d8eb7b0dcc371d07d3f735a8a291c438148b8195bbea7d2",
-    "renderers/shared/geometry.mjs": "818f6c000595f11a915cce2f73b5deb1a82ececf6c578a22bee70099988ea7a5",
-    "schemas/erd.schema.json": "83aef0349f3cd415a00da4ed30c7864056dc9599627e004e6b7168ad4149ebc8",
-}
+VENDOR_MANIFEST = ROOT / "tests" / "archify-vendor-manifest.json"
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[bytes]:
@@ -107,10 +100,19 @@ class ArchifyPackageTest(unittest.TestCase):
         self.assertIn("fail closed", setup.lower())
         self.assertIn("doctor", setup)
 
-    def test_vendored_files_match_the_pinned_upstream_bytes(self) -> None:
-        for relative, expected in PINNED_SHA256.items():
-            data = (SKILL_DIR / relative).read_bytes()
-            self.assertEqual(expected, hashlib.sha256(data).hexdigest(), relative)
+    def test_vendored_tree_matches_the_complete_manifest(self) -> None:
+        manifest = json.loads(VENDOR_MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual("azhou-hub.archify-vendor-manifest.v1", manifest["schema"])
+        self.assertEqual(UPSTREAM_TAG, manifest["tag"])
+        self.assertEqual(UPSTREAM_COMMIT, manifest["commit"])
+        actual = {
+            path.relative_to(SKILL_DIR).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(SKILL_DIR.rglob("*")) if path.is_file()
+        }
+        self.assertEqual(VENDORED_FILE_COUNT, len(manifest["files"]))
+        self.assertEqual(set(manifest["files"]), set(actual))
+        for relative, expected in manifest["files"].items():
+            self.assertEqual(expected, actual[relative], relative)
 
     def test_vendored_tree_size_is_stable(self) -> None:
         files = [path for path in SKILL_DIR.rglob("*") if path.is_file()]
