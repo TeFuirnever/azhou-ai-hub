@@ -11,7 +11,7 @@ This map records the imported `asd-ste100` baseline at commit `32511c6992ecb5f19
 | Scan checklist of six mechanical habits | preserved verbatim | `SKILL.md` "Scan Checklist" |
 | Meaning, hedge and modality preservation requirements | preserved verbatim | `SKILL.md` process, boundaries and output format |
 | No reproduction of the non-redistributable ASD dictionary | preserved verbatim | `SKILL.md` "Source and Scope"; the boundary carries over unchanged |
-| `scripts/ste-lint.py` linter (`--json`, `--baseline`, `--disable`, `--selftest`) | preserved byte-identical | pinned SHA-256 in `tests/test_asd_ste100.py` |
+| `scripts/ste-lint.py` linter (`--json`, `--baseline`, `--disable`, `--selftest`) | preserved; locally patched | two review fixes (hard-wrapped sentence merging, verb-inflection matching) on the pinned base; both SHAs recorded in provenance and `tests/test_asd_ste100.py` |
 | Writing-rules summary and worked examples | preserved byte-identical | `references/writing-rules.md`, `examples/` |
 | `version` frontmatter key | adapted | the hub frontmatter contract allows only `name`, `description`, `invocation`; upstream v0.4.0 is recorded in provenance |
 | Azhou brand protocol, hold boundary, stable receipt, provenance and compatibility map | Azhou addition | no upstream counterpart; additive contract layers |

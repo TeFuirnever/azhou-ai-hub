@@ -94,7 +94,7 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Copyright: Dustin Yuchen Teng, 2026
 - License: [MIT](LICENSES/asd-ste100-skill-MIT.txt)
 - Imported boundary: the controlled-English rewrite capability with its Strict and STE-flavored modes, the structural-rule linter `ste-lint.py`, the writing-rules summary and the worked examples
-- Local changes: frontmatter normalization to the hub contract, Azhou brand protocol, explicit hold boundary, stable receipt, provenance and compatibility records
+- Local changes: frontmatter normalization to the hub contract, Azhou brand protocol, explicit hold boundary, stable receipt, provenance and compatibility records, plus two reviewed `ste-lint.py` patches (hard-wrapped sentence merging, verb-inflection matching) recorded with both SHA-256 values in the package's provenance
 
 ## Autoresearch (referenced, not redistributed)
 

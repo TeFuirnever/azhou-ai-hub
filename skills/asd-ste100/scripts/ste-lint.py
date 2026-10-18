@@ -81,8 +81,20 @@ CONJUNCTION_END = re.compile(r"\b(?:and|or)\s*$", re.I)
 TABLE_SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
 
 
+def _word_forms(base):
+    forms = {base, base + "s", base + "es", base + "d", base + "ed", base + "ing"}
+    if base.endswith("e"):
+        stem = base[:-1]
+        forms.update({stem + "ing", stem + "ed"})
+    if (len(base) >= 3 and base[-1] not in "aeiouwxy"
+            and base[-2] in "aeiou" and base[-3] not in "aeiou"):
+        forms.update({base + base[-1] + "ing", base + base[-1] + "ed"})
+    return sorted(forms)
+
+
 def _word_re(base):
-    return re.compile(r"\b" + base + r"(?:s|es|ed|d|ing)?\b", re.I)
+    forms = "|".join(re.escape(form) for form in _word_forms(base))
+    return re.compile(r"\b(?:" + forms + r")\b", re.I)
 
 
 def _leading_spaces(line):
@@ -238,12 +250,61 @@ def _dangling_conjunction_findings(text, filename):
     return findings
 
 
+def _sentence_merge_map(lines, table_cells):
+    """Map each non-fence line to the logical line that owns its sentence check.
+
+    Hard-wrapped prose joins into one logical line so the sentence-length cap
+    sees whole sentences: a prose line merges into the previous one only when
+    that line stays open (no terminal ``.!?:``) and the continuation starts
+    with a lowercase word. Tables, lists, fences, headings, blockquotes and
+    blank lines stay boundaries. Returns ``{lineno: (owner_lineno, text)}``;
+    table rows carry ``None`` text because their cells are checked separately.
+    """
+    merged = {}
+    in_fence = False
+    owner = None
+    parts = []
+    for lineno, raw_line in enumerate(lines, 1):
+        if CODE_FENCE.match(raw_line.strip()):
+            in_fence = not in_fence
+            owner, parts = None, []
+            continue
+        if in_fence:
+            continue
+        if table_cells.get(lineno - 1):
+            merged[lineno] = (lineno, None)
+            owner, parts = None, []
+            continue
+        stripped = raw_line.strip()
+        masked = INLINE_CODE.sub("", stripped)
+        if (not stripped or masked.startswith("#") or masked.startswith(">")
+                or LIST_ITEM_START.match(stripped)):
+            merged[lineno] = (lineno, masked)
+            owner, parts = None, []
+            continue
+        joinable = (
+            owner is not None
+            and not re.search(r"[.!?:]\s*$", parts[-1])
+            and not parts[-1].endswith(";")
+            and bool(re.match(r"[a-z]", masked))
+        )
+        if joinable:
+            parts.append(stripped)
+            merged[lineno] = (owner, " ".join(parts))
+            merged[owner] = (owner, " ".join(parts))
+        else:
+            owner, parts = lineno, [stripped]
+            merged[lineno] = (lineno, masked)
+    return merged
+
+
 def lint(text, filename="<stdin>"):
     findings = []
     words_total = 0
     in_fence = False
     lines = text.splitlines()
     table_cells = _markdown_table_cells(lines)
+    sentence_segments = _sentence_merge_map(lines, table_cells)
     # first occurrence of each synonym-group member: (group_idx, base) -> (line, col, match)
     seen_synonyms = {}
     for lineno, raw_line in enumerate(lines, 1):
@@ -253,6 +314,7 @@ def lint(text, filename="<stdin>"):
         if in_fence:
             continue
         segments = table_cells.get(lineno - 1, [(raw_line, 0)])
+        is_table_row = (lineno - 1) in table_cells
         for segment, source_column in segments:
             line = INLINE_CODE.sub("", segment)
             words_total += len(line.split())
@@ -275,7 +337,12 @@ def lint(text, filename="<stdin>"):
                         seen_synonyms[(gi, base)] = (
                             lineno, source_column + m.start() + 1, m.group(0)
                         )
-            for sent in re.split(r"(?<=[.!?])\s+", line):
+            owner_line, sentence_text = sentence_segments.get(lineno, (lineno, None))
+            if is_table_row:
+                sentence_text = line
+            elif owner_line != lineno:
+                sentence_text = None
+            for sent in (re.split(r"(?<=[.!?])\s+", sentence_text) if sentence_text else ()):
                 n = len(sent.split())
                 if n > MAX_WORDS:
                     findings.append({"file": filename, "line": lineno,

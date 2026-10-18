@@ -12,7 +12,18 @@ Repository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICE
 | Upstream `scripts/ste-lint.py` SHA-256 | `1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85` |
 | License | MIT, retained at [asd-ste100-skill-MIT.txt](../../../LICENSES/asd-ste100-skill-MIT.txt) |
 
-The upstream capability baseline at the locked commit is the complete controlled-English rewrite discipline: the two-mode `SKILL.md` body (structural rules applied with confidence, lexical rules kept as direction of travel without the non-redistributable ASD dictionary), the writing-rules summary, and the stdlib `ste-lint.py` deterministic linter. `scripts/ste-lint.py`, `references/writing-rules.md`, `examples/before-after.md` and `examples/linter-edge-cases.md` are vendored byte-identical; their pinned SHA-256 values live in `tests/test_asd_ste100.py`, so any drift fails the unit gate.
+The upstream capability baseline at the locked commit is the complete controlled-English rewrite discipline: the two-mode `SKILL.md` body (structural rules applied with confidence, lexical rules kept as direction of travel without the non-redistributable ASD dictionary), the writing-rules summary, and the stdlib `ste-lint.py` deterministic linter. `references/writing-rules.md`, `examples/before-after.md` and `examples/linter-edge-cases.md` are vendored byte-identical; `scripts/ste-lint.py` carries two reviewed local patches on the upstream base (recorded below), with both the upstream and the local SHA-256 pinned in `tests/test_asd_ste100.py`, so any further drift fails the unit gate.
+
+## Local linter patches
+
+Two review findings (PR #291) are fixed locally on the pinned upstream base; both make the linter do what the imported `SKILL.md` already documents:
+
+| Patch | Upstream base SHA-256 | Local SHA-256 | Records |
+|---|---|---|---|
+| Hard-wrapped prose is joined before the sentence-length cap so a >25-word sentence can no longer evade it by splitting across lines; tables, lists, fences, headings and blockquotes stay boundaries | `1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85` | `1cfec74cfd45a472fe92855fb14580026eec440a0fdacc1effcebb1a7c35393d` | `tests/test_asd_ste100.py` wrapped-sentence regression |
+| Synonym-group matching generates real inflection forms (silent-e dropping, consonant doubling, regular suffixes) so `removing`, `deleting`, `stopping` and friends are detected | same base | same local | `tests/test_asd_ste100.py` silent-e regression |
+
+Both patches have upstream-fix candidates; when the upstream pin moves, re-derive the local delta against the new base and retire the patches it absorbs.
 
 ASD-STE100 itself (Issue 9, January 2025) is free to obtain but not free to redistribute; this package encodes only the rule categories and the one-word-one-meaning principle and must never embed the official dictionary. The upstream package already draws this boundary and it carries over unchanged.
 

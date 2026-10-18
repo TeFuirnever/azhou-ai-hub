@@ -25,8 +25,10 @@ SKILL = SKILL_DIR / "SKILL.md"
 
 UPSTREAM_COMMIT = "32511c6992ecb5f1971e46a2943f2e6adceedafe"
 UPSTREAM_SKILL_SHA256 = "39940a0db3d185416edfd757eff4c971006d8f59ad39715295b150b552344342"
+UPSTREAM_LINT_SHA256 = "1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85"
+LOCAL_LINT_SHA256 = "1cfec74cfd45a472fe92855fb14580026eec440a0fdacc1effcebb1a7c35393d"
 PINNED_SHA256 = {
-    "scripts/ste-lint.py": "1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85",
+    "scripts/ste-lint.py": LOCAL_LINT_SHA256,
     "references/writing-rules.md": "4b92c86bf803f9f54e069767d34dc7356fbb95fb52a3f28476093917c608c102",
     "examples/before-after.md": "d7bf2b4a390f1997a18790b243dd4c0670018d0d4d5183ec8ed44cbbf282bc52",
     "examples/linter-edge-cases.md": "b6cc08af876014453b0c72d26ee4bfaeed1e9a154b5046947392752911ce1774",
@@ -82,9 +84,17 @@ class AsdSte100PackageTest(unittest.TestCase):
         provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
         self.assertIn(UPSTREAM_COMMIT, provenance)
         self.assertIn(UPSTREAM_SKILL_SHA256, provenance)
+        self.assertIn(UPSTREAM_LINT_SHA256, provenance)
+        self.assertIn(LOCAL_LINT_SHA256, provenance)
         self.assertIsNotNone(re.search(r"^Classification: `faithful`", provenance, re.MULTILINE))
         self.assertIn("Skill-standard §2.3", provenance)
         self.assertIn("not free to redistribute", provenance)
+
+    def test_local_linter_patches_are_recorded(self) -> None:
+        compat = (SKILL_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
+        self.assertIn("locally patched", compat)
+        self.assertIn("hard-wrapped", compat)
+        self.assertIn("inflection", compat)
 
     def test_compatibility_map_preserves_capability_rows(self) -> None:
         compat = (SKILL_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
@@ -139,6 +149,21 @@ class AsdSte100LinterTest(unittest.TestCase):
     def test_hedges_and_modality_are_never_flagged(self) -> None:
         result = self.run_lint(text="The request may have failed.\n")
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_hard_wrapped_long_sentence_is_caught(self) -> None:
+        wrapped = (
+            "The agent performs a comprehensive configuration validation pass over the entire\n"
+            "deployment directory before any restart, and it writes one very detailed report "
+            "file for review before the restart can finally begin.\n"
+        )
+        result = self.run_lint(text=wrapped)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("long-sentence", result.stdout.decode("utf-8"))
+
+    def test_silent_e_ing_forms_are_matched(self) -> None:
+        result = self.run_lint(text="Delete the first file. Removing the second file.\n")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("synonym-rotation", result.stdout.decode("utf-8"))
 
 
 if __name__ == "__main__":
