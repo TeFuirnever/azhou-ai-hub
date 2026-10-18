@@ -517,6 +517,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "autoresearch" / "SKILL.md",
                 root / "skills" / "ask-azhou" / "SKILL.md",
                 root / "skills" / "arch-doc" / "SKILL.md",
+                root / "skills" / "archify" / "SKILL.md",
                 root / "skills" / "asd-ste100" / "SKILL.md",
                 root / "skills" / "session-insights" / "SKILL.md",
             ]
