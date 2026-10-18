@@ -41,6 +41,10 @@ REJECTED_DRAFT_CASE_SHA256 = "5ae6e242baf1612bde3252cdbb2b11369e68244614b6e8c8e2
 REJECTED_DRAFT_RESULT_SHA256 = {
     "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb",
 }
+REJECTED_DRAFT_RIDE2_CASE_SHA256 = "08963fd0101ec44a733896a5a225b2d5f20d61fc6dfe34b480fb8f2f2070ea4d"
+REJECTED_DRAFT_RIDE2_RESULT_SHA256 = {
+    "revision-12b5552a-attempt-1-summary.json": "cfab8b14edb93706f32230706aed264c0631d9ecac4d6977d271f5280d10cfc2",
+}
 
 
 def result_summaries() -> list[dict]:
@@ -149,7 +153,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         self.assertEqual(19, contract["claim_gate"]["required_passed_cases"])
         self.assertEqual(19, contract["claim_gate"]["required_total_cases"])
         legacy = contract["legacy_case_sets"]
-        self.assertEqual(5, len(legacy))
+        self.assertEqual(6, len(legacy))
         self.assertEqual(LEGACY_CASE_SHA256, legacy[0]["sha256"])
         self.assertEqual(14, legacy[0]["count"])
         self.assertEqual(LEGACY_RESULT_SHA256, legacy[0]["result_files"])
@@ -165,6 +169,9 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         self.assertEqual(REJECTED_DRAFT_CASE_SHA256, legacy[4]["sha256"])
         self.assertEqual(19, legacy[4]["count"])
         self.assertEqual(REJECTED_DRAFT_RESULT_SHA256, legacy[4]["result_files"])
+        self.assertEqual(REJECTED_DRAFT_RIDE2_CASE_SHA256, legacy[5]["sha256"])
+        self.assertEqual(19, legacy[5]["count"])
+        self.assertEqual(REJECTED_DRAFT_RIDE2_RESULT_SHA256, legacy[5]["result_files"])
         self.assertEqual(0, contract["claim_gate"]["high_risk_failures_allowed"])
         self.assertIn("Git-external", contract["evidence"]["raw_outputs"])
         self.assertEqual(3, contract["promotion_review"]["independent_paired_judges"])

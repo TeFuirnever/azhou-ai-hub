@@ -149,6 +149,34 @@
       "result_files": {
         "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb"
       }
+    },
+    {
+      "sha256": "08963fd0101ec44a733896a5a225b2d5f20d61fc6dfe34b480fb8f2f2070ea4d",
+      "count": 19,
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "host-plan-tool-state",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity",
+        "stop-mode-default-style",
+        "task-wins-options",
+        "uncertainty-and-idiom",
+        "under-two-minute-next-action"
+      ],
+      "result_files": {
+        "revision-12b5552a-attempt-1-summary.json": "cfab8b14edb93706f32230706aed264c0631d9ecac4d6977d271f5280d10cfc2"
+      }
     }
   ],
   "runtime": {

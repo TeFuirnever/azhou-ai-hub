@@ -72,6 +72,10 @@ REJECTED_DRAFT_CASE_SHA256 = "5ae6e242baf1612bde3252cdbb2b11369e68244614b6e8c8e2
 REJECTED_DRAFT_RESULT_SHA256 = {
     "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb",
 }
+REJECTED_DRAFT_RIDE2_CASE_SHA256 = "08963fd0101ec44a733896a5a225b2d5f20d61fc6dfe34b480fb8f2f2070ea4d"
+REJECTED_DRAFT_RIDE2_RESULT_SHA256 = {
+    "revision-12b5552a-attempt-1-summary.json": "cfab8b14edb93706f32230706aed264c0631d9ecac4d6977d271f5280d10cfc2",
+}
 PRIOR_STATE_RESULT_SHA256 = {
     "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
     "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95",
@@ -1428,6 +1432,12 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
             "case_ids": sorted(RESPONSE_IDS),
             "result_files": REJECTED_DRAFT_RESULT_SHA256,
         },
+        {
+            "sha256": REJECTED_DRAFT_RIDE2_CASE_SHA256,
+            "count": len(RESPONSE_IDS),
+            "case_ids": sorted(RESPONSE_IDS),
+            "result_files": REJECTED_DRAFT_RIDE2_RESULT_SHA256,
+        },
     ]
     if legacy_case_sets != expected_legacy_case_sets:
         errors.append("evaluation contract legacy case metadata mismatch")
@@ -1530,6 +1540,7 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         PRIOR_CLOSURE_CASE_SHA256: RESPONSE_IDS,
         PRIOR_STATE_CASE_SHA256: RESPONSE_IDS,
         REJECTED_DRAFT_CASE_SHA256: RESPONSE_IDS,
+        REJECTED_DRAFT_RIDE2_CASE_SHA256: RESPONSE_IDS,
     }
     immutable_result_sets = {
         LEGACY_CASE_SHA256: LEGACY_RESULT_SHA256,
@@ -1537,6 +1548,7 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         PRIOR_CLOSURE_CASE_SHA256: PRIOR_CLOSURE_RESULT_SHA256,
         PRIOR_STATE_CASE_SHA256: PRIOR_STATE_RESULT_SHA256,
         REJECTED_DRAFT_CASE_SHA256: REJECTED_DRAFT_RESULT_SHA256,
+        REJECTED_DRAFT_RIDE2_CASE_SHA256: REJECTED_DRAFT_RIDE2_RESULT_SHA256,
     }
     current_passing_results: list[Path] = []
     for result_path in sorted((BENCHMARK / "results").glob("*-summary.json")):
