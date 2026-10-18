@@ -29,6 +29,8 @@
 
 **决定 B — super-repo-pedant 保持合同 v2,实现基线留在 pin `bab17831`。** 沿用 2026-10-07 neat-freak v3.0.0 能力账目重审的"等价演进"判定(`docs/research/2026-10-07-neat-freak-v3-capability-audit.md`:kept 20 / changed 8 / removed 0,12 项 upstream-additive 均有 disposition);上游自 2026-10-01 起无新提交,现有账面与快照哈希锁仍然新鲜。未来采纳任何 v3 语义仍属行为变更,须走本仓 gate 与测试面的完整评估。
 
+**[2026-10-18 更新]** 决定 B 已由 workspace-owner 于同日指示修订:参考基线移至 v3.0.0(`322346de`,快照哈希锁刷新,合同 v3,账面 8 个 changed 行按 v3 措辞重述;本地行为字节不变,12 项 disposition 保留)。见审计文档的 "Decision (2026-10-18)" 节。决定 A(super-caveman 维持 pin)仍被同日指令修订为启动完整晋级骑行,见该骑行的 own evidence。
+
 ## 方法与边界
 
 - 命令:`gh api repos/<repo>/compare/<pin>...HEAD` + `npm view`;快照时间 2026-10-17,上游持续移动,结论有时效性。

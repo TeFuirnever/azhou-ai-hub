@@ -80,3 +80,7 @@
 - 本审计只读;未抓取 evals fixtures 全部 11 套内容(仅 evals.json 的 expectations 与路径清单),fixture 级内容核对不在本票范围。
 - 上游无 v3.0.0 git tag(releases 为空,tags 止于 `neat-freak-v1.0.2`);v3.0.0 是 frontmatter `metadata.version` 自声明(`U(v3) SKILL.md` L17-19)。
 - 后续监控:下次例行上游新鲜度扫描复用本审计的 compare 命令与判定表;若上游再改 `neat-freak/SKILL.md` 或 `evals/`,按本票同型重审。
+
+### Decision (2026-10-18): re-baseline the ledger onto v3 (owner-directed)
+
+On 2026-10-18 the workspace owner directed super-repo-pedant's upgrade to the v3 reference (revising the 2026-10-07 branch decision that kept the implementation baseline at the pin with a v2 delta section). Scope executed: the hash-locked snapshot refreshed to the v3 files at `322346de` and gained `references/governance.md` + `references/verification.md` (`BASELINE_HASHES` re-locked, 5 entries); `neat-freak-compatibility.md` moves to contract v3 — the 8 `changed` ledger rows restated to v3 wording, the three converged replacement rows annotated, the 12 additive dispositions and the bare-tidy divergence retained verbatim; parity controls flipped in `tests/test_super_repo_pedant_parity.py`; THIRD_PARTY_NOTICES and both READMEs re-scope the 28/28 claim. **Local skill behavior is byte-unchanged** — this package remains the strict superset; no additive v3 capability was adopted, and any future adoption still requires its own evidence path. The absorption pin `bab17831` is retained as lineage in provenance and notices.
