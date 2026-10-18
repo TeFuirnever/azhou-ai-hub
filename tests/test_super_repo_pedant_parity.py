@@ -110,33 +110,37 @@ class RepoPedantParityTest(unittest.TestCase):
         self.assertTrue((SKILL_DIR / "scripts" / "closeout_hook.py").is_file())
         self.assertTrue((SKILL_DIR / "scripts" / "manage_evolution.py").is_file())
 
-    def test_contract_v2_records_upstream_v3_delta_without_rebaselining(self) -> None:
-        # Positive controls: contract v2 documents the audited upstream v3 delta.
-        self.assertIn("Contract version: v2 (2026-10-07)", CONTRACT_TEXT)
-        self.assertIn("## Baseline and upstream v3 delta", CONTRACT_TEXT)
+    def test_contract_v3_rebaselines_the_ledger_onto_upstream_v3(self) -> None:
+        # Positive controls: contract v3 rests the ledger on the audited v3.0.0 baseline.
+        self.assertIn("Contract version: v3 (2026-10-18)", CONTRACT_TEXT)
+        self.assertIn("## Baseline", CONTRACT_TEXT)
         self.assertIn(V3_OBSERVATION_COMMIT, CONTRACT_TEXT)
         self.assertIn("equivalent evolution", CONTRACT_TEXT)
         self.assertIn(AUDIT_DOC_RELPATH, CONTRACT_TEXT)
         self.assertIn(V3_OBSERVATION_COMMIT, PROVENANCE_TEXT)
         self.assertIn(AUDIT_DOC_RELPATH, PROVENANCE_TEXT)
+        self.assertIn("Reference baseline (2026-10-18 re-baseline", PROVENANCE_TEXT)
         # The audit document exists and carries the per-capability ledger the contract cites.
         self.assertTrue((ROOT / AUDIT_DOC_RELPATH).is_file())
         self.assertIn("pin `bab17831` 语义", AUDIT_TEXT)
         for verdict_count in ("kept 20", "changed 8", "removed 0"):
             self.assertIn(verdict_count, AUDIT_TEXT)
         self.assertIn(V3_OBSERVATION_COMMIT, AUDIT_TEXT)
-        # Negative controls: the ledger stays bound to the pinned baseline; v3 is
-        # recorded as an observation baseline, never adopted as the implementation baseline.
+        # The absorption pin survives as recorded lineage in contract and provenance.
         self.assertIn(PIN_COMMIT, CONTRACT_TEXT)
+        self.assertIn(PIN_COMMIT, PROVENANCE_TEXT)
         self.assertIn("Every ledger row below is judged against this baseline", CONTRACT_TEXT)
         self.assertIn("not new mandatory rows", CONTRACT_TEXT)
-        self.assertIn(PIN_COMMIT, PROVENANCE_TEXT)
-        self.assertIn("The implementation baseline stays at the pin above", PROVENANCE_TEXT)
         self.assertEqual(28, len(PARITY["capabilities"]))
         self.assertIn("## Required original behavior", CONTRACT_TEXT)
         # The bare-tidy trigger divergence is recorded, not silently adopted from v3.
         self.assertEqual("reconcile", {case["id"]: case["expected"] for case in TRIGGER_CASES["cases"]}["bare-tidy"])
         self.assertIn("bare-tidy", CONTRACT_TEXT)
+        # Negative controls: the local stronger-than-v3 forms are still in force.
+        validator = (SKILL_DIR / "scripts" / "inventory_knowledge.py").read_text(encoding="utf-8")
+        self.assertIn("agent-rule net growth above 30 lines is a red flag", validator)
+        self.assertIn("上次收尾遗漏", SKILL_TEXT)
+        self.assertIn("bare tidy/整理 in development context", SKILL_TEXT)
 
 
 if __name__ == "__main__":

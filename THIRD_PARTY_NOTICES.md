@@ -8,7 +8,7 @@ Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtim
 
 ## Super Repo Pedant baseline
 
-`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the legacy baseline.
+`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`322346ded8129436b3f64707789a73e732ae24d9`](https://github.com/KKKKhazix/Khazix-Skills/commit/322346ded8129436b3f64707789a73e732ae24d9) (self-declared v3.0.0; re-baselined 2026-10-18 from the absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
 
 - Copyright: 数字生命卡兹克
 - License: [MIT](LICENSES/Khazix-Skills-MIT.txt)
