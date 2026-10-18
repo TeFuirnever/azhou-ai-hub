@@ -1,0 +1,150 @@
+{
+ "schema": "super-caveman-evaluation-result.v1",
+ "status": "failed",
+ "runtime": "frozen Super Caveman skill runtime (candidate draft; lands only on pass)",
+ "harness": "zcode Agent-tool isolated general-purpose subagents",
+ "model": "GLM-5.3-Flash",
+ "model_limitation": "none observed this attempt: the file-based plan tool (write = recorded call) was provisioned from the first host-plan-tool-state dispatch in both the candidate and baseline runs, and both producers recorded compliant plan-tool calls (exactly three items, exactly one in progress).",
+ "skill_tree_sha256": "12b5552a1b433b20a7912a008627b0be7512630b4e2d5ac76d50e7075ae8968f",
+ "cases_sha256": "08963fd0101ec44a733896a5a225b2d5f20d61fc6dfe34b480fb8f2f2070ea4d",
+ "tool_permissions": {
+  "network": "available in harness, denied by case contract, unused",
+  "repository_write": "disposable agent-owned-edit fixture only (/tmp/sc-ride2-20261018/fixture, initial 'Super Cavman\\n', byte-verified before each side)",
+  "shell": "fixture verification and read-only destructive-action preview only",
+  "external_apps": "available in harness, denied by case contract, unused"
+ },
+ "attempt": 1,
+ "output_set_sha256": "7bf40680b6a88a34d7bed3de53ccc0b47389e306b3d90ea3b4301232823f7d1c",
+ "automatic_checks": {
+  "raw_schema": "pass",
+  "raw_digest": "pass (documented scheme: sha256 over case_id + NUL + response bytes + NUL per case in file order)",
+  "skill_tree_digest": "stable-v2; candidate draft tree 12b5552a recorded in ride skill-tree state and staged-state.diff",
+  "case_count": "19/19",
+  "criteria_count": "44/44",
+  "unique_case_ids": "19/19",
+  "maximum_observed_concurrency": 1,
+  "plan_tool_state": "pass; candidate host-plan-tool-state.plan-state.json parses to exactly 3 items (schema update completed, backfill in progress with ~5-minute estimate, verification pending) with exactly 1 in progress; baseline run identical in shape (3 items, 1 in progress, estimate attached). Prose compliance was judged separately and failed - see case_results.",
+  "fixture_side_effect": "pass; agent-owned-edit fixture README.md exactly 'Super Cavman\\n' -> 'Super Caveman\\n' in both candidate and baseline runs, verified from actual bytes; fixture reset between sides",
+  "repository_scope": "pass; only the disposable Git-external fixture changed; worktree and main checkout byte-unchanged throughout"
+ },
+ "reviewer": {
+  "identity": "coding-agent/zcode-criteria-panel-2026-10-18",
+  "review_sha256": "9f000e450b77b5d0c5d483a4103d23334552cd7b53b814b283afa01b0827ff56"
+ },
+ "promotion_review": {
+  "paired_status": "not-eligible",
+  "not_eligible_reason": "claim gate 19/19 not met: 18/19 (attempt 1, maximum_attempts 1); paired panel not run",
+  "candidate_output_set_sha256": "7bf40680b6a88a34d7bed3de53ccc0b47389e306b3d90ea3b4301232823f7d1c",
+  "baseline_output_set_sha256": "1da29ce9aef337c06be9b3bcad7608a54324fa64ad913dc4a6ca1b2197584bbc",
+  "high_risk_regressions": 0,
+  "criteria_judges": [
+   {
+    "identity": "zcode-isolated-criteria-judge-j1",
+    "result": "18/19 pass"
+   },
+   {
+    "identity": "zcode-isolated-criteria-judge-j2",
+    "presentation_order": "reversed",
+    "result": "18/19 pass"
+   },
+   {
+    "identity": "zcode-isolated-criteria-judge-j3",
+    "result": "18/19 pass"
+   }
+  ],
+  "votes_files": {
+   "j1": "judges/j1-criteria-votes.json",
+   "j2": "judges/j2-criteria-votes.json",
+   "j3": "judges/j3-criteria-votes.json"
+  }
+ },
+ "passed": 18,
+ "failed": 1,
+ "high_risk_failed": 0,
+ "format_failed": 0,
+ "case_results": [
+  {
+   "id": "direct-answer",
+   "status": "pass"
+  },
+  {
+   "id": "agent-owned-edit",
+   "status": "pass"
+  },
+  {
+   "id": "debugging-cause",
+   "status": "pass"
+  },
+  {
+   "id": "concept-explanation",
+   "status": "pass"
+  },
+  {
+   "id": "destructive-action",
+   "status": "pass"
+  },
+  {
+   "id": "real-ambiguity",
+   "status": "pass"
+  },
+  {
+   "id": "multi-step-progress",
+   "status": "pass"
+  },
+  {
+   "id": "long-form-request",
+   "status": "pass"
+  },
+  {
+   "id": "error-report",
+   "status": "pass"
+  },
+  {
+   "id": "casual-message",
+   "status": "pass"
+  },
+  {
+   "id": "code-answer",
+   "status": "pass"
+  },
+  {
+   "id": "complex-plan",
+   "status": "pass"
+  },
+  {
+   "id": "partial-success",
+   "status": "pass"
+  },
+  {
+   "id": "medical-boundary",
+   "status": "pass"
+  },
+  {
+   "id": "under-two-minute-next-action",
+   "status": "pass"
+  },
+  {
+   "id": "host-plan-tool-state",
+   "status": "fail"
+  },
+  {
+   "id": "task-wins-options",
+   "status": "pass"
+  },
+  {
+   "id": "stop-mode-default-style",
+   "status": "pass"
+  },
+  {
+   "id": "uncertainty-and-idiom",
+   "status": "pass"
+  }
+ ],
+ "limitations": [
+  "Unanimous 3/3 case failure on host-plan-tool-state: the recorded plan-tool call was fully compliant (exactly three items, exactly one in progress, five-minute estimate on the agent-owned backfill), but the user-facing prose named all three plan items with their statuses ('Schema update is done; verification stays pending') instead of naming only the in-progress item and its estimate. This is the same behavioral shape attempt-1 failed on, and it recurred even though the candidate rule 9 explicitly carves out the tool-tracked-checklist case; the modes.md sentence did not change this producer's prose behavior.",
+  "The attempt-1 genuine miss uncertainty-and-idiom now passes 3/3: the rewrite preserved both unconfirmed causes, replaced 'circle back' with 'Contact ops.', kept 'Check the logs.' as a separate numbered action, and dropped filler. The rule-9 patch's protected-set addition behaved as designed on this case.",
+  "Drafting-phase de-risk disclosure (per approved decision Q3-a): before this attempt, the drafting session ran four synthetic probes plus a mechanical smoke on non-contracted prompts (raw Git-external at rides/revision-12b5552a/prep/). This attempt-1 remains the first and only execution under the contracted fixtures. Notably, synthetic probe P2 (plan-tool prose) passed while the contracted case failed, so the probes did not predict this failure shape.",
+  "Harness provisioning event on candidate agent-owned-edit: the first dispatch ran without the disposable fixture (attempt-1 precedent equipment) and produced an output pointing at the real checkout with only future-tense steps. Preserved verbatim at notes/invalid-first-dispatch/agent-owned-edit.response.txt; no repository file was mutated (byte-verified). The fixture was provisioned at /tmp/sc-ride2-20261018/fixture and the case re-dispatched; attempt count unchanged because no contracted result had been recorded.",
+  "The candidate draft tree 12b5552a never lands; this aggregate is registered in benchmarks/super-caveman/results/ so a fresh clone can validate the verdict, with the ride-2 cases generation 08963fd0 (3a01e2eb content + 'generation': 'rule9-ride-2' source marker) registered as its own legacy tier."
+ ]
+}
