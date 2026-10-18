@@ -84,6 +84,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/arch-doc/SKILL.md",
     "skills/session-insights/SKILL.md",
     "skills/asd-ste100/SKILL.md",
+    "skills/archify/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/super-llm-wiki/SKILL.md",
@@ -177,6 +178,11 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "ASD-STE100",
         "motto": "一词一义，一句一事，agent 无从误读。",
         "startup": "🦊 阿舟 · ASD-STE100 启动｜mode=<strict|flavored>｜scope=<text-or-files>",
+    },
+    "skills/archify/SKILL.md": {
+        "display_name": "Archify",
+        "motto": "一张图讲清一个系统，交给读者去探索。",
+        "startup": "🦊 阿舟 · Archify 启动｜mode=<diagram-type>｜scope=<subject>",
     },
 }
 

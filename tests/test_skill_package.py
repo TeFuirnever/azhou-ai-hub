@@ -31,6 +31,7 @@ SKILL_DIRS = (
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
     ROOT / "skills" / "ask-azhou",
     ROOT / "skills" / "arch-doc",
+    ROOT / "skills" / "archify",
     ROOT / "skills" / "session-insights",
     ROOT / "skills" / "asd-ste100",
 )
@@ -63,7 +64,8 @@ class SkillPackageTest(unittest.TestCase):
             relative_links = [value for value in links if "://" not in value and not value.startswith("#")]
             self.assertTrue(relative_links)
             for value in relative_links:
-                self.assertTrue((package / value).exists(), f"{package.name}: {value}")
+                target = value.split("#", 1)[0]
+                self.assertTrue((package / target).exists(), f"{package.name}: {value}")
 
     def test_no_scaffold_placeholders(self) -> None:
         text_suffixes = {".md", ".py", ".mjs", ".json", ".toml", ".yaml", ".yml", ".html"}
@@ -241,8 +243,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(15, len(SKILL_DIRS))
-        self.assertIn("fifteen canonical packages", support)
+        self.assertEqual(16, len(SKILL_DIRS))
+        self.assertIn("sixteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)

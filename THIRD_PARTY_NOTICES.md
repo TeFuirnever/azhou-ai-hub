@@ -96,6 +96,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the controlled-English rewrite capability with its Strict and STE-flavored modes, the structural-rule linter `ste-lint.py`, the writing-rules summary and the worked examples
 - Local changes: frontmatter normalization to the hub contract, Azhou brand protocol, explicit hold boundary, stable receipt, provenance and compatibility records, plus two reviewed `ste-lint.py` patches (hard-wrapped sentence merging, verb-inflection matching) recorded with both SHA-256 values in the package's provenance
 
+## Archify
+
+`skills/archify/` imports the `archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.1.0`](https://github.com/tt-a1i/archify/releases/tag/v3.1.0) (commit [`1c2b42d660e4a7571813fb43839c79e3e9ca7720`](https://github.com/tt-a1i/archify/commit/1c2b42d660e4a7571813fb43839c79e3e9ca7720)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the fifteen pre-rendered example HTML files and the dev-only `package-lock.json` are the only exclusions, recorded in the package's compatibility map.
+
+- Copyright: tt-a1i (Archify), 2026
+- License: [MIT](LICENSES/archify-MIT.txt); bundled font notice inside the package under `assets/JetBrainsMono-OFL.txt`
+- Imported boundary: the ten-mode typed-JSON diagram capability with its `validate`/`deliver`/`finalize` gate chain, renderers, viewer template, contracts, examples and locale translations
+- Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
+
 ## Autoresearch (referenced, not redistributed)
 
 `skills/autoresearch/` is an Azhou-authored wrapper around [karpathy/autoresearch](https://github.com/karpathy/autoresearch) pinned at commit `228791fb499afffb54b46200aca536f79142f117`. The upstream repository publishes no license file, so no upstream bytes are vendored: the runtime environment is the user's own pinned checkout, the experiment protocol stays in the upstream `program.md`, and this package ships wrapper, setup and provenance text only.
