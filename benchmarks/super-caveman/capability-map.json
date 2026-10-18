@@ -9,14 +9,23 @@
       "repository": "https://github.com/JuliusBrussee/caveman",
       "commit": "11ddc0c9813c8f75365cd5be2f753df08712f154",
       "import_basis": "user-provided local entry-file snapshots traced against the pinned upstream commit",
-      "byte_identical_entries": ["cavecrew", "caveman-commit", "caveman-review"],
-      "local_derivative_entries": ["caveman", "caveman-compress", "caveman-help", "caveman-stats"],
+      "byte_identical_entries": [
+        "cavecrew",
+        "caveman-commit",
+        "caveman-review"
+      ],
+      "local_derivative_entries": [
+        "caveman",
+        "caveman-compress",
+        "caveman-help",
+        "caveman-stats"
+      ],
       "license": "MIT"
     },
     "i_have_adhd": {
       "repository": "https://github.com/ayghri/i-have-adhd",
-      "commit": "b42a45a068e080294924bfba19a7a2e8944c48ff",
-      "skill_sha256": "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e",
+      "commit": "1ecea1993b7fce257ffbd686c070948b5e07eda6",
+      "skill_sha256": "88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3",
       "license": "MIT"
     }
   },

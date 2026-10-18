@@ -131,8 +131,8 @@ class SkillPackageTest(unittest.TestCase):
             source_names,
         )
         self.assertIn("one independently installable package", provenance)
-        self.assertIn("b42a45a068e080294924bfba19a7a2e8944c48ff", provenance)
-        self.assertIn("938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e", provenance)
+        self.assertIn("1ecea1993b7fce257ffbd686c070948b5e07eda6", provenance)
+        self.assertIn("88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3", provenance)
         for alias in source_names:
             self.assertFalse((ROOT / "skills" / alias / "SKILL.md").exists())
         for route in (
@@ -149,7 +149,7 @@ class SkillPackageTest(unittest.TestCase):
             "Number multi-step tasks",
             "End with one concrete next action",
             "Restate state every turn",
-            "Cap lists at five items",
+            "Cap lists to five items per group",
             "A future-tense plan to edit, test, or inspect is not completion",
             "Casual acknowledgement",
             "one verb phrase",

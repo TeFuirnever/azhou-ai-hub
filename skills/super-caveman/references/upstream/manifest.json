@@ -53,7 +53,7 @@
     {
       "name": "i-have-adhd",
       "repository": "https://github.com/ayghri/i-have-adhd",
-      "commit": "b42a45a068e080294924bfba19a7a2e8944c48ff",
+      "commit": "1ecea1993b7fce257ffbd686c070948b5e07eda6",
       "license": {
         "spdx": "MIT",
         "path": "references/upstream/i-have-adhd/LICENSE.txt",
@@ -63,7 +63,7 @@
         {
           "source_path": "skills/i-have-adhd/SKILL.md",
           "snapshot_path": "references/upstream/i-have-adhd/SKILL.snapshot.txt",
-          "sha256": "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e"
+          "sha256": "88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3"
         }
       ]
     }

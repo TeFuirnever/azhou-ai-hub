@@ -72,13 +72,34 @@ REJECTED_DRAFT_CASE_SHA256 = "5ae6e242baf1612bde3252cdbb2b11369e68244614b6e8c8e2
 REJECTED_DRAFT_RESULT_SHA256 = {
     "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb",
 }
+REBASE_CASE_SHA256 = "3a01e2ebcace21bcf4dbe609dee7db806bb1c2ac67e85a4b047543e4e9abf6e9"
+REBASE_RESULT_SHA256 = {
+    "revision-39b77881-attempt-1-summary.json": "dc98e519c20872d882a56e464c74cf8f1edaad7770c452b26203e9fe9f5570f5",
+    "revision-54de6c3c-attempt-1-summary.json": "48b0b85ca769add9e0c83b3c50451f0d722451508e84fb3a140143cbb73be1cc",
+    "revision-55d53933-attempt-1-summary.json": "52914c4cec308019722a1127295c82a8832801ec05e5dda5fc7723cfe936e3ff",
+    "revision-594a9010-attempt-1-summary.json": "93f294aebd79c68323937ce6b369679c95a1ca27ab57e813d7dcddbe6eb0f93a",
+    "revision-74f8d585-attempt-1-summary.json": "db8b4983623d2f744f13020fb105d4d3476e31c55f1280be6ee1170c697b8ac3",
+    "revision-8f493670-attempt-1-summary.json": "b9c376e23816796d75b8fa9c372e08df715052ca355b2a5015d74046b0f240ca",
+    "revision-93f38a6b-attempt-1-summary.json": "5535e1552e2d4c0d92a8d3fb32867db7006b511aac2a1e9fa58bcf066fbd87ff",
+    "revision-a011a085-attempt-1-summary.json": "d383895d61cfd399d045f1bf25e227890a80a14bd0d2e69d9e204aa7b9986b38",
+    "revision-a32a3a41-attempt-1-summary.json": "f4b5e297e505cde3c5dc024d3626e5a0542e21e2f4de91f30b95a61424a83f93",
+    "revision-a726d695-attempt-1-summary.json": "393a64bdbb4bd931b0537ac5612a37b1a6ee6657ff3dc11e0353537c9a8afc02",
+    "revision-b8bcf464-attempt-1-summary.json": "6d064c965fae3da54b7eb43d23f1bec9fabe19c99aabe1afb5c3f2d3e4734529",
+    "revision-c41e0a4c-attempt-1-summary.json": "02b6837f18c9b1a3c127ffb9d6aea986c150d3422e7bda31fd09fc3e5e1dd43a",
+    "revision-c5366b95-attempt-1-summary.json": "8ca2c1b4360829e4bfe71d9a1deb65e61f6e8e79ba7eb6e442b74733d136ddd5",
+    "revision-cec8d73d-attempt-1-summary.json": "7c7ac36eb5dd8c5fededb959974e24b65ef3c1975326b9bc4ce37e412966131d",
+    "revision-e04ba7c3-attempt-1-summary.json": "67870f46edc6f5cc7503eaf5c003e2b3d185ecfb5848b20d7779c05e81b015c6",
+    "revision-e2d998c6-attempt-1-summary.json": "be017c0c84f03962ef778a348a43e0d5eb5acdddf49ccc73599f7657f464fee6",
+    "revision-e6680676-attempt-1-summary.json": "cc2efe83b1b4ac09550180ec697c0c2eb9e7886f36f6d4f2773986542052b8b6",
+    "revision-ed8a4b80-attempt-1-summary.json": "223909b4e66e5ac7ae7c56893a18e98c192eaec6319702169ba1f47287e0c7e6",
+}
 PRIOR_STATE_RESULT_SHA256 = {
     "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
     "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95",
 }
 CAVEMAN_COMMIT = "11ddc0c9813c8f75365cd5be2f753df08712f154"
-ADHD_COMMIT = "b42a45a068e080294924bfba19a7a2e8944c48ff"
-ADHD_SKILL_SHA256 = "938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e"
+ADHD_COMMIT = "1ecea1993b7fce257ffbd686c070948b5e07eda6"
+ADHD_SKILL_SHA256 = "88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_BLOB_OID = re.compile(r"^[0-9a-f]{40}$")
 CAVEMAN_UPSTREAM_SHA256 = {
@@ -1428,6 +1449,12 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
             "case_ids": sorted(RESPONSE_IDS),
             "result_files": REJECTED_DRAFT_RESULT_SHA256,
         },
+        {
+            "sha256": REBASE_CASE_SHA256,
+            "count": len(RESPONSE_IDS),
+            "case_ids": sorted(RESPONSE_IDS),
+            "result_files": REBASE_RESULT_SHA256,
+        },
     ]
     if legacy_case_sets != expected_legacy_case_sets:
         errors.append("evaluation contract legacy case metadata mismatch")
@@ -1530,6 +1557,7 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         PRIOR_CLOSURE_CASE_SHA256: RESPONSE_IDS,
         PRIOR_STATE_CASE_SHA256: RESPONSE_IDS,
         REJECTED_DRAFT_CASE_SHA256: RESPONSE_IDS,
+        REBASE_CASE_SHA256: RESPONSE_IDS,
     }
     immutable_result_sets = {
         LEGACY_CASE_SHA256: LEGACY_RESULT_SHA256,
@@ -1537,6 +1565,7 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         PRIOR_CLOSURE_CASE_SHA256: PRIOR_CLOSURE_RESULT_SHA256,
         PRIOR_STATE_CASE_SHA256: PRIOR_STATE_RESULT_SHA256,
         REJECTED_DRAFT_CASE_SHA256: REJECTED_DRAFT_RESULT_SHA256,
+        REBASE_CASE_SHA256: REBASE_RESULT_SHA256,
     }
     current_passing_results: list[Path] = []
     for result_path in sorted((BENCHMARK / "results").glob("*-summary.json")):

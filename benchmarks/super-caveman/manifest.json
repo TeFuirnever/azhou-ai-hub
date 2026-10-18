@@ -3,7 +3,7 @@
   "skill": "super-caveman",
   "upstreams": {
     "caveman": "11ddc0c9813c8f75365cd5be2f753df08712f154",
-    "i_have_adhd": "b42a45a068e080294924bfba19a7a2e8944c48ff"
+    "i_have_adhd": "1ecea1993b7fce257ffbd686c070948b5e07eda6"
   },
   "inputs": [
     "capability-map.json",

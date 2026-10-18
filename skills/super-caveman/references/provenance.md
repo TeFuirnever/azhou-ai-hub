@@ -18,11 +18,11 @@ The derivative deltas cover response-mode wording, backup placement, platform-sp
 
 - Upstream: `ayghri/i-have-adhd`
 - Repository: <https://github.com/ayghri/i-have-adhd>
-- Commit: `b42a45a068e080294924bfba19a7a2e8944c48ff`
+- Commit: `1ecea1993b7fce257ffbd686c070948b5e07eda6` (2026-10-18 adoption re-pin; the pre-adoption pin was `b42a45a068e080294924bfba19a7a2e8944c48ff`)
 - Source file: `skills/i-have-adhd/SKILL.md`
-- Source SHA-256: `938d0e350a0c2b0e2e6c3a9032542e062846d108e0f89dd27c798ba5b436397e`
+- Source SHA-256: `88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3`
 - License: MIT, retained inside the package at [`upstream/i-have-adhd/LICENSE.txt`](upstream/i-have-adhd/LICENSE.txt) and at repository level in `LICENSES/i-have-adhd-MIT.txt`
-- Imported: 2026-08-23
+- Imported: 2026-08-23; re-pinned 2026-10-18 by the maintainer-named rule-9 adoption ride
 
 ## Package-local source archive
 

@@ -27,7 +27,7 @@ The requested local import set is not described as byte-identical wholesale: `ca
 - Imported boundary: response modes, delegation router, commit and review formats, help, safe prose compression, and exact-statistics semantics
 - Local changes: original Caveman remains the core while six companion entries become routes in one canonical package; Claude-only presets, model subprocesses, automatic hooks and unverified savings claims are replaced by neutral capability routing and deterministic local gates
 
-The complete pinned output-behavior contract and its original fourteen response fixtures are adopted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) at immutable commit [`b42a45a068e080294924bfba19a7a2e8944c48ff`](https://github.com/ayghri/i-have-adhd/commit/b42a45a068e080294924bfba19a7a2e8944c48ff). Five local closure fixtures cover previously implicit behavior without importing plugin installation, hooks, global configuration or persistence files.
+The complete pinned output-behavior contract and its original fourteen response fixtures are adopted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) at immutable commit [`1ecea1993b7fce257ffbd686c070948b5e07eda6`](https://github.com/ayghri/i-have-adhd/commit/1ecea1993b7fce257ffbd686c070948b5e07eda6) (2026-10-18 adoption re-pin). Five local closure fixtures cover previously implicit behavior without importing plugin installation, hooks, global configuration or persistence files.
 
 - Copyright: Ayoub Ghriss, 2026
 - License: [MIT](LICENSES/i-have-adhd-MIT.txt)
