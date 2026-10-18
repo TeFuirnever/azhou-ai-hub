@@ -15,6 +15,7 @@ This map records the imported `archify` baseline at tag `v3.1.0` (commit `1c2b42
 | Fifteen pre-rendered example `*.html` files | intentionally omitted | presentation outputs, not runtime inputs; excluded at vendoring, recorded here |
 | `package-lock.json` | intentionally omitted | dev-only; the package has zero runtime npm dependencies |
 | `package.json` npm scripts | adapted | the fifteen monorepo-relative npm scripts are removed so a standalone copy cannot escape to an omitted parent layout; the CLI never invokes them |
+| trailing whitespace | normalized at import | trailing whitespace on sixteen lines of `assets/template.html` and `renderers/workflow/workflow-compiler.mjs` is stripped for the repository whitespace gate; no content change |
 | known upstream alert | accepted at pin time | CodeQL flags incomplete multi-character sanitization in `delta/architecture-delta.mjs` (an offline authoring helper writing local artifacts); accepted with the v3.1.0 pin and revisited on the next pin move |
 | `license` and `metadata` frontmatter keys | adapted | the hub frontmatter contract allows only `name`, `description`, `invocation`; upstream v3.1.0 / tt-a1i recorded in provenance |
 | Output example's illustrative path | adapted | the example's `file:///abs/path/….html` link target replaces the upstream bare `/abs/path/….html` form so the repository Markdown-link gate passes; no behavior change |

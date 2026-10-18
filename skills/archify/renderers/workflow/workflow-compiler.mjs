@@ -916,7 +916,7 @@ function createWorkflowLaneGeometry(workflow, layout, legendExtraHeight, minimum
     + 124
     + legendExtraHeight;
   const initialViewBox = workflow.meta?.viewBox || [minimumCanvasWidth, autoHeight];
-  
+
 
   const laneIndex = new Map(asArray(workflow.lanes).map((lane, index) => [lane.id, index]));
   const laneLabels = new Map(asArray(workflow.lanes).map((lane) => [lane.id, lane.label]));
