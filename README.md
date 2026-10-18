@@ -47,6 +47,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
 npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill asd-ste100
+npx skills add TeFuirnever/azhou-ai-hub --skill archify
 ~~~
 
 Package-manager installs resolve the mutable default branch; [verify what you installed](docs/installation.md#verify-what-you-installed) against a published tag, or use the receipt-backed checkout-assisted path.
@@ -99,8 +100,9 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Arch Doc](skills/arch-doc/SKILL.md) | Draft, calibrate and review an architecture design document from upstream sources: reading notes with per-fact provenance, a baseline skeleton with controlled evidence vocabulary, PlantUML-only diagram discipline (four-part captions, sequence-diagram rules), source cross-calibration and two-line best-practice review gates. | Distilled from the MCC ARCH-2026-001 v0.1-v0.17 pipeline (upstream team research, readability audit, best-practice review and an architect-approved 20-item backlog); five validated sequence diagrams and two registered review guides ship as references; deterministic scaffold (`new_doc.py`), closing-gate checker (`verify_doc.py`) and a golden scaffold case in `benchmarks/arch-doc/`. |
 | [Session Insights](skills/session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code and Codex adapters; the zcode adapter fails closed — the probed store exposes no plaintext transcripts); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates, window/cap trimming, receipt-digest stability, and privacy plus fail-closed negative controls. Excerpts-off aggregate runs reuse a disposable per-file metadata cache whose cold, warm, deleted and corrupt states yield byte-identical results; roast tone, the offline HTML artifact and the Codex rollout adapter are delivered behind golden parity and fail-closed negative controls, and the zcode hold stays fixed even for populated-but-unrecognized store shapes. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [ASD-STE100](skills/asd-ste100/SKILL.md) | Rewrite agent-facing English — tool descriptions, error messages, inter-agent instructions, status reports — under ASD-STE100-derived controlled-English structural rules in Strict or STE-flavored mode, preserving every hedge, fact and scope qualifier; the non-redistributable ASD dictionary stays out by design. | Faithfully imported at the locked upstream commit with pinned SHA-256 integrity tests; `scripts/ste-lint.py` turns the machine-checkable structural rules into a deterministic stdlib gate (hard-violation exit codes, `--baseline`, `--json`, `--selftest`) covered by positive and negative tests. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
+| [Archify](skills/archify/SKILL.md) | Turn systems, plans, or codebases into presentation-grade interactive diagram maps — ten typed-JSON modes from architecture and workflow to ERD, tree, timeline and waterfall — delivered as self-contained explorable HTML with themes, pan/zoom, guided views and truthful exports; editable .excalidraw source scenes stay excalidraw-diagram's lane. | Faithfully imported at the locked upstream tag with pinned SHA-256 integrity tests over the trimmed vendored subtree (`doctor` passes 13/13); the deterministic `validate`/`deliver`/`finalize` real-browser gate chain is preserved unmodified, with the Azhou brand protocol and `archify.receipt.v1` added as wrapper layers. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 
-All fifteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class — fourteen in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces), and super-caveman's in the repository gate's held-declaration table until its promotion-frozen tree next rides — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All sixteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class — fifteen in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces), and super-caveman's in the repository gate's held-declaration table until its promotion-frozen tree next rides — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 Canonical names carry their provenance: `super-` marks a skill adapted from pinned upstream material, and a bare name marks original or faithfully adopted work. The repository gate enforces that prefix-fidelity rule in both directions and fails on residue from renamed-away names outside the documented compatibility surfaces.
 
@@ -265,6 +267,18 @@ ASD-STE100 rewrites agent-facing English — tool descriptions, error messages, 
 > 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
 
 [Read the package](skills/asd-ste100/SKILL.md)
+
+## Archify
+
+> 🗺️ One map tells the whole system — hand it to the reader to explore.
+
+Archify turns systems, plans, or codebases into presentation-grade interactive diagram maps: ten typed-JSON diagram modes delivered as self-contained explorable HTML with themes, pan/zoom, guided views and truthful exports, behind deterministic `validate`/`deliver`/`finalize` real-browser gates. Editable .excalidraw source scenes stay excalidraw-diagram's lane.
+
+![Archify effect preview](assets/skills/archify-effect.png)
+
+> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
+
+[Read the package](skills/archify/SKILL.md)
 
 ## One architecture
 
