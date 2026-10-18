@@ -12,7 +12,7 @@ invocation: user-invoked orchestrator
 
 Invocation class: user-invoked orchestrator, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — invoked by name or by an explicit "which skill" request; it recommends and never invokes another skill on the user's behalf.
 
-It is guidance, not a script. This is the hub's front door: fourteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
+It is guidance, not a script. This is the hub's front door: fifteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
 
 ## Brand protocol
 
@@ -32,6 +32,7 @@ Match the request to a family first, then to the catalog's intent keywords: inst
 
 <!-- generated-routing-index:begin -->
 - `arch-doc` — End-to-end authoring and calibration of an architecture design document from upstream sources. MUST trigger for 写架构设计文档, 架构说明书, ARCH 文档, 软件实现架构说明书, 架构文档补时序图, PlantUML 时序图（架构文档内）, 交叉校准, 回源核对, 上游研读, 上游真源, 最佳实践评审, 架构评审对标, 架构文档模板, PRD 模板, 产品需求文档模板, 功能详细设计模板, 校准架构文档, 质量场景卡, or whenever a repository needs a software-implementation-architecture document drafted, calibrated against upstream design docs, or reviewed against industry best practices. Distilled from the MCC ARCH-2026-001 authoring pipeline.
+- `asd-ste100` — Use when English text must be parsed without a human to resolve ambiguity — tool descriptions, error messages, inter-agent instructions, system prompts, status reports — and misreading has a real cost, or when text reads as dense, hedged, or easy to misparse. Triggers: disambiguate, STE100 rewrite, apply Simplified Technical English, plain-language rewrite, controlled-language rewrite, rewrite so an agent cannot misread this. Not for creative or marketing copy.
 - `ask-azhou` — One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf.
 - `autoresearch` — Wrap Karpathy's autoresearch environment so an agent can run, resume, and report automatic nanochat training experiments inside a user-owned pinned checkout. Requires an NVIDIA GPU and uv; vendors no upstream bytes. Use when the user asks to run or check autoresearch experiments; also for 跑 nanochat 训练实验.
 - `azhou-doctor` — Diagnose Azhou AI Hub checkout, package, explicit install-target, Treehouse lease, or host stale-install migration health without mutation. Use for health checks, broken installs, environment diagnostics, stale hook paths, residual installs after a canonical rename, or support verification; also for "is my checkout healthy", "what broke", 仓库体检, 哪里坏了, or a stuck-lease question.

@@ -83,6 +83,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/ask-azhou/SKILL.md",
     "skills/arch-doc/SKILL.md",
     "skills/session-insights/SKILL.md",
+    "skills/asd-ste100/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/super-llm-wiki/SKILL.md",
@@ -171,6 +172,11 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先有数字，再有故事。",
         "startup": "🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>",
         "brand_path": "skills/session-insights/references/brand-layer.md",
+    },
+    "skills/asd-ste100/SKILL.md": {
+        "display_name": "ASD-STE100",
+        "motto": "一词一义，一句一事，agent 无从误读。",
+        "startup": "🦊 阿舟 · ASD-STE100 启动｜mode=<strict|flavored>｜scope=<text-or-files>",
     },
 }
 
