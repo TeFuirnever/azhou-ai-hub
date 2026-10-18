@@ -136,7 +136,7 @@ All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows,
 - Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
 - Hook commands rendered by super-repo-pedant, super-caveman and Super LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
 
-A checked-in Windows full-flow receipt exists (evidence/windows-full-flow-receipt-2026-09-13.md): the managed flow (info → setup → doctor) passes on a real Windows runner, while the receipt's gate section records a console-encoding divergence (cp1252 under Git Bash) filed as issue #236 — treat that section as green once #236 closes.
+Checked-in Windows full-flow receipts exist: the managed flow (info → setup → doctor) and the repository gate pass fully green on a real Windows runner with the default Git Bash console encoding ([evidence/windows-full-flow-receipt-2026-10-17.md](../evidence/windows-full-flow-receipt-2026-10-17.md), after the #236 UTF-8 console fix); the 2026-09-13 receipt ([evidence/windows-full-flow-receipt-2026-09-13.md](../evidence/windows-full-flow-receipt-2026-09-13.md)) records the pre-fix cp1252 divergence for history.
 
 ## One-path rule
 
@@ -156,7 +156,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - Super LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/super-llm-wiki/references/setup.md).
-- Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.83` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/super-lavish/references/setup.md).
+- Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.89` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/super-lavish/references/setup.md).
 - Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/arch-doc/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.

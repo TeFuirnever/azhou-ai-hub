@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import unittest
@@ -18,6 +19,7 @@ def run_validator(line: str, *flags: str) -> tuple[int, str]:
         input=line,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     return result.returncode, result.stdout
@@ -51,6 +53,24 @@ class ExcalidrawBrandStartupTest(unittest.TestCase):
         code, out = run_validator(PREFIX + "mode=create｜deliverable=svg｜scope=unresolved\n", "--locked")
         self.assertEqual(1, code)
         self.assertIn("scope=unresolved after requirement lock", out)
+
+    def test_ok_line_prints_utf8_under_cp1252_console(self) -> None:
+        # Git Bash piped stdio on windows-latest defaults to the cp1252 ANSI
+        # codec (T6 receipt, #236); the validator's own echo must not depend
+        # on the console locale. The line travels in via argv, isolating the
+        # write side.
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [sys.executable, str(VALIDATOR), PREFIX + "mode=create｜deliverable=svg｜scope=checkout-flow\n"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(result.stdout.startswith("ok:"), result.stdout[:80])
+        self.assertIn("\U0001f98a", result.stdout)
 
 
 if __name__ == "__main__":

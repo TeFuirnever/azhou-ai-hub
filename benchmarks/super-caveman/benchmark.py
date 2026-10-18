@@ -68,6 +68,10 @@ PRIOR_CLOSURE_RESULT_SHA256 = {
     "revision-e5f16195-attempt-1-summary.json": "be2d02f6e3d259ee7d41857afe7cd1d32ef949ec099f4e895ce4378746e60715",
 }
 PRIOR_STATE_CASE_SHA256 = "3136808262609cf5bc9083b379b7f1cf15bb79b788127f012ff294142da09290"
+REJECTED_DRAFT_CASE_SHA256 = "5ae6e242baf1612bde3252cdbb2b11369e68244614b6e8c8e2980880f1c4d3bd"
+REJECTED_DRAFT_RESULT_SHA256 = {
+    "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb",
+}
 PRIOR_STATE_RESULT_SHA256 = {
     "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
     "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95",
@@ -1418,6 +1422,12 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
             "case_ids": sorted(RESPONSE_IDS),
             "result_files": PRIOR_STATE_RESULT_SHA256,
         },
+        {
+            "sha256": REJECTED_DRAFT_CASE_SHA256,
+            "count": len(RESPONSE_IDS),
+            "case_ids": sorted(RESPONSE_IDS),
+            "result_files": REJECTED_DRAFT_RESULT_SHA256,
+        },
     ]
     if legacy_case_sets != expected_legacy_case_sets:
         errors.append("evaluation contract legacy case metadata mismatch")
@@ -1519,12 +1529,14 @@ def check(*, require_promotion_evidence: bool = False) -> list[str]:
         PRIOR_19_CASE_SHA256: RESPONSE_IDS,
         PRIOR_CLOSURE_CASE_SHA256: RESPONSE_IDS,
         PRIOR_STATE_CASE_SHA256: RESPONSE_IDS,
+        REJECTED_DRAFT_CASE_SHA256: RESPONSE_IDS,
     }
     immutable_result_sets = {
         LEGACY_CASE_SHA256: LEGACY_RESULT_SHA256,
         PRIOR_19_CASE_SHA256: PRIOR_19_RESULT_SHA256,
         PRIOR_CLOSURE_CASE_SHA256: PRIOR_CLOSURE_RESULT_SHA256,
         PRIOR_STATE_CASE_SHA256: PRIOR_STATE_RESULT_SHA256,
+        REJECTED_DRAFT_CASE_SHA256: REJECTED_DRAFT_RESULT_SHA256,
     }
     current_passing_results: list[Path] = []
     for result_path in sorted((BENCHMARK / "results").glob("*-summary.json")):

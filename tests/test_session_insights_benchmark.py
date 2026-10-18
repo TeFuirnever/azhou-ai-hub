@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ def run_cli(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -40,6 +42,25 @@ class SessionInsightsBenchmarkTest(unittest.TestCase):
             cwd=ROOT,
             capture_output=True,
             text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue(json.loads(result.stdout)["valid"])
+
+
+class SessionInsightsBenchmarkConsoleTest(unittest.TestCase):
+    def test_check_passes_under_cp1252_parent_locale(self) -> None:
+        # The benchmark harness pipes the CLI's UTF-8 output through its own
+        # locale decoder (T6 receipt follow-up, #236); the harness pipes are
+        # pinned to UTF-8 so a cp1252 parent cannot crash the reader thread.
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [sys.executable, str(BENCHMARK), "check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
@@ -61,6 +82,33 @@ class SessionInsightsCliTest(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr)
         return json.loads(result.stdout)
+
+    def test_aggregate_excerpts_print_utf8_under_cp1252_console(self) -> None:
+        # Git Bash piped stdio on windows-latest defaults to the cp1252 ANSI
+        # codec (T6 receipt, #236); excerpt text must survive the console
+        # locale instead of dying in print().
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(CLI),
+                "aggregate",
+                "--harness",
+                "all",
+                "--store-root",
+                str(self.store),
+                "--include-excerpts",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("UnicodeEncodeError", result.stderr)
+        self.assertIn(self.benchmark.FIRST_PROMPT_SHARED, result.stdout)
 
     def test_aggregate_golden_spot_checks(self) -> None:
         aggregate = self.aggregate()

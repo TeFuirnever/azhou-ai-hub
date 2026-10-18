@@ -8,7 +8,7 @@ Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtim
 
 ## Super Repo Pedant baseline
 
-`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the legacy baseline.
+`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`322346ded8129436b3f64707789a73e732ae24d9`](https://github.com/KKKKhazix/Khazix-Skills/commit/322346ded8129436b3f64707789a73e732ae24d9) (self-declared v3.0.0; re-baselined 2026-10-18 from the absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
 
 - Copyright: 数字生命卡兹克
 - License: [MIT](LICENSES/Khazix-Skills-MIT.txt)
@@ -86,6 +86,24 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - License: [Apache-2.0](LICENSES/Claude-Plugins-Community-Apache-2.0.txt), the repository-level license file of the upstream project
 - Imported boundary: the eli5 behavior sentence and trigger intent; no other upstream files exist
 - Local changes: harness-neutral description and topic argument, topic boundary, self-contained artifact contract, Azhou brand protocol, stable receipt, provenance and compatibility records
+
+## ASD-STE100
+
+`skills/asd-ste100/` imports the `asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
+
+- Copyright: Dustin Yuchen Teng, 2026
+- License: [MIT](LICENSES/asd-ste100-skill-MIT.txt)
+- Imported boundary: the controlled-English rewrite capability with its Strict and STE-flavored modes, the structural-rule linter `ste-lint.py`, the writing-rules summary and the worked examples
+- Local changes: frontmatter normalization to the hub contract, Azhou brand protocol, explicit hold boundary, stable receipt, provenance and compatibility records, plus two reviewed `ste-lint.py` patches (hard-wrapped sentence merging, verb-inflection matching) recorded with both SHA-256 values in the package's provenance
+
+## Archify
+
+`skills/archify/` imports the `archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.1.0`](https://github.com/tt-a1i/archify/releases/tag/v3.1.0) (commit [`1c2b42d660e4a7571813fb43839c79e3e9ca7720`](https://github.com/tt-a1i/archify/commit/1c2b42d660e4a7571813fb43839c79e3e9ca7720)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the fifteen pre-rendered example HTML files and the dev-only `package-lock.json` are the only exclusions, recorded in the package's compatibility map.
+
+- Copyright: tt-a1i (Archify), 2026
+- License: [MIT](LICENSES/archify-MIT.txt); bundled font notice inside the package under `assets/JetBrainsMono-OFL.txt`
+- Imported boundary: the ten-mode typed-JSON diagram capability with its `validate`/`deliver`/`finalize` gate chain, renderers, viewer template, contracts, examples and locale translations
+- Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
 
 ## Autoresearch (referenced, not redistributed)
 

@@ -121,6 +121,34 @@
         "revision-45121948-attempt-1-summary.json": "cce6d8ef17114efd02dae0a89e7182dcc3ec00c3acf6f2d2a8db809413956058",
         "revision-6210ab51-attempt-1-summary.json": "e3071a4f1da088a45f70bf51d9c54693c9fdcf4088d071a822d3d569e1530f95"
       }
+    },
+    {
+      "sha256": "5ae6e242baf1612bde3252cdbb2b11369e68244614b6e8c8e2980880f1c4d3bd",
+      "count": 19,
+      "case_ids": [
+        "agent-owned-edit",
+        "casual-message",
+        "code-answer",
+        "complex-plan",
+        "concept-explanation",
+        "debugging-cause",
+        "destructive-action",
+        "direct-answer",
+        "error-report",
+        "host-plan-tool-state",
+        "long-form-request",
+        "medical-boundary",
+        "multi-step-progress",
+        "partial-success",
+        "real-ambiguity",
+        "stop-mode-default-style",
+        "task-wins-options",
+        "uncertainty-and-idiom",
+        "under-two-minute-next-action"
+      ],
+      "result_files": {
+        "revision-03e62944-attempt-1-summary.json": "d9ddcc9243a799341ddda7accc5990a289ada65a7384c6d32d9b89af00d879cb"
+      }
     }
   ],
   "runtime": {

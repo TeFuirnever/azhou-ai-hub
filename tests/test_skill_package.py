@@ -31,7 +31,9 @@ SKILL_DIRS = (
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
     ROOT / "skills" / "ask-azhou",
     ROOT / "skills" / "arch-doc",
+    ROOT / "skills" / "archify",
     ROOT / "skills" / "session-insights",
+    ROOT / "skills" / "asd-ste100",
 )
 
 
@@ -62,7 +64,8 @@ class SkillPackageTest(unittest.TestCase):
             relative_links = [value for value in links if "://" not in value and not value.startswith("#")]
             self.assertTrue(relative_links)
             for value in relative_links:
-                self.assertTrue((package / value).exists(), f"{package.name}: {value}")
+                target = value.split("#", 1)[0]
+                self.assertTrue((package / target).exists(), f"{package.name}: {value}")
 
     def test_no_scaffold_placeholders(self) -> None:
         text_suffixes = {".md", ".py", ".mjs", ".json", ".toml", ".yaml", ".yml", ".html"}
@@ -240,8 +243,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(14, len(SKILL_DIRS))
-        self.assertIn("fourteen canonical packages", support)
+        self.assertEqual(16, len(SKILL_DIRS))
+        self.assertIn("sixteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
@@ -371,7 +374,7 @@ class SkillPackageTest(unittest.TestCase):
 
         self.assertEqual("super-lavish", re.search(r"^name:\s*([^\n]+)$", skill, re.MULTILINE).group(1).strip())
         for surface in (skill, setup, provenance):
-            self.assertIn("0.1.83", surface)
+            self.assertIn("0.1.89", surface)
         self.assertIn("232972beba9e0e4e75682c98f2aeb2cf01532122", provenance)
         self.assertIn("7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857", provenance)
         self.assertIn("No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored", provenance)
@@ -395,8 +398,8 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("把复杂结果变成可审阅的界面。", brand)
         self.assertIn("A host without Unicode", brand)
         self.assertIn("Emoji", brand)
-        self.assertIn("lavish-axi@0.1.83", skill)
-        self.assertIn("lavish-axi@0.1.83", setup)
+        self.assertIn("lavish-axi@0.1.89", skill)
+        self.assertIn("lavish-axi@0.1.89", setup)
         self.assertIn("preserved", compatibility)
         self.assertIn("intentionally omitted", compatibility)
 

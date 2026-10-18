@@ -15,7 +15,7 @@ Point the agent at real material. The skill builds the artifact locally, opens t
 The agent must return:
 
 1. one local HTML artifact, by default under `.lavish/`, written in a chosen design source and matching Lavish playbooks;
-2. a review session opened with the locked baseline `npx -y lavish-axi@0.1.83 <html-file>`;
+2. a review session opened with the locked baseline `npx -y lavish-axi@0.1.89 <html-file>`;
 3. a foreground long-poll (or a verified harness wake callback) so user annotations and queued prompts reach the agent;
 4. user feedback applied to the artifact before polling again;
 5. session end (`end` / `Send & End`) honored: no uninvited reopening;
@@ -44,7 +44,7 @@ Then inspect the locked npm baseline before first execution:
 
 ```bash
 node --version
-npm view lavish-axi@0.1.83 version dist.integrity license --json
+npm view lavish-axi@0.1.89 version dist.integrity license --json
 ```
 
 Real output:
@@ -52,8 +52,8 @@ Real output:
 ```text
 v24.15.0
 {
-  "version": "0.1.83",
-  "dist.integrity": "sha512-cs6hfWReEPrGjySrEsPWm/Qg0ESKfRpH3t0dFRpsQiC0WSatkTA85LwRZngAwbJEDVSA2AmCf2p4+NlcVerzZA==",
+  "version": "0.1.89",
+  "dist.integrity": "sha512-qPt10ej626zXv4uG1gMgv0btR2WLi5tO92jV0HfmjpZHk795OHF/AMC2WW0N5qJJhZyIG2l3T5Al9DZeBOADXw==",
   "license": "MIT"
 }
 ```
@@ -93,10 +93,10 @@ The agent must return: a source-linked HTML with addressable `data-review-id` se
 From the repository root, run the deterministic suite:
 
 ```bash
-python3 -m unittest tests.test_lavish_relay_state -v
+python3 -m unittest tests.test_super_lavish_relay_state -v
 ```
 
-Real run at revision `9d491ea`, Python 3.14.7 (trimmed; recorded when the parser lived at `skills/spec-relay/` — it moved byte-identical to `skills/lavish/scripts/relay_state.py` in the merge):
+Real run at revision `9d491ea`, Python 3.14.7 (trimmed; recorded when the parser lived at `skills/spec-relay/` — it moved byte-identical to `skills/lavish/scripts/relay_state.py` in the merge, and the test module is now `tests/test_super_lavish_relay_state.py`):
 
 ```text
 test_comment_and_selection_round_trip_inside_html ... ok
@@ -163,7 +163,7 @@ Recorded for the relay runs quoted above at their pinned revision `9d491ea`:
 | runtime | Python 3.14.7, macOS (Darwin 25.6.0), repository `9d491ea` |
 | harness / model | deterministic `unittest` + stdlib CLI; no model in the loop |
 | skill package digest | `SKILL.md` `08fd0d195d32ad6f`, `relay_state.py` `0bf07a5b314885ee` (sha256, 16-hex prefix) |
-| input / case digest | fixture `packet.html` `c818268160674886`; `tests/test_spec_relay.py` `0c4ed73067a661a6` (now `tests/test_lavish_relay_state.py`) |
+| input / case digest | fixture `packet.html` `c818268160674886`; `tests/test_spec_relay.py` `0c4ed73067a661a6` (now `tests/test_super_lavish_relay_state.py`) |
 | tool permissions | local filesystem and Python only; no network access |
 | attempt | one deterministic attempt; byte-reproducible commands above |
 | artifact digest | final packet `f7d5308a…` (packet id), `state_revision` 1 |

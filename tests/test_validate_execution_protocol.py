@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
             [sys.executable, str(SCRIPT), str(path)],
             cwd=ROOT,
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -48,11 +50,32 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
                 [sys.executable, str(SCRIPT)],
                 cwd=project,
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=False,
             )
             self.assertEqual(0, result.returncode, result.stderr or result.stdout)
             self.assertTrue(json.loads(result.stdout)["valid"])
+
+    def test_rejection_errors_print_utf8_under_cp1252_console(self) -> None:
+        # Git Bash piped stdio on windows-latest defaults to the cp1252 ANSI
+        # codec (T6 receipt, #236); rejection errors echo CJK/emoji anchors
+        # and must stay parseable regardless of the console locale.
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), str(FIXTURES / "prior-drift.execution.json")],
+            cwd=ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertNotIn("UnicodeEncodeError", result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["valid"])
+        self.assertTrue(payload["errors"])
 
     def test_prior_freeform_brand_drift_is_rejected(self) -> None:
         result = self.run_validator(FIXTURES / "prior-drift.execution.json")

@@ -35,7 +35,22 @@ def check(line: str, locked: bool) -> list[str]:
     return errors
 
 
+def _force_utf8_stdio() -> None:
+    # Console pipes inherit the host locale codec (cp1252 under Git Bash on
+    # Windows, #236); broadcast lines and verdicts are UTF-8 by contract, so
+    # the streams are reconfigured before any I/O happens.
+    for stream in (sys.stdout, sys.stderr, sys.stdin):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--locked", action="store_true", help="requirement lock has happened; unresolved is no longer allowed")
     parser.add_argument("lines", nargs="*", help="broadcast lines; stdin when omitted")

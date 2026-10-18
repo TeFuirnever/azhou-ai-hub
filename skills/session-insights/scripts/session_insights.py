@@ -1183,7 +1183,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _force_utf8_stdio() -> None:
+    # Console pipes inherit the host locale codec (cp1252 under Git Bash on
+    # Windows, #236); every byte this CLI exchanges over stdio is UTF-8 by
+    # contract, so the streams are reconfigured before any I/O happens.
+    for stream in (sys.stdout, sys.stderr, sys.stdin):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdio()
     args = parse_args(argv)
     for name in ("days", "max_sessions"):
         value = getattr(args, name, None)
