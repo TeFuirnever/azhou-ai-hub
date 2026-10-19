@@ -1021,7 +1021,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 parser.parse_args(command)
             for command in (
                 ["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
-                ["migrate", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
+                ["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "copy", "--apply", "--plan-id", "reviewed"],
                 ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
             ):
                 with self.subTest(command=command[0]):
