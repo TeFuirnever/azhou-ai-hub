@@ -273,14 +273,20 @@ class ManageEvolutionTest(unittest.TestCase):
                         text=True,
                     )
                     # Handshake: give the child its interpreter startup, then
-                    # prove it is blocked on the held lock — if it managed to
-                    # append while the archive still holds the lock, the lock
-                    # is a no-op and this test must fail here.
+                    # prove it is blocked on the held lock — add-signal stores
+                    # only the evidence digest, so the observable marker is the
+                    # live line count: an early append would add one line while
+                    # the archive still holds the lock, meaning the lock is a
+                    # no-op and this test must fail here.
                     time.sleep(0.3)
                     live_during_window = (
                         project / ".azhou" / "super-repo-pedant" / "evolution" / "signals.jsonl"
                     ).read_text(encoding="utf-8")
-                    self.assertNotIn("receipt-racer", live_during_window)
+                    self.assertEqual(
+                        len(live_during_window.splitlines()),
+                        2,
+                        "a racer append landed while the archive transaction lock was held",
+                    )
 
             MODULE.write_private_text = publish_spawning_racer
             try:

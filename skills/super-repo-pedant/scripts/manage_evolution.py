@@ -188,7 +188,10 @@ def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> 
         return
     lock_path = state_root / ".transaction.lock"
     secure_state_target(lock_path, root)
-    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as exc:
+        raise EvolutionError(f"cannot open the transaction lock: {lock_path} ({exc})") from exc
     deadline = time.monotonic() + timeout
     try:
         while True:
