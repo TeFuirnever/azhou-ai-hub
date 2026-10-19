@@ -1178,5 +1178,56 @@ class LlmWikiTest(unittest.TestCase):
             )
 
 
+class LlmWikiMcpIsolationTest(unittest.TestCase):
+    """One bad MCP request must surface as a structured error, never kill the session."""
+
+    def ingest_arguments(self, root: Path, confidence: object) -> dict:
+        return {
+            "workingDirectory": str(root),
+            "title": "Isolation probe",
+            "content": "Body text.",
+            "tags": ["probe"],
+            "category": "reference",
+            "confidence": confidence,
+        }
+
+    def test_unhashable_confidence_returns_isError_not_a_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for bad in ([], {}, ["high"], 3):
+                with self.subTest(confidence=bad):
+                    result = llm_wiki_mcp.call_tool("wiki_ingest", self.ingest_arguments(root, bad))
+                    self.assertTrue(result["isError"])
+                    self.assertIn("confidence", result["content"][0]["text"])
+            ok = llm_wiki_mcp.call_tool("wiki_ingest", self.ingest_arguments(root, "low"))
+            self.assertNotIn("isError", ok)
+
+    def test_archive_rejects_filenames_with_title_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = llm_wiki.WikiStore(root)
+            store.add(
+                title="Audit Decision",
+                content="## Decision\n\nShip it.\n\n## Alternatives considered\n\nNone.",
+                tags=[],
+                category="decision",
+                sources=[],
+                confidence="high",
+                lifecycle="implemented",
+            )
+            by_filename = llm_wiki_mcp.call_tool(
+                "wiki_archive",
+                {"workingDirectory": str(root), "page": "audit-decision.md", "confirm": True},
+            )
+            self.assertTrue(by_filename["isError"])
+            self.assertIn("title", by_filename["content"][0]["text"])
+            by_title = llm_wiki_mcp.call_tool(
+                "wiki_archive",
+                {"workingDirectory": str(root), "page": "Audit Decision", "confirm": True},
+            )
+            self.assertNotIn("isError", by_title)
+            self.assertIn("audit-decision.md", by_title["content"][0]["text"])
+
+
 if __name__ == "__main__":
     unittest.main()
