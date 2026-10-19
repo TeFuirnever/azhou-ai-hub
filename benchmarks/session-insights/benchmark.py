@@ -9,6 +9,7 @@ metric semantics. They are never evidence about model behavior.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -675,6 +676,32 @@ def cmd_check(_: argparse.Namespace) -> int:
         codex_warm_out, _ = cached_aggregate(harness="codex")
         if codex_warm_out != codex_cold_out:
             errors.append("cache: warm codex output differs from the cold run")
+
+        # A hit whose entry lost consumed fields (or carries wrong types) must
+        # be a cache miss: re-parse and reproduce the cold output byte for byte.
+        def store_key(harness: str) -> str:
+            resolved = str(store.resolve())
+            return hashlib.sha256(f"{harness}\n{resolved}".encode("utf-8")).hexdigest()
+
+        def poison_entry(harness: str, mutate) -> None:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            section = payload["stores"][store_key(harness)]
+            mutate(next(iter(section["files"].values())))
+            cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        poisons = {
+            "empty metadata": lambda entry: entry.update({"metadata": {}}),
+            "missing field": lambda entry: entry["metadata"].pop("malformed_lines", None),
+            "wrong type": lambda entry: entry["metadata"].update({"malformed_lines": "0", "message_lines": None}),
+            "non-dict metadata": lambda entry: entry.update({"metadata": 42}),
+        }
+        for harness, cold_reference in (("claude-code", cold_out), ("codex", codex_cold_out)):
+            for name, mutate in poisons.items():
+                cached_aggregate(harness=harness)
+                poison_entry(harness, mutate)
+                poisoned_out, _poisoned = cached_aggregate(harness=harness)
+                if poisoned_out != cold_reference:
+                    errors.append(f"cache: a poisoned {harness} entry ({name}) changed the aggregate output")
 
         s2 = store / "projects" / ALPHA / f"{S2}.jsonl"
         with s2.open("a", encoding="utf-8") as handle:
