@@ -118,6 +118,28 @@ def check_semantic(data: dict, case: dict) -> list[dict]:
     return diags
 
 
+def visual_review_ok(vr: dict) -> bool:
+    """The one first-pass visual-review criterion, shared by verify and report.
+
+    A named reviewer reported `passed` with no defects and no holds; anything
+    else — including a missing reviewer, recorded defects, or unresolved
+    holds — never counts as first-pass usable."""
+    if not isinstance(vr, dict):
+        return False
+    reviewer = vr.get("reviewer")
+    # The reviewer must be a real non-empty string: JSON null/false/0/[] all
+    # stringify to non-empty words and must not pass as an identified person.
+    if (
+        vr.get("status") != "passed"
+        or not isinstance(reviewer, str)
+        or not reviewer.strip()
+    ):
+        return False
+    if vr.get("defects") or vr.get("holds"):
+        return False
+    return True
+
+
 def cmd_verify(args) -> int:
     case = json.loads(Path(args.case).read_text(encoding="utf-8"))
     cand = Path(args.candidate)
@@ -139,10 +161,13 @@ def cmd_verify(args) -> int:
 
     vr = run.get("visual_review", {})
     vr_status = vr.get("status", "skipped")
-    holds = [str(h) for h in (vr.get("holds") or []) if str(h)]
+    # Holds are preserved verbatim (str-form): a blank or malformed entry is
+    # kept, so verify and report judge the same data and malformed input can
+    # never be filtered into a pass.
+    holds = [str(h) for h in (vr.get("holds") or [])]
     if not holds and vr_status == "skipped":
         holds = ["visual review not recorded"]
-    vr_ok = vr_status == "passed" and bool(vr.get("reviewer"))
+    vr_ok = visual_review_ok(vr)
 
     receipt = {
         "schema": 1, "case_id": case["id"],
@@ -248,31 +273,49 @@ def cmd_check(args) -> int:
 def cmd_report(args) -> int:
     man = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     rows = [json.loads(l) for l in Path(args.results).read_text(encoding="utf-8").splitlines() if l.strip()]
+    expected = {c["id"] for c in man["cases"]}
     clusters = {"operational": 0, "semantic": 0, "deterministic": 0, "visual-review": 0}
     usable = 0
     holds = set()
-    seen = {}
+    seen: dict = {}
+    unknown_case_ids: set = set()
+    later_attempts = 0
     for r in rows:
+        if r.get("case_id") not in expected:
+            unknown_case_ids.add(str(r.get("case_id")))
+            continue
         seen.setdefault(r["case_id"], []).append(r)
+        attempt = r.get("attempt")
+        # JSON true compares equal to 1; the attempt identity must be a real
+        # integer, so boolean rows count as later attempts, never as attempt 1.
+        if isinstance(attempt, bool) or attempt != 1:
+            later_attempts += 1
         if r.get("status") == "operational-failure":
             clusters["operational"] += 1
             continue
-        g = r["gates"]
-        holds.update(str(h) for h in (g.get("visual_review", {}).get("holds") or []))
-        if not g["semantic"]["pass"]:
+        g = r.get("gates") or {}
+        vr = g.get("visual_review", {}) if isinstance(g, dict) else {}
+        holds.update(str(h) for h in ((vr or {}).get("holds") or []))
+        if not isinstance(g, dict) or not g.get("semantic", {}).get("pass"):
             clusters["semantic"] += 1
-        elif not g["deterministic"]["pass"]:
+        elif not g.get("deterministic", {}).get("pass"):
             clusters["deterministic"] += 1
-        elif g["visual_review"]["status"] != "passed":
+        elif not visual_review_ok(vr):
             clusters["visual-review"] += 1
-        else:
+        elif isinstance(attempt, int) and not isinstance(attempt, bool) and attempt == 1:
             usable += 1
-    expected = {c["id"] for c in man["cases"]}
-    eligible = expected <= set(seen) and all(len(v) == 1 for v in seen.values())
+    missing = sorted(expected - set(seen))
+    duplicates = sum(len(v) - 1 for v in seen.values())
+    eligible = not missing and not unknown_case_ids and duplicates == 0 and later_attempts == 0
     print(json.dumps({
         "schema": 1, "cases": len(expected), "receipts": len(rows),
         "firstPassUsable": usable, "failureClusters": clusters,
-        "holds": sorted(holds), "evidenceEligible": eligible,
+        "holds": sorted(holds),
+        "matrix": {
+            "missing": len(missing), "duplicates": duplicates,
+            "unknownCaseIds": len(unknown_case_ids), "laterAttempts": later_attempts,
+        },
+        "evidenceEligible": eligible,
     }, ensure_ascii=False))
     return 0
 
