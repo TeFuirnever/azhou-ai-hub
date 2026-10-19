@@ -4,15 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
@@ -39,6 +42,11 @@ FORBIDDEN_KEYS = {"raw_text", "transcript", "command", "tool_input", "tool_outpu
 
 class EvolutionError(ValueError):
     pass
+
+
+# flock failures that will never succeed on retry (unsupported filesystem),
+# as opposed to contention (EAGAIN/EACCES), which is what the wait loop is for.
+PERMANENT_LOCK_ERRNOS = frozenset({errno.EOPNOTSUPP, errno.ENOSYS, errno.EINVAL, errno.EPERM})
 
 
 def now_utc() -> datetime:
@@ -166,6 +174,45 @@ def secure_state_target(path: Path, root: Path) -> None:
         raise EvolutionError(str(exc)) from exc
 
 
+@contextmanager
+def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> Iterator[None]:
+    """Serialize appends against the whole archive transaction.
+
+    The lock lives on a dedicated file because the live batch is republished
+    with os.replace(): an flock on the replaced inode would keep protecting a
+    file no reader ever sees again."""
+    try:
+        import fcntl
+    except ImportError:  # platform without advisory locking keeps single-writer-by-convention
+        yield
+        return
+    lock_path = state_root / ".transaction.lock"
+    secure_state_target(lock_path, root)
+    try:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as exc:
+        raise EvolutionError(f"cannot open the transaction lock: {lock_path} ({exc})") from exc
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as exc:
+                if exc.errno in PERMANENT_LOCK_ERRNOS:
+                    raise EvolutionError(
+                        f"evolution state locking is unavailable on this filesystem: {exc}"
+                    ) from exc
+                if time.monotonic() >= deadline:
+                    raise EvolutionError(
+                        "evolution state is busy: another command holds the transaction lock"
+                    ) from exc
+                time.sleep(0.05)
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def append_jsonl(path: Path, value: dict[str, Any], *, root: Path) -> None:
     secure_state_target(path, root)
     line = json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -263,7 +310,8 @@ def cmd_add_signal(args: argparse.Namespace) -> int:
         errors = validate_signal(signal)
         if errors:
             raise EvolutionError(f"invalid signal fields: {', '.join(errors)}")
-        append_jsonl(state_root / "signals.jsonl", signal, root=project)
+        with transaction_lock(state_root, project):
+            append_jsonl(state_root / "signals.jsonl", signal, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -396,39 +444,40 @@ def cmd_archive(args: argparse.Namespace) -> int:
             raise EvolutionError("; ".join(structure_errors))
 
         signals_path = state_root / "signals.jsonl"
-        try:
-            lines = signals_path.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeError) as exc:
-            raise EvolutionError("live signal batch missing") from exc
-        selected_ids = set(candidate["signal_ids"])
-        archived_lines: list[str] = []
-        retained_lines: list[str] = []
-        for line in lines:
+        with transaction_lock(state_root, project):
             try:
-                value = json.loads(line)
-            except json.JSONDecodeError:
-                retained_lines.append(line)
-                continue
-            if isinstance(value, dict) and value.get("signal_id") in selected_ids and not validate_signal(value):
-                archived_lines.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
-            else:
-                retained_lines.append(line)
-        if not archived_lines:
-            raise EvolutionError("candidate has no validated signals in the live batch")
+                lines = signals_path.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeError) as exc:
+                raise EvolutionError("live signal batch missing") from exc
+            selected_ids = set(candidate["signal_ids"])
+            archived_lines: list[str] = []
+            retained_lines: list[str] = []
+            for line in lines:
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError:
+                    retained_lines.append(line)
+                    continue
+                if isinstance(value, dict) and value.get("signal_id") in selected_ids and not validate_signal(value):
+                    archived_lines.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+                else:
+                    retained_lines.append(line)
+            if not archived_lines:
+                raise EvolutionError("candidate has no validated signals in the live batch")
 
-        archive_path = state_root / "archive" / f"processed-{candidate['candidate_id']}.jsonl"
-        if archive_path.exists():
-            raise EvolutionError("candidate evidence already archived")
-        write_private_text(archive_path, "\n".join(archived_lines) + "\n", root=project)
+            archive_path = state_root / "archive" / f"processed-{candidate['candidate_id']}.jsonl"
+            if archive_path.exists():
+                raise EvolutionError("candidate evidence already archived")
+            write_private_text(archive_path, "\n".join(archived_lines) + "\n", root=project)
 
-        write_private_text(
-            signals_path,
-            ("\n".join(retained_lines) + "\n") if retained_lines else "",
-            root=project,
-        )
-        candidate["archived_signal_count"] = len(archived_lines)
-        candidate["evidence_archive"] = str(archive_path.relative_to(state_root))
-        write_json(candidate_path, candidate, root=project)
+            write_private_text(
+                signals_path,
+                ("\n".join(retained_lines) + "\n") if retained_lines else "",
+                root=project,
+            )
+            candidate["archived_signal_count"] = len(archived_lines)
+            candidate["evidence_archive"] = str(archive_path.relative_to(state_root))
+            write_json(candidate_path, candidate, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
