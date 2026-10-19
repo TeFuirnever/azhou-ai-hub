@@ -89,6 +89,19 @@ class OrdinaryModelFloorEvidenceGateTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertFalse(json.loads(result.stdout)["firstPassUsable"])
 
+    def test_verify_and_report_agree_on_blank_string_holds(self) -> None:
+        # A raw [""] hold is filtered out of the receipt's serialized holds;
+        # the criterion must judge the normalized data so the receipt verify
+        # rejected can never be counted usable by report.
+        run = self.write_run("blank-holds.run.json", lambda r: r["visual_review"].update({"holds": [""]}))
+        result = self.verify(run)
+        self.assertEqual(1, result.returncode)
+        receipt = json.loads(result.stdout)
+        self.assertFalse(receipt["firstPassUsable"])
+        payload = self.run_report([receipt], [receipt["case_id"]])
+        self.assertEqual(0, payload["firstPassUsable"])
+        self.assertEqual(1, payload["failureClusters"]["visual-review"])
+
     def run_report(self, rows: list[dict], case_ids: list[str]) -> dict:
         manifest = self.work / "manifest.json"
         results = self.work / "results.jsonl"

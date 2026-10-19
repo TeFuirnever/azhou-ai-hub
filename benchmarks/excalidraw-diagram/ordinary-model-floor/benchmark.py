@@ -154,7 +154,10 @@ def cmd_verify(args) -> int:
 
     vr = run.get("visual_review", {})
     vr_status = vr.get("status", "skipped")
-    holds = [str(h) for h in (vr.get("holds") or []) if str(h)]
+    # Holds are preserved verbatim (str-form): a blank or malformed entry is
+    # kept, so verify and report judge the same data and malformed input can
+    # never be filtered into a pass.
+    holds = [str(h) for h in (vr.get("holds") or [])]
     if not holds and vr_status == "skipped":
         holds = ["visual review not recorded"]
     vr_ok = visual_review_ok(vr)
