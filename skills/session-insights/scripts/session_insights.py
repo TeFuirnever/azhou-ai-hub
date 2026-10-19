@@ -257,6 +257,10 @@ def cached_metadata(
         return None
     if any(field not in metadata or not isinstance(metadata[field], expected) for field, expected in types.items()):
         return None
+    tool_calls = metadata["tool_calls"]
+    if any(not isinstance(name, str) or not isinstance(count, int) for name, count in tool_calls.items()):
+        # Nested corruption: the aggregate consumes name->count arithmetic.
+        return None
     return dict(metadata)
 
 

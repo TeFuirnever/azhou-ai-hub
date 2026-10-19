@@ -694,6 +694,7 @@ def cmd_check(_: argparse.Namespace) -> int:
             "missing field": lambda entry: entry["metadata"].pop("malformed_lines", None),
             "wrong type": lambda entry: entry["metadata"].update({"malformed_lines": "0", "message_lines": None}),
             "non-dict metadata": lambda entry: entry.update({"metadata": 42}),
+            "nested tool_calls": lambda entry: entry["metadata"].update({"tool_calls": {"Read": "broken"}}),
         }
         for harness, cold_reference in (("claude-code", cold_out), ("codex", codex_cold_out)):
             for name, mutate in poisons.items():
