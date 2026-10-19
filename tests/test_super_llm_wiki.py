@@ -789,6 +789,24 @@ class LlmWikiTest(unittest.TestCase):
             self.assertEqual("pass", linted["status"])
             self.assertEqual(0, linted["result"]["stats"]["archiveTamperCount"])
 
+    def test_archive_bad_lock_fails_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._add_implemented_decision(root, "Auth decision")
+            page_path = root / ".azhou" / "super-llm-wiki" / "auth-decision.md"
+            before = page_path.read_bytes()
+            lock_path = root / ".azhou" / "super-llm-wiki" / ".archive-lock.json"
+            lock_path.write_text(json.dumps({"entries": []}), encoding="utf-8")
+            failed = self.run_cli(root, "archive", "--title", "Auth decision", expected_code=2)
+            self.assertEqual("fail", failed["status"])
+            self.assertEqual([], failed["changes"])
+            self.assertEqual(before, page_path.read_bytes())
+            self.assertIn("lifecycle: implemented", page_path.read_text(encoding="utf-8"))
+            self.assertEqual('{"entries": []}', lock_path.read_text(encoding="utf-8"))
+            lock_path.unlink()
+            self.run_cli(root, "archive", "--title", "Auth decision")
+            self.assertIn("lifecycle: archived", page_path.read_text(encoding="utf-8"))
+
     def test_archive_tamper_is_a_lint_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
