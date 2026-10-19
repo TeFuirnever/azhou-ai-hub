@@ -702,5 +702,18 @@ exit 0
             self.assertTrue(errors[0].startswith("treehouse config is invalid TOML:"))
 
 
+class WorkflowExitCodePolicyTest(unittest.TestCase):
+    """A receipt pipeline must propagate the original exit code (F09)."""
+
+    def test_no_run_block_swallows_failures_with_an_echo_tail(self) -> None:
+        offenders = [
+            f"{path.name}:{line_number}"
+            for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+            if '|| echo "exit=' in line
+        ]
+        self.assertEqual([], offenders, "run steps must propagate failures instead of echoing past them")
+
+
 if __name__ == "__main__":
     unittest.main()
