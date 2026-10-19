@@ -927,6 +927,24 @@ class AzhouHubCliTest(unittest.TestCase):
             (shared_root / "skills" / "tdd" / "scripts" / "notice.py").write_text("print('hi')\n", encoding="utf-8")
             host = Path(directory) / "host"
             (host / "skills").mkdir(parents=True)
+            # A second, earlier absolute reference must not steal the prefix
+            # binding: each path judges its own target (review follow-up on
+            # #315).
+            (host / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            "SessionStart": [
+                                {"command": f"python {shared_root}/skills/other/scripts/other.py"},
+                                {"command": f"python {shared_root}/skills/tdd/scripts/notice.py"},
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (shared_root / "skills" / "other" / "scripts").mkdir(parents=True)
+            (shared_root / "skills" / "other" / "scripts" / "other.py").write_text("print('ok')\n", encoding="utf-8")
             (host / "config.toml").write_text(
                 f'pre_compact_command = "python {shared_root}/skills/tdd/scripts/notice.py"\n',
                 encoding="utf-8",

@@ -1189,10 +1189,11 @@ def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
 def _referenced_skill_directory(text: str, match: re.Match) -> Path | None:
     """Best-effort absolute path for one matched ``skills/<name>/`` reference.
 
-    Scans backwards from the match for a POSIX or Windows path prefix so a
-    config pointing outside the host root is judged by its own target, not by
-    a same-named directory under the host root."""
-    prefix = re.search(r"(?:[A-Za-z]:[\\/]|/)[^\s\"';=,)}]*", text[: match.start()])
+    Takes the path-like run that ends directly at the match (POSIX or Windows
+    form), so multiple absolute paths in one config each bind to their own
+    reference instead of the first path anywhere in the file, and a config
+    pointing outside the host root is judged by its own target."""
+    prefix = re.search(r"(?:[A-Za-z]:[\\/]|/)[^\s\"';=,)}]*$", text[: match.start()])
     if prefix is None:
         return None
     return Path(prefix.group(0) + match.group(0))
