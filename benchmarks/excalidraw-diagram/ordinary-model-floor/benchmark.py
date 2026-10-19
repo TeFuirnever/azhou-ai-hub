@@ -285,7 +285,10 @@ def cmd_report(args) -> int:
             unknown_case_ids.add(str(r.get("case_id")))
             continue
         seen.setdefault(r["case_id"], []).append(r)
-        if r.get("attempt") != 1:
+        attempt = r.get("attempt")
+        # JSON true compares equal to 1; the attempt identity must be a real
+        # integer, so boolean rows count as later attempts, never as attempt 1.
+        if isinstance(attempt, bool) or attempt != 1:
             later_attempts += 1
         if r.get("status") == "operational-failure":
             clusters["operational"] += 1
@@ -299,7 +302,7 @@ def cmd_report(args) -> int:
             clusters["deterministic"] += 1
         elif not visual_review_ok(vr):
             clusters["visual-review"] += 1
-        elif r.get("attempt") == 1:
+        elif isinstance(attempt, int) and not isinstance(attempt, bool) and attempt == 1:
             usable += 1
     missing = sorted(expected - set(seen))
     duplicates = sum(len(v) - 1 for v in seen.values())

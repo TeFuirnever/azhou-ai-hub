@@ -157,6 +157,16 @@ class OrdinaryModelFloorEvidenceGateTest(unittest.TestCase):
         self.assertFalse(payload["evidenceEligible"])
         self.assertEqual(0, payload["firstPassUsable"])
 
+    def test_report_rejects_boolean_attempt_values(self) -> None:
+        # JSON true compares equal to 1; a boolean attempt row must count as a
+        # later attempt, never as attempt-1 evidence (review follow-up on
+        # #311).
+        case_ids = [f"case-{index}" for index in range(5)]
+        rows = [self.receipt(case_id, attempt=True) for case_id in case_ids]
+        payload = self.run_report(rows, case_ids)
+        self.assertFalse(payload["evidenceEligible"])
+        self.assertEqual(0, payload["firstPassUsable"])
+
     def test_report_accepts_an_exact_attempt1_matrix(self) -> None:
         case_ids = [f"case-{index}" for index in range(5)]
         payload = self.run_report([self.receipt(case_id) for case_id in case_ids], case_ids)
