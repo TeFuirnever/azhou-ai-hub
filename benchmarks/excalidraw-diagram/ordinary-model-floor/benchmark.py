@@ -126,7 +126,14 @@ def visual_review_ok(vr: dict) -> bool:
     holds — never counts as first-pass usable."""
     if not isinstance(vr, dict):
         return False
-    if vr.get("status") != "passed" or not str(vr.get("reviewer", "")).strip():
+    reviewer = vr.get("reviewer")
+    # The reviewer must be a real non-empty string: JSON null/false/0/[] all
+    # stringify to non-empty words and must not pass as an identified person.
+    if (
+        vr.get("status") != "passed"
+        or not isinstance(reviewer, str)
+        or not reviewer.strip()
+    ):
         return False
     if vr.get("defects") or vr.get("holds"):
         return False

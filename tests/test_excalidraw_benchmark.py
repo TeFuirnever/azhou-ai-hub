@@ -163,6 +163,22 @@ class OrdinaryModelFloorEvidenceGateTest(unittest.TestCase):
         self.assertTrue(payload["evidenceEligible"])
         self.assertEqual(5, payload["firstPassUsable"])
 
+    def test_reviewer_must_be_a_real_string(self) -> None:
+        # JSON null/false/0/[] all stringify to non-empty words; an unnamed
+        # review can never count as identified (review follow-up on #311).
+        for bad in (None, False, 0, [], {}):
+            with self.subTest(reviewer=bad):
+                run = self.write_run(
+                    "unnamed.run.json",
+                    lambda r: r["visual_review"].update({"reviewer": bad}),
+                )
+                result = self.verify(run)
+                self.assertEqual(1, result.returncode)
+                self.assertFalse(json.loads(result.stdout)["firstPassUsable"])
+                payload = self.run_report([self.receipt("case-a", reviewer=bad)], ["case-a"])
+                self.assertEqual(0, payload["firstPassUsable"])
+                self.assertEqual(1, payload["failureClusters"]["visual-review"])
+
 
 if __name__ == "__main__":
     unittest.main()
