@@ -248,13 +248,52 @@ def cache_store_section(cache: dict[str, Any], harness: str, root: Path) -> dict
     return section
 
 
-def cached_metadata(entry: Any, mtime_ns: int, size: int) -> dict[str, Any] | None:
+# Fields every scanner consumes from a cache hit. A hit missing any of them,
+# or carrying a wrong type, is a miss: the file is re-parsed and the entry
+# rewritten, so a damaged cache can never masquerade as zero counts.
+CACHED_METADATA_TYPES: dict[str, tuple[type, ...]] = {
+    "session_id": (str,),
+    "start": (str, type(None)),
+    "end": (str, type(None)),
+    "turns": (int,),
+    "user_messages": (int,),
+    "assistant_messages": (int,),
+    "tool_calls": (dict,),
+    "interruptions": (int,),
+    "errors": (int,),
+    "first_prompt_sha256": (str, type(None)),
+    "message_timestamps": (list,),
+    "message_lines": (int,),
+    "malformed_lines": (int,),
+    "skipped_lines": (int,),
+}
+CODEX_METADATA_TYPES: dict[str, tuple[type, ...]] = {
+    **CACHED_METADATA_TYPES,
+    "thread_source": (str, type(None)),
+    "project_label": (str, type(None)),
+    "project_match": (str, type(None)),
+}
+
+
+def cached_metadata(
+    entry: Any,
+    mtime_ns: int,
+    size: int,
+    *,
+    types: dict[str, tuple[type, ...]] = CACHED_METADATA_TYPES,
+) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
     if entry.get("mtime_ns") != mtime_ns or entry.get("size") != size:
         return None
     metadata = entry.get("metadata")
     if not isinstance(metadata, dict):
+        return None
+    if any(field not in metadata or not isinstance(metadata[field], expected) for field, expected in types.items()):
+        return None
+    tool_calls = metadata["tool_calls"]
+    if any(not isinstance(name, str) or not isinstance(count, int) for name, count in tool_calls.items()):
+        # Nested corruption: the aggregate consumes name->count arithmetic.
         return None
     return dict(metadata)
 
@@ -563,7 +602,7 @@ def scan_codex_store(
         relative = path.relative_to(root).as_posix()
         path_hash = hashlib.sha256(relative.encode("utf-8")).hexdigest()
         tuples.append(f"{path_hash}:{stat.st_mtime_ns}:{stat.st_size}")
-        parsed = cached_metadata(cached_files.get(path_hash), stat.st_mtime_ns, stat.st_size)
+        parsed = cached_metadata(cached_files.get(path_hash), stat.st_mtime_ns, stat.st_size, types=CODEX_METADATA_TYPES)
         if parsed is None:
             parsed = parse_codex_session_file(path)
         if cache_store is not None:
