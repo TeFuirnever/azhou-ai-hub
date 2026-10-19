@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -41,6 +42,11 @@ FORBIDDEN_KEYS = {"raw_text", "transcript", "command", "tool_input", "tool_outpu
 
 class EvolutionError(ValueError):
     pass
+
+
+# flock failures that will never succeed on retry (unsupported filesystem),
+# as opposed to contention (EAGAIN/EACCES), which is what the wait loop is for.
+PERMANENT_LOCK_ERRNOS = frozenset({errno.EOPNOTSUPP, errno.ENOSYS, errno.EINVAL, errno.EPERM})
 
 
 def now_utc() -> datetime:
@@ -189,9 +195,15 @@ def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> 
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except OSError:
+            except OSError as exc:
+                if exc.errno in PERMANENT_LOCK_ERRNOS:
+                    raise EvolutionError(
+                        f"evolution state locking is unavailable on this filesystem: {exc}"
+                    ) from exc
                 if time.monotonic() >= deadline:
-                    raise EvolutionError("evolution state is busy: another command holds the transaction lock")
+                    raise EvolutionError(
+                        "evolution state is busy: another command holds the transaction lock"
+                    ) from exc
                 time.sleep(0.05)
         yield
     finally:
