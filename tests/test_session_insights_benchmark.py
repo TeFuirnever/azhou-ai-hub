@@ -525,9 +525,16 @@ class SessionInsightsPrivateStateTest(unittest.TestCase):
         self.assertEqual(
             0o600, (namespace / "session-insights" / "metadata-cache.json").stat().st_mode & 0o777
         )
-        self.assertEqual(
-            0o600, (namespace / "session-insights" / "report-2026-09-09.md").stat().st_mode & 0o777
+        report_path = namespace / "session-insights" / "report-2026-09-09.md"
+        self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
+        # Re-running over an existing broader-mode report must reassert 0600,
+        # not preserve the old mode through O_TRUNC (review follow-up, #308).
+        report_path.chmod(0o644)
+        overwrote = self.run_cli_with_umask(
+            0o022, "report", "--aggregate", str(aggregate_path), cwd=self.cwd
         )
+        self.assertEqual(0, overwrote.returncode, overwrote.stderr)
+        self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
 
 
 if __name__ == "__main__":

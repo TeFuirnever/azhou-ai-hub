@@ -158,6 +158,10 @@ def write_private_file(path: Path, text: str, *, base: Path) -> None:
     secure_private_state(path, base=base)
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
+    if hasattr(os, "fchmod"):
+        # The mode argument only applies at creation; re-assert it so an
+        # over-written report cannot keep a broader mode from an older run.
+        os.fchmod(descriptor, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         handle.write(text)
         handle.flush()
