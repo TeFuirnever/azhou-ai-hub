@@ -152,7 +152,7 @@ TOOL_DEFINITIONS = [
         "description": "Freeze a decision page as archived. Requires a decision page with lifecycle: implemented; the page becomes byte-frozen under a recorded content hash.",
         "inputSchema": object_schema(
             {
-                "page": {"type": "string", "description": "Decision page title or filename"},
+                "page": {"type": "string", "description": "Decision page title (not the filename)"},
                 "confirm": {
                     "type": "boolean",
                     "description": "Must be true only after the user authorizes this archive",
@@ -251,7 +251,7 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             category = require_string(values, "category")
             sources = string_list(values, "sources", maximum_items=10, maximum_length=100)
             confidence = values.get("confidence", "medium")
-            if confidence not in llm_wiki.CONFIDENCE_RANK:
+            if not isinstance(confidence, str) or confidence not in llm_wiki.CONFIDENCE_RANK:
                 raise llm_wiki.WikiError("confidence must be high, medium, or low")
             lifecycle = optional_lifecycle(values)
             page, action = store.ingest(
@@ -380,7 +380,13 @@ def call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             archived_title = require_string(values, "page")
             if values.get("confirm") is not True:
                 return text_result("Archiving requires confirm=true after explicit user authorization.", error=True)
-            frozen = store.archive(title=archived_title)
+            try:
+                frozen = store.archive(title=archived_title)
+            except llm_wiki.WikiError as exc:
+                message = str(exc)
+                if message.startswith("page not found"):
+                    message += " — wiki_archive takes the page title, not the filename; retry with the title shown by wiki_list"
+                raise llm_wiki.WikiError(message) from exc
             return text_result(
                 f"Archived decision page: {frozen.filename}\n"
                 "The page is byte-frozen under a recorded content hash. Run wiki_lint to verify archive integrity."
@@ -432,6 +438,7 @@ def serve() -> int:
     for line in sys.stdin:
         if not line.strip():
             continue
+        request: Any = None
         try:
             request = json.loads(line)
             if not isinstance(request, dict):
@@ -442,6 +449,13 @@ def serve() -> int:
                 "jsonrpc": "2.0",
                 "id": None,
                 "error": {"code": -32700, "message": str(exc)},
+            }
+        except Exception as exc:  # one bad request must never kill the session
+            request_id = request.get("id") if isinstance(request, dict) else None
+            response = {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32603, "message": f"Internal error: {exc}"},
             }
         if response is not None:
             print(json.dumps(response, ensure_ascii=False, separators=(",", ":")), flush=True)

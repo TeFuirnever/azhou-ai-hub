@@ -440,6 +440,43 @@ class LLMWikiFullParityTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertTrue(json.loads(output.getvalue())["matched"])
 
+    def test_one_bad_request_does_not_kill_the_stdio_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            messages = [
+                {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "wiki_ingest",
+                        "arguments": {
+                            "workingDirectory": str(root),
+                            "title": "Bad Confidence",
+                            "content": "Body text.",
+                            "tags": ["probe"],
+                            "category": "reference",
+                            "confidence": [],
+                        },
+                    },
+                },
+                {"jsonrpc": "2.0", "id": 3, "method": "ping"},
+            ]
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
+                input="".join(json.dumps(message) + "\n" for message in messages),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            responses = [json.loads(line) for line in completed.stdout.splitlines()]
+            self.assertEqual(3, len(responses))
+            self.assertTrue(responses[1]["result"]["isError"])
+            self.assertIn("confidence", responses[1]["result"]["content"][0]["text"])
+            self.assertEqual({}, responses[2]["result"])
+            self.assertEqual(0, completed.returncode)
+
 
 if __name__ == "__main__":
     unittest.main()
