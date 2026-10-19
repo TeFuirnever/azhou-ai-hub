@@ -126,7 +126,7 @@ python skills/super-repo-pedant/scripts/manage_evolution.py gate \
   --evaluation /absolute/local/evaluation.json
 ```
 
-The gate requires named `schema`, `privacy`, `authorization`, `size`, and `regression` checks; odd `N>=3` unique paired judges with reversed A/B order; candidate majority; no safety regression; and human approval matching the exact diff SHA-256. It never applies the diff.
+The gate requires named `schema`, `privacy`, `authorization`, `size`, and `regression` checks; odd `N>=3` unique paired judges with reversed A/B order; a candidate majority, meaning support from more than half of all judges (a tie does not support); no safety regression and no `holds` entry still marked `unresolved` (each hold carries a `resolved`/`unresolved` status and a reason); and human approval matching the exact diff SHA-256. It never applies the diff.
 
 ## 5. Record the evolution
 

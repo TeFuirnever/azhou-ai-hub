@@ -241,29 +241,8 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(0, two_projects.returncode, two_projects.stdout + two_projects.stderr)
             self.assertEqual(2, json.loads(two_projects.stdout)["projects"])
 
-    def evaluation(self, candidate_id: str, diff_sha: str, approved: bool = True) -> dict:
+    def candidate_fixture(self) -> dict:
         return {
-            "schema_version": MODULE.EVALUATION_SCHEMA,
-            "candidate_id": candidate_id,
-            "diff_sha256": diff_sha,
-            "deterministic_checks": [
-                {"name": name, "status": "passed"} for name in sorted(MODULE.REQUIRED_CHECKS)
-            ],
-            "paired_votes": [
-                {"judge_id": "judge-1", "order": "baseline_first", "preference": "candidate"},
-                {"judge_id": "judge-2", "order": "candidate_first", "preference": "candidate"},
-                {"judge_id": "judge-3", "order": "baseline_first", "preference": "baseline"},
-            ],
-            "safety_review": {"status": "passed", "regression_found": False},
-            "human_approval": {
-                "status": "approved" if approved else "pending",
-                "reviewer": "human-maintainer" if approved else "",
-                "diff_sha256": diff_sha,
-            },
-        }
-
-    def test_promotion_requires_exact_human_approval_and_all_gates(self) -> None:
-        candidate = {
             "schema_version": MODULE.CANDIDATE_SCHEMA,
             "candidate_id": "a" * 24,
             "created_at": "2026-08-23T00:00:00+00:00",
@@ -280,6 +259,91 @@ class ManageEvolutionTest(unittest.TestCase):
             "origin": "learned",
             "live_skill_modified": False,
         }
+
+    def votes(self, *preferences: str) -> list[dict]:
+        orders = ("baseline_first", "candidate_first")
+        return [
+            {"judge_id": f"judge-{index}", "order": orders[index % 2], "preference": preference}
+            for index, preference in enumerate(preferences)
+        ]
+
+    def evaluation(self, candidate_id: str, diff_sha: str, approved: bool = True, votes: list[dict] | None = None, holds: list[dict] | None = None) -> dict:
+        payload = {
+            "schema_version": MODULE.EVALUATION_SCHEMA,
+            "candidate_id": candidate_id,
+            "diff_sha256": diff_sha,
+            "deterministic_checks": [
+                {"name": name, "status": "passed"} for name in sorted(MODULE.REQUIRED_CHECKS)
+            ],
+            "paired_votes": votes
+            if votes is not None
+            else [
+                {"judge_id": "judge-1", "order": "baseline_first", "preference": "candidate"},
+                {"judge_id": "judge-2", "order": "candidate_first", "preference": "candidate"},
+                {"judge_id": "judge-3", "order": "baseline_first", "preference": "baseline"},
+            ],
+            "safety_review": {"status": "passed", "regression_found": False},
+            "human_approval": {
+                "status": "approved" if approved else "pending",
+                "reviewer": "human-maintainer" if approved else "",
+                "diff_sha256": diff_sha,
+            },
+        }
+        if holds is not None:
+            payload["holds"] = holds
+        return payload
+
+    def test_gate_counts_ties_against_the_candidate(self) -> None:
+        candidate = self.candidate_fixture()
+        diff_sha = "b" * 64
+        one_third = self.evaluation(
+            candidate["candidate_id"], diff_sha, votes=self.votes("candidate", "tie", "tie")
+        )
+        errors = MODULE.validate_promotion(candidate, one_third)
+        self.assertTrue(any("majority" in error for error in errors))
+        two_thirds = self.evaluation(
+            candidate["candidate_id"], diff_sha, votes=self.votes("candidate", "candidate", "tie")
+        )
+        self.assertEqual([], MODULE.validate_promotion(candidate, two_thirds))
+        two_fifths = self.evaluation(
+            candidate["candidate_id"],
+            diff_sha,
+            votes=self.votes("candidate", "candidate", "tie", "tie", "baseline"),
+        )
+        self.assertTrue(any("majority" in error for error in MODULE.validate_promotion(candidate, two_fifths)))
+        three_fifths = self.evaluation(
+            candidate["candidate_id"],
+            diff_sha,
+            votes=self.votes("candidate", "candidate", "candidate", "tie", "baseline"),
+        )
+        self.assertEqual([], MODULE.validate_promotion(candidate, three_fifths))
+
+    def test_gate_rejects_unresolved_holds(self) -> None:
+        candidate = self.candidate_fixture()
+        diff_sha = "b" * 64
+        held = self.evaluation(
+            candidate["candidate_id"],
+            diff_sha,
+            holds=[{"status": "unresolved", "reason": "needs a second look at hook redaction"}],
+        )
+        errors = MODULE.validate_promotion(candidate, held)
+        self.assertTrue(any("unresolved hold" in error for error in errors))
+        resolved = self.evaluation(
+            candidate["candidate_id"],
+            diff_sha,
+            holds=[{"status": "resolved", "reason": "re-checked on the exact diff"}],
+        )
+        self.assertEqual([], MODULE.validate_promotion(candidate, resolved))
+        malformed = self.evaluation(
+            candidate["candidate_id"], diff_sha, holds=[{"status": "maybe"}]
+        )
+        self.assertTrue(any("holds" in error for error in MODULE.validate_promotion(candidate, malformed)))
+        null_holds = self.evaluation(candidate["candidate_id"], diff_sha)
+        null_holds["holds"] = None
+        self.assertTrue(any("holds" in error for error in MODULE.validate_promotion(candidate, null_holds)))
+
+    def test_promotion_requires_exact_human_approval_and_all_gates(self) -> None:
+        candidate = self.candidate_fixture()
         diff_sha = "b" * 64
         pending = self.evaluation(candidate["candidate_id"], diff_sha, approved=False)
         self.assertTrue(any("human approval" in error for error in MODULE.validate_promotion(candidate, pending)))

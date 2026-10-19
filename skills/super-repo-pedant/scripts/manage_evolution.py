@@ -481,11 +481,28 @@ def validate_promotion(candidate: Any, evaluation: Any) -> list[str]:
         if any(vote.get("preference") not in {"candidate", "baseline", "tie"} for vote in votes if isinstance(vote, dict)):
             errors.append("paired_votes contain invalid preference")
         candidate_votes, baseline_votes, _ = preference_summary(votes)
-        if candidate_votes <= baseline_votes:
+        # Majority of all judges: a tie does not support the candidate, which is
+        # why the panel itself must be odd (evolution-contract gate 3).
+        if candidate_votes * 2 <= len(votes):
             errors.append("candidate lacks paired majority")
     safety = evaluation.get("safety_review")
     if not isinstance(safety, dict) or safety.get("status") != "passed" or safety.get("regression_found") is not False:
         errors.append("safety review must pass with no regression")
+    holds = evaluation.get("holds")
+    if "holds" in evaluation and holds is None:
+        # An omitted field stays backward-compatible; an explicit null is a
+        # malformed value and must not slip past the gate by looking absent.
+        errors.append("holds entries must carry a resolved/unresolved status and a non-empty reason")
+    elif holds is not None:
+        if not isinstance(holds, list) or any(
+            not isinstance(item, dict)
+            or item.get("status") not in {"resolved", "unresolved"}
+            or not str(item.get("reason", "")).strip()
+            for item in holds
+        ):
+            errors.append("holds entries must carry a resolved/unresolved status and a non-empty reason")
+        elif any(item.get("status") == "unresolved" for item in holds):
+            errors.append("evaluation carries unresolved holds")
     approval = evaluation.get("human_approval")
     if not isinstance(approval, dict) or approval.get("status") != "approved" or not str(approval.get("reviewer", "")).strip():
         errors.append("exact human approval missing")
