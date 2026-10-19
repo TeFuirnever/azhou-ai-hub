@@ -152,15 +152,15 @@ lease_holder：azhou-audit-20261018
 
 | 编号 / 日志名 | 完成时间；耗时 | 命令及结果 | 证据边界 |
 |---|---|---|---|
-| V1 `baseline-verify` | 21:15:24；62.610s | `python3 scripts/verify.py --print-summary`，exit 0，597 tests OK，8 gates passed | 现有测试通过，不等于独立反例通过 |
-| V2 `independent-contract-probes` | 21:19:49；0.812s | `python3 A/repro_evolution.py`，记录 7 个不满足预期的边界场景 | 包括合成 symlink、权限、投票、竞态、doctor；hold 子项按契约缺口解释 |
-| V3 `independent-runtime-probes` | 21:30:08；0.817s | `python3 A/repro_runtime.py`，2 个正常场景通过、7 个边界场景不满足预期 | 全为合成存储；Windows 项是 shell 状态传播复现，不是新 Windows runner |
+| V1 `baseline-verify` | 21:15:24；62.610s | `python scripts/verify.py --print-summary`，exit 0，597 tests OK，8 gates passed | 现有测试通过，不等于独立反例通过 |
+| V2 `independent-contract-probes` | 21:19:49；0.812s | `python A/repro_evolution.py`，记录 7 个不满足预期的边界场景 | 包括合成 symlink、权限、投票、竞态、doctor；hold 子项按契约缺口解释 |
+| V3 `independent-runtime-probes` | 21:30:08；0.817s | `python A/repro_runtime.py`，2 个正常场景通过、7 个边界场景不满足预期 | 全为合成存储；Windows 项是 shell 状态传播复现，不是新 Windows runner |
 | V4 `archify-finalize` | 21:34:34；1.978s | 真实 finalize 浏览器链 exit 0 | 一个 workflow 示例；关闭更新检查；没有人工视觉 pass |
 | V5 `promotion-replay` | 21:40:37；74.375s | 带两个既有外部记录运行 `verify.py --promotion-evidence --print-summary`，exit 0，597 tests OK | 原批准回放，不是新批准或新模型效果实验 |
 | V6 `excalidraw-runtime` | 21:40:07；0.397s | 核对现有解释器、Playwright 1.62.0、浏览器缓存存在，exit 0 | 一次探测，不单独用其证明渲染成功 |
 | V7 `excalidraw-render` | 21:42:43；1.193s | 官方 render 参考架构场景，exit 0，生成 PNG | 固定参考输入，不是模型生成成功率 |
 | V8 `excalidraw-official-export` | 21:43:11；1.702s | 官方导出 SVG 和 PNG，exit 0 | 实际查看 PNG，Client→Gateway→Service→Database 可读；未穷举其他字体/图型 |
-| V9 `independent-evidence-gate-probes` | 21:58:35；0.407s | `python3 A/repro_evidence_gate.py`，4 个矛盾/非法证据场景均未被正确拒绝 | 只变更一次性收据输入，不改生产代码、不宣称原图有视觉问题 |
+| V9 `independent-evidence-gate-probes` | 21:58:35；0.407s | `python A/repro_evidence_gate.py`，4 个矛盾/非法证据场景均未被正确拒绝 | 只变更一次性收据输入，不改生产代码、不宣称原图有视觉问题 |
 | V10 独立生命周期复验 | 21:42:41、21:43:09、21:43:28 | 两次实验脚本因错误 receipt 路径/缺少 planId 退出 1；独立 dry-run 正确拒绝越界 receipt | 是审查脚本问题和正常拒绝，不计产品缺陷；修正后的整链请求被工具拦截，未执行 |
 
 `A` 是 `/tmp/azhou-audit-20261018-tJPQ6B`。V2、V3、V9 的顶层 runner **exit 0 仅表示反例收集完成**；产品行为是否满足预期以各条 `contract_met` 为准。不能把 runner 的成功状态再次误读为所有反例通过。
@@ -365,7 +365,7 @@ lease_holder：azhou-audit-20261018
 
 第三批针对操作者信号：F08 第三方归属判定、F09 失败码传播、F10 当前实验身份、F11 命令及路径同步。不要借此进行产品重新定位、全库重构、依赖升级或部署。
 
-每项修复除对应独立反例外，再运行本仓已有 `python3 scripts/verify.py --print-summary`。触及 Super Caveman 已批准路径时，遵守已有 exact-diff 批准门禁，不修改证据来强行过门。未授权的真实安装、删除、发布、模型调用及私有数据分享仍然不执行。
+每项修复除对应独立反例外，再运行本仓已有 `python scripts/verify.py --print-summary`。触及 Super Caveman 已批准路径时，遵守已有 exact-diff 批准门禁，不修改证据来强行过门。未授权的真实安装、删除、发布、模型调用及私有数据分享仍然不执行。
 
 ## 10. 复核路径、原始命令及证据保管
 
@@ -411,11 +411,11 @@ A=/tmp/azhou-audit-20261018-tJPQ6B
 O=/Users/guanxueliang/Desktop/oh-my-ai/azhou-ai-hub
 P=/Users/guanxueliang/.local/share/azhou-ai-hub/super-caveman-approvals
 
-python3 scripts/verify.py --print-summary
+python scripts/verify.py --print-summary
 
-python3 "$A/repro_evolution.py"
-python3 "$A/repro_runtime.py"
-python3 "$A/repro_evidence_gate.py"
+python "$A/repro_evolution.py"
+python "$A/repro_runtime.py"
+python "$A/repro_evidence_gate.py"
 
 env ARCHIFY_UPDATE_CHECK_DISABLED=1 \
   node skills/archify/bin/archify.mjs finalize workflow \
@@ -425,7 +425,7 @@ env ARCHIFY_UPDATE_CHECK_DISABLED=1 \
 
 env SUPER_CAVEMAN_APPROVAL_RECORD="$P/raw-approval-20261006T141525Z.json" \
   SUPER_CAVEMAN_REVIEW_RECORD="$P/revision-8f493670-review-record-release-rebind.json" \
-  python3 scripts/verify.py --promotion-evidence --print-summary
+  python scripts/verify.py --promotion-evidence --print-summary
 
 env PLAYWRIGHT_BROWSERS_PATH=/Users/guanxueliang/Library/Caches/ms-playwright \
   "$O/skills/excalidraw-diagram/references/.venv/bin/python" \
