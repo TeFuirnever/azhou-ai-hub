@@ -156,10 +156,27 @@ def validate_signal(signal: Any) -> list[str]:
     return errors
 
 
-def append_jsonl(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def secure_state_target(path: Path, root: Path) -> None:
+    """Refuse a symlinked leaf and harden the private parent chain (skill-standard §2.1)."""
+    if path.is_symlink():
+        raise EvolutionError(f"evolution state path cannot be a symlink: {path}")
+    try:
+        azhou_runtime_state.ensure_private_directory(path.parent, root=root)
+    except azhou_runtime_state.StateError as exc:
+        raise EvolutionError(str(exc)) from exc
+
+
+def append_jsonl(path: Path, value: dict[str, Any], *, root: Path) -> None:
+    secure_state_target(path, root)
     line = json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
-    with path.open("a", encoding="utf-8") as handle:
+    try:
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+    except OSError as exc:
+        raise EvolutionError(f"cannot append to private state file: {path} ({exc})") from exc
+    with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
         try:
             import fcntl  # type: ignore
 
@@ -197,11 +214,25 @@ def read_jsonl(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], int]:
     return rows, parse_errors
 
 
-def write_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def write_private_text(path: Path, text: str, *, root: Path) -> None:
+    """Atomically publish one private state file at 0600 below hardened 0700 parents."""
+    secure_state_target(path, root)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except OSError as exc:
+        raise EvolutionError(f"cannot write private state file: {path} ({exc})") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def write_json(path: Path, value: Any, *, root: Path) -> None:
+    write_private_text(path, json.dumps(value, ensure_ascii=False, indent=2) + "\n", root=root)
 
 
 def cmd_add_signal(args: argparse.Namespace) -> int:
@@ -232,7 +263,7 @@ def cmd_add_signal(args: argparse.Namespace) -> int:
         errors = validate_signal(signal)
         if errors:
             raise EvolutionError(f"invalid signal fields: {', '.join(errors)}")
-        append_jsonl(state_root / "signals.jsonl", signal)
+        append_jsonl(state_root / "signals.jsonl", signal, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -289,7 +320,7 @@ def cmd_propose(args: argparse.Namespace) -> int:
         live_skill = (project / "skills" / "super-repo-pedant").resolve()
         if inside(candidate_path.resolve(), live_skill):
             raise EvolutionError("candidate path overlaps the live skill")
-        write_json(candidate_path, candidate)
+        write_json(candidate_path, candidate, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -388,17 +419,16 @@ def cmd_archive(args: argparse.Namespace) -> int:
         archive_path = state_root / "archive" / f"processed-{candidate['candidate_id']}.jsonl"
         if archive_path.exists():
             raise EvolutionError("candidate evidence already archived")
-        temporary_archive = archive_path.with_name(f".{archive_path.name}.{os.getpid()}.tmp")
-        archive_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_archive.write_text("\n".join(archived_lines) + "\n", encoding="utf-8")
-        os.replace(temporary_archive, archive_path)
+        write_private_text(archive_path, "\n".join(archived_lines) + "\n", root=project)
 
-        temporary_live = signals_path.with_name(f".{signals_path.name}.{os.getpid()}.tmp")
-        temporary_live.write_text(("\n".join(retained_lines) + "\n") if retained_lines else "", encoding="utf-8")
-        os.replace(temporary_live, signals_path)
+        write_private_text(
+            signals_path,
+            ("\n".join(retained_lines) + "\n") if retained_lines else "",
+            root=project,
+        )
         candidate["archived_signal_count"] = len(archived_lines)
         candidate["evidence_archive"] = str(archive_path.relative_to(state_root))
-        write_json(candidate_path, candidate)
+        write_json(candidate_path, candidate, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
