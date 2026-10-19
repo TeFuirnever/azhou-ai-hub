@@ -595,8 +595,10 @@ class WikiStore:
                 content=existing.content,
                 lifecycle="archived",
             )
-            self.write_page_unsafe(frozen)
+            # Validate the archive lock before the first write: a bad lock must
+            # fail with the page still implemented, not leave it half-archived.
             lock = self.read_archive_lock()
+            self.write_page_unsafe(frozen)
             lock["version"] = 1
             lock["entries"][frozen.filename] = {
                 "sha256": hashlib.sha256((self.directory / frozen.filename).read_bytes()).hexdigest(),
