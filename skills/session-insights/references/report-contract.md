@@ -43,7 +43,7 @@ zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：�
 - 位置：`<cwd>/.azhou/session-insights/metadata-cache.json`（gitignored 运行时命名空间；永不写入会话 store 内部）。
 - 寻址：`stores[<sha256(harness + 解析后 store 根)>].files[<sha256(相对路径)>]`，条目以 `mtime_ns`+`size` 判活；不匹配即重解析该文件。扫描结束后条目集重写为当次所见文件，删除的会话自然失效。
 - 内容边界：只存逐会话元数据与聚合级字段；`first_prompt` 文本与 `project` 标签不入缓存——首条提示以 `first_prompt_sha256` 留存，`repeated_first_prompt_count` 按摘要计数，与全量解析数值一致。project 标签每次扫描现算。
-- 可丢弃性：文件缺失、损坏或 schema 不符按空缓存处理；写入为尽力而为的原子发布（临时文件 + `os.replace`），写失败静默。冷/热/删除缓存三种状态下聚合输出逐字节一致（由 benchmark 负控钉死）。
+- 可丢弃性：文件缺失、损坏或 schema 不符按空缓存处理；条目即使 `mtime_ns`+`size` 命中，其 metadata 缺失任何被消费字段、类型不符或嵌套 `tool_calls` 形状损坏也按 miss 重解析该文件并由写回自愈（benchmark 投毒负控钉死）。写入为尽力而为的原子发布（临时文件 + `os.replace`），写失败静默。冷/热/删除缓存三种状态下聚合输出逐字节一致（由 benchmark 负控钉死）。
 
 ## 报告产物
 
