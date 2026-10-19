@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -223,6 +225,74 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(0o600, (namespace / "super-repo-pedant" / "evolution" / "signals.jsonl").stat().st_mode & 0o777)
             candidate_file = next((namespace / "super-repo-pedant" / "evolution" / "candidates").glob("*.json"))
             self.assertEqual(0o600, candidate_file.stat().st_mode & 0o777)
+
+    @unittest.skipIf(os.name == "nt", "the transaction lock needs fcntl, absent on Windows")
+    def test_append_blocks_while_archive_transaction_lock_is_held(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            state_root = MODULE.safe_state_root(project, None)
+            with MODULE.transaction_lock(state_root, project):
+                racer = subprocess.Popen(
+                    [sys.executable, str(SCRIPT), *self.add_signal_args(project, session="racer")],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                time.sleep(0.5)
+                self.assertIsNone(
+                    racer.poll(),
+                    "add-signal must wait for the held transaction lock, not write through it",
+                )
+            stdout, stderr = racer.communicate(timeout=30)
+            self.assertEqual(0, racer.returncode, stderr)
+            signal_id = json.loads(stdout)["signal_id"]
+            self.assertIn(signal_id, (state_root / "signals.jsonl").read_text(encoding="utf-8"))
+
+    @unittest.skipIf(os.name == "nt", "without fcntl the archive window is not serialized on Windows")
+    def test_signal_attempted_during_archive_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+
+            original = MODULE.write_private_text
+            racer: subprocess.Popen[str] | None = None
+
+            def publish_spawning_racer(path: Path, text: str, *, root: Path) -> None:
+                nonlocal racer
+                original(path, text, root=root)
+                if path.name.startswith("processed-") and racer is None:
+                    # The racer attempts its append inside the archive window;
+                    # with the transaction lock it commits only after the
+                    # archive releases, and must still land in live or archive.
+                    racer = subprocess.Popen(
+                        [sys.executable, str(SCRIPT), *self.add_signal_args(project, session="racer")],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+
+            MODULE.write_private_text = publish_spawning_racer
+            try:
+                args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+                self.assertEqual(0, MODULE.cmd_archive(args))
+            finally:
+                MODULE.write_private_text = original
+
+            self.assertIsNotNone(racer)
+            stdout, stderr = racer.communicate(timeout=30)
+            self.assertEqual(0, racer.returncode, stderr)
+            signal_id = json.loads(stdout)["signal_id"]
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            live = (evolution / "signals.jsonl").read_text(encoding="utf-8")
+            archived = "".join(
+                path.read_text(encoding="utf-8") for path in (evolution / "archive").glob("*.jsonl")
+            )
+            self.assertTrue(
+                signal_id in live or signal_id in archived,
+                f"confirmed signal lost everywhere: {signal_id}",
+            )
 
     def test_global_candidate_requires_two_projects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
