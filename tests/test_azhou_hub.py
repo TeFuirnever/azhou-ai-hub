@@ -1003,6 +1003,32 @@ class AzhouHubCliTest(unittest.TestCase):
             second = azhou_hub.setup_skills(root=root, target=target, skills=["sample"], mode="copy", dry_run=True)
             self.assertEqual(first["planId"], second["planId"])
 
+    def test_published_command_lines_match_the_real_parsers(self) -> None:
+        # Every command line azhou-setup SKILL.md and docs/foundations.md
+        # publish must be accepted by the real argparse surface (F11).
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            receipt = target / ".azhou" / "hub" / "receipts" / "sample.json"
+            parser = azhou_hub.build_parser(root)
+            for command in (
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--json"],
+                ["setup", "--skill", "sample", "--target", str(target), "--mode", "link", "--apply", "--plan-id", "reviewed", "--json"],
+                ["repair", "--receipt", str(receipt), "--target", str(target), "--json"],
+                ["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"],
+                ["migrate", "--receipt", str(receipt), "--target", str(target), "--mode", "copy", "--apply", "--json"],
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"],
+            ):
+                parser.parse_args(command)
+            for command in (
+                ["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
+                ["migrate", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--plan-id", "reviewed"],
+            ):
+                with self.subTest(command=command[0]):
+                    with self.assertRaises(SystemExit):
+                        parser.parse_args(command)
+            parser.parse_args(["migrate-receipts", "--target", str(target), "--plan-id", "reviewed", "--json"])
+
     def test_setup_rolls_back_safely_when_source_drifts_during_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, source, target = self._fixture_repo(directory)

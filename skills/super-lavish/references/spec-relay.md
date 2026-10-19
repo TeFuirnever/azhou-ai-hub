@@ -76,7 +76,7 @@ Encode the block as valid JSON and escape `<`, `>`, and `&` in user-supplied str
 
 ## State commands
 
-Resolve `<skill-dir>` to the installed `skills/lavish/` directory.
+Resolve `<skill-dir>` to the installed `skills/super-lavish/` directory.
 
 Initialize a generated HTML packet:
 

@@ -28,7 +28,7 @@ Azhou AI Hub keeps the upstream workflow, visual guidance, playbooks, polling ru
 - adds setup, provenance, capability mapping, authorization checkpoints, and stable Azhou receipts;
 - forbids implicit publication, global installation, hook installation, and unrequested session reopening.
 
-No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored. `npx` downloads the external CLI at execution time; `skills/lavish/` contains the Azhou-authored orchestration and relay contract.
+No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored. `npx` downloads the external CLI at execution time; `skills/super-lavish/` contains the Azhou-authored orchestration and relay contract.
 
 ## Reproducible source check
 
