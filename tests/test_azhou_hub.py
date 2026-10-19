@@ -916,6 +916,36 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertTrue(report["valid"])
             self.assertEqual(before, self._host_tree_snapshot(host), "host migration probe must not mutate the host")
 
+    def test_doctor_host_migration_judges_absolute_references_by_their_target(self) -> None:
+        # A config pointing OUTSIDE the host root must be judged by its own
+        # target, not by a same-named directory under host_root (review
+        # follow-up on #315).
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, _ = self._fixture_repo(directory)
+            shared_root = Path(directory) / "shared"
+            (shared_root / "skills" / "tdd" / "scripts").mkdir(parents=True)
+            (shared_root / "skills" / "tdd" / "scripts" / "notice.py").write_text("print('hi')\n", encoding="utf-8")
+            host = Path(directory) / "host"
+            (host / "skills").mkdir(parents=True)
+            (host / "config.toml").write_text(
+                f'pre_compact_command = "python {shared_root}/skills/tdd/scripts/notice.py"\n',
+                encoding="utf-8",
+            )
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("pass", check["status"])
+            self.assertNotIn("stale hook path: ", check["details"])
+            self.assertTrue(report["valid"])
+
+            shared_root.rename(Path(directory) / "shared-gone")
+            stale = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+            stale_check = next(item for item in stale["checks"] if item["name"] == "host_migration")
+            self.assertEqual("fail", stale_check["status"])
+            self.assertIn("stale hook path: config.toml: skills/tdd/", stale_check["details"])
+            self.assertFalse(stale["valid"])
+
     def test_doctor_host_migration_still_flags_dead_foreign_references(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, _ = self._fixture_repo(directory)

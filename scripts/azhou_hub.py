@@ -1163,10 +1163,17 @@ def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
             name = match.group(1)
             if name in canonical:
                 continue
-            if name in KNOWN_RENAMES or not (host_root / "skills" / name).is_dir():
+            if name in KNOWN_RENAMES:
                 findings.append(f"stale hook path: {config.name}: {match.group(0)}")
-            else:
+                continue
+            # Judge a foreign reference by its own target: an absolute path
+            # elsewhere on disk may be a legitimate shared skill, so only a
+            # reference whose resolvable target is missing is stale.
+            referenced = _referenced_skill_directory(text, match)
+            if (referenced is not None and referenced.is_dir()) or (host_root / "skills" / name).is_dir():
                 notes.append(f"non-canonical skill reference with an existing target: {config.name}: {match.group(0)}")
+            else:
+                findings.append(f"stale hook path: {config.name}: {match.group(0)}")
 
     if findings:
         status = "fail" if any(item.startswith("stale hook path:") for item in findings) else "warn"
@@ -1177,6 +1184,18 @@ def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
     if notes:
         details += "; " + "; ".join(notes)
     return "pass", details
+
+
+def _referenced_skill_directory(text: str, match: re.Match) -> Path | None:
+    """Best-effort absolute path for one matched ``skills/<name>/`` reference.
+
+    Scans backwards from the match for a POSIX or Windows path prefix so a
+    config pointing outside the host root is judged by its own target, not by
+    a same-named directory under the host root."""
+    prefix = re.search(r"(?:[A-Za-z]:[\\/]|/)[^\s\"';=,)}]*", text[: match.start()])
+    if prefix is None:
+        return None
+    return Path(prefix.group(0) + match.group(0))
 
 
 def run_doctor(
