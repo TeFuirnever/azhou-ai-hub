@@ -254,6 +254,9 @@ class ManageEvolutionTest(unittest.TestCase):
             candidate["candidate_id"], diff_sha, holds=[{"status": "maybe"}]
         )
         self.assertTrue(any("holds" in error for error in MODULE.validate_promotion(candidate, malformed)))
+        null_holds = self.evaluation(candidate["candidate_id"], diff_sha)
+        null_holds["holds"] = None
+        self.assertTrue(any("holds" in error for error in MODULE.validate_promotion(candidate, null_holds)))
 
     def test_promotion_requires_exact_human_approval_and_all_gates(self) -> None:
         candidate = self.candidate_fixture()

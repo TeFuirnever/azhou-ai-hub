@@ -459,7 +459,11 @@ def validate_promotion(candidate: Any, evaluation: Any) -> list[str]:
     if not isinstance(safety, dict) or safety.get("status") != "passed" or safety.get("regression_found") is not False:
         errors.append("safety review must pass with no regression")
     holds = evaluation.get("holds")
-    if holds is not None:
+    if "holds" in evaluation and holds is None:
+        # An omitted field stays backward-compatible; an explicit null is a
+        # malformed value and must not slip past the gate by looking absent.
+        errors.append("holds entries must carry a resolved/unresolved status and a non-empty reason")
+    elif holds is not None:
         if not isinstance(holds, list) or any(
             not isinstance(item, dict)
             or item.get("status") not in {"resolved", "unresolved"}
