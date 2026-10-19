@@ -12,10 +12,10 @@ python scripts/azhou_hub.py doctor --host-root <host-root> --json
 
 The probe scans:
 
-- entries under `<host-root>/skills/` whose directory name is not canonical - reported as residual installs, with the entry kind (symlink plus resolved target, directory copy, or file);
-- every depth-1 `*.json` and `*.toml` config file directly under `<host-root>/` for `skills/<name>/` references whose `<name>` is not canonical - each hit is reported as a stale hook path with the file and matched string.
+- entries under `<host-root>/skills/` whose directory name is a recorded old name in the rename map below - reported as residual installs, with the entry kind (symlink plus resolved target, directory copy, or file). A foreign name with no rename record is somebody else's skill, not residue: it is surfaced as an informational `foreign skill` note and never degrades the check;
+- every depth-1 `*.json` and `*.toml` config file directly under `<host-root>/` for `skills/<name>/` references whose `<name>` is not canonical. A reference is a stale hook path when `<name>` is a recorded old name, or when the referenced `<host-root>/skills/<name>/` directory does not exist (a dead reference); a non-canonical reference whose target exists is an informational note only.
 
-Status semantics follow the doctor contract: a stale hook path fails the check (the recorded failure mode is a startup hook error), residual installs alone degrade it to a warning, a clean host passes, and a host root that exposes neither a skills directory nor a config file warns that nothing was scanned. The probe is harness-neutral: it does not infer which harness owns the host root, so the path must be supplied explicitly.
+Status semantics follow the doctor contract: a stale hook path fails the check (the recorded failure mode is a startup hook error), residual installs alone degrade it to a warning, a clean host passes, and a host root that exposes neither a skills directory nor a config file warns that nothing was scanned. Informational notes never change the status. The probe is harness-neutral: it does not infer which harness owns the host root, so the path must be supplied explicitly.
 
 Doctor stays read-only. Removing residual installs and rewriting hook paths are operator actions and are never performed by the skill.
 

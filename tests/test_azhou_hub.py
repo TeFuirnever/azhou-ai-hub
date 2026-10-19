@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from scripts import azhou_hub
 from scripts import verify as verify_script
 
 
+ROOT = Path(__file__).parents[1]
 AZHOU_SKILL_NAMES = (
     "azhou-doctor",
     "azhou-info",
@@ -881,7 +883,7 @@ class AzhouHubCliTest(unittest.TestCase):
             check = next(item for item in report["checks"] if item["name"] == "host_migration")
             self.assertEqual("fail", check["status"])
             self.assertIn("residual install: llm-wiki (directory copy)", check["details"])
-            self.assertIn("residual install: wiki (symlink -> ", check["details"])
+            self.assertIn("foreign skill: wiki (symlink -> ", check["details"])
             self.assertIn("stale hook path: settings.json: skills/llm-wiki/", check["details"])
             self.assertIn("stale hook path: config.toml: skills/llm-wiki/", check["details"])
             self.assertNotIn("skills/sample/", check["details"])
@@ -889,6 +891,55 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("unhealthy", report["status"])
 
             self.assertEqual(before, self._host_tree_snapshot(host), "host migration probe must not mutate the host")
+
+    def test_doctor_host_migration_ignores_legitimate_foreign_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, source, _ = self._fixture_repo(directory)
+            host = Path(directory) / "host"
+            foreign = host / "skills" / "tdd" / "scripts"
+            foreign.mkdir(parents=True)
+            (host / "skills" / "tdd" / "SKILL.md").write_text("---\nname: tdd\n---\n", encoding="utf-8")
+            (foreign / "notice.py").write_text("print('hi')\n", encoding="utf-8")
+            (host / "settings.json").write_text(
+                json.dumps({"hooks": {"SessionEnd": [{"command": f"python {host}/skills/tdd/scripts/notice.py"}]}}),
+                encoding="utf-8",
+            )
+            before = self._host_tree_snapshot(host)
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("pass", check["status"])
+            self.assertNotIn("stale hook path: ", check["details"])
+            self.assertNotIn("residual install: ", check["details"])
+            self.assertIn("foreign skill: tdd", check["details"])
+            self.assertTrue(report["valid"])
+            self.assertEqual(before, self._host_tree_snapshot(host), "host migration probe must not mutate the host")
+
+    def test_doctor_host_migration_still_flags_dead_foreign_references(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, _ = self._fixture_repo(directory)
+            host = Path(directory) / "host"
+            (host / "skills").mkdir(parents=True)
+            (host / "settings.json").write_text(
+                json.dumps({"hooks": {"SessionEnd": [{"command": f"python {host}/skills/gone/scripts/x.py"}]}}),
+                encoding="utf-8",
+            )
+
+            report = azhou_hub.run_doctor(root=root, target=None, skills=[], run_verification=False, host_root=host)
+
+            check = next(item for item in report["checks"] if item["name"] == "host_migration")
+            self.assertEqual("fail", check["status"])
+            self.assertIn("stale hook path: settings.json: skills/gone/", check["details"])
+            self.assertFalse(report["valid"])
+
+    def test_known_renames_match_the_host_migration_doc(self) -> None:
+        doc = (ROOT / "skills" / "azhou-doctor" / "references" / "host-migration.md").read_text(encoding="utf-8")
+        table_rows = {
+            match.group(1).strip(): match.group(2).strip()
+            for match in re.finditer(r"^\| ([a-z-]+) \| (super-[a-z-]+) \|$", doc, re.MULTILINE)
+        }
+        self.assertEqual(azhou_hub.KNOWN_RENAMES, table_rows)
 
     def test_doctor_cli_forwards_host_root_and_fails_on_stale_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

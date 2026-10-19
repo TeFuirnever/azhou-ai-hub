@@ -35,6 +35,15 @@ LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
 IGNORED_PACKAGE_PARTS = {".git", ".omc", ".omx", ".venv", "__pycache__", "node_modules"}
 HOST_CONFIG_SUFFIXES = {".json", ".toml"}
 HOST_SKILL_PATH_PATTERN = re.compile(r"skills/([A-Za-z0-9][A-Za-z0-9_.-]*)/")
+# Canonical renames whose host-side wiring is known to be left behind;
+# skills/azhou-doctor/references/host-migration.md keeps the human table.
+KNOWN_RENAMES = {
+    "ci-test-reliability": "super-ci-test-reliability",
+    "prose-standard": "super-prose-standard",
+    "repo-pedant": "super-repo-pedant",
+    "lavish": "super-lavish",
+    "llm-wiki": "super-llm-wiki",
+}
 
 
 class PackageError(RuntimeError):
@@ -1128,11 +1137,17 @@ def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
                     resolved: str | None = str(entry.resolve())
                 except OSError:
                     resolved = None
-                findings.append(f"residual install: {name} (symlink -> {resolved or 'unresolvable'})")
+                kind = f"symlink -> {resolved or 'unresolvable'}"
             elif entry.is_dir():
-                findings.append(f"residual install: {name} (directory copy)")
+                kind = "directory copy"
             else:
-                findings.append(f"residual install: {name} (file)")
+                kind = "file"
+            if name in KNOWN_RENAMES:
+                findings.append(f"residual install: {name} ({kind})")
+            else:
+                # A foreign name with no rename record is somebody else's
+                # skill, not residue; surface it without degrading the check.
+                notes.append(f"foreign skill: {name} ({kind})")
 
     scanned_configs = 0
     for config in sorted(host_root.iterdir(), key=lambda item: item.name):
@@ -1145,9 +1160,13 @@ def _doctor_host_migration(root: Path, host_root: Path) -> tuple[str, str]:
             continue
         scanned_configs += 1
         for match in HOST_SKILL_PATH_PATTERN.finditer(text):
-            if match.group(1) in canonical:
+            name = match.group(1)
+            if name in canonical:
                 continue
-            findings.append(f"stale hook path: {config.name}: {match.group(0)}")
+            if name in KNOWN_RENAMES or not (host_root / "skills" / name).is_dir():
+                findings.append(f"stale hook path: {config.name}: {match.group(0)}")
+            else:
+                notes.append(f"non-canonical skill reference with an existing target: {config.name}: {match.group(0)}")
 
     if findings:
         status = "fail" if any(item.startswith("stale hook path:") for item in findings) else "warn"
