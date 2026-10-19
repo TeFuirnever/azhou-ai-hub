@@ -11,6 +11,18 @@
     "deterministic_checks": {"type": "array", "minItems": 5, "items": {"type": "object"}},
     "paired_votes": {"type": "array", "minItems": 3, "items": {"type": "object"}},
     "safety_review": {"type": "object"},
+    "holds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["status", "reason"],
+        "properties": {
+          "status": {"enum": ["resolved", "unresolved"]},
+          "reason": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
     "human_approval": {"type": "object"}
   }
 }
