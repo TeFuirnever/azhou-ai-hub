@@ -136,6 +136,38 @@ def _safe_resolved(path: Path) -> tuple[Path, ...]:
         return ()
 
 
+def secure_private_state(path: Path, *, base: Path) -> None:
+    """Refuse symlinks along a default private-state path below ``base`` and
+    hold user-only directory modes regardless of umask (skill-standard §2.1)."""
+    relative = path.relative_to(base)
+    cursor = base
+    for part in relative.parts[:-1]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise UsageFailure(f"private state path contains a symlink: {cursor}")
+        if cursor.exists() and not cursor.is_dir():
+            raise UsageFailure(f"private state path ancestor is not a directory: {cursor}")
+        cursor.mkdir(mode=0o700, exist_ok=True)
+        cursor.chmod(0o700)
+    if path.is_symlink():
+        raise UsageFailure(f"private state path contains a symlink: {path}")
+
+
+def write_private_file(path: Path, text: str, *, base: Path) -> None:
+    """Write one default private-state file atomically, owner-only regardless of umask."""
+    secure_private_state(path, base=base)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    if hasattr(os, "fchmod"):
+        # The mode argument only applies at creation; re-assert it so an
+        # over-written report cannot keep a broader mode from an older run.
+        os.fchmod(descriptor, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def store_root(harness: str, override: str | None) -> Path:
     if override is not None:
         return Path(override)
@@ -182,18 +214,20 @@ def load_metadata_cache(base: Path) -> dict[str, Any]:
 
 
 def save_metadata_cache(base: Path, cache: dict[str, Any]) -> None:
-    """Best-effort atomic publish; the cache is disposable, so write failure is silent."""
+    """Best-effort atomic publish; the cache is disposable, so any write
+    failure — including a tampered namespace — stays silent."""
     target = base / OUTPUT_NAMESPACE / CACHE_FILENAME
     temporary = target.with_name(target.name + ".tmp")
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with temporary.open("x", encoding="utf-8") as handle:
+        secure_private_state(target, base=base)
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             json.dump(cache, handle, ensure_ascii=False, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, target)
-    except OSError:
+    except (OSError, UsageFailure):
         temporary.unlink(missing_ok=True)
 
 
@@ -1096,8 +1130,11 @@ def cmd_report(args: argparse.Namespace) -> int:
     document = body + "\n## 🧾 Receipt\n\n```json\n" + json.dumps(
         receipt, ensure_ascii=False, indent=2
     ) + "\n```\n"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(document, encoding="utf-8")
+    if args.out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(document, encoding="utf-8")
+    else:
+        write_private_file(out, document, base=Path.cwd())
     emit_json(receipt)
     return 0
 

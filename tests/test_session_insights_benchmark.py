@@ -463,5 +463,79 @@ class SessionInsightsCacheTest(unittest.TestCase):
         )
 
 
+class SessionInsightsPrivateStateTest(unittest.TestCase):
+    """Default private-state writes refuse symlinks and hold 0700/0600 (skill-standard §2.1)."""
+
+    def setUp(self) -> None:
+        self.benchmark = load_benchmark_module()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.work = Path(self.tempdir.name)
+        self.store = self.work / "store"
+        self.benchmark.build_store(self.store)
+        self.cwd = self.work / "cwd"
+        self.cwd.mkdir()
+
+    def run_cli_with_umask(self, umask: int, *args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(CLI), *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            preexec_fn=lambda: os.umask(umask),
+        )
+
+    def write_aggregate(self) -> Path:
+        aggregate_path = self.work / "aggregate.json"
+        result = run_cli(
+            "aggregate", "--harness", "claude-code", "--store-root", str(self.store),
+            "--out", str(aggregate_path),
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        return aggregate_path
+
+    def test_default_report_refuses_symlinked_namespace(self) -> None:
+        outside = self.work / "outside"
+        outside.mkdir()
+        (self.cwd / ".azhou").mkdir()
+        namespace = self.cwd / ".azhou" / "session-insights"
+        namespace.symlink_to(outside)
+        aggregate_path = self.write_aggregate()
+        result = run_cli("report", "--aggregate", str(aggregate_path), cwd=self.cwd)
+        self.assertEqual(1, result.returncode)
+        self.assertIn("symlink", result.stderr)
+        self.assertEqual([], list(outside.iterdir()))
+
+    @unittest.skipIf(os.name == "nt", "0700/0600 mode enforcement is a POSIX contract")
+    def test_private_modes_hold_under_umask_022(self) -> None:
+        aggregate_path = self.write_aggregate()
+        cached = self.run_cli_with_umask(
+            0o022, "aggregate", "--harness", "claude-code", "--store-root", str(self.store), cwd=self.cwd
+        )
+        self.assertEqual(0, cached.returncode, cached.stderr)
+        reported = self.run_cli_with_umask(
+            0o022, "report", "--aggregate", str(aggregate_path), cwd=self.cwd
+        )
+        self.assertEqual(0, reported.returncode, reported.stderr)
+        namespace = self.cwd / ".azhou"
+        self.assertEqual(0o700, namespace.stat().st_mode & 0o777)
+        self.assertEqual(0o700, (namespace / "session-insights").stat().st_mode & 0o777)
+        self.assertEqual(
+            0o600, (namespace / "session-insights" / "metadata-cache.json").stat().st_mode & 0o777
+        )
+        report_path = namespace / "session-insights" / "report-2026-09-09.md"
+        self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
+        # Re-running over an existing broader-mode report must reassert 0600,
+        # not preserve the old mode through O_TRUNC (review follow-up, #308).
+        report_path.chmod(0o644)
+        overwrote = self.run_cli_with_umask(
+            0o022, "report", "--aggregate", str(aggregate_path), cwd=self.cwd
+        )
+        self.assertEqual(0, overwrote.returncode, overwrote.stderr)
+        self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
+
+
 if __name__ == "__main__":
     unittest.main()

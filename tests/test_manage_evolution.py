@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -26,7 +27,16 @@ class ManageEvolutionTest(unittest.TestCase):
             check=False,
         )
 
-    def add_signal(
+    def run_cli_with_umask(self, umask: int, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            preexec_fn=lambda: os.umask(umask),
+        )
+
+    def add_signal_args(
         self,
         project: Path,
         *,
@@ -36,8 +46,8 @@ class ManageEvolutionTest(unittest.TestCase):
         outcome: str = "failure",
         mechanism: str = "missed-memory",
         observed_at: str = "2026-08-23T00:00:00+00:00",
-    ) -> subprocess.CompletedProcess[str]:
-        return self.run_cli(
+    ) -> list[str]:
+        return [
             "add-signal",
             "--project",
             str(project),
@@ -61,10 +71,33 @@ class ManageEvolutionTest(unittest.TestCase):
             "corrected",
             "--observed-at",
             observed_at,
+        ]
+
+    def add_signal(
+        self,
+        project: Path,
+        *,
+        session: str,
+        category: str = "stale_fact",
+        severity: str = "medium",
+        outcome: str = "failure",
+        mechanism: str = "missed-memory",
+        observed_at: str = "2026-08-23T00:00:00+00:00",
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_cli(
+            *self.add_signal_args(
+                project,
+                session=session,
+                category=category,
+                severity=severity,
+                outcome=outcome,
+                mechanism=mechanism,
+                observed_at=observed_at,
+            )
         )
 
-    def propose(self, project: Path, *extra: str) -> subprocess.CompletedProcess[str]:
-        return self.run_cli(
+    def propose_args(self, project: Path, *extra: str) -> list[str]:
+        return [
             "propose",
             "--project",
             str(project),
@@ -75,7 +108,10 @@ class ManageEvolutionTest(unittest.TestCase):
             "--regression-id",
             "multi-surface-handoff",
             *extra,
-        )
+        ]
+
+    def propose(self, project: Path, *extra: str) -> subprocess.CompletedProcess[str]:
+        return self.run_cli(*self.propose_args(project, *extra))
 
     def test_one_ordinary_failure_cannot_form_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -139,6 +175,54 @@ class ManageEvolutionTest(unittest.TestCase):
             result = self.run_cli("archive", "--project", str(project), "--candidate", str(link))
             self.assertEqual(2, result.returncode)
             self.assertIn("non-symlink", result.stderr)
+
+    def test_add_signal_rejects_symlinked_signals_leaf(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            outside = project / "outside-sentinel.txt"
+            outside.write_text("SENTINEL\n", encoding="utf-8")
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            evolution.mkdir(parents=True)
+            (evolution / "signals.jsonl").symlink_to(outside)
+            result = self.add_signal(project, session="one")
+            self.assertEqual(2, result.returncode)
+            self.assertIn("symlink", result.stderr)
+            self.assertEqual("SENTINEL\n", outside.read_text(encoding="utf-8"))
+
+    def test_propose_rejects_symlinked_candidates_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            outside = project / "outside-candidates"
+            outside.mkdir()
+            candidates = project / ".azhou" / "super-repo-pedant" / "evolution" / "candidates"
+            candidates.symlink_to(outside)
+            result = self.propose(project)
+            self.assertEqual(2, result.returncode)
+            self.assertIn("symlink", result.stderr)
+            self.assertEqual([], list(outside.iterdir()))
+
+    @unittest.skipIf(os.name == "nt", "0700/0600 mode enforcement is a POSIX contract")
+    def test_private_modes_hold_under_umask_022(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            for session in ("one", "two"):
+                result = self.run_cli_with_umask(0o022, *self.add_signal_args(project, session=session))
+                self.assertEqual(0, result.returncode, result.stderr)
+            result = self.run_cli_with_umask(0o022, *self.propose_args(project))
+            self.assertEqual(0, result.returncode, result.stderr)
+            namespace = project / ".azhou"
+            for directory_path in (
+                namespace,
+                namespace / "super-repo-pedant",
+                namespace / "super-repo-pedant" / "evolution",
+                namespace / "super-repo-pedant" / "evolution" / "candidates",
+            ):
+                self.assertEqual(0o700, directory_path.stat().st_mode & 0o777, str(directory_path))
+            self.assertEqual(0o600, (namespace / "super-repo-pedant" / "evolution" / "signals.jsonl").stat().st_mode & 0o777)
+            candidate_file = next((namespace / "super-repo-pedant" / "evolution" / "candidates").glob("*.json"))
+            self.assertEqual(0o600, candidate_file.stat().st_mode & 0o777)
 
     def test_global_candidate_requires_two_projects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
