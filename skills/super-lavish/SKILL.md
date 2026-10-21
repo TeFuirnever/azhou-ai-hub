@@ -15,7 +15,7 @@ Super Lavish Editor turns rich HTML artifacts into collaborative human review su
 Emit once when the skill starts:
 
 ```text
-🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
+🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）
 ```
 
 Pick exactly one mode for each request:

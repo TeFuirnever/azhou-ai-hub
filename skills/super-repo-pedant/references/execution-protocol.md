@@ -1,6 +1,6 @@
 # Execution protocol
 
-Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 record 默认写到受影响项目的 `.azhou/super-repo-pedant/execution.json`；schema 为 `repo-pedant.execution.v1`，机器定义见 `../assets/execution-protocol.schema.json`。
+Repo Pedant 的交互阶段是可验证协议，不是自由文案。运行时 record 默认写到受影响项目的 `.azhou/super-repo-pedant/execution.json`；schema 为 `super-repo-pedant.execution.v2`（v1 使用已退役的 `｜` 分隔文法，validator 会显式拒绝并要求以 v2 重新出具），机器定义见 `../assets/execution-protocol.schema.json`。
 
 ## 固定顺序
 

@@ -17,7 +17,7 @@ Use a project-local Markdown knowledge base for verified architecture, decisions
 For an interactive run, read [brand-layer.md](references/brand-layer.md), then start exactly once:
 
 ```text
-🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
+🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）
 ```
 
 Use one fixed anchor per completed material stage. Keep machine JSON, paths, commands, schema values, page content, and raw evidence emoji-free. Never emit `✅ 验证通过` after a `fail`, `hold`, or `skipped` machine receipt. A host without Unicode may remove emoji without changing prefixes, separators, fields, or values.

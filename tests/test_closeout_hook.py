@@ -64,7 +64,7 @@ class CloseoutHookTest(unittest.TestCase):
             self.write_state(workspace, session_id="must-not-leak")
             output, diagnostic = MODULE.evaluate_event(self.args(workspace, workspace / "cache", format="codex"), {})
             self.assertEqual({"systemMessage": MODULE.REMINDER}, json.loads(output))
-            self.assertTrue(MODULE.REMINDER.startswith("🟡 阿舟提醒｜"))
+            self.assertTrue(MODULE.REMINDER.startswith("🟡 阿舟提醒 — "))
             self.assertNotIn("must-not-leak", output)
             self.assertEqual("advisory", diagnostic["action"])
 
@@ -127,7 +127,7 @@ class CloseoutHookTest(unittest.TestCase):
                 {},
             )
             self.assertEqual(MODULE.PRECOMPACT_REMINDER, output)
-            self.assertTrue(output.startswith("🧠 阿舟记忆检查｜"))
+            self.assertTrue(output.startswith("🧠 阿舟记忆检查 — "))
             self.assertEqual("advisory", diagnostic["action"])
 
     def test_one_shot_disable_is_silent(self) -> None:

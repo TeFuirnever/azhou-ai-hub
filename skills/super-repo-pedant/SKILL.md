@@ -19,7 +19,7 @@ invocation: both
 - 明确收尾但未选模式：`reconcile`。
 - 要求交接：`handoff`，同步后更新已有状态/交接入口。
 - 要求从旧运行改进 skill：`evolve`，读取 [history-evolution.md](references/history-evolution.md) 和 [evolution-contract.md](references/evolution-contract.md)。
-- 只推测 milestone/会话结束：只提醒一次“🟡 阿舟提醒｜需要跑 super-repo-pedant 收尾吗？”，不创建状态、不修改文件。
+- 只推测 milestone/会话结束：只提醒一次“🟡 阿舟提醒 — 需要跑 super-repo-pedant 收尾吗？”，不创建状态、不修改文件。
 - 普通实现、重构或整改请求，即使仅提到 super-repo-pedant 或它的策略，也不视为收尾授权；正常完成实现后最多发推测提醒。直接调用 `$super-repo-pedant` 或 `$repo-pedant`（兼容旧名）或明确要求 `audit`/`evolve` 仍立即执行。
 
 明确 `reconcile` / `handoff` 默认授权同步三层项目知识：用户文档、项目规则、已证明绑定当前项目的 agent memory。它不授权整文件/目录删除、全局规则写入、归属不明 memory、无关仓库、发布、部署或把代码改成 spec。
@@ -29,10 +29,10 @@ invocation: both
 交互式运行先读 [brand-layer.md](references/brand-layer.md) 和 [execution-protocol.md](references/execution-protocol.md)，再输出一条启动锚点：
 
 ```text
-🦊 阿舟 · Super Repo Pedant 启动｜mode=<mode>｜scope=<repo>
+🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）
 ```
 
-五个基础阶段严格按 `start -> scope -> inventory -> impact -> sync` 各播报一次；验证失败可按失败尝试记录，成功最多一次且必须是最后事件。固定前缀、字段名和 `｜` 分隔符不能改写，也不能插入“阶段”“核心”等词。checkpoint 使用 `🔒 阿舟暂停这一项`，但继续其他独立工作。
+五个基础阶段严格按 `start -> scope -> inventory -> impact -> sync` 各播报一次；验证失败可按失败尝试记录，成功最多一次且必须是最后事件。固定前缀、字段名和 `（k=v, k=v）` 字段结构不能改写，也不能插入“阶段”“核心”等词。checkpoint 使用 `🔒 阿舟暂停这一项`，但继续其他独立工作。
 
 品牌层不能进入 schema key、状态 enum、digest、命令、路径或原始证据。host 不支持 Unicode 时可去掉 emoji，但稳定字段和值不变。
 
@@ -144,7 +144,7 @@ python <skill-dir>/scripts/validate_execution_protocol.py \
   /absolute/affected-project/.azhou/super-repo-pedant/execution.json
 ```
 
-只有退出码为 0 才能原样发送 record 中的 `✅ 验证通过｜checks=...`，发送后不能再运行检查或修改文件。若仍需动作，先移除 success 事件再继续。失败时使用 `❌ 验证失败｜check=<id>｜impact=<事实>`；修复后重跑受影响检查并重新验证整个 record。
+只有退出码为 0 才能原样发送 record 中的 `✅ 验证通过（checks=...）`，发送后不能再运行检查或修改文件。若仍需动作，先移除 success 事件再继续。失败时使用 `❌ 验证失败（check=<id>, impact=<事实>）`；修复后重跑受影响检查并重新验证整个 record。
 
 **完成条件：**inventory validator、execution protocol validator 与所有适用检查通过；或以 `failed`/精确 hold 收尾，不发成功锚点。
 

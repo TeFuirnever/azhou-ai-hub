@@ -8,17 +8,17 @@ Keep brand in status output, never in file paths, commands, schema keys, or raw 
 - 密度：每条过程锚点最多一个前导 emoji；每个物质阶段最多一次。
 - Emoji 只属于展示层：schema keys、枚举、digest、路径、命令、测试名与原始证据（raw evidence）保持稳定纯文本。
 - HTML 中立：不向 HTML 正文、内嵌状态、路径、命令或证据注入阿舟名称、emoji、角色资产或专属配色；来源内容自己的品牌与设计系统保持权威。
-- Unicode 降级：A host without Unicode can strip the display anchors; fixed prefixes, the `｜` separator, stable fields and values must not change.
+- Unicode 降级：A host without Unicode can strip the display anchors; fixed prefixes, the `（k=v, k=v）` field grouping, stable fields and values must not change.
 
 ## Start
 
 Emit once when the skill starts, with the selected mode:
 
 ```text
-🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>
+🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）
 ```
 
-The `｜` separator is part of the protocol and must be followed by a verifiable fact or an explicit action; fixed prefixes are never replaced with near synonyms.
+The `（k=v, k=v）` field grouping and ` — ` narrative dash are part of the protocol and must be followed by a verifiable fact or an explicit action; fixed prefixes are never replaced with near synonyms.
 
 ## Material stages
 
@@ -27,15 +27,15 @@ Use at most one anchor per material stage. Artifact mode uses the design-source 
 | State | Anchor |
 |---|---|
 | design source and playbooks selected (artifact mode) | `🧭 方向锁定` |
-| scope and authority locked (relay mode) | `🧭 范围锁定｜branch=relay｜authority=<source>` |
+| scope and authority locked (relay mode) | `🧭 范围锁定（branch=relay, authority=<source>）` |
 | artifact written and local checks complete (artifact mode) | `🧱 产物就绪` |
-| packet written and embedded state initialized (relay mode) | `🧱 交接包就绪｜artifact=<path>｜revision=<n>` |
-| browser review is open and polling is attached | `🔎 审阅进行｜session=<open>｜focus=<review point>` |
-| returned feedback persisted into the packet (relay mode) | `🧾 反馈入包｜total=<n>｜unresolved=<n>` |
-| packet or export ready for the next owner (relay mode) | `📦 交接就绪｜transport=<original_html|exported_html>｜handoff_to=<owner>` |
+| packet written and embedded state initialized (relay mode) | `🧱 交接包就绪（artifact=<path>, revision=<n>）` |
+| browser review is open and polling is attached | `🔎 审阅进行（session=<open>, focus=<review point>）` |
+| returned feedback persisted into the packet (relay mode) | `🧾 反馈入包（total=<n>, unresolved=<n>）` |
+| packet or export ready for the next owner (relay mode) | `📦 交接就绪（transport=<original_html|exported_html>, handoff_to=<owner>）` |
 | explicit hold | `🔒 阿舟暂停这一项` |
-| all declared checks passed | `✅ 验证通过｜checks=<ids>` |
-| current attempt failed | `❌ 验证失败｜check=<id>｜impact=<fact>` |
+| all declared checks passed | `✅ 验证通过（checks=<ids>）` |
+| current attempt failed | `❌ 验证失败（check=<id>, impact=<fact>）` |
 
 Do not emit `🔎 审阅进行` unless a foreground poll or verified wake callback is live. `📦 交接就绪` does not mean published. Do not emit success when review, export, or publication remains pending; the success anchor is the last stage event and only after every declared check passed.
 

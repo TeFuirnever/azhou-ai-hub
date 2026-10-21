@@ -11,17 +11,17 @@ Super Repo Pedant 的品牌感来自稳定、克制、可辨认的过程语言�
 
 ## 过程词典
 
-交互式运行使用下列固定前缀。`｜` 后必须跟可验证事实或明确动作，不能只输出情绪。
+交互式运行使用下列固定前缀。全角括号内的每个字段必须是可验证事实或明确动作，不能只输出情绪。
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · Super Repo Pedant 启动｜mode=<mode>｜scope=<repo>` | mode + repo scope |
-| 范围锁定 | `🧭 范围锁定｜authority=<source>｜projects=<n>` | authority + affected projects |
-| 清单完成 | `🗂️ 清单完成｜files=<n>｜holds=<n>｜out_of_scope=<n>` | files + holds/out-of-scope counts |
-| 影响确认 | `🕸️ 影响确认｜surfaces=<n>｜consumers=<n>` | consumer/surface count |
-| 同步完成 | `🧹 同步完成｜changed=<n|none>` | changed files or `none` |
-| 验证通过 | `✅ 验证通过｜checks=<comma-separated ids>` | exact checks |
-| 验证失败 | `❌ 验证失败｜check=<id>｜impact=<fact>` | failed check + impact |
+| 启动 | `🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）` | mode + repo scope |
+| 范围锁定 | `🧭 范围锁定（authority=<source>, projects=<n>）` | authority + affected projects |
+| 清单完成 | `🗂️ 清单完成（files=<n>, holds=<n>, out_of_scope=<n>）` | files + holds/out-of-scope counts |
+| 影响确认 | `🕸️ 影响确认（surfaces=<n>, consumers=<n>）` | consumer/surface count |
+| 同步完成 | `🧹 同步完成（changed=<n|none>）` | changed files or `none` |
+| 验证通过 | `✅ 验证通过（checks=<comma-separated ids>）` | exact checks |
+| 验证失败 | `❌ 验证失败（check=<id>, impact=<fact>）` | failed check + impact |
 | 单项暂停 | `🔒 阿舟暂停这一项` | blocked action + missing authority |
 | 推测提醒 | `🟡 阿舟提醒` | one closeout question |
 | 压缩前记录 | `🧠 阿舟记忆检查` | state that must be recorded |
@@ -29,33 +29,33 @@ Super Repo Pedant 的品牌感来自稳定、克制、可辨认的过程语言�
 启动示例：
 
 ```text
-🦊 阿舟 · Super Repo Pedant 启动｜mode=<mode>｜scope=<repo>
-🦊 阿舟 · Super Repo Pedant 启动｜mode=reconcile｜scope=/absolute/repo
+🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）
+🦊 阿舟 · Super Repo Pedant 启动（mode=reconcile, scope=/absolute/repo）
 ```
 
 阶段示例：
 
 ```text
-🗂️ 清单完成｜files=60｜holds=0｜out_of_scope=1
+🗂️ 清单完成（files=60, holds=0, out_of_scope=1）
 ```
 
-这些格式是协议，不是文案示例。不能把 `｜` 换成冒号或逗号，不能把 `清单完成` 改成 `清单阶段`，不能把 `验证通过` 改成 `核心验证通过`。运行记录必须通过 [execution-protocol.md](execution-protocol.md) 的确定性 validator。
+这些格式是协议，不是文案示例。不能把 `（…）` 字段组去括号或改成方括号，不能把 ` — ` 叙述分隔改成冒号，不能把 `清单完成` 改成 `清单阶段`，不能把 `验证通过` 改成 `核心验证通过`。运行记录必须通过 [execution-protocol.md](execution-protocol.md) 的确定性 validator。
 
 推测完成只允许提醒一次：
 
 ```text
-🟡 阿舟提醒｜需要跑 super-repo-pedant 收尾吗？
+🟡 阿舟提醒 — 需要跑 super-repo-pedant 收尾吗？
 ```
 
 ## 启动行取值纪律
 
-- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 范围锁定` 事件回填具体值。
+- 启动行是运行时播报：全角括号内每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 范围锁定` 事件回填具体值。
 - 尖括号模板（如 `<repo>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
 - 示例（锁定前后各一）：
 
 ```text
-🦊 阿舟 · Super Repo Pedant 启动｜mode=reconcile｜scope=unresolved
-🦊 阿舟 · Super Repo Pedant 启动｜mode=reconcile｜scope=/absolute/repo
+🦊 阿舟 · Super Repo Pedant 启动（mode=reconcile, scope=unresolved）
+🦊 阿舟 · Super Repo Pedant 启动（mode=reconcile, scope=/absolute/repo）
 ```
 
 ## 状态词典
@@ -76,6 +76,16 @@ Emoji 是显示映射；右侧英文值才是稳定机器状态。
 - `audit_only`：`Mode` 必须为 `audit`，`Changed` 必须为 `none`；
 - `failed`：`Next action` 必须给出一个可执行动作。
 - `complete` 要求 scope 已解析：启动行与收据 `Scope` 携带具体值，`unresolved` 只允许出现在 `🧭 范围锁定` 之前的阶段事件里。
+
+## 记忆署名
+
+inventory、receipt 或历史记录真正贡献了答复的段落，以固定格式开头：
+
+```text
+🧠 From <store> memory（<source>）— <content>
+```
+
+`<store>` 按真实来源命名（本 skill 的记录用 `阿舟`，外部记忆用它的真实名字），`<source>` 指名具体记录或页面。记忆没有贡献就不得署名，读不到的来源不得猜测。
 
 ## 边界
 

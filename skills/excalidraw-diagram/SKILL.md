@@ -17,7 +17,7 @@ invocation: user-invoked orchestrator
 交互执行前读取 [brand-layer.md](references/brand-layer.md)，首条进度使用：
 
 ```text
-🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>
+🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）
 ```
 
 按需使用 `🧭 需求锁定`、`🔎 事实确认`、`✏️ 场景生成`、`🧪 审核第 n 轮`、`📦 交付完成` 和最终验证锚点。锚点只陈述真实进度。缺少权限或依赖时，用 `🔒 阿舟暂停这一项` 标记单项阻塞，继续不受影响的工作。

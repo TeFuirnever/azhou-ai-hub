@@ -10,7 +10,7 @@ Development-only evaluation layer. Nothing here ships inside the installed skill
 - `history/`: aggregate snapshots only. Raw or excerpt-bearing reports stay outside Git.
 - `results.tsv` and `results/`: baseline, paired decisions, and human-checkpoint artifacts.
 - `neat-freak-parity.json` and `regression-map.json`: all 28 baseline capabilities, documented replacements, and deterministic/model-regression evidence routes.
-- `protocol/`: one valid execution record and the captured freeform-anchor drift that deterministic validation must reject.
+- `protocol/`: one valid v2 execution record, the historical v1 freeform-anchor drift (rejected at the schema-version gate), and a v2 freeform-anchor drift that deterministic validation must reject at the anchor level.
 - `trigger-cases.json`: positive, negative, and reminder-only trigger boundaries for cross-model evaluation.
 - `workspace/`: generated local runs; ignored by Git.
 

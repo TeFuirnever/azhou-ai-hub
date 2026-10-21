@@ -17,10 +17,10 @@ Use the repository Foundation CLI as the only authority. Do not reconstruct vers
 Emit this exact display event once, at the start of every run, with the selected mode and resolved checkout scope:
 
 ```text
-🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>
+🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）
 ```
 
-Use `✅ 验证通过` only after the selected read-only command succeeds and its output is read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
+Use `✅ 验证通过` only after the selected read-only command succeeds and its output is read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 ## Workflow
 

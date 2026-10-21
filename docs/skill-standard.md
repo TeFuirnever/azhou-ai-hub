@@ -60,18 +60,19 @@ fidelity 轴按与上游 skill 的血缘关系把 canonical skill 分为三类�
 
 ## 3. 阿舟交互层
 
-品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验：
+品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验。播报文法与业界记忆署名惯例同构（参照 Hindsight 的 `🧠 From Hindsight memory（<page>）— …`）：标签在前，来源与字段用全角括号括起，叙述用破折号引出；不携带粗体等 Markdown 装饰，纯文本与 Markdown 两种渲染读到同一结构。
 
 1. 每个 canonical package 的 `SKILL.md` 必须在正文开头公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。规则对全部 skill 统一，没有例外：普通回复禁止生命周期播报的模式 skill（如 Super Caveman）同样在 `SKILL.md` 携带身份锚点，其阶段事件协议仍完整保留在 `references/brand-layer.md`。
-2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动`，携带稳定的 mode/operation 与 scope 字段；同一协议必须在入口和品牌层逐字一致。启动行是运行时播报：字段值填充当下已知的具体值，无法命名时使用机器稳定字面量 `unresolved` 并在下一阶段事件回填；尖括号模板仅存在于契约示例，不得原样播出。
-3. 多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
-4. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
-5. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
-6. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。
+2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动（mode=…, scope=…）`：全角括号包裹字段，字段为 `k=v` 形式、以 `, ` 分隔；同一协议必须在入口和品牌层逐字一致。启动行是运行时播报：字段值填充当下已知的具体值，无法命名时使用机器稳定字面量 `unresolved` 并在下一阶段事件回填；尖括号模板仅存在于契约示例，不得原样播出。
+3. 阶段事件只有两种固定形状：结构化事件 `<emoji> <label>（k=v, k=v）` 携带字段，叙述事件 `<emoji> <label> — <content>` 携带自然语言。字段值内允许 `,` 但禁止 `, `、`（`、`）`；旧的 `｜` 分隔符已废弃，不得出现在新播报里。多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
+4. 记忆署名：记忆真正贡献了答案的段落才署名，格式固定为 `🧠 From <store> memory（<source>）— <content>`；`<store>` 按真实来源命名（如 `Hindsight`、`阿舟`、`wiki`），`<source>` 指名具体页面或条目。没有贡献的记忆不得署名，读不到的来源不得猜测；把记忆消费写进流程的 skill（如 super-llm-wiki、super-repo-pedant）必须在自己的品牌层写明该署名格式。
+5. 成功、失败、跳过和 hold 分开表达；成功锚点只能在全部声明检查完成后发送，并且是最后阶段事件。
+6. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
+7. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。收据属于机器证据层，不适用播报文法。
 
 Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名和原始证据保持稳定纯文本；不支持 Unicode 的 host 可移除 emoji，不能改机器字段和值。
 
-`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：`SKILL.md` 内的身份与口号、精确启动格式、成功/失败/hold、原始证据边界和 Unicode 降级缺一不可；身份与口号必须命中 `SKILL.md` 本身，品牌层只承载阶段事件协议。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
+`scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：`SKILL.md` 内的身份与口号、精确启动格式、成功/失败/hold、原始证据边界、Unicode 降级与记忆署名缺一不可；身份与口号必须命中 `SKILL.md` 本身，品牌层只承载阶段事件协议，并拒绝 `｜` 旧分隔符在新播报面复现。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。
 
 ## 4. 证据与评测
 

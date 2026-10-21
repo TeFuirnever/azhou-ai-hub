@@ -17,10 +17,10 @@ Use the repository Foundation CLI as the mutation authority. Always inspect firs
 Emit this exact display event once, at the start of every run, with the selected mode and resolved checkout scope:
 
 ```text
-🦊 阿舟 · Azhou Setup 启动｜mode=<setup|repair|migrate|uninstall>｜scope=<checkout>
+🦊 阿舟 · Azhou Setup 启动（mode=<setup|repair|migrate|uninstall>, scope=<checkout>）
 ```
 
-Use `✅ 验证通过` only after the exact reviewed plan is applied when mutation was requested, or after a declared dry-run is read back. Use `❌ 验证失败` for a plan, apply, rollback, or evidence failure and `🔒 阿舟暂停这一项` for missing target or authorization. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, managed receipts, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
+Use `✅ 验证通过` only after the exact reviewed plan is applied when mutation was requested, or after a declared dry-run is read back. Use `❌ 验证失败` for a plan, apply, rollback, or evidence failure and `🔒 阿舟暂停这一项` for missing target or authorization. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, managed receipts, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 ## Workflow
 

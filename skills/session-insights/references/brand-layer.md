@@ -11,26 +11,26 @@ Session Insights 的品牌感来自"先有数字，再有故事"的纪律：品�
 
 ## 阶段协议
 
-交互式运行使用下列固定前缀。`｜` 后必须跟可验证事实或明确动作，不能只输出情绪。
+交互式运行使用下列固定前缀。全角括号内的每个字段必须是可验证事实或明确动作，不能只输出情绪。
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>` | mode + harness/project scope |
-| 采集完成 | `📥 采集完成｜harness=<name>｜files=<n>｜skipped_subagent=<n>` | harness + file/skip counts |
-| 聚合完成 | `🧮 聚合完成｜sessions=<n>｜days=<n>｜holds=<n>` | session count + window + holds |
-| 报告完成 | `📝 报告完成｜artifact=<path>` | artifact path |
-| 验证通过 | `✅ 验证通过｜checks=<comma-separated ids>` | exact checks |
-| 验证失败 | `❌ 验证失败｜check=<id>｜impact=<fact>` | failed check + impact |
+| 启动 | `🦊 阿舟 · Session Insights 启动（mode=<report>, scope=<harness-or-project>）` | mode + harness/project scope |
+| 采集完成 | `📥 采集完成（harness=<name>, files=<n>, skipped_subagent=<n>）` | harness + file/skip counts |
+| 聚合完成 | `🧮 聚合完成（sessions=<n>, days=<n>, holds=<n>）` | session count + window + holds |
+| 报告完成 | `📝 报告完成（artifact=<path>）` | artifact path |
+| 验证通过 | `✅ 验证通过（checks=<comma-separated ids>）` | exact checks |
+| 验证失败 | `❌ 验证失败（check=<id>, impact=<fact>）` | failed check + impact |
 | 单项暂停 | `🔒 阿舟暂停这一项` | blocked action + missing authority |
 
 启动示例：
 
 ```text
-🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>
-🦊 阿舟 · Session Insights 启动｜mode=report｜scope=claude-code
+🦊 阿舟 · Session Insights 启动（mode=<report>, scope=<harness-or-project>）
+🦊 阿舟 · Session Insights 启动（mode=report, scope=claude-code）
 ```
 
-这些格式是协议，不是文案示例。不能把 `｜` 换成冒号或逗号，不能改名阶段前缀。
+这些格式是协议，不是文案示例。不能把 `（…）` 字段组去括号或改成方括号，不能把 ` — ` 叙述分隔改成冒号，不能改名阶段前缀。
 
 ## 收据合同 `session-insights.report.v1`
 

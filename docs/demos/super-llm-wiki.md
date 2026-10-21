@@ -15,12 +15,12 @@ Provide the decision, its source, and an honest confidence level. Do not include
 The interaction uses one restrained Azhou anchor per completed stage:
 
 ```text
-🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
-🧭 知识范围锁定｜topic=architecture｜sources=1｜privacy=checked
-🔎 Wiki 检索完成｜operation=query｜matches=0｜read_only=true
-📝 Wiki 更新完成｜action=created｜page=auth-decision.md｜confidence=high
-🧪 Wiki 健康检查｜errors=0｜warnings=0｜info=1
-✅ 验证通过｜checks=readback,lint
+🦊 阿舟 · Super LLM Wiki 启动（operation=ingest, scope=/absolute/project）
+🧭 知识范围锁定（topic=architecture, sources=1, privacy=checked）
+🔎 Wiki 检索完成（operation=query, matches=0, read_only=true）
+📝 Wiki 更新完成（action=created, page=auth-decision.md, confidence=high）
+🧪 Wiki 健康检查（errors=0, warnings=0, info=1）
+✅ 验证通过（checks=readback,lint）
 ```
 
 The CLI JSON stays emoji-free and returns `super-llm-wiki.receipt.v3`, including `currentTruth`, exact changes and verification, holds, one next action, and `learningSignal`. A success anchor is invalid after `fail`, `hold`, or `skipped`.

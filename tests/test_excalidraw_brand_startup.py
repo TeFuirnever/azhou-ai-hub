@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 VALIDATOR = ROOT / "skills" / "excalidraw-diagram" / "scripts" / "check-brand-startup.py"
 
-PREFIX = "\U0001f98a \u963f\u821f \u00b7 Excalidraw Diagram \u542f\u52a8\uff5c"
+PREFIX = "\U0001f98a \u963f\u821f \u00b7 Excalidraw Diagram \u542f\u52a8\uff08"
 
 
 def run_validator(line: str, *flags: str) -> tuple[int, str]:
@@ -34,23 +34,31 @@ class ExcalidrawBrandStartupTest(unittest.TestCase):
     """
 
     def test_concrete_value_ok(self) -> None:
-        code, out = run_validator(PREFIX + "mode=create｜deliverable=svg｜scope=checkout-flow\n")
+        code, out = run_validator(PREFIX + "mode=create, deliverable=svg, scope=checkout-flow）\n")
         self.assertEqual(0, code)
         self.assertIn("ok:", out)
 
     def test_template_leak_rejected(self) -> None:
-        code, out = run_validator(PREFIX + "mode=create｜deliverable=svg｜scope=<diagram>\n")
+        code, out = run_validator(PREFIX + "mode=create, deliverable=svg, scope=<diagram>）\n")
         self.assertEqual(1, code)
         self.assertIn("invalid:", out)
         self.assertIn("template placeholder in scope", out)
 
+    def test_nested_parentheses_in_scope_rejected(self) -> None:
+        code, out = run_validator(
+            PREFIX + "mode=create, deliverable=svg, scope=foo）bar（baz）\n"
+        )
+        self.assertEqual(1, code)
+        self.assertIn("invalid:", out)
+        self.assertIn("parenthesis in scope", out)
+
     def test_unresolved_before_lock_ok(self) -> None:
-        code, out = run_validator(PREFIX + "mode=create｜deliverable=svg｜scope=unresolved\n")
+        code, out = run_validator(PREFIX + "mode=create, deliverable=svg, scope=unresolved）\n")
         self.assertEqual(0, code)
         self.assertIn("ok:", out)
 
     def test_unresolved_after_lock_rejected(self) -> None:
-        code, out = run_validator(PREFIX + "mode=create｜deliverable=svg｜scope=unresolved\n", "--locked")
+        code, out = run_validator(PREFIX + "mode=create, deliverable=svg, scope=unresolved）\n", "--locked")
         self.assertEqual(1, code)
         self.assertIn("scope=unresolved after requirement lock", out)
 
@@ -61,7 +69,7 @@ class ExcalidrawBrandStartupTest(unittest.TestCase):
         # write side.
         env = dict(os.environ, PYTHONIOENCODING="cp1252")
         result = subprocess.run(
-            [sys.executable, str(VALIDATOR), PREFIX + "mode=create｜deliverable=svg｜scope=checkout-flow\n"],
+            [sys.executable, str(VALIDATOR), PREFIX + "mode=create, deliverable=svg, scope=checkout-flow）\n"],
             capture_output=True,
             text=True,
             encoding="utf-8",
