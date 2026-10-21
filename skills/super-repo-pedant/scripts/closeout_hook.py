@@ -21,8 +21,8 @@ import azhou_runtime_state
 
 SCHEMA_VERSION = "super-repo-pedant.closeout-state.v1"
 LEGACY_SCHEMA_VERSION = "repo-pedant.closeout-state.v1"
-REMINDER = "🟡 阿舟提醒｜Super Repo Pedant 收尾尚未完成。完成当前收尾，或记录 hold 与 receipt。"
-PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜存在未记录的 Super Repo Pedant 进展。压缩前写入 inventory 或 receipt。"
+REMINDER = "🟡 阿舟提醒 — Super Repo Pedant 收尾尚未完成。完成当前收尾，或记录 hold 与 receipt。"
+PRECOMPACT_REMINDER = "🧠 阿舟记忆检查 — 存在未记录的 Super Repo Pedant 进展。压缩前写入 inventory 或 receipt。"
 VALID_STATUSES = {"needs_closeout", "active", "complete", "held"}
 STATE_FIELDS = {"schema_version", "repo_root", "session_id", "status", "progress", "unrecorded_progress", "receipt_digest"}
 

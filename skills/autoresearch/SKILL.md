@@ -17,10 +17,10 @@ This package is an Azhou-authored wrapper. The experiment protocol lives in the 
 Emit this exact display event once, at the start of every run, with the resolved checkout scope:
 
 ```text
-🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>
+🦊 阿舟 · Autoresearch 启动（mode=<prepare|run|resume|report>, scope=<checkout>）
 ```
 
-Use `✅ 验证通过` only after every declared check has run and its output was read back. Use `❌ 验证失败` for a failed environment, checkout, or run check and `🔒 阿舟暂停这一项` when an unattended GPU run or a data download waits for explicit user confirmation. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
+Use `✅ 验证通过` only after every declared check has run and its output was read back. Use `❌ 验证失败` for a failed environment, checkout, or run check and `🔒 阿舟暂停这一项` when an unattended GPU run or a data download waits for explicit user confirmation. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 ## Workflow
 

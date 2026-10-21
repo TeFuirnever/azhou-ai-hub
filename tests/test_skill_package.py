@@ -176,6 +176,8 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("learning_signal:", brand)
         self.assertIn("少说话，技术信号不丢。", brand)
         for event in (
+            # Held on the legacy grammar until the next super-caveman promotion
+            # ride lands brand-layer v2 with the tree (see SKILL_BRAND_CONTRACTS).
             "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
             "🧭 范围锁定｜source=<target>｜holds=<n>",
             "🪨 候选完成｜artifact=<path-or-description>",
@@ -337,15 +339,15 @@ class SkillPackageTest(unittest.TestCase):
         brand = (LLM_WIKI_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
         script = (LLM_WIKI_DIR / "scripts" / "llm_wiki.py").read_text(encoding="utf-8")
         anchors = (
-            "🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
-            "🧭 知识范围锁定｜topic=<topic>｜sources=<n|none>｜privacy=<checked|hold>",
-            "🔎 Wiki 检索完成｜operation=<query|list|read>｜matches=<n>｜read_only=<true|false>",
-            "📝 Wiki 更新完成｜action=<created|updated|deleted>｜page=<filename>｜confidence=<level|none>",
-            "📦 Wiki 迁移完成｜status=<planned|migrated|already_current>｜files=<n>｜source_preserved=true",
-            "🧪 Wiki 健康检查｜errors=<n>｜warnings=<n>｜info=<n>",
-            "✅ 验证通过｜checks=<comma-separated ids>",
-            "❌ 验证失败｜check=<id>｜impact=<fact>",
-            "🔒 阿舟暂停这一项｜action=<action>｜missing=<authority|safe-input>",
+            "🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）",
+            "🧭 知识范围锁定（topic=<topic>, sources=<n|none>, privacy=<checked|hold>）",
+            "🔎 Wiki 检索完成（operation=<query|list|read>, matches=<n>, read_only=<true|false>）",
+            "📝 Wiki 更新完成（action=<created|updated|deleted>, page=<filename>, confidence=<level|none>）",
+            "📦 Wiki 迁移完成（status=<planned|migrated|already_current>, files=<n>, source_preserved=true）",
+            "🧪 Wiki 健康检查（errors=<n>, warnings=<n>, info=<n>）",
+            "✅ 验证通过（checks=<comma-separated ids>）",
+            "❌ 验证失败（check=<id>, impact=<fact>）",
+            "🔒 阿舟暂停这一项（action=<action>, missing=<authority|safe-input>）",
         )
         for anchor in anchors:
             self.assertIn(anchor, brand)
@@ -425,8 +427,8 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("## 🦊 阿舟 · Super Repo Pedant receipt", skill)
         self.assertNotIn("## 🦊 阿舟 · Repo Pedant receipt", skill)
         self.assertNotIn("## 🦊 阿舟 · Repo-pedant receipt", skill)
-        self.assertIn('REMINDER = "🟡 阿舟提醒｜', hook)
-        self.assertIn('PRECOMPACT_REMINDER = "🧠 阿舟记忆检查｜', hook)
+        self.assertIn('REMINDER = "🟡 阿舟提醒 — ', hook)
+        self.assertIn('PRECOMPACT_REMINDER = "🧠 阿舟记忆检查 — ', hook)
 
     def test_project_skill_standard_is_the_shared_authority(self) -> None:
         standard = (ROOT / "docs" / "skill-standard.md").read_text(encoding="utf-8")

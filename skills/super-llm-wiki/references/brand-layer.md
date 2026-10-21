@@ -11,57 +11,57 @@ Super LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过�
 
 ## 过程词典
 
-`｜` 后必须跟可验证事实或明确动作。固定前缀、字段名和分隔符不能改写。
+全角括号内的每个字段必须是可验证事实或明确动作。固定前缀、字段名和分隔结构不能改写。
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>` | operation + absolute project root |
-| 范围锁定 | `🧭 知识范围锁定｜topic=<topic>｜sources=<n\|none>｜privacy=<checked\|hold>` | topic + source count + privacy decision |
-| 检索完成 | `🔎 Wiki 检索完成｜operation=<query\|list\|read>｜matches=<n>｜read_only=<true\|false>` | operation + result count + log behavior |
-| 更新完成 | `📝 Wiki 更新完成｜action=<created\|updated\|deleted>｜page=<filename>｜confidence=<level\|none>` | action + safe filename + confidence |
-| 迁移完成 | `📦 Wiki 迁移完成｜status=<planned\|migrated\|already_current>｜files=<n>｜source_preserved=true` | migration status + file count + preservation |
-| 健康检查 | `🧪 Wiki 健康检查｜errors=<n>｜warnings=<n>｜info=<n>` | exact severity counts |
-| 验证通过 | `✅ 验证通过｜checks=<comma-separated ids>` | checks actually completed |
-| 验证失败 | `❌ 验证失败｜check=<id>｜impact=<fact>` | failed check + artifact impact |
-| 单项暂停 | `🔒 阿舟暂停这一项｜action=<action>｜missing=<authority\|safe-input>` | blocked action + missing condition |
+| 启动 | `🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）` | operation + absolute project root |
+| 范围锁定 | `🧭 知识范围锁定（topic=<topic>, sources=<n\|none>, privacy=<checked\|hold>）` | topic + source count + privacy decision |
+| 检索完成 | `🔎 Wiki 检索完成（operation=<query\|list\|read>, matches=<n>, read_only=<true\|false>）` | operation + result count + log behavior |
+| 更新完成 | `📝 Wiki 更新完成（action=<created\|updated\|deleted>, page=<filename>, confidence=<level\|none>）` | action + safe filename + confidence |
+| 迁移完成 | `📦 Wiki 迁移完成（status=<planned\|migrated\|already_current>, files=<n>, source_preserved=true）` | migration status + file count + preservation |
+| 健康检查 | `🧪 Wiki 健康检查（errors=<n>, warnings=<n>, info=<n>）` | exact severity counts |
+| 验证通过 | `✅ 验证通过（checks=<comma-separated ids>）` | checks actually completed |
+| 验证失败 | `❌ 验证失败（check=<id>, impact=<fact>）` | failed check + artifact impact |
+| 单项暂停 | `🔒 阿舟暂停这一项（action=<action>, missing=<authority\|safe-input>）` | blocked action + missing condition |
 
 精确协议如下；实现和测试按这些行逐字匹配：
 
 ```text
-🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>
-🧭 知识范围锁定｜topic=<topic>｜sources=<n|none>｜privacy=<checked|hold>
-🔎 Wiki 检索完成｜operation=<query|list|read>｜matches=<n>｜read_only=<true|false>
-📝 Wiki 更新完成｜action=<created|updated|deleted>｜page=<filename>｜confidence=<level|none>
-📦 Wiki 迁移完成｜status=<planned|migrated|already_current>｜files=<n>｜source_preserved=true
-🧪 Wiki 健康检查｜errors=<n>｜warnings=<n>｜info=<n>
-✅ 验证通过｜checks=<comma-separated ids>
-❌ 验证失败｜check=<id>｜impact=<fact>
-🔒 阿舟暂停这一项｜action=<action>｜missing=<authority|safe-input>
+🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）
+🧭 知识范围锁定（topic=<topic>, sources=<n|none>, privacy=<checked|hold>）
+🔎 Wiki 检索完成（operation=<query|list|read>, matches=<n>, read_only=<true|false>）
+📝 Wiki 更新完成（action=<created|updated|deleted>, page=<filename>, confidence=<level|none>）
+📦 Wiki 迁移完成（status=<planned|migrated|already_current>, files=<n>, source_preserved=true）
+🧪 Wiki 健康检查（errors=<n>, warnings=<n>, info=<n>）
+✅ 验证通过（checks=<comma-separated ids>）
+❌ 验证失败（check=<id>, impact=<fact>）
+🔒 阿舟暂停这一项（action=<action>, missing=<authority|safe-input>）
 ```
 
 启动示例：
 
 ```text
-🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+🦊 阿舟 · Super LLM Wiki 启动（operation=ingest, scope=/absolute/project）
 ```
 
 更新示例：
 
 ```text
-📝 Wiki 更新完成｜action=updated｜page=auth-decision.md｜confidence=high
+📝 Wiki 更新完成（action=updated, page=auth-decision.md, confidence=high）
 ```
 
 锚点只使用安全文件名、计数和枚举。不得把页面正文、查询片段、会话标识、用户路径之外的私有数据或来源内容拼进阶段消息。
 
 ## 启动行取值纪律
 
-- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 知识范围锁定` 事件回填具体值。
+- 启动行是运行时播报：全角括号内每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 知识范围锁定` 事件回填具体值。
 - 尖括号模板（如 `<project-root>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
 - 示例（锁定前后各一）：
 
 ```text
-🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=unresolved
-🦊 阿舟 · Super LLM Wiki 启动｜operation=ingest｜scope=/absolute/project
+🦊 阿舟 · Super LLM Wiki 启动（operation=ingest, scope=unresolved）
+🦊 阿舟 · Super LLM Wiki 启动（operation=ingest, scope=/absolute/project）
 ```
 
 ## 操作顺序
@@ -127,10 +127,20 @@ Emoji 是展示映射；右侧值才是 `super-llm-wiki.receipt.v3` 的稳定机
 - Learning signal: none | scope | source | privacy | retrieval | write | lint | migration | lifecycle | deletion | config
 ```
 
+## 记忆署名
+
+wiki 页面或知识检索真正贡献了答复的段落，以固定格式开头：
+
+```text
+🧠 From <store> memory（<source>）— <content>
+```
+
+`<store>` 按真实来源命名（本 skill 的页面用 `wiki`，外部记忆用它的真实名字），`<source>` 指名具体页面文件名。记忆没有贡献就不得署名，读不到的来源不得猜测。
+
 ## 边界
 
 - Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名、页面内容和原始证据保持纯文本。
 - 机器收据优先于品牌文案；展示层不能把 `fail`、`hold` 或 `skipped` 改写为成功。
 - `✅ 验证通过` 只能在声明的读回、lint、测试或迁移检查实际通过后输出，并且是最后一条阶段事件。
 - Hook、MCP 和 CLI 的机器输出保持 emoji-free；品牌锚点由交互层输出。
-- Host 不支持 Unicode 时可移除 emoji，但固定中文前缀、`｜` 分隔符、稳定字段和值不能变化。
+- Host 不支持 Unicode 时可移除 emoji，但固定中文前缀、`（k=v, k=v）` 字段结构、稳定字段和值不能变化。

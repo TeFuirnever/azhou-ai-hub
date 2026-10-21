@@ -10,7 +10,8 @@ import argparse
 import re
 import sys
 
-PREFIX = "🦊 阿舟 · Excalidraw Diagram 启动｜"
+PREFIX = "🦊 阿舟 · Excalidraw Diagram 启动（"
+CLOSING = "）"
 FIELDS = ("mode=", "deliverable=", "scope=")
 
 
@@ -20,9 +21,13 @@ def check(line: str, locked: bool) -> list[str]:
         errors.append("fixed prefix mismatch")
         return errors
     body = line[len(PREFIX):]
-    parts = body.split("｜")
+    if not body.endswith(CLOSING):
+        errors.append("field group must close with ）")
+        return errors
+    body = body[:-len(CLOSING)]
+    parts = body.split(", ")
     if [p.split("=", 1)[0] + "=" for p in parts if "=" in p] != list(FIELDS) or len(parts) != 3:
-        errors.append(f"field order/count mismatch: expected mode|deliverable|scope, got {len(parts)} fields")
+        errors.append(f"field order/count mismatch: expected mode, deliverable, scope; got {len(parts)} fields")
         return errors
     for part in parts:
         key, _, value = part.partition("=")

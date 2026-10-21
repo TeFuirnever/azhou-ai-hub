@@ -100,89 +100,93 @@ SKILL_BRAND_CONTRACTS = {
     "skills/autoresearch/SKILL.md": {
         "display_name": "Autoresearch",
         "motto": "实验通宵跑，边界先说清。",
-        "startup": "🦊 阿舟 · Autoresearch 启动｜mode=<prepare|run|resume|report>｜scope=<checkout>",
+        "startup": "🦊 阿舟 · Autoresearch 启动（mode=<prepare|run|resume|report>, scope=<checkout>）",
     },
     "skills/ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",
         "motto": "说清你想做什么，我告诉你敲哪扇门。",
-        "startup": "🦊 阿舟 · Ask Azhou 启动｜mode=route｜scope=<catalog>",
+        "startup": "🦊 阿舟 · Ask Azhou 启动（mode=route, scope=<catalog>）",
     },
     "skills/azhou-doctor/SKILL.md": {
         "display_name": "Azhou Doctor",
         "motto": "先诊断，不越权修复。",
-        "startup": "🦊 阿舟 · Azhou Doctor 启动｜mode=doctor｜scope=<checkout>",
+        "startup": "🦊 阿舟 · Azhou Doctor 启动（mode=doctor, scope=<checkout>）",
     },
     "skills/azhou-info/SKILL.md": {
         "display_name": "Azhou Info",
         "motto": "只报告仓库能证明的事实。",
-        "startup": "🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>",
+        "startup": "🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）",
     },
     "skills/azhou-setup/SKILL.md": {
         "display_name": "Azhou Setup",
         "motto": "先看计划，再按同一计划执行。",
-        "startup": "🦊 阿舟 · Azhou Setup 启动｜mode=<setup|repair|migrate|uninstall>｜scope=<checkout>",
+        "startup": "🦊 阿舟 · Azhou Setup 启动（mode=<setup|repair|migrate|uninstall>, scope=<checkout>）",
     },
     "skills/azhou-verify/SKILL.md": {
         "display_name": "Azhou Verify",
         "motto": "完整 gate 跑完，结论才成立。",
-        "startup": "🦊 阿舟 · Azhou Verify 启动｜mode=verify｜scope=<checkout>",
+        "startup": "🦊 阿舟 · Azhou Verify 启动（mode=verify, scope=<checkout>）",
     },
     "skills/eli5/SKILL.md": {
         "display_name": "Eli5",
         "motto": "把复杂讲给零基础的人，少字，多图。",
-        "startup": "🦊 阿舟 · Eli5 启动｜mode=explain｜scope=<topic>",
+        "startup": "🦊 阿舟 · Eli5 启动（mode=explain, scope=<topic>）",
     },
     "skills/excalidraw-diagram/SKILL.md": {
         "display_name": "Excalidraw Diagram",
         "motto": "先让结构讲清关系，再让文字补充证据。",
-        "startup": "🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>",
+        "startup": "🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）",
         "brand_path": "skills/excalidraw-diagram/references/brand-layer.md",
     },
     "skills/super-lavish/SKILL.md": {
         "display_name": "Super Lavish",
         "motto": "把复杂结果变成可审阅的界面。",
-        "startup": "🦊 阿舟 · Super Lavish 启动｜mode=<artifact|relay|review|export|share>｜scope=<short scope>",
+        "startup": "🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）",
         "brand_path": "skills/super-lavish/references/brand-layer.md",
     },
     "skills/super-llm-wiki/SKILL.md": {
         "display_name": "Super LLM Wiki",
         "motto": "知识要留得住，也要经得起查证。",
-        "startup": "🦊 阿舟 · Super LLM Wiki 启动｜operation=<operation>｜scope=<project-root>",
+        "startup": "🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）",
         "brand_path": "skills/super-llm-wiki/references/brand-layer.md",
     },
     "skills/super-repo-pedant/SKILL.md": {
         "display_name": "Super Repo Pedant",
         "motto": "代码是唯一现役答案，其他都要对齐。",
-        "startup": "🦊 阿舟 · Super Repo Pedant 启动｜mode=<mode>｜scope=<repo>",
+        "startup": "🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）",
         "brand_path": "skills/super-repo-pedant/references/brand-layer.md",
     },
     "skills/super-caveman/SKILL.md": {
         "display_name": "Super Caveman",
         "motto": "少说话，技术信号不丢。",
+        # Held on the legacy pipe grammar: the super-caveman skill tree is
+        # hash-bound to its recorded passing evaluation, so brand-layer v2
+        # rides the tree at the next promotion ride (same hold pattern as the
+        # invocation axis and fidelity classification tables).
         "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
         "brand_path": "skills/super-caveman/references/brand-layer.md",
     },
     "skills/arch-doc/SKILL.md": {
         "display_name": "Arch Doc",
         "motto": "先读上游，再写契约，声称不越证据。",
-        "startup": "🦊 阿舟 · Arch Doc 启动｜mode=<draft|calibrate|review|sequence>｜scope=<repo-or-document>",
+        "startup": "🦊 阿舟 · Arch Doc 启动（mode=<draft|calibrate|review|sequence>, scope=<repo-or-document>）",
         "brand_path": "skills/arch-doc/references/brand-layer.md",
     },
     "skills/session-insights/SKILL.md": {
         "display_name": "Session Insights",
         "motto": "先有数字，再有故事。",
-        "startup": "🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>",
+        "startup": "🦊 阿舟 · Session Insights 启动（mode=<report>, scope=<harness-or-project>）",
         "brand_path": "skills/session-insights/references/brand-layer.md",
     },
     "skills/asd-ste100/SKILL.md": {
         "display_name": "ASD-STE100",
         "motto": "一词一义，一句一事，agent 无从误读。",
-        "startup": "🦊 阿舟 · ASD-STE100 启动｜mode=<strict|flavored>｜scope=<text-or-files>",
+        "startup": "🦊 阿舟 · ASD-STE100 启动（mode=<strict|flavored>, scope=<text-or-files>）",
     },
     "skills/archify/SKILL.md": {
         "display_name": "Archify",
         "motto": "一张图讲清一个系统，交给读者去探索。",
-        "startup": "🦊 阿舟 · Archify 启动｜mode=<diagram-type>｜scope=<subject>",
+        "startup": "🦊 阿舟 · Archify 启动（mode=<diagram-type>, scope=<subject>）",
     },
 }
 
@@ -721,6 +725,76 @@ def check_skill_brand_contract(root: Path) -> list[str]:
     return errors
 
 
+MEMORY_CREDIT_FORMAT = "🧠 From <store> memory（<source>）— <content>"
+MEMORY_CREDIT_SURFACES = (
+    "docs/skill-standard.md",
+    "skills/super-llm-wiki/references/brand-layer.md",
+    "skills/super-repo-pedant/references/brand-layer.md",
+)
+LEGACY_BROADCAST_PATTERN = re.compile(
+    r"(启动|验证通过|验证失败|范围锁定|知识范围锁定|清单完成|影响确认|同步完成|"
+    r"采集完成|聚合完成|报告完成|阿舟提醒|阿舟记忆检查)｜"
+)
+LEGACY_BROADCAST_SCOPES = (
+    "skills/",
+    # skills/super-caveman/ is scanned except its brand-layer, which stays on
+    # the legacy grammar until the next promotion ride (see SKILL_BRAND_CONTRACTS).
+    "scripts/",
+    "tests/",
+    "docs/demos/",
+    "benchmarks/super-repo-pedant/protocol/",
+)
+LEGACY_BROADCAST_EXEMPT_PATHS = (
+    "skills/super-caveman/references/brand-layer.md",
+    # Holds the super-caveman legacy startup contract (see SKILL_BRAND_CONTRACTS).
+    "scripts/check_repository.py",
+    # Asserts the held super-caveman legacy grammar verbatim (see above).
+    "tests/test_skill_package.py",
+)
+
+
+def check_memory_credit_contract(root: Path) -> list[str]:
+    """The memory-attribution protocol stays present on every surface that defines it."""
+    errors: list[str] = []
+    for relative in MEMORY_CREDIT_SURFACES:
+        path = root / relative
+        if not path.is_file():
+            errors.append(f"memory credit surface missing: {relative}")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"cannot read memory credit surface {relative}: {exc}")
+            continue
+        if MEMORY_CREDIT_FORMAT not in text:
+            errors.append(f"memory credit format missing: {relative}")
+    return errors
+
+
+def check_legacy_broadcast_delimiter(files: list[Path], root: Path) -> list[str]:
+    """The deprecated pipe delimiter must not reappear in live broadcast surfaces."""
+    errors: list[str] = []
+    for path in files:
+        try:
+            relative = path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        if not relative.startswith(LEGACY_BROADCAST_SCOPES):
+            continue
+        if relative in LEGACY_BROADCAST_EXEMPT_PATHS:
+            continue
+        if path.suffix not in {".md", ".py", ".json"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if LEGACY_BROADCAST_PATTERN.search(line):
+                errors.append(f"legacy broadcast delimiter: {relative}:{lineno}")
+    return errors
+
+
 def check_json(files: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
     for path in files:
@@ -1004,6 +1078,8 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_treehouse_config(root))
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
+    errors.extend(check_memory_credit_contract(root))
+    errors.extend(check_legacy_broadcast_delimiter(files, root))
     errors.extend(check_router_coverage(root))
     errors.extend(check_router_generated_index(root))
     errors.extend(check_skill_platform_view(root))

@@ -11,11 +11,11 @@ Excalidraw Diagram 的品牌感来自清楚、克制、可验证的作图过程�
 
 ## 过程词典
 
-`｜` 后必须跟可验证事实或明确动作，不能只输出情绪。
+全角括号内的每个字段必须是可验证事实或明确动作，不能只输出情绪。
 
 | 时机 | 固定前缀 | 最小内容 |
 |---|---|---|
-| 启动 | `🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create\|edit\|render\|export>｜deliverable=<format>｜scope=<diagram>` | mode + deliverable + scope |
+| 启动 | `🦊 阿舟 · Excalidraw Diagram 启动（mode=<create\|edit\|render\|export>, deliverable=<format>, scope=<diagram>）` | mode + deliverable + scope |
 | 需求锁定 | `🧭 需求锁定` | audience + depth + output format |
 | 事实确认 | `🔎 事实确认` | sources/real formats，或 conceptual + not_required |
 | 场景生成 | `✏️ 场景生成` | scene path + element count |
@@ -28,25 +28,25 @@ Excalidraw Diagram 的品牌感来自清楚、克制、可验证的作图过程�
 启动示例：
 
 ```text
-🦊 阿舟 · Excalidraw Diagram 启动｜mode=<create|edit|render|export>｜deliverable=<format>｜scope=<diagram>
-🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=checkout-flow
+🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）
+🦊 阿舟 · Excalidraw Diagram 启动（mode=create, deliverable=svg, scope=checkout-flow）
 ```
 
 ## 启动行取值纪律
 
-- 启动行是运行时播报：`｜` 后每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），需求锁定阶段事件回填具体值。
+- 启动行是运行时播报：全角括号内每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），需求锁定阶段事件回填具体值。
 - 尖括号模板（如 `<diagram>`）只存在于本文件的契约示例中，出现在真实播报里即为取值纪律违规。
 - 示例（锁定前后各一）：
 
 ```text
-🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=unresolved
-🦊 阿舟 · Excalidraw Diagram 启动｜mode=create｜deliverable=svg｜scope=checkout-flow
+🦊 阿舟 · Excalidraw Diagram 启动（mode=create, deliverable=svg, scope=unresolved）
+🦊 阿舟 · Excalidraw Diagram 启动（mode=create, deliverable=svg, scope=checkout-flow）
 ```
 
 审核示例：
 
 ```text
-🧪 审核第 2 轮｜overlaps=0｜visual=failed:routing｜remaining=1
+🧪 审核第 2 轮（overlaps=0, visual=failed:routing, remaining=1）
 ```
 
 ## 状态词典

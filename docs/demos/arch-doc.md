@@ -5,7 +5,7 @@
 ## draft + calibrate（真实轨迹）
 
 ```text
-🦊 阿舟 · Arch Doc 启动｜mode=draft｜scope=<repo>
+🦊 阿舟 · Arch Doc 启动（mode=draft, scope=<repo>）
 ```
 
 1. 研读：四名研究员按域精读上游 96 篇文档，产出 4 份研究笔记（120 条带出处事实，存 `.omc/research/`）。
@@ -15,7 +15,7 @@
 ## review + 修复（真实轨迹）
 
 ```text
-🦊 阿舟 · Arch Doc 启动｜mode=review｜scope=docs/architecture/arch-2026-001-mcc-system.md
+🦊 阿舟 · Arch Doc 启动（mode=review, scope=docs/architecture/arch-2026-001-mcc-system.md）
 ```
 
 - 双线对标评审：结构 3.1/5、技术 17/30，16 条发现 + 20 项改进清单（存 `evidence/arch-doc-combined-review-2026-09-04.md`）。
@@ -25,7 +25,7 @@
 ## sequence（真实轨迹）
 
 ```text
-🦊 阿舟 · Arch Doc 启动｜mode=sequence｜scope=docs/architecture/arch-2026-001-mcc-system.md
+🦊 阿舟 · Arch Doc 启动（mode=sequence, scope=docs/architecture/arch-2026-001-mcc-system.md）
 ```
 
 补 5 张时序图（资产接入 / 记忆提取 / 身份隔离 / 行为约束 / 并发恢复），研究员回源核对 16 处勘误后定稿（v0.17）。

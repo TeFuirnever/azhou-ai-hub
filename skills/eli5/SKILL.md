@@ -17,10 +17,10 @@ Capability baseline, imported verbatim from the locked upstream commit: "Explain
 Emit this exact display event once, at the start of every run, with the resolved topic scope:
 
 ```text
-🦊 阿舟 · Eli5 启动｜mode=explain｜scope=<topic>
+🦊 阿舟 · Eli5 启动（mode=explain, scope=<topic>）
 ```
 
-Use `✅ 验证通过` only after the artifact is written to disk and read back. Use `❌ 验证失败` for a write or read-back failure and `🔒 阿舟暂停这一项` when the topic is missing or the request contradicts the eli5 boundary. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
+Use `✅ 验证通过` only after the artifact is written to disk and read back. Use `❌ 验证失败` for a write or read-back failure and `🔒 阿舟暂停这一项` when the topic is missing or the request contradicts the eli5 boundary. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 ## Workflow
 

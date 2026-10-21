@@ -17,10 +17,10 @@ Run the repository Foundation CLI and keep diagnosis read-only. Never turn a doc
 Emit this exact display event once, at the start of every run, with the resolved checkout scope:
 
 ```text
-🦊 阿舟 · Azhou Doctor 启动｜mode=doctor｜scope=<checkout>
+🦊 阿舟 · Azhou Doctor 启动（mode=doctor, scope=<checkout>）
 ```
 
-Use `✅ 验证通过` only after the diagnostic command completes and its results are read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values.
+Use `✅ 验证通过` only after the diagnostic command completes and its results are read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 ## Workflow
 

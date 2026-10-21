@@ -21,10 +21,10 @@ For a real codebase, read [Repository authoring](references/repository-authoring
 Emit this exact display event once, at the start of every run, with the resolved diagram type and subject scope:
 
 ```text
-🦊 阿舟 · Archify 启动｜mode=<diagram-type>｜scope=<subject>
+🦊 阿舟 · Archify 启动（mode=<diagram-type>, scope=<subject>）
 ```
 
-Use `✅ 验证通过` only after the delivered HTML's `finalize` (or standalone `deliver`) receipt reports every gate passed on this run. Use `❌ 验证失败` when a gate fails and the repair limit is reached, and `🔒 阿舟暂停这一项` when the request contradicts the boundary: numeric charts or dashboards stay ordinary work, and editable `.excalidraw` source scenes belong to excalidraw-diagram — say so and return the request instead of degrading it. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values. Raw evidence such as conversation excerpts or user paths stays out of the receipt unless the user supplied it.
+Use `✅ 验证通过` only after the delivered HTML's `finalize` (or standalone `deliver`) receipt reports every gate passed on this run. Use `❌ 验证失败` when a gate fails and the repair limit is reached, and `🔒 阿舟暂停这一项` when the request contradicts the boundary: numeric charts or dashboards stay ordinary work, and editable `.excalidraw` source scenes belong to excalidraw-diagram — say so and return the request instead of degrading it. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence such as conversation excerpts or user paths stays out of the receipt unless the user supplied it.
 
 ## Existing candidate handoff
 

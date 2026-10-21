@@ -15,7 +15,7 @@ invocation: user-invoked orchestrator
 ## 启动协议
 
 ```text
-🦊 阿舟 · Arch Doc 启动｜mode=<draft|calibrate|review|sequence>｜scope=<repo-or-document>
+🦊 阿舟 · Arch Doc 启动（mode=<draft|calibrate|review|sequence>, scope=<repo-or-document>）
 ```
 
 `draft` 产出新文档；`calibrate` 对照上游校准既有文档；`review` 做最佳实践对标评审；`sequence` 只补时序图。缺上游真源或缺读取权限时，用 `🔒 阿舟暂停这一项` 标记该项，其余继续。

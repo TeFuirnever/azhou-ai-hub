@@ -89,7 +89,7 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         protocol = self.valid_fixture()
         protocol["events"][-1]["completed_checks"].remove("coverage")
         protocol["events"].append(
-            {"stage": "verify_failure", "message": "❌ 验证失败｜check=coverage｜impact=late evidence"}
+            {"stage": "verify_failure", "message": "❌ 验证失败（check=coverage, impact=late evidence）"}
         )
         result = self.run_validator(self.write_variant(protocol))
         self.assertEqual(1, result.returncode)
@@ -104,7 +104,7 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         protocol["checks"][-1]["evidence"] = "Coverage tool returned an incomplete range."
         protocol["events"][-1] = {
             "stage": "verify_failure",
-            "message": "❌ 验证失败｜check=coverage｜impact=one range needs direct read",
+            "message": "❌ 验证失败（check=coverage, impact=one range needs direct read）",
         }
         result = self.run_validator(self.write_variant(protocol))
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)

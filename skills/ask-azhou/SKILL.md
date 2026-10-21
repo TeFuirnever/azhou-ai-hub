@@ -19,10 +19,10 @@ It is guidance, not a script. This is the hub's front door: fifteen canonical sk
 Emit this exact display event once:
 
 ```text
-🦊 阿舟 · Ask Azhou 启动｜mode=route｜scope=<catalog>
+🦊 阿舟 · Ask Azhou 启动（mode=route, scope=<catalog>）
 ```
 
-Use `✅ 验证通过` only after the recommendation names a real canonical skill whose boundary fits the request. Use `❌ 验证失败` when no canonical skill fits and `🔒 阿舟暂停这一项` when the request is outside this hub's catalog entirely. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `｜` separators, fields, and values. Raw evidence stays out of receipts unless the user supplied it.
+Use `✅ 验证通过` only after the recommendation names a real canonical skill whose boundary fits the request. Use `❌ 验证失败` when no canonical skill fits and `🔒 阿舟暂停这一项` when the request is outside this hub's catalog entirely. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence stays out of receipts unless the user supplied it.
 
 ## Route by intent
 

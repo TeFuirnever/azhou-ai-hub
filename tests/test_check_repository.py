@@ -8,12 +8,15 @@ import tempfile
 import unittest
 
 from scripts.check_repository import (
+    MEMORY_CREDIT_SURFACES,
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
     check_command_surface,
     check_fidelity_axis,
     check_invocation_axis,
+    check_legacy_broadcast_delimiter,
     check_markdown_links,
+    check_memory_credit_contract,
     check_public_boundaries,
     check_reference_script_paths,
     check_rename_residue,
@@ -419,7 +422,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             skill = root / "skills" / "azhou-info" / "SKILL.md"
             skill.write_text(
                 skill.read_text(encoding="utf-8").replace(
-                    "🦊 阿舟 · Azhou Info 启动｜mode=<info|version>｜scope=<checkout>",
+                    "🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）",
                     "🦊 阿舟 · Azhou Info 启动: mode=<info|version>, scope=<checkout>",
                 ),
                 encoding="utf-8",
@@ -499,6 +502,63 @@ class RepositoryPolicyTest(unittest.TestCase):
             self.assertIn(
                 f"skill brand identity missing: {relative}",
                 check_skill_brand_contract(root),
+            )
+
+    def test_memory_credit_contract_passes_on_the_live_repo(self) -> None:
+        self.assertEqual([], check_memory_credit_contract(ROOT))
+
+    def test_memory_credit_contract_rejects_a_dropped_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in MEMORY_CREDIT_SURFACES:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# surface\n", encoding="utf-8")
+
+            errors = check_memory_credit_contract(root)
+
+            self.assertEqual(len(MEMORY_CREDIT_SURFACES), len(errors))
+            for relative in MEMORY_CREDIT_SURFACES:
+                self.assertIn(f"memory credit format missing: {relative}", errors)
+
+    def test_legacy_broadcast_delimiter_passes_on_the_live_repo(self) -> None:
+        self.assertEqual([], check_legacy_broadcast_delimiter(public_files(ROOT), ROOT))
+
+    def test_legacy_broadcast_delimiter_rejects_the_pipe_grammar(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            surface = root / "skills" / "probe" / "brand-layer.md"
+            surface.parent.mkdir(parents=True)
+            # Concatenated so this test file itself stays free of the legacy
+            # literal the delimiter scan rejects.
+            pipe = "｜"
+            surface.write_text(
+                f"🦊 阿舟 · Probe 启动{pipe}mode=route{pipe}scope=/repo\n", encoding="utf-8"
+            )
+
+            errors = check_legacy_broadcast_delimiter([surface], root)
+
+            self.assertIn(
+                "legacy broadcast delimiter: skills/probe/brand-layer.md:1", errors
+            )
+
+    def test_legacy_broadcast_delimiter_allows_new_grammar_and_held_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            surface = root / "skills" / "probe" / "SKILL.md"
+            surface.parent.mkdir(parents=True)
+            surface.write_text(
+                "🦊 阿舟 · Probe 启动（mode=route, scope=/repo）\n", encoding="utf-8"
+            )
+            held = root / "skills" / "super-caveman" / "references" / "brand-layer.md"
+            held.parent.mkdir(parents=True)
+            pipe = "｜"
+            held.write_text(
+                f"🦊 阿舟 · Super Caveman 启动{pipe}mode=x{pipe}scope=y\n", encoding="utf-8"
+            )
+
+            self.assertEqual(
+                [], check_legacy_broadcast_delimiter([surface, held], root)
             )
 
     def test_only_canonical_runtime_skills_are_discoverable(self) -> None:

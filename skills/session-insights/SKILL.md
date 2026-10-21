@@ -60,10 +60,10 @@ roast 是展示层 tone（`report --tone roast`，已发布）：`report` 与 `r
 每次运行开始时原样播报一次：
 
 ```text
-🦊 阿舟 · Session Insights 启动｜mode=<report>｜scope=<harness-or-project>
+🦊 阿舟 · Session Insights 启动（mode=<report>, scope=<harness-or-project>）
 ```
 
-`✅ 验证通过` 只在报告产物落盘并读回核对之后使用；`❌ 验证失败` 用于聚合 schema 校验失败或产物写读失败；`🔒 阿舟暂停这一项` 用于请求越界（如要求监控、外传或 roast 尚未发布的功能）。Emoji 只出现在展示层；JSON key、schema 值、digest、路径、命令、测试名与原始证据保持无 Emoji。原始证据（原始转写、未脱敏摘录、用户路径明文）永远不进入报告、收据或 Git。host 不支持 Unicode 时可去掉前导 emoji，固定文本、`｜` 分隔符、字段与值不得改变。
+`✅ 验证通过` 只在报告产物落盘并读回核对之后使用；`❌ 验证失败` 用于聚合 schema 校验失败或产物写读失败；`🔒 阿舟暂停这一项` 用于请求越界（如要求监控、外传或 roast 尚未发布的功能）。Emoji 只出现在展示层；JSON key、schema 值、digest、路径、命令、测试名与原始证据保持无 Emoji。原始证据（原始转写、未脱敏摘录、用户路径明文）永远不进入报告、收据或 Git。host 不支持 Unicode 时可去掉前导 emoji，固定文本、`（k=v, k=v）` 字段结构与值不得改变。
 
 ## Verification
 

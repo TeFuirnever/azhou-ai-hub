@@ -221,7 +221,7 @@ class CollectAgentHistoryTest(unittest.TestCase):
                 roots["codex"],
                 [
                     codex_message("user", "这个阶段做完了，整理文档"),
-                    codex_message("assistant", "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/repo"),
+                    codex_message("assistant", "🦊 阿舟 · Repo Pedant 启动（mode=reconcile, scope=/repo）"),
                     codex_message("assistant", "## 🦊 阿舟 · Repo-pedant receipt\n- Schema: repo-pedant.receipt.v2"),
                 ],
             )
@@ -239,7 +239,7 @@ class CollectAgentHistoryTest(unittest.TestCase):
                 roots["codex"],
                 [
                     codex_message("user", "这个阶段做完了，整理文档"),
-                    codex_message("assistant", "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/repo"),
+                    codex_message("assistant", "🦊 阿舟 · Repo Pedant 启动（mode=reconcile, scope=/repo）"),
                     codex_message("assistant", "## 🦊 阿舟 · Repo Pedant receipt\n- Schema: repo-pedant.receipt.v2"),
                 ],
             )
