@@ -44,6 +44,14 @@ class ExcalidrawBrandStartupTest(unittest.TestCase):
         self.assertIn("invalid:", out)
         self.assertIn("template placeholder in scope", out)
 
+    def test_nested_parentheses_in_scope_rejected(self) -> None:
+        code, out = run_validator(
+            PREFIX + "mode=create, deliverable=svg, scope=foo）bar（baz）\n"
+        )
+        self.assertEqual(1, code)
+        self.assertIn("invalid:", out)
+        self.assertIn("parenthesis in scope", out)
+
     def test_unresolved_before_lock_ok(self) -> None:
         code, out = run_validator(PREFIX + "mode=create, deliverable=svg, scope=unresolved）\n")
         self.assertEqual(0, code)

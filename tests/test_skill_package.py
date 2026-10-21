@@ -528,6 +528,7 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "benchmarks" / "super-repo-pedant" / "history" / "baseline-2026-08-23.json",
             ROOT / "benchmarks" / "super-repo-pedant" / "protocol" / "valid.execution.json",
             ROOT / "benchmarks" / "super-repo-pedant" / "protocol" / "prior-drift.execution.json",
+            ROOT / "benchmarks" / "super-repo-pedant" / "protocol" / "freeform-drift.execution.json",
             ROOT / "benchmarks" / "super-caveman" / "manifest.json",
             ROOT / "benchmarks" / "super-caveman" / "capability-map.json",
             ROOT / "benchmarks" / "super-caveman" / "trigger-cases.json",

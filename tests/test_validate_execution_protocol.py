@@ -63,7 +63,7 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         # and must stay parseable regardless of the console locale.
         env = dict(os.environ, PYTHONIOENCODING="cp1252")
         result = subprocess.run(
-            [sys.executable, str(SCRIPT), str(FIXTURES / "prior-drift.execution.json")],
+            [sys.executable, str(SCRIPT), str(FIXTURES / "freeform-drift.execution.json")],
             cwd=ROOT,
             text=True,
             encoding="utf-8",
@@ -77,13 +77,51 @@ class ValidateExecutionProtocolTest(unittest.TestCase):
         self.assertFalse(payload["valid"])
         self.assertTrue(payload["errors"])
 
-    def test_prior_freeform_brand_drift_is_rejected(self) -> None:
+    def test_prior_v1_record_is_rejected_at_the_schema_version_gate(self) -> None:
         result = self.run_validator(FIXTURES / "prior-drift.execution.json")
+        self.assertEqual(1, result.returncode)
+        errors = json.loads(result.stdout)["errors"]
+        self.assertTrue(any("schema_version" in error for error in errors))
+        self.assertTrue(any("retired pipe grammar" in error for error in errors))
+        self.assertTrue(
+            any("super-repo-pedant.execution.v2" in error for error in errors)
+        )
+
+    def test_v2_freeform_brand_drift_is_rejected(self) -> None:
+        result = self.run_validator(FIXTURES / "freeform-drift.execution.json")
         self.assertEqual(1, result.returncode)
         errors = json.loads(result.stdout)["errors"]
         self.assertTrue(any("events[0].message" in error for error in errors))
         self.assertTrue(any("inventory" in error for error in errors))
         self.assertTrue(any("verify_success" in error for error in errors))
+
+    def test_injected_duplicate_field_in_authority_is_rejected(self) -> None:
+        protocol = self.valid_fixture()
+        protocol["events"][1]["message"] = (
+            "🧭 范围锁定（authority=SKILL.md, projects=99, projects=1）"
+        )
+        result = self.run_validator(self.write_variant(protocol))
+        self.assertEqual(1, result.returncode)
+        errors = json.loads(result.stdout)["errors"]
+        self.assertTrue(
+            any("authority value must not contain the field delimiters" in error for error in errors)
+        )
+
+    def test_delimiter_inside_impact_value_is_rejected(self) -> None:
+        protocol = self.valid_fixture()
+        protocol["result"] = "failed"
+        protocol["checks"][-1]["status"] = "failed"
+        protocol["checks"][-1]["evidence"] = "Coverage tool returned an incomplete range."
+        protocol["events"][-1] = {
+            "stage": "verify_failure",
+            "message": "❌ 验证失败（check=coverage, impact=late evidence, injected=1）",
+        }
+        result = self.run_validator(self.write_variant(protocol))
+        self.assertEqual(1, result.returncode)
+        errors = json.loads(result.stdout)["errors"]
+        self.assertTrue(
+            any("impact value must not contain the field delimiters" in error for error in errors)
+        )
 
     def test_success_requires_every_check_and_must_be_last(self) -> None:
         protocol = self.valid_fixture()

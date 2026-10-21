@@ -35,6 +35,8 @@ def check(line: str, locked: bool) -> list[str]:
             errors.append(f"empty value for {key}")
         if "<" in value or ">" in value:
             errors.append(f"template placeholder in {key}: {value}")
+        if "（" in value or "）" in value:
+            errors.append(f"parenthesis in {key}: {value}")
         if value.strip() == "unresolved" and key == "scope" and locked:
             errors.append("scope=unresolved after requirement lock")
     return errors

@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "super-repo-pedant.execution.v1"
-LEGACY_SCHEMA_VERSION = "repo-pedant.execution.v1"
+SCHEMA_VERSION = "super-repo-pedant.execution.v2"
+RETIRED_SCHEMA_VERSIONS = ("super-repo-pedant.execution.v1", "repo-pedant.execution.v1")
 MODES = {"audit", "reconcile", "handoff", "evolve"}
 RESULTS = {"passed", "failed"}
 CHECK_STATUSES = {"passed", "not_applicable", "failed"}
@@ -21,13 +21,18 @@ BASE_STAGES = ("start", "scope", "inventory", "impact", "sync")
 VERIFY_STAGES = {"verify_failure", "verify_success"}
 ALL_STAGES = {*BASE_STAGES, *VERIFY_STAGES}
 CHECK_ID = re.compile(r"[a-z][a-z0-9_-]*")
+VALUE_DELIMITERS = ("（", "）", ", ")
 MESSAGE_PATTERNS = {
-    "scope": re.compile(r"🧭 范围锁定（authority=[^）]+, projects=[1-9][0-9]*）"),
+    "scope": re.compile(r"🧭 范围锁定（authority=([^）]+), projects=[1-9][0-9]*）"),
     "inventory": re.compile(r"🗂️ 清单完成（files=[0-9]+, holds=[0-9]+, out_of_scope=[0-9]+）"),
     "impact": re.compile(r"🕸️ 影响确认（surfaces=[0-9]+, consumers=[0-9]+）"),
     "sync": re.compile(r"🧹 同步完成（changed=(?:none|[0-9]+)）"),
-    "verify_failure": re.compile(r"❌ 验证失败（check=([a-z][a-z0-9_-]*), impact=[^）]+）"),
+    "verify_failure": re.compile(r"❌ 验证失败（check=([a-z][a-z0-9_-]*), impact=([^）]+)）"),
 }
+
+
+def _value_contains_delimiters(value: str) -> bool:
+    return any(token in value for token in VALUE_DELIMITERS)
 
 
 class ProtocolError(ValueError):
@@ -45,7 +50,13 @@ def validate_protocol(data: Any) -> list[str]:
     errors: list[str] = []
     if not isinstance(data, dict):
         return ["protocol: expected object"]
-    if data.get("schema_version") not in {SCHEMA_VERSION, LEGACY_SCHEMA_VERSION}:
+    schema = data.get("schema_version")
+    if schema in RETIRED_SCHEMA_VERSIONS:
+        errors.append(
+            f"schema_version: {schema} used the retired pipe grammar; "
+            f"re-emit the record as {SCHEMA_VERSION}"
+        )
+    elif schema != SCHEMA_VERSION:
         errors.append(f"schema_version: expected {SCHEMA_VERSION}")
 
     mode = data.get("mode")
@@ -125,8 +136,13 @@ def validate_protocol(data: Any) -> list[str]:
             match = pattern.fullmatch(message)
             if match is None:
                 errors.append(f"{label}.message: expected exact {stage} anchor and field grouping")
+            elif stage == "scope" and _value_contains_delimiters(match.group(1)):
+                errors.append(f"{label}.message: authority value must not contain the field delimiters")
             elif stage == "verify_failure":
-                failure_checks.append(match.group(1))
+                if _value_contains_delimiters(match.group(2)):
+                    errors.append(f"{label}.message: impact value must not contain the field delimiters")
+                else:
+                    failure_checks.append(match.group(1))
 
     base_sequence = [stage for stage in stages if stage in BASE_STAGES]
     if tuple(base_sequence) != BASE_STAGES:

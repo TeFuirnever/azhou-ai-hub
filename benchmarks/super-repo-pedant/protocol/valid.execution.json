@@ -1,5 +1,5 @@
 {
-  "schema_version": "super-repo-pedant.execution.v1",
+  "schema_version": "super-repo-pedant.execution.v2",
   "mode": "evolve",
   "scope": "super-repo-pedant",
   "result": "passed",
