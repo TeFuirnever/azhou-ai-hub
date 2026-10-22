@@ -1,0 +1,138 @@
+{
+  "schema": "azhou.brand-compliance.v1",
+  "generated_at": "2026-10-22",
+  "thresholds": {
+    "startup_lines": ">=95%",
+    "success_fail_hold_anchors": "100%"
+  },
+  "method": {
+    "startup": "assistant-emitted lines only; scored against scripts/check_repository.py SKILL_BRAND_CONTRACTS + paren-field grammar rules from validate_execution_protocol / check-brand-startup",
+    "anchors": "success/fail/hold and multi-stage anchors scored against brand-layer fixed prefixes and MESSAGE_PATTERNS where applicable",
+    "exclusion": "SKILL.md contract examples in user/api-request blobs are not counted as live emissions"
+  },
+  "sessions": {
+    "azhou-info": {
+      "skill": "azhou-info",
+      "kind": "foundation_single_stage",
+      "session_id": "c1927daa-cc46-4f69-8bb1-6ed4a50b75a4",
+      "lines": [
+        "🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）",
+        "✅ 验证通过（mode=info, scope=checkout）"
+      ],
+      "startup": {
+        "emitted": true,
+        "line": "🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）",
+        "errors": []
+      },
+      "anchors": [
+        {
+          "line": "✅ 验证通过（mode=info, scope=checkout）",
+          "errors": []
+        }
+      ]
+    },
+    "super-repo-pedant": {
+      "skill": "super-repo-pedant",
+      "kind": "multi_stage",
+      "session_id": "41226a0c-9d29-4b10-95d2-8c4c6cf849f9",
+      "lines": [
+        "🦊 阿舟 · Super Repo Pedant 启动（mode=audit, scope=<repo>/scripts/check_repository.py）",
+        "🧭 范围锁定（authority=user invocation, projects=1）",
+        "🗂️ 清单完成（files=1, holds=1, out_of_scope=1139）",
+        "🕸️ 影响确认（surfaces=8, consumers=20）",
+        "🧹 同步完成（changed=none）",
+        "🔒 阿舟暂停这一项（blocked=完整验证（gate 运行+六项 execution checks+validator）, missing_authority=本次运行受用户最小工具使用与单文件范围约束）"
+      ],
+      "startup": {
+        "emitted": true,
+        "line": "🦊 阿舟 · Super Repo Pedant 启动（mode=audit, scope=<repo>/scripts/check_repository.py）",
+        "errors": []
+      },
+      "anchors": [
+        {
+          "line": "🧭 范围锁定（authority=user invocation, projects=1）",
+          "errors": []
+        },
+        {
+          "line": "🗂️ 清单完成（files=1, holds=1, out_of_scope=1139）",
+          "errors": []
+        },
+        {
+          "line": "🕸️ 影响确认（surfaces=8, consumers=20）",
+          "errors": []
+        },
+        {
+          "line": "🧹 同步完成（changed=none）",
+          "errors": []
+        },
+        {
+          "line": "🔒 阿舟暂停这一项（blocked=完整验证（gate 运行+六项 execution checks+validator）, missing_authority=本次运行受用户最小工具使用与单文件范围约束）",
+          "errors": []
+        }
+      ]
+    },
+    "super-llm-wiki": {
+      "skill": "super-llm-wiki",
+      "kind": "multi_stage",
+      "session_id": "524096ff-5ba0-4f72-95e1-95d9b48a219d",
+      "lines": [
+        "🦊 阿舟 · Super LLM Wiki 启动（operation=list, scope=<repo>）",
+        "🧭 知识范围锁定（topic=full-store, sources=none, privacy=checked）",
+        "🔎 Wiki 检索完成（operation=list, matches=0, read_only=true）"
+      ],
+      "startup": {
+        "emitted": true,
+        "line": "🦊 阿舟 · Super LLM Wiki 启动（operation=list, scope=<repo>）",
+        "errors": []
+      },
+      "anchors": [
+        {
+          "line": "🧭 知识范围锁定（topic=full-store, sources=none, privacy=checked）",
+          "errors": []
+        },
+        {
+          "line": "🔎 Wiki 检索完成（operation=list, matches=0, read_only=true）",
+          "errors": []
+        }
+      ]
+    },
+    "eli5": {
+      "skill": "eli5",
+      "kind": "foundation_single_stage",
+      "session_id": "27b8bd6f-78dd-4b62-b235-c8848ad57112",
+      "lines": [
+        "🦊 阿舟 · 舟5 启动（mode=explain，scope=什么是 startup anchor）",
+        "🔒 阿舟暂停这一项（artifact=not written; cause=tiny run stops before write + read-back, so `✅ 验证通过` would be unproven）"
+      ],
+      "startup": {
+        "emitted": true,
+        "line": "🦊 阿舟 · 舟5 启动（mode=explain，scope=什么是 startup anchor）",
+        "errors": [
+          "display name mismatch: got '舟5' expected 'Eli5'",
+          "fullwidth comma inside field group",
+          "display identity must be Eli5"
+        ]
+      },
+      "anchors": [
+        {
+          "line": "🔒 阿舟暂停这一项（artifact=not written; cause=tiny run stops before write + read-back, so `✅ 验证通过` would be unproven）",
+          "errors": []
+        }
+      ]
+    }
+  },
+  "totals": {
+    "startup_emitted": 4,
+    "startup_compliant": 3,
+    "startup_compliance_rate": 0.75,
+    "startup_failures": [
+      "eli5"
+    ],
+    "anchors_scored": 9,
+    "anchors_compliant": 9,
+    "anchor_compliance_rate": 1.0,
+    "anchor_failures": [],
+    "threshold_startup_met": false,
+    "threshold_anchors_met": true
+  }
+}

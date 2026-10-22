@@ -1,0 +1,50 @@
+{
+  "claude-prompt.txt": {
+    "sha256_16": "6d61fa57a2745588",
+    "bytes": 535
+  },
+  "claude-session-1.jsonl": {
+    "sha256_16": "196d0c0f18980876",
+    "bytes": 93557
+  },
+  "claude-session-1.stderr": {
+    "sha256_16": "2122456c9827a04a",
+    "bytes": 94
+  },
+  "claude-session-2.json": {
+    "sha256_16": "95c28854a5eeda94",
+    "bytes": 2355
+  },
+  "claude-session-2.stderr": {
+    "sha256_16": "626ef8cc8f8ee86c",
+    "bytes": 104
+  },
+  "codex-session-1.last.md": {
+    "sha256_16": "dfd3432e08018d93",
+    "bytes": 1054
+  },
+  "codex-session-1.stderr": {
+    "sha256_16": "012fc91c7ada29f0",
+    "bytes": 4038
+  },
+  "codex-session-1.txt": {
+    "sha256_16": "2bfbf5871852a24b",
+    "bytes": 1055
+  },
+  "claude-azhou-info.json": {
+    "sha256_16": "7127dc48e9daea8a",
+    "bytes": 2417
+  },
+  "claude-eli5.json": {
+    "sha256_16": "1b3ce76710843d0d",
+    "bytes": 2422
+  },
+  "claude-llm-wiki.json": {
+    "sha256_16": "c8150caee9a36027",
+    "bytes": 2117
+  },
+  "claude-repo-pedant.json": {
+    "sha256_16": "10849d5d746bba84",
+    "bytes": 4797
+  }
+}

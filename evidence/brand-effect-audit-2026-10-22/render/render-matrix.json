@@ -1,0 +1,54 @@
+{
+  "anchors_source": "anchors.txt",
+  "renders": {
+    "plain": {
+      "chars": 336,
+      "utf8_bytes": 469,
+      "whitespace_tokens": 40,
+      "cjk_chars": 39,
+      "emoji_chars": 9
+    },
+    "markdown": {
+      "chars": 434,
+      "utf8_bytes": 569,
+      "whitespace_tokens": 61,
+      "cjk_chars": 39,
+      "emoji_chars": 9
+    },
+    "no_unicode": {
+      "chars": 319,
+      "utf8_bytes": 428,
+      "whitespace_tokens": 32,
+      "cjk_chars": 39,
+      "emoji_chars": 0
+    },
+    "chat_s1": {
+      "chars": 384,
+      "utf8_bytes": 517,
+      "whitespace_tokens": 48,
+      "cjk_chars": 39,
+      "emoji_chars": 9
+    }
+  },
+  "screenshots": [
+    "00-render-matrix.png",
+    "01-plain.png",
+    "02-markdown.png",
+    "03-no-unicode.png",
+    "04-chat-s1.png"
+  ],
+  "notes": {
+    "plain": "UTF-8 terminal with emoji retained; structure = exact protocol lines",
+    "markdown": "same lines in chat: structured anchors in code fences, narrative in blockquote",
+    "no_unicode": "emoji stripped per brand-layer Unicode fallback; fixed labels and （k=v, k=v） structure preserved",
+    "chat_s1": "S1 chat presentation: blockquote + bold labels; peel restores protocol core; no HTML color"
+  },
+  "screenshot_method": "headless Chrome file:// HTML capture; system font stack with color emoji",
+  "source_text": [
+    "anchors.txt",
+    "01-plain.txt",
+    "02-markdown.md",
+    "03-no-unicode.txt",
+    "04-chat-s1.txt"
+  ]
+}
