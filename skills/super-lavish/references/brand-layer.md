@@ -100,3 +100,13 @@ learning_signal: <repeated failure mechanism or none>
 ```
 
 Receipts prove current truth; they do not replace the artifact or the verification. `complete` requires `holds: none`. `complete_with_holds` lists the unresolved items, their owners, and a next action. `failed` names one executable repair. A local HTML file does not prove human review, a portable export, or publication. A returned URL is publication evidence only when the share command succeeded and the receipt records it.
+
+## 聊天展示层（S1）
+
+Markdown 聊天宿主里，本品牌层的过程播报包一层展示皮；剥掉行首 `>` 与成对 `**` 后必须还原协议核心。headless、CI、收据与机器字段只发协议核心。
+
+```text
+> 🦊 **阿舟 · Super Lavish 启动**（mode=artifact, scope=short scope）
+> ✅ **验证通过**（checks=artifact,review）
+> 🔒 **阿舟暂停这一项**
+```

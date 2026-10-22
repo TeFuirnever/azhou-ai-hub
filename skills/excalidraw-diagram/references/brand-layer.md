@@ -106,3 +106,13 @@ Emoji 是显示映射；右侧英文值才是稳定机器状态。
 - 不用 `✅` 表示只生成 JSON、只打开文件、未完成三轮审核或人工复核缺席。
 - artifact receipt 证明 bytes 和自动检查；它不能声称视觉复核已完成。
 - host 不支持 Unicode 时可移除 emoji；稳定字段、英文状态和值不能变化。
+
+## 聊天展示层（S1）
+
+Markdown 聊天宿主里，本品牌层的过程播报包一层展示皮；剥掉行首 `>` 与成对 `**` 后必须还原协议核心。headless、CI、收据与机器字段只发协议核心。
+
+```text
+> 🦊 **阿舟 · Excalidraw Diagram 启动**（mode=create, deliverable=svg, scope=diagram）
+> ✅ **验证通过**（checks=export,readback）
+> 🔒 **阿舟暂停这一项**
+```

@@ -22,6 +22,8 @@ Emit this exact display event once, at the start of every run, with the resolved
 
 Use `✅ 验证通过` only after the artifact is written to disk and read back. Use `❌ 验证失败` for a write or read-back failure and `🔒 阿舟暂停这一项` when the topic is missing or the request contradicts the eli5 boundary. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## Workflow
 
 1. Resolve the topic from the user's request or the trailing argument after the `/eli5` trigger; do not require a specific harness command syntax.

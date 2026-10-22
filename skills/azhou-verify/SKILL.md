@@ -22,6 +22,8 @@ Emit this exact display event once, at the start of every run, with the resolved
 
 Use `✅ 验证通过` only after the full gate exits successfully and its output is read back. Use `❌ 验证失败` for any failed or unavailable gate and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## Workflow
 
 1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.

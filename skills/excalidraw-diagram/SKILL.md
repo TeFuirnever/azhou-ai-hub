@@ -20,6 +20,7 @@ invocation: user-invoked orchestrator
 🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）
 ```
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1 chat presentation). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
 按需使用 `🧭 需求锁定`、`🔎 事实确认`、`✏️ 场景生成`、`🧪 审核第 n 轮`、`📦 交付完成` 和最终验证锚点。锚点只陈述真实进度。缺少权限或依赖时，用 `🔒 阿舟暂停这一项` 标记单项阻塞，继续不受影响的工作。
 
 Emoji 只属于展示层。文件名、JSON 字段、状态枚举、命令、digest、测试名和证据数据保持纯文本。

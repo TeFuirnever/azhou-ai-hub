@@ -24,6 +24,8 @@ Emit this exact display event once, at the start of every run, with the resolved
 
 Use `✅ 验证通过` only after the rewritten text is delivered and the deterministic lint check has actually run. Use `❌ 验证失败` when the rewrite cannot be delivered or the linter cannot run, and `🔒 阿舟暂停这一项` when the request contradicts the boundary: precision-critical material such as spec review, security analysis, migration plans, or numerical or contractual claims stays in its requesting mode instead of being degraded into a rewrite. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence such as conversation excerpts or user paths stays out of the receipt unless the user supplied it.
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## When to Use This Skill
 
 - An agent's output (explanation, instruction, log message, tool description) reads as dense, jargon-heavy, or ambiguous.

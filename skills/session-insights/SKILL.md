@@ -65,6 +65,8 @@ roast 是展示层 tone（`report --tone roast`，已发布）：`report` 与 `r
 
 `✅ 验证通过` 只在报告产物落盘并读回核对之后使用；`❌ 验证失败` 用于聚合 schema 校验失败或产物写读失败；`🔒 阿舟暂停这一项` 用于请求越界（如要求监控、外传或 roast 尚未发布的功能）。Emoji 只出现在展示层；JSON key、schema 值、digest、路径、命令、测试名与原始证据保持无 Emoji。原始证据（原始转写、未脱敏摘录、用户路径明文）永远不进入报告、收据或 Git。host 不支持 Unicode 时可去掉前导 emoji，固定文本、`（k=v, k=v）` 字段结构与值不得改变。
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## Verification
 
 运行收据为 `session-insights.report.v1`：schema、status、inputs（文件计数 + 排序后（相对路径摘要、mtime、大小）的复合 SHA-256，不含内容与明文绝对路径）、artifact 摘要、verification、holds、next action、learning signal。机器字段纯 ASCII，emoji 只在人读小节标题。报告口径的完整定义以 [report-contract](references/report-contract.md) 为准；接线完整性套件在仓库级 `benchmarks/session-insights/`，尚无行为 benchmark。

@@ -1,0 +1,65 @@
+{
+  "schema": "azhou.chat-s1-live.v1",
+  "generated_at": "2026-10-22",
+  "method": "Claude Code headless -p, Markdown chat host. Prompt required S1 per docs/skill-standard.md.",
+  "sessions": {
+    "azhou-info": {
+      "session_id": "8ba06b69-bfec-4bc1-bb90-28c170897f12",
+      "s1_startup_emitted": true,
+      "s1_success_emitted": true,
+      "peel_restores_protocol_core": true,
+      "samples": [
+        "> 🦊 **阿舟 · Azhou Info 启动**（mode=info, scope=checkout）",
+        "> ✅ **验证通过**"
+      ],
+      "peeled": [
+        "🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）",
+        "✅ 验证通过"
+      ]
+    },
+    "super-repo-pedant": {
+      "status": "timeout",
+      "note": "headless session exceeded 300s; no completion sample this run"
+    },
+    "super-llm-wiki": {
+      "session_id": "ffb86e85-3971-4d63-a3d2-805f0bfed698",
+      "status": "completed_without_brand_broadcast",
+      "s1_lines": [],
+      "finding": "Empty-store list run emitted no startup/stage anchors at all. S1 skin never applied because protocol broadcasts were omitted. Model obedience gap, not a peel failure.",
+      "result_excerpt": "Store 为空：.azhou/super-llm-wiki/ 下没有任何 wiki 页面，无可列条目。"
+    },
+    "super-llm-wiki_strict": {
+      "note": "startup-first prompt still omitted startup; later stage+hold did use S1 skin",
+      "s1_lines_observed": [
+        "> 🔎 **Wiki 检索完成**（operation=list, matches=0, read_only=true）",
+        "> 🔒 **阿舟暂停这一项**（action=write, missing=safe-input）"
+      ],
+      "startup_emitted": false
+    },
+    "super-llm-wiki_post_strength": {
+      "session_id": "26996f42-abe7-4113-b272-7f66284d23ae",
+      "startup_s1": true,
+      "s1_lines": [
+        "> 🦊 **阿舟 · Super LLM Wiki 启动**（operation=list, scope=/Users/guanxueliang/Desktop/oh-my-ai/azhou-ai-hub）",
+        "> 🧭 **知识范围锁定**（topic=full-store, sources=none, privacy=checked）",
+        "> 🔎 **Wiki 检索完成**（operation=list, matches=0, read_only=true）",
+        "> 📚 知识要留得住，也要经得起查证。",
+        "> ✅ **验证通过**（checks=wiki_list）"
+      ],
+      "peeled": [
+        "🦊 阿舟 · Super LLM Wiki 启动（operation=list, scope=/Users/guanxueliang/Desktop/oh-my-ai/azhou-ai-hub）",
+        "🧭 知识范围锁定（topic=full-store, sources=none, privacy=checked）",
+        "🔎 Wiki 检索完成（operation=list, matches=0, read_only=true）",
+        "📚 知识要留得住，也要经得起查证。",
+        "✅ 验证通过（checks=wiki_list）"
+      ]
+    }
+  },
+  "claim_boundary": "Proves one azhou-info headless chat session emitted S1 and peel restored the startup core. Does not prove multi-stage S1 rates, other harnesses, or long-run compliance.",
+  "summary": {
+    "azhou_info_s1": "PASS",
+    "super_llm_wiki_s1_pre_strength": "startup omitted",
+    "super_llm_wiki_s1_post_strength": "PASS startup+stages S1; peel restores cores",
+    "super_repo_pedant_s1": "UNVERIFIED (timeout)"
+  }
+}

@@ -24,6 +24,8 @@ Emit this exact display event once:
 
 Use `✅ 验证通过` only after the recommendation names a real canonical skill whose boundary fits the request. Use `❌ 验证失败` when no canonical skill fits and `🔒 阿舟暂停这一项` when the request is outside this hub's catalog entirely. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence stays out of receipts unless the user supplied it.
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## Route by intent
 
 The catalog below is generated from every canonical skill's frontmatter description — the same text a model router sees. Never edit the generated block by hand: change the owning skill's description, then run `python skills/ask-azhou/scripts/generate_routing_index.py` from the checkout root to regenerate; the repository gate fails on parity when the block drifts.

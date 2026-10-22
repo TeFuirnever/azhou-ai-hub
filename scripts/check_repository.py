@@ -726,6 +726,25 @@ def check_skill_brand_contract(root: Path) -> list[str]:
 
 
 MEMORY_CREDIT_FORMAT = "🧠 From <store> memory（<source>）— <content>"
+CHAT_PRESENTATION_MARKER = "聊天展示层（S1）"
+
+
+def peel_chat_presentation(line: str) -> str:
+    """Strip the S1 chat skin so the protocol core remains.
+
+    Removes a leading blockquote marker and paired bold markers. An unpaired
+    ``**`` leaves the line unchanged so callers can treat it as not peelable.
+    """
+    text = line.rstrip("\n")
+    if text.startswith("> "):
+        text = text[2:]
+    elif text.startswith(">"):
+        text = text[1:]
+    if text.count("**") % 2:
+        return line.rstrip("\n")
+    return text.replace("**", "")
+
+
 MEMORY_CREDIT_SURFACES = (
     "docs/skill-standard.md",
     "skills/super-llm-wiki/references/brand-layer.md",
@@ -768,6 +787,63 @@ def check_memory_credit_contract(root: Path) -> list[str]:
             continue
         if MEMORY_CREDIT_FORMAT not in text:
             errors.append(f"memory credit format missing: {relative}")
+        if CHAT_PRESENTATION_MARKER in text:
+            peelable = False
+            for line in text.splitlines():
+                if not (line.startswith("> ") and "🧠" in line):
+                    continue
+                peeled = peel_chat_presentation(line)
+                if (
+                    peeled.startswith("🧠 From ")
+                    and " memory（" in peeled
+                    and "—" in peeled
+                ):
+                    peelable = True
+                    break
+            if not peelable:
+                errors.append(f"chat presentation credit peel missing: {relative}")
+    return errors
+
+
+def check_chat_presentation_examples(root: Path) -> list[str]:
+    """S1 examples in the standard must peel back to protocol cores."""
+    path = root / "docs/skill-standard.md"
+    if not path.is_file():
+        return ["chat presentation surface missing: docs/skill-standard.md"]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"cannot read chat presentation surface: {exc}"]
+    if CHAT_PRESENTATION_MARKER not in text:
+        return ["chat presentation marker missing: docs/skill-standard.md"]
+    errors: list[str] = []
+    samples = [
+        (
+            "> 🦊 **阿舟 · Azhou Info 启动**（mode=info, scope=checkout）",
+            "🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）",
+        ),
+        (
+            "> 🧭 **范围锁定**（authority=user invocation, projects=1）",
+            "🧭 范围锁定（authority=user invocation, projects=1）",
+        ),
+        (
+            "> ✅ **验证通过**（checks=inventory,tests）",
+            "✅ 验证通过（checks=inventory,tests）",
+        ),
+        (
+            "> 🟡 **阿舟提醒** — 需要跑 super-repo-pedant 收尾吗？",
+            "🟡 阿舟提醒 — 需要跑 super-repo-pedant 收尾吗？",
+        ),
+        (
+            "> 🧠 **From 阿舟 memory（execution-protocol）—** validator pins stage order",
+            "🧠 From 阿舟 memory（execution-protocol）— validator pins stage order",
+        ),
+    ]
+    for decorated, core in samples:
+        if decorated not in text:
+            errors.append(f"chat presentation sample missing: {decorated}")
+        if peel_chat_presentation(decorated) != core:
+            errors.append(f"chat presentation peel mismatch: {decorated}")
     return errors
 
 
@@ -1079,6 +1155,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_memory_credit_contract(root))
+    errors.extend(check_chat_presentation_examples(root))
     errors.extend(check_legacy_broadcast_delimiter(files, root))
     errors.extend(check_router_coverage(root))
     errors.extend(check_router_generated_index(root))

@@ -70,6 +70,34 @@ fidelity 轴按与上游 skill 的血缘关系把 canonical skill 分为三类�
 6. checkpoint 只暂停缺少授权的动作，其他独立步骤继续。
 7. 结束时输出稳定收据：schema、status、current truth、artifacts/changes、verification、holds、next action、learning signal。收据属于机器证据层，不适用播报文法。
 
+### 聊天展示层（S1）
+
+协议字节是权威。在可判定的 Markdown 聊天宿主里，品牌播报要求包一层展示皮，使过程与来源在扫读时跳出来；皮只是显示层，不改协议语义。
+
+- 包皮范围：启动、阶段事件、成功/失败/hold、提醒、记忆署名。不包分析正文、JSON 收据、命令输出、原始证据、hook 控制消息。
+- 形状：`> <emoji> **<label>**<protocol-tail>`。`<protocol-tail>` 保持协议原文（全角括号字段组，或叙述事件的 ` — <content>`），字段名、分隔符与取值规则不变。
+- 剥皮可逆：去掉行首 `>`（及其后至多一个空格）并删除成对 `**` 后，必须逐字还原协议核心行。剥不动或剥后不还原，按文法违规处理。
+- 非 Markdown 宿主（headless、CI 日志、机器字段、收据正文、终端重定向）禁止装饰，只发协议核心。同一会话不得混用两种皮而不遵守宿主边界。
+- 无 Unicode 的 host 仍可去掉 emoji；`>` 与 `**` 同样去掉，只留协议核心。
+
+聊天态示例与剥皮结果：
+
+```text
+> 🦊 **阿舟 · Azhou Info 启动**（mode=info, scope=checkout）
+> 🧭 **范围锁定**（authority=user invocation, projects=1）
+> ✅ **验证通过**（checks=inventory,tests）
+> 🟡 **阿舟提醒** — 需要跑 super-repo-pedant 收尾吗？
+> 🧠 **From 阿舟 memory（execution-protocol）—** validator pins stage order
+```
+
+```text
+🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）
+🧭 范围锁定（authority=user invocation, projects=1）
+✅ 验证通过（checks=inventory,tests）
+🟡 阿舟提醒 — 需要跑 super-repo-pedant 收尾吗？
+🧠 From 阿舟 memory（execution-protocol）— validator pins stage order
+```
+
 Emoji 只存在于展示层。JSON key、schema enum、digest、路径、命令、测试名和原始证据保持稳定纯文本；不支持 Unicode 的 host 可移除 emoji，不能改机器字段和值。
 
 `scripts/check_repository.py` 的品牌合同覆盖全部 canonical skill：`SKILL.md` 内的身份与口号、精确启动格式、成功/失败/hold、原始证据边界、Unicode 降级与记忆署名缺一不可；身份与口号必须命中 `SKILL.md` 本身，品牌层只承载阶段事件协议，并拒绝 `｜` 旧分隔符在新播报面复现。新增 skill 必须同时进入 discovery 与品牌合同，否则仓库 gate 失败。

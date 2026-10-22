@@ -18,6 +18,7 @@ Emit once when the skill starts:
 🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）
 ```
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1 chat presentation). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
 Pick exactly one mode for each request:
 
 - `artifact` (default): build the review surface for the current request and run the browser feedback loop.

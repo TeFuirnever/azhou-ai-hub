@@ -41,6 +41,19 @@ Super Repo Pedant 的品牌感来自稳定、克制、可辨认的过程语言�
 
 这些格式是协议，不是文案示例。不能把 `（…）` 字段组去括号或改成方括号，不能把 ` — ` 叙述分隔改成冒号，不能把 `清单完成` 改成 `清单阶段`，不能把 `验证通过` 改成 `核心验证通过`。运行记录必须通过 [execution-protocol.md](execution-protocol.md) 的确定性 validator。
 
+## 聊天展示层（S1）
+
+Markdown 聊天宿主里，上述播报包一层展示皮；剥掉行首 `>` 与成对 `**` 后必须还原协议核心。headless、CI、收据与机器字段只发协议核心。
+
+```text
+> 🦊 **阿舟 · Super Repo Pedant 启动**（mode=audit, scope=/absolute/repo）
+> 🧭 **范围锁定**（authority=user invocation, projects=1）
+> 🗂️ **清单完成**（files=60, holds=0, out_of_scope=1）
+> 🔒 **阿舟暂停这一项**
+> 🟡 **阿舟提醒** — 需要跑 super-repo-pedant 收尾吗？
+> 🧠 **From 阿舟 memory（execution-protocol）—** <content>
+```
+
 推测完成只允许提醒一次：
 
 ```text
