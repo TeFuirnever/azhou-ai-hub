@@ -32,6 +32,7 @@ invocation: both
 🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）
 ```
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1 chat presentation). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
 五个基础阶段严格按 `start -> scope -> inventory -> impact -> sync` 各播报一次；验证失败可按失败尝试记录，成功最多一次且必须是最后事件。固定前缀、字段名和 `（k=v, k=v）` 字段结构不能改写，也不能插入“阶段”“核心”等词。checkpoint 使用 `🔒 阿舟暂停这一项`，但继续其他独立工作。
 
 品牌层不能进入 schema key、状态 enum、digest、命令、路径或原始证据。host 不支持 Unicode 时可去掉 emoji，但稳定字段和值不变。

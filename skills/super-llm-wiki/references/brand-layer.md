@@ -53,6 +53,18 @@ Super LLM Wiki 的品牌感来自克制、可信、可追溯的知识维护过�
 
 锚点只使用安全文件名、计数和枚举。不得把页面正文、查询片段、会话标识、用户路径之外的私有数据或来源内容拼进阶段消息。
 
+## 聊天展示层（S1）
+
+Markdown 聊天宿主里，过程词典中的播报包一层展示皮；剥掉行首 `>` 与成对 `**` 后必须还原协议核心。headless、CI、收据与机器字段只发协议核心。
+
+```text
+> 🦊 **阿舟 · Super LLM Wiki 启动**（operation=list, scope=/absolute/project）
+> 🧭 **知识范围锁定**（topic=full-store, sources=none, privacy=checked）
+> 🔎 **Wiki 检索完成**（operation=list, matches=0, read_only=true）
+> 🔒 **阿舟暂停这一项**（action=write, missing=safe-input）
+> 🧠 **From 阿舟 memory（wiki）—** <content>
+```
+
 ## 启动行取值纪律
 
 - 启动行是运行时播报：全角括号内每个字段填充当下已知的具体值；值尚无法命名时，唯一合法写法是机器稳定字面量 `unresolved`（如 `scope=unresolved`），`🧭 知识范围锁定` 事件回填具体值。

@@ -26,6 +26,8 @@ Emit this exact display event once, at the start of every run, with the resolved
 
 Use `✅ 验证通过` only after the delivered HTML's `finalize` (or standalone `deliver`) receipt reports every gate passed on this run. Use `❌ 验证失败` when a gate fails and the repair limit is reached, and `🔒 阿舟暂停这一项` when the request contradicts the boundary: numeric charts or dashboards stay ordinary work, and editable `.excalidraw` source scenes belong to excalidraw-diagram — say so and return the request instead of degrading it. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence such as conversation excerpts or user paths stays out of the receipt unless the user supplied it.
 
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
 ## Existing candidate handoff
 
 When the user supplies a frozen candidate, run `finalize` first as one CLI invocation. Its passing receipt completes the automated gates; follow any visual review recommendation under Delivery before claiming visual quality. For repair, follow step 5.

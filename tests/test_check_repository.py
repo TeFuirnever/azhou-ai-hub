@@ -11,12 +11,14 @@ from scripts.check_repository import (
     MEMORY_CREDIT_SURFACES,
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
+    check_chat_presentation_examples,
     check_command_surface,
     check_fidelity_axis,
     check_invocation_axis,
     check_legacy_broadcast_delimiter,
     check_markdown_links,
     check_memory_credit_contract,
+    peel_chat_presentation,
     check_public_boundaries,
     check_reference_script_paths,
     check_rename_residue,
@@ -773,6 +775,29 @@ class WorkflowExitCodePolicyTest(unittest.TestCase):
             if '|| echo "exit=' in line
         ]
         self.assertEqual([], offenders, "run steps must propagate failures instead of echoing past them")
+
+
+class ChatPresentationTest(unittest.TestCase):
+    def test_peel_chat_presentation_restores_protocol_core(self) -> None:
+        decorated = "> 🦊 **阿舟 · Azhou Info 启动**（mode=info, scope=checkout）"
+        core = "🦊 阿舟 · Azhou Info 启动（mode=info, scope=checkout）"
+        self.assertEqual(core, peel_chat_presentation(decorated))
+
+    def test_peel_chat_presentation_rejects_unpaired_bold(self) -> None:
+        line = "> 🧠 **From 阿舟 memory（page）— content"
+        self.assertEqual(line, peel_chat_presentation(line))
+
+    def test_chat_presentation_examples_pass_on_the_live_repo(self) -> None:
+        self.assertEqual([], check_chat_presentation_examples(ROOT))
+
+    def test_chat_presentation_examples_reject_a_missing_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "docs" / "skill-standard.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("# empty\n", encoding="utf-8")
+            errors = check_chat_presentation_examples(root)
+            self.assertIn("chat presentation marker missing: docs/skill-standard.md", errors)
 
 
 if __name__ == "__main__":

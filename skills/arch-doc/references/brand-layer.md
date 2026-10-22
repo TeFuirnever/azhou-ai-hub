@@ -41,3 +41,13 @@ learning_signal=<本次可沉淀的一条经验，或 n/a>
 ## Unicode 降级
 
 不支持 Unicode 的 host：`🦊 阿舟` 可省略，`✅ 验证通过` → `验证通过`，`❌ 验证失败` → `验证失败`，`🔒 阿舟暂停这一项` → `暂停`；模式行、收据字段与校验名不变。
+
+## 聊天展示层（S1）
+
+Markdown 聊天宿主里，本品牌层的过程播报包一层展示皮；剥掉行首 `>` 与成对 `**` 后必须还原协议核心。headless、CI、收据与机器字段只发协议核心。
+
+```text
+> 🦊 **阿舟 · Arch Doc 启动**（mode=review, scope=/absolute/repo）
+> ✅ **验证通过**（checks=inventory,links）
+> 🔒 **阿舟暂停这一项**
+```
