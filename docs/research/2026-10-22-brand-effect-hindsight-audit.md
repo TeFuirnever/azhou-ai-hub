@@ -89,7 +89,7 @@ Hindsight 的「可见品牌效果」= **钩子注入 banner（确定性）+ 模
 问题：display name 错写为「舟5」；字段分隔用了全角「，」而非「, 」
 ```
 
-打分明细：`evidence/brand-effect-audit-2026-10-22/brand-compliance-score.json`  
+打分明细：`evidence/brand-effect-audit-2026-10-22/brand-compliance-score.json`
 方法：只抽取 assistant 发射的锚点行（排除 SKILL.md 契约示例与 api-request 注入字节）；启动行对照 `scripts/check_repository.py` 的 `SKILL_BRAND_CONTRACTS` + 括号字段文法；多阶段锚点对照 `validate_execution_protocol.py` 的 `MESSAGE_PATTERNS` / brand-layer 固定前缀。
 
 **阈值对照**：启动行 75% < 95% → **启动行阈值未达成**；成功/失败/hold 9/9 = 100% → **锚点阈值达成**。
@@ -104,7 +104,7 @@ Hindsight 的「可见品牌效果」= **钩子注入 banner（确定性）+ 模
 
 ### 对抗探针（消费端拒绝）
 
-11 个故意违规样本（值内分隔符、混合文法、模板泄漏）全部被拒绝，0 漏拦。  
+11 个故意违规样本（值内分隔符、混合文法、模板泄漏）全部被拒绝，0 漏拦。
 证据：`evidence/brand-effect-audit-2026-10-22/adversarial-probes.json`
 
 覆盖面：
