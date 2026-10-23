@@ -26,7 +26,7 @@ SETUP_MD = ROOT / "skills" / "super-repo-pedant" / "references" / "setup.md"
 INVENTORY_PY = ROOT / "skills" / "super-repo-pedant" / "scripts" / "inventory_knowledge.py"
 AGENTS_MD = ROOT / "AGENTS.md"
 RESULTS = ROOT / "benchmarks" / "super-caveman" / "results"
-EXCALIDRAW_SKILL = ROOT / "skills" / "excalidraw-diagram" / "SKILL.md"
+EXCALIDRAW_SKILL = ROOT / "skills" / "super-excalidraw-diagram" / "SKILL.md"
 REPO_PEDANT_SKILL = ROOT / "skills" / "super-repo-pedant" / "SKILL.md"
 ARTIFACT_MODE = ROOT / "skills" / "super-lavish" / "references" / "artifact-mode.md"
 

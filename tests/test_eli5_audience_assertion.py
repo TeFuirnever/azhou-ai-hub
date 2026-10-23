@@ -1,11 +1,11 @@
-"""Deterministic audience read-back assertion for the eli5 artifact (u14).
+"""Deterministic audience read-back assertion for the super-eli5 artifact (u14).
 
 Covers three layers:
 
 1. behavior - the assertion script passes compliant artifacts and fails
    named non-compliance with deterministic violations and exit codes;
 2. determinism - identical input produces an identical verdict;
-3. wiring - the SKILL.md receipt contract (eli5.receipt.v2), the cited
+3. wiring - the SKILL.md receipt contract (super-eli5.receipt.v2), the cited
    script path, and the documented budgets match the script constants, so
    the receipt judgment layer cannot drift from the enforcement.
 """
@@ -22,7 +22,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "skills" / "eli5"
+PACKAGE = ROOT / "skills" / "super-eli5"
 SCRIPT = PACKAGE / "scripts" / "check_audience.py"
 SKILL_TEXT = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")
 
@@ -205,8 +205,8 @@ class AudienceAssertionBehaviorTest(unittest.TestCase):
 
 class AudienceAssertionWiringTest(unittest.TestCase):
     def test_receipt_contract_is_v2_with_audience_field(self) -> None:
-        self.assertIn("eli5.receipt.v2", SKILL_TEXT)
-        self.assertNotIn("eli5.receipt.v1", SKILL_TEXT)
+        self.assertIn("super-eli5.receipt.v2", SKILL_TEXT)
+        self.assertNotIn("super-eli5.receipt.v1", SKILL_TEXT)
         self.assertIn("- audience_assertion: pass | fail", SKILL_TEXT)
         self.assertIn("scripts/check_audience.py", SKILL_TEXT)
 

@@ -34,11 +34,11 @@ def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str
         ("super-caveman benchmark", super_caveman),
         (
             "excalidraw benchmark wiring",
-            [python, "benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],
+            [python, "benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],
         ),
         (
-            "session-insights benchmark wiring",
-            [python, "benchmarks/session-insights/benchmark.py", "check"],
+            "super-session-insights benchmark wiring",
+            [python, "benchmarks/super-session-insights/benchmark.py", "check"],
         ),
         ("working-tree whitespace", ["git", "diff", "--check"]),
         ("staged whitespace", ["git", "diff", "--cached", "--check"]),

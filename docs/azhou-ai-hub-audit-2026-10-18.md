@@ -102,18 +102,18 @@ lease_holder：azhou-audit-20261018
 |---|---:|---|---|
 | Foundation 与仓库 scripts | 8；7/0/1 | info、doctor、setup、receipt 生命周期、总门禁、运行状态辅助模块；现有真实临时目录测试与新 doctor 反例 | 新增独立安装全生命周期脚本未完成，见 V10 |
 | `.github` | 16；16/0/0 | CI、发布、覆盖率、fuzz、安全扫描和 Windows 验证工作流；失败状态独立检查 | 没有触发远端 Actions、发布或签名 |
-| `arch-doc` | 19；10/0/9 | 入口、生成/验证脚本、模板契约、演化及评审方法；现有测试 | 没有新模型撰写并完成人工验收的大型架构文档 |
-| `archify` | 144；6/0/138 | Azhou 包装层与边界、完整 vendor manifest 校验、真实 finalize/browser-check | 未逐行审计整个第三方运行时；本次仅一个 workflow 示例 |
-| `asd-ste100` | 7；3/0/4 | 指令、写作规则、确定性 linter 与现有回归 | 不证明自然语言改写的全部语义，也不是完整标准认证 |
-| `ask-azhou` | 4；3/0/1 | 路由入口、索引生成、未路由记录脚本和现有测试 | 未在每一种真实宿主运行路由到下游交付 |
-| `autoresearch` | 3；2/0/1 | 入口与 setup，外部 checkout、GPU、运行批准边界 | 未运行 GPU 实验；不证明训练效果 |
-| `azhou-info` | 3；1/0/2 | Skill 入口到共享 Foundation CLI | 独立安装入口不等于内置独立 CLI |
-| `azhou-doctor` | 4；2/0/2 | 入口、迁移契约与共享实现；第三方误报复验 | 不证明宿主信任、hook 已激活或浏览器依赖全部就绪 |
-| `azhou-setup` | 3；1/0/2 | 入口和共享实现；计划与生命周期参数交叉检查 | 新独立生命周期复验受阻；不代表现有测试未运行 |
-| `azhou-verify` | 4；2/0/2 | 入口、gate report 检查器和总门禁 | 不把结构门禁解释为所有模型效果验证 |
-| `eli5` | 4；2/0/2 | 入口与受众检查脚本、现有测试 | 未重新生成并评估一份模型解释产物 |
-| `excalidraw-diagram` | 507；19/0/488 | 一方图形辅助/转换/导出/检查脚本；官方 PNG/SVG 导出；评测收据反例 | 不穷举字体、库图标、所有图型、CJK 或视觉效果 |
-| `session-insights` | 5；4/0/1 | 入口、完整聚合/报告实现和契约；冷/热缓存与错误缓存、输出边界复验 | 没有扫描用户真实全部会话；zcode 不受支持仍保留 hold |
+| `super-arch-doc` | 19；10/0/9 | 入口、生成/验证脚本、模板契约、演化及评审方法；现有测试 | 没有新模型撰写并完成人工验收的大型架构文档 |
+| `super-archify` | 144；6/0/138 | Azhou 包装层与边界、完整 vendor manifest 校验、真实 finalize/browser-check | 未逐行审计整个第三方运行时；本次仅一个 workflow 示例 |
+| `super-asd-ste100` | 7；3/0/4 | 指令、写作规则、确定性 linter 与现有回归 | 不证明自然语言改写的全部语义，也不是完整标准认证 |
+| `super-ask-azhou` | 4；3/0/1 | 路由入口、索引生成、未路由记录脚本和现有测试 | 未在每一种真实宿主运行路由到下游交付 |
+| `super-autoresearch` | 3；2/0/1 | 入口与 setup，外部 checkout、GPU、运行批准边界 | 未运行 GPU 实验；不证明训练效果 |
+| `super-azhou-info` | 3；1/0/2 | Skill 入口到共享 Foundation CLI | 独立安装入口不等于内置独立 CLI |
+| `super-azhou-doctor` | 4；2/0/2 | 入口、迁移契约与共享实现；第三方误报复验 | 不证明宿主信任、hook 已激活或浏览器依赖全部就绪 |
+| `super-azhou-setup` | 3；1/0/2 | 入口和共享实现；计划与生命周期参数交叉检查 | 新独立生命周期复验受阻；不代表现有测试未运行 |
+| `super-azhou-verify` | 4；2/0/2 | 入口、gate report 检查器和总门禁 | 不把结构门禁解释为所有模型效果验证 |
+| `super-eli5` | 4；2/0/2 | 入口与受众检查脚本、现有测试 | 未重新生成并评估一份模型解释产物 |
+| `super-excalidraw-diagram` | 507；19/0/488 | 一方图形辅助/转换/导出/检查脚本；官方 PNG/SVG 导出；评测收据反例 | 不穷举字体、库图标、所有图型、CJK 或视觉效果 |
+| `super-session-insights` | 5；4/0/1 | 入口、完整聚合/报告实现和契约；冷/热缓存与错误缓存、输出边界复验 | 没有扫描用户真实全部会话；zcode 不受支持仍保留 hold |
 | `super-caveman` | 25；12/0/13 | 入口、压缩保护、三个适配器及重要引用；公开与私有证据门禁、既有真实尝试 | 没有新宿主信任/触发验收、盲保留集或成本收益实验 |
 | `super-lavish` | 8；6/0/2 | relay 状态、反馈、版本、账本、授权、轮询和外部运行时契约；现有测试 | 未下载/启动外部 Lavish 浏览器评审与轮询 |
 | `super-llm-wiki` | 11；7/0/4 | CLI、MCP、适配器、数据/归档/迁移规则；正常与失败链复验 | 不把 MCP 正常函数存在当成完整协议健壮性 |
@@ -189,7 +189,7 @@ lease_holder：azhou-audit-20261018
 
 **证据状态：已复现缺陷。** 项目承诺 `.azhou/<skill>` 状态约束在授权项目内、拒绝 symlink、目录 0700、文件 0600（`docs/skill-standard.md:34-39`）。但 Pedant 的 root 检查不覆盖后续所有 leaf/子目录写入，Session Insights 的默认报告路径也未执行同等级检查。
 
-**位置**：`skills/super-repo-pedant/scripts/manage_evolution.py:95-112,159-171,200-204,247-297`；`skills/session-insights/scripts/session_insights.py:172-197,859-868,1099-1100`。
+**位置**：`skills/super-repo-pedant/scripts/manage_evolution.py:95-112,159-171,200-204,247-297`；`skills/super-session-insights/scripts/session_insights.py:172-197,859-868,1099-1100`。
 
 **触发与后果**：把合成项目中的 `signals.jsonl` 链接到合成项目外的 sentinel，追加成功且外部文件增长；把 `candidates/` 链接到外部目录，候选创建在外部；把 `.azhou/session-insights` 链接到外部目录，默认报告仍成功写入。umask 022 下相关状态目录为 0755、文件为 0644，而不是契约要求的私有权限。触发要求调用者具有对应文件系统权限及项目状态可被预置；本次没有利用真实敏感文件，不声称远程攻击已发生。
 
@@ -223,7 +223,7 @@ lease_holder：azhou-audit-20261018
 
 ### F04 — P1｜绘图评测器和汇总器能把不合格证据升级为成功
 
-**证据状态：已复现缺陷。** 这是证据判定问题，不是本次参考图实际有视觉缺陷。评测器自己的文档要求具名视觉通过且无 defects，矩阵要求每个规定案例恰好一次 attempt-1（`benchmarks/excalidraw-diagram/ordinary-model-floor/benchmark.py:11-19,31-35`）。
+**证据状态：已复现缺陷。** 这是证据判定问题，不是本次参考图实际有视觉缺陷。评测器自己的文档要求具名视觉通过且无 defects，矩阵要求每个规定案例恰好一次 attempt-1（`benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py:11-19,31-35`）。
 
 **位置**：同文件 `140-166`、`248-277`。单项只检查视觉 status/reviewer，汇总又用更弱条件自行计算；矩阵判断使用集合包含关系且未验证 attempt。
 
@@ -261,7 +261,7 @@ lease_holder：azhou-audit-20261018
 
 **证据状态：已复现缺陷。** 缓存契约是可丢弃、坏缓存回退源扫描，不应让缓存变成可靠性依赖。
 
-**位置**：`skills/session-insights/scripts/session_insights.py:172-181,217-225,599`；`references/report-contract.md:40-46`。现有相关测试验证了损坏 JSON 的回退，但不充分验证每个已命中 entry 的结构。
+**位置**：`skills/super-session-insights/scripts/session_insights.py:172-181,217-225,599`；`references/report-contract.md:40-46`。现有相关测试验证了损坏 JSON 的回退，但不充分验证每个已命中 entry 的结构。
 
 **触发与后果**：保留匹配的 mtime/size，将 metadata 改为 `{}`。缓存外层仍可解码，命中后读取 `malformed_lines` 触发 KeyError，聚合退出 1。正常 cold/warm 合成结果一致，源会话没有变化，因此问题限于缓存 entry 的信任边界。
 
@@ -273,7 +273,7 @@ lease_holder：azhou-audit-20261018
 
 **证据状态：已复现缺陷，并存在跨文档契约冲突。** 独立 Skill root 可以包含第三方包，但迁移检查将“不是当前 Azhou canonical name”直接当作残留/陈旧路径。
 
-**位置**：`scripts/azhou_hub.py:1367-1421`，尤其非 canonical 名称及配置路径判断；`skills/azhou-doctor/references/host-migration.md:7-18,29-39`。该迁移文档本身也描述了过宽扫描规则，不能只改实现而保留错误用户预期。
+**位置**：`scripts/azhou_hub.py:1367-1421`，尤其非 canonical 名称及配置路径判断；`skills/super-azhou-doctor/references/host-migration.md:7-18,29-39`。该迁移文档本身也描述了过宽扫描规则，不能只改实现而保留错误用户预期。
 
 **触发与后果**：合成 host 中存在合法的 `tdd/SKILL.md` 及真实存在的 `skills/tdd/scripts/notice.py` hook，doctor 仍返回失败。用户可能因此对无问题的第三方安装做不必要迁移。Doctor 保持只读，本次没有删除或改写任何 host 文件。
 
@@ -305,9 +305,9 @@ lease_holder：azhou-audit-20261018
 
 ### F11 — P3｜部分生效指令与真实 CLI/安装路径不一致
 
-**证据状态：源码/契约直接证实；未完成独立执行复现。** `azhou-setup` 的工作流先列 setup、repair、migrate、uninstall，然后统一要求追加 `--apply --plan-id`，而后面三种命令的 parser 并不支持 `--plan-id`。
+**证据状态：源码/契约直接证实；未完成独立执行复现。** `super-azhou-setup` 的工作流先列 setup、repair、migrate、uninstall，然后统一要求追加 `--apply --plan-id`，而后面三种命令的 parser 并不支持 `--plan-id`。
 
-**位置**：`skills/azhou-setup/SKILL.md:29-35`；`scripts/azhou_hub.py:1446-1458`；与此相比，`docs/foundations.md:116-133` 给出了不带该参数的正确生命周期命令。另外 `skills/super-lavish/references/artifact-mode.md:68` 仍将安装目录称为 `skills/lavish/`，与当前 canonical 包名不一致。
+**位置**：`skills/super-azhou-setup/SKILL.md:29-35`；`scripts/azhou_hub.py:1446-1458`；与此相比，`docs/foundations.md:116-133` 给出了不带该参数的正确生命周期命令。另外 `skills/super-lavish/references/artifact-mode.md:68` 仍将安装目录称为 `skills/lavish/`，与当前 canonical 包名不一致。
 
 **后果与边界**：忠实按提示词追加参数会被 argparse 拒绝；跟随旧目录会找不到 helper。这不是授权绕过，也不是需要扩展新 CLI 能力的理由。新增安装全流程脚本未完成，不能将其失败当成本项运行证据。
 
@@ -317,7 +317,7 @@ lease_holder：azhou-audit-20261018
 
 ### 7.1 机制存在到哪一步
 
-项目允许改变 instructions、references、templates 或确定性脚本，但要求先有失败证据与回归、隔离 candidate、评审、人工 exact-diff 批准；正常回退是显式仓库变更，而不是后台自己撤销 live skill。知识新增、使用计数或健康趋势只是线索，不自动成为推广权。（`GOVERNANCE.md:33-35`；`skills/super-repo-pedant/references/history-evolution.md:103-143`；`skills/excalidraw-diagram/references/evolution-contract.md:18-43`）
+项目允许改变 instructions、references、templates 或确定性脚本，但要求先有失败证据与回归、隔离 candidate、评审、人工 exact-diff 批准；正常回退是显式仓库变更，而不是后台自己撤销 live skill。知识新增、使用计数或健康趋势只是线索，不自动成为推广权。（`GOVERNANCE.md:33-35`；`skills/super-repo-pedant/references/history-evolution.md:103-143`；`skills/super-excalidraw-diagram/references/evolution-contract.md:18-43`）
 
 本次没有把“没有自动写代码/发布”列为缺陷。真正需要修复的是 F01–F04 这类已经声明要负责的状态和判定环节。
 
@@ -422,8 +422,8 @@ python "$A/repro_runtime.py"
 python "$A/repro_evidence_gate.py"
 
 env ARCHIFY_UPDATE_CHECK_DISABLED=1 \
-  node skills/archify/bin/archify.mjs finalize workflow \
-  skills/archify/examples/agent-tool-call.workflow.json \
+  node skills/super-archify/bin/archify.mjs finalize workflow \
+  skills/super-archify/examples/agent-tool-call.workflow.json \
   "$A/archify/workflow.html" --quality showcase --json \
   --out-dir "$A/archify/browser"
 
@@ -432,15 +432,15 @@ env SUPER_CAVEMAN_APPROVAL_RECORD="$P/raw-approval-20261006T141525Z.json" \
   python scripts/verify.py --promotion-evidence --print-summary
 
 env PLAYWRIGHT_BROWSERS_PATH=/Users/guanxueliang/Library/Caches/ms-playwright \
-  "$O/skills/excalidraw-diagram/references/.venv/bin/python" \
-  skills/excalidraw-diagram/references/render_excalidraw.py \
-  benchmarks/excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw \
+  "$O/skills/super-excalidraw-diagram/references/.venv/bin/python" \
+  skills/super-excalidraw-diagram/references/render_excalidraw.py \
+  benchmarks/super-excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw \
   --output "$A/excalidraw/reference.png"
 
 env PLAYWRIGHT_BROWSERS_PATH=/Users/guanxueliang/Library/Caches/ms-playwright \
-  "$O/skills/excalidraw-diagram/references/.venv/bin/python" \
-  skills/excalidraw-diagram/scripts/export-official-svg.py \
-  benchmarks/excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw \
+  "$O/skills/super-excalidraw-diagram/references/.venv/bin/python" \
+  skills/super-excalidraw-diagram/scripts/export-official-svg.py \
+  benchmarks/super-excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw \
   "$A/excalidraw/reference.svg" --png "$A/excalidraw/reference.official.png"
 ```
 

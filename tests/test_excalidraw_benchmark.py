@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-BENCHMARK = ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "benchmark.py"
+BENCHMARK = ROOT / "benchmarks" / "super-excalidraw-diagram" / "ordinary-model-floor" / "benchmark.py"
 REFERENCE = BENCHMARK.parent / "fixtures" / "reference"
 
 
@@ -26,7 +26,7 @@ class ExcalidrawBenchmarkTest(unittest.TestCase):
         self.assertIn("5 cases", result.stdout)
 
     def test_setup_is_harness_neutral_and_preview_first(self) -> None:
-        setup = (ROOT / "skills" / "excalidraw-diagram" / "references" / "setup.md").read_text(encoding="utf-8")
+        setup = (ROOT / "skills" / "super-excalidraw-diagram" / "references" / "setup.md").read_text(encoding="utf-8")
         self.assertIn("uv sync --frozen --dry-run", setup)
         self.assertIn("npm ci --dry-run --ignore-scripts", setup)
         self.assertIn("pipx install uv", setup)

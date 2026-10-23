@@ -12,28 +12,28 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "super-repo-pedant"
 SKILL = SKILL_DIR / "SKILL.md"
 AZHOU_SKILL_NAMES = (
-    "azhou-doctor",
-    "azhou-info",
-    "azhou-setup",
-    "azhou-verify",
+    "super-azhou-doctor",
+    "super-azhou-info",
+    "super-azhou-setup",
+    "super-azhou-verify",
 )
 SUPER_CAVEMAN_DIR = ROOT / "skills" / "super-caveman"
 LLM_WIKI_DIR = ROOT / "skills" / "super-llm-wiki"
 LAVISH_DIR = ROOT / "skills" / "super-lavish"
-TASK_SKILL_NAMES = ("eli5", "autoresearch")
+TASK_SKILL_NAMES = ("super-eli5", "super-autoresearch")
 SKILL_DIRS = (
     SKILL_DIR,
-    ROOT / "skills" / "excalidraw-diagram",
+    ROOT / "skills" / "super-excalidraw-diagram",
     SUPER_CAVEMAN_DIR,
     LLM_WIKI_DIR,
     LAVISH_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
-    ROOT / "skills" / "ask-azhou",
-    ROOT / "skills" / "arch-doc",
-    ROOT / "skills" / "archify",
-    ROOT / "skills" / "session-insights",
-    ROOT / "skills" / "asd-ste100",
+    ROOT / "skills" / "super-ask-azhou",
+    ROOT / "skills" / "super-arch-doc",
+    ROOT / "skills" / "super-archify",
+    ROOT / "skills" / "super-session-insights",
+    ROOT / "skills" / "super-asd-ste100",
 )
 
 
@@ -202,10 +202,10 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("i-have-adhd-MIT.txt", notices)
     def test_public_readmes_expose_the_foundation_skill_contract(self) -> None:
         command_map = {
-            "azhou-info": ("info", "version"),
-            "azhou-doctor": ("doctor",),
-            "azhou-setup": ("setup", "repair", "migrate", "uninstall"),
-            "azhou-verify": ("verify",),
+            "super-azhou-info": ("info", "version"),
+            "super-azhou-doctor": ("doctor",),
+            "super-azhou-setup": ("setup", "repair", "migrate", "uninstall"),
+            "super-azhou-verify": ("verify",),
         }
         readmes = {
             "English": (ROOT / "README.md").read_text(encoding="utf-8"),
@@ -254,10 +254,10 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_provenance_contract_stays_reproducible(self) -> None:
         notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         provenance = (
-            ROOT / "skills" / "excalidraw-diagram" / "references" / "provenance.md"
+            ROOT / "skills" / "super-excalidraw-diagram" / "references" / "provenance.md"
         ).read_text(encoding="utf-8")
         diagram_types = (
-            ROOT / "skills" / "excalidraw-diagram" / "references" / "diagram-types.md"
+            ROOT / "skills" / "super-excalidraw-diagram" / "references" / "diagram-types.md"
         ).read_text(encoding="utf-8")
         github_license_path = ROOT / "LICENSES" / "GitHub-Awesome-Copilot-MIT.txt"
 
@@ -290,7 +290,7 @@ class SkillPackageTest(unittest.TestCase):
             self.assertNotRegex(text, r"\b(?:30|60) seconds\b|(?:30|60) 秒", str(path))
 
     def test_azhou_setup_optional_support_is_link_only_and_bounded(self) -> None:
-        skill = (ROOT / "skills" / "azhou-setup" / "SKILL.md").read_text(encoding="utf-8")
+        skill = (ROOT / "skills" / "super-azhou-setup" / "SKILL.md").read_text(encoding="utf-8")
         cli = (ROOT / "scripts" / "azhou_hub.py").read_text(encoding="utf-8")
 
         self.assertIn("optional_support", skill)
@@ -446,7 +446,7 @@ class SkillPackageTest(unittest.TestCase):
             self.assertIn(phrase, standard)
 
     def test_excalidraw_brand_and_evolution_cover_the_shared_lifecycle(self) -> None:
-        package = ROOT / "skills" / "excalidraw-diagram"
+        package = ROOT / "skills" / "super-excalidraw-diagram"
         skill = (package / "SKILL.md").read_text(encoding="utf-8")
         brand = (package / "references" / "brand-layer.md").read_text(encoding="utf-8")
         history = (package / "references" / "history-evolution.md").read_text(encoding="utf-8")
@@ -463,7 +463,7 @@ class SkillPackageTest(unittest.TestCase):
             "🔒 阿舟暂停这一项",
         ):
             self.assertIn(anchor, brand)
-        self.assertIn("excalidraw-diagram.receipt.v1", brand)
+        self.assertIn("super-excalidraw-diagram.receipt.v1", brand)
         self.assertIn("(references/brand-layer.md)", skill)
         for runtime in ("Codex", "Claude", "zcode"):
             self.assertIn(runtime, history)
@@ -472,7 +472,7 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("不能写 live", evolution)
 
     def test_excalidraw_uses_one_canonical_public_motto(self) -> None:
-        package = ROOT / "skills" / "excalidraw-diagram"
+        package = ROOT / "skills" / "super-excalidraw-diagram"
         skill = (package / "SKILL.md").read_text(encoding="utf-8")
         brand = (package / "references" / "brand-layer.md").read_text(encoding="utf-8")
         motto = "先让结构讲清关系，再让文字补充证据。"
@@ -483,7 +483,7 @@ class SkillPackageTest(unittest.TestCase):
         self.assertNotIn("图要可编辑，也要把关系说清楚。", brand)
 
     def test_excalidraw_export_example_matches_locked_runtime_and_cli(self) -> None:
-        package = ROOT / "skills" / "excalidraw-diagram"
+        package = ROOT / "skills" / "super-excalidraw-diagram"
         skill = (package / "SKILL.md").read_text(encoding="utf-8")
         exporter = (package / "scripts" / "export-official-svg.py").read_text(encoding="utf-8")
         self.assertIn('cd "$SKILL_DIR/references"', skill)
@@ -499,10 +499,10 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "README.md",
             ROOT / "CONTRIBUTING.md",
             ROOT / "docs" / "skill-standard.md",
-            ROOT / "docs" / "excalidraw-diagram.md",
+            ROOT / "docs" / "super-excalidraw-diagram.md",
             ROOT / "benchmarks" / "super-repo-pedant" / "README.md",
-            ROOT / "benchmarks" / "excalidraw-diagram" / "README.md",
-            ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "README.md",
+            ROOT / "benchmarks" / "super-excalidraw-diagram" / "README.md",
+            ROOT / "benchmarks" / "super-excalidraw-diagram" / "ordinary-model-floor" / "README.md",
             ROOT / "evidence" / "README.md",
         ):
             text = document.read_text(encoding="utf-8")
@@ -540,8 +540,8 @@ class SkillPackageTest(unittest.TestCase):
             ROOT / "benchmarks" / "super-caveman" / "results" / "revision-e1eef218-attempt-1-summary.json",
             ROOT / "benchmarks" / "super-caveman" / "results" / "revision-f3ab4d37-attempt-1-summary.json",
             *(ROOT / "benchmarks" / "super-repo-pedant" / "cases").glob("*.case.json"),
-            ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "manifest.json",
-            *(ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "cases").glob("*.case.json"),
+            ROOT / "benchmarks" / "super-excalidraw-diagram" / "ordinary-model-floor" / "manifest.json",
+            *(ROOT / "benchmarks" / "super-excalidraw-diagram" / "ordinary-model-floor" / "cases").glob("*.case.json"),
         ]
         for path in paths:
             self.assertIsInstance(json.loads(path.read_text(encoding="utf-8")), (list, dict))

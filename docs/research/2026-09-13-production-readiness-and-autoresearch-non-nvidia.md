@@ -137,7 +137,7 @@
 
 ### B.1 上游 pinned commit 实际包含什么
 
-对象：`karpathy/autoresearch` @ `228791fb499afffb54b46200aca536f79142f117`（`skills/autoresearch/references/setup.md` 与 `provenance.md` 记录的 pin）。文件树经 GitHub API 实查共 10 个文件：`.gitignore`、`.python-version`（内容 `3.10`）、`README.md`、`analysis.ipynb`、`prepare.py`、`program.md`、`progress.png`、`pyproject.toml`、`train.py`、`uv.lock`（https://api.github.com/repos/karpathy/autoresearch/git/trees/228791fb499afffb54b46200aca536f79142f117 ）。树内**没有 LICENSE 文件**（与 `skills/autoresearch/references/provenance.md` 的记录一致；GitHub repo API 的 license 字段为 null，已验证）。README 声明仓库实质只有三个文件：`prepare.py`（固定数据准备/评测，禁改）、`train.py`（agent 唯一可改的训练单文件）、`program.md`（agent 指令）；训练目标是 nanochat 的单 GPU 简化版，固定 5 分钟墙钟预算，指标 `val_bpb`。
+对象：`karpathy/autoresearch` @ `228791fb499afffb54b46200aca536f79142f117`（`skills/super-autoresearch/references/setup.md` 与 `provenance.md` 记录的 pin）。文件树经 GitHub API 实查共 10 个文件：`.gitignore`、`.python-version`（内容 `3.10`）、`README.md`、`analysis.ipynb`、`prepare.py`、`program.md`、`progress.png`、`pyproject.toml`、`train.py`、`uv.lock`（https://api.github.com/repos/karpathy/autoresearch/git/trees/228791fb499afffb54b46200aca536f79142f117 ）。树内**没有 LICENSE 文件**（与 `skills/super-autoresearch/references/provenance.md` 的记录一致；GitHub repo API 的 license 字段为 null，已验证）。README 声明仓库实质只有三个文件：`prepare.py`（固定数据准备/评测，禁改）、`train.py`（agent 唯一可改的训练单文件）、`program.md`（agent 指令）；训练目标是 nanochat 的单 GPU 简化版，固定 5 分钟墙钟预算，指标 `val_bpb`。
 
 README 的平台声明（原文，https://raw.githubusercontent.com/karpathy/autoresearch/228791fb499afffb54b46200aca536f79142f117/README.md ）：
 
@@ -177,7 +177,7 @@ README 的平台声明（原文，https://raw.githubusercontent.com/karpathy/aut
 - `torch==2.9.1`，且 `[tool.uv.sources]` 把 torch 强制指到显式 index `pytorch-cu128`（https://download.pytorch.org/whl/cu128 ）。该 index 上 torch 2.9.1 的 wheel 只有 manylinux（x86_64/aarch64）与 win_amd64 三类，**macOS wheel 为零**（index 页实查：linux 28 个、win_amd64 14 个、macosx 0 个）。据此推断：在 macOS 上按 pin 的 `uv sync --locked` 连 torch 都解析不到 wheel（推断依据：uv 显式 index 语义 + 已验证的 wheel 清单；未实机复现）。
 - 隐含结论：这个锁不仅是“运行时假设 CUDA”，是“**安装期**就锁定 CUDA 构建的 PyTorch”。
 
-一个容易误读的点：上游代码本身**从不调用 `nvidia-smi`**。`nvidia-smi` 探针是 hub wrapper 自己的预备检查（`skills/autoresearch/references/setup.md` 的最小环境表），上游的做法更简单——不检查，直接在 import 期崩。两者的失败面不同：wrapper 在任何步骤前就能拦住，上游会跑到 Python import 才炸。
+一个容易误读的点：上游代码本身**从不调用 `nvidia-smi`**。`nvidia-smi` 探针是 hub wrapper 自己的预备检查（`skills/super-autoresearch/references/setup.md` 的最小环境表），上游的做法更简单——不检查，直接在 import 期崩。两者的失败面不同：wrapper 在任何步骤前就能拦住，上游会跑到 Python import 才炸。
 
 ### B.3 对照：父项目 nanochat 的平台支持（默认分支 master，2026-09-13 抓取）
 
@@ -211,9 +211,9 @@ autoresearch 的训练目标简化自 nanochat；nanochat 在同一批“CUDA �
 
 ### B.5 hub wrapper 的现有合同与回据
 
-- `skills/autoresearch/SKILL.md`：workflow 第 1-2 步要求 pin 校验与 `mode=prepare` 环境，“Every missing check fails closed; no partial state is reported as ready”；无任何 CUDA-ready 状态可以在非 NVIDIA 主机上产生。
-- `skills/autoresearch/references/setup.md`：最小环境表第一行 “NVIDIA CUDA GPU; the upstream README documents a single-GPU setup tested on H100, and **other GPUs are unverified**”，检查 `nvidia-smi`，失败边界 “fail closed ... do not start a CPU fallback run”。
-- `skills/autoresearch/references/provenance.md`：上游无 LICENSE → 零上游字节 vendor，实验协议运行时从用户 checkout 读取。
+- `skills/super-autoresearch/SKILL.md`：workflow 第 1-2 步要求 pin 校验与 `mode=prepare` 环境，“Every missing check fails closed; no partial state is reported as ready”；无任何 CUDA-ready 状态可以在非 NVIDIA 主机上产生。
+- `skills/super-autoresearch/references/setup.md`：最小环境表第一行 “NVIDIA CUDA GPU; the upstream README documents a single-GPU setup tested on H100, and **other GPUs are unverified**”，检查 `nvidia-smi`，失败边界 “fail closed ... do not start a CPU fallback run”。
+- `skills/super-autoresearch/references/provenance.md`：上游无 LICENSE → 零上游字节 vendor，实验协议运行时从用户 checkout 读取。
 - 回据（已验证存在且内容一致）：`evidence/autoresearch-load-fail-closed-zcode-2026-09-03.md`（Apple M5，`nvidia-smi` 缺失，prepare 停在 CUDA 检查，receipt `status: fail`）与 `evidence/autoresearch-load-fail-closed-codex-2026-09-04.md`（`nvidia-smi` exit 127，同结论）。`docs/support-matrix.md` 的对应行把第三列写成 “host-dependent; requires ... NVIDIA CUDA GPU and uv”。
 
 ### B.6 三个选项的对照结论

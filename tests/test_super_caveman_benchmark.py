@@ -143,6 +143,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         self.assertEqual(120, contract["execution"]["timeout_seconds_per_case"])
         self.assertEqual(2, contract["execution"]["concurrency"])
         self.assertIn("exclude only generated __pycache__, .pyc, and .pyo", contract["runtime"]["skill_tree_digest"])
+        self.assertIn("frontmatter", contract["runtime"]["skill_tree_digest"])
         self.assertFalse(contract["execution"]["tool_permissions"]["default"]["repository_write"])
         self.assertEqual(
             "disposable fixture only",
@@ -282,13 +283,38 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
     RULES_DIGEST = "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17"
 
     def _invariance_fixtures(self, tamper: bool) -> tuple[dict, dict, dict]:
+        import hashlib
         import subprocess
+        import sys
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+
+        body = benchmark._frontmatter_body
+
         base_commit = subprocess.run(
             ["git", "rev-parse", "HEAD~1"], cwd=ROOT, capture_output=True, text=True, check=True
         ).stdout.strip()
         context = ["SKILL.md", "references/modes.md", "references/brand-layer.md"]
         declared = {}
         for rel in context:
+            if rel == "SKILL.md":
+                base_data = subprocess.run(
+                    ["git", "show", f"{base_commit}:skills/super-caveman/SKILL.md"],
+                    cwd=ROOT, capture_output=True, check=True,
+                ).stdout
+                head_data = (ROOT / "skills/super-caveman/SKILL.md").read_bytes()
+                base_value = hashlib.sha256(body(base_data)).hexdigest()
+                head_value = hashlib.sha256(body(head_data)).hexdigest()
+                if tamper:
+                    head_value = "0" * 64
+                declared[rel] = {
+                    "base_body_sha256": base_value,
+                    "candidate_body_sha256": head_value,
+                }
+                continue
             base_blob = subprocess.run(
                 ["git", "rev-parse", f"{base_commit}:skills/super-caveman/{rel}"],
                 cwd=ROOT, capture_output=True, text=True, check=True,
@@ -313,7 +339,7 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
         }
         approval = {
             "reviewed_blobs": [
-                {"path": "skills/super-caveman/scripts/claude_adapter.py", "old_oid": "b" * 40, "new_oid": "c" * 40}
+                {"path": "skills/super-caveman/references/setup.md", "old_oid": "b" * 40, "new_oid": "c" * 40}
             ],
             "base_commit": base_commit,
         }
@@ -335,6 +361,21 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             sys.path.pop(0)
         result, paired, approval, promotion = self._invariance_fixtures(tamper=False)
         self.assertTrue(benchmark._invariance_pathway_valid(result, paired, approval, promotion))
+
+    def test_invariance_pathway_rejects_runtime_script_changes(self) -> None:
+        sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
+        try:
+            import benchmark
+        finally:
+            sys.path.pop(0)
+        result, paired, approval, promotion = self._invariance_fixtures(tamper=False)
+        approval = {
+            "reviewed_blobs": [
+                {"path": "skills/super-caveman/scripts/claude_adapter.py", "old_oid": "b" * 40, "new_oid": "c" * 40}
+            ],
+            "base_commit": approval["base_commit"],
+        }
+        self.assertFalse(benchmark._invariance_pathway_valid(result, paired, approval, promotion))
 
     def test_invariance_pathway_rejects_changed_producer_context(self) -> None:
         sys.path.insert(0, str(ROOT / "benchmarks/super-caveman"))
@@ -1672,6 +1713,8 @@ class SuperCavemanBenchmarkTest(unittest.TestCase):
             benchmark, "committed_review_digests", return_value=None
         ), mock.patch.object(
             benchmark, "committed_review_digests_from_blobs", return_value=None
+        ), mock.patch.object(
+            benchmark, "reviewed_blob_snapshot_matches", return_value=True
         ):
             errors = benchmark.check(require_promotion_evidence=False)
 

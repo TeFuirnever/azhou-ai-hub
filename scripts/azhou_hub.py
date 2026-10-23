@@ -36,7 +36,7 @@ IGNORED_PACKAGE_PARTS = {".git", ".omc", ".omx", ".venv", "__pycache__", "node_m
 HOST_CONFIG_SUFFIXES = {".json", ".toml"}
 HOST_SKILL_PATH_PATTERN = re.compile(r"skills/([A-Za-z0-9][A-Za-z0-9_.-]*)/")
 # Canonical renames whose host-side wiring is known to be left behind;
-# skills/azhou-doctor/references/host-migration.md keeps the human table.
+# skills/super-azhou-doctor/references/host-migration.md keeps the human table.
 KNOWN_RENAMES = {
     "ci-test-reliability": "super-ci-test-reliability",
     "prose-standard": "super-prose-standard",
@@ -318,7 +318,7 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
         "support_matrix": "docs/support-matrix.md",
         "runtime_state": {
             "root": ".azhou",
-            "namespaces": ["ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
+            "namespaces": ["super-ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
             "compatibility_sources": [
                 ".azhou-ai-hub/receipts",
                 ".azhou/llm-wiki",

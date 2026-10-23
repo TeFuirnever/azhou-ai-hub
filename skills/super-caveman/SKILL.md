@@ -1,6 +1,7 @@
 ---
 name: super-caveman
-description: Enhanced Caveman skill that combines the original terse-mode core, six companion routes, and the complete pinned i-have-adhd output-behavior contract in one installable package. Use for "super caveman", "caveman mode", "be brief", token efficiency, /super-caveman, /caveman, /cavecrew, /caveman-commit, /caveman-review, /caveman-compress, /caveman-help, /caveman-stats, commit-message requests, concise PR review, compact delegation, prose compression, or exact usage statistics.
+description: Azhou skill. Enhanced Caveman skill that combines the original terse-mode core, six companion routes, and the complete pinned i-have-adhd output-behavior contract in one installable package. Use for "super caveman", "caveman mode", "be brief", token efficiency, /super-caveman, /caveman, /cavecrew, /caveman-commit, /caveman-review, /caveman-compress, /caveman-help, /caveman-stats, commit-message requests, concise PR review, compact delegation, prose compression, or exact usage statistics.
+invocation: user-invoked orchestrator
 ---
 
 # Super Caveman

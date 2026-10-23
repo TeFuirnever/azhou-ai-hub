@@ -8,7 +8,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RENDERER = ROOT / "skills" / "excalidraw-diagram" / "references" / "render_excalidraw.py"
+RENDERER = ROOT / "skills" / "super-excalidraw-diagram" / "references" / "render_excalidraw.py"
 SPEC = importlib.util.spec_from_file_location("azhou_render_excalidraw", RENDERER)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

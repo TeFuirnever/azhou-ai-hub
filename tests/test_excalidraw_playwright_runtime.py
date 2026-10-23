@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "excalidraw-diagram"
+SKILL_DIR = ROOT / "skills" / "super-excalidraw-diagram"
 CHECKER = (
     SKILL_DIR / "scripts" / "check-playwright-runtime.py"
 )

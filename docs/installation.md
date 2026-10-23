@@ -6,19 +6,19 @@ Install only the skill you need:
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
-npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
+npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
+npx skills add TeFuirnever/azhou-ai-hub --skill super-autoresearch
+npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
+npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
@@ -113,7 +113,7 @@ REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 ln -s "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
-ln -s "$REPO_ROOT/skills/excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
+ln -s "$REPO_ROOT/skills/super-excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
 ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ln -s "$REPO_ROOT/skills/super-llm-wiki" "$SKILLS_HOME/super-llm-wiki"
 ln -s "$REPO_ROOT/skills/super-lavish" "$SKILLS_HOME/super-lavish"
@@ -152,12 +152,12 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 ## Skill-specific dependencies
 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [super-repo-pedant setup](../skills/super-repo-pedant/references/setup.md).
-- Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/excalidraw-diagram/references/setup.md).
+- Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/super-excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - Super LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/super-llm-wiki/references/setup.md).
 - Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.89` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/super-lavish/references/setup.md).
-- Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/arch-doc/references/setup.md).
+- Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/super-arch-doc/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 

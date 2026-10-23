@@ -1,4 +1,4 @@
-"""Style-doc alignment: excalidraw-diagram docs match the hand-drawn gate defaults.
+"""Style-doc alignment: super-excalidraw-diagram docs match the hand-drawn gate defaults.
 
 Red symptom (craft-audit 2026-09-05, evolution-level #2): references/design-system.md
 marketed roughness 0 ("Default to 0") and fontFamily 3 (Cascadia) as the default
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-SKILL_DIR = ROOT / "skills" / "excalidraw-diagram"
+SKILL_DIR = ROOT / "skills" / "super-excalidraw-diagram"
 
 
 def assert_style_docs_aligned(skill_dir: Path) -> None:

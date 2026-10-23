@@ -6,10 +6,10 @@
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
-| Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/excalidraw-diagram.md) |
+| Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/super-excalidraw-diagram.md) |
 | Try the Super Lavish review-loop and relay reference demo | [Super Lavish demo](demos/super-lavish.md) |
 | Try the Super LLM Wiki reference demo | [Super LLM Wiki demo](demos/super-llm-wiki.md) |
-| Try the Arch Doc reference demo | [Arch Doc demo](demos/arch-doc.md) |
+| Try the Arch Doc reference demo | [Arch Doc demo](demos/super-arch-doc.md) |
 | Use action-first terse response, commit, review or compression workflows | [Super Caveman package](../skills/super-caveman/SKILL.md) |
 | Build or inspect persistent project knowledge | [Super LLM Wiki package](../skills/super-llm-wiki/SKILL.md) |
 | Relay a spec and its review history in one HTML | [Super Lavish package, Spec Relay relay mode](../skills/super-lavish/SKILL.md) |
@@ -18,7 +18,7 @@
 | Build or evolve a skill | [Azhou Skill Standard](skill-standard.md) |
 | Release a version | [Releasing](releasing.md) |
 | See planned work | [Roadmap](roadmap.md) |
-| Understand the Excalidraw package | [Excalidraw Diagram](excalidraw-diagram.md) |
+| Understand the Excalidraw package | [Excalidraw Diagram](super-excalidraw-diagram.md) |
 | Review open-source benchmark research | [Research](research/2026-08-23-open-source-benchmark.md) |
 
 Community, security and legal documents stay at repository root so GitHub and contributors can discover them.

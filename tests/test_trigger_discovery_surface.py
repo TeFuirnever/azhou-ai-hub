@@ -1,8 +1,8 @@
 """Trigger and discovery surface gates from the u4 batch.
 
 Covers four evidence-backed surfaces (docs/research/2026-10-06-cross-harness-
-execution-evidence.md §3.3): the ask-azhou routing catalog is generated from
-the canonical skills manifest and gate-checked for parity; eli5's frontmatter
+execution-evidence.md §3.3): the super-ask-azhou routing catalog is generated from
+the canonical skills manifest and gate-checked for parity; super-eli5's frontmatter
 carries a paired positive/negative trigger-phrase list (the repo-pedant C1
 precedent); every canonical description declares its trigger surface; and
 unrouted routing misses are recorded under `.azhou/ask-azhou/` as
@@ -27,10 +27,10 @@ from scripts.check_repository import (
 )
 
 ROOT = Path(__file__).parents[1]
-GENERATOR = ROOT / "skills" / "ask-azhou" / "scripts" / "generate_routing_index.py"
-RECORDER = ROOT / "skills" / "ask-azhou" / "scripts" / "record_unrouted.py"
-ROUTER = ROOT / "skills" / "ask-azhou" / "SKILL.md"
-ELI5 = ROOT / "skills" / "eli5" / "SKILL.md"
+GENERATOR = ROOT / "skills" / "super-ask-azhou" / "scripts" / "generate_routing_index.py"
+RECORDER = ROOT / "skills" / "super-ask-azhou" / "scripts" / "record_unrouted.py"
+ROUTER = ROOT / "skills" / "super-ask-azhou" / "SKILL.md"
+ELI5 = ROOT / "skills" / "super-eli5" / "SKILL.md"
 BEGIN_MARKER = "<!-- generated-routing-index:begin -->"
 END_MARKER = "<!-- generated-routing-index:end -->"
 UPSTREAM_ELI5_SENTENCE = (
@@ -59,7 +59,7 @@ def write_skill(package: Path, name: str, description: str) -> None:
 def make_router(package: Path, body: str = "Router catalog:\n") -> None:
     package.mkdir(parents=True, exist_ok=True)
     (package / "SKILL.md").write_text(
-        f"---\nname: ask-azhou\ndescription: Router probe\ninvocation: user-invoked orchestrator\n---\n\n# Ask Azhou\n\n{body}"
+        f"---\nname: super-ask-azhou\ndescription: Router probe\ninvocation: user-invoked orchestrator\n---\n\n# Ask Azhou\n\n{body}"
         f"{BEGIN_MARKER}\n{END_MARKER}\n",
         encoding="utf-8",
     )
@@ -67,7 +67,7 @@ def make_router(package: Path, body: str = "Router catalog:\n") -> None:
 
 def install_generator(root: Path) -> None:
     """Copy the generator into a fixture root so the gate wrapper can run it."""
-    destination = root / "skills" / "ask-azhou" / "scripts" / "generate_routing_index.py"
+    destination = root / "skills" / "super-ask-azhou" / "scripts" / "generate_routing_index.py"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(GENERATOR.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -85,7 +85,7 @@ class RoutingIndexGenerationTest(unittest.TestCase):
             root = Path(directory)
             write_skill(root / "skills" / "alpha", "alpha", "Alpha probe surface.")
             write_skill(root / "skills" / "beta", "beta", "Beta probe surface.")
-            make_router(root / "skills" / "ask-azhou")
+            make_router(root / "skills" / "super-ask-azhou")
             self.assertEqual(0, run_script(GENERATOR, "--root", str(root)).returncode)
             self.assertEqual(0, run_script(GENERATOR, "--root", str(root), "--check").returncode)
 
@@ -96,20 +96,20 @@ class RoutingIndexGenerationTest(unittest.TestCase):
             install_generator(root)
             self.assertEqual(
                 ["router generated index drift: routing index is stale; regenerate with "
-                 "python skills/ask-azhou/scripts/generate_routing_index.py"],
+                 "python skills/super-ask-azhou/scripts/generate_routing_index.py"],
                 check_router_generated_index(root),
             )
 
             self.assertEqual(0, run_script(GENERATOR, "--root", str(root)).returncode)
             self.assertEqual(0, run_script(GENERATOR, "--root", str(root), "--check").returncode)
-            text = (root / "skills" / "ask-azhou" / "SKILL.md").read_text(encoding="utf-8")
+            text = (root / "skills" / "super-ask-azhou" / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("`beta` — Beta probe surface, re-described.", text)
 
     def test_added_skill_without_regeneration_is_drift(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_skill(root / "skills" / "alpha", "alpha", "Alpha probe surface.")
-            make_router(root / "skills" / "ask-azhou")
+            make_router(root / "skills" / "super-ask-azhou")
             self.assertEqual(0, run_script(GENERATOR, "--root", str(root)).returncode)
             write_skill(root / "skills" / "gamma", "gamma", "Gamma probe surface.")
             self.assertEqual(1, run_script(GENERATOR, "--root", str(root), "--check").returncode)
@@ -118,7 +118,7 @@ class RoutingIndexGenerationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_skill(root / "skills" / "alpha", "not-alpha", "Alpha probe surface.")
-            make_router(root / "skills" / "ask-azhou")
+            make_router(root / "skills" / "super-ask-azhou")
             result = run_script(GENERATOR, "--root", str(root), "--check")
             self.assertEqual(1, result.returncode)
             self.assertIn("does not match the package folder", result.stderr.decode("utf-8"))
@@ -132,7 +132,7 @@ class RoutingIndexGenerationTest(unittest.TestCase):
                 "---\nname: alpha\ndescription: Alpha probe surface.\ntriggers: [x]\n---\n",
                 encoding="utf-8",
             )
-            make_router(root / "skills" / "ask-azhou")
+            make_router(root / "skills" / "super-ask-azhou")
             result = run_script(GENERATOR, "--root", str(root), "--check")
             self.assertEqual(1, result.returncode)
             self.assertIn("unsupported frontmatter line", result.stderr.decode("utf-8"))
@@ -141,10 +141,10 @@ class RoutingIndexGenerationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_skill(root / "skills" / "alpha", "alpha", "Alpha probe surface.")
-            package = root / "skills" / "ask-azhou"
+            package = root / "skills" / "super-ask-azhou"
             package.mkdir(parents=True)
             (package / "SKILL.md").write_text(
-                "---\nname: ask-azhou\ndescription: Router probe\n---\n\n# Ask Azhou\n",
+                "---\nname: super-ask-azhou\ndescription: Router probe\n---\n\n# Ask Azhou\n",
                 encoding="utf-8",
             )
             result = run_script(GENERATOR, "--root", str(root))
@@ -155,10 +155,10 @@ class RoutingIndexGenerationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_skill(root / "skills" / "alpha", "alpha", "Alpha probe surface.")
-            package = root / "skills" / "ask-azhou"
+            package = root / "skills" / "super-ask-azhou"
             package.mkdir(parents=True)
             (package / "SKILL.md").write_text(
-                f"---\nname: ask-azhou\ndescription: Router probe\n---\n\n{BEGIN_MARKER}\n{END_MARKER}\n{BEGIN_MARKER}\n{END_MARKER}\n",
+                f"---\nname: super-ask-azhou\ndescription: Router probe\n---\n\n{BEGIN_MARKER}\n{END_MARKER}\n{BEGIN_MARKER}\n{END_MARKER}\n",
                 encoding="utf-8",
             )
             result = run_script(GENERATOR, "--root", str(root))
@@ -225,7 +225,7 @@ class DescriptionTriggerSurfaceTest(unittest.TestCase):
 
 
 class UnroutedTelemetryTest(unittest.TestCase):
-    STORE = Path(".azhou") / "ask-azhou" / "unrouted-telemetry.json"
+    STORE = Path(".azhou") / "super-ask-azhou" / "unrouted-telemetry.json"
     REQUEST = "how do I fold this into the quarterly report xf7qzunitmarker"
 
     def store_text(self, root: Path) -> str:
@@ -240,7 +240,7 @@ class UnroutedTelemetryTest(unittest.TestCase):
             self.assertEqual(0, second.returncode, second.stderr.decode("utf-8"))
 
             payload = json.loads(self.store_text(root))
-            self.assertEqual("ask-azhou.unrouted-telemetry.v1", payload["schema"])
+            self.assertEqual("super-ask-azhou.unrouted-telemetry.v1", payload["schema"])
             self.assertEqual(1, len(payload["events"]))
             event = next(iter(payload["events"].values()))
             self.assertEqual(2, event["count"])
@@ -305,7 +305,7 @@ class UnroutedTelemetryTest(unittest.TestCase):
             store.parent.mkdir(parents=True)
             digest = "a" * 64
             store.write_text(
-                json.dumps({"schema": "ask-azhou.unrouted-telemetry.v1", "events": {digest: {"count": 1}}}),
+                json.dumps({"schema": "super-ask-azhou.unrouted-telemetry.v1", "events": {digest: {"count": 1}}}),
                 encoding="utf-8",
             )
             result = run_script(RECORDER, "--root", str(root), "--prompt", self.REQUEST)
@@ -321,7 +321,7 @@ class UnroutedTelemetryTest(unittest.TestCase):
             result = run_script(RECORDER, "--root", str(root), "--prompt", self.REQUEST)
             self.assertEqual(1, result.returncode)
             self.assertIn("symlink", result.stderr.decode("utf-8"))
-            self.assertFalse((outside / "ask-azhou" / "unrouted-telemetry.json").exists())
+            self.assertFalse((outside / "super-ask-azhou" / "unrouted-telemetry.json").exists())
 
     def test_missing_root_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -333,7 +333,7 @@ class UnroutedTelemetryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(0, run_script(RECORDER, "--root", str(root), "--prompt", self.REQUEST).returncode)
-            self.assertTrue((root / ".azhou" / "ask-azhou" / "unrouted-telemetry.json").is_file())
+            self.assertTrue((root / ".azhou" / "super-ask-azhou" / "unrouted-telemetry.json").is_file())
             self.assertTrue(os.path.islink(root / ".azhou") is False)
 
 

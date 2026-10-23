@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-VALIDATOR = ROOT / "skills" / "excalidraw-diagram" / "scripts" / "check-brand-startup.py"
+VALIDATOR = ROOT / "skills" / "super-excalidraw-diagram" / "scripts" / "check-brand-startup.py"
 
 PREFIX = "\U0001f98a \u963f\u821f \u00b7 Excalidraw Diagram \u542f\u52a8\uff08"
 

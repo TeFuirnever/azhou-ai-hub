@@ -63,28 +63,28 @@ REQUIRED_PATHS = (
     "docs/foundations.md",
     "scripts/azhou_hub.py",
     "skills/super-caveman/SKILL.md",
-    "skills/excalidraw-diagram/SKILL.md",
+    "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-llm-wiki/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-lavish/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
+    "skills/super-arch-doc/SKILL.md",
+    "skills/super-archify/SKILL.md",
+    "skills/super-asd-ste100/SKILL.md",
+    "skills/super-ask-azhou/SKILL.md",
+    "skills/super-autoresearch/SKILL.md",
+    "skills/super-azhou-doctor/SKILL.md",
+    "skills/super-azhou-info/SKILL.md",
+    "skills/super-azhou-setup/SKILL.md",
+    "skills/super-azhou-verify/SKILL.md",
     "skills/super-caveman/SKILL.md",
-    "skills/excalidraw-diagram/SKILL.md",
-    "skills/azhou-doctor/SKILL.md",
-    "skills/azhou-info/SKILL.md",
-    "skills/azhou-setup/SKILL.md",
-    "skills/azhou-verify/SKILL.md",
-    "skills/super-repo-pedant/SKILL.md",
+    "skills/super-eli5/SKILL.md",
+    "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-lavish/SKILL.md",
-    "skills/eli5/SKILL.md",
-    "skills/autoresearch/SKILL.md",
-    "skills/ask-azhou/SKILL.md",
-    "skills/arch-doc/SKILL.md",
-    "skills/session-insights/SKILL.md",
-    "skills/asd-ste100/SKILL.md",
-    "skills/archify/SKILL.md",
+    "skills/super-repo-pedant/SKILL.md",
+    "skills/super-session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = {
     "skills/super-llm-wiki/SKILL.md",
@@ -97,46 +97,46 @@ INVOCATION_CLASSES = (
 SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
 
 SKILL_BRAND_CONTRACTS = {
-    "skills/autoresearch/SKILL.md": {
+    "skills/super-autoresearch/SKILL.md": {
         "display_name": "Autoresearch",
         "motto": "实验通宵跑，边界先说清。",
         "startup": "🦊 阿舟 · Autoresearch 启动（mode=<prepare|run|resume|report>, scope=<checkout>）",
     },
-    "skills/ask-azhou/SKILL.md": {
+    "skills/super-ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",
         "motto": "说清你想做什么，我告诉你敲哪扇门。",
         "startup": "🦊 阿舟 · Ask Azhou 启动（mode=route, scope=<catalog>）",
     },
-    "skills/azhou-doctor/SKILL.md": {
+    "skills/super-azhou-doctor/SKILL.md": {
         "display_name": "Azhou Doctor",
         "motto": "先诊断，不越权修复。",
         "startup": "🦊 阿舟 · Azhou Doctor 启动（mode=doctor, scope=<checkout>）",
     },
-    "skills/azhou-info/SKILL.md": {
+    "skills/super-azhou-info/SKILL.md": {
         "display_name": "Azhou Info",
         "motto": "只报告仓库能证明的事实。",
         "startup": "🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）",
     },
-    "skills/azhou-setup/SKILL.md": {
+    "skills/super-azhou-setup/SKILL.md": {
         "display_name": "Azhou Setup",
         "motto": "先看计划，再按同一计划执行。",
         "startup": "🦊 阿舟 · Azhou Setup 启动（mode=<setup|repair|migrate|uninstall>, scope=<checkout>）",
     },
-    "skills/azhou-verify/SKILL.md": {
+    "skills/super-azhou-verify/SKILL.md": {
         "display_name": "Azhou Verify",
         "motto": "完整 gate 跑完，结论才成立。",
         "startup": "🦊 阿舟 · Azhou Verify 启动（mode=verify, scope=<checkout>）",
     },
-    "skills/eli5/SKILL.md": {
+    "skills/super-eli5/SKILL.md": {
         "display_name": "Eli5",
         "motto": "把复杂讲给零基础的人，少字，多图。",
         "startup": "🦊 阿舟 · Eli5 启动（mode=explain, scope=<topic>）",
     },
-    "skills/excalidraw-diagram/SKILL.md": {
+    "skills/super-excalidraw-diagram/SKILL.md": {
         "display_name": "Excalidraw Diagram",
         "motto": "先让结构讲清关系，再让文字补充证据。",
         "startup": "🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）",
-        "brand_path": "skills/excalidraw-diagram/references/brand-layer.md",
+        "brand_path": "skills/super-excalidraw-diagram/references/brand-layer.md",
     },
     "skills/super-lavish/SKILL.md": {
         "display_name": "Super Lavish",
@@ -166,24 +166,24 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
         "brand_path": "skills/super-caveman/references/brand-layer.md",
     },
-    "skills/arch-doc/SKILL.md": {
+    "skills/super-arch-doc/SKILL.md": {
         "display_name": "Arch Doc",
         "motto": "先读上游，再写契约，声称不越证据。",
         "startup": "🦊 阿舟 · Arch Doc 启动（mode=<draft|calibrate|review|sequence>, scope=<repo-or-document>）",
-        "brand_path": "skills/arch-doc/references/brand-layer.md",
+        "brand_path": "skills/super-arch-doc/references/brand-layer.md",
     },
-    "skills/session-insights/SKILL.md": {
+    "skills/super-session-insights/SKILL.md": {
         "display_name": "Session Insights",
         "motto": "先有数字，再有故事。",
         "startup": "🦊 阿舟 · Session Insights 启动（mode=<report>, scope=<harness-or-project>）",
-        "brand_path": "skills/session-insights/references/brand-layer.md",
+        "brand_path": "skills/super-session-insights/references/brand-layer.md",
     },
-    "skills/asd-ste100/SKILL.md": {
+    "skills/super-asd-ste100/SKILL.md": {
         "display_name": "ASD-STE100",
         "motto": "一词一义，一句一事，agent 无从误读。",
         "startup": "🦊 阿舟 · ASD-STE100 启动（mode=<strict|flavored>, scope=<text-or-files>）",
     },
-    "skills/archify/SKILL.md": {
+    "skills/super-archify/SKILL.md": {
         "display_name": "Archify",
         "motto": "一张图讲清一个系统，交给读者去探索。",
         "startup": "🦊 阿舟 · Archify 启动（mode=<diagram-type>, scope=<subject>）",
@@ -249,11 +249,11 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
-ROUTER_SKILL_RELATIVE = "skills/ask-azhou/SKILL.md"
+ROUTER_SKILL_RELATIVE = "skills/super-ask-azhou/SKILL.md"
 
 
 def check_router_coverage(root: Path) -> list[str]:
-    """The ask-azhou routing map must name every canonical skill.
+    """The super-ask-azhou routing map must name every canonical skill.
 
     Add or rename a canonical skill without updating the router and this
     check fails; removal is caught by discovery parity, not by this check — the structural fix for hand-maintained router currency.
@@ -276,14 +276,14 @@ def check_router_coverage(root: Path) -> list[str]:
     ]
 
 
-ROUTER_INDEX_SCRIPT_RELATIVE = "skills/ask-azhou/scripts/generate_routing_index.py"
+ROUTER_INDEX_SCRIPT_RELATIVE = "skills/super-ask-azhou/scripts/generate_routing_index.py"
 
 
 def check_router_generated_index(root: Path) -> list[str]:
     """The router's generated catalog must match the canonical skills manifest.
 
-    The catalog block in skills/ask-azhou/SKILL.md is produced by
-    skills/ask-azhou/scripts/generate_routing_index.py from every
+    The catalog block in skills/super-ask-azhou/SKILL.md is produced by
+    skills/super-ask-azhou/scripts/generate_routing_index.py from every
     skills/*/SKILL.md frontmatter description. Adding, renaming, or
     re-describing a canonical skill without regenerating the block is
     drift, and this check fails closed on it.
@@ -489,33 +489,11 @@ def check_skill_platform_view(root: Path) -> list[str]:
                     )
     return errors
 
-GATE_HELD_INVOCATIONS = {
-    # super-caveman's whole tree is frozen by its promotion digest
-    # (93f38a6b...), so its invocation class is held here until the next
-    # super-caveman promotion ride migrates it into SKILL.md frontmatter.
-    "skills/super-caveman/SKILL.md": "user-invoked orchestrator",
-}
-
-
-GATE_HELD_FIDELITY = {
-    # Same frozen-tree arrangement for the skill-standard §2.3 fidelity
-    # classification: super-caveman is `adapted` (merged Caveman core, six
-    # companions and the i-have-adhd contract with local derivative deltas,
-    # already correctly prefixed). It migrates into the tree's
-    # references/provenance.md on the next promotion ride. Every other skill
-    # records its own classification in its provenance record; the
-    # prefix-classification enforcement check is check_fidelity_axis (#183).
-    "skills/super-caveman/SKILL.md": "adapted",
-}
-
-
 def check_invocation_axis(root: Path) -> list[str]:
     """Require the invocation class for every canonical skill.
 
-    Fifteen packages declare the class in SKILL.md frontmatter;
-    super-caveman's class is held in GATE_HELD_INVOCATIONS because its
-    promotion digest freezes the whole skill tree. Values outside the
-    docs/skill-standard.md enum fail closed.
+    Every package declares the class in SKILL.md frontmatter. Values
+    outside the docs/skill-standard.md enum fail closed.
     """
     errors: list[str] = []
     for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
@@ -536,8 +514,6 @@ def check_invocation_axis(root: Path) -> list[str]:
                 if line.partition(":")[0].strip() == "invocation"
             ]
             declared = declared[0] if declared else None
-        if declared is None and relative in GATE_HELD_INVOCATIONS:
-            declared = GATE_HELD_INVOCATIONS[relative]
         if declared is None:
             errors.append(f"skill invocation declaration missing: {relative}")
         elif declared not in INVOCATION_CLASSES:
@@ -552,6 +528,18 @@ RENAMED_AWAY_SKILLS = {
     "repo-pedant": "super-repo-pedant",
     "lavish": "super-lavish",
     "llm-wiki": "super-llm-wiki",
+    "arch-doc": "super-arch-doc",
+    "archify": "super-archify",
+    "asd-ste100": "super-asd-ste100",
+    "ask-azhou": "super-ask-azhou",
+    "autoresearch": "super-autoresearch",
+    "azhou-doctor": "super-azhou-doctor",
+    "azhou-info": "super-azhou-info",
+    "azhou-setup": "super-azhou-setup",
+    "azhou-verify": "super-azhou-verify",
+    "eli5": "super-eli5",
+    "excalidraw-diagram": "super-excalidraw-diagram",
+    "session-insights": "super-session-insights",
 }
 
 # Surfaces where a renamed-away canonical name is legal, by category:
@@ -568,6 +556,7 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
     ".gitignore",
     "scripts/azhou_hub.py",
     "scripts/check_repository.py",
+    "scripts/migrate_canonical_super_prefix.py",
     "docs/skill-standard.md",
     "skills/super-repo-pedant/scripts/migrate_state.py",
     "skills/super-llm-wiki/scripts/llm_wiki.py",
@@ -610,37 +599,73 @@ def _residue_allowed(relative: str) -> bool:
 
 
 def check_fidelity_axis(root: Path) -> list[str]:
-    """Bind the canonical-name prefix to the recorded fidelity classification.
+    """Require the super- brand prefix and a recorded fidelity classification.
 
-    Skill-standard §2.3: `adapted` skills carry the `super-` prefix;
-    `original` and `faithful` skills do not. super-caveman's classification
-    is held in GATE_HELD_FIDELITY because its promotion digest freezes the
-    whole tree; every other skill declares its own `Classification: `<value>``
-    line in references/provenance.md. A skill without a declared
-    classification fails closed.
+    Skill-standard §2.3: every canonical package carries the `super-` brand
+    prefix. Fidelity no longer selects the package name. Packages are
+    discovered from ``<root>/skills/*/SKILL.md``. Each skill declares its own
+    `Classification: `<value>`` line in references/provenance.md. A skill
+    without a declared classification fails closed.
     """
     errors: list[str] = []
-    for relative in sorted(INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS):
-        if not (root / relative).is_file():
-            continue
+    discovered = {
+        path.relative_to(root).as_posix()
+        for path in (root / "skills").glob("*/SKILL.md")
+        if path.is_file()
+    }
+    for relative in sorted(discovered):
         package = PurePosixPath(relative).parent.name
-        declared = GATE_HELD_FIDELITY.get(relative)
-        if declared is None:
-            provenance = root / PurePosixPath(relative).parent / "references" / "provenance.md"
-            try:
-                text = provenance.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                text = ""
-            match = FIDELITY_DECLARATION_PATTERN.search(text)
-            if match is None:
-                errors.append(f"skill fidelity classification missing: {relative}")
-                continue
-            declared = match.group("value")
-            if declared not in FIDELITY_CLASSES:
-                errors.append(f"skill fidelity classification enum invalid: {relative}: {declared}")
-                continue
-        if (package.startswith("super-")) != (declared == "adapted"):
-            errors.append(f"fidelity prefix mismatch: {relative} classified {declared}")
+        if not package.startswith("super-"):
+            errors.append(f"canonical package missing super- brand prefix: {relative}")
+            continue
+        provenance = root / PurePosixPath(relative).parent / "references" / "provenance.md"
+        try:
+            text = provenance.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        match = FIDELITY_DECLARATION_PATTERN.search(text)
+        if match is None:
+            errors.append(f"skill fidelity classification missing: {relative}")
+            continue
+        declared = match.group("value")
+        if declared not in FIDELITY_CLASSES:
+            errors.append(f"skill fidelity classification enum invalid: {relative}: {declared}")
+    return errors
+
+
+def check_azhou_description_brand(root: Path) -> list[str]:
+    """Require the uniform Azhou brand keyword in every skill description.
+
+    Incidental substrings such as a package name or product name are not a
+    brand marker. Each description must open with `Azhou skill.`.
+    """
+    errors: list[str] = []
+    discovered = {
+        path.relative_to(root).as_posix()
+        for path in (root / "skills").glob("*/SKILL.md")
+        if path.is_file()
+    }
+    for relative in sorted(discovered):
+        try:
+            text = (root / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            errors.append(f"cannot read skill frontmatter {relative}")
+            continue
+        match = SKILL_FRONTMATTER_PATTERN.match(text)
+        if not match:
+            errors.append(f"skill frontmatter missing: {relative}")
+            continue
+        description = None
+        for line in match.group("frontmatter").splitlines():
+            key, sep, value = line.partition(":")
+            if sep and key.strip() == "description":
+                description = value.strip()
+                break
+        if description is None:
+            errors.append(f"skill description missing: {relative}")
+            continue
+        if not description.startswith("Azhou skill."):
+            errors.append(f"skill description missing Azhou brand keyword: {relative}")
     return errors
 
 
@@ -965,8 +990,8 @@ def check_reference_script_paths(files: list[Path], root: Path) -> list[str]:
 
     docs/ pages and skills/<skill>/references/ pages cite executable entry
     points as bare repo-root code spans (`scripts/verify.py`). When a script
-    moves or is renamed, those citations silently rot: the arch-doc entry
-    pointing at a never-existing root verifier and the excalidraw-diagram
+    moves or is renamed, those citations silently rot: the super-arch-doc entry
+    pointing at a never-existing root verifier and the super-excalidraw-diagram
     script drift were both this mechanism, with no gate covering it. The rule
     stays mechanical to avoid false positives: only a code span whose entire
     content is a `scripts/...` path with an executable suffix is checked, and
@@ -1141,7 +1166,7 @@ def check_provenance(root: Path) -> list[str]:
         if actual != expected:
             errors.append(f"neat-freak provenance snapshot changed: {rel}")
 
-    bundle = root / "skills/excalidraw-diagram/references/vendor/excalidraw-all.esm.js"
+    bundle = root / "skills/super-excalidraw-diagram/references/vendor/excalidraw-all.esm.js"
     if bundle.is_file() and b"Bundled license information" not in bundle.read_bytes():
         errors.append("vendored Excalidraw bundle lost its bundled-license block")
     return errors
@@ -1162,6 +1187,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_platform_view(root))
     errors.extend(check_invocation_axis(root))
     errors.extend(check_fidelity_axis(root))
+    errors.extend(check_azhou_description_brand(root))
     errors.extend(check_rename_residue(files, root))
     errors.extend(check_json(files, root))
     errors.extend(check_markdown_links(files, root))

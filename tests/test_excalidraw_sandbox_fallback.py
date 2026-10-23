@@ -1,4 +1,4 @@
-"""Sandbox fallback verification and explicit holds for excalidraw-diagram.
+"""Sandbox fallback verification and explicit holds for super-excalidraw-diagram.
 
 Evidence: docs/research/2026-10-06-cross-harness-execution-evidence.md section
 3.4 — under a Codex sandbox the render/preview chain failed five ways (patch
@@ -6,7 +6,7 @@ rejected, renderer traceback, sips failure, file:// preview blocked, magick
 fonts missing) and the session ended with a silent "Visual review: skipped".
 u5 requires a GUI-free geometry-plus-hash fallback channel and an explicit
 hold instead of a silent skip, aligned with the holds mechanism of the other
-benchmark suites (for example session-insights "zcode unsupported").
+benchmark suites (for example super-session-insights "zcode unsupported").
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills" / "excalidraw-diagram" / "scripts" / "visual-check.py"
-BENCHMARK = ROOT / "benchmarks" / "excalidraw-diagram" / "ordinary-model-floor" / "benchmark.py"
+SCRIPT = ROOT / "skills" / "super-excalidraw-diagram" / "scripts" / "visual-check.py"
+BENCHMARK = ROOT / "benchmarks" / "super-excalidraw-diagram" / "ordinary-model-floor" / "benchmark.py"
 SUITE = BENCHMARK.parent
 CASE = SUITE / "cases" / "layered-architecture.case.json"
 REFERENCE_SCENE = SUITE / "fixtures" / "reference" / "reference.architecture.excalidraw"

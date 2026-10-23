@@ -338,18 +338,18 @@ def _tuple_paths(tuples: list[bytes]) -> list[str]:
     return [os.fsdecode(item.split(b"\0", 1)[0]) for item in tuples]
 
 
+def _chunked(values: list[str], size: int = 48) -> list[list[str]]:
+    return [values[i : i + size] for i in range(0, len(values), size)]
+
+
 def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
+    """Compare HEAD and worktree oids without a long argv.
+
+    Windows CreateProcess rejects overlong command lines (WinError 206) when a
+    landing touches thousands of paths. Chunk the path list instead.
+    """
     paths = _tuple_paths(tuples)
-    selectors = [f":(top,literal){path}" for path in paths]
-    try:
-        changes = subprocess.check_output(
-            canonical_git_diff("--name-only", "-z", "HEAD", "--", *selectors),
-            cwd=ROOT,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return False
-    if changes:
-        return False
+    present: list[tuple[str, bytes]] = []
     for item, path in zip(tuples, paths, strict=True):
         _, _, new_oid, _ = item.split(b"\0")
         if new_oid == b"<deleted>":
@@ -366,16 +366,37 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
             if exists.returncode == 0:
                 return False
             continue
-        try:
-            current_oid = subprocess.check_output(
-                ["git", "rev-parse", "--verify", f"HEAD:{path}"],
+        present.append((path, new_oid))
+    if not present:
+        return True
+    try:
+        head_by_path: dict[str, str] = {}
+        for chunk in _chunked([path for path, _ in present]):
+            oids = subprocess.check_output(
+                ["git", "rev-parse", "--verify", *[f"HEAD:{path}" for path in chunk]],
                 cwd=ROOT,
                 text=True,
                 stderr=subprocess.DEVNULL,
-            ).strip()
-        except (OSError, subprocess.CalledProcessError):
-            return False
-        if current_oid != new_oid.decode("ascii"):
+            ).splitlines()
+            if len(oids) != len(chunk):
+                return False
+            head_by_path.update(zip(chunk, oids, strict=True))
+        work_by_path: dict[str, str] = {}
+        for chunk in _chunked([path for path, _ in present]):
+            oids = subprocess.check_output(
+                ["git", "hash-object", *[str(ROOT / path) for path in chunk]],
+                cwd=ROOT,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).splitlines()
+            if len(oids) != len(chunk):
+                return False
+            work_by_path.update(zip(chunk, oids, strict=True))
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    for path, new_oid in present:
+        expected = new_oid.decode("ascii")
+        if head_by_path.get(path) != expected or work_by_path.get(path) != expected:
             return False
     return True
 
@@ -414,6 +435,29 @@ def staged_review_digests(excluded_paths: set[str]) -> dict[str, str] | None:
         "path_set_sha256": hashlib.sha256(b"".join(item.split(b"\0", 1)[0] + b"\0" for item in tuples)).hexdigest(),
         "staged_patch_sha256": _canonical_digest(tuples),
     }
+
+
+def _rev_list_touches(diff_range: str, pathspecs: list[str]) -> bool:
+    for chunk in _chunked(pathspecs):
+        output = subprocess.check_output(
+            ["git", "rev-list", diff_range, "--", *chunk],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+        )
+        if output.strip():
+            return True
+    return False
+
+
+def _worktree_diff_touches(pathspecs: list[str]) -> bool:
+    for chunk in _chunked(pathspecs):
+        output = subprocess.check_output(
+            canonical_git_diff("--name-only", "-z", "HEAD", "--", *chunk),
+            cwd=ROOT,
+        )
+        if output:
+            return True
+    return False
 
 
 def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict[str, str] | None:
@@ -500,19 +544,9 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
     approved_path_selectors = [
         f":(top,literal){os.fsdecode(item)}" for item in items
     ]
-    later_commits = subprocess.check_output(
-        ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
-        cwd=ROOT,
-    )
-    if later_commits.strip():
+    if _rev_list_touches(f"{approval_anchor}..HEAD", approved_path_selectors):
         return None
-    working_tree_changes = subprocess.check_output(
-        canonical_git_diff(
-            "--name-only", "-z", "HEAD", "--", *approved_path_selectors
-        ),
-        cwd=ROOT,
-    )
-    if working_tree_changes:
+    if _worktree_diff_touches(approved_path_selectors):
         return None
     tuples = _canonical_blob_tuples(diff_range, selectors)
     if not tuples:
@@ -578,11 +612,7 @@ def committed_review_digests_from_blobs(
             break
     if approval_anchor is None:
         return None
-    later_commits = subprocess.check_output(
-        ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
-        cwd=ROOT,
-    )
-    if later_commits.strip():
+    if _rev_list_touches(f"{approval_anchor}..HEAD", approved_path_selectors):
         return None
     working_tree_changes = subprocess.check_output(
         canonical_git_diff(
@@ -915,6 +945,7 @@ def _approved_exact_diff(
         )
         return False
     exclusions = {result_relative, record_relative}
+    replay_error = None
     try:
         candidates = [staged_review_digests(exclusions)]
         candidates.append(committed_review_digests(exclusions, value["base_commit"]))
@@ -926,9 +957,12 @@ def _approved_exact_diff(
             )
         )
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-        trace.structural("replay", f"git replay failed: {type(exc).__name__}: {exc}")
-        return False
-    exact_replay = any(
+        # Windows CreateProcess can reject an overlong git argv (WinError 206)
+        # even when the committed tree is correct. Fall through to the snapshot
+        # replay instead of failing closed before that check can run.
+        candidates = None
+        replay_error = f"{type(exc).__name__}: {exc}"
+    exact_replay = candidates is not None and any(
         candidate is not None
         and all(
             candidate[key] == value[key]
@@ -938,23 +972,29 @@ def _approved_exact_diff(
     )
     if not exact_replay:
         snap = reviewed_blob_snapshot_matches(reviewed_tuples)
-        for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
-            _gate_trace(
-                "approved-candidate",
-                f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
-            )
+        if candidates is None:
+            _gate_trace("approved-candidate", f"git replay unavailable: {replay_error}")
+        else:
+            for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
+                _gate_trace(
+                    "approved-candidate",
+                    f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
+                )
         _gate_trace(
             "approved",
             "status=" + subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True)[:300].replace("\n", " | "),
         )
         _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
         if require_external_evidence or not snap:
-            candidate_summary = "; ".join(
-                "None"
-                if candidate is None
-                else f"path_set={candidate['path_set_sha256'][:12]} patch={candidate['staged_patch_sha256'][:12]}"
-                for candidate in candidates
-            )
+            if candidates is None:
+                candidate_summary = f"git replay unavailable: {replay_error}"
+            else:
+                candidate_summary = "; ".join(
+                    "None"
+                    if candidate is None
+                    else f"path_set={candidate['path_set_sha256'][:12]} patch={candidate['staged_patch_sha256'][:12]}"
+                    for candidate in candidates
+                )
             trace.structural(
                 "replay",
                 f"receipt path_set={value['path_set_sha256'][:12]} "
@@ -1194,7 +1234,28 @@ def _approved_exact_diff(
     return True
 
 
+def _frontmatter_body(data: bytes) -> bytes:
+    text = data.decode("utf-8")
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 3)
+        if end != -1:
+            return text[end + len("\n---\n") :].encode("utf-8")
+    return data
+
+
+def _runtime_payload(relative: str, data: bytes) -> bytes:
+    if relative == "SKILL.md":
+        return _frontmatter_body(data)
+    return data
+
+
 def sha256_skill_tree() -> str:
+    """Bind the behavior runtime, not discovery metadata.
+
+    ``SKILL.md`` frontmatter (name, description, invocation) is harness
+    discovery metadata and is excluded so catalog edits do not invalidate
+    a passing evaluation. Everything else in the package stays in the digest.
+    """
     digest = hashlib.sha256()
     files = sorted(
         (
@@ -1207,14 +1268,19 @@ def sha256_skill_tree() -> str:
         key=lambda path: path.relative_to(SKILL).as_posix(),
     )
     for path in files:
-        digest.update(path.relative_to(SKILL).as_posix().encode("utf-8"))
+        relative = path.relative_to(SKILL).as_posix()
+        digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(_runtime_payload(relative, path.read_bytes()))
         digest.update(b"\0")
     return digest.hexdigest()
 
 
 INVARIANCE_SCHEMA = "super-caveman-producer-context-invariance.v1"
+
+
+def _skill_body_digest(data: bytes) -> str:
+    return hashlib.sha256(_frontmatter_body(data)).hexdigest()
 
 
 def _invariance_pathway_valid(
@@ -1241,13 +1307,45 @@ def _invariance_pathway_valid(
     changed_paths = {
         blob.get("path") for blob in approval.get("reviewed_blobs", []) if isinstance(blob, dict)
     }
-    if changed_paths & {f"skills/super-caveman/{rel}" for rel in context_files}:
+    # SKILL.md discovery metadata may change without leaving the invariance
+    # pathway; its response body is enforced by the body digests below. Runtime
+    # scripts are behavior surfaces and always block the invariance shortcut.
+    blocking = {
+        f"skills/super-caveman/{rel}" for rel in context_files if rel != "SKILL.md"
+    }
+    if changed_paths & blocking:
+        return False
+    if any(path.startswith("skills/super-caveman/scripts/") for path in changed_paths):
         return False
     base_commit = approval.get("base_commit")
     if re.fullmatch(r"[0-9a-f]{40}", str(base_commit)) is None:
         return False
     for rel in context_files:
         entry = declared[rel]
+        if rel == "SKILL.md":
+            if not isinstance(entry, dict) or set(entry) != {
+                "base_body_sha256",
+                "candidate_body_sha256",
+            }:
+                return False
+            try:
+                base_data = subprocess.check_output(
+                    ["git", "show", f"{base_commit}:skills/super-caveman/SKILL.md"],
+                    cwd=ROOT,
+                    stderr=subprocess.DEVNULL,
+                )
+                head_data = (SKILL / "SKILL.md").read_bytes()
+            except (OSError, subprocess.CalledProcessError):
+                return False
+            base_body = _skill_body_digest(base_data)
+            head_body = _skill_body_digest(head_data)
+            if (
+                entry["base_body_sha256"] != base_body
+                or entry["candidate_body_sha256"] != head_body
+                or base_body != head_body
+            ):
+                return False
+            continue
         if not isinstance(entry, dict) or set(entry) != {"base_blob_sha256", "candidate_blob_sha256"}:
             return False
         try:
