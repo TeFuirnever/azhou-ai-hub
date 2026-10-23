@@ -338,18 +338,18 @@ def _tuple_paths(tuples: list[bytes]) -> list[str]:
     return [os.fsdecode(item.split(b"\0", 1)[0]) for item in tuples]
 
 
+def _chunked(values: list[str], size: int = 48) -> list[list[str]]:
+    return [values[i : i + size] for i in range(0, len(values), size)]
+
+
 def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
+    """Compare HEAD and worktree oids without a long argv.
+
+    Windows CreateProcess rejects overlong command lines (WinError 206) when a
+    landing touches thousands of paths. Chunk the path list instead.
+    """
     paths = _tuple_paths(tuples)
-    selectors = [f":(top,literal){path}" for path in paths]
-    try:
-        changes = subprocess.check_output(
-            canonical_git_diff("--name-only", "-z", "HEAD", "--", *selectors),
-            cwd=ROOT,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return False
-    if changes:
-        return False
+    present: list[tuple[str, bytes]] = []
     for item, path in zip(tuples, paths, strict=True):
         _, _, new_oid, _ = item.split(b"\0")
         if new_oid == b"<deleted>":
@@ -366,16 +366,37 @@ def reviewed_blob_snapshot_matches(tuples: list[bytes]) -> bool:
             if exists.returncode == 0:
                 return False
             continue
-        try:
-            current_oid = subprocess.check_output(
-                ["git", "rev-parse", "--verify", f"HEAD:{path}"],
+        present.append((path, new_oid))
+    if not present:
+        return True
+    try:
+        head_by_path: dict[str, str] = {}
+        for chunk in _chunked([path for path, _ in present]):
+            oids = subprocess.check_output(
+                ["git", "rev-parse", "--verify", *[f"HEAD:{path}" for path in chunk]],
                 cwd=ROOT,
                 text=True,
                 stderr=subprocess.DEVNULL,
-            ).strip()
-        except (OSError, subprocess.CalledProcessError):
-            return False
-        if current_oid != new_oid.decode("ascii"):
+            ).splitlines()
+            if len(oids) != len(chunk):
+                return False
+            head_by_path.update(zip(chunk, oids, strict=True))
+        work_by_path: dict[str, str] = {}
+        for chunk in _chunked([path for path, _ in present]):
+            oids = subprocess.check_output(
+                ["git", "hash-object", *[str(ROOT / path) for path in chunk]],
+                cwd=ROOT,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).splitlines()
+            if len(oids) != len(chunk):
+                return False
+            work_by_path.update(zip(chunk, oids, strict=True))
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    for path, new_oid in present:
+        expected = new_oid.decode("ascii")
+        if head_by_path.get(path) != expected or work_by_path.get(path) != expected:
             return False
     return True
 
@@ -414,6 +435,29 @@ def staged_review_digests(excluded_paths: set[str]) -> dict[str, str] | None:
         "path_set_sha256": hashlib.sha256(b"".join(item.split(b"\0", 1)[0] + b"\0" for item in tuples)).hexdigest(),
         "staged_patch_sha256": _canonical_digest(tuples),
     }
+
+
+def _rev_list_touches(diff_range: str, pathspecs: list[str]) -> bool:
+    for chunk in _chunked(pathspecs):
+        output = subprocess.check_output(
+            ["git", "rev-list", diff_range, "--", *chunk],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+        )
+        if output.strip():
+            return True
+    return False
+
+
+def _worktree_diff_touches(pathspecs: list[str]) -> bool:
+    for chunk in _chunked(pathspecs):
+        output = subprocess.check_output(
+            canonical_git_diff("--name-only", "-z", "HEAD", "--", *chunk),
+            cwd=ROOT,
+        )
+        if output:
+            return True
+    return False
 
 
 def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict[str, str] | None:
@@ -500,19 +544,9 @@ def committed_review_digests(excluded_paths: set[str], base_commit: str) -> dict
     approved_path_selectors = [
         f":(top,literal){os.fsdecode(item)}" for item in items
     ]
-    later_commits = subprocess.check_output(
-        ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
-        cwd=ROOT,
-    )
-    if later_commits.strip():
+    if _rev_list_touches(f"{approval_anchor}..HEAD", approved_path_selectors):
         return None
-    working_tree_changes = subprocess.check_output(
-        canonical_git_diff(
-            "--name-only", "-z", "HEAD", "--", *approved_path_selectors
-        ),
-        cwd=ROOT,
-    )
-    if working_tree_changes:
+    if _worktree_diff_touches(approved_path_selectors):
         return None
     tuples = _canonical_blob_tuples(diff_range, selectors)
     if not tuples:
@@ -578,11 +612,7 @@ def committed_review_digests_from_blobs(
             break
     if approval_anchor is None:
         return None
-    later_commits = subprocess.check_output(
-        ["git", "rev-list", f"{approval_anchor}..HEAD", "--", *approved_path_selectors],
-        cwd=ROOT,
-    )
-    if later_commits.strip():
+    if _rev_list_touches(f"{approval_anchor}..HEAD", approved_path_selectors):
         return None
     working_tree_changes = subprocess.check_output(
         canonical_git_diff(
