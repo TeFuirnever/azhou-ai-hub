@@ -915,6 +915,7 @@ def _approved_exact_diff(
         )
         return False
     exclusions = {result_relative, record_relative}
+    replay_error = None
     try:
         candidates = [staged_review_digests(exclusions)]
         candidates.append(committed_review_digests(exclusions, value["base_commit"]))
@@ -926,9 +927,12 @@ def _approved_exact_diff(
             )
         )
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-        trace.structural("replay", f"git replay failed: {type(exc).__name__}: {exc}")
-        return False
-    exact_replay = any(
+        # Windows CreateProcess can reject an overlong git argv (WinError 206)
+        # even when the committed tree is correct. Fall through to the snapshot
+        # replay instead of failing closed before that check can run.
+        candidates = None
+        replay_error = f"{type(exc).__name__}: {exc}"
+    exact_replay = candidates is not None and any(
         candidate is not None
         and all(
             candidate[key] == value[key]
@@ -938,23 +942,29 @@ def _approved_exact_diff(
     )
     if not exact_replay:
         snap = reviewed_blob_snapshot_matches(reviewed_tuples)
-        for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
-            _gate_trace(
-                "approved-candidate",
-                f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
-            )
+        if candidates is None:
+            _gate_trace("approved-candidate", f"git replay unavailable: {replay_error}")
+        else:
+            for name, candidate in zip(("staged", "committed", "from_blobs"), candidates):
+                _gate_trace(
+                    "approved-candidate",
+                    f"{name}: {'None' if candidate is None else {k: candidate[k][:12] for k in ('path_set_sha256', 'staged_patch_sha256')}}",
+                )
         _gate_trace(
             "approved",
             "status=" + subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True)[:300].replace("\n", " | "),
         )
         _gate_trace("approved", f"value path_set={value['path_set_sha256'][:12]} patch={value['staged_patch_sha256'][:12]} snapshot={snap}")
         if require_external_evidence or not snap:
-            candidate_summary = "; ".join(
-                "None"
-                if candidate is None
-                else f"path_set={candidate['path_set_sha256'][:12]} patch={candidate['staged_patch_sha256'][:12]}"
-                for candidate in candidates
-            )
+            if candidates is None:
+                candidate_summary = f"git replay unavailable: {replay_error}"
+            else:
+                candidate_summary = "; ".join(
+                    "None"
+                    if candidate is None
+                    else f"path_set={candidate['path_set_sha256'][:12]} patch={candidate['staged_patch_sha256'][:12]}"
+                    for candidate in candidates
+                )
             trace.structural(
                 "replay",
                 f"receipt path_set={value['path_set_sha256'][:12]} "
