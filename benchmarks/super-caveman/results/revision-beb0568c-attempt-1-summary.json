@@ -117,7 +117,7 @@
   },
   "reviewer": {
     "identity": "workspace-owner/metadata-unfreeze/2026-10-23",
-    "review_sha256": "6a1120074f74349b6961c7ee50a1f87d172acc11fe2f6890c7be05c45e951b44"
+    "review_sha256": "cab0851b4a029b29237de9545b73cda95d3948bdfea97fc939ad17811bb52218"
   },
   "promotion_review": {
     "paired_status": "invariant",
@@ -153,7 +153,7 @@
       "approver": "workspace-owner",
       "approved_at": "2026-10-23T08:40:00Z",
       "record_path": "results/revision-beb0568c-exact-diff-approval.json",
-      "record_sha256": "f73cfd60215cbac49873719289b285208b69a2c24fd51dfc1cc6a6de6050f243",
+      "record_sha256": "5d9a625554323a17085d5032bb4a38b3dd48b0ea7a004587e4ef3859bd31b11b",
       "record_storage": "Git aggregate receipt; raw approval Git-external"
     }
   }
