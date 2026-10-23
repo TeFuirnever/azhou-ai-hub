@@ -14,7 +14,7 @@ body:
       label: Affected surface
       options:
         - super-repo-pedant
-        - excalidraw-diagram
+        - super-excalidraw-diagram
         - benchmarks or tests
         - installation or documentation
         - GitHub automation

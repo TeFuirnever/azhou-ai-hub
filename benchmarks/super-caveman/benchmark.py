@@ -1194,7 +1194,28 @@ def _approved_exact_diff(
     return True
 
 
+def _frontmatter_body(data: bytes) -> bytes:
+    text = data.decode("utf-8")
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 3)
+        if end != -1:
+            return text[end + len("\n---\n") :].encode("utf-8")
+    return data
+
+
+def _runtime_payload(relative: str, data: bytes) -> bytes:
+    if relative == "SKILL.md":
+        return _frontmatter_body(data)
+    return data
+
+
 def sha256_skill_tree() -> str:
+    """Bind the behavior runtime, not discovery metadata.
+
+    ``SKILL.md`` frontmatter (name, description, invocation) is harness
+    discovery metadata and is excluded so catalog edits do not invalidate
+    a passing evaluation. Everything else in the package stays in the digest.
+    """
     digest = hashlib.sha256()
     files = sorted(
         (
@@ -1207,14 +1228,19 @@ def sha256_skill_tree() -> str:
         key=lambda path: path.relative_to(SKILL).as_posix(),
     )
     for path in files:
-        digest.update(path.relative_to(SKILL).as_posix().encode("utf-8"))
+        relative = path.relative_to(SKILL).as_posix()
+        digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(_runtime_payload(relative, path.read_bytes()))
         digest.update(b"\0")
     return digest.hexdigest()
 
 
 INVARIANCE_SCHEMA = "super-caveman-producer-context-invariance.v1"
+
+
+def _skill_body_digest(data: bytes) -> str:
+    return hashlib.sha256(_frontmatter_body(data)).hexdigest()
 
 
 def _invariance_pathway_valid(
@@ -1241,13 +1267,45 @@ def _invariance_pathway_valid(
     changed_paths = {
         blob.get("path") for blob in approval.get("reviewed_blobs", []) if isinstance(blob, dict)
     }
-    if changed_paths & {f"skills/super-caveman/{rel}" for rel in context_files}:
+    # SKILL.md discovery metadata may change without leaving the invariance
+    # pathway; its response body is enforced by the body digests below. Runtime
+    # scripts are behavior surfaces and always block the invariance shortcut.
+    blocking = {
+        f"skills/super-caveman/{rel}" for rel in context_files if rel != "SKILL.md"
+    }
+    if changed_paths & blocking:
+        return False
+    if any(path.startswith("skills/super-caveman/scripts/") for path in changed_paths):
         return False
     base_commit = approval.get("base_commit")
     if re.fullmatch(r"[0-9a-f]{40}", str(base_commit)) is None:
         return False
     for rel in context_files:
         entry = declared[rel]
+        if rel == "SKILL.md":
+            if not isinstance(entry, dict) or set(entry) != {
+                "base_body_sha256",
+                "candidate_body_sha256",
+            }:
+                return False
+            try:
+                base_data = subprocess.check_output(
+                    ["git", "show", f"{base_commit}:skills/super-caveman/SKILL.md"],
+                    cwd=ROOT,
+                    stderr=subprocess.DEVNULL,
+                )
+                head_data = (SKILL / "SKILL.md").read_bytes()
+            except (OSError, subprocess.CalledProcessError):
+                return False
+            base_body = _skill_body_digest(base_data)
+            head_body = _skill_body_digest(head_data)
+            if (
+                entry["base_body_sha256"] != base_body
+                or entry["candidate_body_sha256"] != head_body
+                or base_body != head_body
+            ):
+                return False
+            continue
         if not isinstance(entry, dict) or set(entry) != {"base_blob_sha256", "candidate_blob_sha256"}:
             return False
         try:

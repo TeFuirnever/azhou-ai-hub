@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-BENCHMARK = ROOT / "benchmarks" / "session-insights" / "benchmark.py"
-CLI = ROOT / "skills" / "session-insights" / "scripts" / "session_insights.py"
+BENCHMARK = ROOT / "benchmarks" / "super-session-insights" / "benchmark.py"
+CLI = ROOT / "skills" / "super-session-insights" / "scripts" / "session_insights.py"
 
 
 def load_benchmark_module():
@@ -227,7 +227,7 @@ class SessionInsightsCliTest(unittest.TestCase):
         result = run_cli("report", "--aggregate", str(aggregate_path), "--out", str(report_path))
         self.assertEqual(0, result.returncode, result.stderr)
         receipt = json.loads(result.stdout)
-        self.assertEqual("session-insights.report.v1", receipt["schema"])
+        self.assertEqual("super-session-insights.report.v1", receipt["schema"])
         self.assertEqual("pass", receipt["status"])
         text = report_path.read_text(encoding="utf-8")
         home = str(Path.home())
@@ -250,7 +250,7 @@ class SessionInsightsCliTest(unittest.TestCase):
             "report", "--aggregate", str(aggregate_path), cwd=self.work
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        expected = self.work / ".azhou" / "session-insights" / "report-2026-09-09.md"
+        expected = self.work / ".azhou" / "super-session-insights" / "report-2026-09-09.md"
         self.assertTrue(expected.is_file())
 
     def test_report_rejects_foreign_schema(self) -> None:
@@ -365,7 +365,7 @@ class SessionInsightsCacheTest(unittest.TestCase):
 
     @property
     def cache_file(self) -> Path:
-        return self.cwd / ".azhou" / "session-insights" / "metadata-cache.json"
+        return self.cwd / ".azhou" / "super-session-insights" / "metadata-cache.json"
 
     def aggregate(self, *extra: str) -> dict:
         result = run_cli(
@@ -393,7 +393,7 @@ class SessionInsightsCacheTest(unittest.TestCase):
         rebuilt = self.aggregate()
         self.assertEqual(cold, rebuilt)
         self.assertEqual(
-            "session-insights.metadata-cache.v1", json.loads(self.cache_file.read_text(encoding="utf-8"))["schema"]
+            "super-session-insights.metadata-cache.v1", json.loads(self.cache_file.read_text(encoding="utf-8"))["schema"]
         )
 
     def test_cache_carries_no_transcript_text(self) -> None:
@@ -500,7 +500,7 @@ class SessionInsightsPrivateStateTest(unittest.TestCase):
         outside = self.work / "outside"
         outside.mkdir()
         (self.cwd / ".azhou").mkdir()
-        namespace = self.cwd / ".azhou" / "session-insights"
+        namespace = self.cwd / ".azhou" / "super-session-insights"
         namespace.symlink_to(outside)
         aggregate_path = self.write_aggregate()
         result = run_cli("report", "--aggregate", str(aggregate_path), cwd=self.cwd)
@@ -521,11 +521,11 @@ class SessionInsightsPrivateStateTest(unittest.TestCase):
         self.assertEqual(0, reported.returncode, reported.stderr)
         namespace = self.cwd / ".azhou"
         self.assertEqual(0o700, namespace.stat().st_mode & 0o777)
-        self.assertEqual(0o700, (namespace / "session-insights").stat().st_mode & 0o777)
+        self.assertEqual(0o700, (namespace / "super-session-insights").stat().st_mode & 0o777)
         self.assertEqual(
-            0o600, (namespace / "session-insights" / "metadata-cache.json").stat().st_mode & 0o777
+            0o600, (namespace / "super-session-insights" / "metadata-cache.json").stat().st_mode & 0o777
         )
-        report_path = namespace / "session-insights" / "report-2026-09-09.md"
+        report_path = namespace / "super-session-insights" / "report-2026-09-09.md"
         self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
         # Re-running over an existing broader-mode report must reassert 0600,
         # not preserve the old mode through O_TRUNC (review follow-up, #308).

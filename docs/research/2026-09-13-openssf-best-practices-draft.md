@@ -30,7 +30,7 @@
 | contribution / contribution_requirements | ✅ | `CONTRIBUTING.md`：以真实任务与可复现证据为起点，声明 `docs/skill-standard.md` 为包级权威；明确中文 issue/PR 可接受、机器字段保持英文 |
 | floss_license / floss_license_osi / license_location | ✅ | `LICENSE`（MIT，OSI 批准），仓库标准位置；第三方携带许可见根目录各 `*-MIT.txt`/`*-Apache-2.0.txt` |
 | documentation_basics | ✅ | 双语 README、`docs/skill-standard.md`、`docs/support-matrix.md`、`docs/installation.md` 等 |
-| documentation_interface | ✅ | 每个 canonical skill 的 `SKILL.md` 入口合同与 references（如 `skills/session-insights/references/report-contract.md` 的 CLI 口径）；声明"便携运行不意味着 hooks/内存 API 等同" |
+| documentation_interface | ✅ | 每个 canonical skill 的 `SKILL.md` 入口合同与 references（如 `skills/super-session-insights/references/report-contract.md` 的 CLI 口径）；声明"便携运行不意味着 hooks/内存 API 等同" |
 | sites_https | ✅ | 仓库、分发、issue 全部经由 GitHub HTTPS |
 | discussion | ✅ | GitHub Issues：可检索、URL 可寻址、对新来者开放、无私有客户端要求 |
 | english | ✅ | README 英文为公共入口，英文 issue/PR 明确可接受 |

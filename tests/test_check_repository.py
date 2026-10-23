@@ -13,7 +13,7 @@ from scripts.check_repository import (
     check_action_pins,
     check_chat_presentation_examples,
     check_command_surface,
-    check_fidelity_axis,
+    check_fidelity_axis, check_azhou_description_brand,
     check_invocation_axis,
     check_legacy_broadcast_delimiter,
     check_markdown_links,
@@ -43,16 +43,16 @@ class RouterCoverageTest(unittest.TestCase):
     def test_router_missing_a_name_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            router = root / "skills" / "ask-azhou"
+            router = root / "skills" / "super-ask-azhou"
             router.mkdir(parents=True)
-            (router / "SKILL.md").write_text("Routes to eli5 and lavish only.\n", encoding="utf-8")
+            (router / "SKILL.md").write_text("Routes to super-eli5 and lavish only.\n", encoding="utf-8")
             errors = check_router_coverage(root)
             self.assertTrue(
                 any("router coverage missing" in error for error in errors),
                 errors,
             )
-            self.assertIn("router coverage missing: arch-doc", errors)
-            self.assertNotIn("router coverage missing: eli5", errors)
+            self.assertIn("router coverage missing: super-arch-doc", errors)
+            self.assertNotIn("router coverage missing: super-eli5", errors)
 
 
 class SkillPlatformViewTest(unittest.TestCase):
@@ -95,7 +95,7 @@ class SkillPlatformViewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             mutated = self.real_view().replace(
-                "| ask-azhou | supported by a configured skill root |",
+                "| super-ask-azhou | supported by a configured skill root |",
                 "| retired-skill | supported by a configured skill root |",
                 1,
             )
@@ -103,7 +103,7 @@ class SkillPlatformViewTest(unittest.TestCase):
             self.assertIn("| retired-skill |", mutated)
             self.write_fixture(root, mutated)
             errors = check_skill_platform_view(root)
-            self.assertIn("skill platform view row missing: ask-azhou", errors)
+            self.assertIn("skill platform view row missing: super-ask-azhou", errors)
             self.assertIn("skill platform view row unexpected: retired-skill", errors)
 
     def test_map_entry_without_a_matrix_row_fails_the_gate(self) -> None:
@@ -119,7 +119,7 @@ class SkillPlatformViewTest(unittest.TestCase):
             errors = check_skill_platform_view(root)
             self.assertTrue(
                 any(
-                    "map row not found in support matrix" in error and "eli5" in error
+                    "map row not found in support matrix" in error and "super-eli5" in error
                     for error in errors
                 ),
                 errors,
@@ -141,7 +141,7 @@ class SkillPlatformViewTest(unittest.TestCase):
             errors = check_skill_platform_view(root)
             self.assertTrue(
                 any(
-                    "claim not derived from its governing rows" in error and "eli5:" in error
+                    "claim not derived from its governing rows" in error and "super-eli5:" in error
                     for error in errors
                 ),
                 errors,
@@ -166,28 +166,22 @@ class InvocationAxisTest(unittest.TestCase):
                 check_invocation_axis(root),
             )
 
-    def test_missing_invocation_declaration_fails_except_the_held_entry(self) -> None:
+    def test_missing_invocation_declaration_fails_for_every_package(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            skill = root / "skills" / "super-lavish" / "SKILL.md"
-            skill.parent.mkdir(parents=True)
-            skill.write_text(
-                "---\nname: super-lavish\ndescription: probe\n---\n# Super Lavish\n",
-                encoding="utf-8",
-            )
+            for package in ("super-lavish", "super-caveman"):
+                skill = root / "skills" / package / "SKILL.md"
+                skill.parent.mkdir(parents=True)
+                skill.write_text(
+                    f"---\nname: {package}\ndescription: probe\n---\n# Probe\n",
+                    encoding="utf-8",
+                )
             self.assertEqual(
-                ["skill invocation declaration missing: skills/super-lavish/SKILL.md"],
+                [
+                    "skill invocation declaration missing: skills/super-caveman/SKILL.md",
+                    "skill invocation declaration missing: skills/super-lavish/SKILL.md",
+                ],
                 check_invocation_axis(root),
-            )
-            held = root / "skills" / "super-caveman" / "SKILL.md"
-            held.parent.mkdir(parents=True)
-            held.write_text(
-                "---\nname: super-caveman\ndescription: probe\n---\n# Super Caveman\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                [],
-                [e for e in check_invocation_axis(root) if "super-caveman" in e],
             )
 
 
@@ -207,42 +201,74 @@ class FidelityAxisTest(unittest.TestCase):
     def test_new_skill_without_a_classification_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_skill(root, "skills/eli5/SKILL.md", None)
+            self.write_skill(root, "skills/super-probe/SKILL.md", None)
             self.assertEqual(
-                ["skill fidelity classification missing: skills/eli5/SKILL.md"],
+                ["skill fidelity classification missing: skills/super-probe/SKILL.md"],
                 check_fidelity_axis(root),
             )
 
     def test_unknown_classification_value_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_skill(root, "skills/eli5/SKILL.md", "forked")
+            self.write_skill(root, "skills/super-probe/SKILL.md", "forked")
             self.assertEqual(
-                ["skill fidelity classification enum invalid: skills/eli5/SKILL.md: forked"],
+                ["skill fidelity classification enum invalid: skills/super-probe/SKILL.md: forked"],
                 check_fidelity_axis(root),
             )
 
-    def test_prefix_mismatch_fails_in_both_directions(self) -> None:
+    def test_missing_brand_prefix_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_skill(root, "skills/eli5/SKILL.md", "adapted")
+            self.write_skill(root, "skills/probe/SKILL.md", "adapted")
             self.assertEqual(
-                ["fidelity prefix mismatch: skills/eli5/SKILL.md classified adapted"],
+                ["canonical package missing super- brand prefix: skills/probe/SKILL.md"],
                 check_fidelity_axis(root),
             )
+
+    def test_brand_prefix_accepts_any_fidelity_class(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.write_skill(root, "skills/super-lavish/SKILL.md", "original")
-            self.assertEqual(
-                ["fidelity prefix mismatch: skills/super-lavish/SKILL.md classified original"],
-                check_fidelity_axis(root),
-            )
+            self.assertEqual([], check_fidelity_axis(root))
 
-    def test_gate_held_classification_satisfies_the_rule(self) -> None:
+    def test_super_caveman_requires_its_own_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.write_skill(root, "skills/super-caveman/SKILL.md", None)
-            self.assertEqual([], check_fidelity_axis(root))
+            self.assertEqual(
+                ["skill fidelity classification missing: skills/super-caveman/SKILL.md"],
+                check_fidelity_axis(root),
+            )
+
+
+class AzhouDescriptionBrandTest(unittest.TestCase):
+    def test_repository_descriptions_carry_the_brand_keyword(self) -> None:
+        self.assertEqual([], check_azhou_description_brand(ROOT))
+
+    def test_incidental_azhou_substring_is_not_enough(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-azhou-doctor" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: super-azhou-doctor\ndescription: Renamed from azhou-doctor. Diagnose a checkout.\ninvocation: both\n---\n# Probe\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                ["skill description missing Azhou brand keyword: skills/super-azhou-doctor/SKILL.md"],
+                check_azhou_description_brand(root),
+            )
+
+    def test_uniform_marker_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-eli5" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: super-eli5\ndescription: Azhou skill. Explain simply.\ninvocation: both\n---\n# Probe\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_azhou_description_brand(root))
 
 
 class RenameResidueTest(unittest.TestCase):
@@ -289,7 +315,7 @@ class RenameResidueTest(unittest.TestCase):
 class ReferenceScriptPathsTest(unittest.TestCase):
     """Reference docs cite scripts mechanically: a `scripts/...` code span
     must resolve at the repository root or, on a skill's own reference page,
-    inside the citing skill package (the arch-doc and excalidraw-diagram
+    inside the citing skill package (the super-arch-doc and super-excalidraw-diagram
     doc-script drift mechanism, now gated)."""
 
     def test_reference_docs_cite_existing_scripts(self) -> None:
@@ -309,19 +335,19 @@ class ReferenceScriptPathsTest(unittest.TestCase):
     def test_skill_reference_pages_resolve_their_own_scripts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            packaged = root / "skills" / "eli5" / "scripts" / "check_audience.py"
+            packaged = root / "skills" / "super-eli5" / "scripts" / "check_audience.py"
             packaged.parent.mkdir(parents=True)
             packaged.write_text("print('ok')\n", encoding="utf-8")
-            reference = root / "skills" / "eli5" / "references" / "setup.md"
+            reference = root / "skills" / "super-eli5" / "references" / "setup.md"
             reference.parent.mkdir(parents=True)
             reference.write_text("Assert with `scripts/check_audience.py`.\n", encoding="utf-8")
             self.assertEqual([], check_reference_script_paths([reference], root))
 
-            docs_page = root / "docs" / "eli5.md"
+            docs_page = root / "docs" / "super-eli5.md"
             docs_page.parent.mkdir(parents=True)
             docs_page.write_text("Assert with `scripts/check_audience.py`.\n", encoding="utf-8")
             self.assertEqual(
-                ["reference script path missing: docs/eli5.md:1: scripts/check_audience.py"],
+                ["reference script path missing: docs/super-eli5.md:1: scripts/check_audience.py"],
                 check_reference_script_paths([docs_page], root),
             )
 
@@ -345,7 +371,7 @@ class ReferenceScriptPathsTest(unittest.TestCase):
             research = root / "docs" / "research" / "2026-01-01-note.md"
             research.parent.mkdir(parents=True)
             research.write_text("The survey recorded `scripts/gone.py`.\n", encoding="utf-8")
-            vendored = root / "skills" / "excalidraw-diagram" / "references" / ".venv" / "lib" / "note.md"
+            vendored = root / "skills" / "super-excalidraw-diagram" / "references" / ".venv" / "lib" / "note.md"
             vendored.parent.mkdir(parents=True)
             vendored.write_text("Upstream ships `scripts/gone.py`.\n", encoding="utf-8")
             frozen = root / "skills" / "super-caveman" / "references" / "setup.md"
@@ -421,7 +447,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             root = Path(directory)
             copy_skill_brand_surfaces(root)
 
-            skill = root / "skills" / "azhou-info" / "SKILL.md"
+            skill = root / "skills" / "super-azhou-info" / "SKILL.md"
             skill.write_text(
                 skill.read_text(encoding="utf-8").replace(
                     "🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）",
@@ -433,7 +459,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             errors = check_skill_brand_contract(root)
 
             self.assertIn(
-                "skill brand startup drift: skills/azhou-info/SKILL.md",
+                "skill brand startup drift: skills/super-azhou-info/SKILL.md",
                 errors,
             )
 
@@ -568,20 +594,20 @@ class RepositoryPolicyTest(unittest.TestCase):
             root = Path(directory)
             expected = [
                 root / "skills" / "super-caveman" / "SKILL.md",
-                root / "skills" / "excalidraw-diagram" / "SKILL.md",
-                root / "skills" / "azhou-doctor" / "SKILL.md",
-                root / "skills" / "azhou-info" / "SKILL.md",
-                root / "skills" / "azhou-setup" / "SKILL.md",
-                root / "skills" / "azhou-verify" / "SKILL.md",
+                root / "skills" / "super-excalidraw-diagram" / "SKILL.md",
+                root / "skills" / "super-azhou-doctor" / "SKILL.md",
+                root / "skills" / "super-azhou-info" / "SKILL.md",
+                root / "skills" / "super-azhou-setup" / "SKILL.md",
+                root / "skills" / "super-azhou-verify" / "SKILL.md",
                 root / "skills" / "super-repo-pedant" / "SKILL.md",
                 root / "skills" / "super-lavish" / "SKILL.md",
-                root / "skills" / "eli5" / "SKILL.md",
-                root / "skills" / "autoresearch" / "SKILL.md",
-                root / "skills" / "ask-azhou" / "SKILL.md",
-                root / "skills" / "arch-doc" / "SKILL.md",
-                root / "skills" / "archify" / "SKILL.md",
-                root / "skills" / "asd-ste100" / "SKILL.md",
-                root / "skills" / "session-insights" / "SKILL.md",
+                root / "skills" / "super-eli5" / "SKILL.md",
+                root / "skills" / "super-autoresearch" / "SKILL.md",
+                root / "skills" / "super-ask-azhou" / "SKILL.md",
+                root / "skills" / "super-arch-doc" / "SKILL.md",
+                root / "skills" / "super-archify" / "SKILL.md",
+                root / "skills" / "super-asd-ste100" / "SKILL.md",
+                root / "skills" / "super-session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"

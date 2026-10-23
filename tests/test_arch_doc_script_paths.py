@@ -6,14 +6,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SKILL = ROOT / "skills" / "arch-doc"
+SKILL = ROOT / "skills" / "super-arch-doc"
 SCAN_FILES = [SKILL / "SKILL.md", SKILL / "references" / "templates" / "PROVENANCE.md"]
 SCRIPT_REF = re.compile(r"`((?:<skill-dir>/)?scripts/[\w./-]+\.py)")
 
 
 class ArchDocScriptPathTest(unittest.TestCase):
     """Regression for doc-code drift: every referenced skill script must
-    resolve inside the arch-doc package. The 2026-09-05 audit found the entry
+    resolve inside the super-arch-doc package. The 2026-09-05 audit found the entry
     pointing at repo-root `scripts/verify_doc.py`, which never existed; the
     scripts live under the skill directory.
     """

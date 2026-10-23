@@ -17,7 +17,7 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
-    directory: /skills/excalidraw-diagram/scripts
+    directory: /skills/super-excalidraw-diagram/scripts
     schedule:
       interval: weekly
       day: monday
@@ -29,11 +29,11 @@ updates:
           - patch
     labels:
       - dependencies
-      - excalidraw-diagram
+      - super-excalidraw-diagram
     open-pull-requests-limit: 5
 
   - package-ecosystem: pip
-    directory: /skills/excalidraw-diagram/references
+    directory: /skills/super-excalidraw-diagram/references
     schedule:
       interval: weekly
       day: monday
@@ -45,5 +45,5 @@ updates:
           - patch
     labels:
       - dependencies
-      - excalidraw-diagram
+      - super-excalidraw-diagram
     open-pull-requests-limit: 5

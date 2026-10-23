@@ -15,7 +15,7 @@ from scripts.verify import SUMMARY_SCHEMA, commands, main, summary_payload
 
 FAILURE_PATTERN = re.compile(r"(?i)\bfailed\b|failures?=\d+")
 ROOT = Path(__file__).parents[1]
-VALIDATOR = ROOT / "skills" / "azhou-verify" / "scripts" / "check-gate-report.py"
+VALIDATOR = ROOT / "skills" / "super-azhou-verify" / "scripts" / "check-gate-report.py"
 
 
 class FakeRunner:
@@ -176,7 +176,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
             self.assertIsNone(FAILURE_PATTERN.search(line), line)
 
     def test_green_capture_satisfies_the_gate_report_validator(self) -> None:
-        """The azhou-verify validator must stay green on the new default output."""
+        """The super-azhou-verify validator must stay green on the new default output."""
         runner = FakeRunner()
         code, out, err = run_main([], runner)
         self.assertEqual(0, code)

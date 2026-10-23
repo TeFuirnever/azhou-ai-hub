@@ -25,22 +25,22 @@ class LLMWikiRepositoryTest(unittest.TestCase):
             package.mkdir(parents=True)
             (package / "SKILL.md").write_text("super-llm-wiki\n", encoding="utf-8")
             expected = [
-                root / "skills" / "arch-doc" / "SKILL.md",
+                root / "skills" / "super-arch-doc" / "SKILL.md",
                 root / "skills" / "super-caveman" / "SKILL.md",
-                root / "skills" / "excalidraw-diagram" / "SKILL.md",
-                root / "skills" / "azhou-doctor" / "SKILL.md",
-                root / "skills" / "azhou-info" / "SKILL.md",
+                root / "skills" / "super-excalidraw-diagram" / "SKILL.md",
+                root / "skills" / "super-azhou-doctor" / "SKILL.md",
+                root / "skills" / "super-azhou-info" / "SKILL.md",
                 root / "skills" / "super-llm-wiki" / "SKILL.md",
-                root / "skills" / "azhou-setup" / "SKILL.md",
-                root / "skills" / "azhou-verify" / "SKILL.md",
+                root / "skills" / "super-azhou-setup" / "SKILL.md",
+                root / "skills" / "super-azhou-verify" / "SKILL.md",
                 root / "skills" / "super-repo-pedant" / "SKILL.md",
                 root / "skills" / "super-lavish" / "SKILL.md",
-                root / "skills" / "eli5" / "SKILL.md",
-                root / "skills" / "autoresearch" / "SKILL.md",
-                root / "skills" / "ask-azhou" / "SKILL.md",
-                root / "skills" / "archify" / "SKILL.md",
-                root / "skills" / "asd-ste100" / "SKILL.md",
-                root / "skills" / "session-insights" / "SKILL.md",
+                root / "skills" / "super-eli5" / "SKILL.md",
+                root / "skills" / "super-autoresearch" / "SKILL.md",
+                root / "skills" / "super-ask-azhou" / "SKILL.md",
+                root / "skills" / "super-archify" / "SKILL.md",
+                root / "skills" / "super-asd-ste100" / "SKILL.md",
+                root / "skills" / "super-session-insights" / "SKILL.md",
             ]
 
             self.assertEqual([], check_skill_discovery(expected, root))

@@ -20,10 +20,10 @@ from scripts import verify as verify_script
 
 ROOT = Path(__file__).parents[1]
 AZHOU_SKILL_NAMES = (
-    "azhou-doctor",
-    "azhou-info",
-    "azhou-setup",
-    "azhou-verify",
+    "super-azhou-doctor",
+    "super-azhou-info",
+    "super-azhou-setup",
+    "super-azhou-verify",
 )
 
 
@@ -120,7 +120,7 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
-            ["ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
+            ["super-ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
             payload["runtime_state"]["namespaces"],
         )
         self.assertEqual(
@@ -129,19 +129,19 @@ class AzhouHubCliTest(unittest.TestCase):
         )
         self.assertEqual(
             [
-                "arch-doc",
-                "archify",
-                "asd-ste100",
-                "ask-azhou",
-                "autoresearch",
+                "super-arch-doc",
+                "super-archify",
+                "super-asd-ste100",
+                "super-ask-azhou",
+                "super-autoresearch",
                 *AZHOU_SKILL_NAMES,
-                "eli5",
-                "excalidraw-diagram",
-                "session-insights",
                 "super-caveman",
+                "super-eli5",
+                "super-excalidraw-diagram",
                 "super-lavish",
                 "super-llm-wiki",
                 "super-repo-pedant",
+                "super-session-insights",
             ],
             payload["installable_skills"],
         )
@@ -179,7 +179,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
     def test_task_skill_real_packages_complete_managed_lifecycle(self) -> None:
-        for name in ("super-repo-pedant", "super-caveman", "excalidraw-diagram"):
+        for name in ("super-repo-pedant", "super-caveman", "super-excalidraw-diagram"):
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
                 target = Path(directory) / "skills"
                 receipt = target / ".azhou/hub" / "receipts" / f"{name}.json"
@@ -982,7 +982,7 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertFalse(report["valid"])
 
     def test_known_renames_match_the_host_migration_doc(self) -> None:
-        doc = (ROOT / "skills" / "azhou-doctor" / "references" / "host-migration.md").read_text(encoding="utf-8")
+        doc = (ROOT / "skills" / "super-azhou-doctor" / "references" / "host-migration.md").read_text(encoding="utf-8")
         table_rows = {
             match.group(1).strip(): match.group(2).strip()
             for match in re.finditer(r"^\| ([a-z-]+) \| (super-[a-z-]+) \|$", doc, re.MULTILINE)
@@ -1103,7 +1103,7 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(first["planId"], second["planId"])
 
     def test_published_command_lines_match_the_real_parsers(self) -> None:
-        # Every command line azhou-setup SKILL.md and docs/foundations.md
+        # Every command line super-azhou-setup SKILL.md and docs/foundations.md
         # publish must be accepted by the real argparse surface (F11).
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)

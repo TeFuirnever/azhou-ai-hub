@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-VALIDATOR = ROOT / "skills" / "azhou-verify" / "scripts" / "check-gate-report.py"
+VALIDATOR = ROOT / "skills" / "super-azhou-verify" / "scripts" / "check-gate-report.py"
 
 
 def run_validator(exit_code: int, captured: str) -> tuple[int, str]:

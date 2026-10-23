@@ -1,4 +1,4 @@
-"""Integrity suite for the asd-ste100 canonical skill.
+"""Integrity suite for the super-asd-ste100 canonical skill.
 
 Pins the vendored upstream baseline (TeFuirnever/asd-ste100-skill at the
 immutable provenance commit), the hub wrapper layer (frontmatter contract,
@@ -20,7 +20,7 @@ from scripts.check_repository import INVOCATION_CLASSES, SKILL_BRAND_CONTRACTS
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_DIR = ROOT / "skills" / "asd-ste100"
+SKILL_DIR = ROOT / "skills" / "super-asd-ste100"
 SKILL = SKILL_DIR / "SKILL.md"
 
 UPSTREAM_COMMIT = "32511c6992ecb5f1971e46a2943f2e6adceedafe"
@@ -57,7 +57,7 @@ class AsdSte100PackageTest(unittest.TestCase):
         keys = {line.split(":", 1)[0] for line in self.frontmatter.splitlines()}
         self.assertEqual({"name", "description"}, keys - {"invocation"})
         name = re.search(r"^name:\s*([^\n]+)$", self.frontmatter, re.MULTILINE)
-        self.assertEqual("asd-ste100", name.group(1).strip())
+        self.assertEqual("super-asd-ste100", name.group(1).strip())
         invocation = re.search(r"^invocation:\s*([^\n]+)$", self.frontmatter, re.MULTILINE)
         self.assertIsNotNone(invocation)
         self.assertIn(invocation.group(1).strip(), INVOCATION_CLASSES)
@@ -70,7 +70,7 @@ class AsdSte100PackageTest(unittest.TestCase):
         self.assertIn("Not for creative or marketing copy", self.text)
 
     def test_brand_contract_is_present(self) -> None:
-        contract = SKILL_BRAND_CONTRACTS["skills/asd-ste100/SKILL.md"]
+        contract = SKILL_BRAND_CONTRACTS["skills/super-asd-ste100/SKILL.md"]
         self.assertIn(f"🦊 阿舟 · {contract['display_name']}", self.text)
         self.assertIn(contract["motto"], self.text)
         self.assertIn(contract["startup"], self.text)
@@ -78,7 +78,7 @@ class AsdSte100PackageTest(unittest.TestCase):
             self.assertIn(marker, self.text)
         self.assertIn("A host without Unicode", self.text)
         self.assertIn("raw evidence", self.text)
-        self.assertIn("asd-ste100.receipt.v1", self.text)
+        self.assertIn("super-asd-ste100.receipt.v1", self.text)
 
     def test_provenance_pins_the_locked_upstream(self) -> None:
         provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")

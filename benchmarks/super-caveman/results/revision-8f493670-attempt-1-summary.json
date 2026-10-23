@@ -99,7 +99,7 @@
     "The prior bounded output set is reused under the existing producer-context invariance contract; this rebind provides no new model, platform-preview, or publication evidence.",
     "Workspace-owner approval for the re-bind was granted in-session on 2026-09-15 ('同意，go') after per-image human P0 review of all seven azhou-scenes candidates; the raw approval follows the validator-conformant eight-key form."
   ],
-  "status": "pass",
+  "status": "superseded",
   "harness": "zcode CLI isolated general-purpose subagents (GLM), one case per agent, serial execution; the reused raw set was produced under the same harness against the byte-identical producer context",
   "skill_tree_sha256": "8f493670ae612192bfc885549685b12e4386637623363d8daf5b072ec6fc6670",
   "automatic_checks": {

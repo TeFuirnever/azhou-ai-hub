@@ -72,24 +72,24 @@ The package uses these licensed upstreams. Package versions and local digests ar
 
 Font redistribution notices ship beside the fonts:
 
-- [Virgil SIL Open Font License 1.1](skills/excalidraw-diagram/references/Virgil-LICENSE.md)
-- [Excalifont SIL Open Font License 1.1](skills/excalidraw-diagram/references/Excalifont-LICENSE.md)
+- [Virgil SIL Open Font License 1.1](skills/super-excalidraw-diagram/references/Virgil-LICENSE.md)
+- [Excalifont SIL Open Font License 1.1](skills/super-excalidraw-diagram/references/Excalifont-LICENSE.md)
 
 The vendored `excalidraw-all.esm.js` retains its generated bundled-license block, including notices for React, pako, fonteditor-core, harfbuzzjs, pica, DOMPurify, Mermaid and other bundled dependencies. Do not strip that block when rebuilding the file.
 
-Refresh these sources only in an isolated checkout or package workspace at an approved immutable commit/version. Rebuild the engine and font set together. Before replacing libraries, compare the selected baseline to the checked-in snapshot; if it differs, record the verified source commit instead of assuming equivalence. Retain author paths, regenerate `skills/excalidraw-diagram/references/icon-catalog.md`, update both provenance surfaces and license copies, then run `python3 scripts/verify.py`. Never refresh from a moving default branch directly into the runtime package.
+Refresh these sources only in an isolated checkout or package workspace at an approved immutable commit/version. Rebuild the engine and font set together. Before replacing libraries, compare the selected baseline to the checked-in snapshot; if it differs, record the verified source commit instead of assuming equivalence. Retain author paths, regenerate `skills/super-excalidraw-diagram/references/icon-catalog.md`, update both provenance surfaces and license copies, then run `python3 scripts/verify.py`. Never refresh from a moving default branch directly into the runtime package.
 
 ## Eli5
 
-`skills/eli5/` adapts the `eli5` skill from [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community) at immutable commit [`794af9e63d07fad17087dcab61f21f44cb48effd`](https://github.com/anthropics/claude-plugins-community/commit/794af9e63d07fad17087dcab61f21f44cb48effd). The upstream baseline is a single 321-byte `SKILL.md`; its behavior sentence is retained verbatim in the local package.
+`skills/super-eli5/` adapts the `super-eli5` skill from [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community) at immutable commit [`794af9e63d07fad17087dcab61f21f44cb48effd`](https://github.com/anthropics/claude-plugins-community/commit/794af9e63d07fad17087dcab61f21f44cb48effd). The upstream baseline is a single 321-byte `SKILL.md`; its behavior sentence is retained verbatim in the local package.
 
 - License: [Apache-2.0](LICENSES/Claude-Plugins-Community-Apache-2.0.txt), the repository-level license file of the upstream project
-- Imported boundary: the eli5 behavior sentence and trigger intent; no other upstream files exist
+- Imported boundary: the super-eli5 behavior sentence and trigger intent; no other upstream files exist
 - Local changes: harness-neutral description and topic argument, topic boundary, self-contained artifact contract, Azhou brand protocol, stable receipt, provenance and compatibility records
 
 ## ASD-STE100
 
-`skills/asd-ste100/` imports the `asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
+`skills/super-asd-ste100/` imports the `super-asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
 
 - Copyright: Dustin Yuchen Teng, 2026
 - License: [MIT](LICENSES/asd-ste100-skill-MIT.txt)
@@ -98,16 +98,16 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 ## Archify
 
-`skills/archify/` imports the `archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.1.0`](https://github.com/tt-a1i/archify/releases/tag/v3.1.0) (commit [`1c2b42d660e4a7571813fb43839c79e3e9ca7720`](https://github.com/tt-a1i/archify/commit/1c2b42d660e4a7571813fb43839c79e3e9ca7720)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the fifteen pre-rendered example HTML files and the dev-only `package-lock.json` are the only exclusions, recorded in the package's compatibility map.
+`skills/super-archify/` imports the `super-archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.1.0`](https://github.com/tt-a1i/archify/releases/tag/v3.1.0) (commit [`1c2b42d660e4a7571813fb43839c79e3e9ca7720`](https://github.com/tt-a1i/archify/commit/1c2b42d660e4a7571813fb43839c79e3e9ca7720)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the fifteen pre-rendered example HTML files and the dev-only `package-lock.json` are the only exclusions, recorded in the package's compatibility map.
 
 - Copyright: tt-a1i (Archify), 2026
 - License: [MIT](LICENSES/archify-MIT.txt); bundled font notice inside the package under `assets/JetBrainsMono-OFL.txt`
 - Imported boundary: the ten-mode typed-JSON diagram capability with its `validate`/`deliver`/`finalize` gate chain, renderers, viewer template, contracts, examples and locale translations
-- Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
+- Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `super-excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
 
 ## Autoresearch (referenced, not redistributed)
 
-`skills/autoresearch/` is an Azhou-authored wrapper around [karpathy/autoresearch](https://github.com/karpathy/autoresearch) pinned at commit `228791fb499afffb54b46200aca536f79142f117`. The upstream repository publishes no license file, so no upstream bytes are vendored: the runtime environment is the user's own pinned checkout, the experiment protocol stays in the upstream `program.md`, and this package ships wrapper, setup and provenance text only.
+`skills/super-autoresearch/` is an Azhou-authored wrapper around [karpathy/autoresearch](https://github.com/karpathy/autoresearch) pinned at commit `228791fb499afffb54b46200aca536f79142f117`. The upstream repository publishes no license file, so no upstream bytes are vendored: the runtime environment is the user's own pinned checkout, the experiment protocol stays in the upstream `program.md`, and this package ships wrapper, setup and provenance text only.
 
 ## Public prior art excluded from distribution
 

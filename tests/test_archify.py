@@ -1,4 +1,4 @@
-"""Integrity suite for the archify canonical skill.
+"""Integrity suite for the super-archify canonical skill.
 
 Pins the vendored upstream baseline (tt-a1i/archify v3.1.0), the hub wrapper
 layer (frontmatter contract, carved coexistence boundary, brand protocol,
@@ -19,7 +19,7 @@ from scripts.check_repository import INVOCATION_CLASSES, SKILL_BRAND_CONTRACTS
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_DIR = ROOT / "skills" / "archify"
+SKILL_DIR = ROOT / "skills" / "super-archify"
 SKILL = SKILL_DIR / "SKILL.md"
 
 UPSTREAM_TAG = "v3.1.0"
@@ -48,7 +48,7 @@ class ArchifyPackageTest(unittest.TestCase):
         keys = {line.split(":", 1)[0] for line in self.frontmatter.splitlines()}
         self.assertEqual({"name", "description"}, keys - {"invocation"})
         name = re.search(r"^name:\s*([^\n]+)$", self.frontmatter, re.MULTILINE)
-        self.assertEqual("archify", name.group(1).strip())
+        self.assertEqual("super-archify", name.group(1).strip())
         invocation = re.search(r"^invocation:\s*([^\n]+)$", self.frontmatter, re.MULTILINE)
         self.assertIsNotNone(invocation)
         self.assertIn(invocation.group(1).strip(), INVOCATION_CLASSES)
@@ -62,14 +62,14 @@ class ArchifyPackageTest(unittest.TestCase):
             self.text,
         )
         self.assertIn("Not for numeric charts or dashboards", self.text)
-        self.assertIn("belong to excalidraw-diagram", self.text)
+        self.assertIn("belong to super-excalidraw-diagram", self.text)
 
     def test_excalidraw_diagram_records_the_other_side_of_the_carve(self) -> None:
-        excalidraw = (ROOT / "skills" / "excalidraw-diagram" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("belong to archify", excalidraw)
+        excalidraw = (ROOT / "skills" / "super-excalidraw-diagram" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("belong to super-archify", excalidraw)
 
     def test_brand_contract_is_present(self) -> None:
-        contract = SKILL_BRAND_CONTRACTS["skills/archify/SKILL.md"]
+        contract = SKILL_BRAND_CONTRACTS["skills/super-archify/SKILL.md"]
         self.assertIn(f"🦊 阿舟 · {contract['display_name']}", self.text)
         self.assertIn(contract["motto"], self.text)
         self.assertIn(contract["startup"], self.text)
@@ -77,7 +77,7 @@ class ArchifyPackageTest(unittest.TestCase):
             self.assertIn(marker, self.text)
         self.assertIn("A host without Unicode", self.text)
         self.assertIn("raw evidence", self.text)
-        self.assertIn("archify.receipt.v1", self.text)
+        self.assertIn("super-archify.receipt.v1", self.text)
 
     def test_provenance_pins_the_locked_upstream(self) -> None:
         provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")

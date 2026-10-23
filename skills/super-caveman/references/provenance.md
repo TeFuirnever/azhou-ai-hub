@@ -1,5 +1,7 @@
 # Provenance and composition boundary
 
+Classification: `adapted` — merged Caveman core, six companion routes, and the pinned i-have-adhd response contract with local derivative deltas.
+
 ## Immutable sources
 
 ### Caveman capability source

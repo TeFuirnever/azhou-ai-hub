@@ -6,10 +6,10 @@
 
 Four independently installable, open-format adapter packages expose this control surface without duplicating its implementation. Independent installation makes each `SKILL.md` discoverable on its own; it does not bundle a standalone copy of the repository CLI:
 
-- [`azhou-info`](../skills/azhou-info/SKILL.md) selects the read-only `info` or `version` contract.
-- [`azhou-doctor`](../skills/azhou-doctor/SKILL.md) builds a read-only diagnostic request and never auto-fixes it.
-- [`azhou-setup`](../skills/azhou-setup/SKILL.md) requires a dry-run before any explicitly authorized setup or receipt-owned lifecycle mutation.
-- [`azhou-verify`](../skills/azhou-verify/SKILL.md) invokes the one authoritative full-repository gate.
+- [`super-azhou-info`](../skills/super-azhou-info/SKILL.md) selects the read-only `info` or `version` contract.
+- [`super-azhou-doctor`](../skills/super-azhou-doctor/SKILL.md) builds a read-only diagnostic request and never auto-fixes it.
+- [`super-azhou-setup`](../skills/super-azhou-setup/SKILL.md) requires a dry-run before any explicitly authorized setup or receipt-owned lifecycle mutation.
+- [`super-azhou-verify`](../skills/super-azhou-verify/SKILL.md) invokes the one authoritative full-repository gate.
 
 The same `SKILL.md` packages can be installed into any Agent Skills-compatible root. Discovery paths and explicit invocation syntax remain host concerns, but no host receives a separate implementation. These Skills require an explicit Azhou AI Hub checkout because the CLI and source packages remain repository-level authorities; they do not scan home directories, infer a harness root, or bundle a second copy of the lifecycle code.
 

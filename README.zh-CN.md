@@ -33,21 +33,21 @@ https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-info
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-doctor
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-setup
-npx skills add TeFuirnever/azhou-ai-hub --skill azhou-verify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
+npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill autoresearch
-npx skills add TeFuirnever/azhou-ai-hub --skill arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill archify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
+npx skills add TeFuirnever/azhou-ai-hub --skill super-autoresearch
+npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
+npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
+npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
+npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 ~~~
 
 包管理器安装解析的是可变默认分支；请按[安装指南](docs/installation.md#verify-what-you-installed)对照已发布 tag 校验安装内容，或改用带回据的 checkout 托管路径。
@@ -64,10 +64,10 @@ npx skills add TeFuirnever/azhou-ai-hub --skill archify
 
 | Agent Skill | CLI 权威命令 | 修改边界 |
 |---|---|---|
-| `azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
-| `azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移。 |
-| `azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
-| `azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate；维护者可显式追加 promotion evidence 回放。 |
+| `super-azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
+| `super-azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移。 |
+| `super-azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
+| `super-azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate；维护者可显式追加 promotion evidence 回放。 |
 
 ~~~bash
 python scripts/azhou_hub.py info --json
@@ -85,37 +85,37 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 | Skill | 解决的真实任务 | 验证依据 |
 |---|---|---|
-| [Azhou Info](skills/azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
-| [Azhou Doctor](skills/azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移健康。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke、fail-closed target 检查和只读宿主迁移探测。 |
-| [Azhou Setup](skills/azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
-| [Azhou Verify](skills/azhou-verify/SKILL.md) | 执行公开全仓完整性 gate，或显式执行维护者 promotion 回放。 | 委派给仓库策略、单元测试、benchmark integrity 和空白检查；promotion 模式额外要求 Git-external 证据。 |
+| [Azhou Info](skills/super-azhou-info/SKILL.md) | 报告 checkout、运行时、支持范围和可证明的 Git revision，不虚构发布状态。 | 委派给稳定的 `info` / `version` JSON 合同；只读包检查与仓库策略检查。 |
+| [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移健康。 | 只读 doctor 合同、真实 Treehouse 2.3.0 smoke、fail-closed target 检查和只读宿主迁移探测。 |
+| [Azhou Setup](skills/super-azhou-setup/SKILL.md) | 先规划再显式执行 checkout-assisted 安装或 receipt-owned 生命周期操作。 | dry-run-first setup、mutation lock、身份防护、rollback 与 receipt 回归。 |
+| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | 执行公开全仓完整性 gate，或显式执行维护者 promotion 回放。 | 委派给仓库策略、单元测试、benchmark integrity 和空白检查；promotion 模式额外要求 Git-external 证据。 |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | 明确任务结束时，用当前代码校正文档、项目规则、交接状态和已绑定项目 memory。 | 28/28 项 <code>neat-freak</code> 能力有机器映射（基线为上游 v3.0.0 <code>322346de</code>，快照哈希锁定；2026-10-07 审计、2026-10-18 重基线，吸收 pin <code>bab17831</code> 保留为 lineage）；3 个注册行为 case；固定执行协议与 memory inventory 证明。 |
-| [Excalidraw Diagram](skills/excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。沙箱拦截预览时降级为几何与哈希校验，并以显式 hold 报告，不做静默跳过。仓库 reference 只证明接线，不冒充模型效果。 |
+| [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | 生成或编辑可继续修改的图，渲染真实产物、查看成图，并按需交付 CJK-safe SVG/PNG。 | 5 个冻结 benchmark case；风格、场景、重叠和 same-DOM 确定性 gate。沙箱拦截预览时降级为几何与哈希校验，并以显式 hold 报告，不做静默跳过。仓库 reference 只证明接线，不冒充模型效果。 |
 | [Super LLM Wiki](skills/super-llm-wiki/SKILL.md) | 构建私有、持久的 Markdown 项目知识库，让 Agent 跨会话摄取、检索、读取和检查知识。 | 标准本地目录、8 个 MCP 工具与决策生命周期、原子迁移、隐私默认值和专项确定性合同测试。 |
 | [Super Caveman](skills/super-caveman/SKILL.md) | 在原版 Caveman 上完整采用锁定版 `i-have-adhd` 输出行为，并吸纳 commit、review、委派、帮助、文件压缩和统计路线。 | 原版 Caveman 加六个伴生 Skill，收口为一个 canonical 包；8 条路线、保留的 14-case 历史证据、已记录的 19/19 case 与 44/44 criterion 行为运行（三名独立配对评审 3/3 选择 candidate、高风险回归为 0；由原始 Codex Desktop 生产者链产出，该链已被取代且未在其他宿主上演示）、当前在 zcode CLI / GLM-5.3-Flash 宿主上的晋升绑定（对字节等价的 producer context 以 zcode 产出的证据做不变性重验，不作跨宿主等价主张）以及可恢复压缩门禁。证据仅适用于上述记录的宿主/模型绑定。 |
 | [Super Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉化的 Agent 回复变成富 HTML 产物，用户可以标注、排队 prompt 并通过 Lavish Editor CLI 反馈；Spec Relay relay 模式把 PRD、RFC、设计或技术 Spec 连同评论、选区批注、处置与下一责任人状态打包进一份可传递 HTML。 | 上游基线哈希锁定用于复现，CLI 锁定 <code>0.1.89</code>，本地层在其上加入 relay 模式；provenance 记录不可变上游 commit 与可复现源校验。relay 模式内嵌 <code>spec-relay.html-state.v1</code> 与乐观修订守卫；确定性检查覆盖反馈更新、旧副本拒绝、可见状态精确投影与响应式布局。本地审阅不是发布；<code>share</code> 需要单独授权。不主张 hosted-share receipt。 |
-| [Eli5](skills/eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、带固定受众声明与词量预算的自包含产物合同、品牌协议和稳定收据，收据判定层带确定性的受众与风格读回断言，并有正负例测试覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
-| [Ask Azhou](skills/ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用；路由覆盖由仓库门禁强制。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
-| [Autoresearch](skills/autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
-| [Arch Doc](skills/arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与两份评审指南作为 references 随包交付；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/arch-doc/` 黄金用例。 |
-| [Session Insights](skills/session-insights/SKILL.md) | 从本机 agent 会话存储产出事实绑定的使用洞察报告（Claude Code 与 Codex 适配器；zcode 适配器 fail closed——探测确认其存储无明文转写）；只做聚合，原始转写永不出本机。 | 合成存储上的接线完整性套件：golden 聚合、窗口/上限裁剪、收据摘要稳定性、隐私与 fail-closed 负控。不含摘录的聚合运行复用可丢弃的逐文件元数据缓存，冷、热、删除、损坏四种缓存状态产出字节一致的结果；roast 语气、离线 HTML 产物与 Codex rollout 适配器均在 golden parity 与 fail-closed 负控之下交付，zcode hold 即使面对更丰富但未核实的存储形状也保持不动。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
-| [ASD-STE100](skills/asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则，以 Strict 或 STE-flavored 模式改写面向 agent 的英文——工具描述、错误消息、inter-agent 指令、状态报告；保留每个 hedge、事实和范围限定语，不可再分发的 ASD 词典按设计排除。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`scripts/ste-lint.py` 把可机械核验的结构规则变成确定性标准库门禁（硬违规退出码、`--baseline`、`--json`、`--selftest`），配正负测试。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
-| [Archify](skills/archify/SKILL.md) | 把系统、计划或代码库变成成品级交互图示地图——从 architecture、workflow 到 ERD、tree、timeline、waterfall 共十种 typed-JSON 模式，交付为自包含可探索 HTML（主题、pan/zoom、引导视图、诚实导出）；可编辑 .excalidraw 源场景仍归 excalidraw-diagram。 | 在锁定的上游 tag 上 faithful 导入，裁剪后的 vendored 子树钉有 SHA-256 完整性测试（`doctor` 25/25）；确定性 `validate`/`deliver`/`finalize` 真浏览器门禁链原样保留，包装层只加阿舟品牌协议与 `archify.receipt.v1`。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Eli5](skills/super-eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML，遇到精度关键的请求会显式拒绝，不把精读内容降级成图片。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验；本地层增加主题边界、带固定受众声明与词量预算的自包含产物合同、品牌协议和稳定收据，收据判定层带确定性的受众与风格读回断言，并有正负例测试覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Ask Azhou](skills/super-ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用；路由覆盖由仓库门禁强制。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Autoresearch](skills/super-autoresearch/SKILL.md) | 包装用户自有、锁定 commit 的 karpathy/autoresearch checkout，让 Agent 能准备、运行、恢复和汇报自动 nanochat 训练实验，无人值守 GPU 运行前先显式 hold。 | 阿舟自研包装器；上游未发布 license，因此不 vendor 任何上游字节；setup 对 GPU、uv 和 pin 检查 fail-closed，并有确定性包面检查覆盖。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律（四联注与时序图规范）、回源交叉校准和两条最佳实践评审线。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线（团队上游研读、可读性审计、最佳实践评审与 architect 批准的 20 项改进）；五张已验证时序图与两份评审指南作为 references 随包交付；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/super-arch-doc/` 黄金用例。 |
+| [Session Insights](skills/super-session-insights/SKILL.md) | 从本机 agent 会话存储产出事实绑定的使用洞察报告（Claude Code 与 Codex 适配器；zcode 适配器 fail closed——探测确认其存储无明文转写）；只做聚合，原始转写永不出本机。 | 合成存储上的接线完整性套件：golden 聚合、窗口/上限裁剪、收据摘要稳定性、隐私与 fail-closed 负控。不含摘录的聚合运行复用可丢弃的逐文件元数据缓存，冷、热、删除、损坏四种缓存状态产出字节一致的结果；roast 语气、离线 HTML 产物与 Codex rollout 适配器均在 golden parity 与 fail-closed 负控之下交付，zcode hold 即使面对更丰富但未核实的存储形状也保持不动。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则，以 Strict 或 STE-flavored 模式改写面向 agent 的英文——工具描述、错误消息、inter-agent 指令、状态报告；保留每个 hedge、事实和范围限定语，不可再分发的 ASD 词典按设计排除。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`scripts/ste-lint.py` 把可机械核验的结构规则变成确定性标准库门禁（硬违规退出码、`--baseline`、`--json`、`--selftest`），配正负测试。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
+| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成成品级交互图示地图——从 architecture、workflow 到 ERD、tree、timeline、waterfall 共十种 typed-JSON 模式，交付为自包含可探索 HTML（主题、pan/zoom、引导视图、诚实导出）；可编辑 .excalidraw 源场景仍归 super-excalidraw-diagram。 | 在锁定的上游 tag 上 faithful 导入，裁剪后的 vendored 子树钉有 SHA-256 完整性测试（`doctor` 25/25）；确定性 `validate`/`deliver`/`finalize` 真浏览器门禁链原样保留，包装层只加阿舟品牌协议与 `super-archify.receipt.v1`。尚无行为 benchmark。最小行为 eval-case 路径见 `docs/eval-case-contract.md`。 |
 
-十六个包都能作为独立 package surface 安装和发现。目录按[技能标准](docs/skill-standard.md) §2.2 的调用类轴组合：[Ask Azhou](skills/ask-azhou/SKILL.md) 是 user-invoked 前门，每个包都声明调用类——十五个在各自 `SKILL.md` frontmatter（user-invoked orchestrator 或双类面），super-caveman 的在仓库门禁的持表声明中直至其晋升冻结树下次 ride——orchestrator 可以指向 discipline，任何东西不得链入另一个 orchestrator，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
+十六个包都能作为独立 package surface 安装和发现。目录按[技能标准](docs/skill-standard.md) §2.2 的调用类轴组合：[Ask Azhou](skills/super-ask-azhou/SKILL.md) 是 user-invoked 前门，每个包都在各自 `SKILL.md` frontmatter 声明调用类（user-invoked orchestrator 或双类面）——orchestrator 可以指向 discipline，任何东西不得链入另一个 orchestrator，但这不代表四个 Foundation 适配器是独立控制面：它们仍需要显式本地 checkout，并编排该 checkout 的仓库级 CLI，而不是在 prompt 中复制生命周期逻辑。运行时材料在 <code>skills/</code>；prompt、assertion、fixture 和 judge record 在仓库级 <code>benchmarks/</code>。
 
-Canonical 名字本身携带来源信息：`super-` 前缀表示该 skill 改编自锁定上游材料，无前缀表示原创或忠实承接。仓库门禁双向强制执行这条 prefix-fidelity 规则，并对已改名旧名字在文档兼容面之外的残留直接 fail。
+Canonical 名字统一使用 `super-` 品牌前缀。与上游材料的 fidelity 写在各包 provenance，不再决定目录名。仓库门禁强制品牌前缀，并对已改名旧名字在文档兼容面之外的残留直接 fail。
 
 ## 试用六个任务型 Skill
 
 | Skill | 复制给 Agent | 必须返回什么 |
 |---|---|---|
 | Super Repo Pedant | <code>这个阶段做完了，跑一次 super-repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/super-repo-pedant.md)。 |
-| Excalidraw Diagram | <code>用 excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/excalidraw-diagram.md)。 |
+| Excalidraw Diagram | <code>用 super-excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/super-excalidraw-diagram.md)。 |
 | Super Caveman | <code>使用 /super-caveman full，再为这份 diff 写 commit message。</code> | 行动优先精简模式和可直接粘贴的 Conventional Commit；不暂存、不提交。 |
 | Super LLM Wiki | <code>用 super-llm-wiki 保存这条已验证的架构决策，再检索回来并检查 wiki。</code> | 私有本地页面、来源与置信度、检索结果、健康报告和稳定收据。[运行 demo](docs/demos/super-llm-wiki.md)。 |
 | Super Lavish | <code>用 super-lavish 的 relay 模式把这份 Spec 和审阅评论打包成一份可传递 HTML。</code> | 与来源关联的 HTML、可寻址分区、内嵌评论与批注、已处置反馈、未决责任人、明确的 transport/publication 状态和 relay 收据。[运行 demo](docs/demos/super-lavish.md)。 |
-| Arch Doc | <code>用 arch-doc 从这个仓库的上游设计文档产出架构说明书。</code> | 带出处的研究笔记、图注入账的模板骨架、仅 PlantUML 的图纪律、确定性收尾门禁和稳定收据。[运行 demo](docs/demos/arch-doc.md)。 |
+| Arch Doc | <code>用 super-arch-doc 从这个仓库的上游设计文档产出架构说明书。</code> | 带出处的研究笔记、图注入账的模板骨架、仅 PlantUML 的图纪律、确定性收尾门禁和稳定收据。[运行 demo](docs/demos/super-arch-doc.md)。 |
 
 Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合同和 verifier 接线，只有冻结的 attempt-1 运行才算模型证据。
 
@@ -154,11 +154,11 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 
 JSON 可解析不等于完成。这个 skill 要求交付可编辑源图，用官方引擎渲染，实际查看图片，从源场景修复，再重跑 gate。离线字体、官方引擎、转换器和 231 个 MIT 许可的组件库随运行包提供。
 
-![Excalidraw Diagram 效果图](assets/skills/excalidraw-diagram-effect.png)
+![Excalidraw Diagram 效果图](assets/skills/super-excalidraw-diagram-effect.png)
 
 > ✏️ 效果图由 Azhou Scenes skill 生成。机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。
 
-[运行包](skills/excalidraw-diagram/SKILL.md) · [依赖安装](skills/excalidraw-diagram/references/setup.md) · [来源说明](skills/excalidraw-diagram/references/provenance.md)
+[运行包](skills/super-excalidraw-diagram/SKILL.md) · [依赖安装](skills/super-excalidraw-diagram/references/setup.md) · [来源说明](skills/super-excalidraw-diagram/references/provenance.md)
 
 ## Super Caveman
 
@@ -202,11 +202,11 @@ Lavish Editor 是通用富 HTML 审阅面：artifact 模式服务复杂或视觉
 
 Arch Doc 从上游真源文档端到端产出、校准与评审架构设计文档：带出处的研究笔记、受控证据词表的基线骨架、PlantUML 唯一图纪律、回源交叉校准和两条最佳实践评审线。
 
-![Arch Doc 效果图](assets/skills/arch-doc-effect.png)
+![Arch Doc 效果图](assets/skills/super-arch-doc-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/arch-doc/SKILL.md) · [运行 demo](docs/demos/arch-doc.md)
+[运行包](skills/super-arch-doc/SKILL.md) · [运行 demo](docs/demos/super-arch-doc.md)
 
 ## Eli5
 
@@ -214,11 +214,11 @@ Arch Doc 从上游真源文档端到端产出、校准与评审架构设计文�
 
 Eli5 把主题讲到读者零门槛：一份自包含 HTML，只有大图和极少文字；对精度关键的请求宁可拒绝，也不降级成画。
 
-![Eli5 效果图](assets/skills/eli5-effect.png)
+![Eli5 效果图](assets/skills/super-eli5-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/eli5/SKILL.md)
+[运行包](skills/super-eli5/SKILL.md)
 
 ## Ask Azhou
 
@@ -226,11 +226,11 @@ Eli5 把主题讲到读者零门槛：一份自包含 HTML，只有大图和极�
 
 Ask Azhou 是目录的用户入口：描述意图，得到一个 skill 推荐及其模式和边界。只做推荐，不代执行；全 canonical skill 覆盖由仓库门禁强制。
 
-![Ask Azhou 效果图](assets/skills/ask-azhou-effect.png)
+![Ask Azhou 效果图](assets/skills/super-ask-azhou-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/ask-azhou/SKILL.md)
+[运行包](skills/super-ask-azhou/SKILL.md)
 
 ## Autoresearch
 
@@ -238,11 +238,11 @@ Ask Azhou 是目录的用户入口：描述意图，得到一个 skill 推荐及
 
 Autoresearch 包装用户持有的锁定版 <code>karpathy/autoresearch</code> checkout，让 Agent 可以准备、运行、续跑和汇报 nanochat 训练实验，并在任何无人看管的 GPU 运行前先停住。
 
-![Autoresearch 效果图](assets/skills/autoresearch-effect.png)
+![Autoresearch 效果图](assets/skills/super-autoresearch-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/autoresearch/SKILL.md)
+[运行包](skills/super-autoresearch/SKILL.md)
 
 ## Session Insights
 
@@ -250,11 +250,11 @@ Autoresearch 包装用户持有的锁定版 <code>karpathy/autoresearch</code> c
 
 Session Insights 把本地 Agent 会话存储变成事实约束的使用洞察报告：只出聚合，数字可复验；存储没有明文 transcript 时适配器 fail-closed。
 
-![Session Insights 效果图](assets/skills/session-insights-effect.png)
+![Session Insights 效果图](assets/skills/super-session-insights-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/session-insights/SKILL.md)
+[运行包](skills/super-session-insights/SKILL.md)
 
 ## ASD-STE100
 
@@ -262,23 +262,23 @@ Session Insights 把本地 Agent 会话存储变成事实约束的使用洞察�
 
 ASD-STE100 用源自 ASD-STE100 的受控英语结构规则改写面向 agent 的英文——工具描述、错误消息、inter-agent 指令、状态报告：主动语态、一句一事、句长与名词堆叠封顶、同义词不轮换。Strict 模式管机器要解析的文本；STE-flavored 模式保留结构纪律、对叙述文放宽词汇规则。标准库 linter `ste-lint.py` 把可机械核验的结构规则变成确定性门禁；每次改写都保留原有的 hedge、事实和范围限定语，不升格、不加料。不可再分发的 ASD 词典按设计排除在外。
 
-![ASD-STE100 效果图](assets/skills/asd-ste100-effect.png)
+![ASD-STE100 效果图](assets/skills/super-asd-ste100-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/asd-ste100/SKILL.md)
+[运行包](skills/super-asd-ste100/SKILL.md)
 
 ## Archify
 
 > 🗺️ 一张图讲清一个系统，交给读者去探索。
 
-Archify 把系统、计划或代码库变成成品级交互图示地图：十种 typed-JSON 图模式交付为自包含可探索 HTML（主题切换、pan/zoom、引导视图、诚实导出），背后是确定性的 `validate`/`deliver`/`finalize` 真浏览器门禁。可编辑的 .excalidraw 源场景仍归 excalidraw-diagram。
+Archify 把系统、计划或代码库变成成品级交互图示地图：十种 typed-JSON 图模式交付为自包含可探索 HTML（主题切换、pan/zoom、引导视图、诚实导出），背后是确定性的 `validate`/`deliver`/`finalize` 真浏览器门禁。可编辑的 .excalidraw 源场景仍归 super-excalidraw-diagram。
 
-![Archify 效果图](assets/skills/archify-effect.png)
+![Archify 效果图](assets/skills/super-archify-effect.png)
 
 > 🦊 效果图由 Azhou Scenes skill 生成，人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。
 
-[运行包](skills/archify/SKILL.md)
+[运行包](skills/super-archify/SKILL.md)
 
 ## 一套架构
 

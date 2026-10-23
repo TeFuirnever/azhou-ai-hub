@@ -7,13 +7,13 @@
 
 ## Problem Statement
 
-用户无法从名字判断一个 skill 是"原版能力"还是"在原版基础上调整过的能力"。`super-caveman` 用名字声明了它是 Caveman 的增强版，但 `repo-pedant`（自述为 neat-freak 的严格增强版）、`llm-wiki`（上游实现的 Python 重写）、`ci-test-reliability` 与 `prose-standard`（换栈重表达）、`lavish`（保留上游工作流外加新增 relay 模式）看起来和 `eli5`（行为句逐字保留的忠实导入）或 `ask-azhou` / `autoresearch`（零上游字节的原创包装）毫无区别。命名语义没有规则约束，会持续漂移。
+用户无法从名字判断一个 skill 是"原版能力"还是"在原版基础上调整过的能力"。`super-caveman` 用名字声明了它是 Caveman 的增强版，但 `repo-pedant`（自述为 neat-freak 的严格增强版）、`llm-wiki`（上游实现的 Python 重写）、`ci-test-reliability` 与 `prose-standard`（换栈重表达）、`lavish`（保留上游工作流外加新增 relay 模式）看起来和 `super-eli5`（行为句逐字保留的忠实导入）或 `super-ask-azhou` / `super-autoresearch`（零上游字节的原创包装）毫无区别。命名语义没有规则约束，会持续漂移。
 
 ## Solution
 
 全目录采用一条命名规则：忠实保留原版能力的 skill 保留原名；能力被调整（增强、合并、重表达、换栈移植、重写）的 skill 统一加 `super-` 前缀。判定标准用户已确认为**能力改造判定**。分四步落地：先在 skill-standard 定义 fidelity 轴并把每个 skill 的证据化分类写进 provenance 记录；再逐 skill 原子改名并同步全部引用面；与 super-caveman 晋升记录 reviewed blobs 相交的那一个改名走 maintainer 批准的 promotion 流程；最后由仓库 gate 机械强制"前缀 ⟺ 分类"。
 
-预期结果：改名 5 个（`super-repo-pedant`、`super-ci-test-reliability`、`super-prose-standard`、`super-llm-wiki`、`super-lavish`），其中两个边界案例由审计引证确认（`eli5` 预期保留原名，`lavish` 预期加前缀）；全部 Azhou 原创 skill 保留原名；`super-caveman` 已合规。
+预期结果：改名 5 个（`super-repo-pedant`、`super-ci-test-reliability`、`super-prose-standard`、`super-llm-wiki`、`super-lavish`），其中两个边界案例由审计引证确认（`super-eli5` 预期保留原名，`lavish` 预期加前缀）；全部 Azhou 原创 skill 保留原名；`super-caveman` 已合规。
 
 ## 判定标准（fidelity 轴）
 
@@ -39,24 +39,24 @@
 
 **`faithful` → 保留（边界，预期 1 个）：**
 
-- `eli5`：上游 321 字节行为句逐字保留；新增仅 topic 边界、单 artifact 输出形态、品牌、收据、provenance —— 属包装层。
+- `super-eli5`：上游 321 字节行为句逐字保留；新增仅 topic 边界、单 artifact 输出形态、品牌、收据、provenance —— 属包装层。
 
 **`original` → 保留（9 个）：**
 
-- `ask-azhou`（借用 ask-matt 模式，零上游字节，路由的是本仓自己的目录）、`autoresearch`（包装未修改的 karpathy/autoresearch 环境，vendor 零上游字节）、`azhou-doctor`、`azhou-info`、`azhou-setup`、`azhou-verify`、`arch-doc`、`excalidraw-diagram`（Azhou 自维护；上游为无许可证 prior art 未分发）、`super-caveman`（已合规，仍记录分类以纳入统一 gate）。
+- `super-ask-azhou`（借用 ask-matt 模式，零上游字节，路由的是本仓自己的目录）、`super-autoresearch`（包装未修改的 karpathy/autoresearch 环境，vendor 零上游字节）、`super-azhou-doctor`、`super-azhou-info`、`super-azhou-setup`、`super-azhou-verify`、`super-arch-doc`、`super-excalidraw-diagram`（Azhou 自维护；上游为无许可证 prior art 未分发）、`super-caveman`（已合规，仍记录分类以纳入统一 gate）。
 
-> 对 seam 讨论时预览的修正：`autoresearch` 当时列为可能改名，但其 provenance 证明它 vendor 零上游字节、只包装外部环境，判为 `original` 保留原名；`lavish` 反向 —— 新增 relay 模式构成能力扩展，预期加前缀。两者均由审计引证确认。
+> 对 seam 讨论时预览的修正：`super-autoresearch` 当时列为可能改名，但其 provenance 证明它 vendor 零上游字节、只包装外部环境，判为 `original` 保留原名；`lavish` 反向 —— 新增 relay 模式构成能力扩展，预期加前缀。两者均由审计引证确认。
 
 ## 里程碑
 
 - **M1 —— 立规则与记录**：fidelity 轴写入 skill-standard；每个 skill 的分类 + 证据写入其 provenance 记录。不改名、不改 gate。
-- **M2 —— 无耦合改名**：每个 skill 一个原子 commit（`git mv` 保留历史）：移动包目录、更新 frontmatter `name`、品牌锚点行、ask-azhou 路由图、discovery 与 invocation 声明表、双语 README、support-matrix、skill-standard 提及、第三方声明路径、benchmark 目录 + manifest + integrity 套件、tests、收据/schema 机器身份串。`llm-wiki` 的 `.azhou/llm-wiki/` 状态根随改名 commit 按标准 §2.1 迁移协议迁到新 canonical 名（先稳定 dry-run plan，同 planId 原子应用，源目录保留为具名 compatibility source，禁止 fallback read）。
+- **M2 —— 无耦合改名**：每个 skill 一个原子 commit（`git mv` 保留历史）：移动包目录、更新 frontmatter `name`、品牌锚点行、super-ask-azhou 路由图、discovery 与 invocation 声明表、双语 README、support-matrix、skill-standard 提及、第三方声明路径、benchmark 目录 + manifest + integrity 套件、tests、收据/schema 机器身份串。`llm-wiki` 的 `.azhou/llm-wiki/` 状态根随改名 commit 按标准 §2.1 迁移协议迁到新 canonical 名（先稳定 dry-run plan，同 planId 原子应用，源目录保留为具名 compatibility source，禁止 fallback read）。
 - **M3 —— repo-pedant 改名（promotion 耦合）**：动手前先读最新 super-caveman 晋升记录的 reviewed blobs；凡相交编辑（AGENTS.md 中点名 `skills/repo-pedant/...` 的不变量、results bookkeeping）必须与 maintainer 批准的 promotion 流程同批落地，附新的 checked-in receipt，否则公开 gate 失败。
 - **M4 —— 机械强制**：仓库 gate 新增"前缀 ⟺ 分类"检查；新 skill 引入时必须声明分类；改名残留检查（旧名只允许出现在兼容触发词、迁移源、provenance/changelog 历史）；跑完整 closeout。
 
 ## 引用面清单（每个改名 commit 必须同步）
 
-`skills/<name>/` 目录、frontmatter `name`、`🦊 阿舟 · <Skill>` 锚点行、ask-azhou 路由图（gate 强制其覆盖全部 canonical skill）、`check_repository.py` 的 discovery/invocation 表、`README.md` 与 `README.zh-CN.md`（同一 commit）、`docs/support-matrix.md`、`docs/skill-standard.md`（含"十四个 canonical skill"等计数与点名）、`THIRD_PARTY_NOTICES.md` 与 `LICENSES/` 路径引用、`benchmarks/<skill>/` 目录与 manifest/integrity 套件、`tests/`、收据 schema 串（如 `schema_version` 内嵌名）。改名后的旧名仅允许保留为入口 description 内的兼容触发词（沿用 super-caveman 的 `/caveman` 先例）。
+`skills/<name>/` 目录、frontmatter `name`、`🦊 阿舟 · <Skill>` 锚点行、super-ask-azhou 路由图（gate 强制其覆盖全部 canonical skill）、`check_repository.py` 的 discovery/invocation 表、`README.md` 与 `README.zh-CN.md`（同一 commit）、`docs/support-matrix.md`、`docs/skill-standard.md`（含"十四个 canonical skill"等计数与点名）、`THIRD_PARTY_NOTICES.md` 与 `LICENSES/` 路径引用、`benchmarks/<skill>/` 目录与 manifest/integrity 套件、`tests/`、收据 schema 串（如 `schema_version` 内嵌名）。改名后的旧名仅允许保留为入口 description 内的兼容触发词（沿用 super-caveman 的 `/caveman` 先例）。
 
 ## Testing Decisions
 
@@ -71,7 +71,7 @@
 - 不改任何 skill 行为；不重同步上游；除名字与引用同步外不改内容；不动品牌层。
 - 不改名、不触碰 Azhou 原创 skill、super-caveman 行为及其 adapter 命令面。
 - GitHub label 改名、对外的改名公告。
-- session-insights（#161 及后续）与其他新 skill 工作。
+- super-session-insights（#161 及后续）与其他新 skill 工作。
 - Harness adapter 身份与任何模型专用打包（继续禁止）。
 
 ## Further Notes

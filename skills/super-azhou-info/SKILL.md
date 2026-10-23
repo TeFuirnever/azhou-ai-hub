@@ -1,0 +1,36 @@
+---
+name: super-azhou-info
+description: Azhou skill. Renamed from azhou-info (the old name still triggers this skill). Report provable Azhou AI Hub checkout information or revision facts. Use for project info, installable repository inventory, support facts, version, commit, branch, or dirty-state questions; also for 这是什么版本, 现在装了哪些 skill, or "what revision is this checkout on".
+invocation: user-invoked orchestrator
+---
+
+# Azhou Info
+
+**🦊 阿舟 · Azhou Info**
+
+> 🔎 只报告仓库能证明的事实。
+
+Use the repository Foundation CLI as the only authority. Do not reconstruct version or package facts from memory.
+
+## Brand protocol
+
+Emit this exact display event once, at the start of every run, with the selected mode and resolved checkout scope:
+
+```text
+🦊 阿舟 · Azhou Info 启动（mode=<info|version>, scope=<checkout>）
+```
+
+Use `✅ 验证通过` only after the selected read-only command succeeds and its output is read back. Use `❌ 验证失败` for a command or evidence failure and `🔒 阿舟暂停这一项` when an explicit checkout is missing. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
+
+In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
+## Workflow
+
+1. Resolve the checkout from a user-supplied path, or from the current Git root only when both `scripts/azhou_hub.py` and `docs/skill-standard.md` exist. Do not scan unrelated directories or infer a harness home.
+2. Run one read-only command from that checkout:
+   - General project/runtime/support facts and installable repository inventory: `python scripts/azhou_hub.py info --json`
+   - Revision, branch, dirty state, or release-version questions: `python scripts/azhou_hub.py version --json`
+3. Report only fields returned by the command. A missing `release_version` is not an installation failure and must not be invented.
+4. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
+
+If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and a smoke check, read [setup and compatibility](references/setup.md).

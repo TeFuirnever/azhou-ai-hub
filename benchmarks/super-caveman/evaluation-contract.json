@@ -181,7 +181,7 @@
   ],
   "runtime": {
     "package": "skills/super-caveman",
-    "skill_tree_digest": "stable-v2: sha256 over every sorted relative POSIX runtime path, one NUL byte, file bytes, one NUL byte; exclude only generated __pycache__, .pyc, and .pyo files",
+    "skill_tree_digest": "stable-v3: sha256 over every sorted relative POSIX runtime path, one NUL byte, behavior payload bytes, one NUL byte; exclude only generated __pycache__, .pyc, and .pyo files; SKILL.md contributes its body after the frontmatter block so discovery metadata (name, description, invocation) does not bind the runtime",
     "harness": "record the concrete harness in the result",
     "model": "record the concrete model identifier when exposed; otherwise record the family and an explicit limitation"
   },
@@ -301,7 +301,7 @@
         "references/brand-layer.md"
       ],
       "capsule_rules_digest": "b468435b1fbbcf33aa65107efc3aab1c0286cb325bb736673442478657409d17",
-      "requirement": "When the promotion diff touches none of the producer context files and the capsule rules digest is unchanged, a fresh candidate production adds no behavioral signal relative to a production against the base tree: the attempt may reuse a raw output set produced against the base tree and substitute the three-judge paired review with the invariance proof (per-file blob equality between base and candidate)."
+      "requirement": "When the promotion diff leaves the response body of every producer context file, any skills/super-caveman/scripts/ path, and the capsule rules digest unchanged, a fresh candidate production adds no behavioral signal relative to a production against the base tree: the attempt may reuse a raw output set produced against the base tree and substitute the three-judge paired review with the invariance proof (per-file body equality for SKILL.md; per-file git blob equality for the other context files)."
     }
   },
   "claim_gate": {

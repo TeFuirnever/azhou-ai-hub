@@ -61,7 +61,7 @@ jobs:
         run: |
           SKILLS_HOME="$RUNNER_TEMP/skills-home"
           rc=0
-          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --json 2>&1 | tee plan.json | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
+          python scripts/azhou_hub.py setup --skill super-session-insights --target "$SKILLS_HOME" --mode link --json 2>&1 | tee plan.json | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
           if [ "$rc" -ne 0 ]; then echo "exit=$rc" | tee -a "$GITHUB_STEP_SUMMARY"; fi
           exit "$rc"
       - name: End of plan section, start setup apply
@@ -82,7 +82,7 @@ jobs:
             exit 1
           fi
           rc=0
-          python scripts/azhou_hub.py setup --skill session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
+          python scripts/azhou_hub.py setup --skill super-session-insights --target "$SKILLS_HOME" --mode link --apply --plan-id "$PLAN_ID" --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
           if [ "$rc" -ne 0 ]; then echo "exit=$rc" | tee -a "$GITHUB_STEP_SUMMARY"; fi
           exit "$rc"
       - name: End of apply section, start doctor
@@ -98,7 +98,7 @@ jobs:
         run: |
           SKILLS_HOME="$RUNNER_TEMP/skills-home"
           rc=0
-          python scripts/azhou_hub.py doctor --skill session-insights --target "$SKILLS_HOME" --verify --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
+          python scripts/azhou_hub.py doctor --skill super-session-insights --target "$SKILLS_HOME" --verify --json 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || rc=$?
           if [ "$rc" -ne 0 ]; then echo "exit=$rc" | tee -a "$GITHUB_STEP_SUMMARY"; fi
           exit "$rc"
       - name: End of doctor section, start repository gate
