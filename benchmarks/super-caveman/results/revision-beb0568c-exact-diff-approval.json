@@ -5,8 +5,8 @@
   "approved_at": "2026-10-23T08:40:00Z",
   "base_commit": "6fea078a95047235705c3538bdd0379cbb8fb92d",
   "review_scope": "all staged task paths except the aggregate result and aggregate approval record",
-  "path_set_sha256": "3e05f32a5e151ed37948be0e117f5a2ac20f150a44c32c0771566dd806038209",
-  "staged_patch_sha256": "0be07f7576c890354d84c4f2b57bcedfc64f8fe8fe6789c03f491a68bb8e15b1",
+  "path_set_sha256": "a4587f2b1e419edc883ee1a1056976cc256b787a0cf9b09a120cf4b64503a422",
+  "staged_patch_sha256": "962c48ee41860f614ce51eba4bba9874e4faf9e640352a529816c258c5404309",
   "reviewed_blobs": [
     {
       "path": ".github/ISSUE_TEMPLATE/bug.yml",
@@ -32,6 +32,11 @@
       "path": "AGENTS.md",
       "old_oid": "c30f9ce39f95ac20e4ffd7a0ddcbfe7d73366e2b",
       "new_oid": "37e122f73b6080a2d38b1fa915e3c653947b61f3"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "old_oid": "4735ecba9f4bee9388a033afa94887edd5879ba3",
+      "new_oid": "f570016da84674691d33eb08696f5c4af654c1c5"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -7699,6 +7704,6 @@
       "new_oid": "1ddf95cb1a43b1a75f9fc8c04934442f4f645265"
     }
   ],
-  "raw_approval_record_sha256": "d9b3c91c1b39d22ab3d2122c16bcefa654ecc8c5aa9fd50130f4ad353006bfe8",
+  "raw_approval_record_sha256": "f87b7b80449788a96e9bf0f9c395a96423c26d72e0871a2c1e25ed297a3b8404",
   "raw_approval_storage": "Git-external"
 }
