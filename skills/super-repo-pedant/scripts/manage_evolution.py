@@ -78,6 +78,7 @@ def project_identity(project: Path) -> str:
             ["git", "-C", str(project), "config", "--get", "remote.origin.url"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=5,
             check=False,
         )

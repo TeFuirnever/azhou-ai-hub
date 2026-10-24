@@ -26,6 +26,7 @@ class ManageEvolutionTest(unittest.TestCase):
             [sys.executable, str(SCRIPT), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
 
@@ -34,6 +35,7 @@ class ManageEvolutionTest(unittest.TestCase):
             [sys.executable, str(SCRIPT), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
             preexec_fn=lambda: os.umask(umask),
         )
@@ -237,6 +239,7 @@ class ManageEvolutionTest(unittest.TestCase):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
                 )
                 time.sleep(0.5)
                 self.assertIsNone(
@@ -271,6 +274,7 @@ class ManageEvolutionTest(unittest.TestCase):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
+                        encoding="utf-8",
                     )
                     # Handshake: give the child its interpreter startup, then
                     # prove it is blocked on the held lock — add-signal stores
