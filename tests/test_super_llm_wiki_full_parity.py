@@ -303,6 +303,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
                 input="".join(json.dumps(message) + "\n" for message in messages),
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )
@@ -467,6 +468,7 @@ class LLMWikiFullParityTests(unittest.TestCase):
                 [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
                 input="".join(json.dumps(message) + "\n" for message in messages),
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )

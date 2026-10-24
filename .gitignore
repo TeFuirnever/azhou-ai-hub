@@ -75,6 +75,7 @@ benchmarks/excalidraw-diagram/workspace/
 # Harness-local agent state dirs; session state, never committed.
 /.claude/
 /.local/
+/.mimocode/
 /.treehouse/
 
 # Scene-image generation scratch (azhou-scenes working state: candidates,

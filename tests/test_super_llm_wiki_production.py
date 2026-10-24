@@ -400,6 +400,7 @@ class LLMWikiProductionTests(unittest.TestCase):
             [sys.executable, str(SCRIPTS / "llm_wiki_adapter.py"), "host-hook", "session-start"],
             input=json.dumps({"cwd": str(ROOT)}),
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=True,
         )
@@ -440,6 +441,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
                 input="\n".join(json.dumps(request) for request in requests) + "\n",
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )
@@ -461,6 +463,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                     "Lifecycle context.",
                 ],
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )
@@ -472,6 +475,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                     [sys.executable, str(SCRIPTS / "llm_wiki_adapter.py"), "host-hook", name],
                     input=event,
                     text=True,
+                    encoding="utf-8",
                     capture_output=True,
                     check=True,
                 )
@@ -493,6 +497,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                     "true",
                 ],
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )
@@ -535,6 +540,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 [sys.executable, str(SCRIPTS / "llm_wiki_mcp.py")],
                 input="\n".join(requests) + "\n",
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=True,
             )
@@ -556,6 +562,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                     [sys.executable, str(SCRIPTS / "llm_wiki_adapter.py"), "host-hook", name],
                     input=event,
                     text=True,
+                    encoding="utf-8",
                     capture_output=True,
                     check=True,
                 )
@@ -576,6 +583,7 @@ class LLMWikiProductionTests(unittest.TestCase):
                 completed = subprocess.run(
                     [sys.executable, str(SCRIPTS / "llm_wiki.py"), "--root", str(root), *arguments],
                     text=True,
+                    encoding="utf-8",
                     capture_output=True,
                     check=False,
                 )

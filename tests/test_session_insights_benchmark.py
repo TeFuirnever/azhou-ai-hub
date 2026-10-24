@@ -41,7 +41,7 @@ class SessionInsightsBenchmarkTest(unittest.TestCase):
             [sys.executable, str(BENCHMARK), "check"],
             cwd=ROOT,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)

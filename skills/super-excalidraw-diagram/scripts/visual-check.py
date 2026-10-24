@@ -97,7 +97,7 @@ def _fallback_block(scene: Path | None, artifact_stat: dict) -> dict:
 
     audit = subprocess.run(
         [sys.executable, str(_SCRIPTS / "audit-overlaps.py"), str(scene)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     audit_entry: dict = {"exit": audit.returncode}
     match = re.search(r"GEOMETRY ISSUES: (\d+)", audit.stdout)
     audit_entry["issues"] = int(match.group(1)) if match else None

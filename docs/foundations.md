@@ -20,7 +20,6 @@ python scripts/azhou_hub.py info --json
 python scripts/azhou_hub.py version --json
 python scripts/azhou_hub.py doctor --json
 python scripts/azhou_hub.py verify
-python scripts/azhou_hub.py verify --promotion-evidence
 ~~~
 
 - `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. The `azhou-ai-hub.info.v1` schema adds `primary_commands` as the preferred five-command field while retaining the original `commands` field with the same value; changing the schema discriminator requires an explicitly approved incompatible migration.

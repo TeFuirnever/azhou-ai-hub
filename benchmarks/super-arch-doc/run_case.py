@@ -34,14 +34,14 @@ def main() -> int:
         out = Path(td) / "ARCH-2026-099.md"
         r1 = subprocess.run([sys.executable, str(SKILL / "scripts" / "new_doc.py"),
                              "software-implementation-architecture", "ARCH-2026-099",
-                             "演示系统", "--out", str(out)], capture_output=True, text=True)
+                             "演示系统", "--out", str(out)], capture_output=True, text=True, encoding="utf-8")
         results.append(("scaffold exit 0", r1.returncode == 0, r1.stderr.strip()[:200]))
         body = out.read_text(encoding="utf-8") if out.exists() else ""
         results.append(("control line present",
                         "文档 ID：`ARCH-2026-099`" in body and "版本：`0.1`" in body and "状态：`Draft`" in body,
                         ""))
         r2 = subprocess.run([sys.executable, str(SKILL / "scripts" / "verify_doc.py"), str(out)],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8")
         results.append(("verify_doc exit 0", r2.returncode == 0, r2.stdout.strip()[:200]))
         results.append(("selector links rewritten",
                         "](design-doc.md" not in body and "super-arch-doc skill 内 design-doc.md" in body, ""))
