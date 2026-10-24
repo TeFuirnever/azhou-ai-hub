@@ -715,7 +715,7 @@ exit 0
                     env=env,
                     check=False,
                     capture_output=True,
-                    text=True,
+                    text=True, encoding="utf-8",
                 )
 
                 self.assertEqual(expected_code, result.returncode, result.stderr)

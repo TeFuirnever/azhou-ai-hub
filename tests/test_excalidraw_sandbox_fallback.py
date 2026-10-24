@@ -139,7 +139,7 @@ def _run_visual_check(args: list[str], shim: dict[str, str] | None = None):
             env["PYTHONPATH"] = str(shim_dir)
         result = subprocess.run(
             [sys.executable, str(SCRIPT), *args],
-            capture_output=True, text=True, env=env, check=False)
+            capture_output=True, text=True, encoding="utf-8", env=env, check=False)
     return result
 
 
@@ -235,7 +235,7 @@ class BenchmarkHoldsTest(unittest.TestCase):
                  "--case", str(CASE),
                  "--candidate", str(REFERENCE_SCENE),
                  "--run", str(run_path)],
-                capture_output=True, text=True, check=False)
+                capture_output=True, text=True, encoding="utf-8", check=False)
 
     def test_verify_surfaces_sandbox_hold_and_stays_unusable(self) -> None:
         result = self._verify({
@@ -284,7 +284,7 @@ class BenchmarkHoldsTest(unittest.TestCase):
             results.write_text(verify.stdout.strip() + "\n", encoding="utf-8")
             report = subprocess.run(
                 [sys.executable, str(BENCHMARK), "report", "--results", str(results)],
-                capture_output=True, text=True, check=False)
+                capture_output=True, text=True, encoding="utf-8", check=False)
         self.assertEqual(0, report.returncode, report.stderr)
         aggregate = json.loads(report.stdout)
         self.assertIn("sandbox blocked preview", aggregate["holds"])
@@ -303,7 +303,7 @@ class BenchmarkHoldsTest(unittest.TestCase):
             receipt["artifact"]["sha256"])
         result = subprocess.run(
             [sys.executable, str(BENCHMARK), "check"],
-            capture_output=True, text=True, check=False)
+            capture_output=True, text=True, encoding="utf-8", check=False)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("sandbox-blocked fixture holds explicitly", result.stdout)
 

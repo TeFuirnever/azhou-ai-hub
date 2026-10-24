@@ -176,7 +176,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
             [sys.executable, str(VALIDATOR), "--exit-code", str(code)],
             input=out + err,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout)
@@ -196,7 +196,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
             [sys.executable, str(VALIDATOR), "--exit-code", str(code)],
             input=merged,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
         )
         self.assertEqual(1, result.returncode)
