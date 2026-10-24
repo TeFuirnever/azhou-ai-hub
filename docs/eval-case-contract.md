@@ -2,7 +2,7 @@
 
 本文定义本目录中最小的**行为证据层**（minimal behavior eval-case）：一个包在"wiring-integrity benchmark 已绿"之上、在"paired-judges 行为演化"之下，所能做出的第一层真实行为声明。它回答一个问题：*这个 skill 在冻结条件下被真实调用一次时，是否做到了它的入口合同所承诺的事。*
 
-适用对象：目录中标注 "No behavior benchmark yet" 的包（当前为 super-eli5、super-ask-azhou、super-autoresearch、super-session-insights）。super-caveman 的 promotion 评测链是更高一层，不受本文约束。
+适用对象：目录中标注 "No behavior benchmark yet" 的包（当前为 super-eli5、super-ask-azhou、super-autoresearch、super-session-insights）。
 
 ## 六要素
 

@@ -135,7 +135,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-ask-azhou",
                 "super-autoresearch",
                 *AZHOU_SKILL_NAMES,
-                "super-caveman",
                 "super-eli5",
                 "super-excalidraw-diagram",
                 "super-lavish",
@@ -179,7 +178,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 self.assertEqual("pass", checks[f"target:{name}"]["status"])
 
     def test_task_skill_real_packages_complete_managed_lifecycle(self) -> None:
-        for name in ("super-repo-pedant", "super-caveman", "super-excalidraw-diagram"):
+        for name in ("super-repo-pedant", "super-excalidraw-diagram"):
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
                 target = Path(directory) / "skills"
                 receipt = target / ".azhou/hub" / "receipts" / f"{name}.json"
@@ -708,36 +707,12 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(azhou_hub.ROOT, run.call_args.kwargs["cwd"])
         self.assertFalse(run.call_args.kwargs["check"])
 
-    def test_authoritative_verify_scopes_promotion_evidence_to_the_promotion_gate(self) -> None:
-        completed = mock.Mock(returncode=0)
-        # Redirect the gate's own output: an unredirected main() here used to
-        # leak "verification passed" into the suite stream, which is exactly
-        # the captured-block contradiction issue #252 u8 removes.
+    def test_authoritative_verify_rejects_the_retired_promotion_evidence_flag(self) -> None:
         stdout, stderr = io.StringIO(), io.StringIO()
-        with mock.patch("scripts.verify.subprocess.run", return_value=completed) as run:
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                result = verify_script.main(
-                    ["--python", "/custom/python", "--promotion-evidence"]
-                )
-
-        self.assertEqual(0, result)
-        self.assertEqual(
-            "verification passed", stdout.getvalue().strip().splitlines()[-1]
-        )
-        commands = [call.args[0] for call in run.call_args_list]
-        self.assertIn(
-            [
-                "/custom/python",
-                "benchmarks/super-caveman/benchmark.py",
-                "check",
-                "--promotion-evidence",
-            ],
-            commands,
-        )
-        self.assertIn(
-            ["/custom/python", "-m", "unittest", "discover", "-s", "tests"],
-            commands,
-        )
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                verify_script.main(["--promotion-evidence"])
+        self.assertNotEqual(0, raised.exception.code)
 
     def test_documented_direct_script_verify_invocation_does_not_require_package_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

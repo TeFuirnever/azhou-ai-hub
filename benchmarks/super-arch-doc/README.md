@@ -17,4 +17,4 @@ python3 benchmarks/super-arch-doc/run_case.py [--receipt <path.json>]
 3. 模板内的 3 处 `design-doc.md` 选择器链接被改写为纯文本标注（产物 `grep -c "design-doc.md#"` 为 3，但无 Markdown 断链）。
 4. 模板本体哈希不变（`references/templates/PROVENANCE.md` 表仍一致）。
 
-当前状态：自动断言 runner 已交付并实跑通过，收据见 `evidence/arch-doc-benchmark-receipt-2026-09-04.json`（2026-09-04）。接入 `scripts/verify.py` 公开 gate 待排期（sibling-gap GAP#4 的剩余半步）；在接入之前，公开 gate 的 benchmark 完整性主张仍为三套（repo-pedant / super-caveman / excalidraw）。
+当前状态：自动断言 runner 已交付并实跑通过，收据见 `evidence/arch-doc-benchmark-receipt-2026-09-04.json`（2026-09-04）。接入 `scripts/verify.py` 公开 gate 待排期（sibling-gap GAP#4 的剩余半步）；在接入之前，公开 gate 的 benchmark 完整性主张仍为三套（repo-pedant / super-excalidraw-diagram / super-session-insights）。

@@ -26,7 +26,6 @@ class LLMWikiRepositoryTest(unittest.TestCase):
             (package / "SKILL.md").write_text("super-llm-wiki\n", encoding="utf-8")
             expected = [
                 root / "skills" / "super-arch-doc" / "SKILL.md",
-                root / "skills" / "super-caveman" / "SKILL.md",
                 root / "skills" / "super-excalidraw-diagram" / "SKILL.md",
                 root / "skills" / "super-azhou-doctor" / "SKILL.md",
                 root / "skills" / "super-azhou-info" / "SKILL.md",

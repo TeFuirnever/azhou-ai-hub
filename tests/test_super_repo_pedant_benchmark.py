@@ -18,8 +18,8 @@ FIXTURE = ROOT / "benchmarks" / "super-repo-pedant" / "fixtures" / "code-spec-co
 
 
 def load_benchmark_module():
-    # Load under a unique name: test_super_caveman_benchmark imports its own
-    # module as plain "benchmark", and sys.modules must not collide.
+    # Load under a unique module name so sys.modules does not collide with
+    # other benchmark modules loaded by the suite.
     spec = importlib.util.spec_from_file_location("repo_pedant_benchmark", BENCHMARK)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
