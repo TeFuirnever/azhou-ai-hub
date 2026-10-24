@@ -129,6 +129,7 @@ All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows,
 
 - Checkout-assisted `setup` defaults to `--mode link`, which creates a symlink. Windows requires Developer Mode or an elevated prompt for symlink creation; without it, use `--mode copy`, which needs no special privilege and produces a standalone snapshot.
 - Development symlinks follow the same privilege premise as `--mode link`; without Developer Mode prefer `--mode copy`.
+- A linked install follows the checkout: when a canonical skill is retired upstream, remove the link and any registered lifecycle-adapter hooks before pulling the retirement commit — `python scripts/azhou_hub.py doctor --host-root <root>` reports stale hook paths. `--mode copy` and package-manager installs are frozen snapshots and keep working after a retirement.
 - Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
 - Hook commands rendered by super-repo-pedant and Super LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
 
