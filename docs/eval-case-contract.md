@@ -2,7 +2,7 @@
 
 本文定义本目录中最小的**行为证据层**（minimal behavior eval-case）：一个包在"wiring-integrity benchmark 已绿"之上、在"paired-judges 行为演化"之下，所能做出的第一层真实行为声明。它回答一个问题：*这个 skill 在冻结条件下被真实调用一次时，是否做到了它的入口合同所承诺的事。*
 
-适用对象：目录中标注 "No behavior benchmark yet" 的包（当前为 super-eli5、super-ask-azhou、super-autoresearch、super-session-insights）。
+适用对象：目录中标注 "No behavior benchmark yet" 的包（当前为 super-eli5、super-ask-azhou、super-session-insights）。
 
 ## 六要素
 
@@ -34,7 +34,6 @@
 |---|---|
 | super-eli5 | 冻结主题 → 断言：自包含 HTML 产物存在、含预声明结构标记、精度关键拒绝句在边界输入下出现 |
 | super-ask-azhou | 冻结意图输入 → 断言：推荐指向真实 canonical skill 且边界句在场；负例输入得到 ❌ 而非伪造推荐 |
-| super-autoresearch | 冻结非 NVIDIA 主机 → 断言：prepare 产出具名 `unsupported` hold 且无任何运行启动（复用 #219 的回据形态） |
 | super-session-insights | 冻结合成 store → 断言：aggregate golden 逐字节一致且报告含 holds 节（对真实行为的接线再确认） |
 
 这些占位不是承诺；每包第一次真实运行前，公开措辞维持 "No behavior benchmark yet"。

@@ -133,7 +133,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-archify",
                 "super-asd-ste100",
                 "super-ask-azhou",
-                "super-autoresearch",
                 *AZHOU_SKILL_NAMES,
                 "super-eli5",
                 "super-excalidraw-diagram",

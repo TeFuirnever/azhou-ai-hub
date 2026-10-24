@@ -72,7 +72,6 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-archify/SKILL.md",
     "skills/super-asd-ste100/SKILL.md",
     "skills/super-ask-azhou/SKILL.md",
-    "skills/super-autoresearch/SKILL.md",
     "skills/super-azhou-doctor/SKILL.md",
     "skills/super-azhou-info/SKILL.md",
     "skills/super-azhou-setup/SKILL.md",
@@ -94,11 +93,6 @@ INVOCATION_CLASSES = (
 SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
 
 SKILL_BRAND_CONTRACTS = {
-    "skills/super-autoresearch/SKILL.md": {
-        "display_name": "Autoresearch",
-        "motto": "实验通宵跑，边界先说清。",
-        "startup": "🦊 阿舟 · Autoresearch 启动（mode=<prepare|run|resume|report>, scope=<checkout>）",
-    },
     "skills/super-ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",
         "motto": "说清你想做什么，我告诉你敲哪扇门。",
@@ -517,7 +511,6 @@ RENAMED_AWAY_SKILLS = {
     "archify": "super-archify",
     "asd-ste100": "super-asd-ste100",
     "ask-azhou": "super-ask-azhou",
-    "autoresearch": "super-autoresearch",
     "azhou-doctor": "super-azhou-doctor",
     "azhou-info": "super-azhou-info",
     "azhou-setup": "super-azhou-setup",

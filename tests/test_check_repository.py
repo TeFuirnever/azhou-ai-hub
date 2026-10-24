@@ -598,7 +598,6 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-repo-pedant" / "SKILL.md",
                 root / "skills" / "super-lavish" / "SKILL.md",
                 root / "skills" / "super-eli5" / "SKILL.md",
-                root / "skills" / "super-autoresearch" / "SKILL.md",
                 root / "skills" / "super-ask-azhou" / "SKILL.md",
                 root / "skills" / "super-arch-doc" / "SKILL.md",
                 root / "skills" / "super-archify" / "SKILL.md",
