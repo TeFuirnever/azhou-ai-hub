@@ -75,7 +75,7 @@ def run_assertion(html: str | None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), str(path)],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             timeout=60,
         )
 

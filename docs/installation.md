@@ -11,7 +11,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
@@ -97,7 +96,6 @@ REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 cp -R "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
-cp -R "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 cp -R "$REPO_ROOT/skills/super-llm-wiki" "$SKILLS_HOME/super-llm-wiki"
 cp -R "$REPO_ROOT/skills/super-lavish" "$SKILLS_HOME/super-lavish"
 ~~~
@@ -114,7 +112,6 @@ SKILLS_HOME=/absolute/path/to/harness/skills
 
 ln -s "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
 ln -s "$REPO_ROOT/skills/super-excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
-ln -s "$REPO_ROOT/skills/super-caveman" "$SKILLS_HOME/super-caveman"
 ln -s "$REPO_ROOT/skills/super-llm-wiki" "$SKILLS_HOME/super-llm-wiki"
 ln -s "$REPO_ROOT/skills/super-lavish" "$SKILLS_HOME/super-lavish"
 ~~~
@@ -134,7 +131,7 @@ All shell examples in this document are POSIX (`bash`/`zsh`) syntax. On Windows,
 - Checkout-assisted `setup` defaults to `--mode link`, which creates a symlink. Windows requires Developer Mode or an elevated prompt for symlink creation; without it, use `--mode copy`, which needs no special privilege and produces a standalone snapshot.
 - Development symlinks follow the same privilege premise as `--mode link`; without Developer Mode prefer `--mode copy`.
 - Some skill scripts print brand emoji to the console. On Chinese Windows the legacy code page (cp936) cannot encode them; if you see `UnicodeEncodeError`, prefix commands with `PYTHONUTF8=1` (PowerShell: `$env:PYTHONUTF8 = "1"`).
-- Hook commands rendered by super-repo-pedant, super-caveman and Super LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
+- Hook commands rendered by super-repo-pedant and Super LLM Wiki are POSIX shell syntax executed by the host shell: on Windows they require Git Bash; a PowerShell fallback is outside the supported claim.
 
 Checked-in Windows full-flow receipts exist: the managed flow (info → setup → doctor) and the repository gate pass fully green on a real Windows runner with the default Git Bash console encoding ([evidence/windows-full-flow-receipt-2026-10-17.md](../evidence/windows-full-flow-receipt-2026-10-17.md), after the #236 UTF-8 console fix); the 2026-09-13 receipt ([evidence/windows-full-flow-receipt-2026-09-13.md](../evidence/windows-full-flow-receipt-2026-09-13.md)) records the pre-fix cp1252 divergence for history.
 
@@ -154,7 +151,6 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [super-repo-pedant setup](../skills/super-repo-pedant/references/setup.md).
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/super-excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
-- Super Caveman uses Python 3.10+ standard library only for guarded file compression. Install only the canonical `super-caveman` package, not the seven upstream source packages; hooks, global response configuration and private-log discovery are never automatic: [Super Caveman setup](../skills/super-caveman/references/setup.md).
 - Super LLM Wiki uses Python 3.11+ standard library only. CLI, seven-tool stdio MCP, lifecycle adapter and migration ship together. MCP and hook configuration remain explicit; `.azhou/llm-wiki/` stays private by default: [LLM Wiki setup](../skills/super-llm-wiki/references/setup.md).
 - Lavish uses Node.js 22+ and the locked `lavish-axi@0.1.89` npm package for browser review; its Spec Relay relay mode additionally uses Python 3.11+ standard library for embedded review state. Relay HTML contains portable review data after feedback is persisted. Inspect metadata before execution and treat global installs, hooks and third-party sharing as explicit checkpoints: [Lavish setup](../skills/super-lavish/references/setup.md).
 - Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/super-arch-doc/references/setup.md).

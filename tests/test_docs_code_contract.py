@@ -7,8 +7,6 @@ under-tested after the 2026-09-05/06 evolution batches:
   snapshot flags; the audit requires every documented flag to exist in the
   script's argparse (the repo already hit doc-code drift twice via dead script
   pointers).
-- ``AGENTS.md`` names the latest super-caveman promotion record; the pin keeps
-  that pointer mechanically fresh instead of relying on manual reconciles.
 - The completion-criteria additions (excalidraw SKILL.md sections 1-3,
   super-repo-pedant SKILL.md sections 2-3, super-lavish ``artifact-mode.md`` steps 1-7)
   stay present; deleting a marker fails here.
@@ -16,7 +14,6 @@ under-tested after the 2026-09-05/06 evolution batches:
 
 from __future__ import annotations
 
-import json
 import re
 import unittest
 from pathlib import Path
@@ -25,7 +22,6 @@ ROOT = Path(__file__).parents[1]
 SETUP_MD = ROOT / "skills" / "super-repo-pedant" / "references" / "setup.md"
 INVENTORY_PY = ROOT / "skills" / "super-repo-pedant" / "scripts" / "inventory_knowledge.py"
 AGENTS_MD = ROOT / "AGENTS.md"
-RESULTS = ROOT / "benchmarks" / "super-caveman" / "results"
 EXCALIDRAW_SKILL = ROOT / "skills" / "super-excalidraw-diagram" / "SKILL.md"
 REPO_PEDANT_SKILL = ROOT / "skills" / "super-repo-pedant" / "SKILL.md"
 ARTIFACT_MODE = ROOT / "skills" / "super-lavish" / "references" / "artifact-mode.md"
@@ -76,25 +72,6 @@ def artifact_steps_missing_completion(artifact_text: str) -> list[str]:
     return missing
 
 
-def agents_md_promotion_is_current(agents_text: str, results_dir: Path) -> tuple[bool, str]:
-    named = set(re.findall(r"revision-([0-9a-f]{8})", agents_text))
-    if not named:
-        return False, "AGENTS.md names no super-caveman revision"
-    for revision in sorted(named):
-        record = results_dir / f"revision-{revision}-exact-diff-approval.json"
-        if not record.is_file():
-            return False, f"record for revision-{revision} does not exist"
-    passing = [
-        json.loads(p.read_text(encoding="utf-8"))
-        for p in sorted(results_dir.glob("*-attempt-1-summary.json"))
-        if json.loads(p.read_text(encoding="utf-8")).get("status") == "pass"
-    ]
-    for revision in sorted(named):
-        if any(s.get("skill_tree_sha256", "").startswith(revision) for s in passing):
-            return True, revision
-    return False, f"none of {sorted(named)} is the current passing promotion"
-
-
 class SetupDocsMatchArgparse(unittest.TestCase):
     def test_every_documented_snapshot_flag_exists_in_script(self) -> None:
         documented = documented_snapshot_flags(SETUP_MD.read_text(encoding="utf-8"))
@@ -106,23 +83,6 @@ class SetupDocsMatchArgparse(unittest.TestCase):
         skill_text = REPO_PEDANT_SKILL.read_text(encoding="utf-8")
         for flag in set(re.findall(r"--(global-instruction|output)\b", skill_text)):
             self.assertIn(f"--{flag}", SETUP_MD.read_text(encoding="utf-8"))
-
-
-class AgentsMdPromotionPointer(unittest.TestCase):
-    def test_agents_md_names_the_current_passing_promotion(self) -> None:
-        ok, detail = agents_md_promotion_is_current(AGENTS_MD.read_text(encoding="utf-8"), RESULTS)
-        self.assertTrue(ok, detail)
-
-    def test_stale_revision_pointer_is_rejected(self) -> None:
-        stale_summary = json.loads((RESULTS / "revision-93f38a6b-attempt-1-summary.json").read_text(encoding="utf-8"))
-        self.assertEqual(stale_summary.get("status"), "superseded")
-        agents_text = AGENTS_MD.read_text(encoding="utf-8")
-        ok, current = agents_md_promotion_is_current(agents_text, RESULTS)
-        self.assertTrue(ok, current)
-        stale_text = agents_text.replace(current, "93f38a6b")
-        self.assertNotEqual(stale_text, agents_text, "stale-pointer control requires the current revision id in AGENTS.md")
-        ok, detail = agents_md_promotion_is_current(stale_text, RESULTS)
-        self.assertFalse(ok, "a superseded-only promotion pointer must not pass")
 
 
 class CompletionCriteriaPinned(unittest.TestCase):

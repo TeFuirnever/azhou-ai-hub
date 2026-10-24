@@ -130,11 +130,11 @@ class SkillPlatformViewTest(unittest.TestCase):
             root = Path(directory)
             mutated = self.real_view().replace(
                 "(evidence/eli5-load-explain-zcode-2026-09-03.md) | host-dependent",
-                "(evidence/super-caveman-zcode-adapter-live-gui-2026-09-04.md) | host-dependent",
+                "(evidence/retired-skill-fragment-2026-01-01.md) | host-dependent",
                 1,
             )
             self.assertNotIn(
-                "super-caveman-zcode-adapter-live-gui-2026-09-04.md) | host-dependent",
+                "retired-skill-fragment-2026-01-01.md) | host-dependent",
                 self.real_view(),
             )
             self.write_fixture(root, mutated)
@@ -169,7 +169,7 @@ class InvocationAxisTest(unittest.TestCase):
     def test_missing_invocation_declaration_fails_for_every_package(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for package in ("super-lavish", "super-caveman"):
+            for package in ("super-lavish", "super-eli5"):
                 skill = root / "skills" / package / "SKILL.md"
                 skill.parent.mkdir(parents=True)
                 skill.write_text(
@@ -178,7 +178,7 @@ class InvocationAxisTest(unittest.TestCase):
                 )
             self.assertEqual(
                 [
-                    "skill invocation declaration missing: skills/super-caveman/SKILL.md",
+                    "skill invocation declaration missing: skills/super-eli5/SKILL.md",
                     "skill invocation declaration missing: skills/super-lavish/SKILL.md",
                 ],
                 check_invocation_axis(root),
@@ -231,12 +231,12 @@ class FidelityAxisTest(unittest.TestCase):
             self.write_skill(root, "skills/super-lavish/SKILL.md", "original")
             self.assertEqual([], check_fidelity_axis(root))
 
-    def test_super_caveman_requires_its_own_classification(self) -> None:
+    def test_probe_skill_requires_its_own_classification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.write_skill(root, "skills/super-caveman/SKILL.md", None)
+            self.write_skill(root, "skills/super-probe/SKILL.md", None)
             self.assertEqual(
-                ["skill fidelity classification missing: skills/super-caveman/SKILL.md"],
+                ["skill fidelity classification missing: skills/super-probe/SKILL.md"],
                 check_fidelity_axis(root),
             )
 
@@ -365,7 +365,7 @@ class ReferenceScriptPathsTest(unittest.TestCase):
             )
             self.assertEqual([], check_reference_script_paths([doc], root))
 
-    def test_historical_frozen_and_vendored_surfaces_stay_out_of_scope(self) -> None:
+    def test_historical_and_vendored_surfaces_stay_out_of_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             research = root / "docs" / "research" / "2026-01-01-note.md"
@@ -374,11 +374,8 @@ class ReferenceScriptPathsTest(unittest.TestCase):
             vendored = root / "skills" / "super-excalidraw-diagram" / "references" / ".venv" / "lib" / "note.md"
             vendored.parent.mkdir(parents=True)
             vendored.write_text("Upstream ships `scripts/gone.py`.\n", encoding="utf-8")
-            frozen = root / "skills" / "super-caveman" / "references" / "setup.md"
-            frozen.parent.mkdir(parents=True)
-            frozen.write_text("Ride-pinned citation `scripts/gone.py`.\n", encoding="utf-8")
             self.assertEqual(
-                [], check_reference_script_paths([research, vendored, frozen], root)
+                [], check_reference_script_paths([research, vendored], root)
             )
 
 
@@ -514,7 +511,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             )
 
     def test_skill_brand_contract_requires_identity_in_skill_md_itself(self) -> None:
-        relative = "skills/super-caveman/SKILL.md"
+        relative = "skills/super-excalidraw-diagram/SKILL.md"
         contract = SKILL_BRAND_CONTRACTS[relative]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -578,11 +575,11 @@ class RepositoryPolicyTest(unittest.TestCase):
             surface.write_text(
                 "🦊 阿舟 · Probe 启动（mode=route, scope=/repo）\n", encoding="utf-8"
             )
-            held = root / "skills" / "super-caveman" / "references" / "brand-layer.md"
+            held = root / "scripts" / "check_repository.py"
             held.parent.mkdir(parents=True)
             pipe = "｜"
             held.write_text(
-                f"🦊 阿舟 · Super Caveman 启动{pipe}mode=x{pipe}scope=y\n", encoding="utf-8"
+                f"🦊 阿舟 · Probe 启动{pipe}mode=x{pipe}scope=y\n", encoding="utf-8"
             )
 
             self.assertEqual(
@@ -593,7 +590,6 @@ class RepositoryPolicyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             expected = [
-                root / "skills" / "super-caveman" / "SKILL.md",
                 root / "skills" / "super-excalidraw-diagram" / "SKILL.md",
                 root / "skills" / "super-azhou-doctor" / "SKILL.md",
                 root / "skills" / "super-azhou-info" / "SKILL.md",
@@ -637,16 +633,13 @@ class RepositoryPolicyTest(unittest.TestCase):
             self.assertEqual(1, len(errors))
             self.assertIn("POSIX-only interpreter 'python3' in docs/installation.md:2", errors[0])
 
-    def test_command_surface_skips_promotion_bound_and_historical_surfaces(self) -> None:
+    def test_command_surface_skips_historical_surfaces(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            held = root / "skills" / "super-caveman" / "references" / "setup.md"
-            held.parent.mkdir(parents=True)
-            held.write_text("python3 run.py\n", encoding="utf-8")
             historical = root / "docs" / "research" / "2026-09-07-note.md"
             historical.parent.mkdir(parents=True)
             historical.write_text("the survey counted python3 occurrences\n", encoding="utf-8")
-            self.assertEqual([], check_command_surface([held, historical], root))
+            self.assertEqual([], check_command_surface([historical], root))
 
     def test_workflow_action_requires_full_sha(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -722,7 +715,7 @@ exit 0
                     env=env,
                     check=False,
                     capture_output=True,
-                    text=True,
+                    text=True, encoding="utf-8",
                 )
 
                 self.assertEqual(expected_code, result.returncode, result.stderr)

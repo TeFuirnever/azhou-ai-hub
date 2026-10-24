@@ -83,7 +83,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(1, code)
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (1 of 8 gates failed: unit tests)", lines[-1]
+            "verification FAILED (1 of 7 gates failed: unit tests)", lines[-1]
         )
         self.assertNotIn("verification passed", out)
         self.assertEqual(
@@ -94,18 +94,18 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(len(commands(sys.executable)), len(runner.calls))
 
     def test_multiple_failures_aggregate_into_one_line(self) -> None:
-        runner = FakeRunner(codes={"unittest": 2, "super-caveman": 3})
+        runner = FakeRunner(codes={"unittest": 2, "excalidraw": 3})
         code, out, err = run_main([], runner)
         self.assertEqual(2, code, "exit code is the first failing gate's code")
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (2 of 8 gates failed: unit tests, super-caveman benchmark)",
+            "verification FAILED (2 of 7 gates failed: unit tests, excalidraw benchmark wiring)",
             lines[-1],
         )
         self.assertEqual(1, sum(1 for line in lines if "verification FAILED" in line))
         self.assertNotIn("verification passed", out)
         self.assertEqual(
-            {"FAILED: unit tests (exit 2)", "FAILED: super-caveman benchmark (exit 3)"},
+            {"FAILED: unit tests (exit 2)", "FAILED: excalidraw benchmark wiring (exit 3)"},
             {line for line in err.splitlines() if line.startswith("FAILED:")},
         )
 
@@ -115,7 +115,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(127, code)
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (1 of 8 gates failed: repository policy)", lines[-1]
+            "verification FAILED (1 of 7 gates failed: repository policy)", lines[-1]
         )
         self.assertNotIn("verification passed", out)
         self.assertIn("FAILED: repository policy (exit 127)", err)
@@ -140,7 +140,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(4, code)
         payload, verdict = split_summary(out)
         self.assertEqual(
-            "verification FAILED (1 of 8 gates failed: super-repo-pedant benchmark)",
+            "verification FAILED (1 of 7 gates failed: super-repo-pedant benchmark)",
             verdict,
         )
         self.assertEqual("failed", payload["verdict"])
@@ -155,14 +155,6 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(0, passed_entry["exit_code"])
         self.assertEqual("passed", passed_entry["status"])
         self.assertIn("FAILED: super-repo-pedant benchmark (exit 4)", err)
-
-    def test_promotion_evidence_flag_reaches_super_caveman_gate(self) -> None:
-        runner = FakeRunner()
-        code, out, _ = run_main(["--promotion-evidence"], runner)
-        self.assertEqual(0, code)
-        super_caveman_calls = [call for call in runner.calls if "super-caveman" in " ".join(call)]
-        self.assertEqual(1, len(super_caveman_calls))
-        self.assertIn("--promotion-evidence", super_caveman_calls[0])
 
     def test_green_summary_lines_match_no_failure_pattern(self) -> None:
         """A green capture carrying the JSON summary stays validator-clean."""
@@ -184,7 +176,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
             [sys.executable, str(VALIDATOR), "--exit-code", str(code)],
             input=out + err,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout)
@@ -204,7 +196,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
             [sys.executable, str(VALIDATOR), "--exit-code", str(code)],
             input=merged,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
         )
         self.assertEqual(1, result.returncode)

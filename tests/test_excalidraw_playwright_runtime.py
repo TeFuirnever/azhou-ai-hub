@@ -90,7 +90,7 @@ class ExcalidrawPlaywrightRuntimeTest(unittest.TestCase):
                 [sys.executable, str(CHECKER)],
                 capture_output=True,
                 env=env,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
 
@@ -119,7 +119,7 @@ class ExcalidrawPlaywrightRuntimeTest(unittest.TestCase):
                 [sys.executable, str(CHECKER)],
                 capture_output=True,
                 env=env,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
 

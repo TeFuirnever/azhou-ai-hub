@@ -10,7 +10,6 @@
 | Try the Super Lavish review-loop and relay reference demo | [Super Lavish demo](demos/super-lavish.md) |
 | Try the Super LLM Wiki reference demo | [Super LLM Wiki demo](demos/super-llm-wiki.md) |
 | Try the Arch Doc reference demo | [Arch Doc demo](demos/super-arch-doc.md) |
-| Use action-first terse response, commit, review or compression workflows | [Super Caveman package](../skills/super-caveman/SKILL.md) |
 | Build or inspect persistent project knowledge | [Super LLM Wiki package](../skills/super-llm-wiki/SKILL.md) |
 | Relay a spec and its review history in one HTML | [Super Lavish package, Spec Relay relay mode](../skills/super-lavish/SKILL.md) |
 | Know what each harness really supports | [Support matrix](support-matrix.md) |

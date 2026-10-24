@@ -157,7 +157,7 @@ def cmd_verify(args) -> int:
     hyg = hygiene.check_scene(data)
     geo = subprocess.run(
         [sys.executable, str(SCRIPTS / "audit-overlaps.py"), str(cand)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
 
     vr = run.get("visual_review", {})
     vr_status = vr.get("status", "skipped")
@@ -228,7 +228,7 @@ def cmd_check(args) -> int:
          "--case", str(Path(__file__).parent / "cases" / "layered-architecture.case.json"),
          "--candidate", str(ref / "reference.architecture.excalidraw"),
          "--run", str(ref / "reference.run.json")],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     assert rc.returncode == 0, f"reference fixture failed verify:\n{rc.stdout}\n{rc.stderr}"
 
     # sandbox-blocked fixture must hold explicitly — a silent skip cannot wire
@@ -238,7 +238,7 @@ def cmd_check(args) -> int:
          "--case", str(Path(__file__).parent / "cases" / "layered-architecture.case.json"),
          "--candidate", str(ref / "reference.architecture.excalidraw"),
          "--run", str(ref / "reference.sandbox-blocked.run.json")],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     assert rc.returncode == 1, (
         f"sandbox-blocked fixture must not verify usable:\n{rc.stdout}\n{rc.stderr}")
     receipt = json.loads(rc.stdout)

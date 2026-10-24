@@ -20,14 +20,12 @@ python scripts/azhou_hub.py info --json
 python scripts/azhou_hub.py version --json
 python scripts/azhou_hub.py doctor --json
 python scripts/azhou_hub.py verify
-python scripts/azhou_hub.py verify --promotion-evidence
 ~~~
 
 - `info` reports the checked-out repository, Git revision when available, Python runtime, canonical skill list, support-matrix path and verification command. The `azhou-ai-hub.info.v1` schema adds `primary_commands` as the preferred five-command field while retaining the original `commands` field with the same value; changing the schema discriminator requires an explicitly approved incompatible migration.
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate.
-- `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, the current staged-or-committed Super Caveman exact diff, and Git whitespace without private evidence. Changes to approved paths fail closed until a fresh checked-in promotion receipt matches them.
-- `verify --promotion-evidence` is a maintainer/release gate. It additionally requires `SUPER_CAVEMAN_APPROVAL_RECORD` and `SUPER_CAVEMAN_REVIEW_RECORD` to name absolute, Git-external files and authenticates them against the same exact diff. Missing or invalid evidence fails closed.
+- `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, and Git whitespace without private evidence.
 
 When a task is running inside a Treehouse pool, the doctor can also verify the explicit pool without changing its lease:
 

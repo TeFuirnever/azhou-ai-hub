@@ -278,7 +278,7 @@ def _git_command(root: Path, *arguments: str) -> str | None:
             cwd=root,
             check=False,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
         )
     except OSError:
         return None
@@ -1308,7 +1308,7 @@ def run_doctor(
                 cwd=root,
                 check=False,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
             )
             output = (result.stderr or result.stdout or "").strip().splitlines()
             suffix = f"; {output[-1]}" if output else ""
@@ -1331,7 +1331,7 @@ def run_doctor(
                 ["treehouse", "--version"],
                 cwd=root,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 timeout=5,
                 check=False,
             )
@@ -1343,7 +1343,7 @@ def run_doctor(
                 ["treehouse", "status", "--json"],
                 cwd=root,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 timeout=5,
                 check=False,
             )
@@ -1434,10 +1434,8 @@ def _print_setup(payload: dict[str, Any]) -> None:
         print("No files changed. The destination already links an identical canonical package from another checkout; resolve the duplicate checkout or choose a different target before applying.")
 
 
-def run_verifier(root: Path, python: str, *, promotion_evidence: bool = False) -> int:
+def run_verifier(root: Path, python: str) -> int:
     command = [python, str(root / "scripts/verify.py"), "--python", python]
-    if promotion_evidence:
-        command.append("--promotion-evidence")
     try:
         result = subprocess.run(
             command,
@@ -1507,11 +1505,6 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
 
     verify = subcommands.add_parser("verify", help="Run the authoritative repository verification gate")
     verify.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
-    verify.add_argument(
-        "--promotion-evidence",
-        action="store_true",
-        help="Also require Git-external maintainer promotion evidence",
-    )
     return parser
 
 
@@ -1670,7 +1663,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         return 0 if payload["status"] in {"planned", "migrated", "already-current"} else 1
 
     if args.command == "verify":
-        return run_verifier(root, args.python, promotion_evidence=args.promotion_evidence)
+        return run_verifier(root, args.python)
 
     raise AssertionError(f"unhandled command: {args.command}")
 

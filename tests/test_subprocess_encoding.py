@@ -5,16 +5,15 @@ without an explicit ``encoding`` decodes child output with the host locale, so
 the same test or script corrupts output (or raises ``UnicodeDecodeError``) on
 hosts whose default encoding is not UTF-8, e.g. Windows cp936/cp1252.
 
-对应 issue #287:非保护面禁止回潮 —— 任何 ``text=True`` 调用必须同时写
-``encoding="utf-8"``。钉住面(revision-beb0568c 晋级记录的 reviewed_blobs,
-测试运行时动态读取,将来晋级记录更新后保护面自动跟随)与 vendored/upstream
-面留给晋级流程处理,本测试不保护。
+对应 issue #287:所有仓库自有 Python 面禁止回潮 —— 任何 ``text=True`` 调用
+必须同时写 ``encoding="utf-8"``。vendored/upstream 面不在本测试范围内。
+(super-caveman 晋级体系退役后,原"钉住面随晋级记录"的延期修整理由不再存在,
+全部自有面由本守卫直接覆盖。)
 """
 
 from __future__ import annotations
 
 import ast
-import json
 import unittest
 from pathlib import Path
 
@@ -27,52 +26,6 @@ SCAN_ROOTS = ("tests", "benchmarks", "scripts")
 
 # The four subprocess entry points whose text mode requires an explicit codec.
 TEXT_MODE_CALLS = {"run", "check_output", "Popen", "check_call"}
-
-# Latest super-caveman promotion record. Its reviewed_blobs pin the public
-# surface; they are read at test runtime so the protected set follows the
-# record instead of a frozen path list.
-PROMOTION_RECORD = (
-    ROOT / "benchmarks" / "super-caveman" / "results" / "revision-beb0568c-exact-diff-approval.json"
-)
-
-# 静态排除表(issue #287 界定结果,逐路径注明理由)。规则含义:
-#   规则1 = 路径在 revision-beb0568c reviewed_blobs 钉住面内 —— 改字节即挂
-#           promotion check 与 CI,encoding 修整必须随晋级流程一起走
-#           (这些路径同时会被运行时读取的钉住面命中,此处显式留底理由);
-#   规则2 = super-caveman 晋级体系自有面 —— 门禁裁判本体及其测试,留给晋级流程。
-PATH_EXCLUSIONS = {
-    # 规则1:在 revision-beb0568c reviewed_blobs 钉住面内(路径精确匹配),改字节即挂 check 与 CI。
-    "benchmarks/super-arch-doc/run_case.py":
-        "规则1:在 revision-beb0568c reviewed_blobs 钉住面内(路径精确匹配),改字节即挂 check 与 CI。",
-    # 规则1+2:钉住面内,且属 super-caveman 晋级体系自有面(门禁裁判本体)。
-    "benchmarks/super-caveman/benchmark.py":
-        "规则1+2:在 reviewed_blobs 钉住面内,且属 super-caveman 晋级体系自有面(门禁裁判本体)。",
-    # 规则1:在 reviewed_blobs 钉住面内。
-    "benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py":
-        "规则1:在 reviewed_blobs 钉住面内。",
-    "scripts/azhou_hub.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "skills/super-excalidraw-diagram/scripts/visual-check.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_azhou_hub.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_azhou_verify_gate_report.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_check_repository.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_eli5_audience_assertion.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_excalidraw_benchmark.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_excalidraw_playwright_runtime.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_excalidraw_sandbox_fallback.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_session_insights_benchmark.py": "规则1:在 reviewed_blobs 钉住面内。",
-    "tests/test_verify_final_verdict.py": "规则1:在 reviewed_blobs 钉住面内。",
-    # 规则1+2:钉住面内,且文件名含 super_caveman(晋级体系自有测试面)。
-    "tests/test_super_caveman_benchmark.py":
-        "规则1+2:在 reviewed_blobs 钉住面内,且文件名含 super_caveman(晋级体系自有测试面)。",
-    # 规则2:文件名含 super_caveman,晋级体系自有面,虽经核对不在 reviewed_blobs 内仍留给晋级流程。
-    "tests/test_super_caveman.py":
-        "规则2:文件名含 super_caveman,晋级体系自有面,虽经核对不在 reviewed_blobs 内仍留给晋级流程。",
-    # 规则2:文件名含 super_caveman,晋级体系自有面。
-    "tests/test_super_caveman_claude_adapter.py": "规则2:文件名含 super_caveman,晋级体系自有面。",
-    "tests/test_super_caveman_codex_adapter.py": "规则2:文件名含 super_caveman,晋级体系自有面。",
-    "tests/test_super_caveman_codex_adapter_lifecycle.py": "规则2:文件名含 super_caveman,晋级体系自有面。",
-    "tests/test_super_caveman_zcode_adapter.py": "规则2:文件名含 super_caveman,晋级体系自有面。",
-}
 
 
 class SubprocessEncodingTest(unittest.TestCase):
@@ -95,18 +48,6 @@ class SubprocessEncodingTest(unittest.TestCase):
                 files.append(path)
         return files
 
-    def _pinned_paths(self) -> set[str]:
-        self.assertTrue(PROMOTION_RECORD.is_file(), f"missing promotion record: {PROMOTION_RECORD}")
-        record = json.loads(PROMOTION_RECORD.read_text(encoding="utf-8"))
-        blobs = record["reviewed_blobs"]
-        self.assertIsInstance(blobs, list)
-        paths = set()
-        for blob in blobs:
-            self.assertIsInstance(blob, dict, blob)
-            self.assertIn("path", blob)
-            paths.add(blob["path"])
-        return paths
-
     @staticmethod
     def _iter_text_mode_calls(tree: ast.Module):
         for node in ast.walk(tree):
@@ -126,15 +67,10 @@ class SubprocessEncodingTest(unittest.TestCase):
                 yield node, func.attr, keywords
 
     def test_text_mode_subprocess_calls_pin_utf8_encoding(self) -> None:
-        excluded = set(PATH_EXCLUSIONS) | self._pinned_paths()
         violations: list[str] = []
         checked = 0
         for path in self._iter_scan_files():
             relative = path.relative_to(ROOT).as_posix()
-            if "super-caveman" in path.name or "super_caveman" in path.name:
-                continue  # 晋级体系自有面(规则2)
-            if relative in excluded:
-                continue  # 晋级钉住面(规则1)或静态排除表
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for node, call_name, keywords in self._iter_text_mode_calls(tree):
                 checked += 1

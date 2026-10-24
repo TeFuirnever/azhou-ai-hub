@@ -23,15 +23,11 @@ SUCCESS_LINE = "verification passed"
 LAUNCH_FAILURE_EXIT = 127
 
 
-def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str, list[str]]]:
-    super_caveman = [python, "benchmarks/super-caveman/benchmark.py", "check"]
-    if promotion_evidence:
-        super_caveman.append("--promotion-evidence")
+def commands(python: str) -> list[tuple[str, list[str]]]:
     return [
         ("repository policy", [python, "scripts/check_repository.py"]),
         ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests"]),
         ("super-repo-pedant benchmark", [python, "benchmarks/super-repo-pedant/benchmark.py", "check"]),
-        ("super-caveman benchmark", super_caveman),
         (
             "excalidraw benchmark wiring",
             [python, "benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py", "check"],
@@ -45,9 +41,9 @@ def commands(python: str, *, promotion_evidence: bool = False) -> list[tuple[str
     ]
 
 
-def run_gates(python: str, *, promotion_evidence: bool, environment: dict[str, str]) -> list[dict[str, object]]:
+def run_gates(python: str, *, environment: dict[str, str]) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
-    for label, command in commands(python, promotion_evidence=promotion_evidence):
+    for label, command in commands(python):
         print(f"==> {label}", flush=True)
         try:
             result = subprocess.run(command, cwd=ROOT, env=environment, check=False)
@@ -92,11 +88,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify the complete Azhou AI Hub repository")
     parser.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
     parser.add_argument(
-        "--promotion-evidence",
-        action="store_true",
-        help="Also require Git-external maintainer promotion evidence",
-    )
-    parser.add_argument(
         "--print-summary",
         action="store_true",
         help="Print a machine-readable JSON summary (before the final verdict line)",
@@ -105,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
 
     environment = os.environ.copy()
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    results = run_gates(args.python, promotion_evidence=args.promotion_evidence, environment=environment)
+    results = run_gates(args.python, environment=environment)
     payload = summary_payload(results)
     if args.print_summary:
         print(json.dumps(payload, indent=2), flush=True)

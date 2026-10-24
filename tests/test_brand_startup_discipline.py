@@ -5,7 +5,7 @@ values, with the machine-stable literal `unresolved` as the only legal pending
 marker and angle brackets reserved to contract examples. The discipline was
 promoted for super-excalidraw-diagram (candidate 2774771204f20d4ca2a28369); this batch
 rolls the same discipline into the remaining multi-stage brand layers
-(super-llm-wiki, super-repo-pedant, super-arch-doc, super-caveman). The startup contract
+(super-llm-wiki, super-repo-pedant, super-arch-doc). The startup contract
 strings come from scripts/check_repository.py and must keep matching each brand
 layer verbatim - the discipline sections are additive-only.
 """
@@ -29,14 +29,12 @@ DISCIPLINE_HEADINGS = {
     "super-llm-wiki": "启动行取值纪律",
     "super-repo-pedant": "启动行取值纪律",
     "super-arch-doc": "启动行取值纪律",
-    "super-caveman": "Startup value discipline",
 }
 
 RESOLVED_SCOPE_MARKERS = {
     "super-llm-wiki": "知识范围锁定",
     "super-repo-pedant": "范围锁定",
     "super-arch-doc": "回填具体值",
-    "super-caveman": "范围锁定",
 }
 
 

@@ -56,8 +56,6 @@ jobs:
           python-version: "3.11"
       - name: Super Repo Pedant
         run: python benchmarks/super-repo-pedant/benchmark.py check
-      - name: Super Caveman public integrity
-        run: python benchmarks/super-caveman/benchmark.py check
       - name: Excalidraw Diagram
         run: python benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py check
       - name: Session Insights
@@ -110,7 +108,6 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONUTF8: "1"
-          SUPER_CAVEMAN_GATE_TRACE: "1"
         run: python scripts/verify.py
 
   required:
