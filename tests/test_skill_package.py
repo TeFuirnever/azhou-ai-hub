@@ -19,7 +19,7 @@ AZHOU_SKILL_NAMES = (
 )
 LLM_WIKI_DIR = ROOT / "skills" / "super-llm-wiki"
 LAVISH_DIR = ROOT / "skills" / "super-lavish"
-TASK_SKILL_NAMES = ("super-eli5", "super-autoresearch")
+TASK_SKILL_NAMES = ("super-eli5",)
 SKILL_DIRS = (
     SKILL_DIR,
     ROOT / "skills" / "super-excalidraw-diagram",
@@ -145,8 +145,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(15, len(SKILL_DIRS))
-        self.assertIn("fifteen canonical packages", support)
+        self.assertEqual(14, len(SKILL_DIRS))
+        self.assertIn("fourteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)

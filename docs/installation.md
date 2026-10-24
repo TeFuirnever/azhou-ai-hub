@@ -15,7 +15,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill super-autoresearch
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 ~~~
