@@ -44,7 +44,7 @@ def commits_since(window_days: int, repo: Path) -> list[list[str]]:
     raw = subprocess.run(
         ["git", "-C", str(repo), "log", f"--since={since}T00:00:00+00:00",
          "--format=@%H", "--name-only"],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", check=True,
     ).stdout
     commits: list[list[str]] = []
     current: list[str] | None = None
