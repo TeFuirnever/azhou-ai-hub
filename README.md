@@ -14,14 +14,14 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TeFuirnever/azhou-ai-hub)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 16 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 14 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
 
 
 https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
 
-> 🦊 Hero composed with the Azhou Covers skill under the `github_readme_image_16_9` profile: cream paper, the registered four-colour palette, and the canonical character composited at exact pixels. Thumbnail review passed at 120/240/360 px; final public visual approval remains a human checkpoint.
+> 🦊 Hero generated under the `github_readme_image_16_9` profile contract (1280×720, lossless PNG): the Azhou fox (canonical reference) stamping an approval seal, rendered by the local Azhou imagegen pipeline (Qwen-Image-2.1 edit, seed 7 of the 2026-10-25 batch) with the claim lines overlaid deterministically. Reviewed at 120/240/360 px; maintainer (IP owner) visual approval recorded 2026-10-25.
 
 Most skill repositories stop at prompts. Azhou AI Hub treats each skill as a product: a precise trigger, a portable runtime package, reproducible setup, deterministic gates, honest evaluation, provenance, and a human-controlled evolution path.
 
@@ -38,12 +38,10 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-caveman
 npx skills add TeFuirnever/azhou-ai-hub --skill super-llm-wiki
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill super-autoresearch
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
@@ -67,7 +65,7 @@ Four portable Azhou Agent Skills expose the checkout workflow without duplicatin
 | `super-azhou-info` | `info`, `version` | Read-only project, runtime, Git revision and dirty-state facts. |
 | `super-azhou-doctor` | `doctor` | Read-only repository, explicit install-target, optional Treehouse lease and host stale-install migration diagnostics. |
 | `super-azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first; only an exact reviewed plan with `--apply` may mutate its explicit target. |
-| `super-azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate; maintainers can explicitly add promotion-evidence replay. |
+| `super-azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate. |
 
 ~~~bash
 python scripts/azhou_hub.py info --json
@@ -88,31 +86,28 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 | [Azhou Info](skills/super-azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts without manufacturing release state. | Delegates to stable `info` / `version` JSON contracts; read-only package and repository-policy checks. |
 | [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | Diagnose repository, explicit install target, optional Treehouse lease and host stale-install migration health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke, fail-closed target checks and the read-only host migration probe. |
 | [Azhou Setup](skills/super-azhou-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
-| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate or an explicit maintainer promotion replay. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates; promotion mode additionally requires Git-external evidence. |
+| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates. |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for against the upstream v3.0.0 reference baseline (<code>322346de</code>, snapshot hash-locked; audited 2026-10-07, re-baselined 2026-10-18 with the absorption pin <code>bab17831</code> retained as lineage); 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. A sandbox-blocked preview degrades to geometry and hash verification and is reported as an explicit hold, never a silent skip. Checked-in reference output proves wiring only, not model quality. |
 | [Super LLM Wiki](skills/super-llm-wiki/SKILL.md) | Build a private, persistent Markdown knowledge base that agents can ingest, search, read and lint across sessions. | Canonical local store, eight MCP tools with decision lifecycle, atomic migration, privacy defaults and focused deterministic contract tests. |
-| [Super Caveman](skills/super-caveman/SKILL.md) | Enhance original Caveman with the complete pinned `i-have-adhd` output-behavior contract plus commit, review, delegation, help, file-compression and statistics routes. | Original Caveman plus six companions in one canonical package; 8 route fixtures, retained historical 14-case evidence, the recorded 19/19-case and 44/44-criterion behavior run with three independent paired judges voting 3/3 and zero high-risk regressions (produced under the original Codex Desktop producer chain, now superseded and never demonstrated under another harness), a current promotion binding on the zcode CLI / GLM-5.3-Flash harness that re-verifies the byte-identical producer context with zcode-produced evidence and claims no cross-harness equivalence, and a neutral recoverable compression guard. Evidence is limited to the recorded harness/model bindings. |
 | [Super Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual agent responses into rich, reviewable HTML artifacts users can annotate and answer through the Lavish Editor CLI; in Spec Relay relay mode, package a PRD, RFC, design spec or technical plan with comments, selected-text annotations, disposition and next-owner state inside one portable HTML file. | Upstream baseline hash-locked for reproducibility at the locked CLI <code>0.1.89</code>, with the documented local relay layer on top; provenance records the immutable upstream commit and the reproducible source check. Relay mode embeds <code>spec-relay.html-state.v1</code> with optimistic revision guards; deterministic checks cover feedback updates, stale-copy rejection, exact visible-state projection and responsive layout. Local review is not publication; <code>share</code> requires separate authorization. No hosted-share receipt is claimed. |
 | [Eli5](skills/super-eli5/SKILL.md) | Explain a topic like the reader knows nothing about it: one self-contained HTML artifact of big pictures and few words, refusing precision-critical asks instead of degrading them to pictures. | Upstream behavior sentence retained verbatim at the locked upstream commit with a reproducible SHA-256 source check; the local layer adds the topic boundary, self-contained artifact contract with a fixed audience declaration and word budgets, brand protocol and stable receipt, whose judgment layer carries a deterministic audience/style read-back assertion covered by positive and negative tests. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Ask Azhou](skills/super-ask-azhou/SKILL.md) | Router for the whole catalog: describe the intent, get the skill, its mode, and its boundary. Recommendation-only; gate-enforced coverage of every canonical skill. | Router pattern adapted from a pinned upstream; routing-map parity is a repository-gate check with a negative control. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
-| [Autoresearch](skills/super-autoresearch/SKILL.md) | Wrap a user-owned pinned <code>karpathy/autoresearch</code> checkout so an agent can prepare, run, resume and report automatic nanochat training experiments, holding before any unattended GPU run. | Azhou-authored wrapper vendors zero upstream bytes because the upstream publishes no license; fail-closed setup checks the CUDA GPU, uv and the pinned commit, covered by deterministic package-surface checks. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | Draft, calibrate and review an architecture design document from upstream sources: reading notes with per-fact provenance, a baseline skeleton with controlled evidence vocabulary, PlantUML-only diagram discipline (four-part captions, sequence-diagram rules), source cross-calibration and two-line best-practice review gates. | Distilled from the MCC ARCH-2026-001 v0.1-v0.17 pipeline (upstream team research, readability audit, best-practice review and an architect-approved 20-item backlog); five validated sequence diagrams and two registered review guides ship as references; deterministic scaffold (`new_doc.py`), closing-gate checker (`verify_doc.py`) and a golden scaffold case in `benchmarks/super-arch-doc/`. |
 | [Session Insights](skills/super-session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code and Codex adapters; the zcode adapter fails closed — the probed store exposes no plaintext transcripts); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates, window/cap trimming, receipt-digest stability, and privacy plus fail-closed negative controls. Excerpts-off aggregate runs reuse a disposable per-file metadata cache whose cold, warm, deleted and corrupt states yield byte-identical results; roast tone, the offline HTML artifact and the Codex rollout adapter are delivered behind golden parity and fail-closed negative controls, and the zcode hold stays fixed even for populated-but-unrecognized store shapes. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English — tool descriptions, error messages, inter-agent instructions, status reports — under ASD-STE100-derived controlled-English structural rules in Strict or STE-flavored mode, preserving every hedge, fact and scope qualifier; the non-redistributable ASD dictionary stays out by design. | Faithfully imported at the locked upstream commit with pinned SHA-256 integrity tests; `scripts/ste-lint.py` turns the machine-checkable structural rules into a deterministic stdlib gate (hard-violation exit codes, `--baseline`, `--json`, `--selftest`) covered by positive and negative tests. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into presentation-grade interactive diagram maps — ten typed-JSON modes from architecture and workflow to ERD, tree, timeline and waterfall — delivered as self-contained explorable HTML with themes, pan/zoom, guided views and truthful exports; editable .excalidraw source scenes stay super-excalidraw-diagram's lane. | Faithfully imported at the locked upstream tag with pinned SHA-256 integrity tests over the trimmed vendored subtree (`doctor` passes all 25 checks); the deterministic `validate`/`deliver`/`finalize` real-browser gate chain is preserved unmodified, with the Azhou brand protocol and `super-archify.receipt.v1` added as wrapper layers. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 
-All sixteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/super-ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces) — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All fourteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/super-ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces) — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 Canonical names carry one brand: every package uses the `super-` prefix. Fidelity to upstream material is recorded in each package's provenance, not in the directory name. The repository gate enforces the brand prefix and fails on residue from renamed-away names outside the documented compatibility surfaces.
 
-## Try six task skills
+## Try five task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
 | Super Repo Pedant | <code>This phase is done. Run super-repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/super-repo-pedant.md). |
 | Excalidraw Diagram | <code>Use super-excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/super-excalidraw-diagram.md). |
-| Super Caveman | <code>Use /super-caveman full. Then write a commit message for this diff.</code> | Action-first terse mode plus a paste-ready Conventional Commit message; no staging or commit side effect. |
 | Super LLM Wiki | <code>Use super-llm-wiki to store this verified architecture decision, then query it back and lint the wiki.</code> | Private local page, source and confidence metadata, retrieval result, health report and stable receipt. [Run the demo](docs/demos/super-llm-wiki.md). |
 | Super Lavish | <code>Use super-lavish in relay mode to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. [Run the demo](docs/demos/super-lavish.md). |
 | Arch Doc | <code>Use super-arch-doc to draft this repository's architecture document from its upstream design docs.</code> | Research notes with per-fact provenance, a template scaffold with accounted diagram captions, PlantUML-only diagrams, deterministic closing gates and a stable receipt. [Run the demo](docs/demos/super-arch-doc.md). |
@@ -122,7 +117,7 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 ## Why trust it?
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
-- **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, an 8-route and 19-response-case Super Caveman integrity suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
+- **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
 - **Harness differences stay visible.** Codex, Claude Code, zcode and Kimi Code share the same runtime packages, but discovery, hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md); the Kimi Code column carries its own 2026-10-06 discovery/invocation receipt and leaves the rest unclaimed.
 - **Per-skill platform view.** A derived summary of the support matrix shows each canonical skill across harnesses and operating systems in [docs/skill-platform-view.md](docs/skill-platform-view.md); the support matrix stays the single authority.
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
@@ -159,18 +154,6 @@ The skill never calls JSON validity “done.” It requires an editable source s
 > ✏️ Effect preview generated with the Azhou Scenes skill. Machine colour gate passed; final identity, hand and text review remains a human checkpoint.
 
 [Read the package](skills/super-excalidraw-diagram/SKILL.md) · [Read setup](skills/super-excalidraw-diagram/references/setup.md) · [Read provenance](skills/super-excalidraw-diagram/references/provenance.md)
-
-## Super Caveman
-
-> 🪨 Less prose. Same technical signal.
-
-Super Caveman keeps original Caveman's persistent terse modes as its core, absorbs six companion skills as compact delegation, commit-message, review, guarded compression, help and evidence-bound statistics routes, and fully adopts the pinned `i-have-adhd` output-behavior contract. Everything ships as one canonical `super-caveman` package. Safety and explicit output contracts run first, the complete ADHD-friendly behavior contract runs second, and Caveman compression runs last. Plugin installation, hooks, global configuration, diagnostic claims and unverified cross-session persistence are outside this neutral package. The optional Codex, Claude Code and zcode lifecycle adapters are the documented exceptions and require explicit scoped setup before any hook registration. File compression never launches a second model or silently transmits content; a standard-library guard checks the source, validates protected structure, writes an out-of-tree backup, uses a checkpointed no-clobber install, and refuses restore over newer work. Guarded apply and restore require same-directory hard-link support and fail before moving the source when the filesystem denies it. Material operations use one restrained Azhou anchor per verified stage; ordinary terse replies do not add lifecycle emoji. Exact statistics remain unavailable when the host exposes no audited counters.
-
-![Super Caveman guarded-compression effect preview](assets/skills/super-caveman-effect.png)
-
-> 🦊 Effect preview generated with Azhou Scenes. Composition, text and run binding were checked; formal v1.9 colour promotion and final identity/hand approval remain checkpoints.
-
-[Read the package](skills/super-caveman/SKILL.md) · [Read setup](skills/super-caveman/references/setup.md) · [Read provenance](skills/super-caveman/references/provenance.md) · [Read compression safety](skills/super-caveman/references/compression.md)
 
 ## Super LLM Wiki
 
@@ -231,18 +214,6 @@ Ask Azhou is the user-invoked front door of the catalog: describe the intent, ge
 > 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
 
 [Read the package](skills/super-ask-azhou/SKILL.md)
-
-## Autoresearch
-
-> 🧪 No verified environment, no unattended GPU run.
-
-Autoresearch wraps a user-owned pinned <code>karpathy/autoresearch</code> checkout so an agent can prepare, run, resume and report automatic nanochat training experiments, holding before any unattended GPU run.
-
-![Autoresearch effect preview](assets/skills/super-autoresearch-effect.png)
-
-> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
-
-[Read the package](skills/super-autoresearch/SKILL.md)
 
 ## Session Insights
 
@@ -305,7 +276,7 @@ Python 3.11+ is enough for the repository gate:
 python scripts/verify.py
 ~~~
 
-The same command checks repository policy, all unit tests, four public benchmark-integrity suites and Git whitespace without private inputs. It runs every gate to completion and always ends on exactly one aggregate verdict line, so a piped or tailed capture cannot end on a passing note while the run failed; `python scripts/verify.py --print-summary` emits a machine-readable JSON summary (`azhou-hub.verify-summary.v1`) before that verdict line. It is enforced in CI on Ubuntu and windows-latest, and is verified on the maintainer macOS checkout, so the OS support claims in [docs/support-matrix.md](docs/support-matrix.md) stay receipt-backed. The full managed flow on Windows (info → setup → doctor → repository gate) is receipt-backed green on a real runner with the default Git Bash console encoding ([evidence/windows-full-flow-receipt-2026-10-17.md](evidence/windows-full-flow-receipt-2026-10-17.md)). Super Caveman's public integrity check still recomputes the approved exact diff against the current staged or committed tree, so a changed approved path requires fresh promotion evidence instead of silently passing. Release maintainers additionally run `python scripts/verify.py --promotion-evidence` after materializing the Git-external Super Caveman approval and review records. That second mode authenticates the raw promotion evidence; the default public gate validates the checked-in receipt and exact diff but does not claim external authentication. Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
+The same command checks repository policy, all unit tests, three public benchmark-integrity suites and Git whitespace without private inputs. It runs every gate to completion and always ends on exactly one aggregate verdict line, so a piped or tailed capture cannot end on a passing note while the run failed; `python scripts/verify.py --print-summary` emits a machine-readable JSON summary (`azhou-hub.verify-summary.v1`) before that verdict line. It is enforced in CI on Ubuntu and windows-latest, and is verified on the maintainer macOS checkout, so the OS support claims in [docs/support-matrix.md](docs/support-matrix.md) stay receipt-backed. The full managed flow on Windows (info → setup → doctor → repository gate) is receipt-backed green on a real runner with the default Git Bash console encoding ([evidence/windows-full-flow-receipt-2026-10-17.md](evidence/windows-full-flow-receipt-2026-10-17.md)). Excalidraw rendering has additional locked Python/Node dependencies documented in its own setup guide.
 
 ## Project
 

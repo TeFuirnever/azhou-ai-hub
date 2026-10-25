@@ -58,13 +58,13 @@ fidelity 轴按与上游 skill 的血缘关系把 canonical skill 分为三类�
 
 品牌锚点、收据、provenance 记录、setup 文档与授权 checkpoint 本身永远不构成 `adapted`；不改变原版承诺行为的输出形态约束属于包装层。
 
-每个 skill 的分类记录在自己的 provenance 记录中（`references/provenance.md`，无上游血缘的 `original` 同样建档），与已锁定的上游证据并列；分类统一写作 `Classification: \`<值>\`` 单行，后接引证。super-caveman 的分类与调用类均已写入包内 provenance 与 frontmatter；其 evaluation 只绑定行为面（`SKILL.md` body、modes、brand-layer、scripts），frontmatter discovery 元数据不进入 runtime digest。新 skill 引入时分类是 provenance 合同的必备项；仓库 gate 由 `check_fidelity_axis` 机械强制每个包必须带 `super-` 品牌前缀且声明 fidelity 分类（缺前缀或未声明分类即失败），并由 `check_rename_residue` 拒绝改名旧名出现在兼容触发、迁移源、provenance 与历史记录之外的 surface（#176 M4 / #183）。
+每个 skill 的分类记录在自己的 provenance 记录中（`references/provenance.md`，无上游血缘的 `original` 同样建档），与已锁定的上游证据并列；分类统一写作 `Classification: \`<值>\`` 单行，后接引证。新 skill 引入时分类是 provenance 合同的必备项；仓库 gate 由 `check_fidelity_axis` 机械强制每个包必须带 `super-` 品牌前缀且声明 fidelity 分类（缺前缀或未声明分类即失败），并由 `check_rename_residue` 拒绝改名旧名出现在兼容触发、迁移源、provenance 与历史记录之外的 surface（#176 M4 / #183）。
 
 ## 3. 阿舟交互层
 
 品牌属于仓库，能力属于 skill。每个交互式 skill 使用自己的英文 canonical name，并通过克制的阿舟锚点形成同族体验。播报文法与业界记忆署名惯例同构（参照 Hindsight 的 `🧠 From Hindsight memory（<page>）— …`）：标签在前，来源与字段用全角括号括起，叙述用破折号引出；不携带粗体等 Markdown 装饰，纯文本与 Markdown 两种渲染读到同一结构。
 
-1. 每个 canonical package 的 `SKILL.md` 必须在正文开头公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。规则对全部 skill 统一，没有例外：普通回复禁止生命周期播报的模式 skill（如 Super Caveman）同样在 `SKILL.md` 携带身份锚点，其阶段事件协议仍完整保留在 `references/brand-layer.md`。
+1. 每个 canonical package 的 `SKILL.md` 必须在正文开头公开一次 `🦊 阿舟 · <Skill>` 身份和领域口号；这属于文档识别层，不要求各 skill 使用相同阶段 emoji。规则对全部 skill 统一，没有例外：普通回复禁止生命周期播报的模式 skill 同样在 `SKILL.md` 携带身份锚点，其阶段事件协议仍完整保留在 `references/brand-layer.md`。
 2. 启动时输出一次 `🦊 阿舟 · <Skill> 启动（mode=…, scope=…）`：全角括号包裹字段，字段为 `k=v` 形式、以 `, ` 分隔；同一协议必须在入口和品牌层逐字一致。启动行是运行时播报：字段值填充当下已知的具体值，无法命名时使用机器稳定字面量 `unresolved` 并在下一阶段事件回填；尖括号模板仅存在于契约示例，不得原样播出。
 3. 阶段事件只有两种固定形状：结构化事件 `<emoji> <label>（k=v, k=v）` 携带字段，叙述事件 `<emoji> <label> — <content>` 携带自然语言。字段值内允许 `,` 但禁止 `, `、`（`、`）`；旧的 `｜` 分隔符已废弃，不得出现在新播报里。多阶段 skill 将顺序、固定前缀、字段和分隔符写入 `references/brand-layer.md`；单阶段 Foundation adapter 可在 `SKILL.md` 内联同一最小合同。脆弱流程提供标准库 validator 与正反回归，不让 agent 自由改写阶段名。
 4. 记忆署名：记忆真正贡献了答案的段落才署名，格式固定为 `🧠 From <store> memory（<source>）— <content>`；`<store>` 按真实来源命名（如 `Hindsight`、`阿舟`、`wiki`），`<source>` 指名具体页面或条目。没有贡献的记忆不得署名，读不到的来源不得猜测；把记忆消费写进流程的 skill（如 super-llm-wiki、super-repo-pedant）必须在自己的品牌层写明该署名格式。
@@ -124,7 +124,7 @@ observed -> corroborated -> regression_ready -> isolated_candidate
 - 普通失败至少在两个独立运行中重复；权限、删除、安全、隐私或损坏交付类严重失败可由一次证据形成候选。
 - 修改前增加回归 case。baseline 与 candidate 使用同一输入和权限，candidate 保持隔离。
 - promotion 需要确定性检查通过、无安全回归、至少 3 个独立 paired judges 的奇数多数、反转 A/B 顺序，以及人类对 exact diff 的明确批准。
-- 每次重绑仓内收据的骑行（含 re-bind 落地）必须在同一提交刷新 Git-external raw approval 与 review 记录的绑定（raw 的摘要字段、summary 的 `reviewer.review_sha256`），并在落地前用 `python scripts/verify.py --promotion-evidence`（或 `benchmarks/super-caveman/benchmark.py check --promotion-evidence`）做一次认证回放；回放失败不得落地。invariant 通路的 review 记录绑定复用的 `candidate_output_set_sha256`。
+- 每次重绑仓内收据的骑行（含 re-bind 落地）必须在同一提交刷新 Git-external raw approval 与 review 记录的绑定（raw 的摘要字段、summary 的 `reviewer.review_sha256`），并在落地前对同一 diff 做一次认证回放；回放失败不得落地。invariant 通路的 review 记录绑定复用的 `candidate_output_set_sha256`。
 - 后台 observer、hook、历史采集器和健康趋势都不能静默修改 live skill。失败批次保留；成功只归档已验证批次。
 
 ### 5.1 中断与配额恢复

@@ -15,7 +15,7 @@ def run_validator(exit_code: int, captured: str) -> tuple[int, str]:
         [sys.executable, str(VALIDATOR), "--exit-code", str(exit_code)],
         input=captured,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8",
         check=False,
     )
     return result.returncode, result.stdout

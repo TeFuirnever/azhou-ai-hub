@@ -53,7 +53,6 @@ REQUIRED_PATHS = (
     "README.md",
     "README.zh-CN.md",
     "assets/skills/super-llm-wiki-effect.png",
-    "assets/skills/super-caveman-effect.png",
     "SECURITY.md",
     "SUPPORT.md",
     "THIRD_PARTY_NOTICES.md",
@@ -62,7 +61,6 @@ REQUIRED_PATHS = (
     "docs/skill-standard.md",
     "docs/foundations.md",
     "scripts/azhou_hub.py",
-    "skills/super-caveman/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-llm-wiki/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
@@ -74,12 +72,10 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-archify/SKILL.md",
     "skills/super-asd-ste100/SKILL.md",
     "skills/super-ask-azhou/SKILL.md",
-    "skills/super-autoresearch/SKILL.md",
     "skills/super-azhou-doctor/SKILL.md",
     "skills/super-azhou-info/SKILL.md",
     "skills/super-azhou-setup/SKILL.md",
     "skills/super-azhou-verify/SKILL.md",
-    "skills/super-caveman/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-lavish/SKILL.md",
@@ -97,11 +93,6 @@ INVOCATION_CLASSES = (
 SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
 
 SKILL_BRAND_CONTRACTS = {
-    "skills/super-autoresearch/SKILL.md": {
-        "display_name": "Autoresearch",
-        "motto": "实验通宵跑，边界先说清。",
-        "startup": "🦊 阿舟 · Autoresearch 启动（mode=<prepare|run|resume|report>, scope=<checkout>）",
-    },
     "skills/super-ask-azhou/SKILL.md": {
         "display_name": "Ask Azhou",
         "motto": "说清你想做什么，我告诉你敲哪扇门。",
@@ -155,16 +146,6 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "代码是唯一现役答案，其他都要对齐。",
         "startup": "🦊 阿舟 · Super Repo Pedant 启动（mode=<mode>, scope=<repo>）",
         "brand_path": "skills/super-repo-pedant/references/brand-layer.md",
-    },
-    "skills/super-caveman/SKILL.md": {
-        "display_name": "Super Caveman",
-        "motto": "少说话，技术信号不丢。",
-        # Held on the legacy pipe grammar: the super-caveman skill tree is
-        # hash-bound to its recorded passing evaluation, so brand-layer v2
-        # rides the tree at the next promotion ride (same hold pattern as the
-        # invocation axis and fidelity classification tables).
-        "startup": "🦊 阿舟 · Super Caveman 启动｜mode=<operation>｜scope=<target>",
-        "brand_path": "skills/super-caveman/references/brand-layer.md",
     },
     "skills/super-arch-doc/SKILL.md": {
         "display_name": "Arch Doc",
@@ -327,9 +308,7 @@ PLATFORM_VIEW_SHARED_OS_ROWS = (
     "Host lifecycle hooks, MCP transports and memory APIs",
 )
 # OS-gate rows whose title names a skill govern only that skill's row.
-PLATFORM_VIEW_SKILL_SCOPED_OS_ROWS = {
-    "Super Caveman harness adapters and gate machinery": frozenset({"super-caveman"}),
-}
+PLATFORM_VIEW_SKILL_SCOPED_OS_ROWS: dict[str, frozenset[str]] = {}
 TABLE_SEPARATOR_CELL = re.compile(r":?-{3,}:?")
 
 
@@ -532,7 +511,6 @@ RENAMED_AWAY_SKILLS = {
     "archify": "super-archify",
     "asd-ste100": "super-asd-ste100",
     "ask-azhou": "super-ask-azhou",
-    "autoresearch": "super-autoresearch",
     "azhou-doctor": "super-azhou-doctor",
     "azhou-info": "super-azhou-info",
     "azhou-setup": "super-azhou-setup",
@@ -577,7 +555,6 @@ RESIDUE_HISTORY_PREFIXES = (
     "docs/research/",
     "docs/specs/",
     "evidence/",
-    "benchmarks/super-caveman/results/",
 )
 RESIDUE_HISTORY_FILES = {
     "AGENTS.md",
@@ -781,19 +758,14 @@ LEGACY_BROADCAST_PATTERN = re.compile(
 )
 LEGACY_BROADCAST_SCOPES = (
     "skills/",
-    # skills/super-caveman/ is scanned except its brand-layer, which stays on
-    # the legacy grammar until the next promotion ride (see SKILL_BRAND_CONTRACTS).
     "scripts/",
     "tests/",
     "docs/demos/",
     "benchmarks/super-repo-pedant/protocol/",
 )
 LEGACY_BROADCAST_EXEMPT_PATHS = (
-    "skills/super-caveman/references/brand-layer.md",
-    # Holds the super-caveman legacy startup contract (see SKILL_BRAND_CONTRACTS).
+    # Holds the legacy broadcast pattern definitions.
     "scripts/check_repository.py",
-    # Asserts the held super-caveman legacy grammar verbatim (see above).
-    "tests/test_skill_package.py",
 )
 
 
@@ -962,11 +934,6 @@ REFERENCE_SCRIPT_EXCLUDED_SEGMENTS = (
     "/node_modules/",
     "/references/upstream/",
 )
-REFERENCE_SCRIPT_FROZEN_PREFIXES = (
-    # super-caveman is bound to its promotion skill-tree digest; its reference
-    # surface rides the pending promotion ride (see check_command_surface).
-    "skills/super-caveman/",
-)
 INLINE_CODE_SPAN = re.compile(r"`([^`\n]+)`")
 REFERENCE_SCRIPT_SPAN = re.compile(
     r"scripts/[\w][\w./-]*\.(?:py|sh|bash|zsh|js|mjs|cjs|ts)"
@@ -975,8 +942,6 @@ REFERENCE_SCRIPT_SPAN = re.compile(
 
 def _reference_script_surface(relative: str) -> bool:
     if not relative.endswith(".md"):
-        return False
-    if relative.startswith(REFERENCE_SCRIPT_FROZEN_PREFIXES):
         return False
     if any(segment in f"/{relative}" for segment in REFERENCE_SCRIPT_EXCLUDED_SEGMENTS):
         return False
@@ -1035,9 +1000,6 @@ COMMAND_SURFACE_EXCLUDED_DIRECTORIES = (
     "docs/research/",
     "docs/specs/",
     "docs/demos/",
-    # super-caveman is bound to its promotion skill-tree digest; its command
-    # surface rides the pending promotion ride (see .azhou/win-07-doc-command-sweep/).
-    "skills/super-caveman/",
 )
 PYTHON3_TOKEN = re.compile(r"\bpython3\b")
 

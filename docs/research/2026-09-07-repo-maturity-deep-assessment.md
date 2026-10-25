@@ -38,7 +38,7 @@
 3. **CI 供应链姿态一流**：6 个 workflow 文件（ci/codeql/dependency-review/fuzz/release/scorecard）全部最小权限、全 job 有 timeout、并发取消、action 全 SHA pin 且有仓库策略门二次强制；CodeQL 双语言周扫、dependency-review 高危即fail、周度 fuzz、OpenSSF Scorecard；release.yml 仅手动触发、限 main、SemVer 正则、只建草稿。
 4. **Git 纪律**：113 个 commit 中仅 2 个偏离 `type(scope): imperative` 格式（Initial commit 与 #136 批量提交）；CHANGELOG 条目详尽并交叉引用 PR/规格/上游 pin。
 5. **合规与双语文档**：README EN/ZH 镜像同步（各 14 节、15 条安装命令，抽查无漂移）；`THIRD_PARTY_NOTICES.md` + `LICENSES/` 9 份许可文本，每个 vendored/改编材料记录不可变上游 commit；SECURITY.md 走私有 advisory；GOVERNANCE.md、CODEOWNERS、dependabot 齐备。
-6. **晋升治理机制**：super-caveman 晋升门以 blob 级 old/new oid 锁定改动面（[benchmarks/super-caveman/results/revision-93f38a6b-exact-diff-approval.json](../../benchmarks/super-caveman/results/revision-93f38a6b-exact-diff-approval.json) 的 8 个 reviewed_blobs），被覆盖路径再编辑即触发公共门失败——演化链有实打实的哈希绑定。
+6. **晋升治理机制**：super-caveman 晋升门以 blob 级 old/new oid 锁定改动面（`benchmarks/super-caveman/results/revision-93f38a6b-exact-diff-approval.json` 的 8 个 reviewed_blobs），被覆盖路径再编辑即触发公共门失败——演化链有实打实的哈希绑定。
 
 ### 弱项/缺口
 

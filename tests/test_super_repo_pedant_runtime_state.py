@@ -19,6 +19,7 @@ class RepoPedantRuntimeStateTest(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(script), *args],
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
