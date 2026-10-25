@@ -21,7 +21,7 @@ https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
 
-> 🦊 主视觉由 Azhou Covers skill 按 `github_readme_image_16_9` profile 确定性合成：米色纸面、注册四色、canonical 角色按原像素合成。120/240/360 px 缩略图复核已通过；最终公开视觉批准仍保留为人工 checkpoint。
+> 🦊 主视觉按 `github_readme_image_16_9` profile 合同生成（1280×720，无损 PNG）：阿舟狐狸（canonical 参考）盖章批准的画面由本地 Azhou imagegen 流水线生成（Qwen-Image-2.1 edit，2026-10-25 批次 seed 7），三条主张文字为确定性叠加。120/240/360 px 缩略图已复核；维护者（IP 权利人）视觉批准记录于 2026-10-25。
 
 很多 skill 仓库停在提示词。Azhou AI Hub 把每个 skill 当成产品：触发准确、运行包可移植、依赖可复现、检查可执行、评测不造假、来源可追踪、演化受人类控制。
 
