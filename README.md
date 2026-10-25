@@ -100,6 +100,8 @@ python scripts/azhou_hub.py integrations startup-animation --help
 
 The animation program has no recorded open-source license grant. The Hub root license does not cover that package; do not publish its source or binaries until redistribution permission is clarified. Private artwork stays outside the package. The 2026-10-25 acceptance report is historical evidence for its inspected inputs and host, not fresh acceptance of the monorepo import. This migration did not restart Codex or change live appearance; production installation, cold host launch, wallpaper application and formal visual approval remain unverified.
 
+The package also includes its existing Codex Pet theme and maintenance tools. Private reviewed candidates and installation ownership were not transferred; see [Pet maintenance after the import](docs/integrations.md#pet-maintenance-after-the-import) before using them from the new checkout. Installed-byte checks do not prove host selection or playback.
+
 ## Skills
 
 | Skill | Real job | Verification basis |

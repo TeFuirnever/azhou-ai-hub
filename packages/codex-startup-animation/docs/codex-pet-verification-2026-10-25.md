@@ -1,5 +1,7 @@
 # 阿舟原生 Codex pet：2026-10-25 交付与验证
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史记录：以下结论来自原项目工作树当时的证据。引用的 `.local/evidence/`、`.local/pets/` 与用户级安装目录均未迁入本包；本文件不证明本包或当前机器的安装状态。
 
 ## 交付结论
@@ -21,7 +23,7 @@
 
 ## 1. 文件、位置与使用入口
 
-项目根目录为 `/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。本文所有相对路径均以此为根。
+项目根目录为 `$ORIGINAL_PROJECT_ROOT`。本文所有相对路径均以此为根。
 
 | 新增或更新内容 | 用途 |
 | --- | --- |
@@ -34,12 +36,12 @@
 | `.local/pets/azhou-agent-lab/` | 私有快照、已审阅 run、候选与选择记录 |
 | `.local/evidence/20261025-pet-feature/` | 本轮命令输出、独立检查与证据索引 |
 
-实际原生目录是 `/Users/guanxueliang/.codex/pets/azhou-agent-lab/`，包含 `pet.json`、`spritesheet.webp` 和独立所有权 receipt。没有创建额外 `.app` 入口，也没有设置宿主当前选择项。[E03–E05]
+实际原生目录是 `$CODEX_HOME/pets/azhou-agent-lab/`，包含 `pet.json`、`spritesheet.webp` 和独立所有权 receipt。没有创建额外 `.app` 入口，也没有设置宿主当前选择项。[E03–E05]
 
 日常核对与同步：
 
 ```bash
-cd /Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation
+cd "$ORIGINAL_PROJECT_ROOT"
 python3 -B tools/manage-codex-pet.py status
 python3 -B tools/manage-codex-pet.py sync
 ```
@@ -68,7 +70,7 @@ python3 -B tools/manage-codex-pet.py prepare
 | `pet/theme.json` | `f10f190a100694f614d40139654878868c4408951386e9ea51955a7a9d04645e` | pet 身份及生成约束 |
 | 正式 `01-master-idle.png` | `e38132192c8056dadff424eead7856625c9752810813ab5795e1cd6c0385b9de` | 正式身份来源；摘要记录在 theme 中 |
 
-正式主形象位置：`/Users/guanxueliang/Desktop/oh-my-ai/IP/azhou/assets/characters/azhou-chibi-pet/v1.0.0/images/01-master-idle.png`。同目录的 `04-working.png` 与项目工作姿态同摘要。末次独立读取确认两张正式图都未变化。[E07]
+正式主形象位置：`$PRIVATE_IP_ROOT/assets/characters/azhou-chibi-pet/v1.0.0/images/01-master-idle.png`。同目录的 `04-working.png` 与项目工作姿态同摘要。末次独立读取确认两张正式图都未变化。[E07]
 
 四项主题输入的规范 JSON 摘要构成修订：
 
@@ -228,7 +230,7 @@ manifestSHA256= b4fc418c87d5211e57e47a8322aff861d781ad09d428fb706549c0644be12a3e
 ```bash
 python3 -B tools/manage-codex-pet.py status
 python3 -B tools/test-codex-pet.py
-shasum -a 256 /Users/guanxueliang/.codex/pets/azhou-agent-lab/spritesheet.webp
+shasum -a 256 "$CODEX_HOME/pets/azhou-agent-lab/spritesheet.webp"
 ```
 
 第三条应得到上文完整 `atlasSHA256`；只验 SHA 仍不能证明宿主实际展示。后续正常使用时，在原生 Pets 界面刷新并选择阿舟，记录实际选择项、真实截图、完整状态播放和上下左右鼠标响应。若宿主仍显示旧 pet，则安装状态仍可为正确，运行状态不得晋升为 applied；如果现场结果与图集/方向契约不符，应据实否证当前运行验收。

@@ -1,15 +1,17 @@
 # 鲜明配色、默认最大化与唯一入口：0.5.0 验收
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史范围：本文记录0.5.0的视觉与路径验收。0.5.1改为隐藏无.app载荷并移除dist副本，见 [0.5.1验收](upgrade-0.5.1-verification.md)；0.5.2增加应用图标。当前版本、唯一入口和操作步骤以 [项目 README](../README.md) 为准，本文不作为现行产物数量说明。
 
-日期：2026-10-24。项目：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。Git 起点 `c743c2b`；本轮没有 commit、push 或公开发布。本文记录用户要求删除旧入口及备份、对齐默认最大化、复用原项目能力增强动效之后的实际状态。
+日期：2026-10-24。项目：`$ORIGINAL_PROJECT_ROOT`。Git 起点 `c743c2b`；本轮没有 commit、push 或公开发布。本文记录用户要求删除旧入口及备份、对齐默认最大化、复用原项目能力增强动效之后的实际状态。
 
 ## 0.5.0验收结果
 
-- 唯一日常安装入口：`/Users/guanxueliang/Applications/阿舟启动 Codex.app`。
+- 唯一日常安装入口：`$HOME/Applications/阿舟启动 Codex.app`。
 - Bundle ID：`local.azhou.codex-startup`；可执行文件：`AzhouCodexStartup`；版本：`0.5.0 / build 2`；`LSUIElement=true`。
 - 项目内唯一应用产物：`dist/阿舟启动 Codex.app`。它是安装来源；日常打开上面的 Applications 入口。
-- 已核实的旧项目入口 `/Users/guanxueliang/Applications/Codex.app` 已移除。它是项目包装器，不是官方主程序。
+- 已核实的旧项目入口 `$HOME/Applications/Codex.app` 已移除。它是项目包装器，不是官方主程序。
 - 已删除 `.local/recovery/` 中19个恢复文件，共28,299,908字节，并移除该恢复目录。删除清单和SHA256保留在 `.local/evidence/20261024-vivid/cleanup.json`；清单自身不包含可恢复副本。
 - 当前官方目标仍为 `/Applications/ChatGPT.app`，身份 `com.openai.codex`，主可执行文件 `ChatGPT`。未修改或删除它，也未处理其正常 Helper。
 

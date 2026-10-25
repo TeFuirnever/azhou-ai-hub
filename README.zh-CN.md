@@ -100,6 +100,8 @@ python scripts/azhou_hub.py integrations startup-animation --help
 
 动画程序目前没有已记录的开源授权；Hub 根目录许可证不覆盖该包。再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材保留在包外。2026-10-25 验收报告只记录当时检查的输入和宿主，不代表本次 monorepo 导入已重新验收。本次迁移没有重启 Codex，也没有改变实时外观；正式安装、冷启动宿主、应用壁纸和正式视觉审阅仍未验证。
 
+包内还保留了现有 Codex Pet 主题和维护工具，但私有已审阅候选与安装归属没有转移；从新 checkout 使用前请阅读 [Pet 迁入后的维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+
 ## Skills
 
 | Skill | 解决的真实任务 | 验证依据 |

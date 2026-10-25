@@ -1,6 +1,8 @@
 # 0.7.1 / build 8 — 聊天装饰渐隐层修复验收
 
-日期：2026-10-25（Asia/Shanghai）。项目：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
+日期：2026-10-25（Asia/Shanghai）。项目：`$ORIGINAL_PROJECT_ROOT`。
 
 ## 结论
 
@@ -65,7 +67,7 @@
 
 ## 安装与源码一致性
 
-- 唯一安装路径：`/Users/guanxueliang/Applications/阿舟启动 Codex.app`。
+- 唯一安装路径：`$HOME/Applications/阿舟启动 Codex.app`。
 - Bundle ID / executable：`local.azhou.codex-startup / AzhouCodexStartup`。
 - 包树SHA256：`2a2831efa487d88f86c4f91aacc7448042179764c6e959aa0dd7ecb9123ce467`。
 - 构建输入SHA256：`23e98e50bdaae75a79d41aeed5d1f867e12f0e32dcd8811adcf30364d0374f09`。

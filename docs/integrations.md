@@ -134,6 +134,23 @@ For the test entry, use `test-uninstall --workspace ...`, then repeat with `--ap
 
 `install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The source installer hardcodes the user Applications entry, writes source-local build/state and exposes no uninstall operation. This Hub change does not bypass its `projectRoot` ownership check, duplicate that installer or alter the source. A separate source-owner change must define explicit build/state/destination and native uninstall contracts before Hub can offer that production lifecycle. `native-check` remains read-only. The original official Codex entry remains available.
 
+### Pet maintenance after the import
+
+The animation package also carries `pet/theme.json`, `tools/manage-codex-pet.py` and its isolated tests. The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand. See the [package runbook](../packages/codex-startup-animation/docs/codex-pet.md).
+
+From the Hub root, these commands inspect state or run isolated tests:
+
+```sh
+python -B packages/codex-startup-animation/tools/manage-codex-pet.py status
+python -B packages/codex-startup-animation/tools/test-codex-pet.py
+```
+
+A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. Its `status` can report invalid source/candidate state or `unknown-target` for an existing Pet whose receipt belongs to the old `projectRoot`. Those results do not establish that the old installation is damaged. The top-level status command is an inspection result, not a readiness or host-activation verdict. Likewise, `native-check` requires that selected package root's build payload; a missing payload does not diagnose an installation built elsewhere.
+
+Use explicitly authorized private inputs and revalidate their frozen candidate/review chain before considering synchronization. A changed theme requires generation and renewed review; `sync` never generates images. Current Pet revision inputs are the two configured private images, `style.css` and `pet/theme.json`, not every visual file. Keep the old root and receipts intact: no current command transfers ownership between roots, and rewriting `projectRoot` or copying `.local` does not create a verified transfer.
+
+`matchesSelectedPackage` compares installed bytes with the tool's selected candidate, not the host's selected avatar. `pending-refresh-selection` is the tool's fixed runtime boundary; real selection, playback and direction behavior require separate observation. Private inputs, candidates and installation receipts remain local. The repository gate currently runs the native installer suite, while the Pet suite above remains a separate check.
+
 ## Why these checks are necessary
 
 The initial read-only review answered the four implementation questions with concrete consequences:

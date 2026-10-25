@@ -1,5 +1,7 @@
 # Codex pet：文件核验、用户级清理与动作扩展边界（2026-10-26）
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 ## 结论与适用范围
 
 本轮通过 Remote Desktop Commander **重新读取本机文件并运行测试**，不是照搬前次验收。关键 pet 源码、主题和安装内容一致，`0.7.1` 启动器安装器 `--check` 返回 `current`，用户 Applications 实体包一份、dist 额外包零份、系统登记一条。原生 pet 的实际刷新、选择与完整动画 **仍未观察**，不可宣称已应用。
@@ -26,18 +28,11 @@
 
 ## 2. 已执行的自定义 pet 清理
 
-从用户级扫描目录移出以下五个经过目录结构、JSON 身份和 10 个文件摘要核对的项目：
-
-- `clawd`（Clawd；属于自定义文件，并非 Codex 内置 pet）
-- `deepseek-whalechan--qimi`（蓝色大肥鱼·Q版女仆）
-- `guga`（咕嘎）
-- `monthly-salary-cat`（Monthly Salary Cat）
-- `rem--l1`（Rem）
+从用户级扫描目录移出了五个自定义项目，操作前核对了目录结构、JSON 身份和 10 个文件摘要。具体名称与文件级清单属于用户本机盘点，保留在原项目的清理日志中，不随本包列出。
 
 移除使用相同 APFS 卷上的原子重命名；未删除未识别文件。执行后 `~/.codex/pets/` 的用户级目录仅有 `azhou-agent-lab`。系统内置的 `codex`、`dewey`、`fireball`、`hoots`、`rocky`、`seedy` 位于官方资源，未触碰。阿舟 `pet.json`、WebP、receipt 的三项 SHA 均与移除前相同。
 
-本地恢复路径：
-`/Users/guanxueliang/.codex/.pet-removal-recovery/20261026-010348-c27a29d9/`
+本地恢复路径记为 `$PET_RECOVERY_ROOT`；实际目录以原项目清理日志和恢复记录为准，不从历史日期或占位符猜测。
 
 五个目录已离开 app 的自动扫描范围，但**恢复副本仍在磁盘上**，不是永久粉碎。恢复前确认同名目录尚未重新安装，只把需要恢复的单个目录移回 `~/.codex/pets`。不要把整个恢复目录移入 `pets`：当前宿主连隐藏子目录也会扫描。没有修改选中 pet 设置、退出宿主、清理 IP 素材或执行 `git clean/reset`。
 

@@ -1,10 +1,12 @@
 # 阿舟启动 Codex：实际验收记录
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史记录：本文描述0.5.0之前的设计或验收，文中的版本、命令和数量均属于当时状态。旧 `~/Applications/Codex.app` 及恢复备份已按用户要求删除，历史恢复命令不再适用。现行入口、构建安装步骤和验收索引以 [项目 README](../README.md) 为准。
 
 > 0.4.0后续记录：用户指出已有 Applications 安装入口后的原位更新，见 [当时的安装补齐记录](azhou-installation-verification.md)。该记录同样属于历史，不代表现行安装状态。
 
-日期：2026-10-24。工作目录：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。Git 起点：`c743c2b`；保留了开始时已有的 README 和两个 command 文件的未提交修改。本轮没有 commit、push 或公开发布。
+日期：2026-10-24。工作目录：`$ORIGINAL_PROJECT_ROOT`。Git 起点：`c743c2b`；保留了开始时已有的 README 和两个 command 文件的未提交修改。本轮没有 commit、push 或公开发布。
 
 ## 结论和证据边界
 
@@ -34,7 +36,7 @@
 
 指定头像为 256×256 RGBA 半身像；指定实验室图为 1536×1024 RGB，背景已包含成人比例人物。它们不足以支持独立完整 Q 版桌前敲键动作。最终使用原素材库已经存在的女性 Q 版工作姿态：
 
-`/Users/guanxueliang/Desktop/oh-my-ai/IP/azhou/assets/characters/azhou-chibi-pet/v1.0.0/images/04-working.png`
+`$PRIVATE_IP_ROOT/assets/characters/azhou-chibi-pet/v1.0.0/images/04-working.png`
 
 该图为 1254×1254 RGBA，alpha 范围 0–255，alpha>8 的可见包围盒为 [61,37,1209,1212]，四边无 alpha>8 的像素。原图和私有复制的 SHA-256 均为：
 

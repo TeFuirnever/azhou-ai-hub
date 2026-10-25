@@ -4,6 +4,7 @@
 |---|---|
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
+| Use optional project packages or diagnose imported Pet state | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/super-excalidraw-diagram.md) |

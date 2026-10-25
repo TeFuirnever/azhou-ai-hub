@@ -1,8 +1,10 @@
 # 0.5.1：安装升级与唯一入口实际验收
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史范围：本文记录0.5.1/build3的升级、重复问题与验收证据。现行版本与操作以 [项目 README](../README.md) 为准；后续0.5.2图标及安装包验证见 [图标验收](app-icon-0.5.2-verification.md)。
 
-日期：2026-10-24。项目：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。
+日期：2026-10-24。项目：`$ORIGINAL_PROJECT_ROOT`。
 本轮响应用户指出“安装新版本仍留下旧入口，应沉淀到项目”的问题。修改范围限于构建、安装、应用登记、启动脚本及对应回归；没有改动本轮动画画面和时间轴。
 
 ## 根因与上次验收遗漏
@@ -13,8 +15,8 @@
 
 两条实体路径为：
 
-1. `/Users/guanxueliang/Applications/阿舟启动 Codex.app`
-2. `/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation/dist/阿舟启动 Codex.app`
+1. `$HOME/Applications/阿舟启动 Codex.app`
+2. `$ORIGINAL_PROJECT_ROOT/dist/阿舟启动 Codex.app`
 
 Spotlight与公开的NSWorkspace全部应用URL查询均同时列出这两处。旧 `~/Applications/Codex.app` 已不存在，两个历史旧Bundle ID的登记列表为空。Dock相关固定项只有官方 `/Applications/ChatGPT.app`，未发现固定的项目旧入口。
 
@@ -90,12 +92,12 @@ Spotlight与公开的NSWorkspace全部应用URL查询均同时列出这两处。
 | `README.md`、`docs/installation-lifecycle.md` | 持久升级约定、正常命令和保护边界。 |
 
 ```sh
-cd "/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation"
+cd "$ORIGINAL_PROJECT_ROOT"
 bash tools/install-macos.sh
 bash tools/install-macos.sh --check
 open "$HOME/Applications/阿舟启动 Codex.app"
 ```
 
-所有本轮证据位于 `/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation/.local/evidence/20261024-upgrade/`。原有0.5.0的视觉验收文档及其dist存在性记录属于当时历史状态，本次0.5.1的入口结果以本文为证据，现行入口状态见项目README。本轮没有commit或push。
+所有本轮证据位于 `$ORIGINAL_PROJECT_ROOT/.local/evidence/20261024-upgrade/`。原有0.5.0的视觉验收文档及其dist存在性记录属于当时历史状态，本次0.5.1的入口结果以本文为证据，现行入口状态见项目README。本轮没有commit或push。
 
 官方依据和工具的稳定性边界见 [安装升级约定](installation-lifecycle.md#官方依据)。

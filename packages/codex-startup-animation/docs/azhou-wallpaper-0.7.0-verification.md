@@ -1,10 +1,12 @@
 # 0.7.0 / build 7 — Q版全景壁纸验收
 
-日期：2026-10-24。项目：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
+日期：2026-10-24。项目：`$ORIGINAL_PROJECT_ROOT`。
 
 ## 本轮目标与纠正
 
-用户要求借用本机 `/Users/guanxueliang/Desktop/oh-my-ai/IP/azhou` 正式资产，将右下角人物背景扩展为完整场景；随后明确纠正：“为啥不用Q版了？”
+用户要求借用本机 `$PRIVATE_IP_ROOT` 正式资产，将右下角人物背景扩展为完整场景；随后明确纠正：“为啥不用Q版了？”
 
 第一轮普通动漫比例全景偏离了既有Q版设定，未接入运行中的壁纸。最终重新以正式 `azhou-chibi-pet/v1.0.0/images/04-working.png` 为造型、比例、画风主参考，女性v2正式身份图仅用于核对身份细节。保留大头、小躯干、短四肢、暖棕眼、橙色卷发、狐耳单尾、观者右侧发饰、狐脸胸针及白橙服装；场景扩展为完整实验室。
 
@@ -44,7 +46,7 @@ renderer新增 `coverMatched`、`fixedViewport` 成功判据，报告源图尺�
 
 ## 本机运行与安装
 
-- 唯一入口：`/Users/guanxueliang/Applications/阿舟启动 Codex.app`。
+- 唯一入口：`$HOME/Applications/阿舟启动 Codex.app`。
 - 身份：`local.azhou.codex-startup / AzhouCodexStartup`。
 - 通过最终安装应用的有限helper接入，`applied:true`、`coverMatched:true`、`fixedViewport:true`、`footerBackgroundClear:true`。
 - 宿主仍为原 `/Applications/ChatGPT.app`、PID80172、回环端口62554；本轮没有退出或重启宿主。

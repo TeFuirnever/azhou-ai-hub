@@ -1,13 +1,15 @@
 # 0.5.2 应用图标验收
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史范围：本文记录0.5.2/build4的图标与安装验收。当前版本与壁纸行为见 [项目 README](../README.md) 和 [0.6.0壁纸记录](azhou-wallpaper-0.6.0-verification.md)。
 
 日期：2026-10-24。当前应用版本0.5.2/build4，唯一入口：
-`/Users/guanxueliang/Applications/阿舟启动 Codex.app`。
+`$HOME/Applications/阿舟启动 Codex.app`。
 
 ## 指定源图与实现
 
-用户指定原图为 `/Users/guanxueliang/Desktop/Tilted fox-robot face avatar.png`。实际打开确认1254×1254、RGB PNG、不透明深色背景，保留原有倾斜近景构图。原图SHA256：
+用户指定原图为 `$ICON_SOURCE`。实际打开确认1254×1254、RGB PNG、不透明深色背景，保留原有倾斜近景构图。原图SHA256：
 
 `fd0d4bfd7b394f45c8724436e765be5ecfa9f675a2a9214619a65e32eebbf21d`
 

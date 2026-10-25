@@ -25,6 +25,8 @@
 
 ## 包内路径改造与验证边界
 
+历史文档中的个人机器路径已脱敏：`$ORIGINAL_PROJECT_ROOT` 表示旧 checkout，`$PRIVATE_IP_ROOT` 表示原私有 IP 库，`$CODEX_HOME` 表示当时的 Codex 用户目录，`$HOME` 表示用户主目录，`$ICON_SOURCE` 表示用户提供的图标源，`$PET_RECOVERY_ROOT` 表示实际恢复记录指向的目录。这些是历史定位占位符，不是新包配置或可直接套用的安装命令。原始位置、文件清单与恢复日志仍保留在旧仓本地证据中；不把本机清理盘点迁为公开操作记录。
+
 源 shell 与 Python 工具多数从自身位置解析源项目根目录，迁入子目录后仍应指向本包根。包级 `.gitignore` 补充屏蔽 `.build/`、`dist/`、`assets/private/`、`.local/`、`.azhou/`、`docs/audits/` 和 `.app` 产物；需在子目录工作目录验证 `git check-ignore` 与 `git ls-files` 的实际结果。
 
 README 与 `.command` 操作入口改用本包根路径；历史验证记录保留当时的运行环境并注明其为历史证据。构建需要独立提供的私有图像与图标输入，本次没有复制这些资产。纯原生校验测试和安装器隔离测试不触发安装、宿主重启、CDP 注入或生产壁纸接入；这些边界必须在验证结果中保持明确。

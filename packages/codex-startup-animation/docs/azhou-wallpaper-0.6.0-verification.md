@@ -1,8 +1,10 @@
 # 0.6.0 阿舟壁纸接入与工作姿态升级
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 后续实机回归（2026-10-24）：本记录保留 0.6.0 / build 5 当时的结果。正常启动后，用户截图暴露了底部整行装饰背景截断人物的问题；它未被本版模拟宿主和 applied 判定覆盖，不属于窄窗口输入框正常叠放的限制。修复后的当前版本为 0.6.1 / build 6，实机证据与测试范围见 [0.6.1验收](azhou-wallpaper-0.6.1-verification.md)。
 
-日期：2026-10-24。项目：`/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation`。
+日期：2026-10-24。项目：`$ORIGINAL_PROJECT_ROOT`。
 
 **状态：实现与0.6.0/build5安装完成；新图的模拟界面验收、原生预览、已有Codex的交接与重复打开已完成。真实Codex页面内的壁纸成功接入仍待一次正常冷启动验证，不能标记为全部通过。** 当前主进程PID35120没有CDP监听，实时检查为 `needs-restart / applied:false`。没有替用户退出当前工作会话。
 
@@ -74,7 +76,7 @@
 | 官方包 | 当前路径 `/Applications/ChatGPT.app`，ID `com.openai.codex`，Team ID `2DC432GLL2`；`codesign --verify --strict` 成功。 |
 | 真实冷启动壁纸 | **未验证。** 现有进程没有CDP端口，且用户要求不打断当前工作；未替用户退出、未强制多开、未绕过辅助功能权限。 |
 
-安装应用：`/Users/guanxueliang/Applications/阿舟启动 Codex.app`。身份 `local.azhou.codex-startup / AzhouCodexStartup`，0.6.0/build5，LSUIElement=true，图标继续为AzhouAppIcon.icns。
+安装应用：`$HOME/Applications/阿舟启动 Codex.app`。身份 `local.azhou.codex-startup / AzhouCodexStartup`，0.6.0/build5，LSUIElement=true，图标继续为AzhouAppIcon.icns。
 
 最终应用树摘要：`e3d8c324dcc67d44f07a07c23e70c81aa8f1bf4a324e3b90d4b9abca03066ea0`。
 构建输入摘要：`233da02d61d593644dbc50922b6784eda40f36cb31a427f6fb225663b29f1302`。
@@ -99,7 +101,7 @@
 ## 6. 可复现命令与恢复边界
 
 ```sh
-cd "/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation"
+cd "$ORIGINAL_PROJECT_ROOT"
 bash tools/install-macos.sh
 bash tools/install-macos.sh --check
 "$HOME/Applications/阿舟启动 Codex.app/Contents/MacOS/AzhouCodexStartup" --preview

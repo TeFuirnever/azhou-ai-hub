@@ -16,7 +16,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 ## Repository shape
 
 - [`docs/skill-standard.md`](docs/skill-standard.md) is the project authority for every skill's package, setup, brand lifecycle, evidence, evaluation, evolution, and closeout.
-- [`docs/integrations.md`](docs/integrations.md) governs only the three optional external integrations. Keep their sources hash-locked, their native installers' ownership distinct, and installation/discovery/invocation evidence separate. They do not become canonical Skills or bypass the orchestrator composition rule.
+- [`docs/integrations.md`](docs/integrations.md) governs the three optional projects under `packages/`. Maintain their canonical package sources, preserve original-import provenance, and fingerprint current `runtime_paths` inputs for each plan. Keep native installation ownership and installation/discovery/invocation evidence distinct. They do not become canonical Skills or bypass the orchestrator composition rule.
 - Keep every skill independently installable under `skills/<canonical-name>/`; keep development-only evaluation material under repository-level `benchmarks/`.
 - `README.md` is the English public entry and `README.zh-CN.md` its Chinese reader mirror. Material product, install, evidence, compatibility, security, or license changes update both in one commit.
 - Public support claims must match `docs/support-matrix.md`. Portable runtime does not imply identical hooks, memory APIs, or tool access across harnesses.
@@ -58,6 +58,6 @@ Run before handoff:
 python3 scripts/verify.py
 ```
 
-This runs repository policy, all unit tests, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/super-excalidraw-diagram/references/setup.md`.
+This runs repository policy, Hub unit tests, package manifest/lifecycle suites, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/super-excalidraw-diagram/references/setup.md`. For Codex Pet runtime changes, also run `python3 -B packages/codex-startup-animation/tools/test-codex-pet.py`; the package gate does not yet include that suite.
 
 Use `uv run --with pyyaml python <skill-creator>/scripts/quick_validate.py skills/<skill>` only for development validation; PyYAML is not a runtime dependency of these skills.

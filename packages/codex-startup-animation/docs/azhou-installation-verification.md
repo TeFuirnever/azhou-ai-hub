@@ -1,5 +1,7 @@
 # Applications 安装补齐与验收
 
+> 历史路径已按[迁移清单](../MIGRATION-INVENTORY.md)脱敏；变量仅定位原项目环境，原始证据仍留在本地，不证明本包当前已安装或生效。
+
 > 历史记录：本文描述0.5.0之前的设计或验收，文中的版本、命令和数量均属于当时状态。旧 `~/Applications/Codex.app` 及恢复备份已按用户要求删除，历史恢复命令不再适用。现行入口、构建安装步骤和验收索引以 [项目 README](../README.md) 为准。
 
 日期：2026-10-24。用户指出本项目已有本地 Applications 安装入口。首次交付只更新了项目 dist，没有同步该安装副本；本次已补齐。
@@ -8,7 +10,7 @@
 
 | 项目 | 安装前 | 安装后 |
 | --- | --- | --- |
-| 物理路径 | /Users/guanxueliang/Applications/Codex.app | 原路径不变 |
+| 物理路径 | $HOME/Applications/Codex.app | 原路径不变 |
 | Bundle ID | local.aemeath.extension | local.azhou.codex-startup |
 | 主可执行文件 | CodexStartup | AzhouCodexStartup |
 | 版本 | 0.3.5 | 0.4.0 |
@@ -31,7 +33,7 @@
 ## 实际验收
 
 1. 正常命令 bash tools/install-macos.sh 执行成功；安装包通过 codesign --verify --strict，内容 / 权限指纹与 dist 构建一致。
-2. 从 /Users/guanxueliang/Applications/Codex.app 实际启动。运行中的主可执行路径明确为 /Users/guanxueliang/Applications/Codex.app/Contents/MacOS/AzhouCodexStartup，PID 96182。
+2. 从 $HOME/Applications/Codex.app 实际启动。运行中的主可执行路径明确为 $HOME/Applications/Codex.app/Contents/MacOS/AzhouCodexStartup，PID 96182。
 3. 动画完整播放 7.8 秒，并覆盖播放中再次打开入口：一次 player-start、一次 target-reused、一次 reopen-existing-player、一次 target-activation-request；没有 target-open-request 或 failure。
 4. 淡出完成时实际前台是 /Applications/ChatGPT.app，仍为原 PID 45354；启动器随后退出，无进程残留。
 5. ~/Applications 中按本项目新旧 Bundle ID 核查，只找到现有 Codex.app 一个项目入口；没有另建“阿舟启动 Codex.app”安装副本。
@@ -59,7 +61,7 @@
 ## 日常命令
 
 ```sh
-cd "/Users/guanxueliang/Desktop/Matrix/社区工程/codex-startup-animation"
+cd "$ORIGINAL_PROJECT_ROOT"
 bash tools/install-macos.sh
 open "$HOME/Applications/Codex.app"
 
