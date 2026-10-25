@@ -21,7 +21,7 @@ https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
 
-> 🦊 Hero composed with the Azhou Covers skill under the `github_readme_image_16_9` profile: cream paper, the registered four-colour palette, and the canonical character composited at exact pixels. Thumbnail review passed at 120/240/360 px; final public visual approval remains a human checkpoint.
+> 🦊 Hero generated under the `github_readme_image_16_9` profile contract (1280×720, lossless PNG): the Azhou fox (canonical reference) stamping an approval seal, rendered by the local Azhou imagegen pipeline (Qwen-Image-2.1 edit, seed 7 of the 2026-10-25 batch) with the claim lines overlaid deterministically. Reviewed at 120/240/360 px; maintainer (IP owner) visual approval recorded 2026-10-25.
 
 Most skill repositories stop at prompts. Azhou AI Hub treats each skill as a product: a precise trigger, a portable runtime package, reproducible setup, deterministic gates, honest evaluation, provenance, and a human-controlled evolution path.
 
