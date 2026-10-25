@@ -190,9 +190,9 @@ def load_snapshot(project, path):
     return data, snapshot, config
 
 
-def prepare(project):
+def prepare(project, operation_id=None):
     state = state_dir(project, True)
-    recover_package_stage(state, project)
+    recover_package_stage(state, project, operation_id)
     snapshot, blobs, _ = theme_facts(project)
     directory = child(state, "snapshots/" + snapshot["themeRevision"])
     snapshot_path = directory / "theme-snapshot.json"
@@ -201,8 +201,10 @@ def prepare(project):
     else:
         directory.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         stage = child(state, ".stage-" + uuid.uuid4().hex)
-        atomic_json(state / "package-journal.json", {"owner": OWNER, "projectRoot": str(project),
-                    "petId": PET_ID, "stage": stage.name})
+        journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name}
+        if operation_id is not None:
+            journal["operationId"] = operation_id
+        atomic_json(state / "package-journal.json", journal)
         try:
             stage.mkdir(mode=0o700)
             for name, data in blobs.items():
@@ -224,7 +226,7 @@ def prepare(project):
             os.rename(stage, directory)
             fsync_dir(directory.parent)
         finally:
-            recover_package_stage(state, project)
+            recover_package_stage(state, project, operation_id)
     return {"status": "generation-required", "themeRevision": snapshot["themeRevision"],
             "snapshot": str(snapshot_path), "brief": str(directory / "generation-brief.md"),
             "next": "通过 ImageGen/hatch-pet 生成并审阅，然后 package --run RUN --snapshot SNAPSHOT"}
@@ -333,7 +335,7 @@ def validate_run(project, run, snapshot_path):
 
 
 def ownership(receipt, project):
-    require(receipt.get("owner") == OWNER and receipt.get("projectRoot") == str(project)
+    require(isinstance(receipt, dict) and receipt.get("owner") == OWNER and receipt.get("projectRoot") == str(project)
             and receipt.get("petId") == PET_ID, "发现非本项目管理的同名内容，拒绝覆盖", "unknown-target")
 
 
@@ -391,12 +393,15 @@ def remove_tree(path):
     shutil.rmtree(path)
 
 
-def recover_package_stage(state, project):
+def recover_package_stage(state, project, operation_id=None):
     journal = child(state, "package-journal.json")
     if not journal.exists():
         return
     data = parse(read(journal))
     ownership(data, project)
+    recorded_operation = data.get("operationId")
+    require(recorded_operation == operation_id,
+            "暂存日志属于其他操作，拒绝自动恢复", "recovery-required")
     name = data.get("stage", "")
     require(isinstance(name, str) and name.startswith(".stage-") and len(name) == 39,
             "暂存日志路径无效", "recovery-required")
@@ -407,9 +412,9 @@ def recover_package_stage(state, project):
     fsync_dir(state)
 
 
-def package_run(project, run, snapshot_path):
+def package_run(project, run, snapshot_path, operation_id=None):
     state = state_dir(project, True)
-    recover_package_stage(state, project)
+    recover_package_stage(state, project, operation_id)
     candidate = validate_run(project, run, snapshot_path)
     facts = candidate["facts"]
     rev = candidate["snapshot"]["themeRevision"]
@@ -421,6 +426,8 @@ def package_run(project, run, snapshot_path):
     if not destination.exists():
         stage = child(state, ".stage-" + uuid.uuid4().hex)
         journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name}
+        if operation_id is not None:
+            journal["operationId"] = operation_id
         atomic_json(state / "package-journal.json", journal)
         try:
             stage.mkdir(mode=0o700)
@@ -440,7 +447,7 @@ def package_run(project, run, snapshot_path):
             os.rename(stage, destination)
             fsync_dir(packages)
         finally:
-            recover_package_stage(state, project)
+            recover_package_stage(state, project, operation_id)
     check_package(destination, project)
     atomic_json(state / "selection.json", {"package": name, "themeRevision": rev,
                                            "atlasSHA256": facts["atlasSHA256"]})

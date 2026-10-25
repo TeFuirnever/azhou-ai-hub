@@ -32,6 +32,14 @@ python3 -B tools/manage-codex-pet.py --help
 
 默认项目根目录为脚本所在项目。默认原生安装位置为 `${CODEX_HOME:-$HOME/.codex}/pets/azhou-agent-lab/`。隔离测试和预演可显式传入 `--project-root` 与 `--codex-home`。
 
+### 从旧项目复用已审阅候选
+
+已有同主题候选时，可使用 `tools/import-codex-pet.py --from-project OLD --project-root NEW` 生成只读计划，审阅后以 `--apply --plan-id PLAN_ID` 导入。它使用本包现有校验器重新解码图集、验证冻结主题和六份 QA，保留原图集与 QA 字节，并为新项目创建候选归属与原始来源记录；不会伪造新生成或新审阅。
+
+新项目的 `style.css` 和 `pet/theme.json` 必须匹配，私有主题图只能补缺或复用完全相同的文件。未知状态、冲突素材、变更后的计划或无效 QA 均拒绝；仅本次导入记录绑定的中断状态可在重新审阅计划后续跑。先保存旧项目工作树与私有候选链，原项目保持不变。
+
+此操作只准备新项目候选，不读取或修改用户安装目录，不转移原安装 receipt，也不刷新、选择或播放 pet。完整命令与边界见 Hub [接入操作说明](../../../docs/integrations.md#pet-maintenance-after-the-import)。对应隔离测试为 `python3 -B tools/test-import-codex-pet.py`。
+
 ### 1. 冻结主题
 
 ```bash

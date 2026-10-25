@@ -84,7 +84,7 @@ jobs:
         run: bun tools/typecheck-pi.mjs
 
   startup-animation-macos:
-    name: Startup animation Swift validation
+    name: Startup animation and Pet validation
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -95,6 +95,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install Pet test dependency
+        run: python -m pip install --only-binary=:all: Pillow==12.3.0
+      - name: Run isolated Pet validation and candidate import tests
+        working-directory: packages/codex-startup-animation
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python -B tools/test-codex-pet.py
+          python -B tools/test-import-codex-pet.py
       - name: Run pure wallpaper validation
         working-directory: packages/codex-startup-animation
         run: |

@@ -37,6 +37,8 @@ Each `hub-package.json` declares current runtime paths. Plans fingerprint their 
 
 The startup-animation package includes player, wallpaper and Pet maintenance code. Private artwork, reviewed Pet candidates and existing installation receipts remain outside the source package. Copying code does not transfer a receipt bound to another `projectRoot`, prove host playback or create a shared character engine. Production launcher lifecycle remains blocked by the existing native installer's destination/state/uninstall contract.
 
+The Pet candidate importer is a bounded package operation above the existing validator and packager. It plans before writing, imports only matching private theme data and a reviewed candidate into local state, and records source provenance for the new candidate. It leaves the old project and installed receipt intact; candidate preparation and installation adoption remain distinct operations.
+
 ## Evaluation boundary
 
 Repository-level benchmarks are not visible to a normally installed skill. They own frozen prompts, assertions, fixtures, run receipts and paired decisions. Reference fixtures prove the verifier is wired; only real attempt-1 runs can become performance evidence.

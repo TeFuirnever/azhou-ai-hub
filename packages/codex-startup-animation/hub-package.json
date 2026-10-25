@@ -50,6 +50,8 @@
     "tools/test-wallpaper.mjs",
     "tools/manage-codex-pet.py",
     "tools/test-codex-pet.py",
+    "tools/import-codex-pet.py",
+    "tools/test-import-codex-pet.py",
     "pet/theme.json",
     "扩展启动Codex.command",
     "预览动画.command",

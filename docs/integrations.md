@@ -147,9 +147,31 @@ python -B packages/codex-startup-animation/tools/test-codex-pet.py
 
 A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. Its `status` can report invalid source/candidate state or `unknown-target` for an existing Pet whose receipt belongs to the old `projectRoot`. Those results do not establish that the old installation is damaged. The top-level status command is an inspection result, not a readiness or host-activation verdict. Likewise, `native-check` requires that selected package root's build payload; a missing payload does not diagnose an installation built elsewhere.
 
-Use explicitly authorized private inputs and revalidate their frozen candidate/review chain before considering synchronization. A changed theme requires generation and renewed review; `sync` never generates images. Current Pet revision inputs are the two configured private images, `style.css` and `pet/theme.json`, not every visual file. Keep the old root and receipts intact: no current command transfers ownership between roots, and rewriting `projectRoot` or copying `.local` does not create a verified transfer.
+Use explicitly authorized private inputs and revalidate their frozen candidate/review chain before considering synchronization. A changed theme requires generation and renewed review; `sync` never generates images. Current Pet revision inputs are the two configured private images, `style.css` and `pet/theme.json`, not every visual file. Keep the old root and installation receipts intact; rewriting `projectRoot` or copying `.local` does not create a verified installation transfer.
 
-`matchesSelectedPackage` compares installed bytes with the tool's selected candidate, not the host's selected avatar. `pending-refresh-selection` is the tool's fixed runtime boundary; real selection, playback and direction behavior require separate observation. Private inputs, candidates and installation receipts remain local. The repository gate currently runs the native installer suite, while the Pet suite above remains a separate check.
+To reuse an existing reviewed candidate, first preserve the old working tree and its private candidate/frozen-input evidence. The separate importer uses this package's validator and packaging code; `--from-project` selects data, not another implementation:
+
+```sh
+PET_SOURCE=/absolute/original-project
+PET_TARGET=/absolute/hub/packages/codex-startup-animation
+python -B "$PET_TARGET/tools/import-codex-pet.py" \
+  --from-project "$PET_SOURCE" --project-root "$PET_TARGET"
+# Review the current plan, then repeat with its exact planId:
+python -B "$PET_TARGET/tools/import-codex-pet.py" \
+  --from-project "$PET_SOURCE" --project-root "$PET_TARGET" \
+  --apply --plan-id PLAN_ID
+```
+
+The plan is read-only. Apply requires an unchanged source and target, a fully validated selected source candidate, matching public theme inputs, and absent or byte-identical private images. It refuses conflicting files and unknown target state. An owned interrupted import can be resumed after reviewing a new plan; unrelated state is never deleted to make room. The result is a newly validated, target-owned **candidate** with retained source provenance and original atlas/QA bytes. It does not call image generation, install or select a Pet, or transfer the installed receipt. The target still needs separate installation-ownership work and real host acceptance.
+
+This is an initial import or a retry of the same recorded operation. It does not merge an unrelated existing candidate store or silently switch to a changed source. After import, normal candidate updates remain with the package's existing preparation, review and packaging workflow.
+
+`matchesSelectedPackage` compares installed bytes with the tool's selected candidate, not the host's selected avatar. `pending-refresh-selection` is the tool's fixed runtime boundary; real selection, playback and direction behavior require separate observation. Private inputs, candidates and installation receipts remain local. The standard-library repository gate runs the native installer suite; the Pillow-dependent Pet and importer suites run separately in the macOS CI leg and should both run for Pet runtime changes:
+
+```sh
+python -B packages/codex-startup-animation/tools/test-codex-pet.py
+python -B packages/codex-startup-animation/tools/test-import-codex-pet.py
+```
 
 ## Why these checks are necessary
 

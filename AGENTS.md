@@ -58,6 +58,6 @@ Run before handoff:
 python3 scripts/verify.py
 ```
 
-This runs repository policy, Hub unit tests, package manifest/lifecycle suites, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/super-excalidraw-diagram/references/setup.md`. For Codex Pet runtime changes, also run `python3 -B packages/codex-startup-animation/tools/test-codex-pet.py`; the package gate does not yet include that suite.
+This runs repository policy, Hub unit tests, package manifest/lifecycle suites, every registered benchmark-integrity suite, and working/staged Git whitespace checks. For Excalidraw runtime changes, also execute the render/export/visual gates in `skills/super-excalidraw-diagram/references/setup.md`. For Codex Pet runtime changes, also run `python3 -B packages/codex-startup-animation/tools/test-codex-pet.py` and `python3 -B packages/codex-startup-animation/tools/test-import-codex-pet.py`; these Pillow-dependent suites run in the macOS CI leg, separately from the standard-library repository gate.
 
 Use `uv run --with pyyaml python <skill-creator>/scripts/quick_validate.py skills/<skill>` only for development validation; PyYAML is not a runtime dependency of these skills.
