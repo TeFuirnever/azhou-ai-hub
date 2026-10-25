@@ -1,0 +1,16 @@
+{
+  "schema": "azhou-hub.package.v1",
+  "component": "model-router",
+  "display_name": "Agent Orchestration Kit",
+  "version": "unreleased",
+  "commit": "4d1a2081f96cdab8a9ea0fe3d357312471546dcc",
+  "repository": "https://github.com/donvito/codex-astra-luna-orchestrator.git",
+  "license": "Apache-2.0",
+  "runtime_paths": [
+    "hub-package.json",
+    "LICENSE",
+    "scripts/install_codex.py",
+    "scripts/codex_native.py",
+    "profiles/azhou-balanced/"
+  ]
+}

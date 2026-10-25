@@ -11,11 +11,11 @@ import json
 from pathlib import Path
 import shutil
 import stat
-import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
+from package_fixture import configure_package
 from scripts import integration_common as common
 from scripts import integration_model_router as adapter
 
@@ -117,26 +117,17 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name).resolve()
-        self.source = self.base / "source"
-        self.source.mkdir()
-        (self.source / "scripts").mkdir()
-        for name in ("install_codex.py", "codex_native.py"):
-            (self.source / "scripts" / name).write_text("# source fixture\n", encoding="utf-8")
-        def git(*args):
-            return subprocess.run(["git", "-C", str(self.source), *args], check=True,
-                                  capture_output=True, text=True, encoding="utf-8").stdout.strip()
-        git("init", "-q")
-        git("add", ".")
-        git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
         self.hub = self.base / "hub"
-        folder = self.hub / "integrations/model-router"
-        folder.mkdir(parents=True)
-        lock = {"schema": common.LOCK_SCHEMA, "component": "model-router", "commit": git("rev-parse", "HEAD"),
-                "source_kind": "commit", "files": {
-                    p.relative_to(self.source).as_posix(): {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
-                                                         "executable": False}
-                    for p in (self.source / "scripts").iterdir()}}
-        (folder / "source-lock.json").write_text(json.dumps(lock), encoding="utf-8")
+        self.source = configure_package(self.hub, "model-router", [
+            "scripts/install_codex.py", "scripts/codex_native.py", "profiles/azhou-balanced",
+        ])
+        for name in ("install_codex.py", "codex_native.py"):
+            path = self.source / "scripts" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# source fixture\n", encoding="utf-8")
+        profile = self.source / "profiles/azhou-balanced/AGENTS.md"
+        profile.parent.mkdir(parents=True, exist_ok=True)
+        profile.write_text("# fixture profile\n", encoding="utf-8")
         self.workspace = self.base / "workspace"
         self.home = self.base / "personal/codex"
         self.skills = self.home / "skills"
@@ -152,10 +143,10 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def plan(self):
-        return adapter.make_plan(self.source, *self.targets, self.runtime, hub_root=self.hub)[0]
+        return adapter.make_plan(None, *self.targets, self.runtime, hub_root=self.hub)[0]
 
     def install(self):
-        return adapter.apply(self.source, *self.targets, self.runtime, self.plan()["plan_id"], hub_root=self.hub)
+        return adapter.apply(None, *self.targets, self.runtime, self.plan()["plan_id"], hub_root=self.hub)
 
     def put(self, relative, raw):
         path = self.home / relative
@@ -177,6 +168,20 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         self.assertEqual(plan["codex_home"], str(self.home))
         self.assertIn(str(config), plan["changes"])
 
+    def test_cli_defaults_to_canonical_package_without_source_flag(self):
+        import io
+        from contextlib import redirect_stdout
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = adapter.main(["plan", "--workspace", str(self.workspace), "--codex-home", str(self.home),
+                                   "--skills-dir", str(self.skills), "--codex-bin", str(self.runtime), "--json"],
+                                  hub_root=self.hub)
+        self.assertEqual(0, result)
+        plan = json.loads(output.getvalue())
+        self.assertEqual(str(self.source), plan["source"])
+        self.assertFalse(self.workspace.exists())
+
     def test_stale_plan_does_not_write_any_target(self):
         plan = self.plan()
         self.put("config.toml", b'model = "new concurrent choice"\n')
@@ -186,16 +191,43 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         self.assertEqual(before, self.disk())
         self.assertFalse(self.workspace.exists())
 
-    def test_missing_runtime_and_source_drift_fail_before_install(self):
+    def test_missing_runtime_and_package_change_stale_the_reviewed_plan_before_install(self):
         self.runtime.unlink()
         with self.assertRaisesRegex(common.IntegrationError, "executable"):
             self.plan()
         self.runtime.write_bytes(b"runtime")
         self.runtime.chmod(0o700)
+
+        old_plan = self.plan()
         (self.source / "scripts/install_codex.py").write_bytes(b"wrong version")
-        with self.assertRaisesRegex(common.IntegrationError, "drift"):
-            self.plan()
+        fresh_plan = self.plan()
+        self.assertNotEqual(old_plan["source_lock_sha256"], fresh_plan["source_lock_sha256"])
+        before = self.disk()
+        with self.assertRaisesRegex(common.IntegrationError, "stale|changed"):
+            adapter.apply(None, *self.targets, self.runtime, old_plan["plan_id"], hub_root=self.hub)
+        self.assertEqual(before, self.disk())
         self.assertFalse(self.home.exists())
+        self.assertFalse(self.workspace.exists())
+
+    def test_package_change_after_plan_check_is_rejected_before_router_target_writes(self):
+        plan = self.plan()
+        before = self.disk()
+        snapshot = common.snapshot_source
+        mutated = []
+
+        def mutate_then_snapshot(component, source, workspace, *, hub_root, expected_digest=None):
+            (self.source / "scripts/install_codex.py").write_bytes(b"unreviewed install code")
+            mutated.append(True)
+            return snapshot(component, source, workspace, hub_root=hub_root, expected_digest=expected_digest)
+
+        with patch.object(common, "snapshot_source", side_effect=mutate_then_snapshot):
+            with self.assertRaisesRegex(common.IntegrationError, "changed after the reviewed plan"):
+                adapter.apply(None, *self.targets, self.runtime, plan["plan_id"], hub_root=self.hub)
+
+        self.assertEqual([True], mutated)
+        self.assertEqual(before, self.disk())
+        self.assertFalse(self.home.exists())
+        self.assertFalse(self.workspace.exists())
 
     def test_pstack_registration_or_model_policy_blocks_router(self):
         config = self.put("config.toml", b'[plugins."pstack@pstack-claude"]\nenabled = true\n')

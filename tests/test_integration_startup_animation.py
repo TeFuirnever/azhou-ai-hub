@@ -4,11 +4,12 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-import subprocess
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
 
+from package_fixture import configure_package
 from scripts import integration_common as common
 from scripts import integration_startup_animation as animation
 
@@ -18,11 +19,12 @@ class AnimationIntegrationTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name).resolve()
-        self.source = self.base / "source"
         self.hub = self.base / "hub"
         self.assets = self.base / "private"
         self.workspace = self.base / "isolated"
-        self.source.mkdir()
+        self.source = configure_package(self.hub, animation.COMPONENT,
+            [".gitignore", "Native/App.swift", "tools/verify-artifacts.py"],
+            build_inputs=["Native/App.swift"], runtime_version="0.7.0", runtime_build="7")
         for name in (".gitignore", "Native/App.swift", "tools/verify-artifacts.py"):
             file = self.source / name
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -31,19 +33,6 @@ class AnimationIntegrationTests(unittest.TestCase):
             file = self.assets / name
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(("private fixture " + name).encode("utf-8"))
-        subprocess.run(["git", "init", "--quiet", str(self.source)], check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(self.source), "add", "."], check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-                        "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"], check=True, capture_output=True)
-        commit = subprocess.check_output(["git", "-C", str(self.source), "rev-parse", "HEAD"]).decode("ascii").strip()
-        files = {name: {"sha256": hashlib.sha256((self.source / name).read_bytes()).hexdigest(), "executable": False}
-                 for name in (".gitignore", "Native/App.swift", "tools/verify-artifacts.py")}
-        lock = {"schema": common.LOCK_SCHEMA, "component": animation.COMPONENT, "commit": commit,
-                "source_kind": "worktree", "files": files, "build_inputs": ["Native/App.swift"],
-                "runtime_version": "0.7.0", "runtime_build": "7"}
-        lockfile = self.hub / "integrations/startup-animation/source-lock.json"
-        lockfile.parent.mkdir(parents=True)
-        lockfile.write_text(json.dumps(lock), encoding="utf-8")
         self.payload = self.source / ".build/azhou-payload"
         (self.payload / "Contents/MacOS").mkdir(parents=True)
         (self.payload / "Contents/MacOS/AzhouCodexStartup").write_text("fake executable", encoding="utf-8")
@@ -74,6 +63,19 @@ class AnimationIntegrationTests(unittest.TestCase):
     def install(self):
         plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
         return animation.test_install(self.source, self.payload, self.workspace, plan["plan_id"], hub_root=self.hub)
+
+    def test_build_cli_defaults_to_canonical_package_without_source_flag(self):
+        from contextlib import redirect_stdout
+        import io
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = animation.main(["build", "--workspace", str(self.workspace), "--private-assets", str(self.assets)],
+                                    hub_root=self.hub)
+        self.assertEqual(0, result)
+        plan = json.loads(output.getvalue())
+        self.assertEqual(str(self.source), plan["source"]["source"])
+        self.assertFalse(self.workspace.exists())
 
     def owned_snapshot_fixture(self):
         snapshot = common.snapshot_source(animation.COMPONENT, self.source, self.workspace, hub_root=self.hub)
@@ -124,10 +126,38 @@ class AnimationIntegrationTests(unittest.TestCase):
             animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
         self.assertFalse(self.workspace.exists())
 
-    def test_locked_source_drift_is_not_silently_accepted(self):
+    def test_package_edit_is_valid_but_stales_reviewed_build_before_native_execution(self):
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
         (self.source / "Native/App.swift").write_text("concurrent change", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "content drift"):
-            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        fresh = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertNotEqual(plan["plan_id"], fresh["plan_id"])
+        with patch.object(animation, "_mac") as native, patch.object(animation, "_run") as run:
+            with self.assertRaisesRegex(common.IntegrationError, "exact current plan_id|regenerate"):
+                animation.build(self.source, self.workspace, self.assets, plan["plan_id"], hub_root=self.hub)
+            native.assert_not_called()
+            run.assert_not_called()
+        self.assertFalse(self.workspace.exists())
+
+    def test_package_change_after_build_plan_check_is_rejected_before_native_execution(self):
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        snapshot_source = common.snapshot_source
+        mutated = []
+
+        def mutate_then_snapshot(component, source, workspace, *, hub_root, expected_digest=None):
+            (self.source / "Native/App.swift").write_text("unreviewed source input", encoding="utf-8")
+            mutated.append(True)
+            return snapshot_source(component, source, workspace, hub_root=hub_root, expected_digest=expected_digest)
+
+        with patch.object(animation, "_mac") as native, patch.object(animation.os, "access", return_value=True), \
+                patch.object(animation, "_run") as run, patch.object(common, "snapshot_source", side_effect=mutate_then_snapshot):
+            with self.assertRaisesRegex(common.IntegrationError, "changed after the reviewed plan"):
+                animation.build(self.source, self.workspace, self.assets, plan["plan_id"], hub_root=self.hub)
+            native.assert_called_once()
+            run.assert_not_called()
+
+        self.assertEqual([True], mutated)
+        self.assertFalse(self.workspace.exists())
+        self.assertFalse(Path(plan["snapshot"]).exists())
 
     def test_native_build_cannot_substitute_an_unapproved_private_input(self):
         plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
@@ -206,7 +236,7 @@ class AnimationIntegrationTests(unittest.TestCase):
             with self.assertRaisesRegex(common.IntegrationError, "outside the read-only source"):
                 animation.test_install_plan(self.source, self.payload, self.source, hub_root=self.hub)
             with self.assertRaisesRegex(common.IntegrationError, "outside the read-only source"):
-                animation.test_install_plan(self.source, self.payload, self.base / "another/../source", hub_root=self.hub)
+                animation.test_install_plan(self.source, self.payload, self.source / "another/../.", hub_root=self.hub)
         self.assertFalse((self.source / ".azhou").exists())
 
     def test_failed_test_copy_leaves_no_install_or_receipt(self):
@@ -289,21 +319,25 @@ class AnimationIntegrationTests(unittest.TestCase):
             self.assertTrue(target.exists())
             self.assertTrue(record.exists())
 
-    def test_owned_cleanup_uses_frozen_snapshot_after_live_source_changes(self):
+    def test_owned_cleanup_uses_frozen_snapshot_after_live_package_edit_and_removal(self):
         snapshot, target, record, native = self.owned_snapshot_fixture()
+        recorded_manifest = common.snapshot_lock(animation.COMPONENT, snapshot)
         (self.source / "Native/App.swift").write_text("another session's new source", encoding="utf-8")
+        self.assertNotEqual(recorded_manifest, common.load_lock(animation.COMPONENT, hub_root=self.hub))
         self.registry[animation.REGISTRY_IDS[0]].append(str(target))
         self.registry[animation.REGISTRY_IDS[0]].sort()
+
         def run(command, **_options):
             if command[0] == animation.LSREGISTER:
                 self.assertEqual([animation.LSREGISTER, "-u", str(target)], command)
                 self.registry[animation.REGISTRY_IDS[0]].remove(str(target))
             return {"returncode": 0, "stdout": "", "stderr": ""}
         with patch.object(animation.runpy, "run_path", return_value=native) as loader:
-            with self.assertRaisesRegex(common.IntegrationError, "content drift"):
-                animation.inspect_bundle(self.source, target, hub_root=self.hub)
-            loader.assert_not_called()
+            self.assertEqual(recorded_manifest, common.snapshot_lock(animation.COMPONENT, snapshot))
+            self.assertEqual(str(snapshot), common.verify_snapshot(animation.COMPONENT, snapshot)["snapshot"])
             plan = animation.test_uninstall_plan(self.source, self.workspace, hub_root=self.hub)
+            self.assertEqual("another session's new source", (self.source / "Native/App.swift").read_text(encoding="utf-8"))
+            shutil.rmtree(self.source)
             with patch.object(animation, "_run", side_effect=run):
                 result = animation.test_uninstall(self.source, self.workspace, plan["plan_id"], hub_root=self.hub)
             self.assertTrue(all(call.args[0] == str(snapshot / "tools/verify-artifacts.py") for call in loader.call_args_list))
@@ -311,7 +345,7 @@ class AnimationIntegrationTests(unittest.TestCase):
         self.assertFalse(target.exists())
         self.assertFalse(record.exists())
         self.assertEqual([self.production_path], self.registry[animation.REGISTRY_IDS[0]])
-        self.assertEqual("another session's new source", (self.source / "Native/App.swift").read_text(encoding="utf-8"))
+        self.assertFalse(self.source.exists())
 
     def test_owned_cleanup_rejects_tampered_frozen_snapshot(self):
         snapshot, target, record, native = self.owned_snapshot_fixture()
@@ -323,6 +357,62 @@ class AnimationIntegrationTests(unittest.TestCase):
             run.assert_not_called()
         self.assertTrue(target.exists())
         self.assertTrue(record.exists())
+
+    def test_install_plan_rejects_payload_from_stale_snapshot_without_host_side_effects(self):
+        snapshot, target, record, native = self.owned_snapshot_fixture()
+        recorded_manifest = common.snapshot_lock(animation.COMPONENT, snapshot)
+        payload = snapshot / ".build/azhou-payload"
+        shutil.copytree(target, payload)
+        payload_fingerprint = native["fingerprint"](payload)
+        record_before = record.read_bytes()
+        registry_before = {name: list(paths) for name, paths in self.registry.items()}
+        (self.source / "Native/App.swift").write_text("new live package input", encoding="utf-8")
+        self.assertNotEqual(recorded_manifest, common.load_lock(animation.COMPONENT, hub_root=self.hub))
+
+        with patch.object(animation.runpy, "run_path", return_value=native) as loader, patch.object(animation, "_run") as run:
+            with self.assertRaisesRegex(common.IntegrationError, "different package inputs"):
+                animation.inspect_bundle(self.source, payload, hub_root=self.hub)
+            with self.assertRaisesRegex(common.IntegrationError, "different package inputs"):
+                animation.test_install_plan(self.source, payload, self.workspace, hub_root=self.hub)
+            loader.assert_not_called()
+            run.assert_not_called()
+
+        self.assertEqual(recorded_manifest, common.snapshot_lock(animation.COMPONENT, snapshot))
+        self.assertEqual(payload_fingerprint, native["fingerprint"](payload))
+        self.assertEqual(record_before, record.read_bytes())
+        self.assertEqual(registry_before, self.registry)
+        self.assertTrue(target.exists())
+
+    def test_install_plan_rejects_identical_package_from_a_different_checkout(self):
+        snapshot, target, record, native = self.owned_snapshot_fixture()
+        payload = snapshot / ".build/azhou-payload"
+        shutil.copytree(target, payload)
+
+        hub_b = self.base / "hub-b"
+        source_b = hub_b / "packages" / common.PACKAGES[animation.COMPONENT]
+        source_b.parent.mkdir(parents=True)
+        shutil.copytree(self.source, source_b)
+        origin_a = common.inspect_source(animation.COMPONENT, self.source, hub_root=self.hub)
+        origin_b = common.inspect_source(animation.COMPONENT, source_b, hub_root=hub_b)
+        self.assertEqual(origin_a["source_lock_sha256"], origin_b["source_lock_sha256"])
+        self.assertNotEqual(origin_a["source"], origin_b["source"])
+        self.assertEqual(str(self.source), common.read_receipt(snapshot / ".hub-source.json")["source"])
+
+        workspace_b = self.base / "hub-b-workspace"
+        registry_before = {name: list(paths) for name, paths in self.registry.items()}
+        with patch.object(animation.runpy, "run_path", return_value=native) as loader, patch.object(animation, "_run") as run:
+            with self.assertRaisesRegex(common.IntegrationError, "different package checkout"):
+                animation.inspect_bundle(source_b, payload, hub_root=hub_b)
+            with self.assertRaisesRegex(common.IntegrationError, "different package checkout"):
+                animation.test_install_plan(source_b, payload, workspace_b, hub_root=hub_b)
+            loader.assert_not_called()
+            run.assert_not_called()
+
+        self.assertFalse(workspace_b.exists())
+        self.assertTrue(payload.exists())
+        self.assertTrue(target.exists())
+        self.assertTrue(record.exists())
+        self.assertEqual(registry_before, self.registry)
 
     def test_successful_exit_without_player_events_is_not_behavior_success(self):
         result = animation.assess_execution("smoke", {"returncode": 0, "stdout": "", "stderr": ""}, self.payload)

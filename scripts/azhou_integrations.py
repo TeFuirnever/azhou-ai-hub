@@ -28,9 +28,13 @@ def catalog(*, hub_root: Path = ROOT) -> dict:
             "id": component,
             "name": lock.get("display_name", component),
             "commit": lock["commit"],
+            "commit_scope": "original import provenance",
+            "package": common.PACKAGES[component],
+            "path": str(common.package_root(component, hub_root=hub_root)),
+            "version": lock.get("version", lock.get("runtime_version", "unreleased")),
             "source_kind": lock["source_kind"],
             "source_lock_sha256": common.plan_digest(lock),
-            "license": lock.get("license", "see source provenance"),
+            "license": lock.get("license", lock.get("license_status", "see source provenance")),
             "entry": f"python scripts/azhou_hub.py integrations {component} --help",
             "enabled_by_default": False,
         })
@@ -54,10 +58,10 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
             return 1
     parser = argparse.ArgumentParser(
         prog="azhou-ai-hub integrations",
-        description="Three fixed optional integrations; installing Skills never enables them.",
+        description="Three in-repository packages with optional installation; installing Skills never enables them.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    listing = sub.add_parser("list", help="List fixed versions and separate operational entries")
+    listing = sub.add_parser("list", help="List in-repository packages and separate operational entries")
     listing.add_argument("--json", action="store_true")
     for component in ADAPTERS:
         sub.add_parser(component, help=f"Use the {component} adapter", add_help=False)
@@ -71,7 +75,8 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         for item in payload["integrations"]:
-            print(f"{item['id']}: {item['name']} @ {item['commit']}")
+            print(f"{item['id']}: {item['name']} {item['version']} ({item['package']})")
+            print(f"  original import: {item['commit']}")
             print(f"  {item['entry']}")
     return 0
 

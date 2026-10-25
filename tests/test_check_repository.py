@@ -605,12 +605,24 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
+            bundled = [
+                root / "packages/pstack-agent-harness/plugins/pstack/skills/how/SKILL.md",
+                root / "packages/agent-orchestration-kit/profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md",
+            ]
+            self.assertEqual([], check_skill_discovery([*expected, *bundled], root))
+            stray = root / "packages/unknown/skills/new/SKILL.md"
+            self.assertIn("unexpected installable skill: packages/unknown/skills/new/SKILL.md",
+                          check_skill_discovery([*expected, stray], root))
             legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
             errors = check_skill_discovery([*expected, legacy], root)
             self.assertEqual(["unexpected installable skill: benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.md"], errors)
 
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"
+        self.assertEqual(["docs/run.md"], relative_markdown_targets(text))
+
+    def test_markdown_code_examples_are_not_local_links(self) -> None:
+        text = "`[example](path with spaces.md)`\n```md\n[example](missing.md)\n```\n[real](docs/run.md)"
         self.assertEqual(["docs/run.md"], relative_markdown_targets(text))
 
     def test_broken_markdown_link_is_reported(self) -> None:

@@ -220,7 +220,12 @@ def check_treehouse_config(root: Path) -> list[str]:
 
 
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
-    actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"}
+    bundled_roots = (
+        "packages/pstack-agent-harness/plugins/pstack/skills/",
+        "packages/agent-orchestration-kit/profiles/",
+    )
+    actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"
+              and not path.relative_to(root).as_posix().startswith(bundled_roots)}
     repository_extensions = {
         path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
     }
@@ -881,6 +886,9 @@ def check_json(files: list[Path], root: Path) -> list[str]:
 
 
 def relative_markdown_targets(text: str) -> list[str]:
+    # Upstream changelogs include literal Markdown syntax as code examples.
+    text = re.sub(r"(?ms)^```[^\n]*\n.*?^```[ \t]*$", "", text)
+    text = re.sub(r"`[^`\n]*`", "", text)
     targets: list[str] = []
     for match in MARKDOWN_LINK.finditer(text):
         raw = match.group("target").strip("<>")

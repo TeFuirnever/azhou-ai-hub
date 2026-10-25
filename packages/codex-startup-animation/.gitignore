@@ -1,0 +1,10 @@
+# Project-local private artwork is supplied separately and must stay out of Git.
+/assets/private/
+
+# Build payloads, installer state, and local evidence.
+/.build/
+/dist/
+/.local/
+/.azhou/
+/docs/audits/
+*.app/

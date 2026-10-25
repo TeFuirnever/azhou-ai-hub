@@ -42,7 +42,9 @@ def _path(value: Path, *, executable: bool = False) -> Path:
 def _module(snapshot: Path, filename: str, *, hub_root: Path = ROOT):
     """Load hash-verified source without leaving bytecode in the source tree."""
     path = snapshot / "scripts" / filename
-    expected = common.load_lock(COMPONENT, hub_root=hub_root)["files"]["scripts/" + filename]
+    manifest = (common.snapshot_lock(COMPONENT, snapshot) if (snapshot / ".hub-source.json").exists()
+                else common.load_lock(COMPONENT, hub_root=hub_root))
+    expected = manifest["files"]["scripts/" + filename]
     if path.is_symlink() or path.parent.is_symlink():
         raise common.IntegrationError("native installer module cannot be a symlink")
     raw = path.read_bytes()
@@ -199,7 +201,8 @@ def apply(source: Path, workspace: Path, codex_home: Path, skills_dir: Path, cod
     if summary["plan_id"] != plan_id:
         raise common.IntegrationError("plan is stale or differs from reviewed targets; run plan again")
     workspace, codex_home, skills_dir = (Path(summary[k]) for k in ("workspace", "codex_home", "skills_dir"))
-    snapshot = common.snapshot_source(COMPONENT, source, workspace, hub_root=hub_root)
+    snapshot = common.snapshot_source(COMPONENT, source, workspace, hub_root=hub_root,
+                                      expected_digest=summary["source_lock_sha256"])
     installer = _module(snapshot, "install_codex.py", hub_root=hub_root)
     plan = installer.build_plan(snapshot, codex_home, skills_dir)
     native, runtime = _native_checks(snapshot, codex_home, plan, Path(summary["codex_bin"]), hub_root=hub_root)
@@ -401,7 +404,7 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
         command.add_argument("--skills-dir", type=Path, required=True)
         command.add_argument("--json", action="store_true")
         if name in ("plan", "apply"):
-            command.add_argument("--source", type=Path, required=True)
+            command.add_argument("--source", type=Path, help="optional assertion of the in-repository package path")
             command.add_argument("--codex-bin", type=Path, required=True)
         if name in ("apply", "uninstall"):
             command.add_argument("--plan-id", required=True)

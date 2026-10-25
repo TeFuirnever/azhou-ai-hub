@@ -113,7 +113,8 @@ def build(source: Path, workspace: Path, private_assets: Path, plan_id: str, *, 
     for name in ("/usr/bin/xcrun", "/usr/bin/codesign", "/usr/bin/sips", "/usr/bin/iconutil"):
         if not os.access(name, os.X_OK):
             raise common.IntegrationError(f"native build dependency missing: {name}")
-    snapshot = common.snapshot_source(COMPONENT, source, workspace, hub_root=hub_root)
+    snapshot = common.snapshot_source(COMPONENT, source, workspace, hub_root=hub_root,
+                                      expected_digest=plan["source"]["source_lock_sha256"])
     for name, digest in plan["private_inputs"].items():
         origin, target = Path(private_assets) / name, snapshot / "assets/private" / name
         if any(p.is_symlink() for p in (target, *target.parents)):
@@ -184,8 +185,13 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
             raise common.IntegrationError("cleanup snapshot does not belong to the explicitly selected original source")
         origin.update(source=str(original), scope="cleanup uses only the locked frozen source; live source state is not consulted")
     elif native_root != Path(origin["source"]):
-        common.verify_snapshot(COMPONENT, native_root, hub_root=hub_root)
-    lock = common.load_lock(COMPONENT, hub_root=hub_root)
+        verified = common.verify_snapshot(COMPONENT, native_root, hub_root=hub_root)
+        if verified["source_lock_sha256"] != origin["source_lock_sha256"]:
+            raise common.IntegrationError("bundle was built from different package inputs; rebuild before installing")
+        if common.read_receipt(native_root / ".hub-source.json").get("source") != origin["source"]:
+            raise common.IntegrationError("bundle snapshot belongs to a different package checkout; rebuild before installing")
+    lock = (common.snapshot_lock(COMPONENT, native_root) if (native_root / ".hub-source.json").exists()
+            else common.load_lock(COMPONENT, hub_root=hub_root))
     inputs = marker.get("inputs", {})
     for name in lock["build_inputs"]:
         if inputs.get(name) != lock["files"][name]["sha256"]:
@@ -499,7 +505,8 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     sub = parser.add_subparsers(dest="action", required=True)
     for name in ("check-source", "build", "test-install", "test-uninstall", "inspect", "run", "native-check", "install-plan", "uninstall-plan"):
         command = sub.add_parser(name)
-        command.add_argument("--source", type=Path, required=True)
+        command.add_argument("--source", type=Path, default=hub_root / "packages" / common.PACKAGES[COMPONENT],
+                             help="defaults to this Hub's in-repository animation package")
         if name in ("build", "test-install", "test-uninstall"):
             command.add_argument("--workspace", type=Path, required=True)
         if name == "build":

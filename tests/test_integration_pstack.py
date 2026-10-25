@@ -1,15 +1,16 @@
 """Exercise native ownership boundaries without spending model requests."""
 from __future__ import annotations
 
-import hashlib
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 from unittest import mock
 
+from package_fixture import configure_package
 from scripts import integration_common as common
 from scripts import integration_pstack as pstack
 
@@ -60,7 +61,6 @@ class PstackIntegrationTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name).resolve()
         self.hub = self.base / "hub"
-        self.source = self.base / "source"
         self.workspace = self.base / "workspace"
         self.home = self.workspace / ".azhou/hub/targets/pstack"
         self.binary = self.base / "codex"
@@ -74,25 +74,17 @@ class PstackIntegrationTest(unittest.TestCase):
             "plugins/pstack/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
             "LICENSE": "fixture license\n",
         }
+        self.source = configure_package(self.hub, "pstack", [
+            ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
+        ])
         for name, content in files.items():
             target = self.source / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
             target.chmod(0o755 if name.endswith(".sh") else 0o644)
-        for command in [["init", "-q"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]]:
-            subprocess.run(["git", "-C", str(self.source), *command], check=True, capture_output=True)
-        commit = subprocess.run(["git", "-C", str(self.source), "rev-parse", "HEAD"], check=True,
-                                capture_output=True, text=True, encoding="utf-8").stdout.strip()
-        lock = {"schema": common.LOCK_SCHEMA, "component":"pstack", "commit":commit,
-                "source_kind":"commit", "repository":"https://example.test/fixture", "license":"MIT",
-                "files":{name:{"sha256":hashlib.sha256((self.source/name).read_bytes()).hexdigest(),
-                               "executable":name.endswith(".sh")} for name in files}}
-        path = self.hub / "integrations/pstack/source-lock.json"
-        path.parent.mkdir(parents=True)
-        path.write_text(json.dumps(lock), encoding="utf-8")
 
     def plan(self, operation="install"):
-        return pstack.make_plan(source=self.source if operation == "install" else None,
+        return pstack.make_plan(source=None,
                                 workspace=self.workspace, codex_home=self.home, codex_bin=self.binary,
                                 operation=operation, hub_root=self.hub)
 
@@ -106,12 +98,21 @@ class PstackIntegrationTest(unittest.TestCase):
     def calls(self):
         return [json.loads(line) for line in (self.home / "native-operations.jsonl").read_text(encoding="utf-8").splitlines()]
 
-    def test_plan_is_read_only_and_selects_local_frozen_source(self):
+    def test_plan_defaults_to_canonical_package_and_cli_needs_no_source_flag(self):
         plan = self.plan()
         self.assertFalse(self.workspace.exists())
         self.assertEqual(plan["commands"][0][1:4], ["plugin", "marketplace", "add"])
         self.assertTrue(plan["commands"][0][4].startswith(str(self.workspace)))
+        self.assertEqual(plan["source"]["source"], str(self.source))
         self.assertNotIn("michael-denyer", json.dumps(plan["commands"]))
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = pstack.main(["plan", "--workspace", str(self.workspace), "--codex-home", str(self.home),
+                                  "--codex-bin", str(self.binary)], hub_root=self.hub)
+        self.assertEqual(0, result)
+        self.assertEqual(str(self.source), json.loads(output.getvalue())["source"]["source"])
+        self.assertFalse(self.workspace.exists())
 
     def test_stale_plan_and_wrong_plan_id_do_not_install(self):
         plan = self.plan()
@@ -172,11 +173,35 @@ class PstackIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(common.IntegrationError, "selected pinned local"):
             self.doctor()
 
-    def test_source_drift_fails_before_installing(self):
+    def test_package_edit_is_valid_but_invalidates_an_old_reviewed_plan(self):
+        old_plan = self.plan()
         (self.source / "plugins/pstack/hooks/session-start.sh").write_text("changed\n", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "source content drift"):
-            self.plan()
-        self.assertFalse(self.workspace.exists())
+
+        fresh_plan = self.plan()
+        self.assertNotEqual(old_plan["source_lock_sha256"], fresh_plan["source_lock_sha256"])
+        with self.assertRaisesRegex(common.IntegrationError, "changed after the plan|stale"):
+            pstack.apply_plan(old_plan, plan_id=old_plan["plan_id"], hub_root=self.hub)
+        self.assertFalse(self.home.exists())
+        self.assertFalse((self.home / "native-operations.jsonl").exists())
+
+    def test_package_change_after_plan_check_is_rejected_before_codex_install(self):
+        plan = self.plan()
+        snapshot_source = common.snapshot_source
+        mutated = []
+
+        def mutate_then_snapshot(component, source, workspace, *, hub_root, expected_digest=None):
+            (self.source / "plugins/pstack/hooks/session-start.sh").write_text("unreviewed hook\n", encoding="utf-8")
+            mutated.append(True)
+            return snapshot_source(component, source, workspace, hub_root=hub_root, expected_digest=expected_digest)
+
+        with mock.patch.object(common, "snapshot_source", side_effect=mutate_then_snapshot):
+            with self.assertRaisesRegex(common.IntegrationError, "changed after the reviewed plan"):
+                pstack.apply_plan(plan, plan_id=plan["plan_id"], hub_root=self.hub)
+
+        self.assertEqual([True], mutated)
+        self.assertFalse(self.home.exists())
+        self.assertFalse((self.home / "native-operations.jsonl").exists())
+        self.assertFalse(Path(plan["snapshot"]).exists())
 
     def test_foreign_installation_and_router_are_not_adopted(self):
         self.home.mkdir(parents=True)

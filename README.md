@@ -81,13 +81,13 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 
 ## Optional integrations
 
-The fourteen canonical Skills keep their independent installation and invocation paths. Three additional capabilities have separate, explicit entries; none is enabled by installing the Hub's Skills.
+Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The fourteen canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
 
-| Entry | Maintained by the Hub | External runtime |
+| Entry | Complete project package | Current boundary |
 |---|---|---|
-| `pstack` | Fixed source identity, bounded installation entry and verification evidence | The selected local pstack fork and its existing generated host packages |
-| `model-router` | Fixed Agent Orchestration Kit source and explicit Codex installation boundary | Its native Codex installer, named agents and `astra-orchestrator` Skill |
-| `startup-animation` | Fixed launcher input snapshot and separate launch/enhancement operations | The existing macOS launcher/player, assets and separately scoped Codex enhancements |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | Optional native Codex plugin installation into an explicit target; review hook trust separately. |
+| `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | Optional native Codex profile installation; keep one workflow owner per task. |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS player and isolated test entry; production installation remains held. Program redistribution is not authorized. |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
@@ -96,7 +96,9 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations startup-animation --help
 ~~~
 
-Use the [integration contract and runbook](docs/integrations.md) to select a source and explicit target, inspect a plan, install and verify, then disable or remove only owned artifacts. [Support and evidence](docs/support-matrix.md#optional-integrations) distinguish installation, native discovery, actual invocation and behavior. pstack and the model router retain one workflow owner per task; the integration does not chain orchestrators. Private artwork and upstream runtime code are not bundled into the public Hub. Animation production installation remains blocked by the source installer contract; this round verifies its isolated build, installed player and cleanup. Cold host launch, wallpaper application and formal visual approval remain pending.
+`python scripts/azhou_hub.py integrations ...` remains the operational entry. Each command defaults to its in-repository package; optional `--source` only asserts that canonical package path. Plans fingerprint current `runtime_paths` inputs and stage private snapshots and recovery receipts under ignored `.azhou/hub/` state. See the [integration runbook](docs/integrations.md), [provenance](docs/integration-provenance.md) and [support matrix](docs/support-matrix.md#optional-integrations).
+
+The animation program has no recorded open-source license grant. The Hub root license does not cover that package; do not publish its source or binaries until redistribution permission is clarified. Private artwork stays outside the package. The 2026-10-25 acceptance report is historical evidence for its inspected inputs and host, not fresh acceptance of the monorepo import. This migration did not restart Codex or change live appearance; production installation, cold host launch, wallpaper application and formal visual approval remain unverified.
 
 ## Skills
 

@@ -16,6 +16,7 @@ from scripts.verify import SUMMARY_SCHEMA, commands, main, summary_payload
 FAILURE_PATTERN = re.compile(r"(?i)\bfailed\b|failures?=\d+")
 ROOT = Path(__file__).parents[1]
 VALIDATOR = ROOT / "skills" / "super-azhou-verify" / "scripts" / "check-gate-report.py"
+GATE_COUNT = len(commands(sys.executable))
 
 
 class FakeRunner:
@@ -65,6 +66,15 @@ class VerifyFinalVerdictTest(unittest.TestCase):
     verdict line that is the true conjunction of all sub-gate results.
     """
 
+    def test_package_verification_is_registered_as_a_gate(self) -> None:
+        self.assertIn(
+            (
+                "package manifests and POSIX lifecycle suites",
+                [sys.executable, "scripts/verify_packages.py"],
+            ),
+            commands(sys.executable),
+        )
+
     def test_green_run_ends_with_single_pass_verdict(self) -> None:
         runner = FakeRunner()
         code, out, err = run_main([], runner)
@@ -83,7 +93,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(1, code)
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (1 of 7 gates failed: unit tests)", lines[-1]
+            f"verification FAILED (1 of {GATE_COUNT} gates failed: unit tests)", lines[-1]
         )
         self.assertNotIn("verification passed", out)
         self.assertEqual(
@@ -99,7 +109,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(2, code, "exit code is the first failing gate's code")
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (2 of 7 gates failed: unit tests, excalidraw benchmark wiring)",
+            f"verification FAILED (2 of {GATE_COUNT} gates failed: unit tests, excalidraw benchmark wiring)",
             lines[-1],
         )
         self.assertEqual(1, sum(1 for line in lines if "verification FAILED" in line))
@@ -115,7 +125,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(127, code)
         lines = out.strip().splitlines()
         self.assertEqual(
-            "verification FAILED (1 of 7 gates failed: repository policy)", lines[-1]
+            f"verification FAILED (1 of {GATE_COUNT} gates failed: repository policy)", lines[-1]
         )
         self.assertNotIn("verification passed", out)
         self.assertIn("FAILED: repository policy (exit 127)", err)
@@ -140,7 +150,7 @@ class VerifyFinalVerdictTest(unittest.TestCase):
         self.assertEqual(4, code)
         payload, verdict = split_summary(out)
         self.assertEqual(
-            "verification FAILED (1 of 7 gates failed: super-repo-pedant benchmark)",
+            f"verification FAILED (1 of {GATE_COUNT} gates failed: super-repo-pedant benchmark)",
             verdict,
         )
         self.assertEqual("failed", payload["verdict"])

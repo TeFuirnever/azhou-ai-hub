@@ -81,13 +81,13 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 ## 可选能力接入
 
-现有十四个 canonical Skills 保留独立安装与调用方式。另有三个显式、独立选择的能力入口；安装 Hub 的 Skills 不会自动启用它们。
+三个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十四个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
 
-| 入口 | Hub 维护内容 | 外部运行时 |
+| 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | 固定来源身份、有边界的安装入口与验收证据 | 选定的本地 pstack fork 及其已有宿主生成包 |
-| `model-router` | 固定 Agent Orchestration Kit 来源与显式 Codex 安装边界 | 来源的原生 Codex 安装器、具名角色与 `astra-orchestrator` Skill |
-| `startup-animation` | 固定启动器输入快照及分别选择的启动、增强操作 | 现有 macOS 启动器/播放器、素材及单独限定的 Codex 增强 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
+| `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS 播放器与隔离测试入口；正式安装仍暂停，程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
@@ -96,7 +96,9 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations startup-animation --help
 ~~~
 
-按[接入合同与操作说明](docs/integrations.md)选择来源和显式目标，检查计划、安装、验证，再停用或卸载归属明确的产物。[支持与证据](docs/support-matrix.md#optional-integrations)分别记录文件安装、原生发现、实际调用和行为结果。pstack 与模型路由在同一任务中只保留一个工作流负责人，接入不会串联两个编排器。公开 Hub 不打包个人素材或上游运行时代码。动画的正式安装仍受来源安装器合同阻塞；本轮验证隔离构建、安装版播放器与清理，冷启动宿主、壁纸应用及正式视觉审阅仍待验证。
+`python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。
+
+动画程序目前没有已记录的开源授权；Hub 根目录许可证不覆盖该包。再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材保留在包外。2026-10-25 验收报告只记录当时检查的输入和宿主，不代表本次 monorepo 导入已重新验收。本次迁移没有重启 Codex，也没有改变实时外观；正式安装、冷启动宿主、应用壁纸和正式视觉审阅仍未验证。
 
 ## Skills
 

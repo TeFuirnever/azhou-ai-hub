@@ -1,6 +1,8 @@
 # Optional integrations / 可选能力接入
 
-The fourteen canonical Skills keep their existing independent install, discovery and invocation contracts. These three optional entries are checkout tools, not three new Skills and not a general plugin manager. `setup` does not enable them. The Hub maintains only the fixed source locks, small adapters, receipts, targeted tests and this runbook. The sources remain the single owners of their implementation.
+The fourteen canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. The three optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
+
+The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [codex-startup-animation](../packages/codex-startup-animation/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
@@ -9,42 +11,41 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations startup-animation --help
 ```
 
-Use Python 3.11+, Git and an explicit absolute source path. The tested native surface is the macOS Codex runtime identified in the [dated acceptance record](../evidence/optional-integrations-2026-10-25.md); neither other operating systems nor arbitrary Codex versions inherit that runtime claim. Resolve and inspect the actual Codex executable, not only the command found first on `PATH`.
+Use Python 3.11+ and a verified Codex executable for operations that need the native runtime. Commands default to the canonical package under `packages/`; optional `--source` accepts only that exact absolute package path as an assertion and cannot select an external checkout. The native acceptance evidence is dated and applies only to the recorded macOS Codex runtime in the [historical report](../evidence/optional-integrations-2026-10-25.md); other operating systems and arbitrary Codex versions are not covered. Resolve and inspect the executable, not only the command found first on `PATH`.
 
 ## Delivery and ownership
 
-| Entry | Hub maintains | External owner and runtime | Selection and invocation | Exit and update |
-|---|---|---|---|---|
-| `pstack` | Fixed 239-file input manifest, local snapshot, native install/doctor/remove adapter | Selected pstack fork; Codex plugin manager owns configuration and the plugin cache. Bun/Node are needed by bundled execution scripts; forge workflows additionally require their declared tools. | Explicit dedicated Codex home; native plugin discovery exposes `pstack:*` Skills, including `pstack:how`. Review hook trust separately. | Native plugin and marketplace removal through the receipt; update the fixed manifest only after source review and new acceptance. |
-| `model-router` | Fixed 13-file source manifest, plan/verify/recovery and exact pre-install restore receipt | Agent Orchestration Kit's native installer owns the `azhou-balanced` config, six roles, marked instructions and orchestrator Skill. Codex owns actual dispatch. | Explicit Codex home and Skill root; invoke `astra-orchestrator` in a new session that reads those settings. | Restore only this invocation's changed files; preserve pre-existing identical Skill/config content. Review a new source pin before reinstalling. |
-| `startup-animation` | Fixed 22-file worktree manifest, isolated build/test install/run/inspect and production blocking plans | Native macOS Swift/AppKit/WKWebView player, source installer and Codex-specific wallpaper helper. Four explicitly supplied private inputs are required. | Explicit build workspace and input directory; run the verified payload or Hub-owned test application. Production entry remains source-owned. | Test uninstall removes only its receipt-owned copy and its exact system registration; use the official Codex entry to stop using the launcher. Live wallpaper restore is separate. |
+| Entry | Package runtime and adapter scope | Native owner and boundary |
+|---|---|---|
+| `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot and native install/doctor/remove adapter | Codex plugin manager owns registration and cache. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
+| `model-router` | `packages/agent-orchestration-kit/`; current `runtime_paths` fingerprint, private snapshot and native install/verify/recovery adapter | Agent Orchestration Kit's installer owns its Codex settings, six roles, instructions and Skill. Codex owns actual dispatch. |
+| `startup-animation` | `packages/codex-startup-animation/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Native macOS Swift/AppKit/WKWebView player and Codex wallpaper helper. Four private assets are supplied separately. No program redistribution grant is recorded. |
 
-Adapters freeze selected source files below `<workspace>/.azhou/hub/sources/`. Receipts and raw evidence remain in ignored `.azhou/hub/` state. They can contain local paths and exact rollback bytes; do not publish them. Source locks are integrity checks, not signatures or proof that an upstream author approved this integration. Build outputs and explicitly supplied private inputs have separate validation from the public source-file lock.
+Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
-No source checkout is reset, cleaned, committed or modified by these adapters. A mismatched HEAD, selected dirty input, executable bit, installed file, transaction identity or source path is a failure, not a reason to refresh a lock silently. See [provenance and fixed-version updates](integration-provenance.md).
+The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
 
 ## pstack: local source to native plugin
 
-Set task-specific absolute paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. For the installed runtime, `CODEX_HOME` below is set only for that one process.
+Set task-specific paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. The package source defaults to `packages/pstack-agent-harness`; `--source` is optional and only asserts that canonical path. For the installed runtime, `CODEX_HOME` below is set only for that one process.
 
 ```sh
-PSTACK_SOURCE=/absolute/pstack-agent-harness
 PSTACK_WORKSPACE=/absolute/test-project
 PSTACK_HOME="$PSTACK_WORKSPACE/.azhou/hub/targets/pstack"
 CODEX_BIN=/absolute/path/to/verified/codex
 
 python scripts/azhou_hub.py integrations pstack plan \
-  --source "$PSTACK_SOURCE" --workspace "$PSTACK_WORKSPACE" \
+  --workspace "$PSTACK_WORKSPACE" \
   --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
 python scripts/azhou_hub.py integrations pstack apply \
-  --source "$PSTACK_SOURCE" --workspace "$PSTACK_WORKSPACE" \
+  --workspace "$PSTACK_WORKSPACE" \
   --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
 python scripts/azhou_hub.py integrations pstack doctor \
   --workspace "$PSTACK_WORKSPACE" --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
 env CODEX_HOME="$PSTACK_HOME" "$CODEX_BIN" -C "$PSTACK_WORKSPACE"
 ```
 
-Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with the frozen **local path**, then `plugin add pstack@pstack-claude`. It does not run the README's online command targeting the port upstream. It verifies the native marketplace root, marketplace source, plugin source path, installed version, every selected runtime hash and the complete plugin file set. Existing foreign installations are not adopted.
+Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack@pstack-claude`. It does not run the README's online command targeting the port upstream. It verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
 
 After opening the dedicated session, inspect native Skills and invoke `pstack:how` or another selected workflow. `doctor` proves installed files and registration; it does not prove invocation. `/setup-pstack` owns model-sheet setup. On Codex the native sheet is `<codex-home>/pstack-models.md`; the upstream setup instructions also place model rows in the home `AGENTS.md`. Review the rows and available model aliases first. The Hub does not invent a universal model table.
 
@@ -61,19 +62,18 @@ Removal calls native plugin removal followed by marketplace removal, then checks
 
 ## Model router: native roles, one workflow owner
 
-The actual source project is **Agent Orchestration Kit**. The old directory name is not an API or a supported alias. Select the current source and an explicit Skill root:
+The package is **Agent Orchestration Kit** at `packages/agent-orchestration-kit/`. Select task-specific workspace, Codex home, Skill root and runtime paths. The package source defaults to that canonical path; optional `--source` only asserts it:
 
 ```sh
-ROUTER_SOURCE=/absolute/agent-orchestration-kit
 ROUTER_WORKSPACE=/absolute/router-test-project
 ROUTER_HOME="$ROUTER_WORKSPACE/codex"
 ROUTER_SKILLS="$ROUTER_WORKSPACE/.agents/skills"
 CODEX_BIN=/absolute/path/to/verified/codex
 python scripts/azhou_hub.py integrations model-router plan \
-  --source "$ROUTER_SOURCE" --workspace "$ROUTER_WORKSPACE" \
+  --workspace "$ROUTER_WORKSPACE" \
   --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS" --codex-bin "$CODEX_BIN"
 python scripts/azhou_hub.py integrations model-router apply \
-  --source "$ROUTER_SOURCE" --workspace "$ROUTER_WORKSPACE" \
+  --workspace "$ROUTER_WORKSPACE" \
   --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
 python scripts/azhou_hub.py integrations model-router verify \
   --workspace "$ROUTER_WORKSPACE" --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS"
@@ -103,13 +103,14 @@ The native configuration and child-setting rules are distinct. For the tested cl
 
 ## Animation: build, test entry and production boundary
 
+The package is at `packages/codex-startup-animation/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
+
 ```sh
-ANIMATION_SOURCE=/absolute/codex-startup-animation
 ANIMATION_WORKSPACE=/absolute/animation-test-project
 PRIVATE_INPUTS=/absolute/explicit-private-inputs
-python scripts/azhou_hub.py integrations startup-animation check-source --source "$ANIMATION_SOURCE"
+python scripts/azhou_hub.py integrations startup-animation check-source
 python scripts/azhou_hub.py integrations startup-animation build \
-  --source "$ANIMATION_SOURCE" --workspace "$ANIMATION_WORKSPACE" --private-assets "$PRIVATE_INPUTS"
+  --workspace "$ANIMATION_WORKSPACE" --private-assets "$PRIVATE_INPUTS"
 ```
 
 The last command is a plan. Repeat it with `--apply --plan-id PLAN_ID` after reviewing the targets and four private-input hashes. Supply `working.png`, `scene.js`, `wallpaper-scene-q-v3.png` and `app-icon/source.png`; missing inputs fail. The adapter copies them only into ignored local state, runs the fixed native build and compares the final marker against **all** approved private inputs. The temporary empty Git database in that snapshot serves only the native ignore checks, not source-history attribution.
@@ -118,18 +119,18 @@ Use the returned `.build/azhou-payload` path as `PAYLOAD`. Test installation lik
 
 ```sh
 python scripts/azhou_hub.py integrations startup-animation test-install \
-  --source "$ANIMATION_SOURCE" --workspace "$ANIMATION_WORKSPACE" --payload "$PAYLOAD"
+  --workspace "$ANIMATION_WORKSPACE" --payload "$PAYLOAD"
 # Repeat with --apply --plan-id PLAN_ID; set TEST_APP to the returned path.
-python scripts/azhou_hub.py integrations startup-animation inspect --source "$ANIMATION_SOURCE" --bundle "$TEST_APP"
-python scripts/azhou_hub.py integrations startup-animation run --source "$ANIMATION_SOURCE" --bundle "$TEST_APP" --mode smoke
-python scripts/azhou_hub.py integrations startup-animation run --source "$ANIMATION_SOURCE" --bundle "$TEST_APP" --mode probe
+python scripts/azhou_hub.py integrations startup-animation inspect --bundle "$TEST_APP"
+python scripts/azhou_hub.py integrations startup-animation run --bundle "$TEST_APP" --mode smoke
+python scripts/azhou_hub.py integrations startup-animation run --bundle "$TEST_APP" --mode probe
 ```
 
 `run` is a plan until repeated with `--apply --plan-id PLAN_ID`. `smoke` runs a one-shot player without launching or enhancing Codex. `probe` resolves the actual `com.openai.codex` target without launching it. The returned log must name the installed application; a source preview or successful exit alone is insufficient. The optional `--evidence` path must be inside this Hub checkout's `.azhou/hub/` and is bound into the plan.
 
 `launch` preserves the current source behavior: player, target start/reuse, **and a coupled wallpaper attempt**. This source has no pure launch-without-wallpaper mode. Plans disclose temporary locks, helper logs and the possible lifetime of a cold-start loopback debugging port. `wallpaper-status` is a separate read-only check. `disable-wallpaper` requires a specific target PID and bundle and restores only the helper-owned page state; it does not terminate the host or close its debugging port. Playback, handoff, helper report, live page state and visual review are separate results. Never restart an active host merely to make an acceptance test pass.
 
-For the test entry, use `test-uninstall --source ... --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified installation snapshot and its original-source receipt, so a concurrently edited live source cannot trap an owned test installation or be executed during its removal. New build, install, run and public inspect operations still reject live-source drift. This is separate from the source-owned production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
+For the test entry, use `test-uninstall --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified private package snapshot and receipt, so later package changes do not remove the recovery source. New build, install, run and inspect plans fingerprint the current in-repository inputs. This is separate from the source-owned production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
 
 `install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The source installer hardcodes the user Applications entry, writes source-local build/state and exposes no uninstall operation. This Hub change does not bypass its `projectRoot` ownership check, duplicate that installer or alter the source. A separate source-owner change must define explicit build/state/destination and native uninstall contracts before Hub can offer that production lifecycle. `native-check` remains read-only. The original official Codex entry remains available.
 
@@ -139,9 +140,9 @@ The initial read-only review answered the four implementation questions with con
 
 | Question | Implementation consequence |
 |---|---|
-| Necessary work beyond copying capabilities? | Correct the stale router identity; pin dirty animation inputs; resolve duplicate global Skill discovery; establish installer ownership and recovery; separate private artwork, playback, host launch and enhancement evidence. |
-| Which primary materials prove what? | Git objects/status and hashes identify inputs; native manifests/build/install code identify execution paths; licenses define stated grants; host protocol/config and run metadata prove discovery/dispatch. README and old receipts locate evidence but do not prove current behavior. |
-| How is the path traced? | Source lock → bounded snapshot → native plan/installer → receipt → native list/config/schema → real task or installed-player events. Each level is recorded separately in the dated acceptance table. |
-| What can disprove correctness? | The unchanged Hub gate, upstream generation checks, native configuration/Skill validation, independent review, altered-file/dependency/material/transaction negative controls, installed resource hashes and actual run metadata. Formal visual approval and unexecuted host behavior remain explicit holds. |
+| Necessary work beyond copying capabilities? | Keep three native projects as independent packages, select only declared runtime inputs, bind current bytes to each plan, preserve recovery after source edits, and separate private artwork, playback, host launch and appearance evidence. |
+| Which primary materials prove what? | Package manifests and runtime source show current intended inputs; package licenses define stated grants; host protocol/config and task metadata prove native discovery/dispatch. README and dated receipts locate evidence but do not prove current behavior. |
+| How is the path traced? | `hub-package.json` runtime paths → per-plan digest → private package snapshot → native plan/installer → receipt → native list/config/schema → task or installed-player events. Dated acceptance records remain tied to their original inputs. |
+| What can disprove correctness? | Changed package bytes, native configuration/Skill validation, independent review, altered target/dependency/material/transaction negative controls, installed resource hashes and actual run metadata. Formal visual approval, redistribution permission and unexecuted host behavior remain explicit holds. |
 
-Run the existing repository gate with `python scripts/verify.py`. It includes the new targeted unit tests without replacing any old gate or removing any conflict check. Current positive, negative and pending results are in the [acceptance record](../evidence/optional-integrations-2026-10-25.md) and [support matrix](support-matrix.md#optional-integrations). No quality, latency, price or cross-harness equivalence claim follows from this integration.
+Run the repository gate with `python scripts/verify.py`; it includes each package's targeted native tests. The [2026-10-25 acceptance report](../evidence/optional-integrations-2026-10-25.md) and [support matrix](support-matrix.md#optional-integrations) are historical evidence, not fresh acceptance of the monorepo package contents. No quality, latency, price or cross-harness equivalence claim follows from these integrations.

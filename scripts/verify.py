@@ -27,6 +27,7 @@ def commands(python: str) -> list[tuple[str, list[str]]]:
     return [
         ("repository policy", [python, "scripts/check_repository.py"]),
         ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests"]),
+        ("package manifests and POSIX lifecycle suites", [python, "scripts/verify_packages.py"]),
         ("super-repo-pedant benchmark", [python, "benchmarks/super-repo-pedant/benchmark.py", "check"]),
         (
             "excalidraw benchmark wiring",

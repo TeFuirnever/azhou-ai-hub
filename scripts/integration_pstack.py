@@ -186,12 +186,14 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         raise common.IntegrationError("use a dedicated Codex home, not the workspace or its project files")
     if operation == "install":
         _guard_router(home)
-    lock = common.load_lock(COMPONENT, hub_root=hub_root)
     receipt_file = _receipt_path(workspace, home)
     receipt = common.read_receipt(receipt_file) if receipt_file.exists() else None
-    if receipt and (receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("codex_home") != str(home)
-                    or receipt.get("source_lock_sha256") != common.plan_digest(lock)):
-        raise common.IntegrationError("pstack ownership receipt does not match this target and locked version")
+    if receipt and (receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("codex_home") != str(home)):
+        raise common.IntegrationError("pstack ownership receipt does not match this target")
+    lock = (common.snapshot_lock(COMPONENT, Path(receipt["snapshot"]))
+            if operation == "remove" and receipt else common.load_lock(COMPONENT, hub_root=hub_root))
+    if receipt and receipt.get("source_lock_sha256") != common.plan_digest(lock) and receipt.get("state") != "removed":
+        raise common.IntegrationError("remove the prior owned package version before installing changed package inputs")
     inventory = _inventory(home)
     if receipt is None:
         allowed = {"config.toml", "auth.json", "pstack-models.md", "AGENTS.md"}
@@ -204,8 +206,6 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         if config.is_file() and any(word in config.read_text(encoding="utf-8") for word in [MARKETPLACE, "pstack@", "astra-orchestrator"]):
             raise common.IntegrationError("existing pstack or router configuration has no Hub ownership receipt")
     if operation == "install":
-        if source is None:
-            raise common.IntegrationError("installation requires --source for the pinned local checkout")
         origin = common.inspect_source(COMPONENT, source, hub_root=hub_root)
         source_path = Path(origin["source"])
         if workspace == source_path or source_path in workspace.parents:
@@ -214,7 +214,9 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
             raise common.IntegrationError("Codex installation must not write inside the read-only source")
         snapshot = workspace / ".azhou/hub/sources/pstack" / common.plan_digest(lock)
         if snapshot.exists() or snapshot.is_symlink():
-            common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
+            verified = common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
+            if verified["source_lock_sha256"] != common.plan_digest(lock):
+                raise common.IntegrationError("existing snapshot differs from the reviewed package inputs")
             _check_runtime_tree(snapshot / "plugins/pstack", lock)
         commands = [[str(binary), "plugin", "marketplace", "add", str(snapshot), "--json"],
                     [str(binary), "plugin", "add", PLUGIN, "--json"]]
@@ -269,7 +271,7 @@ def doctor(*, workspace: Path, codex_home: Path, codex_bin: Path, hub_root: Path
     if receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("codex_home") != str(home) or receipt.get("state") != "installed":
         raise common.IntegrationError("pstack does not have a completed installation receipt for this target")
     common.verify_snapshot(COMPONENT, Path(receipt["snapshot"]), hub_root=hub_root)
-    lock = common.load_lock(COMPONENT, hub_root=hub_root)
+    lock = common.snapshot_lock(COMPONENT, Path(receipt["snapshot"]))
     installed = _installed_copy(home, lock, allow_dependencies=True)
     dependencies = _check_runtime_tree(installed, lock, allow_dependencies=True)
     marketplaces = _native(Path(codex_bin), home, ["marketplace", "list"])
@@ -299,8 +301,9 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
             return {**doctor(workspace=workspace, codex_home=home, codex_bin=binary, hub_root=hub_root), "changed": False}
         snapshot = Path(plan["snapshot"])
         if plan["operation"] == "install":
-            snapshot = common.snapshot_source(COMPONENT, Path(plan["source"]["source"]), workspace, hub_root=hub_root)
-            _check_runtime_tree(snapshot / "plugins/pstack", common.load_lock(COMPONENT, hub_root=hub_root))
+            snapshot = common.snapshot_source(COMPONENT, Path(plan["source"]["source"]), workspace, hub_root=hub_root,
+                                              expected_digest=plan["source_lock_sha256"])
+            _check_runtime_tree(snapshot / "plugins/pstack", common.snapshot_lock(COMPONENT, snapshot))
         receipt = {"schema": RECEIPT_SCHEMA, "codex_home": str(home), "snapshot": str(snapshot),
                    "source_lock_sha256": plan["source_lock_sha256"], "commit": plan["source"]["commit"],
                    "codex_bin": str(binary), "codex_bin_sha256": plan["codex_bin_sha256"],
@@ -329,7 +332,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                     continue
                 if plan["operation"] == "install":
                     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
-                    _check_runtime_tree(snapshot / "plugins/pstack", common.load_lock(COMPONENT, hub_root=hub_root))
+                _check_runtime_tree(snapshot / "plugins/pstack", common.snapshot_lock(COMPONENT, snapshot))
                 output = _native(binary, home, command[2:-1])
                 receipt["commands"].append({"argv": command, "result": output})
                 receipt["completed_steps"].append(index)
@@ -354,7 +357,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
 def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "apply", "doctor"))
-    parser.add_argument("--source", type=Path, help="the exact pinned local pstack checkout; never an upstream install URL")
+    parser.add_argument("--source", type=Path, help="optional assertion of the in-repository package path")
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--codex-home", type=Path, required=True, help="explicit dedicated configuration target")
     parser.add_argument("--codex-bin", type=Path, required=True, help="explicit native Codex executable")

@@ -39,6 +39,69 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -m unittest discover -s tests
+      - name: Package manifests and POSIX lifecycle suites
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python scripts/verify_packages.py
+
+  pstack-native:
+    name: pstack native package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+      - name: Install Pi locally
+        working-directory: packages/pstack-agent-harness
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pstack-pi" --ignore-scripts --before=2026-10-11 \
+            --cache "$RUNNER_TEMP/pstack-npm-cache" @earendil-works/pi-coding-agent@1.1.0
+          echo "PI_PACKAGE_DIR=$RUNNER_TEMP/pstack-pi/node_modules/@earendil-works/pi-coding-agent" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pstack-pi/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install test dependencies
+        working-directory: packages/pstack-agent-harness
+        run: bun install --frozen-lockfile
+      - name: Check generated files
+        working-directory: packages/pstack-agent-harness
+        run: bun tools/generate.mjs --check
+      - name: Run pstack tests
+        working-directory: packages/pstack-agent-harness
+        env:
+          PSTACK_PI_REQUIRE_CATALOG: "1"
+          PSTACK_PI_REQUIRE_RUNTIME: "1"
+        run: bun test tests/
+      - name: Typecheck the Pi extension
+        working-directory: packages/pstack-agent-harness
+        run: bun tools/typecheck-pi.mjs
+
+  startup-animation-macos:
+    name: Startup animation Swift validation
+    runs-on: macos-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run pure wallpaper validation
+        working-directory: packages/codex-startup-animation
+        run: |
+          mkdir -p .build
+          xcrun --sdk macosx swiftc Native/Wallpaper.swift Native/WallpaperValidationTests.swift \
+            -o .build/wallpaper-validation-tests -framework AppKit
+          .build/wallpaper-validation-tests
 
   benchmarks:
     name: Benchmark integrity
@@ -118,6 +181,8 @@ jobs:
       - benchmarks
       - policy
       - verify-windows
+      - pstack-native
+      - startup-animation-macos
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -125,6 +190,8 @@ jobs:
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
+      PSTACK_RESULT: ${{ needs.pstack-native.result }}
+      ANIMATION_RESULT: ${{ needs.startup-animation-macos.result }}
     steps:
       - name: Require every CI gate
         run: |
@@ -132,3 +199,5 @@ jobs:
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$WINDOWS_RESULT" = "success"
+          test "$PSTACK_RESULT" = "success"
+          test "$ANIMATION_RESULT" = "success"
