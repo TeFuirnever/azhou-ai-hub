@@ -2,6 +2,8 @@
 
 `scripts/azhou_hub.py` is the repository-level, harness-neutral control surface for local information, diagnostics, explicit skill setup, opt-in checkout lifecycle operations and verification. It uses only Python 3.11+ standard library modules.
 
+The separate `integrations` command exposes exactly three optional external integrations. Its [contract](integrations.md) distinguishes fixed source snapshots and native installation ownership from the Skill setup and receipt commands below. Installing Skills never enables these integrations. `info` adds an `optional_integrations` list and `integration_entry`; the five existing `primary_commands` and their v1 alias remain unchanged.
+
 ## Agent Skill UX layer
 
 Four independently installable, open-format adapter packages expose this control surface without duplicating its implementation. Independent installation makes each `SKILL.md` discoverable on its own; it does not bundle a standalone copy of the repository CLI:
@@ -148,6 +150,6 @@ Doctor checks use `pass`, `warn`, `fail` and `skip`. Warnings produce `degraded`
 
 ## Ownership boundary
 
-The foundation CLI does not contact registries, self-update, rewrite harness configuration, install hooks, clean caches or infer a harness home. Its lifecycle commands own only artifacts created by explicit managed checkout setup and proven by a valid receipt plus current filesystem identity. Package-manager installations still use their package manager for update and removal. Skill-specific lifecycle adapters remain explicit and keep their own setup/uninstall contracts.
+The Skill foundation commands documented on this page do not contact registries, self-update, rewrite harness configuration, install hooks, clean caches or infer a harness home. Their lifecycle commands own only artifacts created by explicit managed checkout setup and proven by a valid receipt plus current filesystem identity. Package-manager installations still use their package manager for update and removal. Skill-specific lifecycle adapters remain explicit and keep their own setup/uninstall contracts.
 
 The design source and portability decisions are recorded in [the oh-my-claudecode foundation research](research/oh-my-claudecode-foundation-capabilities.md) and [the Azhou Skill portability follow-up](research/azhou-skill-portability.md).

@@ -38,6 +38,39 @@
 | ASD-STE100 controlled-English rewrite for agent-facing text | package available; deterministic <code>scripts/ste-lint.py</code> structural-rule gate runs on the Python 3 standard library; no host discovery/invocation receipt yet | same neutral package | same neutral package | host-dependent; Python 3 and local file access required; the deliverable is rewritten text plus a lint receipt, not a certified STE document | host-dependent; Python 3 and local file access required; the deliverable is rewritten text plus a lint receipt, not a certified STE document |
 | Archify presentation-grade interactive diagram maps | package available; deterministic <code>finalize</code>/<code>validate</code> gates run on Node.js 18+ with a local browser for the <code>browser-check</code> gate; no host discovery/invocation receipt yet | same neutral package | same neutral package | host-dependent; Node.js 18+ and local file access required; the deliverable is one self-contained interactive HTML map, not an editable scene | host-dependent; Node.js 18+ and local file access required; the deliverable is one self-contained interactive HTML map, not an editable scene |
 
+## Optional integrations
+
+These entries are opt-in checkout tools, separate from the fourteen canonical Skills above. Their native acceptance applies only to the recorded macOS 27.0.1 arm64 machine, Codex App `26.1021.31345` / build `21828` (`com.openai.codex`), and its CLI `0.164.0-alpha.11.1`. The distinct PATH CLI `0.160.1` was not selected. See the [runbook](integrations.md), [source provenance](integration-provenance.md) and [2026-10-25 acceptance record](../evidence/optional-integrations-2026-10-25.md).
+
+| Surface | Implemented and verified this round | Pending, blocked or outside the claim |
+|---|---|---|
+| pstack native Codex plugin, fixed `0.9.102` | Explicit local-snapshot installation, exact native source registration, runtime file set/hashes, repeat install, native discovery of 65 `pstack:*` Skills, one real `how` task with an ad-hoc Luna/max child, removal, unrelated configuration preservation | Automatic SessionStart injection/trust not exercised; bundled forge workflows and Bun dependency bootstrap not live-exercised; no complete pstack workflow-quality claim |
+| Agent Orchestration Kit `azhou-balanced` | Isolated configuration and six roles installed; an existing identical-hash user Skill reused read-only; native config/role schema/instruction/Skill discovery; real explorer Luna/max and reviewer Sol/high tasks; idempotence and exact restore | Full fresh Skill installation on a machine without the global Skill not live-exercised; worker/tester/researcher/Astra roles discovered but not invoked; aliases in client run metadata do not prove an independent backend model fingerprint |
+| Startup animation isolated macOS build and player | Selected worktree source and explicit private inputs built; native identity/signature/resource hashes checked; isolated installed `.app` replayed and exited; four internal WebView frames captured, two inspected; exact test registration removed while the production registration remained | No new production install; no cold host start, warm activation/handoff, live wallpaper apply/restore or formal visual approval this round. Later source drift is preserved and blocks new operations against that live source; owned test cleanup uses its verified frozen snapshot |
+| Startup animation production lifecycle | Concrete install/uninstall plans and read-only native-check entry | Blocked by source installer destination/state/uninstall contract and missing program redistribution grant. Existing production entry was not adopted, replaced or removed |
+| pstack plus router on one task | Conflicting installation targets are rejected; documented selection of one workflow owner, native per-invocation disabling of the other Skill tested for pstack | No chaining, recursive orchestration or joint routing support; the existing orchestrator composition rule is retained |
+| Other hosts and operating systems | Bounded source/mechanism inventory below | No new route adapter, animation adapter, host modification or cross-platform runtime acceptance |
+
+The observed global Skill traversal-limit warning and one pstack model-list refresh timeout remain recorded. Selected Skills were explicitly discovered and used successfully; neither warning is silently converted into complete global discovery or model-catalog availability.
+
+### Other existing harness references
+
+This inventory separates source-declared mechanisms from runtime observations. A Skill, subagent or startup hook is not a graphical-animation interface. No row below claims this Hub animation works there.
+
+| Target | Identity and version evidence this round | Existing mechanism and animation boundary |
+|---|---|---|
+| Claude Code | CLI `2.1.308` resolved and queried. The separate Claude Desktop app is `com.anthropic.claudefordesktop` `2.42304.0`, not the CLI | pstack includes Claude plugin/hook mappings. A CLI launch wrapper would require new implementation; no Desktop page-injection equivalence is inferred |
+| Pi | Installed package `@earendil-works/pi-coding-agent` `1.0.4`; source identifies CLI/RPC | Source has Pi Skills/extension and ad-hoc dispatch mapping; graphical launch integration would need new implementation |
+| ZCode | Desktop `dev.zcode.app` `3.16.3`, build `3.16.3.8992`; no `zcode` on audited PATH | Hub's earlier Skill receipts and source native-agent boundary are retained as dated evidence. New target identity/launch/UI mechanisms would be required for animation |
+| Kimi Code | Existing Hub target; no `kimi` on audited PATH this round. Earlier matrix receipts remain historical | Existing Skill discovery evidence does not establish current launch or animation mechanisms |
+| GitHub Copilot | Source distinguishes CLI and Copilot app; neither selected runtime was verified on this machine | Source plugin manifest/hook mapping exists; CLI wrapper and Desktop UI integration are different unimplemented tasks |
+| OpenCode / Gemini CLI | Source references OpenCode CLI/Desktop and Gemini CLI; neither CLI resolved on audited PATH | Shared Skill discovery is only a source declaration here; graphical target mechanisms require separate investigation and implementation |
+| Muse / Prime Agent / MiniCode | Names occur in selected source guides; exact current distribution/vendor/version is not established for all three | Available source mapping cannot resolve missing product identity or prove the required graphical extension; not supported |
+| Cursor | `cursor/plugins` is the declared original pstack source; no local runtime acceptance | Workflow-source provenance is not a launcher adapter |
+| DSH | Animation source cites `NativeDog1/dsh-boot-animation` as an overlay reference; exact host/version not independently established | Its different overlay interface is prior art, not a Codex-compatible or Hub-delivered installation |
+
+Source paths for this limited inventory are the pinned pstack `package.json`, manifests, `docs/reference.md`, `docs/pi-equivalence.md` and host mappings; Agent Orchestration Kit `guides/harness-boundaries.md`; animation `docs/references.md`, `Native/App.swift` and `Native/Wallpaper.swift`. The dated acceptance record carries the current machine observations. No old guide version has been substituted for an observed current version.
+
 ## Operating system support (deterministic gate)
 
 The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ standard library only) is enforced per operating system. This table covers the gate and the shipped runtime scripts; the harness rows above are OS-neutral claims about adapters and receipts and are not extended by it.

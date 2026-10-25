@@ -79,6 +79,25 @@ python scripts/azhou_hub.py verify
 
 For setup, review the deterministic `planId` from the dry-run, then pass the exact value with `--apply --plan-id <reviewed-planId>`; source, target, mode, or pre-apply state changes invalidate the apply.
 
+## Optional integrations
+
+The fourteen canonical Skills keep their independent installation and invocation paths. Three additional capabilities have separate, explicit entries; none is enabled by installing the Hub's Skills.
+
+| Entry | Maintained by the Hub | External runtime |
+|---|---|---|
+| `pstack` | Fixed source identity, bounded installation entry and verification evidence | The selected local pstack fork and its existing generated host packages |
+| `model-router` | Fixed Agent Orchestration Kit source and explicit Codex installation boundary | Its native Codex installer, named agents and `astra-orchestrator` Skill |
+| `startup-animation` | Fixed launcher input snapshot and separate launch/enhancement operations | The existing macOS launcher/player, assets and separately scoped Codex enhancements |
+
+~~~bash
+python scripts/azhou_hub.py integrations list --json
+python scripts/azhou_hub.py integrations pstack --help
+python scripts/azhou_hub.py integrations model-router --help
+python scripts/azhou_hub.py integrations startup-animation --help
+~~~
+
+Use the [integration contract and runbook](docs/integrations.md) to select a source and explicit target, inspect a plan, install and verify, then disable or remove only owned artifacts. [Support and evidence](docs/support-matrix.md#optional-integrations) distinguish installation, native discovery, actual invocation and behavior. pstack and the model router retain one workflow owner per task; the integration does not chain orchestrators. Private artwork and upstream runtime code are not bundled into the public Hub. Animation production installation remains blocked by the source installer contract; this round verifies its isolated build, installed player and cleanup. Cold host launch, wallpaper application and formal visual approval remain pending.
+
 ## Skills
 
 | Skill | Real job | Verification basis |

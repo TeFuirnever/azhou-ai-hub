@@ -1,5 +1,9 @@
 # Installation
 
+## Optional external integrations
+
+The existing Skill installation paths below remain independent. For the three explicitly selected pstack, Codex model-routing and startup-animation integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
+
 ## Package-manager install
 
 Install only the skill you need:

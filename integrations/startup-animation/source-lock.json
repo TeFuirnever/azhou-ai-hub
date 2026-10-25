@@ -1,0 +1,122 @@
+{
+  "schema": "azhou-hub.integration-source.v1",
+  "component": "startup-animation",
+  "display_name": "Azhou Codex Startup (macOS launcher + bounded Codex wallpaper helper)",
+  "repository": "https://github.com/TeFuirnever/codex-startup-animation.git",
+  "commit": "c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248",
+  "source_kind": "worktree",
+  "runtime_version": "0.7.0",
+  "runtime_build": "7",
+  "license": "No LICENSE, NOTICE or COPYING grant found in the selected local source; local external execution only, no source or private-artwork redistribution grant is inferred.",
+  "files": {
+    ".gitignore": {
+      "sha256": "c49b991eda6d8e63fa089c7661b100daca7eaa5aceb03b6a842282398dac7901",
+      "executable": false
+    },
+    "AGENTS.md": {
+      "sha256": "efa8c4036fea2a8fac6a9ed11ef945521a81a353f8d19d1d9d2728986ed3dc8c",
+      "executable": false
+    },
+    "README.md": {
+      "sha256": "a654f78e89309ef3ab10fae7c02c1d0879e9bad4e890a562d608480c9224ea62",
+      "executable": false
+    },
+    "docs/references.md": {
+      "sha256": "562b0fff1e45843fdac0fe9692d6ca97efc2442ddec0d942285deae5da907d8b",
+      "executable": false
+    },
+    "docs/installation-lifecycle.md": {
+      "sha256": "3227f5b0602cb04cde8f32d6257a2ea98937a975dfd89851a7bbd495aa6b243b",
+      "executable": false
+    },
+    "Native/App.swift": {
+      "sha256": "0ed42e94cb629a99fdc12461b613bf983f5d6dcf60af9259a6cb32ca847f732d",
+      "executable": false
+    },
+    "Native/Wallpaper.swift": {
+      "sha256": "fdcc099afab213f21e70464b164b74e4983061b64a92f67eba3b39ca544af43b",
+      "executable": false
+    },
+    "Native/InstallRegistry.swift": {
+      "sha256": "64260c804282333fe3a484664ef222c15e882aa38638bdf500aec000f8b580c3",
+      "executable": false
+    },
+    "Native/WallpaperValidationTests.swift": {
+      "sha256": "6f06738e83dcc87e0d1be4601deacc56217283ca54c9bdd6b87522fca5d6e7a9",
+      "executable": false
+    },
+    "index.html": {
+      "sha256": "2d7ddfdfd1aae13d2a3ffb3422c11657e2146f3dd77616b1b0e70423a6daf417",
+      "executable": false
+    },
+    "style.css": {
+      "sha256": "3fa95e58d12ffa5b79498f67b7630c47386204a5dd67f67fe1157ab7531047be",
+      "executable": false
+    },
+    "animation.js": {
+      "sha256": "28ec6fbb0bf29402e4fd5a9cebe96460d4500d49d4748b5fa5308999a2020f80",
+      "executable": false
+    },
+    "tools/build-macos.sh": {
+      "sha256": "5e228acb77c450adb585363765928c05ea51eee05c9a8415f42f4d311fd529b1",
+      "executable": false
+    },
+    "tools/build-wallpaper.py": {
+      "sha256": "6d3d6104da8373b5f34287c83448e633e7eff1e00decda6cd30dcdd400c20589",
+      "executable": false
+    },
+    "tools/verify-artifacts.py": {
+      "sha256": "b44d97a7b492a574938c35db5a7209ed83c79798bfd7fe1a21f0fdfb1825d53a",
+      "executable": false
+    },
+    "tools/install-macos.sh": {
+      "sha256": "5867f76b0fd2441f743d9039cf1045bcee43ea980de76d0c6bc67d3031e7f91b",
+      "executable": true
+    },
+    "tools/install-macos.py": {
+      "sha256": "81f49285688551e0eada1fec4fdda833faf730551182147041af342030cc6fdb",
+      "executable": true
+    },
+    "tools/test-install-macos.py": {
+      "sha256": "8f4a594990484077d21ef21bfca51d52599226a6b88d866cf5ebeb3ff2cb3ab6",
+      "executable": false
+    },
+    "tools/test-wallpaper.mjs": {
+      "sha256": "b3d45d4865a3cab1704849d927c26c479decb44e14858fea2933c32f59218826",
+      "executable": false
+    },
+    "wallpaper/renderer.js": {
+      "sha256": "0629064cde1c664070b61bb1bada7a99150b143529fc3ccf0b7afa797bf0a306",
+      "executable": false
+    },
+    "wallpaper/wallpaper.css": {
+      "sha256": "0b2a6d255cee117c8021571521df6a2235dcc8a3727e020f264c0155d4556799",
+      "executable": false
+    },
+    "wallpaper/preview.html": {
+      "sha256": "c3a2ccc15a9b327a45ea8e2e0ed33fba007582275f8513525b4b093739e0e757",
+      "executable": false
+    }
+  },
+  "build_inputs": [
+    "Native/App.swift",
+    "Native/Wallpaper.swift",
+    "Native/InstallRegistry.swift",
+    "tools/build-macos.sh",
+    "tools/build-wallpaper.py",
+    "tools/verify-artifacts.py",
+    "wallpaper/renderer.js",
+    "wallpaper/wallpaper.css",
+    "index.html",
+    "style.css",
+    "animation.js"
+  ],
+  "provenance": {
+    "selected_state": "base commit plus exact selected working-tree bytes, including uncommitted current implementation",
+    "generation": "native build-macos.sh -> hidden .build/azhou-payload -> native installer canonical app; Hub can separately own a local test app",
+    "ownership": "native installer owns production Applications entry and projectRoot; Hub owns only explicit isolated test apps",
+    "private_assets": "four required existing private files are supplied explicitly at runtime; bytes and hashes are not included in this public source lock",
+    "excluded": "historical Native/Extension.swift and extension/; pet generation; new artwork; other-host adapters",
+    "update": "re-read source rules and changes, renew commit/file hashes together, rerun source checks, isolated build, install lifecycle and execution evidence; do not edit the lock merely to silence drift"
+  }
+}

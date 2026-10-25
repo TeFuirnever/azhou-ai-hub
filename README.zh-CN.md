@@ -79,6 +79,25 @@ python scripts/azhou_hub.py verify
 
 Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--apply --plan-id <reviewed-planId>`，源、目标、模式或执行前状态发生变化都会拒绝执行。
 
+## 可选能力接入
+
+现有十四个 canonical Skills 保留独立安装与调用方式。另有三个显式、独立选择的能力入口；安装 Hub 的 Skills 不会自动启用它们。
+
+| 入口 | Hub 维护内容 | 外部运行时 |
+|---|---|---|
+| `pstack` | 固定来源身份、有边界的安装入口与验收证据 | 选定的本地 pstack fork 及其已有宿主生成包 |
+| `model-router` | 固定 Agent Orchestration Kit 来源与显式 Codex 安装边界 | 来源的原生 Codex 安装器、具名角色与 `astra-orchestrator` Skill |
+| `startup-animation` | 固定启动器输入快照及分别选择的启动、增强操作 | 现有 macOS 启动器/播放器、素材及单独限定的 Codex 增强 |
+
+~~~bash
+python scripts/azhou_hub.py integrations list --json
+python scripts/azhou_hub.py integrations pstack --help
+python scripts/azhou_hub.py integrations model-router --help
+python scripts/azhou_hub.py integrations startup-animation --help
+~~~
+
+按[接入合同与操作说明](docs/integrations.md)选择来源和显式目标，检查计划、安装、验证，再停用或卸载归属明确的产物。[支持与证据](docs/support-matrix.md#optional-integrations)分别记录文件安装、原生发现、实际调用和行为结果。pstack 与模型路由在同一任务中只保留一个工作流负责人，接入不会串联两个编排器。公开 Hub 不打包个人素材或上游运行时代码。动画的正式安装仍受来源安装器合同阻塞；本轮验证隔离构建、安装版播放器与清理，冷启动宿主、壁纸应用及正式视觉审阅仍待验证。
+
 ## Skills
 
 | Skill | 解决的真实任务 | 验证依据 |

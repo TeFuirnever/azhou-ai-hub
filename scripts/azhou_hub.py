@@ -308,6 +308,8 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
             "minimum": ".".join(str(part) for part in MIN_PYTHON),
         },
         "installable_skills": canonical_skills(root),
+        "optional_integrations": ["pstack", "model-router", "startup-animation"],
+        "integration_entry": "python scripts/azhou_hub.py integrations list --json",
         # Keep this list limited to the five portable foundation commands. The
         # receipt-owned lifecycle verbs are intentionally a separate contract.
         "primary_commands": COMMANDS,
@@ -1503,12 +1505,23 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     receipt_migration.add_argument("--plan-id")
     receipt_migration.add_argument("--json", action="store_true")
 
+    integrations = subcommands.add_parser("integrations", help="Discover or explicitly select one of three optional integrations", add_help=False)
+    integrations.add_argument("integration_args", nargs=argparse.REMAINDER)
+
     verify = subcommands.add_parser("verify", help="Run the authoritative repository verification gate")
     verify.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
     return parser
 
 
 def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "integrations":
+        # Lazy import keeps independently copied Foundation verify fixtures valid.
+        try:
+            from . import azhou_integrations
+        except ImportError:
+            import azhou_integrations
+        return azhou_integrations.main(argv[1:], hub_root=root)
     args = build_parser(root).parse_args(argv)
     skills = args.skill if getattr(args, "skill", None) else canonical_skills(root)
 
