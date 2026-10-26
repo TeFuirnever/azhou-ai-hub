@@ -47,6 +47,45 @@ DEPENDENCY_DIR = "skills/poteto-mode/scripts/node_modules"
 KIT_STATE_FILE = "agent-orchestration-kit/state.json"
 KIT_INSTRUCTION_BEGIN = "ASTRA-LUNA-ORCHESTRATOR:BEGIN"
 HOOK_TRUST_UNKNOWN = "unknown; only the host's /hooks review decides whether the hook runs"
+# Byproducts the native runtime itself writes into a Codex home that is merely
+# opened (the Kit installer's native validation leaves exactly these behind).
+# They carry no configuration or installation ownership and the adapter neither
+# reads nor writes them. ``skills/.system`` is the runtime's own system-Skill
+# directory; user-placed Skills under ``skills`` stay a block reason, and any
+# unknown name still blocks. This is the observed byproduct list of the tested
+# client build, not a general allowance; a new client writing new names fails
+# closed for review instead of being silently accepted.
+HOST_RUNTIME_STATE = frozenset({
+    ".sandbox_migration", ".tmp", "tmp", "shell_snapshots", "installation_id",
+    "goals_1.sqlite", "goals_1.sqlite-shm", "goals_1.sqlite-wal",
+    "logs_2.sqlite", "logs_2.sqlite-shm", "logs_2.sqlite-wal",
+    "memories_1.sqlite", "memories_1.sqlite-shm", "memories_1.sqlite-wal",
+    "queue_1.sqlite", "queue_1.sqlite-shm", "queue_1.sqlite-wal",
+    "state_5.sqlite", "state_5.sqlite-shm", "state_5.sqlite-wal",
+})
+HOST_RUNTIME_STATE_PREFIXES = ("skills/.system",)
+
+
+def _is_runtime_state(name: str) -> bool:
+    if name.split("/", 1)[0] in HOST_RUNTIME_STATE:
+        return True
+    return any(name == prefix or name.startswith(prefix + "/")
+               for prefix in HOST_RUNTIME_STATE_PREFIXES)
+
+
+def _runtime_state_roots(inventory: dict) -> list[str]:
+    """Names of host-runtime byproducts present in an inventoried target."""
+    roots = set()
+    for name in inventory:
+        top = name.split("/", 1)[0]
+        if top in HOST_RUNTIME_STATE:
+            roots.add(top)
+            continue
+        for prefix in HOST_RUNTIME_STATE_PREFIXES:
+            if name == prefix or name.startswith(prefix + "/"):
+                roots.add(prefix)
+                break
+    return sorted(roots)
 
 
 def _directory(value: Path) -> Path:
@@ -454,11 +493,14 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
             "this target's completed-removal receipt is stale: a pstack registration is present again and was not "
             "installed by the Hub; remove it through its own lifecycle before a new Hub install here")
     inventory = _inventory(home)
+    host_runtime_state: list[str] = []
     if receipt is None:
         allowed = {"config.toml", "auth.json", SHEET_NAME, "AGENTS.md"}
         if kit["present"]:
             allowed |= kit["owned_files"]
-        unexpected = sorted(set(inventory) - allowed)
+        host_runtime_state = _runtime_state_roots(inventory)
+        unexpected = sorted(name for name in set(inventory) - allowed
+                            if not _is_runtime_state(name))
         if unexpected:
             raise common.IntegrationError("unowned Codex target is not empty; select a separate home: " + ", ".join(unexpected[:8]))
         if any("symlink" in item for item in inventory.values()):
@@ -544,6 +586,11 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         "native_owner": "Codex plugin manager",
         "composition": "pstack owns its selected tasks' workflow and explicit dispatch; one workflow owner per task",
         "coexistence": coexistence_report,
+        "host_runtime_state_accepted": {
+            "entries": host_runtime_state,
+            "scope": ("host-runtime byproducts observed in the target; the adapter neither reads nor writes "
+                      "them and they carry no configuration or installation ownership; unknown names still block"),
+        },
         "activation": "plugin installation does not prove skill invocation or hook trust; review /hooks in a new session",
         "recovery": "failed native steps retain a receipt; plan and apply again to resume, or plan remove to use native cleanup",
     }

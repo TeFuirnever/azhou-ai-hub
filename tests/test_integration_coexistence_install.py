@@ -248,6 +248,60 @@ class InstallOrderTests(CoexistenceInstallTestCase):
         self.assertEqual(self.pstack_plan(coexistence=True)["coexistence"]["requested"], True)
 
 
+class HostRuntimeStateTests(CoexistenceInstallTestCase):
+    """Native-runtime byproducts are accepted and disclosed, and nothing wider is."""
+
+    def byproducts(self):
+        self.put(".sandbox_migration", "v1\n")
+        self.put("installation_id", "00000000-0000-0000-0000-000000000000\n")
+        self.put(".tmp/plugins.sync.lock", "")
+        self.put("tmp/arg0-macos", "fixture\n")
+        self.put("shell_snapshots/abc", "fixture\n")
+        for stem in ("goals_1", "logs_2", "memories_1", "queue_1", "state_5"):
+            for suffix in ("", "-shm", "-wal"):
+                self.put(f"{stem}.sqlite{suffix}", "")
+
+    def test_kit_validation_byproducts_do_not_block_the_coexistence_plan(self):
+        self.kit_apply()
+        self.byproducts()
+        plan = self.pstack_plan(coexistence=True)
+        accepted = plan["host_runtime_state_accepted"]["entries"]
+        self.assertIn(".tmp", accepted)
+        self.assertIn("installation_id", accepted)
+        self.assertIn("state_5.sqlite-wal", accepted)
+        self.assertIn("neither reads nor writes", plan["host_runtime_state_accepted"]["scope"])
+        self.assertTrue(self.pstack_apply(coexistence=True)["changed"])
+        self.assertEqual(self.doctor()["coexistence"]["auto_routing"], "off")
+
+    def test_byproducts_alone_never_block_a_standalone_plan(self):
+        self.byproducts()
+        self.put("skills/.system/openai-docs/SKILL.md", "# runtime system skill\n")
+        plan = self.pstack_plan()
+        self.assertIn("standalone", plan["coexistence"]["compatibility"])
+        self.assertIn("skills/.system", plan["host_runtime_state_accepted"]["entries"])
+
+    def test_unknown_files_still_block_the_plan(self):
+        self.byproducts()
+        self.put("stray-notes.md", "not a runtime byproduct\n")
+        with self.assertRaisesRegex(common.IntegrationError,
+                                    "unowned Codex target is not empty.*stray-notes.md"):
+            self.pstack_plan()
+
+    def test_user_placed_home_skills_still_block_the_plan(self):
+        self.byproducts()
+        self.put("skills/poteto-mode/SKILL.md", "---\nname: poteto-mode\n---\n")
+        with self.assertRaisesRegex(common.IntegrationError, "unowned Codex target is not empty"):
+            self.pstack_plan()
+
+    def test_symlinked_runtime_name_still_blocks_the_plan(self):
+        self.put("installation_id", "00000000-0000-0000-0000-000000000000\n")
+        outside = self.base / "outside"
+        outside.mkdir()
+        os.symlink(outside, self.home / ".tmp")
+        with self.assertRaisesRegex(common.IntegrationError, "symlink"):
+            self.pstack_plan()
+
+
 class AutoRoutingConflictTests(CoexistenceInstallTestCase):
     """An armed target is converted by a reviewed plan, never silently accepted."""
 
