@@ -38,6 +38,9 @@ SETTINGS = {
     "agents.default_subagent_reasoning_effort": "max",
 }
 MANAGED = tuple(SETTINGS) + ("agents.max_threads",)
+PSTACK_SHEET = "pstack-models.md"
+PSTACK_HOOK_OFF = "session hook: off"
+PSTACK_COEXISTENCE_SCHEMA = "agent-orchestration-kit.pstack-coexistence.v1"
 
 
 class InstallError(Exception):
@@ -261,6 +264,94 @@ def check_parents(path):
             raise InstallError(f"Expected directory: {parent}")
 
 
+def pstack_sheet_hook(raw):
+    """The sheet's routing switch, mirroring pstack's read-sheet.sh decoding
+    and the SessionStart hook's exact-line match. ``None`` means no sheet
+    exists; an undecodable sheet counts as missing, so injection stays on."""
+    if raw is None:
+        return None
+    try:
+        text = raw.decode("utf-16") if raw.startswith(b"\xff\xfe") else raw.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return "on"
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    lines = [line[:-1] if line.endswith("\r") else line for line in text.split("\n")]
+    return "off" if PSTACK_HOOK_OFF in lines else "on"
+
+
+def _contains_pstack(value):
+    if isinstance(value, dict):
+        return any(_contains_pstack(key) or _contains_pstack(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_pstack(item) for item in value)
+    return isinstance(value, str) and ("pstack-claude" in value or "pstack@" in value)
+
+
+def pstack_coexistence(codex_home, skills_dir=None):
+    """Evidence-separated pstack diagnosis for one Codex home.
+
+    A model sheet, visible pstack Skills, or a cached plugin copy alone never
+    proves that tasks are auto-routed. Auto-routing is armed only when a
+    native registration exists and the sheet does not carry the exact ``off``
+    line that stops the SessionStart hook. Hook trust and live runs are host
+    state and stay unknown to any file-level check. This one implementation
+    is the compatibility verdict for both the Kit's direct entry and the
+    Hub's model-router entry.
+    """
+    sheet_path = codex_home / PSTACK_SHEET
+    raw_sheet = regular_bytes(sheet_path)
+    hook = pstack_sheet_hook(raw_sheet)
+    plugins = codex_home / "plugins"
+    if plugins.is_symlink():
+        raise InstallError(f"Plugin directory is a symbolic link; pstack state cannot be established: {plugins}")
+    copies = 0
+    if plugins.exists():
+        for manifest_path in plugins.rglob(".codex-plugin/plugin.json"):
+            check_parents(manifest_path)
+            data = regular_bytes(manifest_path)
+            if not data:
+                continue
+            try:
+                registered_name = json.loads(data).get("name")
+            except ValueError as exc:
+                raise InstallError(f"Unreadable plugin manifest: {manifest_path}") from exc
+            if registered_name == "pstack":
+                copies += 1
+    if copies > 1:
+        raise InstallError(f"Duplicate pstack plugin copies in this target; inspect them before installing: {copies} found")
+    raw_config = regular_bytes(codex_home / "config.toml")
+    config_registered = raw_config is not None and _contains_pstack(tomllib.loads(raw_config.decode("utf-8")))
+    shared_skills = None
+    if skills_dir is not None:
+        shared_skills = (Path(skills_dir) / "poteto-mode" / "SKILL.md").is_file()
+    registered = copies == 1 or config_registered
+    if not registered:
+        auto_routing, compatible = "not-armed", True
+        reason = ("no native pstack registration in this target; a model sheet, visible pstack Skills, "
+                  "or a cached copy alone is not routing evidence")
+    elif hook == "off":
+        auto_routing, compatible = "off", True
+        reason = "pstack SessionStart auto-routing is switched off by the model sheet"
+    else:
+        auto_routing, compatible = "on", False
+        reason = ("pstack auto-routing is armed in this target: native registration exists and "
+                  f"{sheet_path} does not carry the exact line '{PSTACK_HOOK_OFF}'. Set that line "
+                  "in the sheet (or remove pstack from this home) before installing the Kit here")
+    return {
+        "schema": PSTACK_COEXISTENCE_SCHEMA,
+        "model_sheet_present": raw_sheet is not None,
+        "session_hook": hook,
+        "native_plugin_present": copies == 1,
+        "config_registration_present": config_registered,
+        "shared_skills_visible": shared_skills,
+        "auto_routing": auto_routing,
+        "hook_trust": "unknown; only the host's /hooks review decides whether the hook runs",
+        "compatible": compatible,
+        "reason": reason,
+    }
+
+
 def source_files(root):
     profile = root / "profiles" / PROFILE
     def read_source(path):
@@ -317,6 +408,9 @@ def build_plan(root, codex_home, skills_dir):
     for path in [config_path, instructions_path, state_path, *targets.values()]:
         check_parents(path)
         regular_bytes(path)
+    pstack = pstack_coexistence(codex_home, skills_dir)
+    if not pstack["compatible"]:
+        raise InstallError(pstack["reason"])
     raw_config = regular_bytes(config_path)
     text = raw_config.decode() if raw_config is not None else ""
     config = tomllib.loads(text)
@@ -408,7 +502,7 @@ def build_plan(root, codex_home, skills_dir):
         changes[state_path] = content
     return {"changes": changes, "watched": watched, "transaction": transaction,
             "config_text": merged.decode(), "roles": {k: files[f"agents/{k}.toml"] for k in ROLE_MODELS},
-            "skill_path": targets["skill"], "manifest": manifest}
+            "skill_path": targets["skill"], "manifest": manifest, "pstack_coexistence": pstack}
 
 
 def atomic_write(path, data, mode=0o600):
@@ -547,7 +641,8 @@ def main():
         plan = build_plan(ROOT, codex_home, skills_dir)
         validate_config(runtime, plan["config_text"], plan["roles"])
         print(json.dumps({"profile": PROFILE, "runtime": runtime, "codex_home": str(codex_home),
-                          "skill": str(plan["skill_path"]), "changed_files": [str(p) for p in plan["changes"]]}, indent=2))
+                          "skill": str(plan["skill_path"]), "changed_files": [str(p) for p in plan["changes"]],
+                          "pstack_coexistence": plan["pstack_coexistence"]}, indent=2))
         if args.dry_run:
             print("Preflight passed; no target files written.")
             return 0

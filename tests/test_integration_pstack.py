@@ -212,7 +212,7 @@ class PstackIntegrationTest(unittest.TestCase):
         marker = self.home / "agent-orchestration-kit/state.json"
         marker.parent.mkdir()
         marker.write_text("{}", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "separate configuration targets"):
+        with self.assertRaisesRegex(common.IntegrationError, "unrecognized agent-orchestration-kit ownership record"):
             self.plan()
 
     def test_existing_config_symlink_is_not_written_through(self):
@@ -230,7 +230,7 @@ class PstackIntegrationTest(unittest.TestCase):
         instructions.write_text("Do not invoke astra-orchestrator.\n", encoding="utf-8")
         self.assertEqual(self.plan()["operation"], "install")
         instructions.write_text("<!-- ASTRA-LUNA-ORCHESTRATOR:BEGIN -->\nUse the installed astra-orchestrator skill.\n<!-- ASTRA-LUNA-ORCHESTRATOR:END -->\n", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "cannot be chained"):
+        with self.assertRaisesRegex(common.IntegrationError, "without its Kit ownership record"):
             self.plan()
 
     def test_source_cannot_be_used_as_workspace_before_any_write(self):

@@ -17,7 +17,7 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 
 | Entry | Package runtime and adapter scope | Native owner and boundary |
 |---|---|---|
-| `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot and native install/doctor/remove adapter | Codex plugin manager owns registration and cache. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
+| `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot and native install/doctor/remove adapter | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
 | `model-router` | `packages/agent-orchestration-kit/`; current `runtime_paths` fingerprint, private snapshot and native install/verify/recovery adapter | Agent Orchestration Kit's installer owns its Codex settings, six roles, instructions and Skill. Codex owns actual dispatch. |
 | `startup-animation` | `packages/codex-startup-animation/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Native macOS Swift/AppKit/WKWebView player and Codex wallpaper helper. Four private assets are supplied separately. No program redistribution grant is recorded. |
 
@@ -55,6 +55,22 @@ After opening the dedicated session, inspect native Skills and invoke `pstack:ho
 
 The `SessionStart` hook requires native `/hooks` trust review. Setting `session hook: off` in that target's model sheet stops automatic injection, while explicit Skill invocation remains available. No adapter bypasses hook trust.
 
+### Sharing one Codex home with the Agent Orchestration Kit
+
+Both orchestration packages can share one controlled Codex home. One compatibility verdict — `pstack_coexistence` in the Kit's `install_codex.py` — is enforced by both public entries, so the Hub's `model-router` entry and the Kit's own `setup.sh` reach the same conclusion for the same target: a model sheet, visible pstack Skills, or a cached plugin copy alone is never evidence of auto-routing, while native registration whose sheet lacks the exact `session hook: off` line is armed and blocks a Kit install until the target is converted. Duplicate pstack plugin copies and symlinked plugin state stay errors.
+
+Install the Kit first and plan pstack against the same home (coexistence is then automatic), or declare the intent before the Kit arrives:
+
+```sh
+python scripts/azhou_hub.py integrations pstack plan --coexistence \
+  --workspace "$PSTACK_WORKSPACE" \
+  --codex-home "$SHARED_HOME" --codex-bin "$CODEX_BIN"
+```
+
+Besides native registration, a coexistence plan owns exactly one narrow change: the model sheet's `session hook` line switched to `off`, with every other byte, encoding and line ending preserved — or a minimal sheet written when none exists. The plan lists that change with its owner (`hub-pstack-adapter`), purpose and restore behavior, and reports the target as compatible only after the reviewed plan is applied; planning alone modifies nothing. A target whose routing is already armed is converted by that same reviewed plan, and an undecodable sheet blocks instead of being rewritten. `remove` restores the exact prior sheet bytes or deletes the adapter-written sheet, keeps every Kit-owned file, and refuses automatic restore after later user edits. A standalone pstack install — no Kit rules in the target — keeps its existing routing mode untouched.
+
+`doctor` reports the states separately: Kit rules present, the model sheet and its `session hook` value, native plugin registration, the resulting `auto_routing` judgment, and hook trust as unknown, because only the host's `/hooks` review decides whether the hook runs.
+
 ```sh
 python scripts/azhou_hub.py integrations pstack plan --operation remove \
   --workspace "$PSTACK_WORKSPACE" --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
@@ -62,7 +78,7 @@ python scripts/azhou_hub.py integrations pstack apply --operation remove \
   --workspace "$PSTACK_WORKSPACE" --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
 ```
 
-Removal calls native plugin removal followed by marketplace removal, then checks both lists. It retains the frozen source and Hub receipt. A partial install records completed native steps; a new plan/apply resumes, or the remove operation cleans only that recorded native installation. Unrecognized cache additions block removal. The upstream Bun bootstrap may create `skills/poteto-mode/scripts/node_modules`; `doctor` reports it as outside source-file verification, and automatic removal refuses unrecorded dependency files instead of deleting them by assumption.
+Removal calls native plugin removal followed by marketplace removal, then checks both lists. It restores the adapter-owned coexistence sheet change when the receipt records one, as described above. It retains the frozen source and Hub receipt. A partial install records completed native steps; a new plan/apply resumes, or the remove operation cleans only that recorded native installation. Unrecognized cache additions block removal. The upstream Bun bootstrap may create `skills/poteto-mode/scripts/node_modules`; `doctor` reports it as outside source-file verification, and automatic removal refuses unrecorded dependency files instead of deleting them by assumption.
 
 ### Retiring an upstream installation
 
@@ -92,7 +108,7 @@ python scripts/azhou_hub.py integrations model-router verify \
 env CODEX_HOME="$ROUTER_HOME" "$CODEX_BIN" -C "$ROUTER_WORKSPACE"
 ```
 
-The source installer validates a staged configuration with the selected native binary before writing, merges its owned settings conservatively, and verifies effective configuration, the named-role tool schema, the instruction block and a unique enabled Skill. Failure rolls back. `verify` sends no model request. Run a bounded real delegation and inspect child session metadata separately.
+The source installer validates a staged configuration with the selected native binary before writing, merges its owned settings conservatively, and verifies effective configuration, the named-role tool schema, the instruction block and a unique enabled Skill. Failure rolls back. `verify` sends no model request. Run a bounded real delegation and inspect child session metadata separately. The installer refuses a target where pstack auto-routing is armed — native registration whose model sheet lacks the exact `session hook: off` line — using the same verdict both public entries share; see [Sharing one Codex home with the Agent Orchestration Kit](#sharing-one-codex-home-with-the-agent-orchestration-kit).
 
 Codex also discovers the real user's `~/.agents/skills`, even when its configuration home is isolated. Two `astra-orchestrator` Skills cause the source's uniqueness check to fail. Do not disable that check or delete the user's Skill. A pre-existing **byte-identical** selected Skill can be reused: set `ROUTER_SKILLS` to its existing root only after checking that `plan.changes` contains no user-level path. In this case the Skill is watched and reused read-only; it is not a new isolated Skill installation. The dated record states exactly which case was tested.
 
@@ -114,7 +130,7 @@ For exit, use the same targets with `uninstall-plan`, then `uninstall --plan-id 
 
 The existing [orchestrator composition rule](skill-standard.md) remains in force: one workflow owner per task, no orchestrator-to-orchestrator chain. Task-level ownership is a rules contract shipped by the installed artifacts themselves — the Kit's managed instruction block and `astra-orchestrator` Skill, and pstack's Codex mapping — so the rules load with each installation and never depend on this checkout at runtime. Selecting a pstack workflow never switches the active root session model, and user instructions, project rules, permissions, and concurrency limits apply on both paths.
 
-The two adapters reject known competing configuration in the same home, so that contract is exercised today through shared Skills and separate homes; a supported same-home coexistence installation is a separate deliverable from this task-level contract. A bounded native dispatch receipt for both paths on an isolated Codex home is in the [2026-10-26 dispatch record](../evidence/pstack-orchestrator-dispatch-2026-10-26.md). A separate home does not isolate every global Skill, so inspect native discovery and disable a competing Skill for the individual test invocation where needed. This is selection between workflows, not a new route adapter. No joint workflow is claimed and no combined benchmark is needed.
+One Codex home can now hold both packages through either public entry: compatibility is judged from actual registration and the model sheet's `session hook` line rather than mere presence, and both install orders converge on the same coexistence configuration with repeat installs changing nothing. That is a deterministic lifecycle result — plan disclosure, diagnosis, conversion and rollback, tested through the public entries with a fake native runtime; no real-host coexistence session, hook-trust approval or live routing observation is claimed. A bounded native dispatch receipt for both paths on an isolated Codex home is in the [2026-10-26 dispatch record](../evidence/pstack-orchestrator-dispatch-2026-10-26.md). No home layout isolates every global Skill, so inspect native discovery and disable a competing Skill for the individual test invocation where needed. This is selection between workflows, not a new route adapter. No joint workflow is claimed and no combined benchmark is needed.
 
 The native configuration and child-setting rules are distinct. For the tested client, root configuration resolves CLI overrides before trusted project configuration, selected profile, user configuration and lower-priority defaults. For a child, explicit spawn values resolve before agent defaults and parent values, **then the selected custom role file overrides the fields it sets**. A role's read-only prose does not create a separate sandbox. Source: [official config precedence](https://learn.chatgpt.com/docs/config-file/config-basic), [official custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [local Skill discovery](https://learn.chatgpt.com/docs/build-skills). Recheck with native `config/read`, rendered tool schema and runtime metadata when the client changes; model self-report is not evidence.
 

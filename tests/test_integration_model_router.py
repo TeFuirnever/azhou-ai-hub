@@ -2,11 +2,14 @@
 
 The fixed source's independent tests and on-device discovery validate its native
 installer; these tests exercise the Hub boundary and deliberately wrong inputs.
+The pstack compatibility verdict is the Kit's real shipped implementation, so
+Hub-boundary tests judge targets exactly as the Kit's direct entry does.
 """
 from __future__ import annotations
 
 import base64
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import shutil
@@ -18,6 +21,17 @@ from unittest.mock import patch
 from package_fixture import configure_package
 from scripts import integration_common as common
 from scripts import integration_model_router as adapter
+
+
+def _load_real_installer():
+    path = Path(__file__).resolve().parents[1] / "packages/agent-orchestration-kit/scripts/install_codex.py"
+    spec = importlib.util.spec_from_file_location("model_router_real_install_codex", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+REAL_INSTALLER = _load_real_installer()
 
 
 class FakeInstaller:
@@ -37,12 +51,25 @@ class FakeInstaller:
             raise RuntimeError("unsafe file")
         return path.read_bytes() if path.exists() else None
 
+    @staticmethod
+    def pstack_coexistence(codex_home, skills_dir=None):
+        return REAL_INSTALLER.pstack_coexistence(codex_home, skills_dir)
+
     @classmethod
     def build_plan(cls, source, home, skills):
         cls.verified_roots.append(source)
+        # A schema-1 ownership record like the real installer's, so coexistence
+        # diagnosis recognizes this target as a Kit installation.
+        manifest = {
+            "schema": 1,
+            "project": "agent-orchestration-kit",
+            "targets": {"agents/worker.toml": str(home / "agents/worker.toml"),
+                        "skill": str(skills / "astra-orchestrator/SKILL.md")},
+            "files": {"agents/worker.toml": "fixture", "skill": "fixture"},
+        }
         desired = {home / "config.toml": b'model = "test-root"\n',
                    home / "AGENTS.md": b"test instructions\n",
-                   home / "agent-orchestration-kit/state.json": b'{"owner":"native"}\n',
+                   home / "agent-orchestration-kit/state.json": json.dumps(manifest, sort_keys=True).encode() + b"\n",
                    home / "agents/worker.toml": b'model = "test-model"\n',
                    skills / "astra-orchestrator/SKILL.md": b"test skill\n"}
         watched = {p: cls.regular_bytes(p) for p in desired}
@@ -229,20 +256,29 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         self.assertFalse(self.home.exists())
         self.assertFalse(self.workspace.exists())
 
-    def test_pstack_registration_or_model_policy_blocks_router(self):
+    def test_armed_pstack_registration_blocks_but_sheet_or_skills_alone_do_not(self):
         config = self.put("config.toml", b'[plugins."pstack@pstack-claude"]\nenabled = true\n')
-        with self.assertRaisesRegex(common.IntegrationError, "cannot be chained"):
+        with self.assertRaisesRegex(common.IntegrationError, "auto-routing is armed"):
             self.plan()
         config.write_bytes(b'personal = true\n')
-        self.put("pstack-models.md", b"unreviewed model policy")
-        with self.assertRaisesRegex(common.IntegrationError, "pstack model policy"):
-            self.plan()
+        self.put("pstack-models.md", b"# sheet with no registration anywhere\n")
+        plan = self.plan()
+        self.assertEqual(plan["coexistence"]["auto_routing"], "not-armed")
+        self.assertTrue(plan["coexistence"]["compatible"])
+        self.put("skills/poteto-mode/SKILL.md", b"visible shared skill\n")
+        plan = self.plan()
+        self.assertTrue(plan["coexistence"]["shared_skills_visible"])
+        self.assertEqual(plan["coexistence"]["auto_routing"], "not-armed")
         self.assertFalse(self.workspace.exists())
 
-    def test_pstack_cached_plugin_blocks_even_without_config(self):
+    def test_pstack_cached_plugin_blocks_without_off_sheet_and_passes_with_it(self):
         self.put("plugins/cache/pstack/.codex-plugin/plugin.json", b'{"name":"pstack"}')
-        with self.assertRaisesRegex(common.IntegrationError, "pstack plugin"):
+        with self.assertRaisesRegex(common.IntegrationError, "auto-routing is armed"):
             self.plan()
+        self.put("pstack-models.md", b"# pstack model configuration\nsession hook: off\n")
+        plan = self.plan()
+        self.assertEqual(plan["coexistence"]["auto_routing"], "off")
+        self.assertIn("unknown", plan["coexistence"]["hook_trust"])
 
     def test_native_installs_snapshot_and_identical_repeat_preserves_files(self):
         first = self.install()

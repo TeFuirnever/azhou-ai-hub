@@ -360,5 +360,117 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(snapshot(self.base, True), before)
 
 
+class PstackCoexistenceTests(unittest.TestCase):
+    """The shipped compatibility verdict: registration plus the sheet's routing
+    switch decide; a sheet, visible Skills, or a cached copy alone proves nothing."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve()
+        self.home = self.base / "home"
+        self.skills = self.base / "skills"
+
+    def put(self, relative, data, mode=0o640):
+        path = self.home / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data.encode() if isinstance(data, str) else data)
+        path.chmod(mode)
+        return path
+
+    def put_plugin_copy(self, relative="plugins/cache/pstack-claude/pstack/0.9.103"):
+        return self.put(f"{relative}/.codex-plugin/plugin.json", '{"name": "pstack"}')
+
+    def put_sheet(self, body):
+        return self.put("pstack-models.md", body)
+
+    def test_sheet_hook_reading_mirrors_the_session_hook(self):
+        self.assertIsNone(installer.pstack_sheet_hook(None))
+        self.assertEqual(installer.pstack_sheet_hook(b"# c\nsession hook: off\n"), "off")
+        self.assertEqual(installer.pstack_sheet_hook(b"# c\nsession hook: on\n"), "on")
+        self.assertEqual(installer.pstack_sheet_hook(b"# c\n"), "on")
+        self.assertEqual(installer.pstack_sheet_hook(b"# c\nsession hook: off  \n"), "on")
+        self.assertEqual(installer.pstack_sheet_hook(b"\xef\xbb\xbf# c\r\nsession hook: off\r\n"), "off")
+        self.assertEqual(installer.pstack_sheet_hook("# c\nsession hook: off\n".encode("utf-16")), "off")
+        self.assertEqual(installer.pstack_sheet_hook(b"\xff\xfe\x01"), "on")
+        self.assertEqual(installer.pstack_sheet_hook(b"\x81\x82\x83"), "on")
+
+    def test_verdict_separates_every_evidence_stream(self):
+        self.assertIsNone(installer.pstack_coexistence(self.home)["shared_skills_visible"])
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertEqual(verdict["auto_routing"], "not-armed")
+        self.assertTrue(verdict["compatible"])
+        self.assertFalse(verdict["model_sheet_present"])
+        self.assertIsNone(verdict["session_hook"])
+        self.assertFalse(verdict["native_plugin_present"])
+        self.assertFalse(verdict["config_registration_present"])
+        self.assertFalse(verdict["shared_skills_visible"])
+        self.assertIn("unknown", verdict["hook_trust"])
+        # A sheet alone, even one saying on, is not routing evidence.
+        self.put_sheet("# sheet\nsession hook: on\n")
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertEqual(verdict["auto_routing"], "not-armed")
+        self.assertEqual(verdict["session_hook"], "on")
+        # Visible shared pstack Skills are reported, never treated as routing.
+        (self.skills / "poteto-mode").mkdir(parents=True)
+        (self.skills / "poteto-mode/SKILL.md").write_text("fixture", encoding="utf-8")
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertTrue(verdict["shared_skills_visible"])
+        self.assertEqual(verdict["auto_routing"], "not-armed")
+        # Registration arms routing until the sheet switches it off.
+        self.put_plugin_copy()
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertEqual(verdict["auto_routing"], "on")
+        self.assertFalse(verdict["compatible"])
+        self.assertIn("session hook: off", verdict["reason"])
+        self.put_sheet("# sheet\nsession hook: off\n")
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertEqual(verdict["auto_routing"], "off")
+        self.assertTrue(verdict["compatible"])
+
+    def test_config_registration_arms_and_off_sheet_disarms(self):
+        self.put("config.toml", '[plugins."pstack@pstack-claude"]\nenabled = true\n')
+        verdict = installer.pstack_coexistence(self.home)
+        self.assertTrue(verdict["config_registration_present"])
+        self.assertEqual(verdict["auto_routing"], "on")
+        self.assertFalse(verdict["compatible"])
+        self.put_sheet("session hook: off\n")
+        verdict = installer.pstack_coexistence(self.home)
+        self.assertEqual(verdict["auto_routing"], "off")
+
+    def test_duplicate_copies_and_symlinked_state_are_errors(self):
+        self.put_plugin_copy("plugins/cache/one")
+        self.put_plugin_copy("plugins/cache/two")
+        with self.assertRaisesRegex(installer.InstallError, "Duplicate pstack plugin copies"):
+            installer.pstack_coexistence(self.home)
+        shutil.rmtree(self.home / "plugins")
+        outside = self.base / "outside-plugins"
+        outside.mkdir()
+        (outside / "marker").write_text("x", encoding="utf-8")
+        (self.home / "plugins").symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(installer.InstallError, "[Ss]ymbolic link"):
+            installer.pstack_coexistence(self.home)
+
+    def test_armed_target_blocks_the_install_before_any_write(self):
+        self.put_plugin_copy()
+        before = snapshot(self.base)
+        with self.assertRaisesRegex(installer.InstallError, "session hook: off"):
+            installer.build_plan(ROOT, self.home, self.skills)
+        self.assertEqual(snapshot(self.base), before)
+
+    def test_installed_kit_replans_as_exact_noop_beside_compatible_pstack(self):
+        plan = installer.build_plan(ROOT, self.home, self.skills)
+        installer.apply_plan(plan)
+        self.put_plugin_copy()
+        self.put_sheet("session hook: off\n")
+        before = snapshot(self.base, timestamps=True)
+        plan = installer.build_plan(ROOT, self.home, self.skills)
+        self.assertEqual(plan["changes"], {})
+        self.assertEqual(plan["pstack_coexistence"]["auto_routing"], "off")
+        self.assertEqual(installer.apply_plan(plan), 0)
+        self.assertEqual(snapshot(self.base, timestamps=True), before)
+        self.assertEqual((self.home / "pstack-models.md").read_text(), "session hook: off\n")
+
+
 if __name__ == "__main__":
     unittest.main()
