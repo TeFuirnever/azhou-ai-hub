@@ -25,4 +25,4 @@ Both runs returned the correct bounded answers (sum 10; total 10 with three acti
 
 ## Boundary
 
-This receipt demonstrates the two dispatch paths' metadata behavior under the shipped rules in one isolated home. It does not claim: same-home coexistence installation support (adapters still reject known competing configuration), automatic SessionStart routing, hook trust, cross-harness equivalence, model quality or cost, or any MiMo Code / Claude Code / zcode capability.
+This receipt demonstrates the two dispatch paths' metadata behavior under the shipped rules in one isolated home. The task-boundary rules themselves — a same-goal follow-up keeping the owner, the task end returning to host defaults, and a mid-task switch draining in-flight children — are enforced as pinned rule text with repository tests, not as live-session transitions; no run in this receipt drove those three transitions. It does not claim: same-home coexistence installation support (adapters still reject known competing configuration), automatic SessionStart routing, hook trust, cross-harness equivalence, model quality or cost, or any MiMo Code / Claude Code / zcode capability.
