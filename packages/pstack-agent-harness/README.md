@@ -19,7 +19,7 @@ export PSTACK_PACKAGE="/absolute/path/to/azhou-ai-hub/packages/pstack-agent-harn
 test -f "$PSTACK_PACKAGE/hub-package.json"
 ```
 
-This Hub package is the source for every install below. Hub-managed Codex installation uses the [Hub integration commands](../../docs/integrations.md#pstack-local-source-to-native-plugin), which target a dedicated `CODEX_HOME` and preserve any existing default configuration, including Agent Orchestration Kit. This is the only Hub-managed runtime installation path for pstack.
+This Hub package is the source for every install below. Hub-managed Codex installation uses the [Hub integration commands](../../docs/integrations.md#pstack-local-source-to-native-plugin), which target a dedicated `CODEX_HOME` and preserve any existing default configuration, including Agent Orchestration Kit. This is the only Hub-managed runtime installation path for pstack. A Hub-managed target can also share one Codex home with the Agent Orchestration Kit: the install plan switches this plugin's SessionStart auto-routing off through the model sheet's `session hook: off` line while the on-demand Skills stay installed, and the Hub records the whole coexistence loop natively ([native acceptance record](../../evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)). The upstream commands below describe the original port's other installation routes and do not select Hub-local changes.
 
 <details>
 <summary><strong>Claude Code</strong></summary>

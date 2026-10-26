@@ -32,7 +32,9 @@ Requirements: Python 3.11 or newer, and a Codex runtime supporting standalone na
 
 The scripts resolve profiles and helper files relative to their own package directory, so they can also be invoked by path from another working directory. The workflow guides below show `./setup.sh` commands from `packages/agent-orchestration-kit`.
 
-`CODEX_HOME` is respected; otherwise the config directory is `~/.codex`. The personal Skill directory defaults to `~/.agents/skills`, independently of `CODEX_HOME`. Explicit `--codex-home` and `--skills-dir` are available for controlled targets. An alternate Skill location must be discoverable by the selected Codex runtime for native verification to pass. Paths are resolved at execution; profile templates contain no personal username.
+`CODEX_HOME` is respected; otherwise the config directory is `~/.codex`. The personal Skill directory defaults to `~/.agents/skills`, independently of `CODEX_HOME`. Explicit `--codex-home` and `--skills-dir` are available for controlled targets. An alternate Skill location must be discoverable by the selected Codex runtime for native verification to pass; this entry verifies discovery from its own package directory, so isolated workspace Skill roots belong to the Hub entry described in the Hub [integration runbook](../../docs/integrations.md). Paths are resolved at execution; profile templates contain no personal username.
+
+A target that natively registers the pstack plugin is installable only when its model sheet carries the exact `session hook: off` line — the same verdict both public entries share; an armed target is refused with that reason until it is converted through a reviewed plan. One Codex home can hold both packages with pstack's SessionStart auto-routing off and its Skills available per task; the whole loop (both install orders, repeats, conversion, both removal orders) is recorded natively on the acceptance client in the Hub's [native acceptance record](../../evidence/pstack-orchestrator-native-acceptance-2026-10-26.md).
 
 ## What installation owns
 
