@@ -294,19 +294,30 @@ def check_router_generated_index(root: Path) -> list[str]:
     return []
 SUPPORT_MATRIX_RELATIVE = "docs/support-matrix.md"
 SKILL_PLATFORM_VIEW_RELATIVE = "docs/skill-platform-view.md"
+SUPPORT_MATRIX_MAIN_HEADER = (
+    "Capability",
+    "Codex",
+    "Claude Code",
+    "MiMo Code",
+    "zcode",
+    "Other harnesses (unsupported)",
+)
 SUPPORT_MATRIX_OS_HEADING = "## Operating system support"
 PLATFORM_VIEW_MAIN_HEADER = (
     "Skill",
     "Codex",
     "Claude Code",
+    "MiMo Code",
     "zcode",
-    "Other compatible harnesses",
+    "Other harnesses (unsupported)",
     "Linux",
     "macOS",
     "Windows",
 )
 PLATFORM_VIEW_MAP_HEADER = ("Skill", "Governing support-matrix rows")
-PLATFORM_VIEW_STATUS_VOCABULARY = frozenset({"supported", "host-dependent", "not claimed"})
+PLATFORM_VIEW_STATUS_VOCABULARY = frozenset(
+    {"supported", "host-dependent", "not claimed", "unsupported"}
+)
 PLATFORM_VIEW_FRAGMENT_SEPARATOR = "<br>"
 PLATFORM_VIEW_SHARED_OS_ROWS = (
     "Repository gate scripts/verify.py",
@@ -363,10 +374,20 @@ def check_skill_platform_view(root: Path) -> list[str]:
     heading_index = matrix_text.find(SUPPORT_MATRIX_OS_HEADING)
     if heading_index < 0:
         return [f"support matrix OS section missing: {SUPPORT_MATRIX_OS_HEADING}"]
-    capability_rows = _markdown_table_rows(matrix_text[:heading_index])
+    capability_end = matrix_text.find("## Optional integrations")
+    if capability_end < 0 or capability_end > heading_index:
+        return ["support matrix optional integrations section missing or misplaced"]
+    capability_rows = _markdown_table_rows(matrix_text[:capability_end])
     os_rows = _markdown_table_rows(matrix_text[heading_index:])
     if len(capability_rows) < 2 or len(os_rows) < 2:
         return ["support matrix tables are missing expected data rows"]
+    if tuple(capability_rows[0]) != SUPPORT_MATRIX_MAIN_HEADER:
+        errors.append(f"support matrix header invalid: {capability_rows[0]}")
+    for row in capability_rows[1:]:
+        if len(row) != len(SUPPORT_MATRIX_MAIN_HEADER):
+            errors.append(f"support matrix row width invalid: {row[0] if row else '<empty>'}")
+        elif row[-1] != "unsupported":
+            errors.append(f"unsupported harness claim in support matrix: {row[0]}")
     capability_by_title = {
         _normalize_claim(row[0]): _normalize_claim(" | ".join(row))
         for row in capability_rows[1:]
@@ -421,6 +442,9 @@ def check_skill_platform_view(root: Path) -> list[str]:
         errors.append(f"skill platform view row missing: {name}")
     for name in sorted(set(view_rows) - canonical_skills):
         errors.append(f"skill platform view row unexpected: {name}")
+    for name, cells in view_rows.items():
+        if len(cells) == len(PLATFORM_VIEW_MAIN_HEADER) and cells[5] != "unsupported":
+            errors.append(f"unsupported harness claim in skill platform view: {name}")
 
     map_rows: dict[str, list[str]] = {}
     for cells in map_table[1:]:

@@ -1,6 +1,6 @@
 # Agent Orchestration Kit
 
-A small, local kit for role responsibilities, focused handoffs, and evidence-based verification. **The only implemented integration is Codex.** ZCode and Claude Code are future targets; MiniCode's identity is unconfirmed.
+A small, local kit for role responsibilities, focused handoffs, and evidence-based verification. **The only implemented integration is Codex.** ZCode, Claude Code and MiMo Code (`mimo`) are maintained Hub Skill targets, but this kit has no native role installer for them. The user's later MiMo Code clarification resolves the “MiniCode” name left unidentified in the 2026-10-25 guide.
 
 This package is a personalized continuation of [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator). Its [Apache 2.0 license](LICENSE) and upstream attribution are retained. The new name does not imply a published package or an upstream rename. See [UPSTREAM.md](UPSTREAM.md) for the imported source revision and update procedure.
 

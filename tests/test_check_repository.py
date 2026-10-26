@@ -61,6 +61,39 @@ class SkillPlatformViewTest(unittest.TestCase):
     def test_view_is_derived_from_the_support_matrix(self) -> None:
         self.assertEqual([], check_skill_platform_view(ROOT))
 
+    def test_support_set_header_drift_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_fixture(root, self.real_view())
+            matrix = root / "docs" / "support-matrix.md"
+            original = matrix.read_text(encoding="utf-8")
+            mutated = original.replace(
+                "| Codex | Claude Code | MiMo Code | zcode | Other harnesses (unsupported) |",
+                "| Codex | Claude Code | Kimi Code | zcode | Other harnesses (unsupported) |",
+                1,
+            )
+            self.assertNotEqual(original, mutated)
+            matrix.write_text(mutated, encoding="utf-8")
+            self.assertTrue(
+                any("support matrix header invalid" in error for error in check_skill_platform_view(root))
+            )
+
+    def test_unsupported_harness_claim_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = self.real_view().splitlines()
+            for index, row in enumerate(rows):
+                if row.startswith("| super-ask-azhou |"):
+                    rows[index] = row.replace(" | unsupported | ", " | supported | ", 1)
+                    break
+            view = "\n".join(rows) + "\n"
+            self.assertNotEqual(self.real_view(), view)
+            self.write_fixture(root, view)
+            self.assertIn(
+                "unsupported harness claim in skill platform view: super-ask-azhou",
+                check_skill_platform_view(root),
+            )
+
     def write_fixture(self, root: Path, view_text: str) -> None:
         docs = root / "docs"
         docs.mkdir(parents=True)
@@ -129,12 +162,12 @@ class SkillPlatformViewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             mutated = self.real_view().replace(
-                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | host-dependent",
-                "(evidence/retired-skill-fragment-2026-01-01.md) | host-dependent",
+                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | unsupported",
+                "(evidence/retired-skill-fragment-2026-01-01.md) | unsupported",
                 1,
             )
             self.assertNotIn(
-                "retired-skill-fragment-2026-01-01.md) | host-dependent",
+                "retired-skill-fragment-2026-01-01.md) | unsupported",
                 self.real_view(),
             )
             self.write_fixture(root, mutated)

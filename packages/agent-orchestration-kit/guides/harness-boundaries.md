@@ -2,6 +2,8 @@
 
 Evidence checked on 2026-10-25 (Asia/Shanghai). Product identity and a documented native delegation mechanism are prerequisites for any future adapter; Skill, Markdown, or MCP support alone is insufficient.
 
+2026-10-26 scope update: the user identified the previously unresolved “MiniCode” name as MiMo Code (`mimo`) and selected it as a maintained Hub Skill target. That does not add a native Agent Orchestration Kit adapter. The row below remains a dated record of what was known on 2026-10-25.
+
 ## Current support
 
 | Harness | Identity / version evidence | Status in this kit |
