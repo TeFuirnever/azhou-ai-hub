@@ -24,6 +24,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 - Interactive skills use one restrained Azhou anchor per material stage and a stable receipt. Emoji stays out of schema keys, enums, digests, paths, commands, tests, and raw evidence.
 - Historical runs may create isolated regression candidates. Observers and hooks never mutate live skills; promotion requires deterministic gates, paired majority, no safety regression, and exact-diff human approval.
 - Adapted or vendored material requires an immutable source, license, retained notice, local boundary and reproducible update path. Public code without a license is not reusable source.
+- Long-range plans and ticket drafts live under `.planning/`, which is git-ignored and therefore absent from Treehouse worktrees; read them from the maintainer checkout by absolute path whenever a task references them.
 
 ## Git and GitHub
 
