@@ -129,10 +129,14 @@ def _receipt(path: Path, codex_home: Path, skills_dir: Path, installer) -> dict 
     return receipt
 
 
-def _difference(name: str, expected: dict, current: dict) -> str:
+def _mode_text(mode: int | None) -> str:
+    return f"{mode:o}" if mode is not None else "absent"
+
+
+def _difference(expected: dict, current: dict) -> str:
     """Render one owned target's recorded-versus-observed difference."""
     return (f"(recorded sha256 {expected['sha256']}, found sha256 {current['sha256']}, "
-            f"mode {expected['mode']:o} found {current['mode']:o})")
+            f"mode {_mode_text(expected['mode'])} found {_mode_text(current['mode'])})")
 
 
 def _assert_unchanged(receipt: dict, installer) -> None:
@@ -140,14 +144,14 @@ def _assert_unchanged(receipt: dict, installer) -> None:
         current = _fingerprint(Path(name), installer)
         if current != expected:
             raise common.IntegrationError(
-                f"installed target changed; refusing automatic restore or overwrite: {name} " + _difference(name, expected, current))
+                f"installed target changed; refusing automatic restore or overwrite: {name} " + _difference(expected, current))
 
 
 def _assert_recoverable(receipt: dict, installer) -> None:
     for name, after in receipt["after"].items():
         current = _fingerprint(Path(name), installer)
         if current not in (receipt["before"][name], after):
-            raise common.IntegrationError(f"concurrent edit prevents recovery: {name} " + _difference(name, after, current))
+            raise common.IntegrationError(f"concurrent edit prevents recovery: {name} " + _difference(after, current))
 
 
 def make_plan(source: Path, workspace: Path, codex_home: Path, skills_dir: Path,

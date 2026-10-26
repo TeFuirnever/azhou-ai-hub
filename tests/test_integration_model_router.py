@@ -321,6 +321,14 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(common.IntegrationError, "changed"):
             adapter.uninstall_plan(*self.targets, hub_root=self.hub)
 
+    def test_deleted_target_blocks_uninstall_with_readable_difference(self):
+        self.install()
+        (self.home / "config.toml").unlink()
+        before = self.disk()
+        with self.assertRaisesRegex(common.IntegrationError, r"mode \d+ found absent"):
+            adapter.uninstall_plan(*self.targets, hub_root=self.hub)
+        self.assertEqual(before, self.disk())
+
     def test_preexisting_unowned_restore_directory_is_preserved(self):
         result = self.install()
         receipt_path = Path(result["receipt"])
