@@ -7,6 +7,11 @@ change the configuration used by an already-running desktop app.
 For a target shared with the Agent Orchestration Kit, the adapter owns one
 narrow change: the model sheet's ``session hook: off`` line that keeps pstack
 SessionStart auto-routing off while the plugin's on-demand Skills stay installed.
+
+``transition-plan`` reviews an existing installation read-only — the reachable
+Kit-plus-shared-Skills, compatible-native, armed and locally-modified states —
+and names the actual source, content differences, owners and recovery basis of
+each transition, without adopting unknown installations.
 """
 from __future__ import annotations
 
@@ -32,10 +37,13 @@ MARKETPLACE = "pstack-claude"
 PLUGIN = "pstack@pstack-claude"
 PLUGIN_ROOT = "plugins/pstack/"
 RECEIPT_SCHEMA = "azhou-hub.pstack-install.v1"
+TRANSITION_SCHEMA = "azhou-hub.pstack-transition.v1"
 SHEET_NAME = "pstack-models.md"
 HOOK_OFF = "session hook: off"
 HOOK_LINE_PREFIX = "session hook:"
 SHEET_HEADER = "# pstack model configuration"
+SHARED_SKILL_PREFIX = PLUGIN_ROOT + "skills/"
+DEPENDENCY_DIR = "skills/poteto-mode/scripts/node_modules"
 KIT_STATE_FILE = "agent-orchestration-kit/state.json"
 KIT_INSTRUCTION_BEGIN = "ASTRA-LUNA-ORCHESTRATOR:BEGIN"
 HOOK_TRUST_UNKNOWN = "unknown; only the host's /hooks review decides whether the hook runs"
@@ -135,6 +143,21 @@ def _sheet_conversion(raw: bytes | None, home: Path) -> tuple[str, bytes] | None
     return None if encoded == raw else ("set-line", encoded)
 
 
+def _sheet_rows(raw: bytes | None) -> list[str] | None:
+    """The sheet's user lines — model rows, host mappings, default effort —
+    that a conversion must preserve. ``None`` means the sheet is undecodable."""
+    if raw is None:
+        return []
+    text = _sheet_text(raw)
+    if text is None:
+        return None
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    lines = [line[:-1] if line.endswith("\r") else line for line in text.split("\n")]
+    return [line for line in lines if line.strip() and not line.startswith("#")
+            and not line.startswith(HOOK_LINE_PREFIX)]
+
+
 def _kit_presence(home: Path) -> dict:
     """Kit rules are installed only with a valid ownership record.
 
@@ -187,6 +210,18 @@ def _kit_presence(home: Path) -> dict:
         raise common.IntegrationError(
             "an astra-orchestrator Skill exists in this target without a Kit ownership record; its source is unknown")
     return {"present": False, "owned_files": set()}
+
+
+def _kit_record(home: Path) -> dict:
+    """Identifying facts of the already-validated Kit ownership record."""
+    try:
+        manifest = json.loads((home / KIT_STATE_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"detail": "the validated ownership record could not be re-read for this report"}
+    return {"record": str(home / KIT_STATE_FILE), "profile": manifest.get("profile"),
+            "source_digest": manifest.get("source_digest"),
+            "adopted_existing": manifest.get("adopted_existing", []),
+            "owned_target_count": len(manifest.get("targets", {}))}
 
 
 def _inventory(home: Path) -> dict:
@@ -557,6 +592,429 @@ def doctor(*, workspace: Path, codex_home: Path, codex_bin: Path, hub_root: Path
                                 "behavior_passed": "requires a real session", "hook_trusted": "requires /hooks review"}}
 
 
+def _plugin_copies(home: Path) -> tuple[list[Path], list[str]]:
+    """Locate pstack plugin copies without adopting or trusting them."""
+    plugins = home / "plugins"
+    if plugins.is_symlink():
+        raise common.IntegrationError(
+            "the plugins directory is a symlink; pstack state cannot be reported: " + str(plugins))
+    roots: list[Path] = []
+    anomalies: list[str] = []
+    if not plugins.exists():
+        return roots, anomalies
+    for manifest in sorted(plugins.rglob(".codex-plugin/plugin.json")):
+        name = manifest.relative_to(home).as_posix()
+        if manifest.is_symlink():
+            anomalies.append("symlinked plugin manifest: " + name)
+            continue
+        try:
+            metadata = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            anomalies.append("unreadable plugin manifest: " + name)
+            continue
+        if metadata.get("name") == "pstack":
+            roots.append(manifest.parent.parent)
+    return roots, anomalies
+
+
+def _content_differences(root: Path, lock: dict) -> dict:
+    """Classify one installed plugin copy against the pinned package, read-only."""
+    expected = {name[len(PLUGIN_ROOT):]: item for name, item in lock["files"].items()
+                if name.startswith(PLUGIN_ROOT)}
+    identical: list[str] = []
+    modified: list[str] = []
+    unexpected: list[str] = []
+    symlinks: list[str] = []
+    seen: set[str] = set()
+    for path in sorted(root.rglob("*")):
+        name = path.relative_to(root).as_posix()
+        if name == DEPENDENCY_DIR or name.startswith(DEPENDENCY_DIR + "/"):
+            continue
+        if path.is_symlink():
+            symlinks.append(name)
+            continue
+        if path.is_dir():
+            continue
+        item = expected.get(name)
+        if item is None or not path.is_file():
+            unexpected.append(name)
+            continue
+        if _digest(path) != item["sha256"] or bool(path.stat().st_mode & 0o111) != item["executable"]:
+            modified.append(name)
+        else:
+            identical.append(name)
+        seen.add(name)
+    missing = sorted(set(expected) - seen)
+    return {"compared_root": str(root), "identical": len(identical),
+            "modified": modified[:8], "modified_count": len(modified),
+            "missing": missing[:8], "missing_count": len(missing),
+            "unexpected": unexpected[:8], "unexpected_count": len(unexpected),
+            "symlinks": symlinks[:8], "symlink_count": len(symlinks),
+            "basis": "identical content is a comparison result, never a takeover basis",
+            "dependency_runtime": DEPENDENCY_DIR + " is excluded; it is upstream bootstrap output outside source verification"}
+
+
+def _shared_skills_report(shared: Path, lock: dict) -> dict:
+    """Compare the shared Skills root against the pinned package, read-only.
+
+    Shared installs may be plain directories or the symlinks upstream's shared
+    installation creates; the report names the actual shape and compares the
+    content behind it, so local modifications stay visible either way."""
+    names = sorted({name[len(SHARED_SKILL_PREFIX):].split("/", 1)[0]
+                    for name in lock["files"] if name.startswith(SHARED_SKILL_PREFIX)})
+    skills: dict[str, dict] = {}
+    for skill in names:
+        prefix = SHARED_SKILL_PREFIX + skill + "/"
+        expected = {name[len(prefix):]: item["sha256"] for name, item in lock["files"].items()
+                    if name.startswith(prefix)}
+        target = shared / skill
+        entry: dict = {}
+        root = target
+        if target.is_symlink():
+            entry["kind"] = "symlink"
+            entry["target"] = os.readlink(target)
+            root = target.resolve()
+        else:
+            entry["kind"] = "directory"
+        if not root.exists():
+            entry["status"] = "broken" if target.is_symlink() else "absent"
+            skills[skill] = entry
+            continue
+        modified: list[str] = []
+        extra: list[str] = []
+        identical = 0
+        seen: set[str] = set()
+        try:
+            for path in sorted(root.rglob("*")):
+                name = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    extra.append(name + " (symlink)")
+                    continue
+                if path.is_dir():
+                    continue
+                digest = expected.get(name)
+                if digest is None or not path.is_file():
+                    extra.append(name)
+                elif _digest(path) != digest:
+                    modified.append(name)
+                else:
+                    identical += 1
+                seen.add(name)
+        except OSError as exc:
+            entry["error"] = f"unreadable through the shared Skills path: {exc}"
+            skills[skill] = entry
+            continue
+        missing = sorted(set(expected) - seen)
+        entry.update(identical=identical,
+                     modified=modified[:8], modified_count=len(modified),
+                     missing=missing[:8], missing_count=len(missing),
+                     extra=extra[:8], extra_count=len(extra))
+        skills[skill] = entry
+    return {"root": str(shared), "compared_against": "the pinned package skills",
+            "skills": skills,
+            "write_policy": "no Hub entry writes this directory; differences are preserved, never overwritten"}
+
+
+def _registry_sources(marketplaces: dict, plugins: dict) -> dict:
+    rows = marketplaces.get("marketplaces") if isinstance(marketplaces, dict) else None
+    selected = [row for row in (rows or []) if isinstance(row, dict) and row.get("name") == MARKETPLACE]
+    installed_rows = plugins.get("installed") if isinstance(plugins, dict) else None
+    pstack_rows = [row for row in (installed_rows or [])
+                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == "pstack")]
+    return {"marketplaces": selected, "installed_plugins": pstack_rows}
+
+
+def _shared_verdict(home: Path, shared: Path | None, hub_root: Path) -> dict:
+    """The one compatibility verdict both public entries share, loaded from the
+    Kit's hash-verified shipped implementation so this report cannot drift
+    from what the install entries would actually decide."""
+    try:
+        from . import integration_model_router as router
+    except ImportError:
+        import integration_model_router as router
+    installer = router._module(common.package_root("model-router", hub_root=hub_root),
+                               "install_codex.py", hub_root=hub_root)
+    try:
+        return installer.pstack_coexistence(home, shared)
+    except common.IntegrationError:
+        raise
+    except Exception as exc:
+        raise common.IntegrationError(f"pstack compatibility could not be established: {exc}") from exc
+
+
+def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
+               skills_dir: Path | None = None, hub_root: Path = ROOT) -> dict:
+    """Review how an existing installation enters the compatible state; read-only.
+
+    Covers the reachable existing-install states — a Kit beside shared pstack
+    Skills, a compatible native pstack, an armed one, and locally modified
+    shared Skills — and names for each the actual source, the content
+    differences against the pinned package, the target change (if any), its
+    owner and its recovery basis. Unknown installations are never adopted: a
+    matching name or byte-identical content is not a takeover basis, and no
+    restore is claimed for history no receipt records. An applicable
+    conversion is the reviewed coexistence plan of this same entry; applying
+    it re-verifies the bound source and target and stops on drift.
+    """
+    workspace, home = _directory(workspace), _directory(codex_home)
+    shared = _directory(skills_dir) if skills_dir is not None else None
+    binary = Path(codex_bin).expanduser()
+    if not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK):
+        raise common.IntegrationError("--codex-bin must name an executable absolute Codex binary")
+    binary = binary.resolve()
+    if (home == workspace or home in workspace.parents
+            or workspace in home.parents and ".azhou" not in home.relative_to(workspace).parts
+            or home in _receipt_path(workspace, home).parents):
+        raise common.IntegrationError("use a dedicated Codex home, not the workspace or its project files")
+    origin = common.inspect_source(COMPONENT, None, hub_root=hub_root)
+    lock = common.load_lock(COMPONENT, hub_root=hub_root)
+
+    receipt_file = _receipt_path(workspace, home)
+    receipt, receipt_error = None, None
+    if receipt_file.exists() or receipt_file.is_symlink():
+        try:
+            candidate = common.read_receipt(receipt_file)
+            if candidate.get("schema") != RECEIPT_SCHEMA or candidate.get("codex_home") != str(home):
+                receipt_error = "the pstack ownership receipt does not match this target"
+            else:
+                receipt = candidate
+        except common.IntegrationError as exc:
+            receipt_error = str(exc)
+
+    kit: dict = {"present": False}
+    try:
+        presence = _kit_presence(home)
+        kit = ({"present": True, "ownership_record": _kit_record(home),
+                "owned_files": sorted(presence["owned_files"])} if presence["present"] else {"present": False})
+    except common.IntegrationError as exc:
+        kit = {"present": None, "error": str(exc)}
+
+    sheet: dict = {"present": False}
+    raw_sheet: bytes | None = None
+    hook: str | None = None
+    try:
+        raw_sheet = _sheet_bytes(home)
+    except common.IntegrationError as exc:
+        sheet = {"present": None, "error": str(exc)}
+    else:
+        hook = _sheet_hook(raw_sheet)
+        rows = _sheet_rows(raw_sheet)
+        sheet = {"present": raw_sheet is not None, "session_hook": hook, "decodable": rows is not None}
+        if rows is None:
+            sheet["error"] = ("the sheet cannot be decoded, so no reviewed conversion is possible until it is "
+                              "inspected: " + str(_sheet_path(home)))
+        else:
+            sheet["preserved_user_rows"] = rows
+
+    copies, anomalies = _plugin_copies(home)
+    config_registered = False
+    config = home / "config.toml"
+    if config.is_file():
+        try:
+            config_registered = any(word in config.read_text(encoding="utf-8") for word in [MARKETPLACE, "pstack@"])
+        except (OSError, ValueError) as exc:
+            anomalies.append("config.toml could not be read: " + str(exc))
+
+    try:
+        registry = _registry_sources(_native(binary, home, ["marketplace", "list"]),
+                                     _native(binary, home, ["list"]))
+        registry["scope"] = "native registry evidence only; it does not prove hook trust or invocation"
+    except common.IntegrationError as exc:
+        registry = {"error": str(exc),
+                    "scope": "native registry evidence only; it does not prove hook trust or invocation"}
+
+    installed_report = _content_differences(copies[0], lock) if len(copies) == 1 else None
+    shared_report = _shared_skills_report(shared, lock) if shared is not None else None
+
+    try:
+        verdict = _shared_verdict(home, shared, hub_root)
+    except common.IntegrationError as exc:
+        verdict = {"compatible": None, "error": str(exc)}
+
+    registration = ("none" if not copies and not config_registered
+                    else "conflict" if len(copies) > 1 or anomalies
+                    else "single" if len(copies) == 1
+                    else "config-only")
+    shared_visible = bool(shared_report
+                          and any(row.get("status") not in ("absent", "broken")
+                                  for row in shared_report["skills"].values()))
+    shared_drift = bool(shared_report and any(
+        row.get("modified_count") or row.get("missing_count") or row.get("extra_count")
+        for row in shared_report["skills"].values()))
+
+    states: list[str] = []
+    if registration == "none" and shared_visible:
+        states.append("kit-with-shared-pstack-skills" if kit.get("present") else "shared-pstack-skills-only")
+    if registration in ("single", "config-only"):
+        states.append("compatible-native-pstack" if hook == "off" else "armed-pstack")
+    if shared_drift:
+        states.append("locally-modified-shared-skills")
+    if registration == "conflict":
+        states.append("registration-conflict")
+    if not states:
+        states.append("no-pstack-installation")
+
+    foreign_steps = [
+        "keep the existing installation and switch routing off with its own tool: run /setup-pstack in a session "
+        "on this home and answer the session-hook question with 'off' — afterwards both public entries judge this "
+        "target compatible and the Hub owns nothing here",
+        "or move the installation under Hub management: remove it through the entry that installed it (codex plugin "
+        "remove " + PLUGIN + ", then codex plugin marketplace remove " + MARKETPLACE + ", with CODEX_HOME set to this "
+        "home), then run this entry's coexistence install, which registers the pinned snapshot and converts the "
+        "sheet in one reviewed plan",
+    ]
+    foreign_recovery = ("no Hub receipt exists for this installation, so no byte-exact Hub restore is claimed for "
+                        "it; the recorded native registry source is the reinstall basis; this report changed nothing")
+
+    routing: dict = {"goal": "let this Codex home share the Kit's host defaults with an on-demand pstack workflow",
+                     "compatibility": (verdict.get("error") if verdict.get("compatible") is None
+                                       else verdict.get("reason"))}
+    if registration == "conflict":
+        routing.update(status="blocked",
+                       reason=(verdict.get("error")
+                               or "duplicate or anomalous pstack plugin state: " + "; ".join(anomalies)),
+                       anomalies=anomalies,
+                       recovery="nothing was changed; resolve the conflicting state through the lifecycle that created it")
+    elif registration == "none":
+        routing.update(status="not-required",
+                       reason=("no native pstack registration exists here; a model sheet, visible shared Skills or "
+                               "a cached copy alone never routes tasks"),
+                       shared_skills_note=("shared Skills stay available for explicit per-task selection; a native "
+                                           "plugin is optional and never required for compatibility"
+                                           if shared_visible else None))
+    elif sheet.get("present") is None and "error" in sheet:
+        routing.update(status="blocked", reason=sheet["error"],
+                       recovery="nothing was changed; inspect the sheet, then run transition-plan again")
+    elif hook == "off":
+        routing.update(status="not-required",
+                       reason="the sheet's exact '" + HOOK_OFF + "' line keeps SessionStart auto-routing off")
+    elif receipt is not None:
+        try:
+            embedded = make_plan(source=None, workspace=workspace, codex_home=home, codex_bin=binary,
+                                 operation="install", coexistence=True, hub_root=hub_root)
+        except common.IntegrationError as exc:
+            routing.update(status="blocked", reason=str(exc),
+                           steps=["resolve the reported blocker through this entry, then run transition-plan again"],
+                           recovery="the interrupted operation keeps its receipt; a fresh plan resumes it, or "
+                                    "'plan --operation remove' exits it")
+        else:
+            routing.update(
+                status="applicable", plan_id=embedded["plan_id"], owner="hub-pstack-adapter",
+                sheet_change=(embedded["coexistence"] or {}).get("sheet_change"),
+                preserved=("every byte outside the 'session hook' line — all model rows, host mappings, the default "
+                           "effort line, the encoding and the line endings — keeps its exact value"),
+                apply={"entry": "python scripts/azhou_hub.py integrations pstack apply --coexistence",
+                       "plan_id": embedded["plan_id"],
+                       "recheck": "apply re-runs the plan against the bound source and target and stops on any drift"},
+                recovery=("the exact prior sheet bytes (or the sheet's absence) reach the receipt before the sheet "
+                          "changes; 'plan --operation remove' restores them; later user edits stop automatic restore "
+                          "with the recorded and observed digests"))
+    else:
+        installed_rows = registry.get("installed_plugins") or []
+        actual = "no native registry record was found for it; its source is unknown"
+        if installed_rows:
+            actual = json.dumps(installed_rows[0].get("marketplaceSource")
+                                or installed_rows[0].get("source"), sort_keys=True)
+        routing.update(status="blocked",
+                       reason=("the armed native pstack installation has no Hub ownership receipt; the Hub neither "
+                               "adopts installations by name or byte-identical content nor writes around an "
+                               "unowned installation"),
+                       actual_source=actual, steps=foreign_steps, recovery=foreign_recovery)
+    transitions = [routing]
+
+    if registration in ("single", "config-only"):
+        ownership: dict
+        if receipt is not None and receipt.get("state") == "installed":
+            ownership = {"goal": "keep the native installation under one named owner",
+                         "status": "owned",
+                         "owner": "hub-pstack-adapter receipt and the native Codex plugin manager",
+                         "source": {"snapshot": receipt.get("snapshot"),
+                                    "source_lock_sha256": receipt.get("source_lock_sha256")},
+                         "pinned_source_changed": receipt.get("source_lock_sha256") != origin["source_lock_sha256"],
+                         "next": "doctor verifies installed files and registration; 'plan --operation remove' exits "
+                                 "through this entry and restores the adapter-owned sheet change"}
+        elif receipt is not None:
+            ownership = {"goal": "keep the native installation under one named owner",
+                         "status": "owned-operation-unfinished", "receipt_state": receipt.get("state"),
+                         "next": "a fresh plan/apply resumes the recorded operation, or 'plan --operation remove' "
+                                 "cleans up only what the receipt records"}
+        else:
+            installed_rows = registry.get("installed_plugins") or []
+            ownership = {"goal": "keep the native installation under one named owner",
+                         "status": "not-adopted",
+                         "reason": ("the native installation has no Hub ownership receipt; a matching name or "
+                                    "byte-identical content is not a takeover basis"),
+                         "owner": "the lifecycle that installed it (the native Codex plugin manager)",
+                         "actual_source": (json.dumps(installed_rows[0].get("marketplaceSource")
+                                                      or installed_rows[0].get("source"), sort_keys=True)
+                                           if installed_rows
+                                           else "no native registry record was found for it; its source is unknown"),
+                         "content_vs_pinned": (installed_report or
+                                               {"detail": "registration exists only in config.toml; there is no "
+                                                          "plugin copy to compare"}),
+                         "optional_migration": foreign_steps,
+                         "recovery": foreign_recovery}
+        transitions.append(ownership)
+
+    if shared_report is not None:
+        summary = {name: {key: row[key] for key in
+                          ("kind", "target", "status", "modified_count", "missing_count", "extra_count") if key in row}
+                   for name, row in shared_report["skills"].items()}
+        shared_transition = {"goal": "keep using shared pstack Skills on demand, with every local modification preserved",
+                             "status": "preserved-with-differences" if shared_drift else "preserved",
+                             "owner": "the user's shared Skills directory; no Hub entry writes it",
+                             "differences": summary,
+                             "forced_conversion": "none: compatibility never requires turning shared Skills into a native plugin"}
+        if shared_drift:
+            shared_transition["steps"] = [
+                "keep the local differences (the default): nothing rewrites this directory, and the Skills stay "
+                "usable on demand",
+                "or migrate a skill after review: compare each listed file with the pinned package content "
+                "(source_lock_sha256 below), back up the shared copy, then replace the reviewed files yourself; "
+                "the Hub performs no write here",
+            ]
+        transitions.append(shared_transition)
+
+    return {
+        "schema": TRANSITION_SCHEMA,
+        "read_only": "this report writes nothing; each transition applies only through the reviewed plan of the entry that owns it",
+        "workspace": str(workspace), "codex_home": str(home),
+        "skills_dir": str(shared) if shared is not None else None,
+        "codex_bin": str(binary), "codex_bin_sha256": _digest(binary),
+        "pinned_source": {"source": origin["source"], "package": origin["package"], "version": origin["version"],
+                          "commit": origin["commit"], "commit_scope": origin["commit_scope"],
+                          "source_lock_sha256": origin["source_lock_sha256"], "locked_files": origin["locked_files"]},
+        "facets": {"hub_receipt": ({"state": receipt.get("state"),
+                                    "source_lock_sha256": receipt.get("source_lock_sha256"),
+                                    "snapshot": receipt.get("snapshot")} if receipt is not None
+                                   else {"state": "none", "error": receipt_error}),
+                   "kit": kit,
+                   "sheet": sheet,
+                   "native_registration": {"copies": [str(path) for path in copies],
+                                            "config_registered": config_registered,
+                                            "classification": registration,
+                                            "anomalies": anomalies},
+                   "native_registry": registry,
+                   "installed_copy_vs_pinned": installed_report,
+                   "shared_skills": shared_report},
+        "compatibility": verdict,
+        "recognized_states": states,
+        "transitions": transitions,
+        "review_before_main_environment": {
+            "review": ["the recognized states and the compatibility verdict above",
+                       "every content difference against the pinned package (source_lock_sha256 "
+                       + origin["source_lock_sha256"] + ")",
+                       "each transition's owner, target change and recovery basis; unknown history is never claimed restorable"],
+            "operations": ["apply an 'applicable' transition only through its named entry and plan id, after "
+                           "re-reading the fresh plan it re-checks",
+                           "resolve a 'blocked' transition through its listed steps; the Hub writes nothing around "
+                           "installations it does not own"],
+            "boundary": "shipping this entry does not authorize applying any transition to the main environment, "
+                        "moving local Skills, or restarting a host; each application is a separate reviewed decision",
+        },
+    }
+
+
 def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
     if plan_id != plan.get("plan_id"):
         raise common.IntegrationError("plan-id mismatch; review a fresh plan before applying")
@@ -643,7 +1101,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
 
 def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("plan", "apply", "doctor"))
+    parser.add_argument("command", choices=("plan", "apply", "doctor", "transition-plan"))
     parser.add_argument("--source", type=Path, help="optional assertion of the in-repository package path")
     parser.add_argument("--workspace", type=Path, required=True,
                         help="workspace for private source snapshots and lifecycle receipts")
@@ -653,11 +1111,16 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser.add_argument("--operation", choices=("install", "remove"), default="install")
     parser.add_argument("--coexistence", action="store_true",
                         help="install pstack with SessionStart auto-routing off, ready to share the target with the Kit")
+    parser.add_argument("--skills-dir", type=Path, default=None,
+                        help="transition-plan only: a shared Skills root compared read-only against the pinned package")
     parser.add_argument("--plan-id")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
             result = doctor(workspace=args.workspace, codex_home=args.codex_home, codex_bin=args.codex_bin, hub_root=hub_root)
+        elif args.command == "transition-plan":
+            result = transition(workspace=args.workspace, codex_home=args.codex_home, codex_bin=args.codex_bin,
+                                skills_dir=args.skills_dir, hub_root=hub_root)
         else:
             result = make_plan(source=args.source, workspace=args.workspace, codex_home=args.codex_home,
                                codex_bin=args.codex_bin, operation=args.operation,
