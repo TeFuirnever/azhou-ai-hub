@@ -331,7 +331,9 @@ class FailureAndRemovalTests(CoexistenceInstallTestCase):
         self.assertTrue(self.pstack_apply()["changed"])
         edited = OFF_SHEET + "feature: opus\n"
         self.put("pstack-models.md", edited)
-        with self.assertRaisesRegex(common.IntegrationError, "modified after the coexistence install"):
+        with self.assertRaisesRegex(common.IntegrationError,
+                                    "modified after the coexistence install.*recorded sha256 [0-9a-f]{64}, "
+                                    "found sha256 [0-9a-f]{64}"):
             self.pstack_apply("remove")
         self.assertEqual(self.sheet(), edited.encode())
 
@@ -340,6 +342,87 @@ class FailureAndRemovalTests(CoexistenceInstallTestCase):
         self.assertTrue(self.pstack_apply()["changed"])
         self.assertEqual(self.pstack_apply("remove")["status"], "removed")
         self.assertEqual(self.sheet(), b"# user sheet\nsession hook: on\n")
+
+
+class UpdateAndRemovalTests(CoexistenceInstallTestCase):
+    """Ticket #341: owned updates and exits keep the other module and user edits.
+
+    Either module can be removed first; an existing installation is recognized
+    when compatibility rules are updated to it; manual edits stop an exit with
+    the recorded-versus-observed difference; interrupted exits recover; repeats
+    converge. All of it runs through the public entries.
+    """
+
+    def test_kit_removed_first_leaves_pstack_usable_and_unrelated_files(self):
+        self.kit_apply()
+        self.assertTrue(self.pstack_apply()["changed"])
+        notes = self.put("notes.txt", "unrelated user file\n")
+        plan = adapter.uninstall_plan(self.workspace, self.home, self.skills, hub_root=self.hub)
+        result = adapter.uninstall(self.workspace, self.home, self.skills, plan["plan_id"], hub_root=self.hub)
+        self.assertEqual(result["status"], "restored")
+        # The Kit's owned scope is gone; nothing else moved.
+        self.assertFalse((self.home / "agents/worker.toml").exists())
+        self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+        self.assertEqual(notes.read_bytes(), b"unrelated user file\n")
+        # pstack remains usable in its retained mode: the sheet keeps routing
+        # off exactly as the adapter wrote it, and the plugin stays registered.
+        self.assertEqual(self.sheet(), OFF_SHEET.encode())
+        self.assertTrue(self.plugin_installed())
+        diagnosis = self.doctor()["coexistence"]
+        self.assertFalse(diagnosis["kit_rules_present"])
+        self.assertEqual(diagnosis["auto_routing"], "off")
+        self.assertEqual(diagnosis["compatibility"],
+                         "coexistence target: SessionStart auto-routing is off, so Kit rules may share this home")
+        # Repeating the Kit exit is an explainable stop, not a silent pass.
+        with self.assertRaisesRegex(common.IntegrationError, "no active installation receipt"):
+            adapter.uninstall_plan(self.workspace, self.home, self.skills, hub_root=self.hub)
+
+    def test_pstack_removed_first_then_kit_exit_restores_kit_scope(self):
+        self.kit_apply()
+        self.assertTrue(self.pstack_apply()["changed"])
+        self.assertEqual(self.pstack_apply("remove")["status"], "removed")
+        self.assertIsNone(self.sheet())
+        plan = adapter.uninstall_plan(self.workspace, self.home, self.skills, hub_root=self.hub)
+        result = adapter.uninstall(self.workspace, self.home, self.skills, plan["plan_id"], hub_root=self.hub)
+        self.assertEqual(result["status"], "restored")
+        self.assertFalse((self.home / "agents/worker.toml").exists())
+        self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+        self.assertFalse(self.plugin_installed())
+
+    def test_old_standalone_record_is_recognized_updated_then_removed(self):
+        original = "# pstack model configuration\nfeature: opus\nsession hook: on\n"
+        self.put("pstack-models.md", original)
+        self.assertTrue(self.pstack_apply()["changed"])
+        self.assertEqual(self.sheet(), original.encode())  # standalone keeps its mode
+        # Updating the same receipt to coexistence rules produces a reviewed,
+        # applicable change instead of a false no-op on the installed receipt.
+        plan = self.pstack_plan(coexistence=True)
+        self.assertIsNotNone(plan["coexistence"]["sheet_change"])
+        self.assertIn("pending", plan["coexistence"]["compatibility"])
+        result = self.pstack_apply(coexistence=True)
+        self.assertTrue(result["changed"])
+        self.assertEqual(self.sheet(),
+                         "# pstack model configuration\nfeature: opus\nsession hook: off\n".encode())
+        self.assertEqual(self.doctor()["coexistence"]["auto_routing"], "off")
+        receipt = common.read_receipt(pstack._receipt_path(self.workspace, self.home))
+        self.assertEqual(receipt["coexistence"]["sheet"]["before_sha256"],
+                         hashlib.sha256(original.encode()).hexdigest())
+        # Removing after the update restores the user's exact original sheet.
+        self.assertEqual(self.pstack_apply("remove")["status"], "removed")
+        self.assertEqual(self.sheet(), original.encode())
+        self.assertFalse(self.plugin_installed())
+
+    def test_hub_uninstall_refusal_reports_the_recorded_and_observed_digest(self):
+        self.kit_apply()
+        worker = self.home / "agents/worker.toml"
+        worker.write_bytes(worker.read_bytes() + b"\n# user amendment\n")
+        before = self.kit_files_snapshot()
+        with self.assertRaisesRegex(common.IntegrationError,
+                                    "refusing automatic restore or overwrite.*recorded sha256 [0-9a-f]{64}, "
+                                    "found sha256 [0-9a-f]{64}") as caught:
+            adapter.uninstall_plan(self.workspace, self.home, self.skills, hub_root=self.hub)
+        self.assertIn(str(worker), str(caught.exception))
+        self.assertEqual(before, self.kit_files_snapshot())
 
 
 class SheetSemanticsTests(unittest.TestCase):

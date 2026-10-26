@@ -129,7 +129,10 @@ def _sheet_conversion(raw: bytes | None, home: Path) -> tuple[str, bytes] | None
         result += HOOK_OFF + "\n"
     if bom:
         result = "\ufeff" + result
-    return "set-line", result.encode("utf-16" if utf16 else "utf-8")
+    encoded = result.encode("utf-16" if utf16 else "utf-8")
+    # An already-satisfied sheet is no change at all: return ``None`` so plans
+    # and receipts report "already established", never a pending no-op edit.
+    return None if encoded == raw else ("set-line", encoded)
 
 
 def _kit_presence(home: Path) -> dict:
@@ -217,9 +220,13 @@ def _establish_sheet(home: Path, change: dict, receipt: dict, receipt_file: Path
         record = (receipt.get("coexistence") or {}).get("sheet") or {}
         if record.get("after_sha256") == change["after_sha256"]:
             return  # already established by this receipt's recorded attempt
-        raise common.IntegrationError("the pstack model sheet changed after the plan")
+        raise common.IntegrationError(
+            "the pstack model sheet changed after the plan (planned sha256 "
+            + f"{change['after_sha256']}, found sha256 {current})")
     if current != change["before_sha256"]:
-        raise common.IntegrationError("the pstack model sheet changed after the plan")
+        raise common.IntegrationError(
+            "the pstack model sheet changed after the plan (planned sha256 "
+            + f"{change['before_sha256']}, found sha256 {current})")
     conversion = _sheet_conversion(raw, home)
     if conversion is None or _digest_bytes(conversion[1]) != change["after_sha256"]:
         raise common.IntegrationError("the reviewed sheet conversion no longer matches this target")
@@ -251,7 +258,8 @@ def _restore_sheet(home: Path, record: dict) -> None:
         return  # already restored, or nothing recorded to remove
     if current != record["after_sha256"]:
         raise common.IntegrationError(
-            "the pstack model sheet was modified after the coexistence install; automatic restore refused: " + str(path))
+            "the pstack model sheet was modified after the coexistence install; automatic restore refused: "
+            + str(path) + f" (recorded sha256 {record['after_sha256']}, found sha256 {current})")
     if record["before_sha256"] is None:
         path.unlink()
         return
@@ -557,7 +565,11 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
         if fresh["plan_id"] != plan_id:
             raise common.IntegrationError("target, source or Codex binary changed after the plan")
         old = common.read_receipt(receipt_file) if receipt_file.exists() else {}
-        if plan["operation"] == "install" and old.get("state") == "installed":
+        # A completed install is a no-op only when the fresh plan has nothing
+        # pending. An existing receipt updated to coexistence rules still owes
+        # its reviewed sheet conversion, so it must be applied, not skipped.
+        pending_sheet = (plan.get("coexistence") or {}).get("sheet_change")
+        if plan["operation"] == "install" and old.get("state") == "installed" and not pending_sheet:
             return {**doctor(workspace=workspace, codex_home=home, codex_bin=binary, hub_root=hub_root), "changed": False}
         snapshot = Path(plan["snapshot"])
         if plan["operation"] == "install":

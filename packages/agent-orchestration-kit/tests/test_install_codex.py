@@ -5,9 +5,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -470,6 +472,251 @@ class PstackCoexistenceTests(unittest.TestCase):
         self.assertEqual(installer.apply_plan(plan), 0)
         self.assertEqual(snapshot(self.base, timestamps=True), before)
         self.assertEqual((self.home / "pstack-models.md").read_text(), "session hook: off\n")
+
+
+class UninstallTests(unittest.TestCase):
+    """Exiting a completed installation through the Kit's own public entry.
+
+    Uninstall restores the recorded pre-install managed content by owned scope
+    and leaves unrelated files, later additions and other modules alone; it is
+    a different operation from ``--recover`` (interrupted-transaction restore).
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve()
+        self.home = self.base / "personal/.codex"
+        self.skills = self.base / "personal/.agents/skills"
+        self.skill_source = (ROOT / "profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md").read_bytes()
+
+    def put(self, relative, data, mode=0o640):
+        path = self.home / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data.encode() if isinstance(data, str) else data)
+        path.chmod(mode)
+        return path
+
+    def install(self):
+        plan = installer.build_plan(ROOT, self.home, self.skills)
+        installer.apply_plan(plan)
+        return plan
+
+    def uninstall(self):
+        plan = installer.build_uninstall_plan(self.home, self.skills)
+        return installer.apply_uninstall(plan)
+
+    def test_uninstall_restores_owned_scopes_and_keeps_pstack_and_unrelated_content(self):
+        original_config = '# Personal preferences\napproval_policy = "never"\nmodel = "old"\n[mcp_servers.notes]\ncommand = "notes"\n'
+        self.put("config.toml", original_config)
+        instructions = self.put("AGENTS.md", "Personal instructions.\n", 0o600)
+        custom = self.put("agents/my-helper.toml", 'name = "my-helper"\nmodel = "custom"\n')
+        self.install()
+        # Another module and later user content arrive after the Kit install.
+        sheet = self.put("pstack-models.md", "# pstack model configuration\nsession hook: off\n")
+        self.put("plugins/cache/pstack-claude/pstack/0.9.103/.codex-plugin/plugin.json", '{"name": "pstack"}')
+        config = self.home / "config.toml"
+        config.write_bytes(config.read_bytes() + b'[plugins."pstack@pstack-claude"]\nenabled = true\n')
+        before = snapshot(self.base)
+
+        result = self.uninstall()
+        self.assertEqual(result["status"], "uninstalled")
+        parsed = tomllib.loads(config.read_text())
+        self.assertEqual(parsed["model"], "old")
+        self.assertEqual(parsed["approval_policy"], "never")
+        self.assertEqual(parsed["mcp_servers"]["notes"]["command"], "notes")
+        self.assertEqual(parsed["plugins"]["pstack@pstack-claude"]["enabled"], True)
+        self.assertNotIn("enabled", parsed.get("agents", {}))
+        self.assertNotIn("service_tier", parsed)
+        self.assertEqual(instructions.read_bytes(), b"Personal instructions.\n")
+        self.assertEqual(stat.S_IMODE(instructions.stat().st_mode), 0o600)
+        self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+        for name in installer.ROLE_MODELS:
+            self.assertFalse((self.home / f"agents/{name}.toml").exists())
+        self.assertFalse((self.skills / "astra-orchestrator/SKILL.md").exists())
+        self.assertEqual(custom.read_bytes(), b'name = "my-helper"\nmodel = "custom"\n')
+        self.assertEqual(sheet.read_bytes(), b"# pstack model configuration\nsession hook: off\n")
+        # pstack stays usable in its retained mode after the Kit exit.
+        verdict = installer.pstack_coexistence(self.home, self.skills)
+        self.assertEqual(verdict["auto_routing"], "off")
+        self.assertTrue(verdict["compatible"])
+        self.assertTrue(verdict["model_sheet_present"])
+
+    def test_uninstall_retains_adopted_pre_existing_files_and_recorded_block(self):
+        managed_block = installer.owned_block((ROOT / "profiles/azhou-balanced/AGENTS.md").read_text())
+        instructions = self.put("AGENTS.md", "Pre-existing setup.\n\n" + managed_block + "\n")
+        adopted_skill = self.skills / "astra-orchestrator/SKILL.md"
+        adopted_skill.parent.mkdir(parents=True)
+        adopted_skill.write_bytes(self.skill_source)
+        self.install()
+        plan = installer.build_uninstall_plan(self.home, self.skills)
+        self.assertIn("restore the recorded pre-install instruction block", plan["instruction_block"])
+        self.assertIn(str(adopted_skill), plan["retained_pre_existing"])
+
+        def observed(path):
+            return (path.read_bytes(), path.stat().st_mtime_ns, stat.S_IMODE(path.stat().st_mode))
+
+        before_skill, before_instructions = observed(adopted_skill), observed(instructions)
+        result = installer.apply_uninstall(plan)
+        self.assertEqual(result["status"], "uninstalled")
+        # Pre-existing adopted content is untouched, not deleted or rewritten.
+        self.assertEqual(observed(adopted_skill), before_skill)
+        self.assertEqual(observed(instructions), before_instructions)
+        self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+
+    def test_user_modified_owned_content_stops_uninstall_with_differences(self):
+        self.install()
+        config = self.home / "config.toml"
+        role = self.home / "agents/worker.toml"
+        instructions = self.home / "AGENTS.md"
+        cases = [
+            ("owned key", config, config.read_bytes(),
+             config.read_bytes().replace(b'model = "gpt-6.1-sol"', b'model = "personal"', 1),
+             'model (installed {"present": true, "value": "gpt-6.1-sol"}'),
+            ("owned file", role, role.read_bytes(), role.read_bytes() + b"\n# user amendment\n",
+             f"{role} (recorded sha256 "),
+            ("managed block", instructions, instructions.read_bytes(),
+             instructions.read_bytes().replace(installer.BEGIN.encode(), installer.BEGIN.encode() + b"\nPersonal amendment", 1),
+             f"{instructions} managed block (recorded sha256 "),
+        ]
+        for label, path, original, edited, fragment in cases:
+            with self.subTest(case=label):
+                path.write_bytes(edited)
+                before = snapshot(self.base, True)
+                with self.assertRaisesRegex(installer.InstallError,
+                                            "User-modified owned content stops uninstall.*" + re.escape(fragment)):
+                    installer.build_uninstall_plan(self.home, self.skills)
+                # The refusal writes nothing and keeps the user's edit in place.
+                self.assertEqual(snapshot(self.base, True), before)
+                path.write_bytes(original)
+        # With the owned scope intact again, the exit proceeds.
+        self.assertEqual(self.uninstall()["status"], "uninstalled")
+
+    def test_uninstall_reports_the_difference_it_refuses_to_overwrite(self):
+        self.install()
+        role = self.home / "agents/worker.toml"
+        role.write_bytes(role.read_bytes() + b"\n# user amendment\n")
+        try:
+            installer.build_uninstall_plan(self.home, self.skills)
+            self.fail("expected a refusal")
+        except installer.InstallError as exc:
+            message = str(exc)
+            self.assertIn(f"recorded sha256 {installer.sha((ROOT / 'profiles/azhou-balanced/codex/agents/worker.toml').read_bytes())}", message)
+            self.assertIn("found sha256 ", message)
+
+    def test_unknown_source_without_a_record_is_never_adopted_or_removed(self):
+        instructions = self.put("AGENTS.md", installer.BEGIN + "\nstray block without a record\n" + installer.END + "\n")
+        role = self.put("agents/worker.toml", 'name = "worker"\n')
+        before = snapshot(self.base, True)
+        with self.assertRaisesRegex(installer.InstallError, "source is unknown"):
+            installer.build_uninstall_plan(self.home, self.skills)
+        self.assertEqual(snapshot(self.base, True), before)
+        instructions.write_bytes(b"No marker left.\n")
+        before = snapshot(self.base, True)
+        with self.assertRaisesRegex(installer.InstallError, "source is unknown"):
+            installer.build_uninstall_plan(self.home, self.skills)
+        self.assertEqual(snapshot(self.base, True), before)
+        role.unlink()
+        # A target with no owned footprint converges to a clean no-op.
+        plan = installer.build_uninstall_plan(self.home, self.skills)
+        self.assertEqual(plan["operation"], "noop")
+        self.assertEqual(installer.apply_uninstall(plan)["changed_files_count"], 0)
+
+    def test_unrecognized_or_incomplete_record_is_refused(self):
+        for content in ['{"schema": 2, "project": "agent-orchestration-kit"}',
+                        '{"schema": 1, "project": "other"}',
+                        '{"schema": 1, "project": "agent-orchestration-kit", "targets": {}, "files": {}}']:
+            with self.subTest(record=content):
+                self.put("agent-orchestration-kit/state.json", content)
+                before = snapshot(self.base, True)
+                with self.assertRaisesRegex(installer.InstallError, "nrecognized|changed"):
+                    installer.build_uninstall_plan(self.home, self.skills)
+                self.assertEqual(snapshot(self.base, True), before)
+
+    def test_unfinished_transaction_directs_to_recover_not_uninstall(self):
+        self.install()
+        tx = self.home / ".agent-orchestration-kit-transaction"
+        tx.mkdir(parents=True)
+        (tx / "journal.json").write_text('{"schema": 1, "created_directories": [], "files": []}')
+        with self.assertRaisesRegex(installer.InstallError, "run --recover"):
+            installer.build_uninstall_plan(self.home, self.skills)
+
+    def test_mid_uninstall_failure_restores_the_installed_state(self):
+        self.install()
+        before = snapshot(self.base)
+        plan = installer.build_uninstall_plan(self.home, self.skills)
+        calls = []
+
+        def fail_after_actual_write(path, data, mode):
+            calls.append(path)
+            installer.atomic_write(path, data, mode)
+            if len(calls) == 1:
+                raise OSError("independent fault after rename")
+
+        with self.assertRaisesRegex(installer.InstallError, "restored"):
+            installer.apply_uninstall(plan, write=fail_after_actual_write)
+        self.assertEqual(snapshot(self.base), before)
+        self.assertFalse((self.home / ".agent-orchestration-kit-transaction").exists())
+
+    def test_interrupted_uninstall_recovers_to_installed_and_retries(self):
+        self.install()
+        before = snapshot(self.base)
+        plan = installer.build_uninstall_plan(self.home, self.skills)
+        calls = []
+
+        def interrupt(path, data, mode):
+            calls.append(path)
+            installer.atomic_write(path, data, mode)
+            if len(calls) == 1:
+                raise RuntimeError("interruption")
+
+        # A killed process cannot run rollback. Keep its real journal to model that.
+        with patch.object(installer, "restore", side_effect=OSError("process stopped")):
+            with self.assertRaisesRegex(installer.InstallError, "rollback needs attention"):
+                installer.apply_uninstall(plan, write=interrupt)
+        self.assertTrue((plan["transaction"] / "journal.json").is_file())
+        with self.assertRaisesRegex(installer.InstallError, "Unfinished transaction"):
+            installer.build_uninstall_plan(self.home, self.skills)
+        installer.recover(self.home, self.skills)
+        self.assertEqual(snapshot(self.base), before)
+        self.assertEqual(self.uninstall()["status"], "uninstalled")
+
+    def test_cli_uninstall_entry_exits_and_repeats_converge(self):
+        self.install()
+        self.assertTrue((self.home / "agent-orchestration-kit/state.json").is_file())
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+        script = str(ROOT / "scripts/install_codex.py")
+        common_args = [sys.executable, script, "--codex-home", str(self.home), "--skills-dir", str(self.skills)]
+
+        dry = subprocess.run([*common_args, "--uninstall", "--dry-run"], env=env, text=True, capture_output=True, timeout=60)
+        self.assertEqual(0, dry.returncode, dry.stderr)
+        self.assertIn("no target files written", dry.stdout)
+        self.assertTrue((self.home / "agent-orchestration-kit/state.json").is_file())
+
+        first = subprocess.run([*common_args, "--uninstall"], env=env, text=True, capture_output=True, timeout=60)
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertIn("Uninstalled", first.stdout)
+        self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+        for name in installer.ROLE_MODELS:
+            self.assertFalse((self.home / f"agents/{name}.toml").exists())
+
+        repeat = subprocess.run([*common_args, "--uninstall"], env=env, text=True, capture_output=True, timeout=60)
+        self.assertEqual(0, repeat.returncode, repeat.stderr)
+        self.assertIn("Nothing owned by this installation remains", repeat.stdout)
+
+        conflict = subprocess.run([*common_args, "--uninstall", "--recover"], env=env, text=True, capture_output=True, timeout=60)
+        self.assertNotEqual(0, conflict.returncode)
+        self.assertIn("choose one", conflict.stderr)
+
+        # An interrupted operation is recovered by --recover, a separate path.
+        tx = self.home / ".agent-orchestration-kit-transaction"
+        tx.mkdir(parents=True)
+        (tx / "journal.json").write_text('{"schema": 1, "created_directories": [], "files": []}')
+        recover = subprocess.run([*common_args, "--recover"], env=env, text=True, capture_output=True, timeout=60)
+        self.assertEqual(0, recover.returncode, recover.stderr)
+        self.assertIn("Interrupted operation restored", recover.stdout)
+        self.assertIn("--uninstall", recover.stdout)
+        self.assertFalse(tx.exists())
 
 
 if __name__ == "__main__":

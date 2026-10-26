@@ -58,6 +58,19 @@ On success, the journal is removed. An identical second installation has zero ch
 
 Recovery refuses unexpected target paths or conflicting edits. A journal that needs manual attention is retained rather than discarded. There is no scheduled cleanup task.
 
+## Exiting a completed installation
+
+Uninstall is the owned exit for a completed installation. It is deliberately a separate command from `--recover` above, which only restores an interrupted transaction:
+
+```sh
+./packages/agent-orchestration-kit/setup.sh --uninstall
+./packages/agent-orchestration-kit/setup.sh --uninstall --dry-run
+```
+
+With the same `--codex-home`/`--skills-dir` as the installation, uninstall reads `agent-orchestration-kit/state.json` and restores only what this kit owns: the managed `config.toml` settings return to their recorded pre-install values, the marked `AGENTS.md` block is replaced by the recorded original or removed, files the installation created (the six roles, the Skill, the ownership record) are deleted, and files that already existed with matching content are left byte-for-byte. Whole files are never restored, so unrelated configuration and files another module wrote later — a pstack model sheet, a plugin cache, extra roles — stay in place; a shared pstack installation keeps its retained mode.
+
+The exit is transactional like the install: a write failure rolls back, an interrupted uninstall leaves the recovery journal for `--recover` (which returns the target to the installed state so the exit can be retried), and repeating uninstall after a completed exit is a clean no-op. A user-modified owned key, file or block stops the exit and prints each difference (installed versus found value or digest) instead of overwriting it. A missing or unreadable ownership record never becomes a guessed history: kit-owned-looking files without a record are reported for manual review, and a target with no owned footprint reports nothing to uninstall.
+
 The one-time migration keeps `~/.codex/agent-orchestration-kit/legacy-recovery.json`: deduplicated unique pre-install values, historical run identifiers, and a cleanup inventory. It contains personal recovery data and is deliberately **not in Git**. See [the migration and acceptance report](guides/migration-2026-10-25.md).
 
 ## Native loading and permissions
@@ -80,6 +93,7 @@ Official contracts: [Subagents](https://developers.openai.com/codex/subagents), 
 |---|---|
 | Project brand / local directory | `agent-orchestration-kit` |
 | Default command | `./setup.sh` installs current-user `azhou-balanced` |
+| Owned exit | `./setup.sh --uninstall` restores the recorded pre-install owned scope |
 | Legacy shell project installer | `./setup.sh --project` |
 | Existing Windows project installer | `setup.ps1` retained; menu adds balanced profile |
 | Skill invocation | `$astra-orchestrator` retained |
