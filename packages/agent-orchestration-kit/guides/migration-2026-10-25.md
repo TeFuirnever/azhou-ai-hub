@@ -26,15 +26,17 @@ This report concerns the bounded Codex integration on the inspected Mac. The dat
 
 ## Repository and interface migration
 
-The physical checkout is now:
+At the 2026-10-25 acceptance point, the physical checkout was:
 
 ```text
 /Users/guanxueliang/Desktop/Matrix/社区工程/agent-orchestration-kit
 ```
 
-The old sibling `codex-astra-luna-orchestrator` is a relative symlink to the new directory; both resolve to the same inode and a single Git working tree. `lsof` found no process using the original repository as its working directory at inspection. App prompt history still mentioned the old source path, so the compatibility link preserves resolution without rewriting history or restarting sessions.
+At that inspection, the old sibling `codex-astra-luna-orchestrator` was a relative symlink to the renamed directory; both resolved to the same inode and a single Git working tree. `lsof` found no process using the original repository as its working directory. App prompt history still mentioned the old source path, so the compatibility link preserved resolution then without rewriting history or restarting sessions.
 
-Run `./setup.sh` from the renamed checkout. The default is user-level `azhou-balanced`; `./setup.sh --project` preserves the old interactive shell workflow. Existing profile numbers 1–6 retain their meanings, with balanced added as choice 7/default. `setup.ps1` remains the legacy Windows project installer with the same menu addition. `$astra-orchestrator`, the six role names, and existing instruction markers remain compatible. Project branding changed; upstream attribution, license, and historical identifiers did not.
+For current installation, run `./setup.sh` from the [Hub package](../README.md). The default is user-level `azhou-balanced`; `./setup.sh --project` preserves the old interactive shell workflow. Existing profile numbers 1–6 retain their meanings, with balanced added as choice 7/default. `setup.ps1` remains the legacy Windows project installer with the same menu addition. `$astra-orchestrator`, the six role names, and existing instruction markers remain compatible. Project branding changed; upstream attribution, license, and historical identifiers did not.
+
+The 2026-10-26 [Hub local handoff](../../../evidence/optional-integrations-local-handoff-2026-10-26.md) verified that the user installation already matched the Hub package and that a fresh `--dry-run` changed nothing after the former checkout was removed. The path above and its sibling symlink are historical, not current install sources.
 
 ## Cleanup inventory and recovery responsibility
 
