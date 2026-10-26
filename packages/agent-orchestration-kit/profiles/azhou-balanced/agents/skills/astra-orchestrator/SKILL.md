@@ -18,6 +18,19 @@ Resolve the Codex configuration directory from `CODEX_HOME` when set, otherwise 
 
 Select the configured named role when spawning. Use a fresh context and a compact handoff when the runtime supports it. Let the role file select its model and effort; if the tool requires explicit model parameters, use the effective role settings with a fresh context. Do not use a full-history fork when it would override the intended role model.
 
+## Task ownership beside a selected workflow
+
+These rules govern ordinary tasks and the delegation this skill owns. They are not a claim on a task the user explicitly assigned to another workflow. When the user selects a pstack workflow for the current task, that workflow owns the task's decomposition, stages, child dispatch, and verification:
+
+- Start no second decomposition, delegation, or review flow on top of the selected workflow, and do not re-delegate its subtasks to the roles above.
+- A status question or an added constraint within the same task keeps the selected workflow as owner; it is not a new task.
+- A new task started after the selected workflow's task completes returns to these defaults; ownership does not persist across tasks.
+- When the user switches workflows mid-task, first bring this skill's running children to a recoverable boundary — wait for, stop, or finish them — before the new workflow starts.
+
+Normal delegation through this skill selects the named roles and lets each role file select its model and effort. A selected workflow dispatches its own children with its explicit model and effort; do not attach a named role to them, because a selected custom-role file overrides the explicit fields it sets. Selecting a workflow never switches the active root session model.
+
+User instructions, project rules, permissions, and concurrency limits apply on both paths. This skill never chains into another orchestrator.
+
 ## Proportionate delegation
 
 Keep small tasks in the root. Delegate only when independent work adds useful evidence or implementation capacity. Do not mechanically start every role, and do not delegate only to increase parallelism.
