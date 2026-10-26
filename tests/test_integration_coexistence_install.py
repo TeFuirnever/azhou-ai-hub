@@ -412,6 +412,61 @@ class UpdateAndRemovalTests(CoexistenceInstallTestCase):
         self.assertEqual(self.sheet(), original.encode())
         self.assertFalse(self.plugin_installed())
 
+    def test_sheet_recovery_basis_precedes_the_sheet_write_and_survives_interruption(self):
+        """An interruption between the basis and the sheet write never orphans it.
+
+        The recovery record must reach the receipt before the sheet changes
+        (the Kit installer's journal-first order). The crash lands right after
+        the basis is persisted; the retry must converge to installed while
+        keeping the basis, and a later remove must restore the user's bytes.
+        """
+        self.kit_apply()
+        original = "# pstack model configuration\nfeature: opus\nsession hook: on\n"
+        self.put("pstack-models.md", original)
+        real_write = common.write_receipt
+        interruptions = []
+
+        def interrupt_after_basis(path, payload):
+            record = (payload.get("coexistence") or {}).get("sheet")
+            if record and payload.get("commands") == []:
+                real_write(path, payload)
+                interruptions.append(self.sheet() == original.encode())
+                raise RuntimeError("simulated interruption right after the recovery basis")
+            return real_write(path, payload)
+
+        with patch.object(common, "write_receipt", side_effect=interrupt_after_basis):
+            with self.assertRaisesRegex(RuntimeError, "simulated interruption"):
+                self.pstack_apply()
+        # Journal-first: the persisted basis saw the sheet still untouched.
+        self.assertEqual(interruptions, [True])
+        receipt = common.read_receipt(pstack._receipt_path(self.workspace, self.home))
+        self.assertEqual(receipt["coexistence"]["sheet"]["before_sha256"],
+                         hashlib.sha256(original.encode()).hexdigest())
+        # The retry converges to installed and keeps the recorded basis.
+        self.assertTrue(self.pstack_apply()["changed"])
+        self.assertEqual(self.sheet(),
+                         "# pstack model configuration\nfeature: opus\nsession hook: off\n".encode())
+        receipt = common.read_receipt(pstack._receipt_path(self.workspace, self.home))
+        self.assertEqual(receipt["coexistence"]["sheet"]["before_sha256"],
+                         hashlib.sha256(original.encode()).hexdigest())
+        # Removing after the interrupted-and-retried install restores the user's bytes.
+        self.assertEqual(self.pstack_apply("remove")["status"], "removed")
+        self.assertEqual(self.sheet(), original.encode())
+
+    def test_preexisting_off_sheet_is_reported_satisfied_and_never_touched(self):
+        user_sheet = "# my own sheet\nsession hook: off\n"
+        self.put("pstack-models.md", user_sheet)
+        plan = self.pstack_plan(coexistence=True)
+        self.assertIsNone(plan["coexistence"]["sheet_change"])
+        self.assertIn("already satisfied", plan["coexistence"]["compatibility"])
+        self.assertTrue(self.pstack_apply(coexistence=True)["changed"])
+        self.assertEqual(self.sheet(), user_sheet.encode())
+        receipt = common.read_receipt(pstack._receipt_path(self.workspace, self.home))
+        self.assertFalse((receipt.get("coexistence") or {}).get("sheet"))
+        # The user's own sheet is not adapter-owned, so remove leaves it alone.
+        self.assertEqual(self.pstack_apply("remove")["status"], "removed")
+        self.assertEqual(self.sheet(), user_sheet.encode())
+
     def test_hub_uninstall_refusal_reports_the_recorded_and_observed_digest(self):
         self.kit_apply()
         worker = self.home / "agents/worker.toml"

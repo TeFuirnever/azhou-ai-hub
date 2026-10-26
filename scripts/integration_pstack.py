@@ -210,7 +210,14 @@ def _receipt_path(workspace: Path, home: Path) -> Path:
 
 
 def _establish_sheet(home: Path, change: dict, receipt: dict, receipt_file: Path) -> None:
-    """Apply the reviewed sheet conversion once and record exact rollback bytes."""
+    """Apply the reviewed sheet conversion once, recording the rollback basis first.
+
+    The recovery record reaches the receipt before the sheet changes, the same
+    journal-first order the Kit installer uses: an interruption between the two
+    steps leaves either "basis recorded, sheet untouched" or "basis recorded,
+    sheet converted" — both recoverable — and never an adapter-written sheet
+    with no recorded original to restore.
+    """
     path = _sheet_path(home)
     if change.get("path") != str(path):
         raise common.IntegrationError("the reviewed sheet conversion targets a different path")
@@ -231,8 +238,6 @@ def _establish_sheet(home: Path, change: dict, receipt: dict, receipt_file: Path
     if conversion is None or _digest_bytes(conversion[1]) != change["after_sha256"]:
         raise common.IntegrationError("the reviewed sheet conversion no longer matches this target")
     mode = stat.S_IMODE(path.stat().st_mode) if raw is not None else 0o600
-    path.write_bytes(conversion[1])
-    os.chmod(path, mode)
     receipt["coexistence"] = {"sheet": {
         "path": str(path),
         "before": base64.b64encode(raw).decode("ascii") if raw is not None else None,
@@ -241,6 +246,8 @@ def _establish_sheet(home: Path, change: dict, receipt: dict, receipt_file: Path
         "mode": mode,
     }}
     common.write_receipt(receipt_file, receipt)
+    path.write_bytes(conversion[1])
+    os.chmod(path, mode)
 
 
 def _restore_sheet(home: Path, record: dict) -> None:

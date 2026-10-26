@@ -563,6 +563,12 @@ class UninstallTests(unittest.TestCase):
         self.assertEqual(observed(adopted_skill), before_skill)
         self.assertEqual(observed(instructions), before_instructions)
         self.assertFalse((self.home / "agent-orchestration-kit/state.json").exists())
+        # Retained pre-existing content is no longer kit-owned: a repeat reports
+        # it for manual review instead of a clean no-op or a deletion.
+        with self.assertRaisesRegex(installer.InstallError, "source is unknown"):
+            installer.build_uninstall_plan(self.home, self.skills)
+        self.assertEqual(observed(adopted_skill), before_skill)
+        self.assertEqual(observed(instructions), before_instructions)
 
     def test_user_modified_owned_content_stops_uninstall_with_differences(self):
         self.install()
