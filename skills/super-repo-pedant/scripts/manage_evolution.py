@@ -182,11 +182,16 @@ def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> 
     The lock lives on a dedicated file because the live batch is republished
     with os.replace(): an flock on the replaced inode would keep protecting a
     file no reader ever sees again."""
-    try:
-        import fcntl
-    except ImportError:  # platform without advisory locking keeps single-writer-by-convention
-        yield
-        return
+    if os.name == "nt":
+        try:
+            import msvcrt
+        except ImportError as exc:
+            raise EvolutionError("evolution state locking is unavailable on this platform") from exc
+    else:
+        try:
+            import fcntl
+        except ImportError as exc:
+            raise EvolutionError("evolution state locking is unavailable on this platform") from exc
     lock_path = state_root / ".transaction.lock"
     secure_state_target(lock_path, root)
     try:
@@ -194,13 +199,21 @@ def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> 
     except OSError as exc:
         raise EvolutionError(f"cannot open the transaction lock: {lock_path} ({exc})") from exc
     deadline = time.monotonic() + timeout
+    acquired = False
     try:
         while True:
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if os.name == "nt":
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
                 break
             except OSError as exc:
-                if exc.errno in PERMANENT_LOCK_ERRNOS:
+                if exc.errno in PERMANENT_LOCK_ERRNOS or (
+                    os.name == "nt" and exc.errno not in {errno.EACCES, errno.EAGAIN}
+                ):
                     raise EvolutionError(
                         f"evolution state locking is unavailable on this filesystem: {exc}"
                     ) from exc
@@ -211,7 +224,15 @@ def transaction_lock(state_root: Path, root: Path, *, timeout: float = 30.0) -> 
                 time.sleep(0.05)
         yield
     finally:
-        os.close(descriptor)
+        try:
+            if acquired and os.name == "nt":
+                try:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                except OSError as exc:
+                    raise EvolutionError("cannot release the evolution transaction lock") from exc
+        finally:
+            os.close(descriptor)
 
 
 def append_jsonl(path: Path, value: dict[str, Any], *, root: Path) -> None:
@@ -225,12 +246,6 @@ def append_jsonl(path: Path, value: dict[str, Any], *, root: Path) -> None:
     except OSError as exc:
         raise EvolutionError(f"cannot append to private state file: {path} ({exc})") from exc
     with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
-        try:
-            import fcntl  # type: ignore
-
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        except (ImportError, OSError):
-            pass
         handle.write(line)
         handle.flush()
         os.fsync(handle.fileno())
@@ -283,6 +298,28 @@ def write_json(path: Path, value: Any, *, root: Path) -> None:
     write_private_text(path, json.dumps(value, ensure_ascii=False, indent=2) + "\n", root=root)
 
 
+def pending_archive(state_root: Path, project: Path) -> dict[str, Any] | None:
+    path = state_root / ".archive-pending.json"
+    secure_state_target(path, project)
+    if not path.exists():
+        return None
+    value = load_json(path)
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"candidate_id", "evidence_archive", "archive_sha256", "archived_signal_count"}
+        or not isinstance(value["candidate_id"], str)
+        or not re.fullmatch(r"[a-f0-9]{24}", value["candidate_id"])
+        or not isinstance(value["evidence_archive"], str)
+        or not isinstance(value["archive_sha256"], str)
+        or not DIGEST_RE.fullmatch(value["archive_sha256"])
+        or not isinstance(value["archived_signal_count"], int)
+        or isinstance(value["archived_signal_count"], bool)
+        or value["archived_signal_count"] < 1
+    ):
+        raise EvolutionError("pending archive record is invalid")
+    return value
+
+
 def cmd_add_signal(args: argparse.Namespace) -> int:
     try:
         project = args.project.expanduser().resolve()
@@ -312,6 +349,8 @@ def cmd_add_signal(args: argparse.Namespace) -> int:
         if errors:
             raise EvolutionError(f"invalid signal fields: {', '.join(errors)}")
         with transaction_lock(state_root, project):
+            if pending_archive(state_root, project) is not None:
+                raise EvolutionError("pending archive must be retried before adding signals")
             append_jsonl(state_root / "signals.jsonl", signal, root=project)
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
@@ -439,13 +478,42 @@ def cmd_archive(args: argparse.Namespace) -> int:
         candidates_root = (state_root / "candidates").resolve()
         if not inside(candidate_path, candidates_root):
             raise EvolutionError("candidate must be a contained non-symlink proposal")
-        candidate = load_json(candidate_path)
-        structure_errors = validate_candidate_structure(candidate)
-        if structure_errors:
-            raise EvolutionError("; ".join(structure_errors))
-
         signals_path = state_root / "signals.jsonl"
         with transaction_lock(state_root, project):
+            candidate = load_json(candidate_path)
+            structure_errors = validate_candidate_structure(candidate)
+            if structure_errors:
+                raise EvolutionError("; ".join(structure_errors))
+            archive_path = state_root / "archive" / f"processed-{candidate['candidate_id']}.jsonl"
+            archive_relative = str(archive_path.relative_to(state_root))
+            marker_path = state_root / ".archive-pending.json"
+            marker = pending_archive(state_root, project)
+            if marker is not None and (
+                marker["candidate_id"] != candidate["candidate_id"]
+                or marker["evidence_archive"] != archive_relative
+            ):
+                raise EvolutionError("pending archive belongs to another candidate")
+            secure_state_target(archive_path, project)
+            if "evidence_archive" in candidate or "archived_signal_count" in candidate:
+                if marker is None:
+                    raise EvolutionError("candidate evidence already archived")
+                if (
+                    candidate.get("evidence_archive") != archive_relative
+                    or candidate.get("archived_signal_count") != marker["archived_signal_count"]
+                ):
+                    raise EvolutionError("candidate archive receipt conflicts with pending archive")
+                try:
+                    archive_text = archive_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    raise EvolutionError("cannot read existing candidate archive") from exc
+                if hashlib.sha256(archive_text.encode("utf-8")).hexdigest() != marker["archive_sha256"]:
+                    raise EvolutionError("existing candidate archive conflicts with pending archive")
+                try:
+                    marker_path.unlink()
+                except OSError as exc:
+                    raise EvolutionError("cannot clear completed pending archive") from exc
+                print(json.dumps({"archived": marker["archived_signal_count"], "archive": str(archive_path)}, ensure_ascii=False))
+                return 0
             try:
                 lines = signals_path.read_text(encoding="utf-8").splitlines()
             except (OSError, UnicodeError) as exc:
@@ -463,26 +531,72 @@ def cmd_archive(args: argparse.Namespace) -> int:
                     archived_lines.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
                 else:
                     retained_lines.append(line)
-            if not archived_lines:
-                raise EvolutionError("candidate has no validated signals in the live batch")
-
-            archive_path = state_root / "archive" / f"processed-{candidate['candidate_id']}.jsonl"
+            if marker is None:
+                if archive_path.exists():
+                    raise EvolutionError("existing candidate archive lacks a pending receipt")
+                if not archived_lines:
+                    raise EvolutionError("candidate has no validated signals in the live batch")
+                archive_text = "\n".join(archived_lines) + "\n"
+                marker = {
+                    "candidate_id": candidate["candidate_id"],
+                    "evidence_archive": archive_relative,
+                    "archive_sha256": hashlib.sha256(archive_text.encode("utf-8")).hexdigest(),
+                    "archived_signal_count": len(archived_lines),
+                }
+                write_json(marker_path, marker, root=project)
             if archive_path.exists():
-                raise EvolutionError("candidate evidence already archived")
-            write_private_text(archive_path, "\n".join(archived_lines) + "\n", root=project)
+                try:
+                    archive_text = archive_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    raise EvolutionError("cannot read existing candidate archive") from exc
+                if hashlib.sha256(archive_text.encode("utf-8")).hexdigest() != marker["archive_sha256"]:
+                    raise EvolutionError("existing candidate archive conflicts with pending archive")
+                archive_lines = archive_text.splitlines()
+                if (
+                    len(archive_lines) != marker["archived_signal_count"]
+                    or archive_text != "\n".join(archive_lines) + "\n"
+                ):
+                    raise EvolutionError("existing candidate archive is invalid")
+                for line in archive_lines:
+                    try:
+                        signal = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        raise EvolutionError("existing candidate archive is invalid") from exc
+                    if (
+                        not isinstance(signal, dict)
+                        or signal.get("signal_id") not in selected_ids
+                        or validate_signal(signal)
+                        or line != json.dumps(signal, ensure_ascii=False, separators=(",", ":"))
+                    ):
+                        raise EvolutionError("existing candidate archive is invalid")
+                if archived_lines and archived_lines != archive_lines:
+                    raise EvolutionError("existing candidate archive conflicts with live signals")
+            else:
+                if not archived_lines:
+                    raise EvolutionError("pending archive has no matching live signals")
+                archive_lines = archived_lines
+                archive_text = "\n".join(archive_lines) + "\n"
+                if hashlib.sha256(archive_text.encode("utf-8")).hexdigest() != marker["archive_sha256"]:
+                    raise EvolutionError("pending archive conflicts with live signals")
+                write_private_text(archive_path, archive_text, root=project)
 
-            write_private_text(
-                signals_path,
-                ("\n".join(retained_lines) + "\n") if retained_lines else "",
-                root=project,
-            )
-            candidate["archived_signal_count"] = len(archived_lines)
-            candidate["evidence_archive"] = str(archive_path.relative_to(state_root))
+            if archived_lines:
+                write_private_text(
+                    signals_path,
+                    ("\n".join(retained_lines) + "\n") if retained_lines else "",
+                    root=project,
+                )
+            candidate["archived_signal_count"] = len(archive_lines)
+            candidate["evidence_archive"] = archive_relative
             write_json(candidate_path, candidate, root=project)
+            try:
+                marker_path.unlink()
+            except OSError as exc:
+                raise EvolutionError("cannot clear completed pending archive") from exc
     except EvolutionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps({"archived": len(archived_lines), "archive": str(archive_path)}, ensure_ascii=False))
+    print(json.dumps({"archived": len(archive_lines), "archive": str(archive_path)}, ensure_ascii=False))
     return 0
 
 

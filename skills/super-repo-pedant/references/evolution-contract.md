@@ -47,6 +47,7 @@ Absolute scores and 7-day/30-day health trends are triage signals only. Unpaired
 - Use a minimum batch size, bounded sample, cooldown, re-entrancy guard, and processing cap.
 - Retain unprocessed evidence after failure. Archive a batch only after its proposal bundle validates and its receipt is written.
 - Signal appends and archive transactions serialize on the state directory's `.transaction.lock`: contention waits bounded, permanent lock failures exit with their cause, and a confirmed append survives any concurrent archive.
+- The lock is mandatory on every supported OS. An archive writes a private pending receipt before removing live signals; while it exists, new signal writes stop with a retry instruction. A retry verifies the recorded archive digest and any still-live selected signals before finishing the live batch and candidate receipt; conflicting evidence stops without rewriting either.
 - Expire stale pending candidates; never delete accepted evidence history silently.
 - Prefer Python standard library and repository-local state. Optional accelerators must fail open and report their absence.
 
