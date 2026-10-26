@@ -442,6 +442,17 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
             if operation == "remove" and receipt else common.load_lock(COMPONENT, hub_root=hub_root))
     if receipt and receipt.get("source_lock_sha256") != common.plan_digest(lock) and receipt.get("state") != "removed":
         raise common.IntegrationError("remove the prior owned package version before installing changed package inputs")
+    if (receipt is not None and operation == "install" and receipt.get("state") == "removed"
+            and (_plugin_copies(home)[0]
+                 or (home / "config.toml").is_file() and any(
+                     word in (home / "config.toml").read_text(encoding="utf-8")
+                     for word in [MARKETPLACE, "pstack@"]))):
+        # A completed removal leaves its receipt behind. A registration that
+        # reappeared afterwards was not installed by the Hub, and installing
+        # over it — or converting the sheet around it — would be adoption.
+        raise common.IntegrationError(
+            "this target's completed-removal receipt is stale: a pstack registration is present again and was not "
+            "installed by the Hub; remove it through its own lifecycle before a new Hub install here")
     inventory = _inventory(home)
     if receipt is None:
         allowed = {"config.toml", "auth.json", SHEET_NAME, "AGENTS.md"}
@@ -687,6 +698,10 @@ def _shared_skills_report(shared: Path, lock: dict) -> dict:
         try:
             for path in sorted(root.rglob("*")):
                 name = path.relative_to(root).as_posix()
+                # The same upstream Bun bootstrap output the plugin-copy comparison
+                # excludes; present in a shared install is not a local modification.
+                if name == "scripts/node_modules" or name.startswith("scripts/node_modules/"):
+                    continue
                 if path.is_symlink():
                     extra.append(name + " (symlink)")
                     continue
@@ -722,6 +737,61 @@ def _registry_sources(marketplaces: dict, plugins: dict) -> dict:
     pstack_rows = [row for row in (installed_rows or [])
                    if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == "pstack")]
     return {"marketplaces": selected, "installed_plugins": pstack_rows}
+
+
+def _registry_row_resolves_to(row: dict, snapshot) -> bool:
+    """Does one installed-registry row resolve back to the receipt's snapshot?"""
+    if not isinstance(snapshot, str) or not snapshot:
+        return False
+    expected = [snapshot, str(Path(snapshot) / "plugins/pstack")]
+    recorded: list[str] = []
+    for group, key in ((row.get("marketplaceSource"), "source"), (row.get("source"), "path")):
+        if isinstance(group, dict) and isinstance(group.get(key), str):
+            recorded.append(group[key])
+    for value in recorded:
+        for name in expected:
+            if value == name:
+                return True
+            try:
+                if Path(value).resolve() == Path(name).resolve():
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def _receipt_registration(receipt: dict | None, registry: dict) -> dict:
+    """Reconcile the receipt's recorded installation with the live registry.
+
+    A receipt alone never proves the registration now in this target is still
+    the Hub's own: a completed remove leaves the receipt behind while the user
+    may have installed a foreign pstack afterwards, and a swapped marketplace
+    re-points the registration at another source. The registry must resolve
+    the installed plugin back to the receipt's snapshot before any Hub-owned
+    conversion or ownership claim is made; otherwise the same conservative
+    rule as for receipt-less targets applies — no adoption, no writes.
+    """
+    if receipt is None:
+        return {"status": "no-receipt"}
+    detail = {"snapshot": receipt.get("snapshot"), "receipt_state": receipt.get("state")}
+    if receipt.get("state") == "removed":
+        return {"status": "receipt-removed", **detail,
+                "explanation": ("this receipt's own installation was already removed; anything registered now "
+                                "was not installed by the Hub")}
+    rows = registry.get("installed_plugins")
+    if not isinstance(rows, list):
+        return {"status": "registry-unavailable", **detail,
+                "explanation": str(registry.get("error", "the native registry returned no usable pstack record"))}
+    if not rows:
+        return {"status": "no-registry-record", **detail,
+                "explanation": ("the native registry lists no installed pstack, so the receipt's installation "
+                                "cannot be confirmed in this target")}
+    for row in rows:
+        if _registry_row_resolves_to(row, receipt.get("snapshot")):
+            return {"status": "receipt-confirmed", **detail}
+    return {"status": "source-mismatch", **detail,
+            "actual_source": json.dumps(rows[0].get("marketplaceSource") or rows[0].get("source"), sort_keys=True),
+            "explanation": "the registered installation resolves to a different source than the receipt's snapshot"}
 
 
 def _shared_verdict(home: Path, shared: Path | None, hub_root: Path) -> dict:
@@ -806,7 +876,14 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
         else:
             sheet["preserved_user_rows"] = rows
 
-    copies, anomalies = _plugin_copies(home)
+    copies: list[Path] = []
+    anomalies: list[str] = []
+    try:
+        copies, anomalies = _plugin_copies(home)
+    except common.IntegrationError as exc:
+        # A symlinked plugins directory is a block reason inside the report,
+        # never a reason to leave the reviewer without one.
+        anomalies = [str(exc)]
     config_registered = False
     config = home / "config.toml"
     if config.is_file():
@@ -822,6 +899,7 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
     except common.IntegrationError as exc:
         registry = {"error": str(exc),
                     "scope": "native registry evidence only; it does not prove hook trust or invocation"}
+    reconciled = _receipt_registration(receipt, registry)
 
     installed_report = _content_differences(copies[0], lock) if len(copies) == 1 else None
     shared_report = _shared_skills_report(shared, lock) if shared is not None else None
@@ -831,8 +909,8 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
     except common.IntegrationError as exc:
         verdict = {"compatible": None, "error": str(exc)}
 
-    registration = ("none" if not copies and not config_registered
-                    else "conflict" if len(copies) > 1 or anomalies
+    registration = ("conflict" if len(copies) > 1 or anomalies
+                    else "none" if not copies and not config_registered
                     else "single" if len(copies) == 1
                     else "config-only")
     shared_visible = bool(shared_report
@@ -863,12 +941,30 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
         "home), then run this entry's coexistence install, which registers the pinned snapshot and converts the "
         "sheet in one reviewed plan",
     ]
-    foreign_recovery = ("no Hub receipt exists for this installation, so no byte-exact Hub restore is claimed for "
-                        "it; the recorded native registry source is the reinstall basis; this report changed nothing")
+    foreign_recovery = ("no Hub receipt claims this installation, so no byte-exact Hub restore is offered for it; "
+                        "the recorded native registry source is the reinstall basis; this report changed nothing")
+    unconfirmed_reasons = {
+        "no-receipt": ("the armed native pstack installation has no Hub ownership receipt; the Hub neither adopts "
+                       "installations by name or byte-identical content nor writes around an unowned installation"),
+        "receipt-removed": ("this target's Hub receipt records a completed removal, so the armed registration now "
+                            "present was not installed by the Hub; the Hub neither adopts it by name or "
+                            "byte-identical content nor writes around an unowned installation"),
+        "source-mismatch": ("the armed registration resolves to a different source than the receipt's recorded "
+                            "snapshot, so it is not the Hub's installation; the Hub neither adopts installations by "
+                            "name or byte-identical content nor writes around an unowned installation"),
+        "no-registry-record": ("the native registry lists no installed pstack resolving to the receipt's snapshot, "
+                               "so ownership of the armed registration cannot be established; the Hub offers no "
+                               "conversion it cannot attribute"),
+        "registry-unavailable": ("the native registry could not be read, so ownership of the armed registration "
+                                 "cannot be established; the Hub offers no conversion it cannot attribute"),
+    }
 
     routing: dict = {"goal": "let this Codex home share the Kit's host defaults with an on-demand pstack workflow",
                      "compatibility": (verdict.get("error") if verdict.get("compatible") is None
                                        else verdict.get("reason"))}
+    if kit.get("present") is None:
+        routing["kit_entry_error"] = ("the Kit's own entry refuses this target (" + kit.get("error", "")
+                                      + "); resolve that state before relying on this report for a Kit install")
     if registration == "conflict":
         routing.update(status="blocked",
                        reason=(verdict.get("error")
@@ -888,7 +984,7 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
     elif hook == "off":
         routing.update(status="not-required",
                        reason="the sheet's exact '" + HOOK_OFF + "' line keeps SessionStart auto-routing off")
-    elif receipt is not None:
+    elif reconciled["status"] == "receipt-confirmed":
         try:
             embedded = make_plan(source=None, workspace=workspace, codex_home=home, codex_bin=binary,
                                  operation="install", coexistence=True, hub_root=hub_root)
@@ -900,6 +996,7 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
         else:
             routing.update(
                 status="applicable", plan_id=embedded["plan_id"], owner="hub-pstack-adapter",
+                receipt_reconciliation=reconciled,
                 sheet_change=(embedded["coexistence"] or {}).get("sheet_change"),
                 preserved=("every byte outside the 'session hook' line — all model rows, host mappings, the default "
                            "effort line, the encoding and the line endings — keeps its exact value"),
@@ -911,44 +1008,60 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                           "with the recorded and observed digests"))
     else:
         installed_rows = registry.get("installed_plugins") or []
-        actual = "no native registry record was found for it; its source is unknown"
-        if installed_rows:
+        actual = reconciled.get("actual_source")
+        if not actual and installed_rows:
             actual = json.dumps(installed_rows[0].get("marketplaceSource")
                                 or installed_rows[0].get("source"), sort_keys=True)
+        actual = actual or "no native registry record was found for it; its source is unknown"
         routing.update(status="blocked",
-                       reason=("the armed native pstack installation has no Hub ownership receipt; the Hub neither "
-                               "adopts installations by name or byte-identical content nor writes around an "
-                               "unowned installation"),
-                       actual_source=actual, steps=foreign_steps, recovery=foreign_recovery)
+                       reason=unconfirmed_reasons[reconciled["status"]],
+                       actual_source=actual, receipt_reconciliation=reconciled,
+                       steps=foreign_steps, recovery=foreign_recovery)
     transitions = [routing]
 
     if registration in ("single", "config-only"):
         ownership: dict
-        if receipt is not None and receipt.get("state") == "installed":
+        if reconciled["status"] == "receipt-confirmed" and receipt.get("state") == "installed":
             ownership = {"goal": "keep the native installation under one named owner",
                          "status": "owned",
                          "owner": "hub-pstack-adapter receipt and the native Codex plugin manager",
                          "source": {"snapshot": receipt.get("snapshot"),
                                     "source_lock_sha256": receipt.get("source_lock_sha256")},
+                         "receipt_reconciliation": reconciled,
                          "pinned_source_changed": receipt.get("source_lock_sha256") != origin["source_lock_sha256"],
                          "next": "doctor verifies installed files and registration; 'plan --operation remove' exits "
                                  "through this entry and restores the adapter-owned sheet change"}
-        elif receipt is not None:
+        elif reconciled["status"] == "receipt-confirmed":
             ownership = {"goal": "keep the native installation under one named owner",
                          "status": "owned-operation-unfinished", "receipt_state": receipt.get("state"),
+                         "receipt_reconciliation": reconciled,
                          "next": "a fresh plan/apply resumes the recorded operation, or 'plan --operation remove' "
                                  "cleans up only what the receipt records"}
+        elif reconciled["status"] == "registry-unavailable":
+            ownership = {"goal": "keep the native installation under one named owner",
+                         "status": "ownership-unverified", "receipt_state": receipt.get("state"),
+                         "receipt_reconciliation": reconciled,
+                         "next": "the native registry could not be read; run doctor with a working codex binary "
+                                 "before any Hub operation here"}
         else:
             installed_rows = registry.get("installed_plugins") or []
+            actual = reconciled.get("actual_source")
+            if not actual and installed_rows:
+                actual = json.dumps(installed_rows[0].get("marketplaceSource")
+                                    or installed_rows[0].get("source"), sort_keys=True)
+            if receipt is None:
+                reason = ("the native installation has no Hub ownership receipt; a matching name or "
+                          "byte-identical content is not a takeover basis")
+            else:
+                reason = ("a matching name or byte-identical content is not a takeover basis, and the receipt here "
+                          "does not confirm this registration (" + reconciled["status"] + ": "
+                          + reconciled.get("explanation", "") + ")")
             ownership = {"goal": "keep the native installation under one named owner",
                          "status": "not-adopted",
-                         "reason": ("the native installation has no Hub ownership receipt; a matching name or "
-                                    "byte-identical content is not a takeover basis"),
+                         "reason": reason,
                          "owner": "the lifecycle that installed it (the native Codex plugin manager)",
-                         "actual_source": (json.dumps(installed_rows[0].get("marketplaceSource")
-                                                      or installed_rows[0].get("source"), sort_keys=True)
-                                           if installed_rows
-                                           else "no native registry record was found for it; its source is unknown"),
+                         "actual_source": (actual or "no native registry record was found for it; its source is unknown"),
+                         "receipt_reconciliation": reconciled if receipt is not None else None,
                          "content_vs_pinned": (installed_report or
                                                {"detail": "registration exists only in config.toml; there is no "
                                                           "plugin copy to compare"}),
@@ -986,7 +1099,8 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                           "source_lock_sha256": origin["source_lock_sha256"], "locked_files": origin["locked_files"]},
         "facets": {"hub_receipt": ({"state": receipt.get("state"),
                                     "source_lock_sha256": receipt.get("source_lock_sha256"),
-                                    "snapshot": receipt.get("snapshot")} if receipt is not None
+                                    "snapshot": receipt.get("snapshot"),
+                                    "registration_reconciliation": reconciled} if receipt is not None
                                    else {"state": "none", "error": receipt_error}),
                    "kit": kit,
                    "sheet": sheet,
@@ -1116,6 +1230,8 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser.add_argument("--plan-id")
     args = parser.parse_args(argv)
     try:
+        if args.skills_dir is not None and args.command != "transition-plan":
+            raise common.IntegrationError("--skills-dir is only valid with transition-plan")
         if args.command == "doctor":
             result = doctor(workspace=args.workspace, codex_home=args.codex_home, codex_bin=args.codex_bin, hub_root=hub_root)
         elif args.command == "transition-plan":

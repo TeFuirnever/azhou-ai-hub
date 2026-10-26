@@ -95,10 +95,13 @@ class TransitionTestCase(unittest.TestCase):
         return adapter.apply(None, self.workspace, self.home, self.skills, self.binary,
                              plan["plan_id"], hub_root=self.hub)
 
-    def pstack_apply(self, operation="install", coexistence=None):
-        plan = pstack.make_plan(source=None, workspace=self.workspace, codex_home=self.home,
+    def pstack_plan(self, operation="install", coexistence=None):
+        return pstack.make_plan(source=None, workspace=self.workspace, codex_home=self.home,
                                 codex_bin=self.binary, operation=operation,
                                 coexistence=coexistence, hub_root=self.hub)
+
+    def pstack_apply(self, operation="install", coexistence=None):
+        plan = self.pstack_plan(operation, coexistence)
         return pstack.apply_plan(plan, plan_id=plan["plan_id"], hub_root=self.hub)
 
     def transition(self, skills_dir="default"):
@@ -205,7 +208,7 @@ class ReachableStateTests(TransitionTestCase):
         self.assertEqual(content["identical"], 4)
         self.assertEqual((content["modified_count"], content["missing_count"], content["unexpected_count"]), (0, 0, 0))
         self.assertIn("identical content is a comparison result, never a takeover basis", content["basis"])
-        self.assertIn("no byte-exact Hub restore is claimed", ownership["recovery"])
+        self.assertIn("no byte-exact Hub restore is offered", ownership["recovery"])
         # Byte-identical content did not create Hub ownership: nothing changed.
         self.assertEqual(plugin_before, self.tree_digests(self.home / "plugins"))
         self.assertFalse(pstack._receipt_path(self.workspace, self.home).exists())
@@ -224,7 +227,7 @@ class ReachableStateTests(TransitionTestCase):
         self.assertIn("byte-identical content", routing["reason"])
         self.assertIn("/setup-pstack", " ".join(routing["steps"]))
         self.assertIn("codex plugin remove " + pstack.PLUGIN, " ".join(routing["steps"]))
-        self.assertIn("no byte-exact Hub restore is claimed", routing["recovery"])
+        self.assertIn("no byte-exact Hub restore is offered", routing["recovery"])
         # The blocked transition left the armed sheet exactly as it was.
         self.assertEqual(self.sheet(), sheet_before)
 
@@ -280,6 +283,84 @@ class ReachableStateTests(TransitionTestCase):
         self.assertEqual(report["transitions"][0]["status"], "not-required")
         self.assertTrue(report["compatibility"]["compatible"])
         self.assertFalse(pstack._receipt_path(self.workspace, self.home).exists())
+
+
+class StaleReceiptTests(TransitionTestCase):
+    """A receipt alone never proves the registration is the Hub's own (#342 review).
+
+    A completed removal leaves its receipt behind, and the user may install a
+    foreign pstack afterwards. The registry must resolve the registration back
+    to the receipt's snapshot before any Hub-owned conversion or ownership
+    claim; otherwise the same conservative rule as for receipt-less targets
+    applies, on both the transition entry and the install entry itself.
+    """
+
+    def test_removed_receipt_then_foreign_install_is_blocked_not_applicable(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()                      # Hub standalone install
+        self.pstack_apply("remove")              # receipt stays, state removed; sheet restored
+        self.assertEqual(self.sheet(), ARMED_SHEET.encode())
+        self.install_foreign_plugin()            # the user installs their own pstack afterwards
+        sheet_before = self.sheet()
+        report = self.transition()
+        self.assertEqual(report["recognized_states"], ["armed-pstack"])
+        routing = report["transitions"][0]
+        self.assertEqual(routing["status"], "blocked")
+        self.assertIn("was not installed by the Hub", routing["reason"])
+        self.assertIn("receipt-removed", routing["receipt_reconciliation"]["status"])
+        self.assertIn("/foreign-upstream-clone", routing["actual_source"])
+        self.assertNotIn("plan_id", routing)
+        ownership = report["transitions"][1]
+        self.assertEqual(ownership["status"], "not-adopted")
+        self.assertIn("receipt-removed", ownership["receipt_reconciliation"]["status"])
+        self.assertIn("/foreign-upstream-clone", ownership["actual_source"])
+        # Byte-identical content and a stale receipt produced no Hub write or claim.
+        self.assertEqual(self.sheet(), sheet_before)
+
+    def test_install_entry_refuses_a_stale_removed_receipt_over_a_foreign_install(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()
+        self.pstack_apply("remove")
+        self.install_foreign_plugin()
+        with self.assertRaisesRegex(common.IntegrationError, "completed-removal receipt is stale"):
+            self.pstack_plan()
+        self.assertEqual(self.sheet(), ARMED_SHEET.encode())
+        # With the foreign registration gone, the same sequence installs cleanly again.
+        shutil.rmtree(self.home / FOREIGN_INSTALLED)
+        (self.home / "native-marketplace.json").unlink()
+        self.assertTrue(self.pstack_apply()["changed"])
+
+    def test_swapped_registry_source_is_not_the_hubs_installation(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()                      # Hub-owned armed standalone install
+        self.home.mkdir(parents=True, exist_ok=True)
+        (self.home / "native-marketplace.json").write_text(
+            json.dumps({"source": "/swapped-marketplace"}), encoding="utf-8")
+        report = self.transition()
+        routing = report["transitions"][0]
+        self.assertEqual(routing["status"], "blocked")
+        self.assertIn("resolves to a different source than the receipt's", routing["reason"])
+        self.assertIn("source-mismatch", routing["receipt_reconciliation"]["status"])
+        self.assertNotIn("plan_id", routing)
+        ownership = report["transitions"][1]
+        self.assertEqual(ownership["status"], "not-adopted")
+        self.assertIn("does not confirm this registration", ownership["reason"])
+
+    def test_unreadable_registry_blocks_rather_than_guesses_ownership(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()                      # Hub-owned armed standalone install
+        broken = self.base / "broken-codex"
+        broken.write_text("#!/usr/bin/env python3\nimport sys; sys.exit('registry down')\n", encoding="utf-8")
+        broken.chmod(0o700)
+        report = pstack.transition(workspace=self.workspace, codex_home=self.home, codex_bin=broken,
+                                   skills_dir=self.shared, hub_root=self.hub)
+        routing = report["transitions"][0]
+        self.assertEqual(routing["status"], "blocked")
+        self.assertIn("registry could not be read", routing["reason"])
+        self.assertNotIn("plan_id", routing)
+        ownership = report["transitions"][1]
+        self.assertEqual(ownership["status"], "ownership-unverified")
+        self.assertIn("doctor", ownership["next"])
 
 
 class ApplicableConversionTests(TransitionTestCase):
@@ -409,6 +490,50 @@ class RegistryAndCliTests(TransitionTestCase):
         self.assertIn("registry down", report["facets"]["native_registry"]["error"])
         self.assertEqual(report["facets"]["native_registration"]["classification"], "single")
         self.assertEqual(report["recognized_states"], ["armed-pstack"])
+
+    def test_shared_skill_bootstrap_output_is_not_reported_as_local_modification(self):
+        self.install_shared_skill()
+        dependency = self.shared / "poteto-mode/scripts/node_modules/commander/package.json"
+        dependency.parent.mkdir(parents=True)
+        dependency.write_text('{"name":"commander"}', encoding="utf-8")
+        report = self.transition()
+        self.assertEqual(report["recognized_states"], ["shared-pstack-skills-only"])
+        shared = [t for t in report["transitions"] if t["goal"].startswith("keep using shared")][0]
+        self.assertEqual(shared["status"], "preserved")
+        row = report["facets"]["shared_skills"]["skills"]["poteto-mode"]
+        self.assertEqual((row["modified_count"], row["missing_count"], row["extra_count"]), (0, 0, 0))
+
+    def test_symlinked_plugins_directory_is_a_block_reason_not_a_crash(self):
+        elsewhere = self.base / "elsewhere-plugins"
+        elsewhere.mkdir()
+        self.home.mkdir(parents=True)
+        (self.home / "plugins").symlink_to(elsewhere)
+        report = self.transition()
+        self.assertEqual(report["recognized_states"], ["registration-conflict"])
+        routing = report["transitions"][0]
+        self.assertEqual(routing["status"], "blocked")
+        self.assertIn("symbolic link", routing["reason"])
+        self.assertTrue(routing["anomalies"])
+
+    def test_kit_side_errors_surface_on_the_routing_transition(self):
+        self.install_shared_skill()
+        stray = self.home / "skills/astra-orchestrator/SKILL.md"
+        stray.parent.mkdir(parents=True)
+        stray.write_text("stray skill without an ownership record\n", encoding="utf-8")
+        report = self.transition()
+        self.assertIsNone(report["facets"]["kit"]["present"])
+        routing = report["transitions"][0]
+        self.assertIn("the Kit's own entry refuses this target", routing["kit_entry_error"])
+        self.assertIn("without a Kit ownership record", routing["kit_entry_error"])
+
+    def test_cli_rejects_skills_dir_on_other_commands(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = pstack.main(["plan", "--workspace", str(self.workspace), "--codex-home", str(self.home),
+                                  "--codex-bin", str(self.binary), "--skills-dir", str(self.shared)],
+                                 hub_root=self.hub)
+        self.assertEqual(1, result)
+        self.assertIn("--skills-dir is only valid with transition-plan", output.getvalue())
 
     def test_cli_transition_plan_is_read_only(self):
         self.kit_apply()
