@@ -40,6 +40,15 @@ python3 -B tools/manage-codex-pet.py --help
 
 此操作只准备新项目候选，不读取或修改用户安装目录，不转移原安装 receipt，也不刷新、选择或播放 pet。完整命令与边界见 Hub [接入操作说明](../../../docs/integrations.md#pet-maintenance-after-the-import)。对应隔离测试为 `python3 -B tools/test-import-codex-pet.py`。
 
+导入的 Hub 候选复验通过后，若原生 Pet 仍带旧项目 receipt，可从最终 Hub 包目录执行一次明确的归属接管：
+
+```bash
+python3 -B tools/manage-codex-pet.py handoff --previous-project-root /absolute/old/project/root
+python3 -B tools/manage-codex-pet.py status
+```
+
+`handoff` 要求旧项目当前候选、实际安装及 Hub 候选的主题、图集和清单摘要一致；它同时取得旧项目锁和用户 Pet 锁，并通过原有事务安装新项目 receipt。旧项目不再存在时，仅已完成且与 Hub 当前候选完全一致的安装可被识别为重试完成。普通 `install`/`sync` 不接管其他项目；`handoff` 也不改变宿主当前所选 Pet。删除旧项目之前，应核对 Hub `status` 的安装字节结果并保存旧候选证据。
+
 ### 1. 冻结主题
 
 ```bash
@@ -141,7 +150,7 @@ azhou-agent-lab/
 
 `pet.json` 严格只有 `id`、`displayName`、`description`、`spriteVersionNumber:2`、`spritesheetPath:"spritesheet.webp"` 五项。独立 receipt 保存本项目所有权、实际字节摘要及主题修订，供后续更新和恢复使用；它不是原生契约字段，也不是签名或视觉验收的替代品。
 
-同名目录没有本项目 receipt、属于其他项目、存在未知文件、含符号链接或内容与 receipt 不符时，安装被拒绝。脚本不会“接管”已有未知 pet。已知且完整的本项目安装允许更新。
+同名目录没有本项目 receipt、属于其他项目、存在未知文件、含符号链接或内容与 receipt 不符时，普通安装被拒绝。明确的 `handoff` 只接管上述三方摘要一致的旧项目安装；未知 pet 仍会被拒绝。已知且完整的本项目安装允许更新。
 
 ## 锁、事务与恢复范围
 

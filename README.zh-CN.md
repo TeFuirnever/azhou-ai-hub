@@ -87,7 +87,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
-| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS 播放器与隔离测试入口；正式安装仍暂停，程序再分发尚未获授权。 |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS 播放器与隔离测试入口；原生安装器可接管一个已严格核实的本地入口，通用正式安装计划和卸载仍暂停。程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
@@ -100,7 +100,7 @@ python scripts/azhou_hub.py integrations startup-animation --help
 
 动画程序目前没有已记录的开源授权；Hub 根目录许可证不覆盖该包。再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材保留在包外。2026-10-25 验收报告只记录当时检查的输入和宿主，不代表本次 monorepo 导入已重新验收。本次迁移没有重启 Codex，也没有改变实时外观；正式安装、冷启动宿主、应用壁纸和正式视觉审阅仍未验证。
 
-包内还保留了现有 Codex Pet 主题和维护工具；源码迁移本身没有转移私有已审阅候选或安装归属。独立导入工具可在审阅计划后，为新根目录复验已有候选，并保留原始来源、QA 和现有安装归属，详见 [Pet 迁入后的维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+包内还保留了现有 Codex Pet 主题和维护工具；源码迁移本身没有转移私有已审阅候选或安装归属。独立导入工具可在审阅计划后，为新根目录复验已有候选并保留原始来源与 QA；原生管理器随后可把完全匹配的已安装 Pet 接管到新根目录，详见 [Pet 迁入后的维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
 
 ## Skills
 

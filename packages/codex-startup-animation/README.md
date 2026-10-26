@@ -170,6 +170,8 @@ python3 tools/install-macos.py --check
 
 `python3 tools/install-macos.py --check` 和 `bash tools/install-macos.sh --check` 均为只读检查；前者也不会自动构建。普通安装和 `--open` 每次先构建当前源码。
 
+从已安装的旧项目目录转到本包时，先在最终 Hub 包目录运行 `bash tools/build-macos.sh`，再执行 `python3 tools/install-macos.py --migrate-from /absolute/old/project/root`。它只接管旧安装记录、旧载荷和唯一原生入口同时吻合的包；完成后用本包的 `--check` 核对，再处理旧目录。普通安装不会自动接管旧项目。
+
 历史旧命名入口和19个恢复文件已按用户要求删除。构建及安装不生成持久ZIP备份，早期验收录像继续保留。当前源码可重新构建；已删除的恢复包不能使用历史恢复命令找回。
 
 完整规则、来源保护、登记工具边界和必要回归命令见 [安装升级约定](docs/installation-lifecycle.md)。

@@ -25,6 +25,17 @@ python3 tools/install-macos.py --check
 
 `bash tools/build-macos.sh` 只更新隐藏载荷；`bash tools/build-extension.sh` 是同一构建的兼容名称。构建不会在新安装验证之前先删除旧的可用应用。
 
+## 从旧项目目录接管现有安装
+
+在最终 Hub 包目录构建并核查新载荷后，可一次性执行：
+
+```sh
+python3 tools/install-macos.py --migrate-from /absolute/old/project/root
+python3 tools/install-macos.py --check
+```
+
+旧路径必须是仍然存在的实体目录。接管要求旧项目 `.local/installation.json`、`.build/azhou-payload` 和当前唯一安装入口的身份、来源标记、版本与完整包指纹一致；旧 `dist` 不得留有应用，系统登记必须只指向当前入口。操作同时锁住固定用户入口、新旧项目的安装记录。只有这一个精确旧包可进入现有的原子替换流程；普通安装仍拒绝其他项目目录的来源标记。新记录中的 `sourceHandoff` 保存新旧目录和指纹。新入口验证完成之前不要删除旧目录；失败后先核查入口与记录，再使用原命令重试。
+
 ## 升级次序与判断依据
 
 安装器核对载荷身份、版本、来源标记、签名及完整包指纹；检查当前项目播放器没有使用待替换或退休路径。新包复制到无 `.app` 后缀的暂存目录，再校验指纹；替换前重新检查原目标未变化。规范目标以原子交换更新，替换后再次验证，失败则回滚。

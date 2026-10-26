@@ -87,7 +87,7 @@ Three complete projects live under `packages/`; they keep their own native layou
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | Optional native Codex plugin installation into an explicit target; review hook trust separately. |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | Optional native Codex profile installation; keep one workflow owner per task. |
-| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS player and isolated test entry; production installation remains held. Program redistribution is not authorized. |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS player and isolated test entry; the native installer can take over one verified local entry. General production plans and uninstall remain held. Program redistribution is not authorized. |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
@@ -100,7 +100,7 @@ python scripts/azhou_hub.py integrations startup-animation --help
 
 The animation program has no recorded open-source license grant. The Hub root license does not cover that package; do not publish its source or binaries until redistribution permission is clarified. Private artwork stays outside the package. The 2026-10-25 acceptance report is historical evidence for its inspected inputs and host, not fresh acceptance of the monorepo import. This migration did not restart Codex or change live appearance; production installation, cold host launch, wallpaper application and formal visual approval remain unverified.
 
-The package also includes its existing Codex Pet theme and maintenance tools. Source migration did not transfer private reviewed candidates or installation ownership. A separate plan-reviewed importer can revalidate an existing candidate for the new root while preserving its source, QA and installed ownership; see [Pet maintenance after the import](docs/integrations.md#pet-maintenance-after-the-import). Installed-byte checks do not prove host selection or playback.
+The package also includes its existing Codex Pet theme and maintenance tools. Source migration alone did not transfer private reviewed candidates or installation ownership. A separate plan-reviewed importer can revalidate an existing candidate for the new root while preserving its source and QA; the native manager can then hand off an exact matching installed Pet to that root. See [Pet maintenance after the import](docs/integrations.md#pet-maintenance-after-the-import). Installed-byte checks do not prove host selection or playback.
 
 ## Skills
 

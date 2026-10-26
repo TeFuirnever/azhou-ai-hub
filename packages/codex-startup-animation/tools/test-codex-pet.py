@@ -85,6 +85,34 @@ class PetSafetyTests(unittest.TestCase):
         for name, value in data.items():
             (self.run / name).write_text(json.dumps(value))
 
+    def make_package_for(self, project, image, label):
+        snapshot = Path(PET.prepare(project)["snapshot"])
+        revision = json.loads(snapshot.read_text())["themeRevision"]
+        run = self.root / label
+        (run / "final").mkdir(parents=True)
+        (run / "qa").mkdir()
+        (run / "final/spritesheet-extended.webp").write_bytes(image)
+        data = {name: {"ok": True, "errors": []} for name in PET.QA_FILES}
+        data["qa/direction-semantics.json"] = {"directions": [
+            {"direction": str(n * 22.5), "pass": True, "expected": "synthetic", "observed": "synthetic",
+             "reason": "fixture only, not a visual acceptance"} for n in range(16)]}
+        data["qa/visual-qa.json"] = {"pass": True, "atlasSHA256": PET.sha(image),
+                                     "themeRevision": revision, "reviewer": "synthetic test fixture"}
+        for name, value in data.items():
+            (run / name).write_text(json.dumps(value))
+        return PET.package_run(project, run, snapshot)
+
+    def make_old_install(self, image=None):
+        old_project = self.root / "previous-project"
+        old_project.mkdir()
+        for name in PET.INPUTS:
+            destination = old_project / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.project / name, destination)
+        self.make_package_for(old_project, image or self.atlas_a, "previous-run")
+        PET.install_package(old_project, self.codex)
+        return old_project
+
     def change_qa(self, name, mutate):
         path = self.run / name
         value = json.loads(path.read_text())
@@ -228,6 +256,163 @@ class PetSafetyTests(unittest.TestCase):
         (target / "user-content.txt").write_text("keep me")
         self.expect_error(lambda: PET.install_package(self.project, self.codex), "unknown-target")
         self.assertEqual((target / "user-content.txt").read_text(), "keep me")
+
+    def test_handoff_rebinds_exact_old_install_and_retries_after_source_removal(self):
+        previous_project = self.make_old_install()
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        old_facts = PET.installed_facts(target, previous_project)
+        old_receipt = json.loads((target / ".azhou-pet-receipt.json").read_text())
+        self.assertEqual(old_receipt["projectRoot"], str(previous_project))
+        self.expect_error(lambda: PET.install_package(self.project, self.codex), "unknown-target")
+        self.assertEqual(json.loads((target / ".azhou-pet-receipt.json").read_text()), old_receipt)
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = PET.main(["handoff", "--project-root", str(self.project),
+                             "--previous-project-root", str(previous_project),
+                             "--codex-home", str(self.codex)])
+        result = json.loads(output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "handed-off")
+        new_receipt = json.loads((target / ".azhou-pet-receipt.json").read_text())
+        self.assertEqual(new_receipt["projectRoot"], str(self.project))
+        self.assertEqual(PET.installed_facts(target, self.project)["atlasSHA256"], old_facts["atlasSHA256"])
+        self.assertFalse(PET.journal_path(target.parent).exists())
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.previous-*")))
+
+        shutil.rmtree(previous_project)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = PET.main(["handoff", "--project-root", str(self.project),
+                             "--previous-project-root", str(previous_project),
+                             "--codex-home", str(self.codex)])
+        result = json.loads(output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "already-handed-off")
+        self.assertEqual(PET.status(self.project, self.codex)["installed"]["status"], "verified")
+
+    def test_handoff_rejects_different_hub_candidate_and_preserves_old_install(self):
+        previous_project = self.make_old_install(self.atlas_a)
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        before = (target / "spritesheet.webp").read_bytes()
+        self.expect_error(lambda: PET.handoff_package(self.project, previous_project, self.codex),
+                          "source-conflict")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), before)
+        self.assertEqual(PET.installed_facts(target, previous_project)["atlasSHA256"], PET.sha(self.atlas_a))
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_rechecks_hub_candidate_after_comparison_before_install(self):
+        previous_project = self.make_old_install(self.atlas_a)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        receipt_before = (target / ".azhou-pet-receipt.json").read_bytes()
+        atlas_before = (target / "spritesheet.webp").read_bytes()
+        original_install = PET.install_package
+
+        def replace_hub_selection_then_install(project, codex_home, **kwargs):
+            self.make_run(self.atlas_b)
+            self.package()
+            return original_install(project, codex_home, **kwargs)
+
+        with patch.object(PET, "install_package", side_effect=replace_hub_selection_then_install):
+            self.expect_error(lambda: PET.handoff_package(self.project, previous_project, self.codex),
+                              "source-conflict")
+        self.assertEqual((target / ".azhou-pet-receipt.json").read_bytes(), receipt_before)
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), atlas_before)
+        self.assertEqual(PET.installed_facts(target, previous_project)["atlasSHA256"], PET.sha(self.atlas_a))
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_rejects_modified_old_install_without_replacing_it(self):
+        previous_project = self.make_old_install()
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        (target / "spritesheet.webp").write_bytes(self.atlas_b)
+        self.expect_error(lambda: PET.handoff_package(self.project, previous_project, self.codex),
+                          "unknown-target")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_b)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_requires_the_installed_receipt_to_name_the_exact_old_root(self):
+        previous_project = self.make_old_install()
+        other_project = self.root / "same-content-other-root"
+        other_project.mkdir()
+        for name in PET.INPUTS:
+            destination = other_project / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.project / name, destination)
+        self.make_package_for(other_project, self.atlas_a, "other-root-run")
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        before = (target / ".azhou-pet-receipt.json").read_bytes()
+        self.expect_error(lambda: PET.handoff_package(self.project, other_project, self.codex),
+                          "unknown-target")
+        self.assertEqual((target / ".azhou-pet-receipt.json").read_bytes(), before)
+        self.assertEqual(PET.installed_facts(target, previous_project)["atlasSHA256"], PET.sha(self.atlas_a))
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_respects_old_project_lock_without_touching_target(self):
+        previous_project = self.make_old_install()
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        receipt_before = (target / ".azhou-pet-receipt.json").read_bytes()
+        with PET.lock(PET.state_dir(previous_project) / "project.lock"):
+            self.expect_error(lambda: PET.handoff_package(self.project, previous_project, self.codex), "busy")
+        self.assertEqual((target / ".azhou-pet-receipt.json").read_bytes(), receipt_before)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_rejects_symlink_alias_for_old_project(self):
+        previous_project = self.make_old_install()
+        self.package()
+        alias = self.root / "previous-project-alias"
+        alias.symlink_to(previous_project, target_is_directory=True)
+        target = self.codex / "pets" / PET.PET_ID
+        receipt_before = (target / ".azhou-pet-receipt.json").read_bytes()
+        self.expect_error(lambda: PET.handoff_package(self.project, alias, self.codex), "unknown-target")
+        self.assertEqual((target / ".azhou-pet-receipt.json").read_bytes(), receipt_before)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_handoff_recovery_restores_old_owner_after_swap_interruption(self):
+        previous_project = self.make_old_install()
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        real = PET.os.rename
+
+        def interrupted(source, destination):
+            real(source, destination)
+            if Path(destination) == target and ".stage-" in str(source):
+                raise SystemExit("simulated process exit during handoff")
+
+        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+            PET.handoff_package(self.project, previous_project, self.codex)
+        self.assertTrue(PET.journal_path(target.parent).exists())
+        self.assertEqual(PET.recover_install(target.parent, self.project), "restored-previous-installed-package")
+        self.assertEqual(PET.installed_facts(target, previous_project)["atlasSHA256"], PET.sha(self.atlas_a))
+        self.assertFalse(PET.journal_path(target.parent).exists())
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.stage-*")))
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.previous-*")))
+
+    def test_handoff_commit_recovery_removes_old_owner_backup(self):
+        previous_project = self.make_old_install()
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        real = PET.remove_tree
+
+        def interrupted(path):
+            if ".previous-" in str(path):
+                raise SystemExit("simulated process exit during handoff cleanup")
+            return real(path)
+
+        with patch.object(PET, "remove_tree", side_effect=interrupted), self.assertRaises(SystemExit):
+            PET.handoff_package(self.project, previous_project, self.codex)
+        self.assertEqual(json.loads((target / ".azhou-pet-receipt.json").read_text())["projectRoot"], str(self.project))
+        self.assertTrue(PET.journal_path(target.parent).exists())
+        self.assertEqual(PET.recover_install(target.parent, self.project), "completed-committed-install")
+        self.assertEqual(PET.installed_facts(target, self.project)["atlasSHA256"], PET.sha(self.atlas_a))
+        self.assertFalse(PET.journal_path(target.parent).exists())
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.previous-*")))
 
     def test_target_symlink_is_rejected(self):
         self.package()

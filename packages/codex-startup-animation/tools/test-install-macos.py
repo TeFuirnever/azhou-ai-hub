@@ -50,6 +50,7 @@ class InstallerTests(unittest.TestCase):
         self.swap_calls = 0
         self.sticky_unregister = set()
         self.mutate_source_during_copy = False
+        self.mutate_old_during_copy = None
         self.capture = io.StringIO()
         self.addCleanup(patch.stopall)
         patch.object(subprocess, 'run', self.run_command).start()
@@ -100,6 +101,30 @@ class InstallerTests(unittest.TestCase):
                                       'sourcePath': str(old), 'bundleID': m.EXPECTED[0], 'version': '0.5.0'}))
         return old
 
+    def old_owned_install(self):
+        m = self.module
+        old_root = self.base / 'old-project'
+        old_root.mkdir()
+        old_root = old_root.resolve()
+        self.bundle(m.DESTINATION, version='0.5.0', build='2', body='old owner')
+        marker_path = m.DESTINATION / m.HELPERS['MARKER']
+        marker = json.loads(marker_path.read_text())
+        marker['projectRoot'] = str(old_root)
+        marker_path.write_text(json.dumps(marker))
+        old_source = old_root / '.build/azhou-payload'
+        old_source.parent.mkdir(parents=True)
+        shutil.copytree(m.DESTINATION, old_source)
+        old_hash = m.fingerprint(m.DESTINATION)
+        record = {'schema': 2, 'projectID': m.PROJECT_ID, 'projectRoot': str(old_root),
+                  'status': 'installed', 'installedPath': str(m.DESTINATION),
+                  'sourcePath': str(old_source), 'sha256Tree': old_hash,
+                  'bundleID': m.EXPECTED[0], 'executable': m.EXPECTED[1],
+                  'version': '0.5.0', 'build': '2'}
+        (old_root / '.local').mkdir()
+        (old_root / '.local/installation.json').write_text(json.dumps(record))
+        self.registry[m.EXPECTED[0]].add(m.DESTINATION)
+        return old_root, record
+
     def run_command(self, command, **options):
         m = self.module
         self.commands.append(tuple(str(value) for value in command))
@@ -110,6 +135,8 @@ class InstallerTests(unittest.TestCase):
             shutil.copytree(command[1], command[2])
             if self.mutate_source_during_copy:
                 (m.SOURCE / 'Contents/Resources/web/index.html').write_text('concurrent build')
+            if self.mutate_old_during_copy is not None:
+                (self.mutate_old_during_copy / 'Contents/Resources/web/index.html').write_text('concurrent old build')
         elif command[0] == m.LSREGISTER:
             self.assertEqual(command[1], '-u')
             path = Path(command[2])
@@ -236,6 +263,58 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '其他项目或路径'):
             m.install()
         self.assertTrue(path.exists())
+
+    def test_explicit_source_handoff_replaces_exact_old_owner(self):
+        m = self.module
+        old_root, old_record = self.old_owned_install()
+        with self.assertRaisesRegex(RuntimeError, '其他项目或路径'):
+            m.install()
+        result = m.install(migrate_from=str(old_root))
+        self.assertEqual(result['status'], 'installed')
+        self.assertEqual(result['sourceHandoff']['oldSHA256'], old_record['sha256Tree'])
+        self.assertEqual(result['sourceHandoff']['newRoot'], str(m.ROOT))
+        self.assertEqual(m.HELPERS['read_marker'](m.DESTINATION)['projectRoot'], str(m.ROOT))
+        self.assertEqual(m.install(True)['status'], 'current')
+        self.assert_clean()
+
+    def test_handoff_rejects_receipt_or_payload_mismatch(self):
+        m = self.module
+        old_root, record = self.old_owned_install()
+        record['sha256Tree'] = '0' * 64
+        (old_root / '.local/installation.json').write_text(json.dumps(record))
+        before = m.fingerprint(m.DESTINATION)
+        with self.assertRaisesRegex(RuntimeError, '不一致'):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(m.fingerprint(m.DESTINATION), before)
+        self.assertEqual(self.swap_calls, 0)
+
+    def test_handoff_rejects_other_registered_app(self):
+        m = self.module
+        old_root, _ = self.old_owned_install()
+        self.registry[m.EXPECTED[0]].add(self.base / 'elsewhere/Another.app')
+        with self.assertRaisesRegex(RuntimeError, '超出清理范围'):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(self.swap_calls, 0)
+
+    def test_handoff_swap_failure_preserves_old_install(self):
+        m = self.module
+        old_root, _ = self.old_owned_install()
+        before = m.fingerprint(m.DESTINATION)
+        self.failure = 'swap'
+        with self.assertRaises(OSError):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(m.fingerprint(m.DESTINATION), before)
+        self.assertEqual(m.HELPERS['read_marker'](m.DESTINATION)['projectRoot'], str(old_root))
+
+    def test_handoff_rechecks_old_payload_before_swap(self):
+        m = self.module
+        old_root, _ = self.old_owned_install()
+        before = m.fingerprint(m.DESTINATION)
+        self.mutate_old_during_copy = old_root / '.build/azhou-payload'
+        with self.assertRaisesRegex(RuntimeError, '不一致'):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(m.fingerprint(m.DESTINATION), before)
+        self.assertEqual(self.swap_calls, 0)
 
     def test_official_and_unrelated_apps_are_excluded(self):
         m = self.module

@@ -78,13 +78,10 @@ def save_receipt(record):
 
 
 @contextlib.contextmanager
-def install_lock(check_only):
-    if check_only:
-        yield
-        return
-    local = receipt_path().parent
-    local.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(local / 'install.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+def file_lock(path):
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise RuntimeError(f'安装锁目录不是实体目录：{path.parent}')
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -93,6 +90,77 @@ def install_lock(check_only):
         yield
     finally:
         os.close(descriptor)
+
+
+@contextlib.contextmanager
+def install_lock(check_only, old_root=None):
+    if check_only:
+        yield
+        return
+    local = receipt_path().parent
+    local.mkdir(parents=True, exist_ok=True)
+    DESTINATION.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(file_lock(DESTINATION.parent / '.azhou-startup-install.lock'))
+        stack.enter_context(file_lock(local / 'install.lock'))
+        if old_root is not None:
+            old_local = old_root / '.local'
+            if old_local.is_symlink() or not old_local.is_dir():
+                raise RuntimeError('旧安装记录目录不是实体目录。')
+            stack.enter_context(file_lock(old_local / 'install.lock'))
+        yield
+
+
+def migration_root(value):
+    old_root = Path(value)
+    if (not old_root.is_absolute() or old_root.is_symlink() or not old_root.is_dir()
+            or old_root != old_root.resolve(strict=True) or old_root == ROOT):
+        raise RuntimeError('旧项目路径必须是不同于当前项目的绝对实体目录。')
+    return old_root
+
+
+def old_install_proof(old_root):
+    """Authorize exactly the currently installed old-root package, never a root wildcard."""
+    record_path = old_root / '.local/installation.json'
+    old_source = old_root / '.build/azhou-payload'
+    if (record_path.is_symlink() or not record_path.is_file()
+            or old_source.parent.is_symlink() or old_source.is_symlink()
+            or not old_source.is_dir()):
+        raise RuntimeError('旧安装记录或构建载荷缺失，不能接管。')
+    record = json.loads(record_path.read_text())
+    if not isinstance(record, dict):
+        raise RuntimeError('旧安装记录格式无效，不能接管。')
+    required = {'schema': 2, 'projectID': PROJECT_ID, 'projectRoot': str(old_root),
+                'installedPath': str(DESTINATION), 'sourcePath': str(old_source),
+                'bundleID': EXPECTED[0], 'executable': EXPECTED[1]}
+    if (any(record.get(key) != value for key, value in required.items())
+            or record.get('status') not in ('installed', 'current', 'consolidated')
+            or not re.fullmatch(r'[0-9a-f]{64}', str(record.get('sha256Tree', '')))):
+        raise RuntimeError('旧安装记录没有证明当前入口归属，不能接管。')
+    old_hash = record['sha256Tree']
+    for path in (old_source, DESTINATION):
+        info = HELPERS['require'](path, EXPECTED)
+        marker = HELPERS['read_marker'](path, required=True)
+        if (marker['projectID'] != PROJECT_ID or marker['projectRoot'] != str(old_root)
+                or marker['bundleID'] != EXPECTED[0] or marker['executable'] != EXPECTED[1]
+                or info.get('CFBundleShortVersionString') != record.get('version')
+                or str(info.get('CFBundleVersion')) != str(record.get('build'))
+                or fingerprint(path) != old_hash):
+            raise RuntimeError(f'旧包与安装记录不一致，不能接管：{path}')
+        HELPERS['verify_icon'](path, info)
+        HELPERS['verify_wallpaper'](path, info, marker)
+        subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(path)], check=True)
+    old_dist = old_root / 'dist'
+    if old_dist.is_symlink() or (old_dist.exists() and not old_dist.is_dir()):
+        raise RuntimeError('旧输出目录不是实体目录，不能接管。')
+    if old_dist.exists() and any(path.suffix.lower() == '.app' for path in old_dist.iterdir()):
+        raise RuntimeError('旧输出目录仍有应用，不能接管。')
+    return {'oldRoot': str(old_root), 'installedPath': str(DESTINATION), 'oldSHA256': old_hash}
+
+
+def recheck_handoff(old_root, expected):
+    if old_install_proof(old_root) != expected:
+        raise RuntimeError('旧安装归属在交换前发生变化，未替换。')
 
 
 def trusted_receipt(record):
@@ -113,7 +181,7 @@ def retired_records(record):
     return accepted
 
 
-def scan_apps(source_info, source_hash, record):
+def scan_apps(source_info, source_hash, record, handoff=None):
     """Only immediate real .app directories in the two managed locations."""
     raw, dist_entities, conflicts = {}, [], []
     known_ids = {identity[0] for identity in KNOWN}
@@ -175,9 +243,13 @@ def scan_apps(source_info, source_hash, record):
             if entry['sha256Tree'] == source_hash:
                 proof = 'current-payload-fingerprint'
             elif marker:
-                if marker.get('projectID') != PROJECT_ID or marker.get('projectRoot') != str(ROOT):
+                old_entry = (handoff is not None and path == DESTINATION
+                             and entry['sha256Tree'] == handoff['oldSHA256']
+                             and marker.get('projectID') == PROJECT_ID
+                             and marker.get('projectRoot') == handoff['oldRoot'])
+                if not old_entry and (marker.get('projectID') != PROJECT_ID or marker.get('projectRoot') != str(ROOT)):
                     raise RuntimeError('来源标记属于其他项目或路径')
-                proof = 'project-build-marker'
+                proof = 'verified-source-handoff' if old_entry else 'project-build-marker'
             elif (legacy_proven and entry['sha256Tree'] == LEGACY_SHA256 and entry['identity'] == EXPECTED
                   and entry['info'].get('CFBundleShortVersionString') == '0.5.0'
                   and str(entry['info'].get('CFBundleVersion')) == '2'):
@@ -244,7 +316,7 @@ def unchanged(entry):
         raise RuntimeError(f'候选在核查后发生变化，未替换或删除：{entry["path"]}')
 
 
-def install_payload(source_hash, original):
+def install_payload(source_hash, original, before_swap=None):
     DESTINATION.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix='.azhou-install-', dir=DESTINATION.parent))
     staged = temporary / 'payload'  # Never create a second discoverable .app.
@@ -257,6 +329,8 @@ def install_payload(source_hash, original):
         require_stopped([DESTINATION])
         if original:
             unchanged(original)
+            if before_swap is not None:
+                before_swap()
             cleanup = False
             try:
                 swap(staged, DESTINATION)
@@ -310,8 +384,11 @@ def unique_state(source_info, source_hash, record):
     return {'installedProjectAppCount': 1, 'distAppCount': 0, 'registeredProjectPathCount': 1}
 
 
-def install(check_only=False):
-    with install_lock(check_only):
+def install(check_only=False, migrate_from=None):
+    if check_only and migrate_from is not None:
+        raise RuntimeError('只读检查与来源接管不能同时执行。')
+    old_root = migration_root(migrate_from) if migrate_from is not None else None
+    with install_lock(check_only, old_root):
         if (ROOT / '.build').is_symlink() or SOURCE.suffix.lower() == '.app':
             raise RuntimeError('构建源必须为项目 .build 内无 .app 后缀的实体载荷。')
         source_hash = fingerprint(SOURCE)
@@ -320,9 +397,21 @@ def install(check_only=False):
         if fingerprint(SOURCE) != source_hash:
             raise RuntimeError('构建载荷在核查期间发生变化，请待构建结束后重试。')
         record = read_receipt()
-        candidates, _ = scan_apps(source_info, source_hash, record)
+        already_current = False
+        if old_root is not None and DESTINATION.is_dir() and not DESTINATION.is_symlink():
+            try:
+                verify(DESTINATION)
+                already_current = fingerprint(DESTINATION) == source_hash
+            except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError):
+                pass
+        handoff = None if old_root is None or already_current else old_install_proof(old_root)
+        candidates, _ = scan_apps(source_info, source_hash, record, handoff)
         inventory = registry_inventory()
         validate_registry_scope(inventory, candidates, record)
+        if handoff is not None:
+            expected_registry = {identity[0]: ({DESTINATION} if identity == EXPECTED else set()) for identity in KNOWN}
+            if inventory != expected_registry:
+                raise RuntimeError('旧应用登记不唯一，不能接管。')
         original = next((entry for entry in candidates if entry['path'] == DESTINATION), None)
         current = original is not None and original['sha256Tree'] == source_hash
         if check_only:
@@ -335,7 +424,17 @@ def install(check_only=False):
         if not current or retire:
             require_stopped([entry['path'] for entry in candidates])
         if not current:
-            install_payload(source_hash, original)
+            if handoff is not None:
+                pending = {'schema': 2, 'projectID': PROJECT_ID, 'projectRoot': str(ROOT),
+                           'status': 'source-handoff-pending', 'installedPath': str(DESTINATION),
+                           'sourcePath': str(SOURCE), 'sha256Tree': source_hash,
+                           'bundleID': EXPECTED[0], 'executable': EXPECTED[1],
+                           'sourceHandoff': {'oldRoot': handoff['oldRoot'],
+                                             'oldSHA256': handoff['oldSHA256'],
+                                             'newRoot': str(ROOT), 'newSHA256': source_hash}}
+                save_receipt(pending)
+            install_payload(source_hash, original,
+                            (lambda: recheck_handoff(old_root, handoff)) if handoff is not None else None)
         verify(DESTINATION)
         if fingerprint(DESTINATION) != source_hash or fingerprint(SOURCE) != source_hash:
             raise RuntimeError('构建或安装内容已变化，旧副本未清理。')
@@ -357,6 +456,11 @@ def install(check_only=False):
                   'displayName': source_info['CFBundleDisplayName'],
                   'version': source_info['CFBundleShortVersionString'], 'build': str(source_info['CFBundleVersion']),
                   'managedFingerprints': sorted(managed_hashes), 'retiredArtifacts': list(historical.values())}
+        if handoff is not None:
+            result['sourceHandoff'] = {'oldRoot': handoff['oldRoot'], 'oldSHA256': handoff['oldSHA256'],
+                                       'newRoot': str(ROOT), 'newSHA256': source_hash}
+        elif trusted_receipt(record) and isinstance(record.get('sourceHandoff'), dict):
+            result['sourceHandoff'] = record['sourceHandoff']
         save_receipt(result)
         unregistered = set()
         for entry in retire:
@@ -392,9 +496,10 @@ if __name__ == '__main__':
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--check', action='store_true', help='只读复查实体入口、载荷与全部项目登记是否唯一')
     group.add_argument('--open', action='store_true', help='完成升级与旧副本清理后打开唯一阿舟入口')
+    group.add_argument('--migrate-from', metavar='OLD_ROOT', help='核对旧项目记录、构建载荷及唯一入口后接管安装')
     args = parser.parse_args()
     try:
-        install(args.check)
+        install(args.check, args.migrate_from)
         if args.open:
             subprocess.run(['/usr/bin/open', str(DESTINATION)], check=True)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:

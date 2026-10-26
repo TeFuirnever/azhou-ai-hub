@@ -132,7 +132,7 @@ python scripts/azhou_hub.py integrations startup-animation run --bundle "$TEST_A
 
 For the test entry, use `test-uninstall --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified private package snapshot and receipt, so later package changes do not remove the recovery source. New build, install, run and inspect plans fingerprint the current in-repository inputs. This is separate from the source-owned production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
 
-`install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The source installer hardcodes the user Applications entry, writes source-local build/state and exposes no uninstall operation. This Hub change does not bypass its `projectRoot` ownership check, duplicate that installer or alter the source. A separate source-owner change must define explicit build/state/destination and native uninstall contracts before Hub can offer that production lifecycle. `native-check` remains read-only. The original official Codex entry remains available.
+`install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The Hub package's native installer has a narrow one-time `--migrate-from OLD_ROOT` operation for an existing launcher at the fixed user Applications entry. Run it only from the final Hub package path after building its own payload. It requires matching old schema-2 installation receipt, old build payload and installed app fingerprints, the old build marker, unique registration, and both project install locks. It replaces the exact verified entry, writes a Hub-owned receipt with `sourceHandoff`, and leaves the old checkout intact for separate archival or removal. A normal install still rejects another `projectRoot`. This native handoff does not implement the Hub adapter's general production install/uninstall plans; explicit build/state/destination and native uninstall contracts remain needed there. `native-check` remains read-only. The original official Codex entry remains available.
 
 ### Pet maintenance after the import
 
@@ -162,7 +162,17 @@ python -B "$PET_TARGET/tools/import-codex-pet.py" \
   --apply --plan-id PLAN_ID
 ```
 
-The plan is read-only. Apply requires an unchanged source and target, a fully validated selected source candidate, matching public theme inputs, and absent or byte-identical private images. It refuses conflicting files and unknown target state. An owned interrupted import can be resumed after reviewing a new plan; unrelated state is never deleted to make room. The result is a newly validated, target-owned **candidate** with retained source provenance and original atlas/QA bytes. It does not call image generation, install or select a Pet, or transfer the installed receipt. The target still needs separate installation-ownership work and real host acceptance.
+The plan is read-only. Apply requires an unchanged source and target, a fully validated selected source candidate, matching public theme inputs, and absent or byte-identical private images. It refuses conflicting files and unknown target state. An owned interrupted import can be resumed after reviewing a new plan; unrelated state is never deleted to make room. The result is a newly validated, target-owned **candidate** with retained source provenance and original atlas/QA bytes. It does not call image generation, install or select a Pet, or transfer the installed receipt.
+
+For an existing installed Pet whose receipt still names the old project, the package manager offers an explicit one-time `handoff` from the final Hub package path:
+
+```sh
+python -B "$PET_TARGET/tools/manage-codex-pet.py" handoff \
+  --project-root "$PET_TARGET" --previous-project-root "$PET_SOURCE"
+python -B "$PET_TARGET/tools/manage-codex-pet.py" status --project-root "$PET_TARGET"
+```
+
+It verifies the old selected candidate, the installed package and the Hub candidate match by theme, atlas and manifest digest; then uses the existing locked installation transaction to issue a Hub-owned receipt. Ordinary `install` and `sync` remain strict about project ownership. The old source and evidence should remain until Hub status verifies the installed bytes. A successful handoff still requires separate real host selection and playback acceptance.
 
 This is an initial import or a retry of the same recorded operation. It does not merge an unrelated existing candidate store or silently switch to a changed source. After import, normal candidate updates remain with the package's existing preparation, review and packaging workflow.
 

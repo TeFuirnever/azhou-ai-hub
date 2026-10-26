@@ -476,6 +476,24 @@ def installed_facts(target, project):
     return {"path": str(target), "themeRevision": receipt["themeRevision"], "manifestSHA256": sha(manifest), **facts}
 
 
+def same_installation(left, right):
+    return all(left.get(key) == right.get(key)
+               for key in ("atlasSHA256", "themeRevision", "manifestSHA256"))
+
+
+def prior_project_from_journal(data, project):
+    raw = data.get("previousProjectRoot")
+    if raw is None:
+        return project
+    recorded = Path(raw) if isinstance(raw, str) else Path(".")
+    require(data.get("hadPrevious") is True and isinstance(raw, str) and recorded.is_absolute()
+            and os.path.normpath(raw) == raw and raw != str(project),
+            "安装恢复日志中的旧项目身份无效", "recovery-required")
+    require(not recorded.is_symlink() and recorded.resolve() == recorded,
+            "旧项目身份路径包含符号链接或路径别名", "recovery-required")
+    return recorded
+
+
 def journal_path(pets):
     return child(pets, f".{PET_ID}.transaction.json")
 
@@ -486,6 +504,12 @@ def recover_install(pets, project):
         return None
     data = parse(read(path))
     ownership(data, project)
+    previous_project = prior_project_from_journal(data, project)
+    has_handoff_owner = previous_project != project
+    if has_handoff_owner:
+        require(data.get("previousAtlasSHA256") and data.get("previousThemeRevision")
+                and data.get("previousManifestSHA256"),
+                "接管恢复日志缺少旧安装摘要", "recovery-required")
     require(data.get("stagingLocation") == "codex-home", "旧版或未知暂存布局需人工核对，不能推测恢复路径",
             "recovery-required")
     tx = data.get("transaction", "")
@@ -501,12 +525,22 @@ def recover_install(pets, project):
         require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
                 actual["themeRevision"] == data["candidateThemeRevision"], "已提交目标发生变化", "recovery-required")
         if backup.exists():
-            installed_facts(backup, project)
+            old = installed_facts(backup, previous_project)
+            if has_handoff_owner:
+                require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
+                                                "themeRevision": data["previousThemeRevision"],
+                                                "manifestSHA256": data["previousManifestSHA256"]}),
+                        "旧安装副本摘要不符", "recovery-required")
             remove_tree(backup)
         outcome = "completed-committed-install"
     elif backup.exists():
-        old = installed_facts(backup, project)
+        old = installed_facts(backup, previous_project)
         require(old["atlasSHA256"] == data.get("previousAtlasSHA256"), "旧包摘要不符", "recovery-required")
+        if has_handoff_owner:
+            require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
+                                            "themeRevision": data["previousThemeRevision"],
+                                            "manifestSHA256": data["previousManifestSHA256"]}),
+                    "旧包摘要不符", "recovery-required")
         if target.exists():
             actual = installed_facts(target, project)
             require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
@@ -515,7 +549,13 @@ def recover_install(pets, project):
         os.rename(backup, target)
         outcome = "restored-previous-installed-package"
     else:
-        if target.exists():
+        if target.exists() and data.get("hadPrevious") and has_handoff_owner:
+            old = installed_facts(target, previous_project)
+            require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
+                                            "themeRevision": data["previousThemeRevision"],
+                                            "manifestSHA256": data["previousManifestSHA256"]}),
+                    "旧包不在暂存且正式目标已改变", "recovery-required")
+        elif target.exists():
             actual = installed_facts(target, project)
             if data.get("hadPrevious"):
                 require(actual["atlasSHA256"] == data.get("previousAtlasSHA256"),
@@ -535,9 +575,16 @@ def recover_install(pets, project):
     return outcome
 
 
-def install_package(project, codex_home):
+def install_package(project, codex_home, *, previous_project=None, expected_previous=None):
+    require(previous_project is not None or expected_previous is None,
+            "接管安装必须同时提供旧项目与已验证候选摘要")
+    require(expected_previous is not None or previous_project is None or not Path(previous_project).exists(),
+            "旧项目仍存在时必须验证其当前候选摘要")
     directory = selected_package(project)
     facts, _ = check_package(directory, project)
+    if previous_project is not None and expected_previous is not None:
+        require(same_installation(facts, expected_previous),
+                "Hub 当前候选与旧项目已安装候选不一致，拒绝接管", "source-conflict")
     codex_home = root_path(codex_home)
     pets = child(codex_home, "pets")
     pets.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -546,8 +593,28 @@ def install_package(project, codex_home):
     with lock(child(pets, f".{PET_ID}.lock")):
         recovery = recover_install(pets, project)
         target = child(pets, PET_ID)
-        previous = installed_facts(target, project) if target.exists() else None
-        if previous and all(previous[k] == facts[k] for k in ("atlasSHA256", "themeRevision")):
+        previous = None
+        if target.exists() and previous_project is not None:
+            try:
+                current = installed_facts(target, project)
+            except PetError:
+                current = None
+            if current is not None and same_installation(current, facts):
+                return {"status": "already-handed-off", "source": facts["themeRevision"],
+                        "package": str(directory), "installed": current, "runtime": RUNTIME,
+                        "recovery": recovery}
+            require(expected_previous is not None,
+                    "旧项目目录已不可用，且当前安装不能证明已归属 Hub", "unknown-target")
+            previous = installed_facts(target, previous_project)
+            require(same_installation(previous, expected_previous),
+                    "已安装内容与旧项目当前候选不一致，拒绝接管", "unknown-target")
+        elif target.exists():
+            previous = installed_facts(target, project)
+        else:
+            require(previous_project is None,
+                    "旧项目已有安装目标缺失，拒绝执行接管", "unknown-target")
+        if previous_project is None and previous and all(
+                previous[k] == facts[k] for k in ("atlasSHA256", "themeRevision")):
             return {"status": "already-installed", "source": facts["themeRevision"],
                     "package": str(directory), "installed": previous, "runtime": RUNTIME, "recovery": recovery}
         tx = uuid.uuid4().hex
@@ -557,6 +624,10 @@ def install_package(project, codex_home):
                    "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": bool(previous),
                    "previousAtlasSHA256": previous["atlasSHA256"] if previous else None,
                    "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"]}
+        if previous_project is not None:
+            journal.update({"previousProjectRoot": str(previous_project),
+                            "previousThemeRevision": previous["themeRevision"],
+                            "previousManifestSHA256": previous["manifestSHA256"]})
         atomic_json(journal_path(pets), journal)
         try:
             stage.mkdir(mode=0o700)
@@ -573,9 +644,8 @@ def install_package(project, codex_home):
             fsync_dir(stage)
             fsync_dir(codex_home)
             if previous:
-                current_target = installed_facts(target, project)
-                require(all(current_target[key] == previous[key] for key in
-                            ("atlasSHA256", "themeRevision", "manifestSHA256")),
+                current_target = installed_facts(target, previous_project or project)
+                require(same_installation(current_target, previous),
                         "安装目标在检查后发生变化", "source-conflict")
                 os.rename(target, backup)
                 fsync_dir(pets)
@@ -601,9 +671,40 @@ def install_package(project, codex_home):
                         "installed": installed_facts(target, project), "runtime": RUNTIME,
                         "recovery": outcome}
             raise PetError("install-failed", f"安装失败：{exc}；恢复结果：{outcome}") from exc
-    return {"status": "installed", "source": {"themeRevision": facts["themeRevision"], "status": "matched"},
+    return {"status": "handed-off" if previous_project is not None else "installed",
+            "source": {"themeRevision": facts["themeRevision"], "status": "matched"},
             "package": {"path": str(directory), **facts}, "installed": actual, "runtime": RUNTIME,
             "next": "正常刷新/重新打开 pet 选择界面并选择阿舟；本工具不退出或修改宿主", "recovery": recovery}
+
+
+def handoff_package(project, previous_project, codex_home):
+    project = root_path(project)
+    raw_previous = Path(previous_project).expanduser()
+    require(raw_previous.is_absolute(), "--previous-project-root 必须是绝对路径")
+    require(not raw_previous.is_symlink(), f"拒绝符号链接旧项目目录：{raw_previous}", "unknown-target")
+    previous_project = root_path(raw_previous)
+    require(raw_previous == previous_project, "拒绝旧项目路径别名", "unknown-target")
+    require(previous_project != project, "旧项目与 Hub 项目不能是同一目录")
+    hub_state = state_dir(project, True)
+    if previous_project.is_dir():
+        old_state = state_dir(previous_project)
+        require(old_state.is_dir() and not old_state.is_symlink(),
+                "旧项目缺少 Pet 状态，不能证明安装来源", "unknown-target")
+        # Freeze both candidate selections before taking the shared installation lock.
+        # The legacy CLI owns the old lock; Hub package operations own the Hub lock.
+        with lock(child(old_state, "project.lock")):
+            with lock(child(hub_state, "project.lock")):
+                old_directory = selected_package(previous_project)
+                old_facts, _ = check_package(old_directory, previous_project)
+                new_facts, _ = check_package(selected_package(project), project)
+                require(same_installation(old_facts, new_facts),
+                        "Hub 候选与旧项目已安装候选不完全一致，拒绝把内容变更混入接管", "source-conflict")
+                return install_package(project, codex_home, previous_project=previous_project,
+                                       expected_previous=old_facts)
+    # After a successful handoff the source checkout may already be gone. This
+    # path is safe only when the target proves it is the exact current Hub package.
+    with lock(child(hub_state, "project.lock")):
+        return install_package(project, codex_home, previous_project=previous_project)
 
 
 def recover(project, codex_home):
@@ -656,15 +757,18 @@ def status(project, codex_home):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "validate", "package", "install", "status", "sync", "recover"))
+    parser.add_argument("command", choices=("prepare", "validate", "package", "install", "status", "sync", "recover", "handoff"))
     parser.add_argument("--project-root", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME") or str(Path.home() / ".codex"))
+    parser.add_argument("--previous-project-root", help="handoff 的旧项目绝对路径")
     parser.add_argument("--run", help="ImageGen/hatch-pet 实际 run 目录")
     parser.add_argument("--snapshot", help="prepare 生成的 theme-snapshot.json")
     args = parser.parse_args(argv)
     try:
         project = root_path(args.project_root)
         require(project.is_dir(), "项目目录不存在")
+        require((args.command == "handoff") == bool(args.previous_project_root),
+                "handoff 必须且只能提供 --previous-project-root")
         require(bool(args.run) == bool(args.snapshot), "--run 与 --snapshot 必须同时提供")
         require(not args.run or args.command in ("validate", "package", "sync"),
                 "--run/--snapshot 仅用于 validate、package 或 sync")
@@ -677,6 +781,8 @@ def main(argv=None):
             else:
                 facts, _ = check_package(selected_package(project), project)
                 result = {"status": "validated", **facts}
+        elif args.command == "handoff":
+            result = handoff_package(project, args.previous_project_root, args.codex_home)
         else:
             state = state_dir(project, True)
             with lock(child(state, "project.lock")):
