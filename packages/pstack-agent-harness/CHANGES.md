@@ -2,6 +2,14 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
+## 0.9.103 - Hub-maintained package source
+
+This Hub-maintained release makes the package under `packages/pstack-agent-harness/` the local source for future installs. Package install and shared-skill instructions use the current Hub checkout; Hub-managed Codex continues through the existing plan, apply, and doctor integration. The shared skills route links the canonical package tree and preserves existing user entries. `setup-pstack` adds the ZCode model-sheet location, static runtime pointer, and `account:<plan>/<model>` ID shape. Its evidence is limited to local configuration inspection; no native plugin or hook acceptance was performed.
+
+The fork registry also records the `automate-me` EOF whitespace normalization performed at import, so the source-sync dry run recognizes that maintained difference without changing the skill's instructions.
+
+Maintained support is limited to Codex, Claude Code, ZCode and MiMo Code. Installation guidance and metadata name those four targets. Workflow and setup entry points stop on other harnesses; imported adapters remain source references. ZCode and MiMo Code use project skills without a native pstack hook claim, and MiMo Code keeps its native model settings. Active CI excludes the unsupported Pi runtime suite and native typecheck.
+
 ## 0.9.102 - The skill link validator keeps angle-bracket destinations
 
 `tools/validate-skills.mjs` now reads a Markdown link destination written in angle brackets, such as `[text](<path with spaces.md>)`, as the path inside the brackets. It used to check the brackets as part of the path, so a link to an existing file was reported as broken. No skill content changed. `tests/agent-skills.test.mjs` covers the case.

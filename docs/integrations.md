@@ -27,7 +27,11 @@ The adapters do not modify package source files. Any runtime input change change
 
 ## pstack: local source to native plugin
 
+Use the maintained Hub package as the source for new pstack installations. Upstream repositories remain provenance and update inputs. The [package install guide](../packages/pstack-agent-harness/README.md#install) covers the maintained targets: native Codex and Claude Code formats, and skills-only zcode and MiMo Code. Only the Codex adapter below has a Hub-managed lifecycle; the other targets use native registration or an explicit Skills root. Imported formats for other harnesses remain source history, outside current support. Existing external installations require their native owner's removal or an explicitly reviewed source transition; copying the package into this repository does not adopt them.
+
 Set task-specific paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. The package source defaults to `packages/pstack-agent-harness`; `--source` is optional and only asserts that canonical path. For the installed runtime, `CODEX_HOME` below is set only for that one process.
+
+Codex normally uses `~/.codex` when `CODEX_HOME` is unset. Its local plugin cache is below that home's `plugins/cache/`; bundled or remote catalog plugins may have other managed source locations. A sibling such as `~/.codex-pstack` is a separate configuration, even though it is outside a project. It is available only to Codex processes launched with that home; an already-running desktop app does not switch homes when a terminal command sets the variable. The adapter accepts a fresh or previously owned target and rejects unknown non-empty targets and known Agent Orchestration Kit configuration. Installing into the default home while preserving an existing Kit installation is not currently supported by this adapter.
 
 ```sh
 PSTACK_WORKSPACE=/absolute/test-project
@@ -45,7 +49,7 @@ python scripts/azhou_hub.py integrations pstack doctor \
 env CODEX_HOME="$PSTACK_HOME" "$CODEX_BIN" -C "$PSTACK_WORKSPACE"
 ```
 
-Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack@pstack-claude`. It does not run the README's online command targeting the port upstream. It verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
+Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack@pstack-claude`. The marketplace name `pstack-claude` is retained for compatibility; the reviewed local source path determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
 
 After opening the dedicated session, inspect native Skills and invoke `pstack:how` or another selected workflow. `doctor` proves installed files and registration; it does not prove invocation. `/setup-pstack` owns model-sheet setup. On Codex the native sheet is `<codex-home>/pstack-models.md`; the upstream setup instructions also place model rows in the home `AGENTS.md`. Review the rows and available model aliases first. The Hub does not invent a universal model table.
 
@@ -59,6 +63,14 @@ python scripts/azhou_hub.py integrations pstack apply --operation remove \
 ```
 
 Removal calls native plugin removal followed by marketplace removal, then checks both lists. It retains the frozen source and Hub receipt. A partial install records completed native steps; a new plan/apply resumes, or the remove operation cleans only that recorded native installation. Unrecognized cache additions block removal. The upstream Bun bootstrap may create `skills/poteto-mode/scripts/node_modules`; `doctor` reports it as outside source-file verification, and automatic removal refuses unrecorded dependency files instead of deleting them by assumption.
+
+### Retiring an upstream installation
+
+Inspect the native registration's source and scope before removal. Preserve model sheets and local source changes, then use the native manager to uninstall the exact pstack plugin. Keep a marketplace that still supplies other plugins, and let the native manager retire caches that are in use. For a shared Skills installation, remove only links whose targets were verified to belong to the retired source; other entries remain user-owned. Back up any pstack-specific standing instruction before removing its bounded block or exact pointer. Source clones can be retired after their local changes are preserved and no installed references or processes depend on them.
+
+Model sheets in automatically loaded rule locations still inject instructions after a plugin is removed. Preserve their contents outside those locations when retiring the installation: [Claude user rules](https://code.claude.com/docs/en/memory#user-level-rules) apply across projects, and [Cursor rules](https://cursor.com/docs/rules) with `alwaysApply: true` are always included. A saved sheet with no include, rule registration or standing pointer can remain as dormant user preferences for a later Hub-sourced installation.
+
+`~/.agents/skills` is a shared Skills discovery directory, including for Codex processes with an isolated home. A skills-only pstack installation there has no native routing hook. Its presence alone does not establish automatic routing or require a native-plugin conversion; choose one workflow owner per task. A later shared installation must link to this Hub's maintained package, and its removal affects every runtime that reads the shared directory. This manual source-retirement procedure does not adopt unknown installations or replace the planned controlled-conversion lifecycle.
 
 ## Model router: native roles, one workflow owner
 

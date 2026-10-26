@@ -1,7 +1,9 @@
-"""Pinned pstack Codex plugin entry; Codex owns installation and removal.
+"""Install the Hub-maintained pstack package with Codex's native plugin manager.
 
 The Hub freezes only the declared source files and records native operations.
 It does not translate pstack's workflow into the separate model-router profile.
+A custom --codex-home requires launching Codex with that CODEX_HOME; it does not
+change the configuration used by an already-running desktop app.
 """
 from __future__ import annotations
 
@@ -358,8 +360,10 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "apply", "doctor"))
     parser.add_argument("--source", type=Path, help="optional assertion of the in-repository package path")
-    parser.add_argument("--workspace", type=Path, required=True)
-    parser.add_argument("--codex-home", type=Path, required=True, help="explicit dedicated configuration target")
+    parser.add_argument("--workspace", type=Path, required=True,
+                        help="workspace for private source snapshots and lifecycle receipts")
+    parser.add_argument("--codex-home", type=Path, required=True,
+                        help="explicit configuration target; custom homes require CODEX_HOME on launch")
     parser.add_argument("--codex-bin", type=Path, required=True, help="explicit native Codex executable")
     parser.add_argument("--operation", choices=("install", "remove"), default="install")
     parser.add_argument("--plan-id")

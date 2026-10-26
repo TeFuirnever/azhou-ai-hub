@@ -1,6 +1,6 @@
 # Support matrix
 
-The maintained agent-harness set is **Codex, Claude Code, MiMo Code (`mimo`), and zcode**. All other harnesses, including Kimi Code, are temporarily unsupported by this project. A portable package may remain readable elsewhere, but that is not a support commitment. This matrix separates shared package behavior from host integration evidence: discovery, invocation, hooks, memory APIs, and optional integrations.
+The maintained agent-harness set is **Codex, Claude Code, MiMo Code (`mimo`), and zcode**. All other harnesses, including Pi and Kimi Code, are unsupported by this project. A portable package may remain readable elsewhere, but that is not a support commitment. This matrix separates shared package behavior from host integration evidence: discovery, invocation, hooks, memory APIs, and optional integrations.
 
 MiMo Code is the newly selected fourth target. Its 2026-10-26 local check establishes CLI identity and discovery of the fourteen canonical Skill names across existing and isolated installs; it does not establish model invocation, lifecycle hooks, MCP transport, or session-store parsing. Capability rows below retain those limits.
 
@@ -53,6 +53,8 @@ These entries are opt-in project packages under `packages/`, separate from the f
 | Codex Pet maintenance and candidate import | The importer revalidated a target-owned candidate. On 2026-10-26 explicit native handoff verified matching old, selected and installed bytes, then wrote a Hub-owned receipt; final `status` reports `bytesVerified`, `matchesCurrentTheme` and `matchesSelectedPackage` true | Private data stays outside source distribution. Import alone does not transfer installed ownership; handoff does not generate images or prove host selection/playback. Pillow-dependent suites run in the macOS CI leg. See the [Pet runbook boundary](integrations.md#pet-maintenance-after-the-import). |
 | pstack plus router on one task | Conflicting targets are rejected; one workflow owner per task and pstack's per-invocation Skill selection were exercised in the dated test | No chaining, recursive orchestration or joint routing support; the existing composition rule is retained. |
 | Other harnesses and operating systems | Dated source/mechanism inventory below | No new route adapter, host modification or cross-platform runtime acceptance; optional integrations remain Codex-specific |
+
+The Hub-maintained pstack `0.9.103` source update limits installation guidance to Codex, Claude Code, MiMo Code and zcode, uses local Hub sources, and records an inspected ZCode model-sheet mapping. Codex and Claude Code use their native plugin formats; MiMo Code and zcode use explicit Skills roots without a native pstack routing-hook claim. The earlier live Codex results above remain evidence for their recorded `0.9.102` inputs; they are not invocation or hook-trust evidence for the updated package. The source update does not extend those workflow acceptance claims. Imported formats for other harnesses remain outside current support and active native CI.
 
 The observed global Skill traversal-limit warning and one pstack model-list refresh timeout remain recorded. Selected Skills were explicitly discovered and used successfully; neither warning is silently converted into complete global discovery or model-catalog availability.
 

@@ -2,7 +2,7 @@
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/codenyer)
 
-Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) is an opinionated Cursor skill stack that improves agent outcomes. This is a port for Claude Code, Codex, Pi, GitHub Copilot, Muse, and other agent harnesses. It tracks upstream and also carries named policy forks, each declared in [`tools/forks.json`](tools/forks.json).
+Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) is an opinionated skill stack that improves agent outcomes. This Hub-maintained package supports Codex and Claude Code through native plugins, and ZCode and MiMo Code through project-scoped skills. Other imported harness adapters remain in the package as source material, outside Hub support. The package tracks upstream and carries named policy forks, each declared in [`tools/forks.json`](tools/forks.json).
 
 Inside Azhou AI Hub, this package root is `packages/pstack-agent-harness/`. Run its maintainer commands from that directory so paths such as `plugins/pstack` resolve within this package. The native marketplace and plugin identities remain `pstack-claude` and `pstack` (`pstack@pstack-claude` in Codex).
 
@@ -12,17 +12,26 @@ For concurrency bugs and invariants that tests cannot reach, `/create-formal-ver
 
 ## Install
 
-For the Hub-managed Codex installation, use the [Hub integration commands](../../docs/integrations.md#pstack-local-source-to-native-plugin). They install the maintained package from this repository. The upstream commands below describe the original port's other installation routes and do not select Hub-local changes.
+Set `PSTACK_PACKAGE` to the absolute path of this package in your current Hub checkout. Replace the example path with the path on your machine:
+
+```shell
+export PSTACK_PACKAGE="/absolute/path/to/azhou-ai-hub/packages/pstack-agent-harness"
+test -f "$PSTACK_PACKAGE/hub-package.json"
+```
+
+This Hub package is the source for every install below. Hub-managed Codex installation uses the [Hub integration commands](../../docs/integrations.md#pstack-local-source-to-native-plugin), which target a dedicated `CODEX_HOME` and preserve any existing default configuration, including Agent Orchestration Kit. This is the only Hub-managed runtime installation path for pstack.
 
 <details>
 <summary><strong>Claude Code</strong></summary>
 
-Run in Claude Code 2.1.292 or later:
+Run in a terminal with Claude Code 2.1.292 or later:
 
-```text
-/plugin marketplace add michael-denyer/pstack-claude
-/plugin install pstack@pstack-claude
+```shell
+claude plugin marketplace add "$PSTACK_PACKAGE"
+claude plugin install pstack@pstack-claude --scope user
 ```
+
+After the Hub package is updated, refresh the local marketplace and update the plugin with Claude Code's native commands: `claude plugin marketplace update pstack-claude` and `claude plugin update pstack@pstack-claude`. Remove it with `claude plugin uninstall pstack@pstack-claude`.
 
 </details>
 
@@ -30,85 +39,78 @@ Run in Claude Code 2.1.292 or later:
 <details>
 <summary><strong>Codex</strong></summary>
 
-Run in your terminal:
-
-```shell
-codex plugin marketplace add michael-denyer/pstack-claude
-codex plugin add pstack@pstack-claude
-```
+Use the Hub integration's plan, apply, and doctor commands linked above. Pass its explicit dedicated `CODEX_HOME`. When Agent Orchestration Kit is already installed in the default home, the current adapter requires a separate target.
 
 </details>
 
+<a id="zcode"></a>
 <details>
-<summary><strong>Pi</strong></summary>
+<summary><strong>ZCode</strong></summary>
 
-Run in your terminal:
+Run this from the project root. It links the canonical Hub skills into the project's `.agents/skills/` root, which ZCode discovers at project scope. Existing files, directories, and links stay untouched.
 
 ```shell
-pi install git:github.com/michael-denyer/pstack-claude
+: "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
+case "$PSTACK_PACKAGE" in /*) ;; *) printf '%s\n' 'PSTACK_PACKAGE must be absolute' >&2; exit 2;; esac
+test -d "$PSTACK_PACKAGE/plugins/pstack/skills" || { printf '%s\n' 'PSTACK_PACKAGE does not contain pstack skills' >&2; exit 2; }
+PSTACK_PROJECT_ROOT="$(pwd -P)"
+: "${PSTACK_PROJECT_ROOT:?Run from the project root}"
+PSTACK_SKILLS_ROOT="$PSTACK_PROJECT_ROOT/.agents/skills"
+case "$PSTACK_SKILLS_ROOT" in /*) ;; *) printf '%s\n' 'skill root must be absolute' >&2; exit 2;; esac
+test -n "$PSTACK_SKILLS_ROOT" || exit 2
+mkdir -p "$PSTACK_SKILLS_ROOT"
+for source in "$PSTACK_PACKAGE"/plugins/pstack/skills/*/; do
+  [ -d "$source" ] || continue
+  skill="${source%/}"
+  target="$PSTACK_SKILLS_ROOT/${skill##*/}"
+  if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+    ln -s "$skill" "$target"
+  fi
+done
 ```
 
-The package loads the skills and the pstack Pi extension, which adds the subagent, question, and wake-up tools the skills use, plus `/loop` and the routing instruction. Invoke a skill with `/skill:<name>`.
+This is a project-scoped skills-only install; it does not install a pstack plugin or hook. Linked skills follow Hub package updates; rerun the loop to link new skills. Remove only a project skill link whose target points into this package.
 
 </details>
 
+<a id="mimo-code"></a>
 <details>
-<summary><strong>GitHub Copilot</strong></summary>
+<summary><strong>MiMo Code</strong></summary>
 
-Run in your terminal:
+Run this from the project root. It links the canonical Hub skills into the project's `.mimocode/skills/` root. Existing files, directories, and links stay untouched.
 
 ```shell
-copilot plugin marketplace add michael-denyer/pstack-claude
-copilot plugin install pstack@pstack-claude
+: "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
+case "$PSTACK_PACKAGE" in /*) ;; *) printf '%s\n' 'PSTACK_PACKAGE must be absolute' >&2; exit 2;; esac
+test -d "$PSTACK_PACKAGE/plugins/pstack/skills" || { printf '%s\n' 'PSTACK_PACKAGE does not contain pstack skills' >&2; exit 2; }
+PSTACK_PROJECT_ROOT="$(pwd -P)"
+: "${PSTACK_PROJECT_ROOT:?Run from the project root}"
+PSTACK_SKILLS_ROOT="$PSTACK_PROJECT_ROOT/.mimocode/skills"
+case "$PSTACK_SKILLS_ROOT" in /*) ;; *) printf '%s\n' 'skill root must be absolute' >&2; exit 2;; esac
+test -n "$PSTACK_SKILLS_ROOT" || exit 2
+mkdir -p "$PSTACK_SKILLS_ROOT"
+for source in "$PSTACK_PACKAGE"/plugins/pstack/skills/*/; do
+  [ -d "$source" ] || continue
+  skill="${source%/}"
+  target="$PSTACK_SKILLS_ROOT/${skill##*/}"
+  if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+    ln -s "$skill" "$target"
+  fi
+done
 ```
 
-This installs pstack for the Copilot CLI and the GitHub Copilot app, which share `~/.copilot`. Start a new session afterwards. Copilot ships no default pstack models, so the first skill that needs one runs `setup-pstack` to pick from the models your account lists, and later sessions reuse that choice.
-
-The Copilot build is tested on Copilot CLI 1.0.87 through 1.0.92. On those versions the routing hook's context reaches the session alongside other plugins' session-start context. If a later version keeps only one plugin's context, `setup-pstack` offers a [standing instruction](plugins/pstack/skills/setup-pstack/copilot.md#wire-it-in) for `~/.copilot/copilot-instructions.md` instead. On 1.0.92, once the CLI caches its computer-use experiment assignment, `copilot -p` sessions list no plugin skills and a `skill` call returns "Skill not found". Interactive sessions, the hooks, and the agents are unaffected.
-
-</details>
-
-<details>
-<summary><strong>Muse</strong></summary>
-
-Run in your terminal:
-
-```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
-muse plugins install ./plugins/pstack
-muse plugins approve pstack
-```
-
-The first command installs the native Muse plugin bundle. The second approves its `SessionStart` hook and agent definitions, which Muse runs only after approval. Start a new session afterwards. Invoke a skill with `/<name>` (for example `/poteto-mode`), which Muse lists for each user-invocable skill.
+This is a project-scoped skills-only install; it does not install a pstack plugin or hook. Choose the session model through MiMo Code's native settings and model catalogue; no pstack model-sheet loader or per-role mapping is verified. Linked skills follow Hub package updates; rerun the loop to link new skills. Remove only a project skill link whose target points into this package.
 
 </details>
 
 <a id="other-harnesses"></a>
-<details>
-<summary><strong>Other harnesses</strong></summary>
+### User-wide shared skills (optional)
 
-OpenCode (the CLI and the desktop app), Gemini CLI, Prime Agent, and skills-only Codex installs read skills from `~/.agents/skills/`. Run in your terminal:
-
-```shell
-git clone https://github.com/michael-denyer/pstack-claude
-cd pstack-claude
-mkdir -p ~/.agents/skills
-for s in plugins/pstack/skills/*/; do
-  target=~/.agents/skills/"$(basename "$s")"
-  test -e "$target" || test -L "$target" || ln -s "$(pwd)/$s" "$target"
-done
-```
-
-To update, run `git pull` in the clone, then run the `for` loop again to link skills added since the last run. These installs have no routing hook, so ask for `poteto-mode` by name or add a standing instruction to the harness's instruction file. See [shared installation](docs/reference.md#shared-skills-installation) for per-harness notes and uninstalling.
-
-</details>
+The project-scoped roots above are the default. If you intentionally link skills into `~/.agents/skills/`, every runtime that discovers that directory can read them, including a Codex home isolated through `CODEX_HOME`. This affects all readers of that shared root; preserve existing entries and link only from the absolute `PSTACK_PACKAGE` source.
 
 ### Configure
 
-pstack routes tasks to `poteto-mode` automatically. At session start, a hook injects an instruction that points the agent at it: the plugin's hook on Claude Code, Codex, GitHub Copilot, and Muse, and the pstack extension on Pi. Codex runs the hook only after you trust it through `/hooks`, and Muse only after `muse plugins approve pstack`. Other harnesses have no hook.
-
-Run `setup-pstack` to turn automatic routing on or off, change model defaults, or set a reasoning effort per role (`arena runners: opus @xhigh, fable @max`).
+The Claude Code and Codex native plugins route supported tasks to `poteto-mode` through their SessionStart hooks. Codex runs its hook only after you trust it through `/hooks`. The ZCode and MiMo Code project-skill installs do not install a pstack hook; invoke `poteto-mode` by name. Run `setup-pstack` where its runtime table defines model-sheet handling. MiMo Code uses its native settings and model catalogue, with no verified pstack sheet or hook.
 
 ## Getting started
 
@@ -120,7 +122,7 @@ For a bug, it reproduces the failure, uses `how` and `why` to investigate, deleg
 
 [Other playbooks](plugins/pstack/skills/poteto-mode/SKILL.md#playbooks) cover planning, features, refactoring, performance issues, investigations, prototypes, PR maintenance, shipping, and longer projects.
 
-![poteto-mode on Claude Code, Codex, and Pi turns a request into verified work. Choose a playbook, plan and delegate with architect, arena, or swarm, then review and verify with interrogate, tests, and measurements. Project playbooks customize the workflow, and setup-pstack configures the model and reasoning effort per role. Supporting skills include how, why, and unslop.](assets/pstack-overview.png)
+![Inherited source artwork showing poteto-mode on Claude Code, Codex, and Pi. The Pi panel is retained source art and is outside Hub support. It shows a playbook, delegation, review, verification, and model setup.](assets/pstack-overview.png)
 
 ## Details
 

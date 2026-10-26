@@ -11,6 +11,8 @@ On GitHub Copilot, read the [platform mapping](../poteto-mode/references/copilot
 
 On Muse, read the [platform mapping](../poteto-mode/references/muse-tools.md), including its per-skill notes, before following this skill.
 
+Hub support is limited to Codex, Claude Code, ZCode, and MiMo Code. On MiMo Code, use its native model settings and stop this setup: no pstack override-sheet path or hook is verified there. On any other harness, report that it is unsupported and stop. Imported instructions for other harnesses below are historical references, not supported setup routes.
+
 On GitHub Copilot, follow [the Copilot setup](copilot.md) in place of steps 1, 3, 4, and 7 and step 6's header.
 
 On another runtime, read [Other runtimes](#other-runtimes) below for where the sheet lives and how it loads; the steps are the same.
@@ -115,6 +117,7 @@ The role lines are the same everywhere. What differs is the sheet path, how the 
 | Muse | `${XDG_CONFIG_HOME:-~/.config}/muse/pstack-models.md` | the plugin hook reads it and injects its role lines at session start, once hooks are approved; no include line | the model catalog (`muse model-profile show <model>` names each one), see [muse-tools.md](../poteto-mode/references/muse-tools.md#model-names) | hook contract tested; plugin install verified |
 | opencode | `~/.config/opencode/pstack-models.md` | add the path to the `instructions` array in `opencode.json` | the `models` slash command in the session | from published docs, no live session |
 | Gemini CLI | `~/.gemini/pstack-models.md` | `@~/.gemini/pstack-models.md` in `~/.gemini/GEMINI.md` | the `model` slash command in the session | from published docs, no live session |
+| ZCode | `~/.zcode/pstack-models.md` | add one static pointer line in `~/.zcode/AGENTS.md` that tells pstack skills to read this sheet at runtime; keep the role rows in the sheet as their source of truth | the host model list (`ListModels`); full IDs are `account:<plan>/<model>` | local configuration inspected; no native plugin or hook acceptance |
 | Prime Agent | no documented sheet path; Prime's configuration chooses models | | | no live session |
 
 ## Models

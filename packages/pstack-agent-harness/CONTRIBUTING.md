@@ -1,14 +1,14 @@
 # Contributing
 
-Thanks for helping out. This repo is a **port**, not an original work: the `skills/` tree tracks [upstream pstack](https://github.com/cursor/plugins/tree/main/pstack) and gets synced forward periodically. That one fact shapes most of what follows.
+Thanks for helping out. This Hub-maintained package began as a **port** of pstack: its `skills/` tree tracks [upstream pstack](https://github.com/cursor/plugins/tree/main/pstack) and may be synced forward periodically. The original import and component pins are recorded in [`UPSTREAM.md`](UPSTREAM.md); the current Hub package is the maintained source for future installs.
 
-Inside Azhou AI Hub, this directory is a source snapshot without its own Git history. Run package validation here, but perform upstream syncs and source releases in the standalone maintainer checkout recorded in [`UPSTREAM.md`](UPSTREAM.md), then import its committed SHA into the Hub package.
+The package lives in the Hub repository and shares its Git history. Make package changes, version them, and run validation here. The sync tool creates its own temporary upstream clone; it can run from this package directory without a standalone port checkout.
 
 [CONTEXT.md](CONTEXT.md) is the glossary for the terms below.
 
 ## The sync boundary
 
-Upstream owns skill content. This port owns the Cursor-to-Claude-Code translation. It also carries named forks, each declared in [`tools/forks.json`](tools/forks.json) as a `port-feature` (Claude Code, Codex, Pi, GitHub Copilot, or Muse mechanics upstream cannot carry) or a `policy` (a workflow change the port chose to keep).
+Maintain the current skill content and runtime translations in this Hub package. It carries named forks against the imported component sources, each declared in [`tools/forks.json`](tools/forks.json) as a `port-feature` (runtime mechanics upstream cannot carry) or a `policy` (a workflow change the package chose to keep).
 
 Both kinds of `SKILL.md` change land here. Upstream rarely merges pull requests from outside its own team, so this port does not ask you to land a change there first. Before changing a `SKILL.md`, work out which kind yours is:
 
@@ -19,17 +19,18 @@ Declare each file your change forks in `tools/forks.json` in the same PR, so the
 
 Each substitution rule in [`tools/substitutions.json`](tools/substitutions.json) has a `rationale` field that gives its reason. If you add a rule, fill in its `rationale` in the same PR.
 
-### Running a sync
+### Preparing a sync
 
-Run the following in the standalone maintainer checkout, not in the Hub snapshot. The sync tool needs the source repository's history and working tree.
+Run from this package directory. The tool clones the upstream repository into a temporary directory, reads its old and proposed pins there, and compares them with the current Hub package. Start with the dry run, review its report, then repeat without `--dry-run` to apply the update:
 
 ```shell
-bun tools/sync.mjs pstack <new-upstream-sha>
+bun tools/sync.mjs pstack <full-upstream-sha> --dry-run
+bun tools/sync.mjs pstack <full-upstream-sha>
 ```
 
 `tools/upstream.json` pins the current upstream SHA per component; `tools/substitutions.json` holds the mechanical Cursor-to-Claude rewrites and a denylist of Cursor-isms that need a rewritten sentence rather than a token swap. A rewrite matches a literal `pattern` or a `regex`, optionally only in files whose upstream-relative path matches `files`, and carries a literal `replacement` and a `rationale`; a denylist entry is a literal `token` or a `regex`. Rewrites run in order, each on the output of the ones before it, so a pattern goes above any shorter pattern it contains. The tool fails on a rule in the reverse order, on an unknown field, and on a rule without exactly one matcher. Match a shape, such as a backticked model slug, rather than one version of it, so an upstream model bump needs no new rule. The tool fetches both upstream revisions and derives each upstream file into its port form: the substitutions, then `deriveSkill` in `tools/generate.mjs`. It sets a skill's or plugin agent's `name` to its directory or file name, drops the Cursor-only `mode`, `icon`, `color`, `reminder`, and `is_background` keys, and drops `disable-model-invocation` (or swaps it for `user-invocable: false` on a `principle-*` leaf). Then it applies the generator's stamps, appending a `## Models` section where upstream has none. It writes files whose only local differences came from upstream (new files included), deletes files upstream removed that the port never edited in text or mode, and runs `git merge-file` on the rest: a file the port forked that upstream left alone (its text or only its mode) is counted as forked and left alone, non-overlapping edits are merged and written, and a real conflict is written with git's `<<<<<<< local`, `=======`, and `>>>>>>> upstream` markers and listed with its hunk count. A written file takes upstream's file mode, except that a merged or conflicted file keeps the port's mode when upstream left the mode alone. Mode here means what git records, executable or not. A write grants no permission that the file's own bits or your umask withhold. A new file is created through the umask. An existing file changes only when its mode has to, and then only in its execute bits, which are set where the file is readable or all cleared. An upstream change to the executable bit alone is written too. Symlinks, upstream's or the port's at an upstream path or at a directory above one, and files upstream deleted that the port had edited join the same conflicts list under their own reason. A deleted file the port had edited stays, and prints under the pinned summary as now port-only, so the CHANGES.md entry can record that decision. The tool never follows or writes through a symlink on either side. An upstream link's target can sit outside the clone, and writing through a port link would change or create its target. A file that differs three ways cannot carry markers when upstream's or the port's copy is binary, so it fails the run with its path: replace it with upstream's version or add it to `exclude`, then rerun. A port path in the way of a file upstream writes also fails the run, before any write, with the port's path: a file where upstream has a directory, a directory where upstream has a file, or an entry spelled another way that the filesystem treats as the same name, as the default macOS filesystem does for case and Unicode normalisation. Rename or delete it, then rerun. Any denylist token in a written file, conflict markers included, fails the run with the file, line, and hint — add a substitution rule or rewrite the sentence, then rerun. A failed run writes nothing. The pin advances only on success, and a run with conflicts succeeds: the generator fails on any conflict-marker line under `plugins/pstack`, so resolve every hunk before you commit. Write the CHANGES.md entry from the printed report, then run the generator and the tests as usual.
 
-`--dry-run` reports without writing. The tool takes the component, the SHA, and `--dry-run`, and any other argument exits 2 naming it, so a mistyped flag never runs a real sync. Passing the pinned SHA itself under `--dry-run` prints the ownership map. Every file under the forked count is one the port has forked, nothing is written or conflicted, and everything else syncs clean. Each forked file prints with its changed lines against the derived upstream text, largest first, above a total, and a fork that differs only in file mode prints `mode`. The `port-only` list names every file under the component's local path that no component carries upstream at its pin, excluded paths aside.
+`--dry-run` reports without writing. The tool takes the component, the SHA, and `--dry-run`, and any other argument exits 2 naming it, so a mistyped flag never runs a real sync. Passing the pinned SHA itself under `--dry-run` prints the ownership map. Every file under the forked count is one the Hub package has forked, nothing is written or conflicted, and everything else syncs clean. Each forked file prints with its changed lines against the derived upstream text, largest first, above a total, and a fork that differs only in file mode prints `mode`. The `port-only` list names every file under the component's local path that no component carries upstream at its pin, excluded paths aside.
 
 `tools/forks.json` declares every fork under its component, keyed by repo-relative path. Each entry has a `kind` (`port-feature` or `policy`), a one-sentence `why` naming the mechanism, the `since` release the fork first shipped in, and an `upstream` status: `not-proposed`, or the URL of the upstream PR or issue. The ownership map prints each fork's kind beside its count. A forked, merged, or conflicted path with no entry fails the run, dry runs included, and a real run then writes nothing. Add the entry in the PR that forks the file. An entry whose path is not forked or no longer exists fails a run at the pinned SHA, which is the CI check, and the run writes nothing. So does an upstream file the port deleted without adding it to `exclude`, since a sync to a new SHA would write it back. On a sync to a new SHA the same entry only warns, because upstream absorbed the fork in that run; delete the entry in the sync's PR.
 
@@ -42,7 +43,7 @@ Install the root dependencies, then run the generator and the tests:
 ```shell
 bun install --frozen-lockfile
 bun tools/generate.mjs
-bun test tests/
+bun test tests/ --path-ignore-patterns '**/tests/pi/**'
 ```
 
 The root `package.json` declares `typebox` and the optional `@earendil-works/pi-coding-agent` as peer dependencies, because Pi provides both to an extension at runtime. The root `bun.lock` pins `typebox` for the generator, which checks hook files against it, and for the tests under `tests/pi/`, which load the extension outside Pi.
