@@ -501,7 +501,7 @@ class AgentSkinAssessmentTests(unittest.TestCase):
             self.event("player-start"),
             self.event("playback-start"),
             self.event("animation-complete"),
-            self.event("preview-result", error=""),
+            self.event("preview-result", success=True, error=""),
             self.event("player-terminated", completed=True, failed=False),
         ]
 
@@ -521,6 +521,24 @@ class AgentSkinAssessmentTests(unittest.TestCase):
 
         events.insert(2, self.event("startup-installed", targetPID=3579, runId=1))
         self.assertEqual("behavior-not-proven", self.assess("smoke", events)["status"])
+
+    def test_smoke_requires_preview_result_success_to_be_true(self) -> None:
+        preview_results = [
+            {"success": False, "error": ""},
+            {"error": ""},
+            {"success": 1, "error": ""},
+            {"success": "true", "error": ""},
+        ]
+        for preview_fields in preview_results:
+            with self.subTest(preview_fields=preview_fields):
+                result = self.assess("smoke", [
+                    self.event("player-start"),
+                    self.event("playback-start"),
+                    self.event("animation-complete"),
+                    self.event("preview-result", **preview_fields),
+                    self.event("player-terminated", completed=True, failed=False),
+                ])
+                self.assertEqual("behavior-not-proven", result["status"])
 
     def test_verified_071_bundle_keeps_legacy_assessment(self) -> None:
         legacy = {"path": str(self.bundle), "version": "0.7.1", "build": "8"}

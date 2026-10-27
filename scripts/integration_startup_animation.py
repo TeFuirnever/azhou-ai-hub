@@ -727,7 +727,8 @@ def _versioned_smoke_passed(events: list[dict[str, Any]], errors: list[str], res
         return False
     preview = consumed[positions[3]]
     terminated = consumed[positions[4]]
-    return (preview.get("error", "") == "" and terminated.get("completed") is True
+    return (preview.get("success") is True and preview.get("error", "") == ""
+            and terminated.get("completed") is True
             and terminated.get("failed") is False)
 
 
