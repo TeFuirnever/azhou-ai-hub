@@ -33,10 +33,14 @@ class AnimationIntegrationTests(unittest.TestCase):
             file = self.assets / name
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(("private fixture " + name).encode("utf-8"))
-        self.payload = self.source / ".build/azhou-payload"
+        self.snapshot = self.base / "frozen-snapshot"
+        self.snapshot.mkdir(parents=True)
+        common.write_receipt(self.snapshot / ".hub-source.json",
+            {"schema": "azhou-hub.integration-snapshot.v1", "source": str(self.source)})
+        self.payload = self.snapshot / ".build/azhou-payload"
         (self.payload / "Contents/MacOS").mkdir(parents=True)
         (self.payload / "Contents/MacOS/AzhouCodexStartup").write_text("fake executable", encoding="utf-8")
-        helper = self.source / ".build/azhou-install-registry"
+        helper = self.snapshot / ".build/azhou-install-registry"
         helper.write_text("fake registry helper", encoding="utf-8")
         helper.chmod(0o700)
         self.production_path = str(self.base / "production" / animation.APP_NAME)
@@ -58,7 +62,7 @@ class AnimationIntegrationTests(unittest.TestCase):
             if path.is_file():
                 digest.update(path.relative_to(bundle).as_posix().encode("utf-8"))
                 digest.update(path.read_bytes())
-        return {"path": str(bundle), "sha256_tree": digest.hexdigest(), "native_source_root": str(source), "source": origin}
+        return {"path": str(bundle), "sha256_tree": digest.hexdigest(), "native_source_root": str(self.snapshot), "source": origin}
 
     def install(self):
         plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
@@ -379,6 +383,28 @@ class AnimationIntegrationTests(unittest.TestCase):
 
         self.assertEqual(recorded_manifest, common.snapshot_lock(animation.COMPONENT, snapshot))
         self.assertEqual(payload_fingerprint, native["fingerprint"](payload))
+        self.assertEqual(record_before, record.read_bytes())
+        self.assertEqual(registry_before, self.registry)
+        self.assertTrue(target.exists())
+
+    def test_install_plan_rejects_a_payload_built_directly_in_the_live_package(self):
+        snapshot, target, record, native = self.owned_snapshot_fixture()
+        payload = self.base / "direct-payload"
+        shutil.copytree(target, payload)
+        marker_path = payload / "Contents/Resources/azhou-build.json"
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker["projectRoot"] = str(self.source)
+        marker_path.write_text(json.dumps(marker), encoding="utf-8")
+        record_before = record.read_bytes()
+        registry_before = {name: list(paths) for name, paths in self.registry.items()}
+
+        with patch.object(animation.runpy, "run_path", return_value=native), patch.object(animation, "_run") as run:
+            inspected = animation.inspect_bundle(self.source, payload, hub_root=self.hub)
+            self.assertEqual(str(self.source), inspected["native_source_root"])
+            with self.assertRaisesRegex(common.IntegrationError, "frozen build snapshot"):
+                animation.test_install_plan(self.source, payload, self.workspace, hub_root=self.hub)
+            run.assert_not_called()
+
         self.assertEqual(record_before, record.read_bytes())
         self.assertEqual(registry_before, self.registry)
         self.assertTrue(target.exists())

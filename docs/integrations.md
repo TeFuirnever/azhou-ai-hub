@@ -165,7 +165,7 @@ python scripts/azhou_hub.py integrations startup-animation build \
 
 The last command is a plan. Repeat it with `--apply --plan-id PLAN_ID` after reviewing the targets and four private-input hashes. Supply `working.png`, `scene.js`, `wallpaper-scene-q-v3.png` and `app-icon/source.png`; missing inputs fail. The adapter copies them only into ignored local state, runs the fixed native build and compares the final marker against **all** approved private inputs. The temporary empty Git database in that snapshot serves only the native ignore checks, not source-history attribution.
 
-Use the returned `.build/azhou-payload` path as `PAYLOAD`. Test installation likewise requires its own current plan:
+Use the returned `.build/azhou-payload` path as `PAYLOAD`. Test installation accepts only that frozen-snapshot payload: a bundle built directly in the live package directory is rejected at planning, because test-uninstall restores from the frozen snapshot. Test installation likewise requires its own current plan:
 
 ```sh
 python scripts/azhou_hub.py integrations startup-animation test-install \

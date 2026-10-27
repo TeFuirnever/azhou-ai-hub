@@ -280,6 +280,11 @@ def _require_stopped(target: Path) -> None:
 
 def test_install_plan(source: Path, payload: Path, workspace: Path, *, hub_root: Path = ROOT) -> dict[str, Any]:
     verified = inspect_bundle(source, payload, hub_root=hub_root)
+    if Path(verified["native_source_root"]) == Path(verified["source"]["source"]):
+        raise common.IntegrationError(
+            "test installation requires the frozen build snapshot; a payload built directly in the live "
+            "package has no frozen cleanup snapshot and could never be test-uninstalled — build through "
+            "the Hub build command first")
     workspace = _directory(workspace, exists=False)
     source_root = Path(verified["source"]["source"])
     if workspace == source_root or source_root in workspace.parents:
