@@ -309,6 +309,7 @@ export async function installRenderer(payload) {
         // An installed 0.7.1 payload predating conditional restore remains a
         // known legacy owner. Let its own dispose restore the host baseline.
         original = captureOriginal();
+        original.properties.set(WASH_PROPERTY, [...rollbackOriginal.properties.get(WASH_PROPERTY)]);
         root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
         root.style.setProperty(WASH_PROPERTY, wash);
         root.setAttribute(ATTRIBUTE, 'active');

@@ -194,6 +194,9 @@ try {
     const url = new URL(location.href);
     let bodyAvailable = !url.searchParams.has('hold-body');
     const initialWallpaperStrength = url.searchParams.has('no-initial-wallpaper') ? 0 : 42;
+    if (url.searchParams.get('legacy-wash') === 'host-important') {
+      document.documentElement.style.setProperty('--azhou-wallpaper-wash', 'host-wash', 'important');
+    }
     const hostDocument = {
       get documentElement() { return document.documentElement; },
       get body() { return bodyAvailable ? document.body : undefined; },
@@ -666,41 +669,47 @@ try {
     return { before, restored, after };
   });
 
-  await navigate('/fixture.html?legacy=1');
-  await check('candidate replaces and owns the frozen legacy 0.7.1 wallpaper after its real dispose', async () => {
-    const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
-      legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
-    assert.equal(setup.legacyError, '', JSON.stringify(setup));
-    assert.equal(setup.legacyApplied, true, JSON.stringify(setup));
-    assert.equal(setup.controller, true, JSON.stringify(setup));
-    const state = await until(() => cdp.evaluate(`(()=>{
-      const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
-    })()`), 10000, 'controller ready after frozen legacy wallpaper takeover');
-    assert.equal(await cdp.evaluate('window.__azhouWallpaper===window.__legacyWallpaperAPI'), true,
-      'legacy wallpaper remains the active owner until this controlled takeover request');
-    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
-    await until(() => cdp.evaluate('window.__startupAPI.status().wallpaper.applied'), 10000, 'candidate wallpaper after legacy dispose');
-    const committed = await cdp.evaluate(`({state:window.__startupAPI.status(),
-      legacySame:window.__azhouWallpaper===window.__legacyWallpaperAPI,
-      owner:window.__azhouWallpaper?.owner,version:window.__azhouWallpaper?.version,
-      wallpaperStatus:window.__azhouWallpaper?.status(),
-      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
-      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
-    assert.equal(state.wallpaper.applied, true);
-    assert.equal(committed.state.wallpaper.applied, true);
-    assert.equal(committed.legacySame, false);
-    assert.equal(committed.owner, 'azhou.codex-startup-animation');
-    assert.equal(committed.version, '0.7.1');
-    assert.equal(committed.wallpaperStatus.applied, true);
-    assert.equal(committed.styleCount, 1);
-    assert.equal(committed.rootAttribute, 'active');
-    await cdp.evaluate('window.__startupAPI.dispose()');
-    const restored = await cdp.evaluate(`({startup:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
-      wallpaper:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
-      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
-    assert.deepEqual(restored, { startup: false, wallpaper: false, styleCount: 0, rootAttribute: null });
-    return { committed, restored };
-  });
+  for (const scenario of [
+    { label: 'absent wash baseline', query: '', expectedWash: '', expectedPriority: '' },
+    { label: 'host wash important baseline', query: '&legacy-wash=host-important', expectedWash: 'host-wash', expectedPriority: 'important' },
+    { label: 'later host wash edit', query: '', editWash: true, expectedWash: 'host-later', expectedPriority: 'important' },
+  ]) {
+    await navigate('/fixture.html?legacy=1' + scenario.query);
+    await check('frozen legacy wallpaper replacement restores ' + scenario.label, async () => {
+      const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
+        legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
+      assert.equal(setup.legacyError, '', JSON.stringify(setup));
+      assert.equal(setup.legacyApplied, true, JSON.stringify(setup));
+      assert.equal(setup.controller, true, JSON.stringify(setup));
+      const state = await until(() => cdp.evaluate(`(()=>{
+        const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
+      })()`), 10000, 'controller ready after frozen legacy wallpaper takeover');
+      assert.equal(await cdp.evaluate('window.__azhouWallpaper===window.__legacyWallpaperAPI'), true,
+        'legacy wallpaper remains the active owner until this controlled takeover request');
+      await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
+      const committed = await until(() => cdp.evaluate(`(()=>{
+        const value=window.__startupAPI.status(),api=window.__azhouWallpaper;
+        return value.wallpaper.applied&&api!==window.__legacyWallpaperAPI
+          ?{state:value,owner:api.owner,version:api.version,apiApplied:api.status().applied}:false;
+      })()`), 10000, 'candidate wallpaper after legacy dispose');
+      assert.equal(committed.state.wallpaper.applied, true);
+      assert.equal(committed.owner, 'azhou.codex-startup-animation');
+      assert.equal(committed.version, '0.7.1');
+      assert.equal(committed.apiApplied, true);
+      if (scenario.editWash) await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-wash','host-later','important')");
+      const beforeRestore = await cdp.evaluate(`({wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),
+        priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-wash')})`);
+      await cdp.evaluate('window.__startupAPI.dispose()');
+      const restored = await cdp.evaluate(`({startup:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
+        wallpaper:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+        rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper'),
+        wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),
+        priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-wash')})`);
+      assert.deepEqual(restored, { startup: false, wallpaper: false, styleCount: 0, rootAttribute: null,
+        wash: scenario.expectedWash, priority: scenario.expectedPriority });
+      return { scenario: scenario.label, beforeRestore, restored };
+    });
+  }
 
   await navigate('/fixture.html?hold-body=1');
   await check('real DOM observer waits for a delayed body and disconnects after mount', async () => {
