@@ -162,6 +162,8 @@ This phase is done. Run super-repo-pedant reconcile.
 
 An inferred milestone only produces one reminder; it does not silently edit the repository. Explicit reconcile/handoff covers three project knowledge layers: user docs, <code>AGENTS.md</code>/<code>CLAUDE.md</code>, and memory proven to belong to the current project. Global instructions, unclear memory ownership, whole-file deletion, publication and deployment remain checkpoints.
 
+Optional evolution commands require a platform file lock for signal additions and archiving. If archiving stops between state-file updates, new signal writes pause until a retry verifies the pending archive and completes the candidate receipt; conflicting evidence is refused.
+
 [Read the compatibility contract](skills/super-repo-pedant/references/neat-freak-compatibility.md) · [Read the execution protocol](skills/super-repo-pedant/references/execution-protocol.md)
 
 ![Repo Pedant effect preview](assets/skills/super-repo-pedant-effect.png)

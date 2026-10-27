@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).parents[1]
@@ -168,6 +169,181 @@ class ManageEvolutionTest(unittest.TestCase):
             repeated = self.run_cli("archive", "--project", str(project), "--candidate", proposal["candidate"])
             self.assertEqual(2, repeated.returncode)
 
+    def test_archive_retries_after_archive_file_was_published(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            original = MODULE.write_private_text
+            failed_once = False
+
+            def fail_live_publish(path: Path, text: str, *, root: Path) -> None:
+                nonlocal failed_once
+                if path.name == "signals.jsonl" and not failed_once:
+                    failed_once = True
+                    raise MODULE.EvolutionError("injected live publish failure")
+                original(path, text, root=root)
+
+            with mock.patch.object(MODULE, "write_private_text", side_effect=fail_live_publish):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            archive = next((evolution / "archive").glob("*.jsonl"))
+            archived_bytes = archive.read_bytes()
+            self.assertEqual(2, len((evolution / "signals.jsonl").read_text().splitlines()))
+            blocked = self.add_signal(project, session="later")
+            self.assertEqual(2, blocked.returncode)
+            self.assertIn("pending archive", blocked.stderr)
+
+            self.assertEqual(0, MODULE.cmd_archive(args))
+            self.assertEqual(archived_bytes, archive.read_bytes())
+            later = self.add_signal(project, session="later")
+            self.assertEqual(0, later.returncode)
+            live = (evolution / "signals.jsonl").read_text(encoding="utf-8")
+            self.assertEqual(1, len(live.splitlines()))
+            self.assertIn(json.loads(later.stdout)["signal_id"], live)
+            candidate = json.loads(Path(proposal["candidate"]).read_text(encoding="utf-8"))
+            self.assertEqual(2, candidate["archived_signal_count"])
+            self.assertEqual(str(archive.relative_to(evolution)), candidate["evidence_archive"])
+            self.assertEqual(2, MODULE.cmd_archive(args))
+
+    def test_archive_retry_refuses_truncated_archive_after_live_publish(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            original = MODULE.write_json
+
+            def fail_candidate_publish(path: Path, value: object, *, root: Path) -> None:
+                if path == args.candidate:
+                    raise MODULE.EvolutionError("injected candidate publish failure")
+                original(path, value, root=root)
+
+            with mock.patch.object(MODULE, "write_json", side_effect=fail_candidate_publish):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            archive = next((evolution / "archive").glob("*.jsonl"))
+            archive.write_text(archive.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+
+            self.assertEqual(2, MODULE.cmd_archive(args))
+            self.assertEqual("", (evolution / "signals.jsonl").read_text(encoding="utf-8"))
+            self.assertNotIn("evidence_archive", json.loads(args.candidate.read_text(encoding="utf-8")))
+
+    def test_archive_retries_after_pending_marker_but_before_archive_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            original = MODULE.write_private_text
+            failed_once = False
+
+            def fail_archive_publish(path: Path, text: str, *, root: Path) -> None:
+                nonlocal failed_once
+                if path.name.startswith("processed-") and not failed_once:
+                    failed_once = True
+                    raise MODULE.EvolutionError("injected archive publish failure")
+                original(path, text, root=root)
+
+            with mock.patch.object(MODULE, "write_private_text", side_effect=fail_archive_publish):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            self.assertEqual([], list((evolution / "archive").glob("*.jsonl")))
+            self.assertEqual(2, len((evolution / "signals.jsonl").read_text().splitlines()))
+            blocked = self.add_signal(project, session="later")
+            self.assertEqual(2, blocked.returncode)
+            self.assertIn("pending archive", blocked.stderr)
+
+            self.assertEqual(0, MODULE.cmd_archive(args))
+            self.assertEqual("", (evolution / "signals.jsonl").read_text(encoding="utf-8"))
+            self.assertEqual(2, json.loads(args.candidate.read_text(encoding="utf-8"))["archived_signal_count"])
+
+    def test_archive_retry_clears_marker_after_candidate_receipt_was_published(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            marker = evolution / ".archive-pending.json"
+            original = Path.unlink
+            failed_once = False
+
+            def fail_marker_cleanup(path: Path, *args: object, **kwargs: object) -> None:
+                nonlocal failed_once
+                if path.name == marker.name and not failed_once:
+                    failed_once = True
+                    raise OSError("injected marker cleanup failure")
+                original(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "unlink", fail_marker_cleanup):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            self.assertTrue(marker.exists())
+            archive = next((evolution / "archive").glob("*.jsonl"))
+            archive.write_bytes(archive.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
+            self.assertEqual(2, json.loads(args.candidate.read_text(encoding="utf-8"))["archived_signal_count"])
+            self.assertEqual(2, self.add_signal(project, session="later").returncode)
+
+            self.assertEqual(0, MODULE.cmd_archive(args))
+            self.assertFalse(marker.exists())
+            self.assertEqual(2, MODULE.cmd_archive(args))
+
+    def test_archive_retries_after_live_batch_was_published(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            original = MODULE.write_json
+            failed_once = False
+
+            def fail_candidate_publish(path: Path, value: object, *, root: Path) -> None:
+                nonlocal failed_once
+                if path == args.candidate and not failed_once:
+                    failed_once = True
+                    raise MODULE.EvolutionError("injected candidate publish failure")
+                original(path, value, root=root)
+
+            with mock.patch.object(MODULE, "write_json", side_effect=fail_candidate_publish):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            self.assertEqual("", (evolution / "signals.jsonl").read_text(encoding="utf-8"))
+
+            self.assertEqual(0, MODULE.cmd_archive(args))
+            candidate = json.loads(args.candidate.read_text(encoding="utf-8"))
+            self.assertEqual(2, candidate["archived_signal_count"])
+
+    def test_archive_refuses_changed_existing_archive_on_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="one")
+            self.add_signal(project, session="two")
+            proposal = json.loads(self.propose(project).stdout)
+            args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
+            evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
+            original = MODULE.write_private_text
+
+            def fail_live_publish(path: Path, text: str, *, root: Path) -> None:
+                if path.name == "signals.jsonl":
+                    raise MODULE.EvolutionError("injected live publish failure")
+                original(path, text, root=root)
+
+            with mock.patch.object(MODULE, "write_private_text", side_effect=fail_live_publish):
+                self.assertEqual(2, MODULE.cmd_archive(args))
+            archive = next((evolution / "archive").glob("*.jsonl"))
+            archive.write_text(archive.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+            live_before = (evolution / "signals.jsonl").read_bytes()
+
+            self.assertEqual(2, MODULE.cmd_archive(args))
+            self.assertEqual(live_before, (evolution / "signals.jsonl").read_bytes())
+            self.assertNotIn("evidence_archive", json.loads(args.candidate.read_text(encoding="utf-8")))
+
     def test_archive_rejects_symlinked_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
@@ -228,7 +404,6 @@ class ManageEvolutionTest(unittest.TestCase):
             candidate_file = next((namespace / "super-repo-pedant" / "evolution" / "candidates").glob("*.json"))
             self.assertEqual(0o600, candidate_file.stat().st_mode & 0o777)
 
-    @unittest.skipIf(os.name == "nt", "the transaction lock needs fcntl, absent on Windows")
     def test_append_blocks_while_archive_transaction_lock_is_held(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
@@ -251,7 +426,6 @@ class ManageEvolutionTest(unittest.TestCase):
             signal_id = json.loads(stdout)["signal_id"]
             self.assertIn(signal_id, (state_root / "signals.jsonl").read_text(encoding="utf-8"))
 
-    @unittest.skipIf(os.name == "nt", "without fcntl the archive window is not serialized on Windows")
     def test_signal_attempted_during_archive_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
@@ -312,6 +486,16 @@ class ManageEvolutionTest(unittest.TestCase):
                 signal_id in live or signal_id in archived,
                 f"confirmed signal lost everywhere: {signal_id}",
             )
+
+    @unittest.skipIf(os.name == "nt", "Windows uses msvcrt rather than fcntl")
+    def test_missing_posix_lock_backend_refuses_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            state_root = MODULE.safe_state_root(project, None)
+            with mock.patch.dict(sys.modules, {"fcntl": None}):
+                with self.assertRaisesRegex(MODULE.EvolutionError, "locking is unavailable"):
+                    with MODULE.transaction_lock(state_root, project):
+                        self.fail("transaction entered without a lock")
 
     def test_global_candidate_requires_two_projects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
