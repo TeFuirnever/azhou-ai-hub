@@ -589,6 +589,17 @@ def _versioned_events(output: str, launcher_path: str,
             reason = item.get("reason")
             if not isinstance(reason, str) or not reason:
                 errors.append(f"line {line_number}: missing startup failure reason")
+        if name == "startup-port-error":
+            reason = item.get("reason")
+            operation = item.get("operation")
+            error_number = item.get("errno")
+            if not isinstance(reason, str) or not reason:
+                errors.append(f"line {line_number}: missing startup port failure reason")
+            if (not isinstance(operation, str)
+                    or operation not in {"socket", "close-on-exec", "bind-loopback", "getsockname"}):
+                errors.append(f"line {line_number}: invalid startup port failure operation")
+            if isinstance(error_number, bool) or not isinstance(error_number, int) or error_number <= 0:
+                errors.append(f"line {line_number}: invalid startup port failure errno")
         if name == "launcher-exit":
             outcome = item.get("outcome")
             exit_code = item.get("exitCode")
@@ -615,8 +626,18 @@ def _versioned_launch_assessment(events: list[dict[str, Any]], errors: list[str]
             or names[0] != "launcher-start" or len(exits) != 1 or names[-1] != "launcher-exit"
             or exits[0].get("exitCode") != result.get("returncode")):
         return "behavior-not-proven", not_proven
-    if {"failure", "duplicate-entry", "lock-error"} & set(names):
-        return "behavior-not-proven", not_proven
+    failure_event = next((item for item in consumed if item.get("event") in _VERSIONED_FAILURE_EVENTS), None)
+    if failure_event is not None:
+        reason = failure_event.get("reason")
+        if not isinstance(reason, str) or not reason:
+            reason = str(failure_event["event"])
+        startup_failure = {"status": "failed", "injection": "not-confirmed",
+                           "installed": any(item.get("event") == "startup-installed" for item in consumed),
+                           "reason": reason}
+        if failure_event.get("event") == "startup-port-error":
+            startup_failure["operation"] = failure_event["operation"]
+            startup_failure["errno"] = failure_event["errno"]
+        return "behavior-not-proven", startup_failure
 
     exit_event = exits[0]
     activations = [item for item in consumed if item.get("event") == "target-activated"]
@@ -700,7 +721,8 @@ def _versioned_smoke_passed(events: list[dict[str, Any]], errors: list[str], res
     forbidden = {"target-opened", "target-activated", "target-open-request", "target-reused",
                  "target-activation-request", "startup-installed", "startup-ready", "startup-skipped",
                  "startup-interrupted", "startup-failed", "startup-launcher-start",
-                 "target-launch-completion", "launcher-exit", "wallpaper-helper-start"}
+                 "target-launch-completion", "launcher-exit", "wallpaper-helper-start",
+                 "preview-promoted-to-launch"}
     if forbidden & {item.get("event") for item in events} or _VERSIONED_FAILURE_EVENTS & set(names):
         return False
     preview = consumed[positions[3]]

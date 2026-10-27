@@ -378,6 +378,34 @@ class AgentSkinAssessmentTests(unittest.TestCase):
         ]
         self.assertEqual("behavior-not-proven", self.assess("launch", overwritten_failure)["status"])
 
+    def test_versioned_failure_event_cannot_be_overwritten_by_later_ready(self) -> None:
+        events = [
+            self.event("launcher-start"),
+            self.event("startup-port-error", reason="listener-mismatch",
+                       operation="bind-loopback", errno=98),
+            self.event("target-opened", targetPID=3579),
+            self.event("startup-installed", targetPID=3579, runId=1),
+            self.event("startup-ready", targetPID=3579, runId=1, ready=True, phase="playing"),
+            self.event("launcher-exit", outcome="startup-ready", exitCode=0),
+        ]
+
+        result = self.assess("launch", events)
+
+        self.assertEqual("behavior-not-proven", result["status"])
+        self.assertEqual("failed", result["startup"]["status"])
+        self.assertEqual("listener-mismatch", result["startup"]["reason"])
+        self.assertEqual("bind-loopback", result["startup"]["operation"])
+        self.assertEqual(98, result["startup"]["errno"])
+
+        malformed_operation = self.assess("launch", [
+            self.event("launcher-start"),
+            self.event("startup-port-error", reason="listener-mismatch", operation=[], errno=98),
+            self.event("launcher-exit", outcome="behavior-not-proven", exitCode=1),
+        ], returncode=1)
+        self.assertEqual("behavior-not-proven", malformed_operation["status"])
+        self.assertTrue(any("invalid startup port failure operation" in error
+                            for error in malformed_operation["event_errors"]))
+
     def test_schema_less_supported_diagnostic_does_not_invalidate_launch(self) -> None:
         diagnostic = {"event": "target-activation-after-startup"}
         events = [
@@ -486,6 +514,10 @@ class AgentSkinAssessmentTests(unittest.TestCase):
         mismatched_pid = [dict(item) for item in events]
         mismatched_pid[1]["launcherPID"] = 2469
         self.assertEqual("behavior-not-proven", self.assess("smoke", mismatched_pid)["status"])
+
+        promoted = [dict(item) for item in events]
+        promoted.insert(4, {"event": "preview-promoted-to-launch"})
+        self.assertEqual("behavior-not-proven", self.assess("smoke", promoted)["status"])
 
         events.insert(2, self.event("startup-installed", targetPID=3579, runId=1))
         self.assertEqual("behavior-not-proven", self.assess("smoke", events)["status"])
