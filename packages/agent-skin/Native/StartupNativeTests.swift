@@ -164,6 +164,26 @@ struct StartupNativeTests {
         expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"]) == "/tmp/startup.jsonl",
                "non-probe modes keep their requested log file")
 
+        let discoveredTarget = URL(fileURLWithPath: "/Applications/Codex.app")
+        var targetLookupCalls = 0
+        func targetLookup(arguments: [String], promoted: Bool = false) -> URL? {
+            StartupModePolicy.resolveTarget(arguments: arguments, promoted: promoted) {
+                targetLookupCalls += 1
+                return discoveredTarget
+            }
+        }
+        expect(targetLookup(arguments: ["Agent Skin", "--preview"]) == nil && targetLookupCalls == 0,
+               "preview mode does not discover the official application")
+        expect(targetLookup(arguments: ["Agent Skin", "--smoke-test"]) == nil && targetLookupCalls == 0,
+               "smoke mode does not discover the official application")
+        expect(targetLookup(arguments: ["Agent Skin", "--probe"]) == discoveredTarget && targetLookupCalls == 1,
+               "probe performs read-only target discovery")
+        expect(targetLookup(arguments: ["Agent Skin"]) == discoveredTarget && targetLookupCalls == 2,
+               "normal launch discovers the target before trusted startup")
+        expect(targetLookup(arguments: ["Agent Skin", "--preview"], promoted: true) == discoveredTarget
+               && targetLookupCalls == 3,
+               "an explicitly promoted preview discovers the target when trusted startup begins")
+
         let wrongPIDSystem = FakeStartupSystem(expectedPID: 9999, ports: [9222])
         let wrongPIDTransport = FakeStartupTransport()
         let wrongPID = await StartupConnector(

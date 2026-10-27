@@ -323,6 +323,15 @@ enum StartupLogPolicy {
     }
 }
 
+enum StartupModePolicy {
+    static func resolveTarget(arguments: [String], promoted: Bool, lookup: () -> URL?) -> URL? {
+        let explicitProbe = arguments.contains("--probe")
+        let previewMode = arguments.contains("--preview") || arguments.contains("--smoke-test")
+        guard explicitProbe || promoted || !previewMode else { return nil }
+        return lookup()
+    }
+}
+
 enum StartupFailureDelivery {
     @discardableResult
     static func deliver(

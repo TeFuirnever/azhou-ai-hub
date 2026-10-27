@@ -96,6 +96,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: targetID) { candidates.append(url) }
         return candidates.compactMap { validTarget($0) }.first
     }
+    private func targetForCurrentMode() -> URL? {
+        StartupModePolicy.resolveTarget(arguments: args, promoted: promoted) { [weak self] in
+            self?.resolveTarget()
+        }
+    }
     private func lockInstance() -> Bool {
         let path = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(launcherID)-\(getuid()).lock").path
         lockFD = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
@@ -119,8 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 logFile = try FileHandle(forWritingTo: url); try logFile?.seekToEnd()
             } catch { print("LOG ERROR: \(error.localizedDescription)") }
         }
-        targetURL = resolveTarget()
         if args.contains("--probe") {
+            targetURL = targetForCurrentMode()
             log("probe", ["launcherPath": real(Bundle.main.bundleURL).path, "targetPath": targetURL?.path ?? "",
                           "targetBundleID": targetURL.flatMap { Bundle(url: $0)?.bundleIdentifier } ?? "",
                           "running": NSRunningApplication.runningApplications(withBundleIdentifier: targetID).map { appInfo($0) },
@@ -152,6 +157,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(self, name: "launcher")
+        let nativeMode = preview ? "preview" : "launch"
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: "window.__agentSkinNativeMode = '\(nativeMode)';",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
         webView = WKWebView(frame: window.contentView!.bounds, configuration: configuration)
         webView.autoresizingMask = [.width, .height]; webView.navigationDelegate = self
         webView.underPageBackgroundColor = window.backgroundColor
@@ -244,6 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func startTrustedSession() {
         guard !startupRequested, !terminating else { return }
         startupRequested = true; requested = true
+        targetURL = targetForCurrentMode()
         guard let url = targetURL, validTarget(url) == url else {
             finishStartup(.failed(reason: "target-missing"), promoted: promoted); return
         }
