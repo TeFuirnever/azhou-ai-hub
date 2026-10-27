@@ -83,8 +83,9 @@ def _pstack_coexistence(codex_home: Path, skills_dir: Path, installer) -> dict:
     The Hub entry and the Kit's direct entry must reach the same conclusion
     for the same target, so the judgment lives in the hash-verified installer
     module and both entries call it. Registration plus the sheet's routing
-    switch decide compatibility; a sheet, visible Skills, or a cached copy
-    alone is not routing evidence.
+    switch decide compatibility; a sheet or visible Skills alone is not
+    routing evidence, and one plugin copy under the native plugins tree
+    already counts as registration.
     """
     try:
         verdict = installer.pstack_coexistence(codex_home, skills_dir)

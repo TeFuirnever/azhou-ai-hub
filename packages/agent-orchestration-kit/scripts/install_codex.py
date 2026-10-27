@@ -291,13 +291,15 @@ def _contains_pstack(value):
 def pstack_coexistence(codex_home, skills_dir=None):
     """Evidence-separated pstack diagnosis for one Codex home.
 
-    A model sheet, visible pstack Skills, or a cached plugin copy alone never
-    proves that tasks are auto-routed. Auto-routing is armed only when a
-    native registration exists and the sheet does not carry the exact ``off``
-    line that stops the SessionStart hook. Hook trust and live runs are host
-    state and stay unknown to any file-level check. This one implementation
-    is the compatibility verdict for both the Kit's direct entry and the
-    Hub's model-router entry.
+    A model sheet or visible pstack Skills alone never proves that tasks are
+    auto-routed. One plugin copy in the native plugins tree already counts as
+    native registration, so auto-routing reads as armed whenever registration
+    exists and the sheet does not carry the exact ``off`` line that stops the
+    SessionStart hook — an orphaned copy is conservatively armed, never
+    silently compatible. Hook trust and live runs are host state and stay
+    unknown to any file-level check. This one implementation is the
+    compatibility verdict for both the Kit's direct entry and the Hub's
+    model-router entry.
     """
     sheet_path = codex_home / PSTACK_SHEET
     raw_sheet = regular_bytes(sheet_path)
@@ -329,7 +331,7 @@ def pstack_coexistence(codex_home, skills_dir=None):
     if not registered:
         auto_routing, compatible = "not-armed", True
         reason = ("no native pstack registration in this target; a model sheet, visible pstack Skills, "
-                  "or a cached copy alone is not routing evidence")
+                  "or foreign plugin files alone are not routing evidence")
     elif hook == "off":
         auto_routing, compatible = "off", True
         reason = "pstack SessionStart auto-routing is switched off by the model sheet"

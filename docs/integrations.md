@@ -57,7 +57,7 @@ The `SessionStart` hook requires native `/hooks` trust review. Setting `session 
 
 ### Sharing one Codex home with the Agent Orchestration Kit
 
-Both orchestration packages can share one controlled Codex home. One compatibility verdict — `pstack_coexistence` in the Kit's `install_codex.py` — is enforced by both public entries, so the Hub's `model-router` entry and the Kit's own `setup.sh` reach the same conclusion for the same target: a model sheet, visible pstack Skills, or a cached plugin copy alone is never evidence of auto-routing, while native registration whose sheet lacks the exact `session hook: off` line is armed and blocks a Kit install until the target is converted. Duplicate pstack plugin copies and symlinked plugin state stay errors.
+Both orchestration packages can share one controlled Codex home. One compatibility verdict — `pstack_coexistence` in the Kit's `install_codex.py` — is enforced by both public entries, so the Hub's `model-router` entry and the Kit's own `setup.sh` reach the same conclusion for the same target: a model sheet or visible pstack Skills alone is never evidence of auto-routing, and one plugin copy under the native plugins tree already counts as native registration, so even an orphaned copy conservatively reads as armed — native registration whose sheet lacks the exact `session hook: off` line blocks a Kit install until the target is converted. Duplicate pstack plugin copies and symlinked plugin state stay errors.
 
 Install the Kit first and plan pstack against the same home (coexistence is then automatic), or declare the intent before the Kit arrives:
 

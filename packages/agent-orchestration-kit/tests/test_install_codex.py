@@ -364,7 +364,8 @@ class InstallTests(unittest.TestCase):
 
 class PstackCoexistenceTests(unittest.TestCase):
     """The shipped compatibility verdict: registration plus the sheet's routing
-    switch decide; a sheet, visible Skills, or a cached copy alone proves nothing."""
+    switch decide; a sheet or visible Skills alone proves nothing, while one
+    plugin copy already counts as registration."""
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
