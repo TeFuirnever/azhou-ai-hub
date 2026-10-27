@@ -26,7 +26,8 @@ except ImportError:
     import azhou_runtime_state as state
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENT = "startup-animation"
+COMPONENT = "agent-skin"
+LEGACY_COMPONENT = "startup-animation"
 APP_NAME = "阿舟启动 Codex.app"
 EXECUTABLE = "AzhouCodexStartup"
 PRIVATE_FILES = ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png")
@@ -178,8 +179,14 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
         original = _directory(source, exists=False)
         if native_root == original:
             raise common.IntegrationError("test cleanup requires the frozen build snapshot, not the live source")
-        origin = common.verify_snapshot(COMPONENT, native_root, hub_root=hub_root)
         snapshot_record = common.read_receipt(native_root / ".hub-source.json")
+        snapshot_component = snapshot_record.get("component")
+        if snapshot_component not in (COMPONENT, LEGACY_COMPONENT):
+            raise common.IntegrationError("cleanup snapshot has an unknown package owner")
+        expected_original = Path(hub_root).resolve() / "packages" / common.PACKAGES[snapshot_component]
+        if original != expected_original:
+            raise common.IntegrationError("cleanup source does not match the snapshot's original package owner")
+        origin = common.verify_snapshot(snapshot_component, native_root, hub_root=hub_root)
         if (snapshot_record.get("schema") != "azhou-hub.integration-snapshot.v1"
                 or snapshot_record.get("source") != str(original)):
             raise common.IntegrationError("cleanup snapshot does not belong to the explicitly selected original source")
@@ -190,7 +197,8 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
             raise common.IntegrationError("bundle was built from different package inputs; rebuild before installing")
         if common.read_receipt(native_root / ".hub-source.json").get("source") != origin["source"]:
             raise common.IntegrationError("bundle snapshot belongs to a different package checkout; rebuild before installing")
-    lock = (common.snapshot_lock(COMPONENT, native_root) if (native_root / ".hub-source.json").exists()
+    lock = (common.snapshot_lock(snapshot_component, native_root) if _cleanup_snapshot_only
+            else common.snapshot_lock(COMPONENT, native_root) if (native_root / ".hub-source.json").exists()
             else common.load_lock(COMPONENT, hub_root=hub_root))
     inputs = marker.get("inputs", {})
     for name in lock["build_inputs"]:
@@ -216,19 +224,27 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
             "limits": "build marker/signature do not independently prove binary reproducibility; invocation and visual review are separate"}
 
 
-def _test_paths(workspace: Path) -> tuple[Path, Path]:
+def _test_paths(workspace: Path, component: str = COMPONENT) -> tuple[Path, Path]:
+    if component not in (COMPONENT, LEGACY_COMPONENT):
+        raise common.IntegrationError("unknown Hub test-installation component")
     workspace = _directory(workspace, exists=False)
-    directory = state.state_path(workspace, "hub", "test-installations", COMPONENT)
+    directory = state.state_path(workspace, "hub", "test-installations", component)
     return directory / APP_NAME, directory / "receipt.json"
 
 
-def _owned_test(workspace: Path) -> tuple[Path, Path, dict[str, Any]]:
-    target, record = _test_paths(workspace)
-    receipt = common.read_receipt(record)
-    if (receipt.get("schema") != "azhou-hub.animation-test-install.v1"
-            or receipt.get("component") != COMPONENT or receipt.get("path") != str(target)):
-        raise common.IntegrationError("test-installation ownership does not match this workspace")
-    return target, record, receipt
+def _owned_test(workspace: Path) -> tuple[Path, Path, dict[str, Any], str]:
+    owned = []
+    for component in (COMPONENT, LEGACY_COMPONENT):
+        target, record = _test_paths(workspace, component)
+        if record.exists() or record.is_symlink() or target.exists() or target.is_symlink():
+            receipt = common.read_receipt(record)
+            if (receipt.get("schema") != "azhou-hub.animation-test-install.v1"
+                    or receipt.get("component") != component or receipt.get("path") != str(target)):
+                raise common.IntegrationError("test-installation ownership does not match this workspace")
+            owned.append((target, record, receipt, component))
+    if len(owned) != 1:
+        raise common.IntegrationError("test-installation ownership is missing or ambiguous in this workspace")
+    return owned[0]
 
 
 def _registry_inventory(tool: Path) -> dict[str, list[str]]:
@@ -294,7 +310,7 @@ def test_install_plan(source: Path, payload: Path, workspace: Path, *, hub_root:
     target, record = _test_paths(workspace)
     current = False
     if target.exists() or target.is_symlink() or record.exists() or record.is_symlink():
-        _, _, receipt = _owned_test(workspace)
+        _, _, receipt, _ = _owned_test(workspace)
         installed = inspect_bundle(source, target, hub_root=hub_root)
         if receipt.get("sha256_tree") != installed["sha256_tree"] or installed["sha256_tree"] != verified["sha256_tree"]:
             raise common.IntegrationError("existing test installation changed or belongs to another build; preserve it")
@@ -344,8 +360,9 @@ def test_uninstall_plan(source: Path, workspace: Path, *, hub_root: Path = ROOT)
     source_root = _directory(source, exists=False)
     if workspace == source_root or source_root in workspace.parents:
         raise common.IntegrationError("test workspace must be outside the read-only source")
-    target, record, receipt = _owned_test(workspace)
-    verified = inspect_bundle(source, target, hub_root=hub_root, _cleanup_snapshot_only=True)
+    target, record, receipt, component = _owned_test(workspace)
+    cleanup_source = Path(hub_root).resolve() / "packages" / common.PACKAGES[component]
+    verified = inspect_bundle(cleanup_source, target, hub_root=hub_root, _cleanup_snapshot_only=True)
     if receipt.get("sha256_tree") != verified["sha256_tree"] or receipt.get("source_lock_sha256") != verified["source"]["source_lock_sha256"]:
         raise common.IntegrationError("test installation differs from ownership receipt; preserved")
     return _plan("test-uninstall", target=verified, workspace=str(workspace), receipt=str(record),
@@ -356,7 +373,7 @@ def test_uninstall_plan(source: Path, workspace: Path, *, hub_root: Path = ROOT)
 def test_uninstall(source: Path, workspace: Path, plan_id: str, *, hub_root: Path = ROOT) -> dict[str, Any]:
     plan = test_uninstall_plan(source, workspace, hub_root=hub_root)
     _approval(plan, plan_id)
-    target, record, _ = _owned_test(workspace)
+    target, record, _, component = _owned_test(workspace)
     _require_stopped(target)
     if test_uninstall_plan(source, workspace, hub_root=hub_root)["plan_id"] != plan["plan_id"]:
         raise common.IntegrationError("test app changed before removal; preserved")
@@ -367,7 +384,8 @@ def test_uninstall(source: Path, workspace: Path, plan_id: str, *, hub_root: Pat
     after = _registry_inventory(tool)
     if after != registration["expected_after"]:
         raise common.IntegrationError("test registration removal did not preserve the expected other application entries; test app and receipt retained")
-    if inspect_bundle(source, target, hub_root=hub_root, _cleanup_snapshot_only=True)["sha256_tree"] != plan["target"]["sha256_tree"]:
+    cleanup_source = Path(hub_root).resolve() / "packages" / common.PACKAGES[component]
+    if inspect_bundle(cleanup_source, target, hub_root=hub_root, _cleanup_snapshot_only=True)["sha256_tree"] != plan["target"]["sha256_tree"]:
         raise common.IntegrationError("test app changed during registration cleanup; preserved")
     _require_stopped(target)
     shutil.rmtree(target)

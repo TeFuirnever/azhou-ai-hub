@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "azhou-agent-lab",
+  "displayName": "阿舟 · Agent 实验室",
+  "description": "与阿舟启动器及全景壁纸采用同一主题的女性 Q 版阿舟原生 Codex pet。",
+  "spriteVersionNumber": 2,
+  "themeInputs": [
+    "assets/private/working.png",
+    "assets/private/wallpaper-scene-q-v3.png",
+    "style.css",
+    "pet/theme.json"
+  ],
+  "identity": {
+    "character": "女性 Q 版阿舟",
+    "proportions": "大头、小身体、短四肢；保持正式 Q 版身份，不改为普通动漫身材",
+    "palette": ["暖橙", "奶白", "棕色"],
+    "referencePriority": "正式 Q 版主形象定义身份；当前 working.png 与全景壁纸定义本项目已采用的主题；style.css 提供界面色彩上下文。"
+  },
+  "identityReferences": [
+    {
+      "name": "01-master-idle.png",
+      "sha256": "e38132192c8056dadff424eead7856625c9752810813ab5795e1cd6c0385b9de",
+      "role": "正式 Q 版身份参考；仅记录来源，不要求普通 clone 访问原 IP 库"
+    },
+    {
+      "path": "assets/private/working.png",
+      "adoptedSHA256": "34dc9a8e9c06c226ec0cc80878548f118ff4a23b4a87d160674e66db4a905e58",
+      "role": "本次采用记录；实际 themeRevision 始终使用当前文件重新计算的摘要"
+    }
+  ],
+  "generation": {
+    "workflow": "ImageGen + 原生 hatch-pet v2 流程；本 CLI 不调用生成 API，也不把复制旧图当作生成",
+    "chromaKey": "#0000FF",
+    "atlas": {"width": 1536, "height": 2288, "columns": 8, "rows": 11, "cellWidth": 192, "cellHeight": 208},
+    "animationFrameCounts": [6, 8, 8, 4, 5, 8, 6, 6, 6],
+    "lookDirectionFrames": 16,
+    "unusedCells": "alpha 必须全部为 0"
+  },
+  "runtime": {
+    "selection": "安装后由用户正常刷新并选择 pet；不修改宿主、自动退出宿主或自报已激活",
+    "state": "pending-refresh-selection"
+  }
+}

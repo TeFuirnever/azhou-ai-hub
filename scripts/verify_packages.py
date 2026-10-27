@@ -110,8 +110,8 @@ def main() -> int:
             ["-m", "unittest", "discover", "-s", "tests"],
         ),
         run_suite(
-            "startup-animation installer lifecycle tests",
-            packages["startup-animation"],
+            "agent-skin installer lifecycle tests",
+            packages["agent-skin"],
             ["tools/test-install-macos.py"],
         ),
     ]

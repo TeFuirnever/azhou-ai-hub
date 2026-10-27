@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADAPTERS = {
     "pstack": "integration_pstack",
     "model-router": "integration_model_router",
-    "startup-animation": "integration_startup_animation",
+    "agent-skin": "integration_startup_animation",
 }
 
 

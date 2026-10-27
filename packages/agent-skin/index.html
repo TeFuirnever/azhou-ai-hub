@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>阿舟启动 Codex · 动画预览</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="assets/private/scene.js" defer></script>
+  <script src="animation.js" defer></script>
+</head>
+<body>
+  <main class="preview">
+    <header class="preview-heading"><span>阿舟启动 Codex</span><span>动画预览 · 不会打开主程序</span></header>
+    <section class="window" aria-label="阿舟在实验室陪伴 Codex 启动">
+      <div class="scene">
+        <svg class="room" viewBox="0 0 1000 658" aria-hidden="true">
+          <defs>
+            <linearGradient id="arch" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#ffe3ae"/><stop offset=".55" stop-color="#ffc4bd"/><stop offset="1" stop-color="#f4b0dc"/></linearGradient>
+            <linearGradient id="windowLight" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff4cf"/><stop offset="1" stop-color="#fff6fe" stop-opacity=".32"/></linearGradient>
+          </defs>
+          <path class="lab-arch" d="M62 573V270C62 126 158 61 286 61S510 126 510 270V573Z" fill="url(#arch)"/>
+          <path d="M83 557V269C83 143 173 83 286 83S489 143 489 269V557" fill="url(#windowLight)" stroke="#fff9ed" stroke-width="2"/>
+          <g class="lab-line" fill="none" stroke="#bc6c9f" stroke-width="1.2"><path d="M286 84V194M84 258H488"/><path d="M98 134L471 520M123 105L488 471" stroke="#fff8db" stroke-width="18" opacity=".33"/></g>
+          <g class="shelf" stroke="#b66a95" stroke-width="1.3" fill="none">
+            <path class="lab-line" d="M90 220H203"/>
+            <path class="lab-line" d="M102 220V176H117V220" fill="#d99be8"/>
+            <path class="lab-line" d="M122 220V164H140V220" fill="#ffbd74"/>
+            <path class="lab-line" d="M145 220L153 182L168 185L161 220" fill="#7cd4d0"/>
+            <path class="lab-line" d="M177 220V206H194V220M185 206V181" fill="#e482ac"/>
+            <path class="lab-line" d="M185 195C163 194 169 175 178 181C185 183 185 195 185 195M185 187C202 185 199 168 190 175C185 177 185 187 185 187" fill="#69b7a3" stroke="#4c9c90"/>
+          </g>
+          <g class="wall-grid" stroke="#af87cb" opacity=".23" fill="none"><path d="M609 76H933M609 94H933M609 112H933M627 62V126M645 62V126M663 62V126"/><circle cx="915" cy="95" r="25"/><path d="M903 95H927M915 83V107"/></g>
+          <ellipse class="ground-shadow" cx="303" cy="574" rx="241" ry="18" fill="#ad5b83" opacity=".15"/>
+          <path d="M64 600H936" stroke="#b48aaf" stroke-opacity=".24"/>
+        </svg>
+        <svg class="lab-dial" viewBox="0 0 560 560" aria-hidden="true"><circle cx="280" cy="280" r="254"/><g class="ticks"></g><path d="M69 137A254 254 0 0 1 240 29" class="dial-accent"/><circle class="dial-point" cx="240" cy="29" r="5"/></svg>
+        <div class="scene-label" aria-hidden="true"><i></i><span>AZHOU</span><b>01 / 工作台</b></div>
+        <div class="lab-sweep" aria-hidden="true"><div class="light-sweep"></div></div>
+        <div class="lamp" aria-hidden="true">
+          <svg viewBox="0 0 140 250">
+            <defs><radialGradient id="lampLight"><stop stop-color="#ffc14f" stop-opacity=".92"/><stop offset="1" stop-color="#ffd994" stop-opacity="0"/></radialGradient></defs>
+            <ellipse class="lamp-glow" cx="54" cy="148" rx="80" ry="105" fill="url(#lampLight)"/>
+            <path d="M104 226V68Q104 37 74 37H62" stroke="#8c638f" stroke-width="6" fill="none"/>
+            <path d="M29 83Q28 36 60 35Q87 48 83 81Z" fill="#efa451" stroke="#c9814a" stroke-width="2"/>
+            <ellipse cx="56" cy="82" rx="28" ry="6" fill="#fff1b8"/><ellipse cx="103" cy="228" rx="26" ry="6" fill="#8c638f"/>
+          </svg>
+        </div>
+        <canvas id="azhou" width="1080" height="1080" role="img" aria-label="女性 Q 版阿舟坐在实验室电脑前，敲键并抬头"></canvas>
+        <div class="screen-response" aria-hidden="true"></div>
+        <svg class="signal" viewBox="0 0 1000 658" aria-hidden="true"><path class="signal-track" d="M431 337C489 337 477 174 549 174H592"/><circle class="signal-origin" cx="431" cy="337" r="4"/></svg>
+        <div class="particles" aria-hidden="true"></div>
+        <div class="copy-paper" aria-hidden="true"></div>
+        <div class="copy">
+          <div class="codex-label"><span class="terminal-symbol"><span>›_</span></span><span>CODEX</span><i></i><b class="response-ring" aria-hidden="true"></b></div>
+          <h1 id="title">阿舟的 Agent<span class="title-second"> 实验室</span></h1>
+          <p id="english">AZHOU / AGENT LAB</p>
+          <div class="copy-rule"></div>
+          <p id="subtitle">和阿舟一起，把想法做出来。</p>
+          <div class="idea-notes" aria-hidden="true"><span>✦ 想法</span><span>⌘ 实验</span><span>↗ 创造</span></div>
+        </div>
+        <div class="small-orbit" aria-hidden="true"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34"/><ellipse cx="50" cy="50" rx="45" ry="16" transform="rotate(-35 50 50)"/><circle cx="83" cy="20" r="3"/></svg></div>
+        <div class="bottom-note"><i></i><span id="phase">实验室正在亮起来</span></div>
+      </div>
+      <div class="error-panel" role="alert" hidden><h2>暂时无法播放</h2><p id="error-message"></p><button id="dismiss" type="button">结束预览</button></div>
+      <button id="replay-end" type="button" hidden>再看一次 ↻</button>
+      <button class="skip" type="button" aria-label="跳过动画">跳过 <kbd>Esc</kbd></button>
+    </section>
+    <footer class="controls">
+      <button id="replay" type="button">↻ 重播</button><button id="pause" type="button">暂停</button>
+      <input id="timeline" aria-label="动画时间轴" type="range" min="0" max="7.8" step="0.01" value="0">
+      <output id="elapsed">0.0 / 7.8 秒</output>
+    </footer>
+  </main>
+</body>
+</html>

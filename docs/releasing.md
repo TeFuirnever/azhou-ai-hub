@@ -12,7 +12,7 @@ Benchmark reruns and evidence refreshes do not create a release unless they chan
 
 ## Release checklist
 
-Before external distribution, check package-local rights in the [provenance ledger](integration-provenance.md). The startup-animation package currently has no redistribution grant; the Hub license and a passing verifier do not authorize publishing its source or binaries, including inside a repository archive. Private artwork, candidate state and machine-specific evidence stay outside distribution.
+Before external distribution, check package-local rights in the [provenance ledger](integration-provenance.md). Agent Skin and its retained startup source currently have no redistribution grant; the Hub license and a passing verifier do not authorize publishing either source or binaries, including inside a repository archive. Private artwork, candidate state and machine-specific evidence stay outside distribution.
 
 1. Update [CHANGELOG.md](../CHANGELOG.md), both READMEs and affected support/provenance documents.
 2. Run <code>python scripts/verify.py</code> from a clean checkout to reproduce the public integrity gate.
