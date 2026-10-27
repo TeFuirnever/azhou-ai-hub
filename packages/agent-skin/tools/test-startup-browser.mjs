@@ -1,0 +1,550 @@
+#!/usr/bin/env node
+// Isolated synthetic-host browser checks. This runner owns only its temporary Chrome profile.
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const options = {
+  chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  out: join(ROOT, '.build/startup-browser-evidence'),
+};
+for (let index = 2; index < process.argv.length; index++) {
+  const key = process.argv[index];
+  if (key === '--help') {
+    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence]');
+    process.exit(0);
+  }
+  if (!['--chrome', '--out'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  options[key.slice(2)] = process.argv[++index];
+}
+options.chrome = resolve(options.chrome);
+options.out = resolve(options.out);
+
+const report = {
+  schema: 1,
+  scope: 'actual PageController and wallpaper renderer in an isolated headless Chrome with a local synthetic Codex-like page',
+  startedAt: new Date().toISOString(),
+  checks: [],
+  screenshots: [],
+  limitations: [
+    'The app:// page identity is supplied through a local host adapter; no Codex process, profile, transport or user content is accessed.',
+    'The wallpaper fixture uses one generated-in-test PNG pixel; the screen proves CSS and lifecycle behavior, not visual identity or performance.',
+    'CSP results cover the renderer after local module loading; they do not prove the official app permits the production script evaluation.',
+    'This fixture does not validate real IndexedDB settings or the full animation UI.',
+  ],
+};
+let server;
+let chrome;
+let profile;
+let cdp;
+let stopping = false;
+let chromeError = '';
+
+function safeError(error) {
+  return String(error?.message || error).replace(/data:image\/[^\s"']+/g, '[fixture image omitted]').slice(0, 1200);
+}
+
+async function until(operation, milliseconds = 10000, label = 'condition') {
+  const deadline = Date.now() + milliseconds;
+  let last;
+  do {
+    try {
+      const value = await operation();
+      if (value) return value;
+    } catch (error) { last = error; }
+    await delay(60);
+  } while (Date.now() < deadline);
+  throw new Error('Timed out waiting for ' + label + (last ? ': ' + safeError(last) : ''));
+}
+
+async function check(name, operation) {
+  const started = Date.now();
+  try {
+    const details = await operation();
+    report.checks.push({ name, passed: true, elapsedMs: Date.now() - started, details });
+    return details;
+  } catch (error) {
+    report.checks.push({ name, passed: false, elapsedMs: Date.now() - started, error: safeError(error) });
+    return null;
+  }
+}
+
+class CDP {
+  constructor(socket) {
+    this.socket = socket;
+    this.nextID = 1;
+    this.pending = new Map();
+    socket.addEventListener('message', event => {
+      let value;
+      try { value = JSON.parse(event.data); } catch { return; }
+      if (!value.id || !this.pending.has(value.id)) return;
+      const pending = this.pending.get(value.id);
+      this.pending.delete(value.id);
+      clearTimeout(pending.timer);
+      value.error ? pending.reject(new Error(value.error.message)) : pending.resolve(value.result);
+    });
+    socket.addEventListener('close', () => {
+      for (const pending of this.pending.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('Fixture CDP closed'));
+      }
+      this.pending.clear();
+    });
+  }
+  static async open(address, expectedPort) {
+    const url = new URL(address);
+    assert.equal(url.protocol, 'ws:');
+    assert.equal(url.hostname, '127.0.0.1');
+    assert.equal(Number(url.port), expectedPort);
+    assert.ok(url.pathname.startsWith('/devtools/page/'));
+    const socket = new WebSocket(address);
+    await new Promise((resolveOpen, reject) => {
+      const timer = setTimeout(() => { socket.close(); reject(new Error('Fixture WebSocket timeout')); }, 5000);
+      socket.addEventListener('open', () => { clearTimeout(timer); resolveOpen(); }, { once: true });
+      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Fixture WebSocket failed')); }, { once: true });
+    });
+    return new CDP(socket);
+  }
+  call(method, params = {}) {
+    const id = this.nextID++;
+    return new Promise((resolveCall, reject) => {
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Fixture CDP timeout: ' + method)); }, 12000);
+      this.pending.set(id, { resolve: resolveCall, reject, timer });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+  async evaluate(expression) {
+    const result = await this.call('Runtime.evaluate', {
+      expression,
+      awaitPromise: true,
+      returnByValue: true,
+      timeout: 10000,
+    });
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+    return result.result?.value;
+  }
+  close() { this.socket.close(); }
+}
+
+async function cleanup() {
+  if (stopping) return;
+  stopping = true;
+  try { cdp?.close(); } catch {}
+  if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
+    const exited = new Promise(resolveExit => chrome.once('exit', resolveExit));
+    chrome.kill('SIGTERM');
+    await Promise.race([exited, delay(2000)]);
+    if (chrome.exitCode === null && chrome.signalCode === null) {
+      chrome.kill('SIGKILL');
+      await Promise.race([exited, delay(1000)]);
+    }
+  }
+  if (server) {
+    server.closeAllConnections();
+    await new Promise(resolveClose => server.close(resolveClose));
+  }
+  if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
+  report.cleanup = {
+    ownChromeStopped: !chrome || chrome.exitCode !== null || chrome.signalCode !== null,
+    temporaryProfileRemoved: !!profile,
+    serverClosed: !server?.listening,
+  };
+}
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => cleanup().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143)));
+}
+
+try {
+  assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
+  await access(options.chrome);
+  await mkdir(options.out, { recursive: true });
+  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer] = await Promise.all([
+    readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
+    readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
+    readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
+    readFile(join(ROOT, 'extension/renderer.mjs'), 'utf8'),
+  ]);
+  const scriptStart = preview.lastIndexOf('<script type="module">');
+  const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
+  assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'The local preview fixture has a replaceable module entry');
+  const fixtureHTML = preview.slice(0, scriptStart) + '<script type="module" src="/fixture.js"></script>' + preview.slice(scriptEnd);
+  const pixelBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64');
+  const pixelImage = 'data:image/png;base64,' + pixelBytes.toString('base64');
+  const imageSHA256 = createHash('sha256').update(pixelBytes).digest('hex');
+  const fixtureModule = `
+    import { installStartup } from '/extension/renderer.mjs';
+    import { installRenderer } from '/wallpaper/renderer.js';
+    const outerWindow = window;
+    const url = new URL(location.href);
+    let bodyAvailable = !url.searchParams.has('hold-body');
+    const hostDocument = {
+      get documentElement() { return document.documentElement; },
+      get body() { return bodyAvailable ? document.body : undefined; },
+      get activeElement() { return document.activeElement; },
+      hasFocus: document.hasFocus.bind(document),
+      createElement: document.createElement.bind(document),
+    };
+    const host = {
+      location: new URL('app://-/index.html?initialRoute=%2F'), document: hostDocument,
+      MutationObserver, addEventListener: window.addEventListener.bind(window),
+      removeEventListener: window.removeEventListener.bind(window),
+      setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
+    };
+    const frameSpecs = [];
+    const senders = new Map();
+    const wallpaper = { version: '0.7.1', preview: true, image: ${JSON.stringify(pixelImage)},
+      imageSHA256: ${JSON.stringify(imageSHA256)}, css: await fetch('/wallpaper.css').then(response => response.text()), strength: 42 };
+    const payload = function (frameWindow, frameDocument, _location, _performance, _indexedDB,
+      _Image, _Path2D, _URL, requestAnimationFrame, _cancelAnimationFrame, _setTimeout, _clearTimeout,
+      _module, SEND, frameSpec) {
+      frameSpecs.push({ runId: frameSpec.runId, intent: frameSpec.intent, protocolVersion: frameSpec.protocolVersion,
+        hasWallpaper: frameSpec.assets?.wallpaper === ${JSON.stringify(pixelImage)} });
+      senders.set(frameSpec.runId, SEND);
+      const overlay = frameDocument.createElement('div');
+      overlay.setAttribute('data-startup-fixture-overlay', String(frameSpec.runId));
+      overlay.setAttribute('aria-label', 'Synthetic Agent Skin ' + frameSpec.intent);
+      overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:transparent';
+      frameDocument.body.appendChild(overlay);
+      requestAnimationFrame(() => {
+        SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+          image: frameSpec.assets.wallpaper, strength: 42 });
+        SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+      });
+      return {
+        openSettings() {
+          if (frameSpec.intent !== 'play') return false;
+          SEND({ type: 'azhou-startup', action: 'settings-open', runId: frameSpec.runId });
+          return true;
+        },
+        dispose() { overlay.remove(); },
+      };
+    };
+    payload.assets = Object.freeze({ wallpaper: ${JSON.stringify(pixelImage)} });
+    payload.applyWallpaper = async (background, isCurrent) => {
+      const state = await installRenderer({ ...wallpaper, image: background.image,
+        strength: background.strength, isCurrent });
+      const api = window.__azhouWallpaper;
+      if (api) Object.defineProperty(host, '__azhouWallpaper', { value: api, configurable: true, writable: true });
+      return state;
+    };
+    const unknownDecoration = document.createElement('div');
+    unknownDecoration.id = 'fixture-unknown';
+    unknownDecoration.style.cssText = 'position:fixed;right:12px;top:80px;width:18px;height:18px;pointer-events:none;background-image:linear-gradient(red,blue)';
+    document.getElementById('root').appendChild(unknownDecoration);
+    if (url.searchParams.has('hold-decode')) {
+      const original = HTMLImageElement.prototype.decode;
+      let release;
+      HTMLImageElement.prototype.decode = function () {
+        return original.call(this).then(() => new Promise(resolve => {
+          outerWindow.__decodePending = true;
+          release = resolve;
+        }));
+      };
+      outerWindow.__releaseDecode = () => { release?.(); HTMLImageElement.prototype.decode = original; };
+      const createURL = URL.createObjectURL.bind(URL), revokeURL = URL.revokeObjectURL.bind(URL), urls = new Set();
+      URL.createObjectURL = value => { const result = createURL(value); urls.add(result); outerWindow.__fixtureBlobCount = urls.size; return result; };
+      URL.revokeObjectURL = value => { urls.delete(value); outerWindow.__fixtureBlobCount = urls.size; return revokeURL(value); };
+    }
+    const result = installStartup(payload, host);
+    outerWindow.__startupAPI = host.__azhouStartup;
+    outerWindow.__startupInstallResult = result;
+    outerWindow.__startupFrameSpecs = frameSpecs;
+    outerWindow.__startupFixtureSend = (runId, message) => senders.get(runId)?.(message);
+    outerWindow.__releaseBody = () => {
+      bodyAvailable = true;
+      const marker = document.createElement('span');
+      marker.hidden = true;
+      marker.dataset.bodyGate = 'open';
+      document.documentElement.appendChild(marker);
+      queueMicrotask(() => marker.remove());
+    };
+    outerWindow.__startupSurfaceBefore = (() => {
+      const read = selector => { const node = document.querySelector(selector); return node ? getComputedStyle(node).backgroundColor : ''; };
+      return { composer: read('.composer'), code: read('pre'), menu: read('[role="menu"]'), unknown: read('#fixture-unknown') };
+    })();
+  `;
+  const routes = new Map([
+    ['/fixture.html', ['text/html; charset=utf-8', fixtureHTML]],
+    ['/csp-style.html', ['text/html; charset=utf-8', fixtureHTML]],
+    ['/csp-blob.html', ['text/html; charset=utf-8', fixtureHTML]],
+    ['/fixture.js', ['text/javascript; charset=utf-8', fixtureModule]],
+    ['/wallpaper.css', ['text/css; charset=utf-8', wallpaperCSS]],
+    ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
+    ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
+  ]);
+  server = createServer((request, response) => {
+    const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+    const route = routes.get(pathname);
+    if (!route) { response.writeHead(404); response.end('Unknown fixture route'); return; }
+    response.setHeader('Content-Type', route[0]);
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    if (pathname === '/csp-style.html') {
+      response.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'");
+    } else if (pathname === '/csp-blob.html') {
+      response.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; object-src 'none'");
+    }
+    response.end(route[1]);
+  });
+  await new Promise((resolveListen, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolveListen); });
+  const origin = 'http://127.0.0.1:' + server.address().port;
+  profile = await mkdtemp(join(tmpdir(), 'azhou-startup-browser-'));
+  chrome = spawn(options.chrome, [
+    '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
+    '--disable-default-apps', '--disable-sync', '--disable-extensions', '--disable-component-update', '--no-pings',
+    '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + profile,
+    '--window-size=1512,889', 'about:blank',
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  chrome.on('error', error => { chromeError = safeError(error); });
+  chrome.stderr.on('data', chunk => { chromeError = (chromeError + chunk.toString()).slice(-4000); });
+  const debugPort = await until(async () => {
+    if (chrome.exitCode !== null || chrome.signalCode !== null) throw new Error('Own Chrome exited: ' + chromeError);
+    const file = await readFile(join(profile, 'DevToolsActivePort'), 'utf8');
+    const port = Number(file.split('\n')[0]);
+    assert.ok(port > 0 && port < 65536);
+    return port;
+  }, 15000, 'isolated Chrome DevToolsActivePort');
+  const endpoint = 'http://127.0.0.1:' + debugPort;
+  const fetchJSON = async path => {
+    const response = await fetch(endpoint + path, { signal: AbortSignal.timeout(2000) });
+    assert.ok(response.ok);
+    return response.json();
+  };
+  const browser = await fetchJSON('/json/version');
+  const page = await until(async () => (await fetchJSON('/json/list')).find(target => target.type === 'page' && target.url === 'about:blank'), 5000, 'isolated blank page');
+  cdp = await CDP.open(page.webSocketDebuggerUrl, debugPort);
+  await cdp.call('Page.enable');
+  await cdp.call('Runtime.enable');
+  report.environment = {
+    node: process.version,
+    platform: process.platform,
+    chromeExecutable: options.chrome,
+    chromePID: chrome.pid,
+    browser: browser.Browser,
+    protocolVersion: browser['Protocol-Version'],
+    isolatedTemporaryProfile: true,
+    debugPortPolicy: 'port 0 was used only by this disposable fixture; this is not a claim about the official app',
+  };
+
+  async function navigate(path) {
+    const result = await cdp.call('Page.navigate', { url: origin + path });
+    assert.ok(!result.errorText, result.errorText);
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'synthetic host page load');
+    await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
+  }
+  async function screenshot(name) {
+    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    const viewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme})');
+    const result = await cdp.call('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false });
+    const bytes = Buffer.from(result.data, 'base64');
+    assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    const pixels = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+    await writeFile(join(options.out, name), bytes);
+    const detail = { file: name, ...viewport, pixels };
+    report.screenshots.push(detail);
+    return detail;
+  }
+
+  await navigate('/fixture.html');
+  const normalReady = await until(() => cdp.evaluate(`(()=>{
+    const state=window.__startupAPI?.status();
+    return state?.phase==='playing' && state.ready && state.wallpaper?.applied ? state : false;
+  })()`), 15000, 'ready page and verified static wallpaper');
+  await check('real controller and wallpaper renderer apply one decoded scene with a valid CSS sentinel', async () => {
+    const state = await cdp.evaluate('window.__startupAPI.status()');
+    assert.equal(state.owner, 'azhou-codex-startup');
+    assert.equal(state.version, 1);
+    assert.equal(state.phase, 'playing');
+    assert.equal(state.wallpaper.imageDecoded, true);
+    assert.equal(state.wallpaper.backgroundMatched, true);
+    assert.equal(state.wallpaper.coverMatched, true);
+    assert.equal(state.wallpaper.washMatched, true);
+    assert.equal(state.wallpaper.unsupportedDecorations.length, 0);
+    const details = await cdp.evaluate(`(()=>{
+      const read=selector=>{const node=document.querySelector(selector);return node?getComputedStyle(node).backgroundColor:'';};
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      const unknown=document.querySelector('#fixture-unknown');
+      return {frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+        frameEvalCount:0,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+        unknownBefore:window.__startupSurfaceBefore.unknown,unknownAfter:getComputedStyle(unknown).backgroundImage,
+        surfaces:{composerBefore:window.__startupSurfaceBefore.composer,composerAfter:read('.composer'),
+          codeBefore:window.__startupSurfaceBefore.code,codeAfter:read('pre'),
+          menuBefore:window.__startupSurfaceBefore.menu,menuAfter:read('[role="menu"]')},
+        frameIntent:window.__startupFrameSpecs[0].intent,frameRunId:window.__startupFrameSpecs[0].runId,
+        frameSpecAssets:window.__startupFrameSpecs[0].hasWallpaper};
+    })()`);
+    assert.equal(details.frameCount, 1);
+    assert.equal(details.styleCount, 1);
+    assert.equal(details.frameIntent, 'play');
+    assert.equal(details.frameSpecAssets, true);
+    assert.equal(details.unknownAfter, 'linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255))');
+    assert.equal(details.surfaces.composerAfter, details.surfaces.composerBefore);
+    assert.equal(details.surfaces.codeAfter, details.surfaces.codeBefore);
+    assert.equal(details.surfaces.menuAfter, details.surfaces.menuBefore);
+    return { state, details };
+  });
+  await check('deep and light synthetic host screenshots preserve controls and unknown decoration', async () => {
+    const shots = [];
+    for (const [theme, file] of [['dark', 'startup-wallpaper-dark.png'], ['light', 'startup-wallpaper-light.png']]) {
+      await cdp.evaluate('document.documentElement.dataset.theme=' + JSON.stringify(theme));
+      const state = await cdp.evaluate('window.__startupAPI.status()');
+      assert.equal(state.wallpaper.applied, true);
+      shots.push(await screenshot(file));
+    }
+    return shots;
+  });
+  await check('child shortcut opens settings in the same iframe and saved settings start a fresh run', async () => {
+    const before = await cdp.evaluate('window.__startupAPI.status()');
+    const opened = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true}));
+      return {count:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,state:window.__startupAPI.status()};
+    })()`);
+    assert.equal(opened.count, 1);
+    assert.equal(opened.state.phase, 'settings');
+    assert.equal(opened.state.runId, before.runId);
+    await cdp.evaluate(`window.__startupFixtureSend(${before.runId},{type:'azhou-startup',action:'settings-close',runId:${before.runId}})`);
+    const replay = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='playing'&&state.ready&&state.runId>${before.runId}?state:false;
+    })()`), 10000, 'fresh play run after settings save');
+    const spec = await cdp.evaluate('window.__startupFrameSpecs.at(-1)');
+    assert.equal(spec.intent, 'play');
+    assert.ok(spec.runId > before.runId);
+    return { before: { runId: before.runId, phase: before.phase }, replay: { runId: replay.runId, phase: replay.phase }, spec };
+  });
+  await check('complete removes the frame, parent shortcut creates a settings frame, and cancellation does not replay', async () => {
+    const play = await cdp.evaluate('window.__startupAPI.status()');
+    await cdp.evaluate(`window.__startupFixtureSend(${play.runId},{type:'azhou-startup',action:'complete',runId:${play.runId},skipped:false})`);
+    assert.equal((await cdp.evaluate('window.__startupAPI.status()')).phase, 'complete');
+    assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[title=\\"Agent Skin startup\\"]").length'), 0);
+    const shortcut = await cdp.evaluate(`(()=>{
+      const event=new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true});
+      const dispatched=window.dispatchEvent(event);
+      return {dispatched,defaultPrevented:event.defaultPrevented,count:document.querySelectorAll('iframe[title="Agent Skin startup"]').length};
+    })()`);
+    assert.equal(shortcut.defaultPrevented, true);
+    assert.equal(shortcut.count, 1);
+    const settings = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='settings'&&state.ready?state:false;
+    })()`), 10000, 'settings-intent ready');
+    const spec = await cdp.evaluate('window.__startupFrameSpecs.at(-1)');
+    assert.equal(spec.intent, 'settings');
+    await cdp.evaluate(`window.__startupFixtureSend(${settings.runId},{type:'azhou-startup',action:'complete',runId:${settings.runId},skipped:true})`);
+    const cancelled = await cdp.evaluate('window.__startupAPI.status()');
+    assert.equal(cancelled.phase, 'complete');
+    assert.deepEqual(cancelled.completion, { cause: 'settings-cancel', beforeReady: false });
+    return { settings: { runId: settings.runId, phase: settings.phase }, completion: cancelled.completion };
+  });
+  await check('completed page remains editable and wallpaper survives animation completion', async () => {
+    const result = await cdp.evaluate(`(()=>{
+      const input=document.querySelector('textarea');
+      input.focus();input.value='synthetic host input';
+      const rect=input.getBoundingClientRect();
+      return {focused:document.activeElement===input,hit:document.elementFromPoint(rect.x+8,rect.y+8)===input,
+        inputValue:input.value,wallpaper:window.__startupAPI.status().wallpaper.applied,
+        frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length};
+    })()`);
+    assert.equal(result.focused, true);
+    assert.equal(result.hit, true);
+    assert.equal(result.inputValue, 'synthetic host input');
+    assert.equal(result.wallpaper, true);
+    assert.equal(result.frameCount, 0);
+    return await screenshot('startup-after-complete-input.png');
+  });
+  await check('restore keeps host-edited property, attribute and stylesheet', async () => {
+    const result = await cdp.evaluate(`(()=>{
+      const root=document.documentElement, style=document.getElementById('azhou-wallpaper-style');
+      root.setAttribute('data-azhou-wallpaper','host-later');
+      root.style.setProperty('--azhou-wallpaper-image','host-image','important');
+      root.style.setProperty('--azhou-wallpaper-wash','host-wash','important');
+      style.textContent+='\\n/* host update */';
+      window.__startupAPI.dispose();
+      return {startup:!!window.__startupAPI.status,installed:Object.hasOwn(window,'__azhouStartup'),
+        frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+        attribute:root.getAttribute('data-azhou-wallpaper'),image:root.style.getPropertyValue('--azhou-wallpaper-image'),
+        imagePriority:root.style.getPropertyPriority('--azhou-wallpaper-image'),wash:root.style.getPropertyValue('--azhou-wallpaper-wash'),
+        washPriority:root.style.getPropertyPriority('--azhou-wallpaper-wash'),styleConnected:style.isConnected,
+        styleChanged:style.textContent.includes('host update'),wallpaperGlobal:!!window.__azhouWallpaper};
+    })()`);
+    assert.deepEqual(result, { startup: true, installed: false, frameCount: 0, attribute: 'host-later',
+      image: 'host-image', imagePriority: 'important', wash: 'host-wash', washPriority: 'important',
+      styleConnected: true, styleChanged: true, wallpaperGlobal: false });
+    return result;
+  });
+
+  await navigate('/fixture.html?hold-body=1');
+  await check('real DOM observer waits for a delayed body and disconnects after mount', async () => {
+    const before = await cdp.evaluate(`({phase:window.__startupAPI.status().phase,frames:document.querySelectorAll('iframe[title="Agent Skin startup"]').length})`);
+    assert.deepEqual(before, { phase: 'loading', frames: 0 });
+    await cdp.evaluate('window.__releaseBody()');
+    const state = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='playing'&&state.ready?state:false;
+    })()`), 10000, 'controller starts after body appears');
+    assert.equal(state.overlay, true);
+    return { before, state: { phase: state.phase, ready: state.ready, runId: state.runId } };
+  });
+
+  await navigate('/fixture.html?hold-decode=1');
+  await check('real late image decode after dispose cannot restore wallpaper or revive a run', async () => {
+    await until(() => cdp.evaluate('window.__decodePending === true'), 10000, 'real Blob image decode gate');
+    const before = await cdp.evaluate('({phase:window.__startupAPI.status().phase,blobCount:window.__fixtureBlobCount})');
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    await cdp.evaluate('window.__releaseDecode()');
+    const after = await until(() => cdp.evaluate(`(()=>({
+      blobCount:window.__fixtureBlobCount,wallpaper:!!window.__azhouWallpaper,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      installed:Object.hasOwn(window,'__azhouStartup'),frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length
+    }))()`), 5000, 'late decode cleanup');
+    assert.equal(before.phase, 'playing');
+    assert.equal(before.blobCount, 1);
+    assert.deepEqual(after, { blobCount: 0, wallpaper: false, styleCount: 0, installed: false, frameCount: 0 });
+    return { before, after };
+  });
+
+  for (const [path, expectedReason] of [
+    ['/csp-style.html', 'wallpaper-unsupported'],
+    ['/csp-blob.html', 'wallpaper-unsupported'],
+  ]) {
+    await navigate(path);
+    await check('CSP refusal is visible in wallpaper state: ' + path, async () => {
+      const state = await until(() => cdp.evaluate(`(()=>{
+        const value=window.__startupAPI.status();
+        return value.phase==='playing'&&value.ready&&value.wallpaper?.reason?value:false;
+      })()`), 12000, 'CSP wallpaper failure with animation ready');
+      assert.equal(state.wallpaper.applied, false);
+      assert.equal(state.wallpaper.reason, expectedReason);
+      assert.equal(state.ready, true, 'wallpaper failure does not impersonate animation readiness');
+      assert.equal(await cdp.evaluate('!!window.__azhouWallpaper'), false);
+      assert.equal(await cdp.evaluate('document.querySelectorAll("#azhou-wallpaper-style").length'), 0);
+      return { phase: state.phase, ready: state.ready, wallpaper: state.wallpaper };
+    });
+  }
+
+  report.finishedAt = new Date().toISOString();
+  report.passed = report.checks.length > 0 && report.checks.every(item => item.passed);
+} catch (error) {
+  report.fatalError = safeError(error);
+  if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);
+} finally {
+  try { await cleanup(); } catch (error) { report.cleanupError = safeError(error); }
+  report.finishedAt = new Date().toISOString();
+  report.passed = !report.fatalError && !report.cleanupError && report.cleanup?.ownChromeStopped
+    && report.cleanup.temporaryProfileRemoved && report.cleanup.serverClosed
+    && report.checks.length > 0 && report.checks.every(item => item.passed);
+  await mkdir(options.out, { recursive: true });
+  await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
+    checks: report.checks.map(({ name, passed }) => ({ name, passed })), fatalError: report.fatalError }));
+  if (!report.passed) process.exitCode = 1;
+}

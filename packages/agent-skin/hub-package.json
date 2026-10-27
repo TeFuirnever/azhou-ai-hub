@@ -52,6 +52,7 @@
     "tools/test-wallpaper.mjs",
     "tools/startup.test.mjs",
     "tools/test-startup-native.py",
+    "tools/test-startup-browser.mjs",
     "tools/manage-codex-pet.py",
     "tools/test-codex-pet.py",
     "tools/import-codex-pet.py",

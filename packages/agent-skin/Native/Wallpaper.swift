@@ -385,7 +385,7 @@ protocol StartupTargetSystem {
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock
 }
 
-private final class WallpaperOperationLock: StartupOperationLock {
+final class WallpaperOperationLock: StartupOperationLock {
     private let descriptor: Int32
     private let stateLock = NSLock()
     private var released = false
@@ -1035,20 +1035,77 @@ private struct WallpaperRequest: Sendable {
 
 enum WallpaperCLI {
     static func handles(_ arguments: [String]) -> Bool { arguments.contains("--wallpaper-helper") || arguments.contains("--wallpaper-status") }
-    private static let statusSource = """
+    static let statusSource = """
     (() => { const u = new URL(location.href);
       if (window.top !== window || u.protocol !== 'app:' || u.hostname !== '-' || u.pathname !== '/index.html'
-          || /avatar|quick.?chat|detached|mini|popover|notification/i.test(u.searchParams.get('initialRoute') || '/')) return {applied:false,reason:'wrong-page'};
-      return globalThis.__azhouWallpaper?.status?.() || {applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:'not-installed'};
+          || /avatar|quick.?chat|detached|mini|popover|notification/i.test(u.searchParams.get('initialRoute') || '/')) return {applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:'wrong-page',startup:{installed:false}};
+      const value=(object,key)=>{const d=object&&Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+      const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
+      const wallpaper=wallpaperDescriptor&&Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
+      let result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:wallpaperDescriptor?'owner-conflict':'not-installed'};
+      if(wallpaper&&value(wallpaper,'owner')==='azhou.codex-startup-animation'&&value(wallpaper,'version')==='0.7.1'&&typeof value(wallpaper,'status')==='function'){
+        try{const state=value(wallpaper,'status').call(wallpaper);if(state&&typeof state==='object'&&typeof state.applied==='boolean')result=state;}
+        catch{result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:'owner-conflict'};}
+      }
+      const startupDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+      const api=startupDescriptor&&Object.hasOwn(startupDescriptor,'value')?startupDescriptor.value:null;
+      let startup={installed:false};
+      if(api&&value(api,'owner')==='azhou-codex-startup'&&value(api,'version')===1&&typeof value(api,'status')==='function'){
+        try{
+          const state=value(api,'status').call(api);
+          if(state&&state.owner==='azhou-codex-startup'&&state.version===1&&typeof state.phase==='string'&&Number.isSafeInteger(state.runId)
+            &&typeof state.ready==='boolean'&&typeof state.completed==='boolean'&&typeof state.overlay==='boolean'){
+            const completion=state.completion;
+            const validCompletion=completion===null||(completion&&['natural','skip','settings-cancel'].includes(completion.cause)&&typeof completion.beforeReady==='boolean');
+            startup={installed:true,owner:state.owner,version:state.version,phase:state.phase,runId:state.runId,
+              ready:state.ready,completed:state.completed,overlay:state.overlay,completion:validCompletion?completion:null};
+          }
+        } catch {}
+      }
+      result.startup=startup;
+      return result;
     })()
     """
-    private static let restoreSource = """
+    static let applyGuardSource = """
+    (() => {
+      const value=(object,key)=>{const d=object&&Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+      const startupDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+      if(startupDescriptor){
+        const api=Object.hasOwn(startupDescriptor,'value')?startupDescriptor.value:null;
+        if(api&&value(api,'owner')==='azhou-codex-startup'&&value(api,'version')===1&&typeof value(api,'status')==='function')return {state:'startup-active',applied:false};
+        return {state:'owner-conflict',applied:false};
+      }
+      const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
+      if(wallpaperDescriptor){
+        const api=Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
+        if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||value(api,'version')!=='0.7.1'
+          ||typeof value(api,'status')!=='function'||typeof value(api,'dispose')!=='function')return {state:'owner-conflict',applied:false};
+      }
+      return {state:'ready',applied:false};
+    })()
+    """
+    static let restoreSource = """
     (() => { const u = new URL(location.href);
       if (window.top !== window || u.protocol !== 'app:' || u.hostname !== '-' || u.pathname !== '/index.html'
           || /avatar|quick.?chat|detached|mini|popover|notification/i.test(u.searchParams.get('initialRoute') || '/')) return {restored:false,reason:'wrong-page'};
-      globalThis.__azhouWallpaper?.dispose?.();
-      const state = globalThis.__azhouWallpaper?.status?.();
-      return {restored:!state || state.applied === false,applied:state?.applied === true};
+      const value=(object,key)=>{const d=object&&Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+      const startupDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+      if(startupDescriptor){
+        const api=Object.hasOwn(startupDescriptor,'value')?startupDescriptor.value:null;
+        if(!api||value(api,'owner')!=='azhou-codex-startup'||value(api,'version')!==1
+          ||typeof value(api,'dispose')!=='function'||typeof value(api,'status')!=='function')return {restored:false,reason:'owner-conflict'};
+        try{const result=value(api,'dispose').call(api);const state=value(api,'status').call(api);
+          return {restored:result?.disposed===true&&state?.phase==='disposed',applied:false,startup:true};}
+        catch{return {restored:false,reason:'owner-conflict'};}
+      }
+      const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
+      if(!wallpaperDescriptor)return {restored:true,applied:false};
+      const api=Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
+      if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||value(api,'version')!=='0.7.1'
+        ||typeof value(api,'dispose')!=='function'||typeof value(api,'status')!=='function')return {restored:false,reason:'owner-conflict'};
+      try{value(api,'dispose').call(api);const state=value(api,'status').call(api);
+        return {restored:state?.applied===false,applied:state?.applied===true};}
+      catch{return {restored:false,reason:'restore-failed'};}
     })()
     """
     private final class Completion: @unchecked Sendable {
@@ -1154,6 +1211,16 @@ enum WallpaperCLI {
                         let socket = transport.socket(try WallpaperValidation.pageSocket(raw, port: port))
                         defer { socket.cancel(with: .normalClosure, reason: nil) }
                         if request.action == .apply {
+                            let ownership = try await transport.evaluate(Self.applyGuardSource, on: socket)
+                            if ownership["state"] as? String == "startup-active" {
+                                throw WallpaperFailure(state: "startup-active", message: "当前页面已有 Agent Skin 启动控制器；独立壁纸应用已拒绝。")
+                            }
+                            if ownership["state"] as? String == "owner-conflict" {
+                                throw WallpaperFailure(state: "owner-conflict", message: "当前页面的壁纸或启动所有者未知；本次未覆盖。")
+                            }
+                            guard ownership["state"] as? String == "ready" else {
+                                throw WallpaperFailure(state: "owner-conflict", message: "当前页面没有返回可核验的壁纸所有权状态；本次未覆盖。")
+                            }
                             let applied: [String: Any]
                             do { applied = try await transport.evaluate(source, on: socket) }
                             catch let error as WallpaperFailure where error.state == "renderer-rejected" {
@@ -1172,7 +1239,12 @@ enum WallpaperCLI {
                             }
                         } else if request.action == .restore {
                             let restored = try await transport.evaluate(restoreSource, on: socket)
-                            guard restored["restored"] as? Bool == true else { throw WallpaperFailure(state: "restore-unconfirmed", message: "页面没有确认移除壁纸。") }
+                            guard restored["restored"] as? Bool == true else {
+                                if restored["reason"] as? String == "owner-conflict" {
+                                    throw WallpaperFailure(state: "owner-conflict", message: "当前页面的壁纸或启动所有者未知；本次未覆盖或删除。")
+                                }
+                                throw WallpaperFailure(state: "restore-unconfirmed", message: "页面没有确认移除壁纸。")
+                            }
                         }
                         let state: [String: Any]
                         do { state = try await transport.evaluate(statusSource, on: socket) }
@@ -1224,7 +1296,8 @@ enum WallpaperCLI {
                     return result
                 } catch let error as WallpaperFailure {
                     if ["target-mismatch", "target-changed", "endpoint-refused", "endpoint-changed", "page-count-refused",
-                        "renderer-rejected", "renderer-not-applied", "verification-failed", "restore-unconfirmed"].contains(error.state) { throw error }
+                        "renderer-rejected", "renderer-not-applied", "verification-failed", "restore-unconfirmed",
+                        "owner-conflict", "startup-active"].contains(error.state) { throw error }
                     lastState = error.state
                 } catch { lastState = "connection-failed" }
             }

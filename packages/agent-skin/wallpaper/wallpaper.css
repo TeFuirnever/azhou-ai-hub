@@ -9,14 +9,14 @@ html[data-azhou-wallpaper="active"] body {
   --azhou-style-ready: ready;
   background-color: var(--azhou-base) !important;
   background-image:
-    linear-gradient(90deg,
+    var(--azhou-wallpaper-wash, linear-gradient(90deg,
       color-mix(in srgb, var(--azhou-base) 76%, transparent) 0%,
       color-mix(in srgb, var(--azhou-base) 82%, transparent) 22%,
       color-mix(in srgb, var(--azhou-base) 88%, transparent) 36%,
       color-mix(in srgb, var(--azhou-base) 84%, transparent) 62%,
       color-mix(in srgb, var(--azhou-base) 70%, transparent) 73%,
       color-mix(in srgb, var(--azhou-base) 35%, transparent) 87%,
-      color-mix(in srgb, var(--azhou-base) 30%, transparent) 100%),
+      color-mix(in srgb, var(--azhou-base) 30%, transparent) 100%)),
     var(--azhou-wallpaper-image) !important;
   background-size: 100% 100%, cover !important;
   background-position: center, 60% center !important;

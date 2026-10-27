@@ -1,6 +1,7 @@
 // Compile separately from the application; fake host operations never launch or kill Codex.
 // python3 -B tools/test-startup-native.py
 import Foundation
+import Darwin
 
 @main
 struct StartupNativeTests {
@@ -37,6 +38,33 @@ struct StartupNativeTests {
         expect(activatedPID == 4123, "hot start activates the same process")
         expect(coldStartCount == 0, "hot start does not launch or replay a session")
         expect(outcome == .activated(pid: 4123), "hot start is reported as activated")
+
+        expect(WallpaperCLI.statusSource.contains("let startup={installed:false}")
+               && WallpaperCLI.statusSource.contains("azhou-codex-startup")
+               && WallpaperCLI.statusSource.contains("azhou.codex-startup-animation"),
+               "wallpaper status reads only supported owner tuples and includes startup status")
+        expect(WallpaperCLI.applyGuardSource.contains("startup-active")
+               && WallpaperCLI.applyGuardSource.contains("owner-conflict"),
+               "explicit helper apply refuses an active or unknown page owner before injection")
+        expect(WallpaperCLI.restoreSource.contains("azhou-codex-startup")
+               && WallpaperCLI.restoreSource.contains("azhou.codex-startup-animation")
+               && WallpaperCLI.restoreSource.contains("0.7.1"),
+               "explicit restore supports the controller and exact known legacy wallpaper version")
+
+        let lockPID = Int32.max
+        let lockPath = WallpaperOperationLock.path(uid: Darwin.getuid(), pid: lockPID)
+        defer { try? FileManager.default.removeItem(atPath: lockPath) }
+        let sharedLock = try WallpaperOperationLock.acquire(pid: lockPID)
+        do {
+            _ = try WallpaperOperationLock.acquire(pid: lockPID)
+            fatalError("FAILED: a second startup or helper operation acquired the same PID lock")
+        } catch let error as WallpaperFailure {
+            expect(error.state == "busy", "startup and helper use one nonblocking PID lock")
+        }
+        sharedLock.release()
+        let helperAfterStartup = try WallpaperOperationLock.acquire(pid: lockPID)
+        helperAfterStartup.release()
+        checks += 1
 
         var preflightOrder: [String] = []
         var preflightColdStartCount = 0

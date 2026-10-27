@@ -102,6 +102,7 @@ jobs:
         run: |
           node --test tools/startup.test.mjs
           python -B tools/test-startup-native.py
+          node tools/test-startup-browser.mjs --out "$RUNNER_TEMP/agent-skin-browser-evidence"
           mkdir -p .build
           xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
             Native/App.swift Native/Wallpaper.swift -o .build/startup-app-compile \

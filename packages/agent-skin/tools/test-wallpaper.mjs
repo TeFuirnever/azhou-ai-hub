@@ -483,6 +483,64 @@ try {
     })()`);
     assert.deepEqual(result.before, result.after); assert.equal(result.focused, true); assert.equal(result.hit, true); return result;
   });
+  await check('status verifies wallpaper strength and restore preserves later host changes', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      __azhouWallpaper?.dispose();
+      const root=document.documentElement, imageName='--azhou-wallpaper-image', washName='--azhou-wallpaper-wash';
+      const before={attribute:root.getAttribute('data-azhou-wallpaper'),
+        image:root.style.getPropertyValue(imageName),imagePriority:root.style.getPropertyPriority(imageName),
+        wash:root.style.getPropertyValue(washName),washPriority:root.style.getPropertyPriority(washName)};
+      await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,strength:75});
+      const high=__azhouWallpaper.status(), firstWash=root.style.getPropertyValue(washName);
+      __azhouWallpaper.dispose();
+      await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,strength:21});
+      const lower=__azhouWallpaper.status(), secondWash=root.style.getPropertyValue(washName);
+      const owned=__azhouWallpaper, style=document.getElementById('azhou-wallpaper-style');
+      root.setAttribute('data-azhou-wallpaper','host-later');
+      root.style.setProperty(imageName,'host-image','important');
+      root.style.setProperty(washName,'host-wash','important');
+      style.textContent+='\\n/* host update */';
+      owned.dispose();
+      const after={attribute:root.getAttribute('data-azhou-wallpaper'),
+        image:root.style.getPropertyValue(imageName),imagePriority:root.style.getPropertyPriority(imageName),
+        wash:root.style.getPropertyValue(washName),washPriority:root.style.getPropertyPriority(washName),
+        styleStillConnected:style.isConnected,styleWasChanged:style.textContent.includes('host update'),
+        globalStillOwned:!!globalThis.__azhouWallpaper};
+      style.remove();
+      if(before.attribute===null)root.removeAttribute('data-azhou-wallpaper');else root.setAttribute('data-azhou-wallpaper',before.attribute);
+      for(const [name,value,priority] of [[imageName,before.image,before.imagePriority],[washName,before.wash,before.washPriority]]){
+        if(value)root.style.setProperty(name,value,priority);else root.style.removeProperty(name);
+      }
+      await __wallpaperFixture.apply();
+      return {high:{applied:high.applied,imageDecoded:high.imageDecoded,washMatched:high.washMatched},
+        lower:{applied:lower.applied,washMatched:lower.washMatched},differentWash:firstWash!==secondWash,after};
+    })()`);
+    assert.deepEqual(result.high, { applied: true, imageDecoded: true, washMatched: true });
+    assert.deepEqual(result.lower, { applied: true, washMatched: true }); assert.equal(result.differentWash, true);
+    assert.deepEqual(result.after, { attribute: 'host-later', image: 'host-image', imagePriority: 'important',
+      wash: 'host-wash', washPriority: 'important', styleStillConnected: true, styleWasChanged: true, globalStillOwned: false });
+    return result;
+  });
+  await check('unknown wallpaper owner and version remain untouched', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      __azhouWallpaper?.dispose();
+      let disposeCount=0;
+      const unknown={owner:'azhou.codex-startup-animation',version:'0.7.0',status(){return {applied:true};},dispose(){disposeCount++;}};
+      globalThis.__azhouWallpaper=unknown;
+      let rejected=false,error='';
+      try{await __wallpaperFixture.installRenderer(__wallpaperFixture.payload);}
+      catch(value){rejected=true;error=String(value.message);}
+      const outcome={rejected,error,sameOwner:globalThis.__azhouWallpaper===unknown,disposeCount,
+        styleCount:document.querySelectorAll('#azhou-wallpaper-style').length};
+      delete globalThis.__azhouWallpaper;
+      await __wallpaperFixture.apply();
+      return outcome;
+    })()`);
+    assert.equal(result.rejected, true); assert.ok(result.error.includes('namespace-conflict'));
+    assert.deepEqual({ sameOwner: result.sameOwner, disposeCount: result.disposeCount, styleCount: result.styleCount },
+      { sameOwner: true, disposeCount: 0, styleCount: 0 });
+    return result;
+  });
   await check('repeat apply / bad updates / dispose: bounded Blob and no resize listeners', async () => {
     const result = await cdp.evaluate(`(async()=>{
       __azhouWallpaper.dispose();
