@@ -48,6 +48,20 @@ class NativeEventAssessmentTests(unittest.TestCase):
         self.assertEqual("not-attempted", result["startup"]["injection"])
         self.assertFalse(result["startup"]["installed"])
 
+    def test_native_probe_sample_proves_target_identity(self) -> None:
+        result = self.assess("probe-success.jsonl", "probe", 0)
+        self.assertEqual("behavior-passed", result["status"])
+        self.assertEqual("not-run", result["startup"]["status"])
+        self.assertEqual("not-attempted", result["wallpaper_status"])
+        self.assertEqual([], result["event_errors"])
+
+    def test_native_probe_missing_target_is_not_proven(self) -> None:
+        result = self.assess("probe-failure.jsonl", "probe", 0)
+        self.assertEqual("behavior-not-proven", result["status"])
+        self.assertEqual("not-run", result["startup"]["status"])
+        self.assertEqual("not-attempted", result["wallpaper_status"])
+        self.assertEqual([], result["event_errors"])
+
     def test_native_skip_sample_remains_distinct_from_ready(self) -> None:
         result = self.assess("startup-skipped.jsonl", "launch", 0)
         self.assertEqual("skipped", result["status"])
