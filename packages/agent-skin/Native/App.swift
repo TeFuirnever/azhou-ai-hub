@@ -111,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        if let path = option("--log") {
+        if let path = StartupLogPolicy.filePath(arguments: args) {
             do {
                 let url = URL(fileURLWithPath: path)
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -261,14 +261,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         } else { existing = nil }
 
         let system = CodexStartupTargetSystem()
-        let deadline = epoch + 60
+        let budget = StartupBudget(startedAt: ProcessInfo.processInfo.systemUptime)
         Task { @MainActor [weak self] in
             guard let self else { return }
             let outcome: StartupOutcome
             do {
                 outcome = try await StartupLaunchFlow.run(
                     existing: existing,
-                    validate: { try system.validate($0) },
+                    preflightBundle: {
+                        do { try system.preflightBundle(url, deadline: budget.preflightDeadline) }
+                        catch let error as WallpaperFailure where error.state == "inspection-timeout" {
+                            throw StartupFailure(reason: "attach-timeout", message: "Codex 签名预检未能在启动预算内完成。")
+                        } catch let error as WallpaperFailure where error.state == "signature-refused" {
+                            throw StartupFailure(reason: "target-identity", message: "Codex 应用未通过 OpenAI 应用签名核验。")
+                        } catch {
+                            throw error
+                        }
+                    },
+                    validate: { try system.validate($0, deadline: budget.preflightDeadline) },
                     activate: { facts in
                         guard let app = NSRunningApplication(processIdentifier: facts.pid), !app.isTerminated,
                               app.bundleIdentifier == facts.bundleID,
@@ -284,15 +294,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     },
                     coldStart: {
                         let payload = try self.startupPayload()
+                        guard ProcessInfo.processInfo.systemUptime < budget.totalDeadline else {
+                            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动已超过 60 秒总预算。")
+                        }
                         let port = try self.prepareStartupPort()
+                        let attachDeadline = budget.attachDeadline(startedAt: ProcessInfo.processInfo.systemUptime)
                         self.opening = true
-                        let app = try await self.openCodex(url, port: port, deadline: deadline, system: system)
+                        let app = try await self.openCodex(url, port: port, deadline: attachDeadline, system: system)
                         self.opening = false
                         self.target = app
                         let facts = try self.startupFacts(app)
                         return await StartupConnector(target: facts, expectedPort: port, system: system,
                                                       transport: WallpaperTransport())
-                            .run(payload: payload, deadline: deadline)
+                            .run(payload: payload, deadline: attachDeadline)
                     }
                 )
             } catch let error as StartupFailure { outcome = .failed(reason: error.reason) }
@@ -339,16 +353,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     private func openCodex(_ url: URL, port: Int, deadline: TimeInterval,
                            system: CodexStartupTargetSystem) async throws -> NSRunningApplication {
-        guard deadline > ProcessInfo.processInfo.systemUptime else {
-            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")
-        }
+        let openTimeout = try StartupBudget.boundedTimeout(
+            maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
+            now: ProcessInfo.processInfo.systemUptime
+        )
         return try await withCheckedThrowingContinuation { continuation in
             let waiter = StartupApplicationWaiter(continuation)
             let timeout = DispatchWorkItem {
-                waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")))
+                waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
             }
             waiter.setTimeout(timeout)
-            DispatchQueue.main.asyncAfter(deadline: .now() + (deadline - ProcessInfo.processInfo.systemUptime), execute: timeout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + openTimeout, execute: timeout)
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
             configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
@@ -362,7 +377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         return
                     }
                     guard ProcessInfo.processInfo.systemUptime < deadline else {
-                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")))
+                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
                         return
                     }
                     if error != nil {
@@ -375,8 +390,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         return
                     }
                     do {
-                        try system.validate(self.startupFacts(app))
+                        try system.validate(self.startupFacts(app), deadline: deadline)
                         waiter.finish(.success(app))
+                    } catch let error as StartupFailure where error.reason == "attach-timeout" {
+                        waiter.finish(.failure(error))
+                    } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
+                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")))
                     } catch {
                         waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")))
                     }
@@ -386,6 +405,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     private func finishStartup(_ outcome: StartupOutcome, promoted: Bool) {
+        if StartupFailureDelivery.deliver(
+            outcome, previewUI: promoted,
+            message: { self.startupMessage($0) },
+            log: { event, reason in self.log(event, ["reason": reason, "message": self.startupMessage(reason)]) },
+            setExitCode: { self.processExitCode = $0 },
+            showPreviewError: { message, reason in self.fail(message, reason) },
+            terminate: { _ in
+                self.terminating = true
+                NSApp.terminate(nil)
+            }
+        ) { return }
         switch outcome {
         case .activated(let pid):
             log("target-activated", ["targetPID": Int(pid)])
@@ -401,15 +431,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             log("startup-skipped", ["runID": runID, "beforeReady": beforeReady])
             processExitCode = 0
             if let target, !target.isTerminated { activated = target.activate(options: []) }
-        case .partial(let reason):
-            log("startup-partial", ["reason": reason])
-            processExitCode = 2
-        case .failed(let reason):
-            log("startup-failed", ["reason": reason, "message": startupMessage(reason)])
-            processExitCode = 1
+        case .partial, .failed:
+            return
         }
-        if case .failed(let reason) = outcome { fail(startupMessage(reason), reason); return }
-        if case .partial(let reason) = outcome { fail(startupMessage(reason), reason); return }
         if promoted {
             if done { finishIfReady("startup-ready") }
             return
@@ -428,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         case "ambiguous-main-page": return "找到多个 Codex 主页面，本次启动接入已拒绝。"
         case "owner-conflict", "startup-active": return "Codex 页面已有启动控制器，本次没有覆盖或重播。"
         case "startup-interrupted": return "Codex 页面在启动接入期间发生变化。"
-        case "attach-timeout": return "Codex 启动接入超过 60 秒总预算。"
+        case "attach-timeout": return "Codex 启动接入超过阶段或总预算。"
         case "asset-invalid": return "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。"
         default: return "Codex 启动接入未完成；Codex 进程保持运行。"
         }

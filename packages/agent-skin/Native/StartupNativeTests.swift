@@ -28,6 +28,7 @@ struct StartupNativeTests {
         var coldStartCount = 0
         let outcome = try await StartupLaunchFlow.run(
             existing: existing,
+            preflightBundle: {},
             validate: { validatedPID = $0.pid },
             activate: { activatedPID = $0.pid; return true },
             coldStart: { coldStartCount += 1; return .failed(reason: "unexpected-cold-start") }
@@ -36,6 +37,85 @@ struct StartupNativeTests {
         expect(activatedPID == 4123, "hot start activates the same process")
         expect(coldStartCount == 0, "hot start does not launch or replay a session")
         expect(outcome == .activated(pid: 4123), "hot start is reported as activated")
+
+        var preflightOrder: [String] = []
+        var preflightColdStartCount = 0
+        do {
+            _ = try await StartupLaunchFlow.run(
+                existing: nil,
+                preflightBundle: { preflightOrder.append("signature"); throw StartupFailure(reason: "target-identity", message: "bad signature") },
+                validate: { _ in preflightOrder.append("running-process") },
+                activate: { _ in true },
+                coldStart: { preflightColdStartCount += 1; return .ready(runID: 1) }
+            )
+            fatalError("FAILED: failed signature preflight refuses cold start")
+        } catch let error as StartupFailure {
+            expect(error.reason == "target-identity", "signature preflight returns a fixed identity error")
+        }
+        expect(preflightOrder == ["signature"], "signature preflight runs before any cold-start work")
+        expect(preflightColdStartCount == 0, "a failed signature preflight never reaches open or evaluation")
+
+        let budget = StartupBudget(startedAt: 100)
+        expect(budget.preflightDeadline == 115 && budget.totalDeadline == 160,
+               "startup uses absolute 15 second preflight and 60 second total limits")
+        let attachDeadline = budget.attachDeadline(startedAt: 112)
+        expect(attachDeadline == 157, "attach has its own absolute 45 second stage deadline")
+        let stageLimitedTimeout = try budget.timeout(maximum: 10, stageDeadline: attachDeadline, now: 155)
+        expect(stageLimitedTimeout == 2,
+               "request timeout is truncated to the nearer stage deadline")
+        let totalLimitedTimeout = try budget.timeout(maximum: 10, stageDeadline: 170, now: 158)
+        expect(totalLimitedTimeout == 2,
+               "request timeout is truncated to the overall deadline")
+        let cdpTimeoutMilliseconds = try StartupBudget.requestTimeoutMilliseconds(0.0029)
+        expect(cdpTimeoutMilliseconds == 2,
+               "fractional CDP timeouts round down so they cannot outlive the remaining budget")
+        refuses("exhausted startup budget refuses another request") {
+            _ = try budget.timeout(maximum: 10, stageDeadline: attachDeadline, now: 157)
+        }
+        refuses("sub-millisecond remaining budget refuses a CDP request") {
+            _ = try StartupBudget.requestTimeoutMilliseconds(0.0009)
+        }
+
+        var failureEvents: [String] = []
+        var deliveredExitCode: Int32?
+        let handledFailure = StartupFailureDelivery.deliver(
+            .failed(reason: "protocol-error"), previewUI: false, message: { _ in "fixed message" },
+            log: { event, reason in failureEvents.append("\(event):\(reason)") },
+            setExitCode: { deliveredExitCode = $0 },
+            showPreviewError: { _, _ in failureEvents.append("gui") },
+            terminate: { failureEvents.append("exit:\($0)") }
+        )
+        expect(handledFailure, "ordinary startup failure is handled by the production exit decision")
+        expect(failureEvents == ["startup-failed:protocol-error", "exit:1"],
+               "ordinary failure fixed-logs and terminates without invoking preview UI")
+        expect(deliveredExitCode == 1, "ordinary failure preserves the launcher process exit status")
+        failureEvents.removeAll()
+        _ = StartupFailureDelivery.deliver(
+            .partial(reason: "startup-interrupted"), previewUI: false, message: { _ in "fixed message" },
+            log: { event, reason in failureEvents.append("\(event):\(reason)") },
+            setExitCode: { deliveredExitCode = $0 },
+            showPreviewError: { _, _ in failureEvents.append("gui") },
+            terminate: { failureEvents.append("exit:\($0)") }
+        )
+        expect(failureEvents == ["startup-partial:startup-interrupted", "exit:2"],
+               "ordinary partial outcomes fixed-log and use exit status two")
+        expect(deliveredExitCode == 2, "ordinary partial outcomes preserve exit status two")
+        failureEvents.removeAll()
+        _ = StartupFailureDelivery.deliver(
+            .failed(reason: "protocol-error"), previewUI: true, message: { _ in "fixed message" },
+            log: { event, reason in failureEvents.append("\(event):\(reason)") },
+            setExitCode: { deliveredExitCode = $0 },
+            showPreviewError: { _, _ in failureEvents.append("gui") },
+            terminate: { failureEvents.append("exit:\($0)") }
+        )
+        expect(failureEvents == ["startup-failed:protocol-error", "gui"],
+               "promoted preview startup failure retains its visible error path")
+        expect(deliveredExitCode == 1, "preview UI keeps the prior failure exit status")
+
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--probe", "--log", "/tmp/probe.jsonl"]) == nil,
+               "probe mode does not initialize a requested log file")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"]) == "/tmp/startup.jsonl",
+               "non-probe modes keep their requested log file")
 
         let wrongPIDSystem = FakeStartupSystem(expectedPID: 9999, ports: [9222])
         let wrongPIDTransport = FakeStartupTransport()
@@ -95,6 +175,7 @@ struct StartupNativeTests {
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
         expect(successfulTransport.payloadCount == 1, "startup installs its payload once")
         expect(successfulTransport.closeCount == 1, "startup closes its socket on readiness")
+        expect(successfulTransport.disposeCount == 0, "successful startup is not disposed")
 
         var skippedNow: TimeInterval = 0
         let skippedTransport = FakeStartupTransport(
@@ -144,6 +225,7 @@ struct StartupNativeTests {
         expect(navigation == .partial(reason: "startup-interrupted"), "navigation interrupts the owned startup run")
         expect(navigationTransport.payloadCount == 1 && navigationTransport.closeCount == 1,
                "navigation does not reinject and closes its page socket")
+        expect(navigationTransport.disposeCount == 0, "navigation does not dispose an untrusted document")
 
         var driftNow: TimeInterval = 0
         func loadingStatus(_ runID: Int) -> [String: Any] {
@@ -174,6 +256,7 @@ struct StartupNativeTests {
             sleep: { driftNow += $0 }
         ).run(payload: "test-only-probe", deadline: 1)
         expect(drift == .partial(reason: "startup-interrupted"), "a status run ID change interrupts the owned startup run")
+        expect(driftTransport.disposeCount == 0, "a changed status run ID does not dispose another run")
 
         var stalledNow: TimeInterval = 0
         let stalledTransport = FakeStartupTransport(
@@ -197,6 +280,10 @@ struct StartupNativeTests {
         expect(stalled == .failed(reason: "attach-timeout"), "never-ready polling ends at the shared deadline")
         expect(stalledTransport.payloadCount == 1 && stalledTransport.closeCount == 1,
                "never-ready polling does not reinstall and closes the session")
+        expect(stalledTransport.requestTimeouts.allSatisfy { $0 <= 0.35 },
+               "page lookup, WebSocket connect, and evaluation requests stay inside the absolute budget")
+        expect(stalledTransport.requestTimeouts.contains { $0 < 0.1 },
+               "the final status request is truncated to the remaining stage time")
 
         var malformedNow: TimeInterval = 0
         let malformedStatusTransport = FakeStartupTransport(
@@ -221,6 +308,35 @@ struct StartupNativeTests {
             sleep: { malformedNow += $0 }
         ).run(payload: "test-only-probe", deadline: 1)
         expect(malformedStatus == .failed(reason: "protocol-error"), "a malformed required status field is rejected")
+        expect(malformedStatusTransport.disposeCount == 1 && malformedStatusTransport.closeCount == 1,
+               "malformed status on the trusted installed controller attempts disposal before closing")
+        let disposalExpression = malformedStatusTransport.disposeExpressions.first ?? ""
+        expect(disposalExpression.contains("location.href !==")
+               && disposalExpression.contains("owner?.value !== 'azhou-codex-startup'")
+               && disposalExpression.contains("version?.value !== 1"),
+               "cleanup is guarded by the inspected document URL and exact controller owner/version")
+
+        var expiredNow: TimeInterval = 0
+        let expiredMalformedStatusTransport = FakeStartupTransport(
+            pages: [["type": "page", "id": "selected-page", "url": startupURL,
+                     "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
+            evaluations: [
+                ["href": startupURL, "controllerPresent": false],
+                ["installed": true, "alreadyActive": false],
+                ["href": startupURL, "missing": false, "status": ["owner": "unknown"]]
+            ],
+            afterEvaluation: { _, index in if index == 2 { expiredNow = 1 } }
+        )
+        let expiredMalformedStatus = await StartupConnector(
+            target: existing, expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
+            transport: expiredMalformedStatusTransport,
+            now: { expiredNow }, sleep: { expiredNow += $0 }
+        ).run(payload: "test-only-probe", deadline: 1)
+        expect(expiredMalformedStatus == .failed(reason: "protocol-error"),
+               "malformed status remains a protocol failure when its response exhausts the budget")
+        expect(expiredMalformedStatusTransport.disposeCount == 0 && expiredMalformedStatusTransport.closeCount == 1,
+               "deadline exhaustion closes without starting cleanup work")
 
         let requestState = StartupCDPRequestState()
         let firstRequestID = try requestState.begin()
@@ -255,12 +371,13 @@ struct StartupNativeTests {
 private struct FakeStartupSystem: StartupTargetSystem {
     let expectedPID: Int32
     let ports: [Int]
-    func validate(_ target: StartupTargetFacts) throws {
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {}
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
         guard target.pid == expectedPID else {
             throw StartupFailure(reason: "target-identity", message: "fake target mismatch")
         }
     }
-    func listeningPorts(_ target: StartupTargetFacts) throws -> [Int] { ports }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] { ports }
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { FakeStartupLock() }
 }
 
@@ -274,32 +391,48 @@ private final class FakeStartupTransport: StartupTransport {
     private(set) var connectCount = 0
     private(set) var closeCount = 0
     private(set) var payloadCount = 0
+    private(set) var requestTimeouts: [TimeInterval] = []
+    private(set) var disposeCount = 0
+    private(set) var disposeExpressions: [String] = []
     private var pageResponses: [[String: Any]]
     private var evaluationResponses: [[String: Any]]
     private var pageFailures: Int
     private var repeatLastEvaluation: Bool
     private var lastEvaluation: [String: Any]?
+    private let afterEvaluation: ((String, Int) -> Void)?
 
     init(pages: [[String: Any]] = [], evaluations: [[String: Any]] = [], pageFailures: Int = 0,
-         repeatLastEvaluation: Bool = false) {
+         repeatLastEvaluation: Bool = false, afterEvaluation: ((String, Int) -> Void)? = nil) {
         pageResponses = pages
         evaluationResponses = evaluations
         self.pageFailures = pageFailures
         self.repeatLastEvaluation = repeatLastEvaluation
+        self.afterEvaluation = afterEvaluation
     }
 
     func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
         pagesCount += 1
+        requestTimeouts.append(timeout)
         if pageFailures > 0 {
             pageFailures -= 1
             throw WallpaperFailure(state: "endpoint-unavailable", message: "temporary")
         }
         return pageResponses
     }
-    func connect(to url: URL, timeout: TimeInterval) throws { connectCount += 1 }
+    func connect(to url: URL, timeout: TimeInterval) throws {
+        connectCount += 1
+        requestTimeouts.append(timeout)
+    }
     func evaluate(_ expression: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let index = evaluateCount
         evaluateCount += 1
+        requestTimeouts.append(timeout)
         if expression.contains("test-only-probe") { payloadCount += 1 }
+        if expression.contains("dispose.value.call(api)") {
+            disposeCount += 1
+            disposeExpressions.append(expression)
+        }
+        afterEvaluation?(expression, index)
         if !evaluationResponses.isEmpty {
             lastEvaluation = evaluationResponses.removeFirst()
             return lastEvaluation!

@@ -31,7 +31,7 @@ function existingController(host) {
   return { present: true, owned: owner === OWNER && version === VERSION && typeof status === 'function' };
 }
 
-function mountOverlay(host, payload, runId) {
+function mountOverlay(host, payload, runId, receive) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function') {
     throw new TypeError('startup overlay host is unavailable');
@@ -41,29 +41,60 @@ function mountOverlay(host, payload, runId) {
   frame.setAttribute('aria-label', 'Agent Skin startup overlay');
   frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
   frame.src = 'about:blank';
-  frame.addEventListener('load', () => {
-    const child = frame.contentWindow;
-    if (!child) return;
-    try {
-      Object.defineProperty(child, '__azhouStartupRunId', { value: runId, configurable: false });
-      child.eval(payload);
-    } catch {
-      child.parent.postMessage({ type: 'azhou-startup', action: 'assetError', runId, reason: ASSET_REASON }, '*');
-    }
-  }, { once: true });
   document.documentElement.appendChild(frame);
   const contentWindow = frame.contentWindow;
   if (!contentWindow) {
     frame.remove();
     throw new TypeError('startup overlay frame is unavailable');
   }
-  return { contentWindow, remove: () => frame.remove() };
+  const bind = (name) => typeof contentWindow[name] === 'function'
+    ? contentWindow[name].bind(contentWindow)
+    : contentWindow[name];
+  const environment = Object.freeze({
+    window: contentWindow,
+    document: contentWindow.document,
+    location: contentWindow.location,
+    performance: contentWindow.performance,
+    indexedDB: contentWindow.indexedDB,
+    Image: contentWindow.Image,
+    Path2D: contentWindow.Path2D,
+    URL: contentWindow.URL ?? URL,
+    requestAnimationFrame: bind('requestAnimationFrame'),
+    cancelAnimationFrame: bind('cancelAnimationFrame'),
+    setTimeout: bind('setTimeout'),
+    clearTimeout: bind('clearTimeout'),
+  });
+  const frameSpec = Object.freeze({ runId, intent: 'play', protocolVersion: 1 });
+  const SEND = (data) => receive({ source: frame.contentWindow, data });
+  return {
+    contentWindow,
+    start() {
+      try {
+        // The single trusted install expression compiles this callable in the
+        // page realm; invoke it directly with the iframe's explicit bindings.
+        const pending = payload(
+          environment.window, environment.document, environment.location,
+          environment.performance, environment.indexedDB, environment.Image,
+          environment.Path2D, environment.URL, environment.requestAnimationFrame,
+          environment.cancelAnimationFrame, environment.setTimeout, environment.clearTimeout,
+          undefined, SEND, frameSpec,
+        );
+        if (pending && typeof pending.then === 'function') {
+          Promise.resolve(pending).catch(() => SEND({
+            type: 'azhou-startup', action: 'assetError', runId, reason: ASSET_REASON,
+          }));
+        }
+      } catch {
+        SEND({ type: 'azhou-startup', action: 'assetError', runId, reason: ASSET_REASON });
+      }
+    },
+    remove: () => frame.remove(),
+  };
 }
 
 class PageController {
-  constructor(host, mount) {
+  constructor(host) {
     this.host = host;
-    this.mount = mount;
     this.frame = null;
     this.installed = false;
     this.disposed = false;
@@ -92,19 +123,20 @@ class PageController {
   #install(payload) {
     if (this.disposed) return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
     if (this.installed) return { installed: true, alreadyActive: true };
-    if (typeof payload !== 'string' || payload.length === 0) {
+    if (typeof payload !== 'function') {
       this.#fail(ASSET_REASON);
       return { installed: false, alreadyActive: false, reason: ASSET_REASON };
     }
     try {
       this.host.addEventListener('message', this.onMessage);
-      this.frame = this.mount(this.host, payload, this.state.runId);
+      this.frame = mountOverlay(this.host, payload, this.state.runId, this.onMessage);
       if (!this.frame?.contentWindow || typeof this.frame.remove !== 'function') {
         throw new TypeError('startup overlay mount is invalid');
       }
       this.installed = true;
       this.state.overlay = true;
       this.watchdog = this.host.setTimeout(() => this.#timeout(), 25_000);
+      this.frame.start();
       return { installed: true, alreadyActive: false };
     } catch {
       this.#fail(ASSET_REASON);
@@ -215,7 +247,7 @@ class PageController {
   }
 }
 
-export function installStartup(payload, host = globalThis, mount = mountOverlay) {
+export function installStartup(payload, host = globalThis) {
   if (!host || !isMainPage(host)) return { installed: false, alreadyActive: false, reason: PAGE_REASON };
   const current = existingController(host);
   if (current.present) {
@@ -223,7 +255,7 @@ export function installStartup(payload, host = globalThis, mount = mountOverlay)
       ? { installed: true, alreadyActive: true }
       : { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
-  const controller = new PageController(host, mount);
+  const controller = new PageController(host);
   try {
     Object.defineProperty(host, GLOBAL_NAME, {
       value: controller.api, configurable: true, enumerable: false, writable: false,

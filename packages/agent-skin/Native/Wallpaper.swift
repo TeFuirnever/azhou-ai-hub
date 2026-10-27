@@ -172,8 +172,9 @@ enum WallpaperJournal {
 
 private struct WallpaperTarget: Sendable {
     let pid: Int32, bundle: URL, executable: URL, launchDate: Date?
+    let commandDeadline: TimeInterval?
     private static func real(_ url: URL) -> URL { url.resolvingSymlinksInPath().standardizedFileURL }
-    init(pid: Int32, bundle: URL, launchTime: TimeInterval?) throws {
+    init(pid: Int32, bundle: URL, launchTime: TimeInterval?, commandDeadline: TimeInterval? = nil) throws {
         let realBundle = Self.real(bundle)
         guard pid > 0, realBundle.pathExtension.lowercased() == "app",
               realBundle != Self.real(Bundle.main.bundleURL),
@@ -193,34 +194,64 @@ private struct WallpaperTarget: Sendable {
             }
         }
         self.pid = pid; self.bundle = realBundle; self.executable = binary; self.launchDate = app.launchDate
-        try validate()
+        self.commandDeadline = commandDeadline
+        try validate(deadline: commandDeadline)
     }
-    func validate() throws {
+    private func commandTimeout(_ maximum: TimeInterval, deadline: TimeInterval? = nil) throws -> TimeInterval {
+        guard let deadline = deadline ?? commandDeadline else { return maximum }
+        return try StartupBudget.boundedTimeout(maximum: maximum, stageDeadline: deadline,
+                                                totalDeadline: deadline, now: ProcessInfo.processInfo.systemUptime)
+    }
+    func validate(deadline: TimeInterval? = nil) throws {
         guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated,
               app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == bundle,
               app.executableURL.map(Self.real) == executable,
               launchDate == nil || app.launchDate == launchDate else {
             throw WallpaperFailure(state: "target-changed", message: "已核实的 Codex 进程已退出或发生变化。")
         }
-        let process = try WallpaperCommand.run("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="])
+        let process = try WallpaperCommand.run("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
+                                              timeout: try commandTimeout(2, deadline: deadline))
         let fields = process.trimmingCharacters(in: .whitespacesAndNewlines).split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
         guard fields.count == 2, UInt32(fields[0]) == getuid(),
               Self.real(URL(fileURLWithPath: String(fields[1]))) == executable else {
             throw WallpaperFailure(state: "target-mismatch", message: "目标进程用户或执行路径与已核实的 Codex 不符。")
         }
     }
-    func validateSignature() throws {
-        _ = try WallpaperCommand.run("/usr/bin/codesign", ["--verify", "--strict", bundle.path], timeout: 6)
-        let signature = try WallpaperCommand.run("/usr/bin/codesign", ["-dv", "--verbose=4", bundle.path], timeout: 3)
-        guard signature.split(separator: "\n").contains("TeamIdentifier=2DC432GLL2") else {
-            throw WallpaperFailure(state: "signature-refused", message: "目标签名不属于已核实的 OpenAI 应用；未连接壁纸。")
-        }
-        try validate()
+    func validateSignature(deadline: TimeInterval? = nil) throws {
+        try StartupBundleSignature.verify(bundle, deadline: deadline ?? commandDeadline)
+        try validate(deadline: deadline)
     }
-    func ports() throws -> [Int] {
-        try validate()
-        let records = try WallpaperCommand.run("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-Fpn"], emptyExit: 1)
+    func ports(deadline: TimeInterval? = nil) throws -> [Int] {
+        try validate(deadline: deadline)
+        let records = try WallpaperCommand.run("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-Fpn"],
+                                              timeout: try commandTimeout(3, deadline: deadline), emptyExit: 1)
         return try WallpaperValidation.loopbackPorts(records, pid: pid)
+    }
+}
+
+private enum StartupBundleSignature {
+    private static let requirement = "=anchor apple generic and identifier \"com.openai.codex\" and certificate leaf[subject.OU] = \"2DC432GLL2\""
+
+    static func verify(_ bundle: URL, deadline: TimeInterval?) throws {
+        let resolved = bundle.resolvingSymlinksInPath().standardizedFileURL
+        guard resolved.pathExtension.lowercased() == "app",
+              let package = Bundle(url: resolved), package.bundleIdentifier == "com.openai.codex" else {
+            throw WallpaperFailure(state: "signature-refused", message: "Codex 应用路径或 Bundle ID 无效。")
+        }
+        let timeout: TimeInterval
+        if let deadline {
+            timeout = try StartupBudget.boundedTimeout(maximum: 12, stageDeadline: deadline,
+                                                       totalDeadline: deadline, now: ProcessInfo.processInfo.systemUptime)
+        } else { timeout = 12 }
+        do {
+            _ = try WallpaperCommand.run("/usr/bin/codesign",
+                                         ["--verify", "--deep", "--strict", "-R", requirement, resolved.path],
+                                         timeout: timeout)
+        } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
+            throw error
+        } catch {
+            throw WallpaperFailure(state: "signature-refused", message: "Codex 应用签名未通过 Apple 锚点、Bundle ID 和 Team ID 核验。")
+        }
     }
 }
 
@@ -246,15 +277,95 @@ struct StartupFailure: LocalizedError {
     var errorDescription: String? { message }
 }
 
+struct StartupBudget {
+    let startedAt: TimeInterval
+    let preflightDeadline: TimeInterval
+    let totalDeadline: TimeInterval
+
+    init(startedAt: TimeInterval) {
+        self.startedAt = startedAt
+        preflightDeadline = startedAt + 15
+        totalDeadline = startedAt + 60
+    }
+
+    func attachDeadline(startedAt: TimeInterval) -> TimeInterval {
+        min(startedAt + 45, totalDeadline)
+    }
+
+    func timeout(maximum: TimeInterval, stageDeadline: TimeInterval, now: TimeInterval) throws -> TimeInterval {
+        try Self.boundedTimeout(maximum: maximum, stageDeadline: stageDeadline,
+                                totalDeadline: totalDeadline, now: now)
+    }
+
+    static func boundedTimeout(maximum: TimeInterval, stageDeadline: TimeInterval,
+                               totalDeadline: TimeInterval, now: TimeInterval) throws -> TimeInterval {
+        let remaining = min(stageDeadline, totalDeadline) - now
+        guard maximum.isFinite, maximum > 0, remaining.isFinite, remaining > 0 else {
+            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动已超过当前阶段预算。")
+        }
+        return min(maximum, remaining)
+    }
+
+    static func requestTimeoutMilliseconds(_ timeout: TimeInterval) throws -> Int {
+        let milliseconds = floor(timeout * 1_000)
+        guard timeout.isFinite, milliseconds >= 1, milliseconds <= Double(Int.max) else {
+            throw StartupFailure(reason: "attach-timeout", message: "剩余启动预算不足以发送 CDP 请求。")
+        }
+        return Int(milliseconds)
+    }
+}
+
+enum StartupLogPolicy {
+    static func filePath(arguments: [String]) -> String? {
+        guard !arguments.contains("--probe"),
+              let index = arguments.firstIndex(of: "--log"), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
+    }
+}
+
+enum StartupFailureDelivery {
+    @discardableResult
+    static func deliver(
+        _ outcome: StartupOutcome,
+        previewUI: Bool,
+        message: (String) -> String,
+        log: (String, String) -> Void,
+        setExitCode: (Int32) -> Void,
+        showPreviewError: (String, String) -> Void,
+        terminate: (Int32) -> Void
+    ) -> Bool {
+        let reason: String
+        let event: String
+        let exitCode: Int32
+        switch outcome {
+        case .failed(let value): reason = value; event = "startup-failed"; exitCode = 1
+        case .partial(let value): reason = value; event = "startup-partial"; exitCode = 2
+        default: return false
+        }
+        log(event, reason)
+        setExitCode(exitCode)
+        if previewUI {
+            showPreviewError(message(reason), reason)
+        } else {
+            terminate(exitCode)
+        }
+        return true
+    }
+}
+
 enum StartupLaunchFlow {
     @MainActor
     static func run(
         existing: StartupTargetFacts?,
+        preflightBundle: () throws -> Void,
         validate: (StartupTargetFacts) throws -> Void,
         activate: (StartupTargetFacts) throws -> Bool,
         coldStart: () async throws -> StartupOutcome
     ) async throws -> StartupOutcome {
-        guard let existing else { return try await coldStart() }
+        guard let existing else {
+            try preflightBundle()
+            return try await coldStart()
+        }
         try validate(existing)
         guard try activate(existing) else {
             throw StartupFailure(reason: "target-identity", message: "已运行的 Codex 会话无法被确认激活。")
@@ -268,8 +379,9 @@ protocol StartupOperationLock: AnyObject {
 }
 
 protocol StartupTargetSystem {
-    func validate(_ target: StartupTargetFacts) throws
-    func listeningPorts(_ target: StartupTargetFacts) throws -> [Int]
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int]
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock
 }
 
@@ -310,23 +422,28 @@ private final class WallpaperOperationLock: StartupOperationLock {
 }
 
 struct CodexStartupTargetSystem: StartupTargetSystem {
-    private func target(_ facts: StartupTargetFacts) throws -> WallpaperTarget {
+    private func target(_ facts: StartupTargetFacts, deadline: TimeInterval? = nil) throws -> WallpaperTarget {
         guard facts.bundleID == "com.openai.codex" else {
             throw StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
         }
-        let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime)
+        let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime,
+                                         commandDeadline: deadline)
         guard target.executable == facts.executable else {
             throw StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
         }
         return target
     }
 
-    func validate(_ facts: StartupTargetFacts) throws {
-        try target(facts).validateSignature()
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {
+        try StartupBundleSignature.verify(bundle, deadline: deadline)
     }
 
-    func listeningPorts(_ facts: StartupTargetFacts) throws -> [Int] {
-        try target(facts).ports()
+    func validate(_ facts: StartupTargetFacts, deadline: TimeInterval) throws {
+        try target(facts, deadline: deadline).validateSignature(deadline: deadline)
+    }
+
+    func listeningPorts(_ facts: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
+        try target(facts, deadline: deadline).ports(deadline: deadline)
     }
 
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock {
@@ -510,9 +627,10 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         guard let socket = startupSocket, timeout > 0 else {
             throw StartupFailure(reason: "protocol-error", message: "启动页面连接不可用。")
         }
+        let timeoutMilliseconds = try StartupBudget.requestTimeoutMilliseconds(min(timeout, 10))
         let request: [String: Any] = ["id": id, "method": "Runtime.evaluate", "params": [
             "expression": source, "returnByValue": true, "awaitPromise": true,
-            "userGesture": false, "timeout": max(1, Int(min(timeout, 10) * 1000))]]
+            "userGesture": false, "timeout": timeoutMilliseconds]]
         let data = try JSONSerialization.data(withJSONObject: request)
         let expired = StartupTimeoutFlag()
         let timeoutWork = DispatchWorkItem {
@@ -692,6 +810,7 @@ struct StartupConnector {
         catch let error as StartupFailure { return .failed(reason: error.reason) }
         catch let error as WallpaperFailure {
             if error.state == "busy" { return .partial(reason: "startup-active") }
+            if error.state == "inspection-timeout" { return .failed(reason: "attach-timeout") }
             if ["target-mismatch", "target-changed", "signature-refused"].contains(error.state) {
                 return .failed(reason: "target-identity")
             }
@@ -703,7 +822,7 @@ struct StartupConnector {
         defer { transport.close() }
         func requireBudget() throws {
             guard now() < deadline else {
-                throw StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")
+                throw StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过阶段或总预算。")
             }
         }
         guard (1...65535).contains(expectedPort), !payload.isEmpty,
@@ -713,9 +832,9 @@ struct StartupConnector {
         let operationLock = try system.acquireOperationLock(pid: target.pid)
         defer { operationLock.release() }
         try requireBudget()
-        try system.validate(target)
+        try system.validate(target, deadline: deadline)
         try requireBudget()
-        guard try system.listeningPorts(target).contains(expectedPort) else {
+        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
             throw StartupFailure(reason: "listener-mismatch", message: "指定调试端口不属于已核验的 Codex 主进程。")
         }
         try requireBudget()
@@ -723,7 +842,7 @@ struct StartupConnector {
         var selectedPage: [String: Any]?
         while now() < deadline {
             try requireBudget()
-            guard try system.listeningPorts(target).contains(expectedPort) else {
+            guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
                 throw StartupFailure(reason: "listener-mismatch", message: "Codex 调试端口归属已变化。")
             }
             try requireBudget()
@@ -750,9 +869,9 @@ struct StartupConnector {
             throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面没有可核验的调试连接。")
         }
         let pageSocket = try WallpaperValidation.pageSocket(rawSocket, port: expectedPort)
-        try system.validate(target)
+        try system.validate(target, deadline: deadline)
         try requireBudget()
-        guard try system.listeningPorts(target).contains(expectedPort) else {
+        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
             throw StartupFailure(reason: "listener-mismatch", message: "选中主页面后调试端口归属已变化。")
         }
         try requireBudget()
@@ -767,15 +886,14 @@ struct StartupConnector {
         guard !controllerPresent else {
             return .partial(reason: "startup-active")
         }
-        try system.validate(target)
+        try system.validate(target, deadline: deadline)
         try requireBudget()
-        guard try system.listeningPorts(target).contains(expectedPort) else {
+        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
             throw StartupFailure(reason: "listener-mismatch", message: "发送启动载荷前调试端口归属已变化。")
         }
         try requireBudget()
-        let install = try await transport.evaluate(try Self.installExpression(payload), timeout: min(10, deadline - now()))
-        guard let installed = Self.boolean(install["installed"]),
-              let alreadyActive = Self.boolean(install["alreadyActive"]) else {
+        let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: min(10, deadline - now()))
+        guard let installed = Self.boolean(install["installed"]) else {
             throw StartupFailure(reason: "protocol-error", message: "启动载荷没有返回有效安装结果。")
         }
         guard installed else {
@@ -785,38 +903,60 @@ struct StartupConnector {
             } ?? "protocol-error"
             throw StartupFailure(reason: reason, message: "页面没有安装有效的启动控制器，本次未继续。")
         }
+        guard let alreadyActive = Self.boolean(install["alreadyActive"]) else {
+            await disposeOwnedController(href: href, deadline: deadline)
+            throw StartupFailure(reason: "protocol-error", message: "启动载荷没有返回有效安装状态。")
+        }
         guard !alreadyActive else { return .partial(reason: "startup-active") }
 
         var runID: Int?
-        while now() < deadline {
-            let remaining = deadline - now()
-            guard remaining > 0 else { break }
-            let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, remaining))
-            guard response["href"] as? String == href else {
-                return .partial(reason: "startup-interrupted")
+        do {
+            while now() < deadline {
+                let remaining = deadline - now()
+                guard remaining > 0 else { break }
+                let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, remaining))
+                guard response["href"] as? String == href else {
+                    return .partial(reason: "startup-interrupted")
+                }
+                guard let missing = Self.boolean(response["missing"]) else {
+                    throw StartupFailure(reason: "protocol-error", message: "页面没有返回有效的控制器状态标记。")
+                }
+                if missing { return .partial(reason: "startup-interrupted") }
+                guard let status = StartupStatus.parse(response["status"]) else {
+                    throw StartupFailure(reason: "protocol-error", message: "启动控制器状态不符合协议 Schema。")
+                }
+                if let runID, status.runID != runID { return .partial(reason: "startup-interrupted") }
+                if runID == nil { runID = status.runID }
+                if status.phase == "failed" || status.phase == "timeout" {
+                    return .failed(reason: status.reason)
+                }
+                if status.completionCause == "skip", status.completed, !status.overlay {
+                    return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
+                }
+                if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
+                    return .ready(runID: status.runID)
+                }
+                if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
+                try await sleep(min(0.1, max(0, deadline - now())))
             }
-            guard let missing = Self.boolean(response["missing"]) else {
-                throw StartupFailure(reason: "protocol-error", message: "页面没有返回有效的控制器状态标记。")
-            }
-            if missing { return .partial(reason: "startup-interrupted") }
-            guard let status = StartupStatus.parse(response["status"]) else {
-                throw StartupFailure(reason: "protocol-error", message: "启动控制器状态不符合协议 Schema。")
-            }
-            if let runID, status.runID != runID { return .partial(reason: "startup-interrupted") }
-            if runID == nil { runID = status.runID }
-            if status.phase == "failed" || status.phase == "timeout" {
-                return .failed(reason: status.reason)
-            }
-            if status.completionCause == "skip", status.completed, !status.overlay {
-                return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
-            }
-            if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
-                return .ready(runID: status.runID)
-            }
-            if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
-            try await sleep(min(0.1, max(0, deadline - now())))
+        } catch {
+            await disposeOwnedController(href: href, deadline: deadline)
+            throw error
         }
         return .failed(reason: "attach-timeout")
+    }
+
+    private func disposeOwnedController(href: String, deadline: TimeInterval) async {
+        guard now() < deadline else { return }
+        do {
+            try system.validate(target, deadline: deadline)
+            guard now() < deadline,
+                  try system.listeningPorts(target, deadline: deadline).contains(expectedPort),
+                  now() < deadline else { return }
+            let timeout = try StartupBudget.boundedTimeout(maximum: 2, stageDeadline: deadline,
+                                                           totalDeadline: deadline, now: now())
+            _ = try await transport.evaluate(try Self.disposeExpression(href), timeout: timeout)
+        } catch { /* Cleanup is best effort and never delays closing past the budget. */ }
     }
 
     private static let inspectExpression = """
@@ -826,15 +966,29 @@ struct StartupConnector {
     (() => { const href = location.href; const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); if (!d || !("value" in d) || !d.value || typeof d.value.status !== "function") return {href, missing: true}; return {href, missing: false, status: d.value.status()}; })()
     """
 
-    private static func installExpression(_ payload: String) throws -> String {
-        let encoded = try JSONSerialization.data(withJSONObject: [payload])
+    private static func disposeExpression(_ href: String) throws -> String {
+        let encoded = try JSONSerialization.data(withJSONObject: [href])
         let array = String(decoding: encoded, as: UTF8.self)
         guard array.first == "[", array.last == "]" else {
-            throw StartupFailure(reason: "asset-invalid", message: "本地启动载荷无法安全编码。")
+            throw StartupFailure(reason: "protocol-error", message: "当前页面无法安全验证启动控制器。")
         }
         let literal = String(array.dropFirst().dropLast())
         return """
-        (() => { if (Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup')) return {installed: false, alreadyActive: false, reason: 'owner-conflict'}; return Promise.resolve((0, eval)(\(literal))).then(result => result); })()
+        (() => { if (location.href !== \(literal)) return {disposed:false}; const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); if (!d || !("value" in d) || !d.value) return {disposed:false}; const api = d.value; const owner = Object.getOwnPropertyDescriptor(api, 'owner'); const version = Object.getOwnPropertyDescriptor(api, 'version'); const dispose = Object.getOwnPropertyDescriptor(api, 'dispose'); if (owner?.value !== 'azhou-codex-startup' || version?.value !== 1 || typeof dispose?.value !== 'function') return {disposed:false}; return dispose.value.call(api); })()
+        """
+    }
+
+    private static func installExpression(_ payload: String, expectedHref: String) throws -> String {
+        // The trusted builder emits one self-contained installer expression;
+        // keep it inside the single bounded CDP evaluation instead of reparsing it.
+        let encoded = try JSONSerialization.data(withJSONObject: [expectedHref])
+        let array = String(decoding: encoded, as: UTF8.self)
+        guard array.first == "[", array.last == "]" else {
+            throw StartupFailure(reason: "protocol-error", message: "当前页面地址无法安全编码。")
+        }
+        let literal = String(array.dropFirst().dropLast())
+        return """
+        (() => { if (location.href !== \(literal)) return {installed: false, alreadyActive: false, reason: 'page-unsupported'}; return Promise.resolve((\(payload))).then(result => result); })()
         """
     }
 
