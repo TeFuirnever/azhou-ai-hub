@@ -2,7 +2,7 @@
    Only this page's appearance is changed. No chat text, storage or network is read. */
 export async function installRenderer(payload) {
   'use strict';
-  const VERSION = '0.7.1', OWNER = 'azhou.codex-startup-animation';
+  const VERSION = '0.8.0', LEGACY_VERSION = '0.7.1', OWNER = 'azhou.codex-startup-animation';
   const STYLE_ID = 'azhou-wallpaper-style', ATTRIBUTE = 'data-azhou-wallpaper';
   const IMAGE_PROPERTY = '--azhou-wallpaper-image', WASH_PROPERTY = '--azhou-wallpaper-wash';
   const BASELINE_KEY = '__azhouWallpaperBaseline_071', RELEASE_KEY = '__azhouWallpaperRelease_071';
@@ -60,7 +60,7 @@ export async function installRenderer(payload) {
   const previous = previousDescriptor && Object.hasOwn(previousDescriptor, 'value')
     ? previousDescriptor.value : null;
   if (previousDescriptor && (!previous || ownValue(previous, 'owner') !== OWNER
-      || ownValue(previous, 'version') !== VERSION
+      || ![VERSION, LEGACY_VERSION].includes(ownValue(previous, 'version'))
       || typeof ownValue(previous, 'dispose') !== 'function' || typeof ownValue(previous, 'status') !== 'function')) {
     throw problem('namespace-conflict');
   }
@@ -99,7 +99,8 @@ export async function installRenderer(payload) {
   // Re-read after the async decode: another apply may have completed meanwhile.
   const activeDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper');
   const active = activeDescriptor && Object.hasOwn(activeDescriptor, 'value') ? activeDescriptor.value : null;
-  if (activeDescriptor && (!active || ownValue(active, 'owner') !== OWNER || ownValue(active, 'version') !== VERSION
+  if (activeDescriptor && (!active || ownValue(active, 'owner') !== OWNER
+      || ![VERSION, LEGACY_VERSION].includes(ownValue(active, 'version'))
       || typeof ownValue(active, 'dispose') !== 'function' || typeof ownValue(active, 'status') !== 'function')) {
     URL.revokeObjectURL(imageURL); image.src = '';
     throw problem('namespace-changed-during-decode');

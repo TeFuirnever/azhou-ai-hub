@@ -125,7 +125,7 @@ try {
   ]);
   const imageSHA256 = createHash('sha256').update(imageBytes).digest('hex');
   const mime = options.image.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
-  const payload = { version: '0.7.1', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
+  const payload = { version: '0.8.0', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
   const installer = renderer.replace(/^export\s+(?=async function installRenderer)/m, '');
   assert.ok(!/^export\s/m.test(installer), 'Renderer must expose one self-contained function');
   const installExpression = '(async()=>{' + installer + '\nreturn await installRenderer(' + JSON.stringify(payload) + ');})()';

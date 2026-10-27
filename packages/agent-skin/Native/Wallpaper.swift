@@ -1056,7 +1056,7 @@ enum WallpaperCLI {
       const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
       const wallpaper=wallpaperDescriptor&&Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
       let result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:wallpaperDescriptor?'owner-conflict':'not-installed'};
-      if(wallpaper&&value(wallpaper,'owner')==='azhou.codex-startup-animation'&&value(wallpaper,'version')==='0.7.1'&&typeof value(wallpaper,'status')==='function'){
+      if(wallpaper&&value(wallpaper,'owner')==='azhou.codex-startup-animation'&&['0.7.1','0.8.0'].includes(value(wallpaper,'version'))&&typeof value(wallpaper,'status')==='function'){
         try{const state=value(wallpaper,'status').call(wallpaper);if(state&&typeof state==='object'&&typeof state.applied==='boolean')result=state;}
         catch{result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:'owner-conflict'};}
       }
@@ -1091,7 +1091,7 @@ enum WallpaperCLI {
       const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
       if(wallpaperDescriptor){
         const api=Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
-        if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||value(api,'version')!=='0.7.1'
+        if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||!['0.7.1','0.8.0'].includes(value(api,'version'))
           ||typeof value(api,'status')!=='function'||typeof value(api,'dispose')!=='function')return {state:'owner-conflict',applied:false};
       }
       return {state:'ready',applied:false};
@@ -1114,7 +1114,7 @@ enum WallpaperCLI {
       const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
       if(!wallpaperDescriptor)return {restored:true,applied:false};
       const api=Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
-      if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||value(api,'version')!=='0.7.1'
+      if(!api||value(api,'owner')!=='azhou.codex-startup-animation'||!['0.7.1','0.8.0'].includes(value(api,'version'))
         ||typeof value(api,'dispose')!=='function'||typeof value(api,'status')!=='function')return {restored:false,reason:'owner-conflict'};
       try{value(api,'dispose').call(api);const state=value(api,'status').call(api);
         return {restored:state?.applied===false,applied:state?.applied===true};}

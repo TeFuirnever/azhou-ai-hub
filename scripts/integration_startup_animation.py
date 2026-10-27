@@ -30,6 +30,7 @@ COMPONENT = "agent-skin"
 LEGACY_COMPONENT = "startup-animation"
 APP_NAME = "阿舟启动 Codex.app"
 EXECUTABLE = "AzhouCodexStartup"
+STARTUP_PAYLOAD_VERSION = "0.8.0"
 PRIVATE_FILES = ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png")
 REGISTRY_IDS = ("local.azhou.codex-startup", "local.aemeath.startup", "local.aemeath.extension")
 LSREGISTER = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
@@ -59,6 +60,26 @@ def _private_manifest(directory: Path) -> dict[str, str]:
             raise common.IntegrationError(f"private asset path is a symlink: {name}")
         result[name] = _hash(path)
     return result
+
+
+def _verify_packaged_sources(bundle: Path, native_root: Path, info: dict[str, Any], marker: dict[str, Any]) -> str:
+    resources = bundle / "Contents/Resources"
+    inputs = marker.get("inputs", {})
+    if info.get("CFBundleShortVersionString") == STARTUP_PAYLOAD_VERSION:
+        for name in ("assets/private/working.png", "assets/private/scene.js"):
+            packaged_source = resources / "web" / name
+            if packaged_source.exists() or packaged_source.is_symlink():
+                raise common.IntegrationError(f"private startup source must not be copied into the web payload: {name}")
+        for name in PRIVATE_FILES:
+            relative = "assets/private/" + name
+            if inputs.get(relative) != _hash(native_root / relative):
+                raise common.IntegrationError(f"built private input differs from its frozen source: {name}")
+        return "native identity, marker, signature, icon, wallpaper, startup defaults and private source hashes"
+
+    for name in ("index.html", "style.css", "animation.js", "assets/private/working.png", "assets/private/scene.js"):
+        if _hash(resources / "web" / name) != inputs.get(name):
+            raise common.IntegrationError(f"installed web resource differs from its build marker: {name}")
+    return "native identity, marker, signature, icon, wallpaper and installed web hashes"
 
 
 def _plan(action: str, **values: Any) -> dict[str, Any]:
@@ -213,14 +234,12 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
         raise common.IntegrationError(f"native bundle verification failed: {exc}") from exc
     if (info.get("CFBundleShortVersionString"), str(info.get("CFBundleVersion"))) != (lock["runtime_version"], lock["runtime_build"]):
         raise common.IntegrationError("bundle version does not match the selected fixed source")
-    for name in ("index.html", "style.css", "animation.js", "assets/private/working.png", "assets/private/scene.js"):
-        if _hash(bundle / "Contents/Resources/web" / name) != marker["inputs"].get(name):
-            raise common.IntegrationError(f"installed web resource differs from its build marker: {name}")
+    verification = _verify_packaged_sources(bundle, native_root, info, marker)
     return {"path": str(bundle), "native_source_root": str(native_root), "source": origin,
             "bundle_id": info["CFBundleIdentifier"], "executable": info["CFBundleExecutable"],
             "version": info["CFBundleShortVersionString"], "build": str(info["CFBundleVersion"]),
             "sha256_tree": fingerprint, "input_sha256": marker["inputSHA256"],
-            "verification": "native identity, marker, signature, icon, wallpaper and installed web hashes",
+            "verification": verification,
             "limits": "build marker/signature do not independently prove binary reproducibility; invocation and visual review are separate"}
 
 

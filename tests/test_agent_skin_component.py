@@ -42,7 +42,12 @@ class AgentSkinComponentTests(unittest.TestCase):
 
         current = common.load_lock("agent-skin")
         legacy = common.load_lock("startup-animation")
-        for field in ("repository", "local_source_origin", "commit", "runtime_version", "runtime_build"):
+        self.assertNotEqual(
+            (legacy["runtime_version"], legacy["runtime_build"]),
+            (current["runtime_version"], current["runtime_build"]),
+            "the canonical Agent Skin runtime may advance while the legacy launcher stays frozen",
+        )
+        for field in ("repository", "local_source_origin", "commit"):
             self.assertEqual(legacy[field], current[field], field)
         legacy_inputs = set(legacy["build_inputs"])
         self.assertEqual(
@@ -52,8 +57,9 @@ class AgentSkinComponentTests(unittest.TestCase):
         )
         self.assertEqual(
             [name for name in current["build_inputs"] if name not in legacy_inputs],
-            ["image-settings.js"],
-            "the canonical Agent Skin package adds only its image settings input",
+            ["tools/build-startup.py", "tools/build-startup-assets.swift", "hub-package.json",
+             "extension/renderer.mjs", "image-settings.js"],
+            "the canonical Agent Skin package adds its complete startup builder and renderer inputs",
         )
 
 

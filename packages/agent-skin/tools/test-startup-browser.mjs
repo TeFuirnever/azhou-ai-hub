@@ -14,21 +14,24 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const options = {
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   out: join(ROOT, '.build/startup-browser-evidence'),
+  generatedPayload: null,
   only: [],
 };
 for (let index = 2; index < process.argv.length; index++) {
   const key = process.argv[index];
   if (key === '--help') {
-    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--only <exact check name>]');
+    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--only <exact check name>]');
     process.exit(0);
   }
-  if (!['--chrome', '--out', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  if (!['--chrome', '--out', '--generated-payload', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
   const value = process.argv[++index];
   if (key === '--only') options.only.push(value);
+  else if (key === '--generated-payload') options.generatedPayload = value;
   else options[key.slice(2)] = value;
 }
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
+if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
 const onlyChecks = options.only.length ? new Set(options.only) : null;
 
 const report = {
@@ -176,7 +179,7 @@ try {
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
   const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, imageSettingsSource, legacyWallpaperCSS,
-    legacyWallpaperRenderer, helperExpressionJSON] = await Promise.all([
+    legacyWallpaperRenderer, helperExpressionJSON, generatedPayloadSource] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
@@ -185,7 +188,15 @@ try {
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
+    options.generatedPayload ? readFile(options.generatedPayload, 'utf8') : Promise.resolve(null),
   ]);
+  const generatedPayloadRoute = generatedPayloadSource === null ? null : (() => {
+    const finalCall = 'return installStartup(installAnimation, globalThis);';
+    assert.equal(generatedPayloadSource.split(finalCall).length, 2,
+      'the builder output exposes one final host binding for isolated browser injection');
+    return generatedPayloadSource.replace(finalCall,
+      'return (globalThis.__generatedPayloadResult = installStartup(installAnimation, globalThis.__agentSkinFixtureHost));');
+  })();
   const helperExpressions = JSON.parse(helperExpressionJSON);
   assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'statusSource']);
   assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
@@ -223,18 +234,38 @@ try {
       hasFocus: document.hasFocus.bind(document),
       createElement: document.createElement.bind(document),
     };
-    const host = {
-      location: new URL('app://-/index.html?initialRoute=%2F'), document: hostDocument,
-      MutationObserver, addEventListener: window.addEventListener.bind(window),
-      removeEventListener: window.removeEventListener.bind(window),
-      setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
-    };
+    const host = url.searchParams.has('generated-payload')
+      ? new Proxy(window, { get(target, name) {
+        if (name === 'location') return new URL('app://-/index.html?initialRoute=%2F');
+        if (name === 'document') return hostDocument;
+        const value = Reflect.get(target, name, target);
+        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout'].includes(name)
+          && typeof value === 'function' ? value.bind(target) : value;
+      } })
+      : {
+        location: new URL('app://-/index.html?initialRoute=%2F'), document: hostDocument,
+        MutationObserver, addEventListener: window.addEventListener.bind(window),
+        removeEventListener: window.removeEventListener.bind(window),
+        setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
+      };
+    let generatedInstallResult;
+    if (url.searchParams.has('generated-payload')) {
+      globalThis.__agentSkinFixtureHost = host;
+      const script = document.createElement('script');
+      script.src = '/generated-startup.js';
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('builder-generated startup payload failed to load'));
+        document.head.appendChild(script);
+      });
+      generatedInstallResult = globalThis.__generatedPayloadResult;
+    }
     const frameSpecs = [];
     const animationRuns = [];
     const senders = new Map();
-    const wallpaper = { version: '0.7.1', preview: true, image: ${JSON.stringify(pixelImage)},
+    const wallpaper = { version: '0.8.0', preview: true, image: ${JSON.stringify(pixelImage)},
       imageSHA256: ${JSON.stringify(imageSHA256)}, css: await fetch('/wallpaper.css').then(response => response.text()), strength: initialWallpaperStrength };
-    const legacyWallpaper = { ...wallpaper, css: await fetch('/legacy-wallpaper.css').then(response => response.text()) };
+    const legacyWallpaper = { ...wallpaper, version: '0.7.1', css: await fetch('/legacy-wallpaper.css').then(response => response.text()) };
     const fixturePayload = function (frameWindow, frameDocument, _location, _performance, _indexedDB,
       _Image, _Path2D, _URL, requestAnimationFrame, _cancelAnimationFrame, _setTimeout, _clearTimeout,
       _module, SEND, frameSpec) {
@@ -428,7 +459,7 @@ try {
       : installStartup(payload, host);
     outerWindow.__fixtureHost = host;
     outerWindow.__startupAPI = host.__azhouStartup;
-    outerWindow.__startupInstallResult = result;
+    outerWindow.__startupInstallResult = generatedInstallResult || result;
     outerWindow.__startupFrameSpecs = frameSpecs;
     outerWindow.__startupAnimationRuns = animationRuns;
     outerWindow.__startupFixtureSend = (runId, message) => senders.get(runId)?.(message);
@@ -458,6 +489,9 @@ try {
     ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
   ]);
+  if (generatedPayloadRoute !== null) {
+    routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);
+  }
   server = createServer((request, response) => {
     const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
     const route = routes.get(pathname);
@@ -529,7 +563,7 @@ try {
       };
     })();
   `;
-  await writeFile(join(animationDefaultsDir, 'defaults.js'), syntheticDefaults, 'utf8');
+  await writeFile(join(animationDefaultsDir, 'contours.js'), syntheticDefaults, 'utf8');
   const identityVariants = [
     { name: 'english', title: 'Synthetic agent', caption: 'SYNTHETIC / TEST' },
     { name: 'maximum-chinese', title: maximumIntroTitle, caption: maximumIntroCaption },
@@ -549,7 +583,7 @@ try {
       'introTitle: ' + JSON.stringify(variant.title) + ', introCaption: ' + JSON.stringify(variant.caption),
     );
     assert.notEqual(identityDefaults, syntheticDefaults);
-    await writeFile(join(variantDefaultsDir, 'defaults.js'), identityDefaults, 'utf8');
+    await writeFile(join(variantDefaultsDir, 'contours.js'), identityDefaults, 'utf8');
     variant.dir = variantDir;
   }
   const upperPreviewDir = join(profile, 'agent-skin-preview-upper');
@@ -596,7 +630,7 @@ try {
       };
     })();
   `;
-  await writeFile(join(upperDefaultsDir, 'defaults.js'), upperDefaults, 'utf8');
+  await writeFile(join(upperDefaultsDir, 'contours.js'), upperDefaults, 'utf8');
   chrome = spawn(options.chrome, [
     '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
     '--disable-default-apps', '--disable-sync', '--disable-extensions', '--disable-component-update', '--no-pings',
@@ -854,9 +888,9 @@ try {
     const state = await until(() => cdp.evaluate(`(()=>{
       const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
     })()`), 10000, 'playing with wallpaper initially disabled');
-    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
+    await cdp.evaluate(`(()=>{window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42});return true})()`);
     await until(() => cdp.evaluate('window.__decodeGateCount===1'), 10000, 'first real decode gate');
-    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:0})`);
+    await cdp.evaluate(`(()=>{window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:0});return true})()`);
     const disabled = await cdp.evaluate('window.__startupAPI.status()');
     assert.equal(disabled.wallpaper.applied, false);
     assert.equal(disabled.wallpaper.reason, 'disabled');
@@ -880,8 +914,8 @@ try {
     const state = await until(() => cdp.evaluate(`(()=>{
       const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
     })()`), 10000, 'playing with wallpaper initially disabled');
-    const sendBackground = strength => cdp.evaluate(`window.__startupFixtureSend(${state.runId},{
-      type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:${strength}})`);
+    const sendBackground = strength => cdp.evaluate(`(()=>{window.__startupFixtureSend(${state.runId},{
+      type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:${strength}});return true})()`);
     await sendBackground(42);
     await until(() => cdp.evaluate('window.__decodeGateCount===1'), 10000, 'first nonzero decode gate');
     await sendBackground(22);
@@ -950,7 +984,7 @@ try {
       })()`), 10000, 'candidate wallpaper after legacy dispose');
       assert.equal(committed.state.wallpaper.applied, true);
       assert.equal(committed.owner, 'azhou.codex-startup-animation');
-      assert.equal(committed.version, '0.7.1');
+      assert.equal(committed.version, '0.8.0');
       assert.equal(committed.apiApplied, true);
       if (scenario.editWash) await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-wash','host-later','important')");
       const beforeRestore = await cdp.evaluate(`({wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),
@@ -2616,6 +2650,54 @@ try {
     }
     return { limits, fixtures: result, measurementScope: 'JS rAF interval and 2D canvas submission only; GPU/compositor/presentation/system-memory timing not measured' };
   });
+
+  if (options.generatedPayload) {
+    await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
+    await navigate('/fixture.html?generated-payload=1');
+    await check('builder-generated startup payload activates the complete controller and saves settings before replay', async () => {
+      const initial = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return window.__startupInstallResult?.installed===true&&state?.phase==='playing'&&state.ready?state:false;
+      })()`), 15000, 'builder-generated controller and animation ready');
+      assert.equal(await cdp.evaluate('document.querySelectorAll(\'iframe[title="Agent Skin startup"]\').length'), 1);
+      const firstRun = initial.runId;
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+        return window.__startupAPI.status().phase==='settings'&&frame?.contentDocument.querySelector('dialog')?.open===true;
+      })()`), 5000, 'generated payload settings panel');
+      const draft = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]'),doc=frame.contentDocument;
+        const title=doc.querySelector('input[aria-label^="启动标题"]');
+        title.value='生成载荷保存验证';title.dispatchEvent(new Event('input',{bubbles:true}));
+        const button=[...doc.querySelectorAll('button')].find(item=>item.textContent.trim()==='保存并重播');
+        if(!button)throw new Error('generated payload settings save control is missing');
+        button.click();
+        return {title:title.value,button:button.textContent.trim()};
+      })()`);
+      assert.equal(draft.title, '生成载荷保存验证');
+      const replay = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.runId>${firstRun}&&state.phase==='playing'&&state.ready?state:false;
+      })()`), 15000, 'settings commit and generated payload replay');
+      assert.ok(replay.runId > firstRun);
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
+      const persisted = await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+        const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]');
+        return window.__startupAPI.status().phase==='settings'&&title?title.value:false;
+      })()`), 10000, 'settings value persisted through generated payload replay');
+      assert.equal(persisted, '生成载荷保存验证');
+      const disposed = await cdp.evaluate(`(()=>{
+        window.__fixtureHost.__azhouStartup.dispose();
+        return {owned:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
+          frames:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+          wallpaper:!!window.__azhouWallpaper,styles:document.querySelectorAll('#azhou-wallpaper-style').length};
+      })()`);
+      assert.deepEqual(disposed, { owned: false, frames: 0, wallpaper: false, styles: 0 });
+      return { firstRun, replayRun: replay.runId, savedTitle: persisted, disposed };
+    });
+  }
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Validate/publish the hidden build payload; installed-app cleanup is separate."""
 import argparse
+import base64
 import ctypes
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import plistlib
 import re
 import shutil
+import struct
 import subprocess
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'dist'  # Legacy location; only the installer may retire its apps.
@@ -24,15 +28,30 @@ PAYLOAD = ROOT / '.build/azhou-payload'
 REGISTRY_TOOL = ROOT / '.build/azhou-install-registry'
 MARKER = Path('Contents/Resources/azhou-build.json')
 PROJECT_ID = 'azhou.codex-startup-animation'
-VERSION = '0.7.1'
-BUILD = '8'
+VERSION = '0.8.0'
+BUILD = '9'
 ICON_NAME = 'AzhouAppIcon.icns'
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift',
-    'tools/build-macos.sh', 'tools/build-wallpaper.py', 'tools/verify-artifacts.py',
-    'wallpaper/renderer.js', 'wallpaper/wallpaper.css',
-    'index.html', 'style.css', 'animation.js',
+    'tools/build-macos.sh', 'tools/build-wallpaper.py', 'tools/build-startup.py',
+    'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json',
+    'extension/renderer.mjs', 'image-settings.js', 'wallpaper/renderer.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
+STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'image-settings.js', 'wallpaper/renderer.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json',
+)
+STARTUP_OUTPUTS = (
+    'startup/install.js',
+    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js',
+    'web/assets/defaults/avatar.png', 'web/assets/defaults/artwork.png',
+    'web/assets/defaults/contours.js',
+)
+MAX_STARTUP_BYTES = 24 * 1024 * 1024
+MAX_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
+MAX_ARTWORK_DATA_URL_BYTES = 12 * 1024 * 1024
 
 
 def identity(path):
@@ -227,6 +246,245 @@ def verify_wallpaper(path, info, marker):
         raise RuntimeError(f'壁纸资源与版本或构建输入不一致：{path}')
 
 
+def png_details(data, label):
+    """Validate a complete, non-interlaced 8-bit RGB/RGBA PNG without Pillow."""
+    if not isinstance(data, bytes) or not data.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise RuntimeError(f'启动默认图不是有效 PNG：{label}')
+    position = 8
+    width = height = bit_depth = color_type = None
+    compressed = bytearray()
+    seen_end = False
+    seen_data = False
+    while position < len(data):
+        if position + 12 > len(data):
+            raise RuntimeError(f'启动默认 PNG 区块被截断：{label}')
+        size = int.from_bytes(data[position:position + 4], 'big')
+        kind = data[position + 4:position + 8]
+        end = position + 12 + size
+        if end > len(data):
+            raise RuntimeError(f'启动默认 PNG 区块长度无效：{label}')
+        body = data[position + 4:position + 8 + size]
+        expected_crc = int.from_bytes(data[position + 8 + size:end], 'big')
+        if (zlib.crc32(body) & 0xffffffff) != expected_crc:
+            raise RuntimeError(f'启动默认 PNG 校验失败：{label}')
+        chunk = data[position + 8:position + 8 + size]
+        if position == 8:
+            if kind != b'IHDR' or size != 13:
+                raise RuntimeError(f'启动默认 PNG 缺少有效 IHDR：{label}')
+            width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack('>IIBBBBB', chunk)
+            if (not width or not height or width * height > 48_000_000
+                    or bit_depth != 8 or color_type not in (2, 6)
+                    or compression != 0 or filtering != 0 or interlace != 0):
+                raise RuntimeError(f'启动默认 PNG 尺寸或像素格式无效：{label}')
+        elif kind == b'IDAT':
+            if seen_end:
+                raise RuntimeError(f'启动默认 PNG 数据位于 IEND 之后：{label}')
+            seen_data = True
+            compressed.extend(chunk)
+        elif kind == b'IEND':
+            if size != 0 or seen_end or not seen_data:
+                raise RuntimeError(f'启动默认 PNG 缺少有效图像数据：{label}')
+            seen_end = True
+            if end != len(data):
+                raise RuntimeError(f'启动默认 PNG 含有尾随数据：{label}')
+        elif not seen_data and kind[0] & 0x20 == 0 and kind not in (b'PLTE',):
+            raise RuntimeError(f'启动默认 PNG 含有不支持的关键区块：{label}')
+        position = end
+    if not seen_end or width is None or height is None:
+        raise RuntimeError(f'启动默认 PNG 未完整结束：{label}')
+    channels = 3 if color_type == 2 else 4
+    row_bytes = width * channels
+    expected_size = (row_bytes + 1) * height
+    try:
+        decoded = zlib.decompress(bytes(compressed))
+    except zlib.error as exc:
+        raise RuntimeError(f'启动默认 PNG 无法解码：{label}') from exc
+    if len(decoded) != expected_size or any(decoded[row * (row_bytes + 1)] > 4 for row in range(height)):
+        raise RuntimeError(f'启动默认 PNG 解码长度或滤镜无效：{label}')
+    return {'width': width, 'height': height, 'bitDepth': bit_depth, 'colorType': color_type}
+
+
+def validate_contours(value, label='startup defaults'):
+    if not isinstance(value, list) or not 1 <= len(value) <= 1200:
+        raise RuntimeError(f'启动轮廓数量无效：{label}')
+    total = 0
+    length = 0.0
+    for path in value:
+        if not isinstance(path, list) or len(path) < 2:
+            raise RuntimeError(f'启动轮廓路径无效：{label}')
+        previous = None
+        for point in path:
+            if (not isinstance(point, list) or len(point) != 2
+                    or any(type(axis) not in (int, float) or not math.isfinite(axis) for axis in point)
+                    or not 0 <= point[0] <= 1536 or not 0 <= point[1] <= 1024):
+                raise RuntimeError(f'启动轮廓坐标无效：{label}')
+            if previous is not None:
+                length += math.hypot(point[0] - previous[0], point[1] - previous[1])
+            previous = point
+            total += 1
+            if total > 300_000:
+                raise RuntimeError(f'启动轮廓点数超出上限：{label}')
+    if length <= 0:
+        raise RuntimeError(f'启动轮廓没有可绘制路径：{label}')
+    return total
+
+
+def _read_json(path, label):
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f'启动资源缺失或不是实体文件：{path}')
+    try:
+        value = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f'启动资源 JSON 无效：{label}') from exc
+    return value
+
+
+def verify_startup(path, info, marker):
+    """Validate the current startup bundle against its source marker and resources."""
+    if not set(STARTUP_REQUIRED_INPUTS).issubset(INPUT_FILES):
+        missing = sorted(set(STARTUP_REQUIRED_INPUTS) - set(INPUT_FILES))
+        raise RuntimeError('启动构建源码未纳入 INPUT_FILES：' + ', '.join(missing))
+    if (info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))) != (VERSION, BUILD):
+        raise RuntimeError('启动载荷 App version/build 与当前 verifier 不一致。')
+    if (marker.get('version'), marker.get('build')) != (VERSION, BUILD):
+        raise RuntimeError('启动载荷来源标记的版本与当前 verifier 不一致。')
+    if not isinstance(marker.get('inputs'), dict) or marker.get('inputSHA256') != aggregate_inputs(marker['inputs']):
+        raise RuntimeError('启动载荷来源输入摘要无效。')
+    if not Path(path).is_dir() or Path(path).is_symlink():
+        raise RuntimeError(f'启动载荷目录无效：{path}')
+
+    resources = Path(path) / 'Contents/Resources'
+    startup = resources / 'startup'
+    install_script = startup / 'install.js'
+    manifest_path = startup / 'manifest.json'
+    if (startup.is_symlink() or install_script.is_symlink() or manifest_path.is_symlink()
+            or not install_script.is_file() or not manifest_path.is_file()):
+        raise RuntimeError(f'当前构建缺少 startup/install.js 或 manifest.json：{path}')
+    script_data = install_script.read_bytes()
+    if not script_data or len(script_data) >= MAX_STARTUP_BYTES:
+        raise RuntimeError('startup/install.js 必须小于 24 MiB。')
+    try:
+        script = script_data.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise RuntimeError('startup/install.js 必须是 UTF-8。') from exc
+    if (re.search(r'^\s*(?:import|export)\s', script, re.M)
+            or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', script)
+            or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', script)
+            or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', script)):
+        raise RuntimeError('startup/install.js 含有模块导入、fixture/preview 开关或外部资源访问。')
+
+    manifest = _read_json(manifest_path, 'startup manifest')
+    if (not isinstance(manifest, dict) or type(manifest.get('schema')) is not int or manifest.get('schema') != 1
+            or type(manifest.get('protocolVersion')) is not int or manifest.get('protocolVersion') != 1
+            or manifest.get('appVersion') != VERSION or str(manifest.get('appBuild')) != BUILD
+            or manifest.get('inputSHA256') != marker['inputSHA256']):
+        raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
+
+    source_inputs = manifest.get('sourceInputs')
+    if not isinstance(source_inputs, dict) or set(source_inputs) != set(STARTUP_REQUIRED_INPUTS):
+        raise RuntimeError('startup manifest 的 sourceInputs 清单不完整。')
+    for name in STARTUP_REQUIRED_INPUTS:
+        digest = source_inputs.get(name)
+        if (not isinstance(digest, str) or re.fullmatch(r'[0-9a-f]{64}', digest) is None
+                or marker['inputs'].get(name) != digest):
+            raise RuntimeError(f'启动构建源码未被来源标记覆盖：{name}')
+
+    metadata_path = ROOT / 'hub-package.json'
+    package = _read_json(metadata_path, 'hub package manifest')
+    if (package.get('runtime_version') != VERSION or str(package.get('runtime_build')) != BUILD
+            or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('build_inputs', []))
+            or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
+        raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
+
+    outputs = manifest.get('outputs')
+    if not isinstance(outputs, dict) or set(outputs) != set(STARTUP_OUTPUTS):
+        raise RuntimeError('startup manifest 的 output 路径清单不完整。')
+    output_bytes = {}
+    for relative in STARTUP_OUTPUTS:
+        candidate = resources / relative
+        if candidate.is_symlink() or not candidate.is_file():
+            raise RuntimeError(f'启动产物缺失或不是实体文件：{candidate}')
+        data = candidate.read_bytes()
+        digest = outputs.get(relative)
+        if not isinstance(digest, str) or digest != hashlib.sha256(data).hexdigest():
+            raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
+        output_bytes[relative] = data
+
+    for source_name in ('index.html', 'style.css', 'animation.js', 'image-settings.js'):
+        copied = output_bytes['web/' + source_name]
+        source_digest = marker['inputs'].get(source_name)
+        if source_digest != hashlib.sha256(copied).hexdigest():
+            raise RuntimeError(f'预览源码与标记来源不一致：web/{source_name}')
+
+    defaults = output_bytes['web/assets/defaults/contours.js']
+    prefix = b'window.AGENT_SKIN_ASSETS = Object.freeze('
+    suffix = b');\n'
+    if not defaults.startswith(prefix) or not defaults.endswith(suffix):
+        raise RuntimeError('web/assets/defaults/contours.js 不符合 AGENT_SKIN_ASSETS 固定格式。')
+    try:
+        preview_assets = json.loads(defaults[len(prefix):-len(suffix)].decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError('默认素材 JavaScript 不是受控 JSON 数据。') from exc
+    required_asset_keys = {
+        'avatar', 'artwork', 'artworkSHA256', 'contours', 'introTitle',
+        'introCaption', 'artworkSubtitle', 'wallpaperStrength',
+    }
+    if not isinstance(preview_assets, dict) or set(preview_assets) != required_asset_keys:
+        raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
+    for key, relative, size_limit in (
+        ('avatar', 'web/assets/defaults/avatar.png', MAX_AVATAR_DATA_URL_BYTES),
+        ('artwork', 'web/assets/defaults/artwork.png', MAX_ARTWORK_DATA_URL_BYTES),
+    ):
+        encoded = preview_assets.get(key)
+        if not isinstance(encoded, str) or not encoded.startswith('data:image/png;base64,'):
+            raise RuntimeError(f'默认 {key} 必须使用规范 PNG data URL。')
+        try:
+            image_bytes = base64.b64decode(encoded.split(',', 1)[1], validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise RuntimeError(f'默认 {key} PNG data URL 无效。') from exc
+        if len(encoded.encode('ascii')) > size_limit:
+            raise RuntimeError(f'默认 {key} data URL 超出允许大小。')
+        if image_bytes != output_bytes[relative]:
+            raise RuntimeError(f'预览默认 {key} 与打包 PNG 字节不一致。')
+        details = png_details(image_bytes, relative)
+        expected = (512, 512) if key == 'avatar' else (1536, 1024)
+        if (details['width'], details['height']) != expected:
+            raise RuntimeError(f'默认 {key} 必须为 {expected[0]}×{expected[1]} PNG。')
+
+    artwork_sha = hashlib.sha256(output_bytes['web/assets/defaults/artwork.png']).hexdigest()
+    if preview_assets.get('artworkSHA256') != artwork_sha:
+        raise RuntimeError('默认背景摘要与默认线稿来源不一致。')
+    point_count = validate_contours(preview_assets.get('contours'))
+    if (manifest.get('assets') != {
+            'avatar': {'width': 512, 'height': 512,
+                       'sha256': hashlib.sha256(output_bytes['web/assets/defaults/avatar.png']).hexdigest()},
+            'artwork': {'width': 1536, 'height': 1024, 'sha256': artwork_sha},
+            'contours': preview_assets['contours'],
+            'contourPathCount': len(preview_assets['contours']),
+            'contourPointCount': point_count,
+            'contourArtworkSHA256': artwork_sha,
+        }
+            or preview_assets.get('introTitle') != '阿舟的 Agent 实验室'
+            or preview_assets.get('introCaption') != 'AZHOU / AGENT LAB'
+            or preview_assets.get('artworkSubtitle') != '和阿舟一起，把想法做出来。'
+            or preview_assets.get('wallpaperStrength') != 42):
+        raise RuntimeError('startup manifest 默认图像、线稿配准或文字默认值无效。')
+
+    assets_prefix = 'const DEFAULT_ASSETS = Object.freeze('
+    if assets_prefix not in script:
+        raise RuntimeError('startup/install.js 未嵌入受控默认素材对象。')
+    literal = script.split(assets_prefix, 1)[1].split(');\n', 1)[0]
+    try:
+        bundled_assets = json.loads(literal)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError('startup/install.js 默认素材对象无效。') from exc
+    if bundled_assets != preview_assets:
+        raise RuntimeError('启动载荷与预览没有使用同一组默认图像和线稿。')
+    if 'return installStartup(installAnimation, globalThis);' not in script:
+        raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
+    return manifest
+
+
 def verify_product(path):
     info = require(path, IDENTITY)
     marker = read_marker(path, required=True)
@@ -234,6 +492,8 @@ def verify_product(path):
         raise RuntimeError(f'来源不属于当前项目，保留未处理：{path}')
     verify_icon(path, info)
     verify_wallpaper(path, info, marker)
+    if info.get('CFBundleShortVersionString') == VERSION:
+        verify_startup(path, info, marker)
     subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(path)], check=True)
     return info
 
@@ -250,6 +510,7 @@ def check():
         'LSUIElement': info.get('LSUIElement'), 'inputSHA256': marker['inputSHA256'],
         'iconFile': info.get('CFBundleIconFile'),
         'wallpaper': 'Contents/Resources/wallpaper/install.js',
+        'startup': 'Contents/Resources/startup/install.js',
         'fingerprint': fingerprint(PAYLOAD), 'hasAppSuffix': PAYLOAD.suffix == '.app',
         'installation': str(Path.home() / 'Applications' / NAME),
         'scope': 'build payload only; run tools/install-macos.py --check for installed-entry audit',

@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-if [[ ! -d assets/private || ! -f assets/private/working.png || ! -f assets/private/scene.js ]]; then
-  printf '%s\n' '缺少本地阿舟素材。请先运行 python3 tools/prepare-azhou-assets.py。' >&2
+if [[ ! -d assets/private || ! -f assets/private/working.png || ! -f assets/private/scene.js \
+  || ! -f assets/private/wallpaper-scene-q-v3.png || ! -f assets/private/app-icon/source.png ]]; then
+  printf '%s\n' '缺少本地阿舟素材（working.png、scene.js、wallpaper-scene-q-v3.png 或 app-icon/source.png）。请先准备本地私有素材。' >&2
   exit 1
 fi
 python3 - <<'PRIVATE_CHECK'
@@ -40,7 +41,7 @@ cleanup_stage() {
 }
 trap cleanup_stage EXIT
 bundle="$stage_root/azhou-payload"
-mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/web/assets/private"
+mkdir -p "$bundle/Contents/MacOS"
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,8 +52,8 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>阿舟启动 Codex</string>
 <key>CFBundleIconFile</key><string>AzhouAppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.7.1</string>
-<key>CFBundleVersion</key><string>8</string>
+<key>CFBundleShortVersionString</key><string>0.8.0</string>
+<key>CFBundleVersion</key><string>9</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
@@ -63,9 +64,8 @@ python3 tools/verify-artifacts.py --write-marker "$bundle"
   Native/App.swift Native/Wallpaper.swift -o "$bundle/Contents/MacOS/AzhouCodexStartup" -framework AppKit -framework WebKit
 /usr/bin/xcrun --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache \
   Native/InstallRegistry.swift -o "$stage_root/azhou-install-registry" -framework AppKit -framework CoreServices
-cp index.html style.css animation.js "$bundle/Contents/Resources/web/"
-cp assets/private/working.png assets/private/scene.js "$bundle/Contents/Resources/web/assets/private/"
 python3 tools/build-wallpaper.py --bundle "$bundle"
+python3 tools/build-startup.py --bundle "$bundle"
 icon_source="$PWD/assets/private/app-icon/source.png"
 iconset="$stage_root/AzhouAppIcon.iconset"
 mkdir -p "$iconset"

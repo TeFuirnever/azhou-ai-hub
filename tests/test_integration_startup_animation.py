@@ -125,10 +125,55 @@ class AnimationIntegrationTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_missing_private_asset_fails_without_workspace_write(self):
-        (self.assets / "scene.js").unlink()
-        with self.assertRaisesRegex(common.IntegrationError, "ordinary file missing"):
-            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        for name in animation.PRIVATE_FILES:
+            path = self.assets / name
+            original = path.read_bytes()
+            path.unlink()
+            with self.subTest(missing=name), self.assertRaisesRegex(common.IntegrationError, "ordinary file missing"):
+                animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(original)
         self.assertFalse(self.workspace.exists())
+
+    def test_new_payload_inspection_binds_private_inputs_without_copying_sources_and_keeps_legacy_rule(self):
+        new_bundle = self.base / "new-bundle"
+        new_source = self.base / "new-snapshot"
+        new_inputs = {}
+        for name in animation.PRIVATE_FILES:
+            source = new_source / "assets/private" / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(("private " + name).encode("utf-8"))
+            new_inputs["assets/private/" + name] = hashlib.sha256(source.read_bytes()).hexdigest()
+        new_bundle.mkdir()
+        new_info = {"CFBundleShortVersionString": animation.STARTUP_PAYLOAD_VERSION}
+        new_marker = {"inputs": new_inputs}
+
+        verification = animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+        self.assertIn("startup defaults", verification)
+        self.assertFalse((new_bundle / "Contents/Resources/web/assets/private").exists())
+
+        copied_source = new_bundle / "Contents/Resources/web/assets/private/working.png"
+        copied_source.parent.mkdir(parents=True)
+        copied_source.write_bytes(b"must not ship in the startup web resources")
+        with self.assertRaisesRegex(common.IntegrationError, "must not be copied"):
+            animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+        copied_source.unlink()
+        (new_source / "assets/private/working.png").write_bytes(b"changed after snapshot")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+
+        legacy_bundle = self.base / "legacy-bundle"
+        legacy_root = legacy_bundle / "Contents/Resources/web"
+        legacy_inputs = {}
+        for name in ("index.html", "style.css", "animation.js", "assets/private/working.png", "assets/private/scene.js"):
+            path = legacy_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(("legacy " + name).encode("utf-8"))
+            legacy_inputs[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        legacy = animation._verify_packaged_sources(
+            legacy_bundle, new_source, {"CFBundleShortVersionString": "0.7.1"}, {"inputs": legacy_inputs},
+        )
+        self.assertIn("installed web hashes", legacy)
 
     def test_package_edit_is_valid_but_stales_reviewed_build_before_native_execution(self):
         plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)

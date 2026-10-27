@@ -3,7 +3,7 @@ const WALLPAPER_GLOBAL = '__azhouWallpaper';
 const OWNER = 'azhou-codex-startup';
 const VERSION = 1;
 const LEGACY_WALLPAPER_OWNER = 'azhou.codex-startup-animation';
-const LEGACY_WALLPAPER_VERSION = '0.7.1';
+const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0']);
 const PAGE_REASON = 'page-unsupported';
 const ASSET_REASON = 'asset-invalid';
 const FIXED_PAGE_REASONS = new Set(['asset-invalid', 'storage-unavailable']);
@@ -59,7 +59,7 @@ function wallpaperRecord(host) {
   }
   const api = descriptor.value;
   const supported = dataProperty(api, 'owner') === LEGACY_WALLPAPER_OWNER
-    && dataProperty(api, 'version') === LEGACY_WALLPAPER_VERSION
+    && WALLPAPER_VERSIONS.has(dataProperty(api, 'version'))
     && typeof dataProperty(api, 'status') === 'function'
     && typeof dataProperty(api, 'dispose') === 'function';
   return { present: true, supported, api: supported ? api : null };
