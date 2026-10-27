@@ -1,0 +1,217 @@
+{
+  "date": "2026-10-25",
+  "baseline_commit": "44bfe5922cf2f96aecc0fa2a9bab970c343d6f7e",
+  "runtime": {
+    "app_version": "26.1021.31345",
+    "bundled_cli": "0.164.0-alpha.11.1",
+    "path_cli": "0.160.1"
+  },
+  "unit_test_methods_passed": 42,
+  "installation_changed_files": 9,
+  "repeat_changed_files": 0,
+  "independent_preservation_checks": {
+    "config_bytes_unchanged": true,
+    "outside_instruction_block_bytes_unchanged": true,
+    "unrelated_roles_unchanged": true,
+    "transaction_removed": true,
+    "repeat_bytes_modes_mtimes_unchanged": true
+  },
+  "native_discovery": {
+    "config_read": {
+      "model": "gpt-6.1-sol",
+      "model_reasoning_effort": "high",
+      "service_tier": "default",
+      "agents.enabled": true,
+      "agents.max_concurrent_threads_per_session": 4,
+      "agents.default_subagent_model": "gpt-6-luna",
+      "agents.default_subagent_reasoning_effort": "max"
+    },
+    "roles": [
+      {
+        "name": "explorer",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "max",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      },
+      {
+        "name": "worker",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "max",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      },
+      {
+        "name": "tester",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "max",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      },
+      {
+        "name": "researcher",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "max",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      },
+      {
+        "name": "reviewer",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      },
+      {
+        "name": "astra-specialist",
+        "model": "gpt-6-astra",
+        "reasoning_effort": "medium",
+        "evidence": "native debug prompt-input agent_type tool schema"
+      }
+    ],
+    "skill": {
+      "name": "astra-orchestrator",
+      "path": "~/.agents/skills/astra-orchestrator/SKILL.md",
+      "scope": "user",
+      "enabled": true
+    },
+    "instruction_block_loaded": true,
+    "inference_requests": 0,
+    "permission_semantics": "subagents inherit parent permissions"
+  },
+  "config_sha256_before_and_after": "4636e26e8f65675ab9ae6bf4d87ef85f14b430e34d7abdeafaedcd2be62377b7",
+  "actual_execution": {
+    "returncode": 0,
+    "elapsed_seconds": 70.13,
+    "model_overrides": false,
+    "threads": [
+      {
+        "thread_id": "01a17005-a381-7343-a360-22ab9e75c6c7",
+        "role": "root",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high",
+        "cli_version": "0.164.0-alpha.11.1",
+        "turn_contexts": [
+          {
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "sandbox_policy": {
+              "type": "read-only"
+            },
+            "approval_policy": "never",
+            "service_tier": null
+          }
+        ],
+        "task_complete_events": [
+          {
+            "started_at": 1792880780,
+            "completed_at": 1792880822,
+            "duration_ms": 41397
+          }
+        ],
+        "verified_tool_results": [],
+        "raw_record_sha256": "7a6f0e855b422ef93f1ae1d821b81c5426bfa937b4a761f5255a75cfd3f90ef3"
+      },
+      {
+        "thread_id": "01a17005-e2e6-7430-9377-a0e753050b5c",
+        "role": "worker",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "max",
+        "cli_version": "0.164.0-alpha.11.1",
+        "turn_contexts": [
+          {
+            "model": "gpt-6-luna",
+            "effort": "max",
+            "sandbox_policy": {
+              "type": "read-only"
+            },
+            "approval_policy": "never",
+            "service_tier": null
+          }
+        ],
+        "task_complete_events": [
+          {
+            "started_at": 1792880796,
+            "completed_at": 1792880811,
+            "duration_ms": 15218
+          }
+        ],
+        "verified_tool_results": [
+          {
+            "exit_code": 0,
+            "line_count": 3,
+            "last_line": "aok-probe-efb1d3aa5a35"
+          }
+        ],
+        "raw_record_sha256": "ad6f4b138eb63cb2fcb04c93525d39bd2bb9866330ef1b1f7000381ca927b520"
+      },
+      {
+        "thread_id": "01a17005-f562-73f1-82b8-4250c9144beb",
+        "role": "reviewer",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "high",
+        "cli_version": "0.164.0-alpha.11.1",
+        "turn_contexts": [
+          {
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "sandbox_policy": {
+              "type": "read-only"
+            },
+            "approval_policy": "never",
+            "service_tier": null
+          }
+        ],
+        "task_complete_events": [
+          {
+            "started_at": 1792880801,
+            "completed_at": 1792880816,
+            "duration_ms": 14935
+          }
+        ],
+        "verified_tool_results": [
+          {
+            "exit_code": 0,
+            "line_count": 3,
+            "last_line": "aok-probe-efb1d3aa5a35"
+          }
+        ],
+        "raw_record_sha256": "8d7948763eb9162c05469cec04c2fe135cfd2c251bfe345ef34a183092e11ab6"
+      }
+    ],
+    "spawn_parameters": [
+      {
+        "agent_type": "worker",
+        "fork_turns": "none",
+        "model": null,
+        "reasoning_effort": null
+      },
+      {
+        "agent_type": "reviewer",
+        "fork_turns": "none",
+        "model": null,
+        "reasoning_effort": null
+      }
+    ],
+    "probe_file_unchanged": true,
+    "config_bytes_unchanged": true,
+    "astra_invocations": 0,
+    "nested_delegations": 0,
+    "native_log_notes": [
+      "The host logged that the global personal Skill scan reached its traversal limit. The target Skill was discovered and actually read in this run; completeness of unrelated Skills was not assessed.",
+      "The host also logged memories Phase 2 no changes; task completion and both child tool results passed."
+    ],
+    "temporary_directory_removed": true
+  },
+  "cleanup": {
+    "historical_files_removed": 22,
+    "historical_bytes_removed": 180800,
+    "historical_roots": [
+      "config.toml.backup-astra-luna-trial-20261024-222720",
+      "backups/astra-luna-global-20261024-223729",
+      "backups/astra-sol-balanced-20261024-234914"
+    ],
+    "minimal_recovery_record": "~/.codex/agent-orchestration-kit/legacy-recovery.json",
+    "minimal_recovery_bytes": 37635,
+    "minimal_recovery_mode": "0o600",
+    "recovery_snapshots_reconstructed": 3,
+    "current_validation_temporary_bytes_removed": 8385,
+    "old_source_alias_retained": true,
+    "native_session_history_retained": true
+  }
+}

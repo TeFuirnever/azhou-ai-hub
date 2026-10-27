@@ -79,6 +79,31 @@ python scripts/azhou_hub.py verify
 
 For setup, review the deterministic `planId` from the dry-run, then pass the exact value with `--apply --plan-id <reviewed-planId>`; source, target, mode, or pre-apply state changes invalidate the apply.
 
+## Optional integrations
+
+Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The fourteen canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
+
+| Entry | Complete project package | Current boundary |
+|---|---|---|
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | Optional native Codex plugin installation into an explicit target; review hook trust separately. |
+| `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | Optional native Codex profile installation; keep one workflow owner per task. |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS player and isolated test entry; the native installer can take over one verified local entry. General production plans and uninstall remain held. Program redistribution is not authorized. |
+
+~~~bash
+python scripts/azhou_hub.py integrations list --json
+python scripts/azhou_hub.py integrations pstack --help
+python scripts/azhou_hub.py integrations model-router --help
+python scripts/azhou_hub.py integrations startup-animation --help
+~~~
+
+`python scripts/azhou_hub.py integrations ...` remains the operational entry. Each command defaults to its in-repository package; optional `--source` only asserts that canonical package path. Plans fingerprint current `runtime_paths` inputs and stage private snapshots and recovery receipts under ignored `.azhou/hub/` state. See the [integration runbook](docs/integrations.md), [provenance](docs/integration-provenance.md) and [support matrix](docs/support-matrix.md#optional-integrations).
+
+Install pstack from this Hub's maintained package for Codex, Claude Code, MiMo Code (`mimo`) or zcode. Its [installation instructions](packages/pstack-agent-harness/README.md#install) use local package sources; upstream links remain attribution and source-update references. For Codex, `--codex-home` selects the exact configuration to receive the plugin. A custom home requires launching Codex with that `CODEX_HOME`; it does not activate the plugin in the default desktop configuration.
+
+The animation program has no recorded open-source license grant. The Hub root license does not cover that package; do not publish its source or binaries until redistribution permission is clarified. Private artwork stays outside Git. The 2026-10-25 acceptance report is historical evidence for its inspected inputs and host. On 2026-10-26, the local Hub package was built and took over the existing single launcher and Pet installation, with native source, registration and installed-byte checks passing. Codex was not restarted; cold host launch, wallpaper application, Pet selection/playback and formal visual approval remain unverified. See the [local handoff record](evidence/optional-integrations-local-handoff-2026-10-26.md).
+
+The package also includes its existing Codex Pet theme and maintenance tools. Source migration alone did not transfer private reviewed candidates or installation ownership. A separate plan-reviewed importer can revalidate an existing candidate for the new root while preserving its source and QA; the native manager can then hand off an exact matching installed Pet to that root. See [Pet maintenance after the import](docs/integrations.md#pet-maintenance-after-the-import). Installed-byte checks do not prove host selection or playback.
+
 ## Skills
 
 | Skill | Real job | Verification basis |
@@ -118,7 +143,7 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
 - **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
-- **Harness differences stay visible.** Codex, Claude Code, zcode and Kimi Code share the same runtime packages, but discovery, hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md); the Kimi Code column carries its own 2026-10-06 discovery/invocation receipt and leaves the rest unclaimed.
+- **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`) and zcode. Their discovery, invocation, hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md); other harnesses are temporarily unsupported. MiMo Code's local Skill discovery has a [bounded receipt](evidence/mimocode-skill-discovery-2026-10-26.md), while its model invocation and host adapters remain unverified.
 - **Per-skill platform view.** A derived summary of the support matrix shows each canonical skill across harnesses and operating systems in [docs/skill-platform-view.md](docs/skill-platform-view.md); the support matrix stays the single authority.
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -2,6 +2,18 @@
 
 Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtime packages preserve or build on separately copyrighted open-source material. Their upstream notices remain effective.
 
+## Optional external integrations
+
+The three entries under `integrations/` contain source-lock metadata, not redistributed source trees. Their adapters operate on explicitly supplied external local checkouts and freeze necessary runtime inputs only in ignored local state. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
+
+| External source | Selected version | License and distribution boundary |
+|---|---|---|
+| [TeFuirnever/pstack-agent-harness](https://github.com/TeFuirnever/pstack-agent-harness), selected commit also published by [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude/commit/356c6e0f978df729eb16f227d795f34d221c5aad) | `356c6e0f978df729eb16f227d795f34d221c5aad`, `0.9.102` | MIT; original pstack, Cursor Team Kit and thermos attribution is retained through the selected licenses/notices. The existing tracked plugin icon is an external input, not new Hub artwork. |
+| Agent Orchestration Kit, recorded origin [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator) | Local continuation `4d1a2081f96cdab8a9ea0fe3d357312471546dcc` | Apache-2.0; the exact local continuation and its license are required. Publication of that commit at the recorded origin has not been established. |
+| [TeFuirnever/codex-startup-animation](https://github.com/TeFuirnever/codex-startup-animation) | Base `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` plus 22 selected worktree hashes; runtime `0.7.0` build `7` | No program license grant was found. Hub distributes no source program, binary or private artwork from this project. Local operation does not establish permission for public redistribution. |
+
+Animation character art, scene data, wallpaper and icon source are separate private runtime inputs, supplied explicitly. Generated bundles and visual evidence containing those inputs remain private; no material is generated or promoted into public brand assets by this integration. A successful hash check is not a rights grant or formal visual approval.
+
 ## Azhou brand assets
 
 `assets/github/social-preview.png` is an Azhou-maintained brand asset generated in-house on 2026-08-23 with Codex image generation and resized to 1280×640 for GitHub previews. This version intentionally contains no third-party logos or copied assets. When replacing it, repeat visual and rights review, keep the file below GitHub's 1 MB limit, and verify the separate GitHub Social Preview setting; the README reference is not that platform receipt.

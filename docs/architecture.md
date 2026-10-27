@@ -1,6 +1,6 @@
 # Repository architecture
 
-Azhou AI Hub has one maintained runtime per skill and separate development evidence.
+Azhou AI Hub has one maintained runtime per skill, optional project packages and separate development evidence.
 
 ~~~text
                   ┌──────────────────────────┐
@@ -28,6 +28,16 @@ Azhou AI Hub has one maintained runtime per skill and separate development evide
 Each <code>skills/&lt;canonical-name&gt;/</code> directory must remain independently installable and discoverable when copied as a complete package. That does not make every package a standalone implementation: declared external runtimes or an explicit repository checkout may still be required. A package must not depend on sibling skill directories, benchmark answers or vendor-specific identity metadata; every external requirement must be documented package-locally and fail closed when unavailable.
 
 Installable packages and mutable project state have separate roots. Packages remain under <code>skills/&lt;canonical-name&gt;/</code>; Azhou-owned project state uses <code>.azhou/&lt;canonical-name&gt;/</code>, while <code>.azhou/hub/</code> is reserved for cross-skill lifecycle state such as checkout receipts. Host-owned configuration and caches, repository infrastructure and user-selected deliverables remain outside <code>.azhou/</code>. Recognized prior roots are migration inputs only: apply is bound to a reviewed plan, preserves the source, publishes atomically and never enables fallback reads or dual writes.
+
+## Optional project packages
+
+The three complete projects under `packages/` retain their native layouts and toolchains. They are separate from independently installable Skills. `scripts/azhou_hub.py integrations` dispatches to the existing adapters; normal Skill setup does not enable them. See the [integration contract](integrations.md) and [package provenance](integration-provenance.md).
+
+Each `hub-package.json` declares current runtime paths. Plans fingerprint their files and executable modes and stage receipt-owned private snapshots under the explicit workspace's `.azhou/hub/`. Original commit fields identify import provenance, not current package contents. Native installers retain ownership of their targets and native state; snapshots support recovery rather than becoming another development source.
+
+The startup-animation package includes player, wallpaper and Pet maintenance code. Private artwork, reviewed Pet candidates and installation receipts remain outside tracked source. Copying code alone does not transfer a receipt bound to another `projectRoot`, prove host playback or create a shared character engine. A separate verified local native handoff moved the maintainer Mac's App and Pet receipt ownership to this package; the Hub adapter's general production install/uninstall plans remain blocked by their destination/state/uninstall contract. See the [dated handoff](../evidence/optional-integrations-local-handoff-2026-10-26.md).
+
+The Pet candidate importer is a bounded package operation above the existing validator and packager. It plans before writing, imports only matching private theme data and a reviewed candidate into local state, and records source provenance for the new candidate. The importer does not change an installed receipt; the later local native handoff adopted the verified package through a separate operation.
 
 ## Evaluation boundary
 

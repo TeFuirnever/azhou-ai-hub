@@ -1,0 +1,21 @@
+{
+  "schema": "azhou-hub.package.v1",
+  "component": "pstack",
+  "display_name": "pstack for Codex",
+  "version": "0.9.103",
+  "commit": "356c6e0f978df729eb16f227d795f34d221c5aad",
+  "repository": "https://github.com/TeFuirnever/pstack-agent-harness.git",
+  "license": "MIT",
+  "runtime_paths": [
+    ".agents/plugins/marketplace.json",
+    "LICENSE",
+    "LICENSE-cursor-team-kit",
+    "LICENSE-thermos",
+    "NOTICE-skills.md",
+    "NOTICE.md",
+    "VERSION",
+    "hub-package.json",
+    "package.json",
+    "plugins/pstack"
+  ]
+}

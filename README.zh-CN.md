@@ -79,6 +79,31 @@ python scripts/azhou_hub.py verify
 
 Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--apply --plan-id <reviewed-planId>`，源、目标、模式或执行前状态发生变化都会拒绝执行。
 
+## 可选能力接入
+
+三个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十四个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
+
+| 入口 | 完整项目包 | 当前边界 |
+|---|---|---|
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
+| `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
+| `startup-animation` | [codex-startup-animation](packages/codex-startup-animation/README.md) | macOS 播放器与隔离测试入口；原生安装器可接管一个已严格核实的本地入口，通用正式安装计划和卸载仍暂停。程序再分发尚未获授权。 |
+
+~~~bash
+python scripts/azhou_hub.py integrations list --json
+python scripts/azhou_hub.py integrations pstack --help
+python scripts/azhou_hub.py integrations model-router --help
+python scripts/azhou_hub.py integrations startup-animation --help
+~~~
+
+`python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。
+
+pstack 统一从当前 Hub 维护的项目包安装，维护目标为 Codex、Claude Code、MiMo Code（`mimo`）和 zcode。[安装说明](packages/pstack-agent-harness/README.md#install)使用本地包来源；上游链接保留作署名和源码更新依据。Codex 的 `--codex-home` 决定插件装入哪份配置；自定义目录需要通过对应的 `CODEX_HOME` 启动 Codex，不会自动在默认桌面配置中启用插件。
+
+动画程序目前没有已记录的开源授权；Hub 根目录许可证不覆盖该包。再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告只记录当时检查的输入和宿主。2026-10-26 已从本地 Hub 包构建并接管原有唯一启动 App 和 Pet 安装，原生来源、系统登记及安装字节检查通过。此次没有重启 Codex；冷启动宿主、壁纸实际应用、Pet 选择与播放、正式视觉审阅仍未验证。详见[本地接管记录](evidence/optional-integrations-local-handoff-2026-10-26.md)。
+
+包内还保留了现有 Codex Pet 主题和维护工具；源码迁移本身没有转移私有已审阅候选或安装归属。独立导入工具可在审阅计划后，为新根目录复验已有候选并保留原始来源与 QA；原生管理器随后可把完全匹配的已安装 Pet 接管到新根目录，详见 [Pet 迁入后的维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+
 ## Skills
 
 | Skill | 解决的真实任务 | 验证依据 |
@@ -118,7 +143,7 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现 spec 保留为 reminder。
 - **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、4-case Super Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、Session Insights 合成会话存储接线完整性套件、JSON/链接/来源/凭据策略和空白检查。
-- **不伪装跨平台完全等价。** Codex、Claude Code、zcode 和 Kimi Code 共用运行包，但发现、hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分开写；Kimi Code 列携带自己的 2026-10-06 发现/调用回据，其余能力保持不声明。
+- **不伪装各宿主能力完全等价。** 当前维护的目标是 Codex、Claude Code、MiMo Code（命令 `mimo`）和 zcode；其他 harness 暂不支持。发现、调用、hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分别列明。MiMo Code 有[本机 Skill 发现记录](evidence/mimocode-skill-discovery-2026-10-26.md)，模型调用及宿主适配尚未验证。
 - **逐 skill 平台汇总。** [docs/skill-platform-view.md](docs/skill-platform-view.md) 从支持矩阵派生出每个 skill 在各 harness 与操作系统上的汇总表；支持矩阵仍是唯一权威。
 - **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。

@@ -1,0 +1,13 @@
+{
+  "description": "Exact hashes from azhou-balanced at 44bfe592; permits migration only of unmodified known content. No personal configuration snapshots.",
+  "files": {
+    "agents/astra-specialist.toml": "7aaf88bdd5fc65179f6e90dceffde99df7361bfb679f0e157a73be555fddc18c",
+    "agents/explorer.toml": "1756c53774e0f227a6a61b69a9e5f248461604400044c68455ba1bab700edf97",
+    "agents/researcher.toml": "51cbeaf7b1ff847f606fccd7f8f28604afb5528c4705088077cc75101db7a728",
+    "agents/reviewer.toml": "bd67185b652a0f8346cb9877bd8610f249ee717cc87a372e9646ef5b8aff849d",
+    "agents/tester.toml": "f50399627c2f363ccc79651c7b6bbe029ee1a829ced9407512e8dc0a7e29d6d6",
+    "agents/worker.toml": "a7da4eaf55dad0543dcb9e24c764c5e4ae4377e50c274d6a85fba4acd0278bfc",
+    "instructions": "3e514be1f587ca40012d97300f9eb0c0778575ac5601319f55be944fa0b162a7",
+    "skill": "990a9baf86b9c6753808d093ae87ad2340cf645726ef9698e8821f4d99ad9ca6"
+  }
+}

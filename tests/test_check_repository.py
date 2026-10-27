@@ -61,6 +61,39 @@ class SkillPlatformViewTest(unittest.TestCase):
     def test_view_is_derived_from_the_support_matrix(self) -> None:
         self.assertEqual([], check_skill_platform_view(ROOT))
 
+    def test_support_set_header_drift_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_fixture(root, self.real_view())
+            matrix = root / "docs" / "support-matrix.md"
+            original = matrix.read_text(encoding="utf-8")
+            mutated = original.replace(
+                "| Codex | Claude Code | MiMo Code | zcode | Other harnesses (unsupported) |",
+                "| Codex | Claude Code | Kimi Code | zcode | Other harnesses (unsupported) |",
+                1,
+            )
+            self.assertNotEqual(original, mutated)
+            matrix.write_text(mutated, encoding="utf-8")
+            self.assertTrue(
+                any("support matrix header invalid" in error for error in check_skill_platform_view(root))
+            )
+
+    def test_unsupported_harness_claim_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = self.real_view().splitlines()
+            for index, row in enumerate(rows):
+                if row.startswith("| super-ask-azhou |"):
+                    rows[index] = row.replace(" | unsupported | ", " | supported | ", 1)
+                    break
+            view = "\n".join(rows) + "\n"
+            self.assertNotEqual(self.real_view(), view)
+            self.write_fixture(root, view)
+            self.assertIn(
+                "unsupported harness claim in skill platform view: super-ask-azhou",
+                check_skill_platform_view(root),
+            )
+
     def write_fixture(self, root: Path, view_text: str) -> None:
         docs = root / "docs"
         docs.mkdir(parents=True)
@@ -129,12 +162,12 @@ class SkillPlatformViewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             mutated = self.real_view().replace(
-                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | host-dependent",
-                "(evidence/retired-skill-fragment-2026-01-01.md) | host-dependent",
+                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | unsupported",
+                "(evidence/retired-skill-fragment-2026-01-01.md) | unsupported",
                 1,
             )
             self.assertNotIn(
-                "retired-skill-fragment-2026-01-01.md) | host-dependent",
+                "retired-skill-fragment-2026-01-01.md) | unsupported",
                 self.real_view(),
             )
             self.write_fixture(root, mutated)
@@ -605,12 +638,24 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
+            bundled = [
+                root / "packages/pstack-agent-harness/plugins/pstack/skills/how/SKILL.md",
+                root / "packages/agent-orchestration-kit/profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md",
+            ]
+            self.assertEqual([], check_skill_discovery([*expected, *bundled], root))
+            stray = root / "packages/unknown/skills/new/SKILL.md"
+            self.assertIn("unexpected installable skill: packages/unknown/skills/new/SKILL.md",
+                          check_skill_discovery([*expected, stray], root))
             legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
             errors = check_skill_discovery([*expected, legacy], root)
             self.assertEqual(["unexpected installable skill: benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.md"], errors)
 
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"
+        self.assertEqual(["docs/run.md"], relative_markdown_targets(text))
+
+    def test_markdown_code_examples_are_not_local_links(self) -> None:
+        text = "`[example](path with spaces.md)`\n```md\n[example](missing.md)\n```\n[real](docs/run.md)"
         self.assertEqual(["docs/run.md"], relative_markdown_targets(text))
 
     def test_broken_markdown_link_is_reported(self) -> None:
