@@ -274,11 +274,14 @@ try {
       const run = { runId: frameSpec.runId, intent: frameSpec.intent,
         settingsCommitted: frameSpec.settingsCommitted === true };
       if (url.searchParams.has('natural-settings-replay')) {
+        const samplePreviewReport = handle.preview.report;
+        run.sampleDisposedResources = () => ({
+          sampledAt: outerWindow.performance.now(),
+          report: samplePreviewReport(),
+        });
         const dispose = handle.dispose;
         handle.dispose = () => {
-          const result = dispose();
-          run.disposedReport = handle.preview.report();
-          return result;
+          return dispose();
         };
       } else {
         run.assets = frameSpec.assets;
@@ -1620,17 +1623,17 @@ try {
         'natural completion removes the child before the settle window');
       const finalReport = await cdp.evaluate(`(()=>{
         const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
-        return run.disposedReport;
+        return run.sampleDisposedResources();
       })()`);
-      assert.equal(finalReport.completed, true);
-      assert.equal(finalReport.skipped, false);
-      assert.equal(finalReport.elapsed, finalReport.duration);
-      assert.ok(finalReport.jsFrame.rafIntervalMs?.count > 100, 'natural playback records actual rAF samples');
-      assert.ok(finalReport.jsFrame.renderSubmissionMs?.count > 100,
+      assert.equal(finalReport.report.completed, true);
+      assert.equal(finalReport.report.skipped, false);
+      assert.equal(finalReport.report.elapsed, finalReport.report.duration);
+      assert.ok(finalReport.report.jsFrame.rafIntervalMs?.count > 100, 'natural playback records actual rAF samples');
+      assert.ok(finalReport.report.jsFrame.renderSubmissionMs?.count > 100,
         'natural playback records actual canvas submission samples');
-      for (const key of zeroResourceKeys) assert.equal(finalReport.resources[key], 0,
+      for (const key of zeroResourceKeys) assert.equal(finalReport.report.resources[key], 0,
         'natural completion releases ' + key);
-      assert.equal(finalReport.resources.framesPending, 0);
+      assert.equal(finalReport.report.resources.framesPending, 0);
       const heapAtComplete = await heapMetrics();
 
       const settleStartedAt = process.hrtime.bigint();
@@ -1640,7 +1643,9 @@ try {
       const afterSettle = await cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
-        return {state,report:run.disposedReport,frameCount:document.querySelectorAll(
+        const observation=run.sampleDisposedResources();
+        run.sampleDisposedResources=null;
+        return {state,observation,frameCount:document.querySelectorAll(
           'iframe[title="Agent Skin startup"]').length};
       })()`);
       const heapAfterSettle = await heapMetrics();
@@ -1648,9 +1653,11 @@ try {
       assert.equal(afterSettle.state.phase, 'complete');
       assert.deepEqual(afterSettle.state.completion, { cause: 'natural', beforeReady: false });
       assert.equal(afterSettle.frameCount, 0);
-      assert.deepEqual(afterSettle.report.resources, finalReport.resources,
-        'resources stay at their released counts for the full settle window');
-      for (const key of zeroResourceKeys) assert.equal(afterSettle.report.resources[key], 0);
+      assert.ok(afterSettle.observation.sampledAt >= finalReport.sampledAt + 5000,
+        'the post-settle resource sample is freshly taken after the full five-second window');
+      assert.deepEqual(afterSettle.observation.report.resources, finalReport.report.resources,
+        'fresh live resource counters remain at their released values after the settle window');
+      for (const key of zeroResourceKeys) assert.equal(afterSettle.observation.report.resources[key], 0);
       cycles.push({
         round,
         runId: started.state.runId,
@@ -1658,9 +1665,10 @@ try {
         completion: completed.completion,
         wallTimeFromReadyToCompleteMs: completedAt - playbackStartedAt,
         settleElapsedMs,
-        rafIntervalMs: finalReport.jsFrame.rafIntervalMs,
-        renderSubmissionMs: finalReport.jsFrame.renderSubmissionMs,
-        releasedResources: finalReport.resources,
+        resourceSampleGapMs: afterSettle.observation.sampledAt - finalReport.sampledAt,
+        rafIntervalMs: finalReport.report.jsFrame.rafIntervalMs,
+        renderSubmissionMs: finalReport.report.jsFrame.renderSubmissionMs,
+        releasedResources: afterSettle.observation.report.resources,
         heapAtComplete,
         heapAfterSettle,
       });
