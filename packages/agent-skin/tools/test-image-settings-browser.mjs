@@ -270,6 +270,22 @@ function browserChecks(maxInputBytes) {
     const reloaded = await api.load(defaults);
     secondAPI.dispose();
     secondPage.remove();
+    const versionchange = await new Promise((resolve, reject) => {
+      const request = child.indexedDB.open('azhou-codex-startup', 2);
+      let blocked = false;
+      let oldVersion = null;
+      const timer = child.setTimeout(() => reject(new Error('versionchange close timed out')), 5000);
+      request.onblocked = () => { blocked = true; };
+      request.onupgradeneeded = event => { oldVersion = event.oldVersion; };
+      request.onerror = () => { child.clearTimeout(timer); reject(request.error || new Error('versionchange upgrade failed')); };
+      request.onsuccess = () => {
+        child.clearTimeout(timer);
+        const db = request.result;
+        const result = { blocked, oldVersion, version: db.version };
+        db.close();
+        resolve(result);
+      };
+    });
     api.dispose();
 
     frame.remove();
@@ -299,6 +315,7 @@ function browserChecks(maxInputBytes) {
         conflictReason,
         reloadedTitle: reloaded.settings.introTitle,
         reloadedBaselineTitle: reloaded.baseline?.introTitle,
+        versionchange,
       },
     };
   })();
@@ -403,9 +420,13 @@ try {
   assert.equal(result.storage.conflictReason, 'settings-conflict');
   assert.equal(result.storage.reloadedTitle, 'Page A wins');
   assert.equal(result.storage.reloadedBaselineTitle, 'Page A wins');
+  assert.equal(result.storage.versionchange.blocked, false,
+    'the settings connection closes on versionchange so the newer open can proceed');
+  assert.equal(result.storage.versionchange.oldVersion, 1);
+  assert.equal(result.storage.versionchange.version, 2);
   console.log(JSON.stringify({
     status: 'PASS',
-    scope: 'synthetic PNG/JPEG/WebP decode, crop, transparent composite, same-crop contours, flat artwork rejection, 30 MiB boundary, real IndexedDB save/reload and two-page conflict',
+    scope: 'synthetic PNG/JPEG/WebP decode, crop, transparent composite, same-crop contours, flat artwork rejection, 30 MiB boundary, real IndexedDB save/reload, two-page conflict and versionchange close',
     formats: result.formats.map(item => item.type),
     boundaryBytes: result.boundarySize,
     objectURLsReleased: result.revokedCount + '/' + result.createdCount,

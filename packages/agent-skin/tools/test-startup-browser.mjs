@@ -271,8 +271,20 @@ try {
     const installActualAnimation = function (...args) {
       const frameSpec = args[14];
       const handle = window.installAnimation(...args);
-      animationRuns.push({ runId: frameSpec.runId, intent: frameSpec.intent,
-        settingsCommitted: frameSpec.settingsCommitted === true, assets: frameSpec.assets, handle });
+      const run = { runId: frameSpec.runId, intent: frameSpec.intent,
+        settingsCommitted: frameSpec.settingsCommitted === true };
+      if (url.searchParams.has('natural-settings-replay')) {
+        const dispose = handle.dispose;
+        handle.dispose = () => {
+          const result = dispose();
+          run.disposedReport = handle.preview.report();
+          return result;
+        };
+      } else {
+        run.assets = frameSpec.assets;
+        run.handle = handle;
+      }
+      animationRuns.push(run);
       return handle;
     };
     const payload = url.searchParams.has('animation')
@@ -319,11 +331,41 @@ try {
       : { wallpaper: ${JSON.stringify(pixelImage)} });
     if (url.searchParams.has('animation')) {
       const createSettings = window.createImageSettings;
-      payload.createImageSettings = url.searchParams.has('settings-blocked')
-        ? environment => createSettings({ ...environment, indexedDB: {
+      if (url.searchParams.has('settings-open-pending')) {
+        payload.createImageSettings = environment => createSettings({ ...environment, indexedDB: {
+          open() { outerWindow.__fixtureIDBStage = 'open'; return {}; },
+        } });
+      } else if (url.searchParams.has('settings-get-pending')) {
+        const database = {
+          objectStoreNames: { contains: name => name === 'settings' },
+          transaction() {
+            const transaction = {
+              aborted: false,
+              objectStore() { return { get() { outerWindow.__fixtureIDBStage = 'get'; return {}; } }; },
+              abort() {
+                if (transaction.aborted) return;
+                transaction.aborted = true;
+                outerWindow.__fixtureIDBAbortCount = (outerWindow.__fixtureIDBAbortCount || 0) + 1;
+                queueMicrotask(() => transaction.onabort?.({ target: transaction }));
+              },
+            };
+            return transaction;
+          },
+          close() {},
+        };
+        payload.createImageSettings = environment => createSettings({ ...environment, indexedDB: {
+          open() {
+            outerWindow.__fixtureIDBStage = 'open';
+            const request = { result: database };
+            queueMicrotask(() => request.onsuccess?.({ target: request }));
+            return request;
+          },
+        } });
+      } else if (url.searchParams.has('settings-blocked')) {
+        payload.createImageSettings = environment => createSettings({ ...environment, indexedDB: {
           open() { const request = {}; queueMicrotask(() => request.onblocked?.({ target: request })); return request; },
-        } })
-        : createSettings;
+        } });
+      } else payload.createImageSettings = createSettings;
     }
     let wallpaperApplications = 0;
     payload.applyWallpaper = async (background, isCurrent) => {
@@ -1374,6 +1416,269 @@ try {
       busyEscape: { runId: busyRun.runId, busyStart, stillOpen: busyStillOpen,
         lateSettingsImage, released: busyResources, afterDispose: lateImportAfterDispose },
       secondReplayResources: secondSettingsResources };
+  });
+
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&settings-open-pending=1');
+  await check('IDB open and get pending keep parent and child shortcuts guarded and Escape safe', async () => {
+    const exercisePendingLoad = async kind => {
+      if (kind === 'get') await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&settings-get-pending=1');
+      const pending = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='loading'&&window.__fixtureIDBStage==='${kind==='open'?'open':'get'}'
+          ?{state,stage:window.__fixtureIDBStage}:false;
+      })()`), 10000, kind + ' request remains pending during startup load');
+      const keys = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+        const parentEvent=new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true});
+        window.dispatchEvent(parentEvent);
+        const parentAfter=window.__startupAPI.status();
+        const childEvent=new frame.contentWindow.KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true});
+        frame.contentWindow.dispatchEvent(childEvent);
+        const childAfter=window.__startupAPI.status();
+        const childDialog=frame.contentDocument.querySelector('dialog');
+        const parentEscape=new KeyboardEvent('keydown',{key:'Escape',cancelable:true});
+        window.dispatchEvent(parentEscape);
+        const parentEscapeAfter=window.__startupAPI.status();
+        return {parentPrevented:parentEvent.defaultPrevented,parentRunId:parentAfter.runId,
+          parentPhase:parentAfter.phase,childPrevented:childEvent.defaultPrevented,
+          childRunId:childAfter.runId,childPhase:childAfter.phase,dialogOpen:childDialog?.open===true,
+          frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+          parentEscapePrevented:parentEscape.defaultPrevented,parentEscapePhase:parentEscapeAfter.phase,
+          parentEscapeRunId:parentEscapeAfter.runId};
+      })()`);
+      assert.equal(keys.parentPrevented, false, 'the parent shortcut is ignored before resources are ready');
+      assert.equal(keys.parentPhase, 'loading');
+      assert.equal(keys.parentRunId, pending.state.runId);
+      assert.equal(keys.childPrevented, true, 'the child consumes its local shortcut without opening settings');
+      assert.equal(keys.childPhase, 'loading');
+      assert.equal(keys.childRunId, pending.state.runId);
+      assert.equal(keys.dialogOpen, false);
+      assert.equal(keys.frameCount, 1);
+      assert.equal(keys.parentEscapePrevented, false, 'the parent has no Escape action during a pending load');
+      assert.equal(keys.parentEscapePhase, 'loading');
+      assert.equal(keys.parentEscapeRunId, pending.state.runId);
+
+      const childEscape = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+        const event=new frame.contentWindow.KeyboardEvent('keydown',{key:'Escape',cancelable:true});
+        frame.contentWindow.dispatchEvent(event);
+        return {prevented:event.defaultPrevented,state:window.__startupAPI.status()};
+      })()`);
+      const ended = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='skip'&&!state.overlay?state:false;
+      })()`), 5000, kind + ' child Escape completes the pending run once');
+      assert.equal(childEscape.prevented, true);
+      assert.equal(ended.runId, pending.state.runId);
+      assert.equal(await cdp.evaluate('window.__startupAnimationRuns.length'), 1,
+        kind + ' pending load does not start a duplicate run');
+      assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[title=\\"Agent Skin startup\\"]").length'), 0);
+      if (kind === 'get') {
+        await until(() => cdp.evaluate('window.__fixtureIDBAbortCount > 0'), 1000,
+          'disposing the pending get aborts its readonly transaction');
+      }
+      await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,100))');
+      const final = await cdp.evaluate(`({state:window.__startupAPI.status(),runs:window.__startupAnimationRuns.length,
+        frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+        stage:window.__fixtureIDBStage,aborts:window.__fixtureIDBAbortCount||0})`);
+      assert.equal(final.state.phase, 'complete', 'late storage callbacks cannot revive the dismissed run');
+      assert.equal(final.runs, 1);
+      assert.equal(final.frameCount, 0);
+      return { pending, keys, childEscape: { prevented: childEscape.prevented,
+        cause: ended.completion, abortCount: final.aborts }, final: final.state.phase };
+    };
+    const open = await exercisePendingLoad('open');
+    const get = await exercisePendingLoad('get');
+    return { open, get };
+  });
+
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1');
+  await check('a top-level page refresh reloads committed settings fields from IndexedDB', async () => {
+    const initial = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();
+      return state?.phase==='playing'&&state.ready?state:false;
+    })()`), 15000, 'startup play is ready before saving refresh fields');
+    const fields = { introTitle: 'Refresh title', introCaption: 'REFRESH / PERSISTED',
+      artworkSubtitle: 'Synthetic settings after top-level reload', wallpaperStrength: 19 };
+    await cdp.evaluate(`(()=>{
+      const event=new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true});
+      window.dispatchEvent(event);return event.defaultPrevented;
+    })()`);
+    await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      const dialog=document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('dialog');
+      return state.phase==='settings'&&dialog?.open?state:false;
+    })()`), 5000, 'settings dialog opens before the committed reload setup');
+    await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      for(const [label,value] of [["input[aria-label^='启动标题']",${JSON.stringify(fields.introTitle)}],
+        ["input[aria-label^='辅助文字']",${JSON.stringify(fields.introCaption)}],
+        ["textarea[aria-label^='背景字幕']",${JSON.stringify(fields.artworkSubtitle)}]]){
+        const control=doc.querySelector(label);control.value=value;control.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+      const strength=doc.querySelector('input[type="range"]');strength.value='${fields.wallpaperStrength}';
+      strength.dispatchEvent(new Event('input',{bubbles:true}));
+      doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+    })()`);
+    const saved = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status(),run=window.__startupAnimationRuns.at(-1);
+      return state.phase==='playing'&&state.ready&&state.runId>${initial.runId}?{state,run}:false;
+    })()`), 15000, 'the settings transaction commits before top-level refresh');
+    assert.equal(saved.run.settingsCommitted, true);
+    const timeOriginBeforeReload = await cdp.evaluate('performance.timeOrigin');
+    await cdp.call('Page.reload', { ignoreCache: true });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'top-level refresh completes');
+    await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000,
+      'top-level refresh installs a fresh controller');
+    const after = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status(),run=window.__startupAnimationRuns?.at(-1);
+      return state?.phase==='playing'&&state.ready&&run?.intent==='play'?{state,run}:false;
+    })()`), 15000, 'top-level refresh reloads persisted settings and prepares the startup');
+    const timeOriginAfterReload = await cdp.evaluate('performance.timeOrigin');
+    assert.notEqual(timeOriginAfterReload, timeOriginBeforeReload, 'Page.reload created a new top-level document');
+    assert.equal(await cdp.evaluate('window.__startupAnimationRuns.length'), 1);
+    await cdp.evaluate(`(()=>window.dispatchEvent(new KeyboardEvent('keydown',{
+      key:'b',metaKey:true,altKey:true,cancelable:true})))()`);
+    await until(() => cdp.evaluate(`document.querySelector('iframe[title="Agent Skin startup"]')
+      ?.contentDocument.querySelector('dialog')?.open`), 5000,
+    'the refreshed top-level page opens its actual settings dialog for a field readback');
+    const reloadedFields = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      return {introTitle:doc.querySelector('input[aria-label^="启动标题"]').value,
+        introCaption:doc.querySelector('input[aria-label^="辅助文字"]').value,
+        artworkSubtitle:doc.querySelector('textarea[aria-label^="背景字幕"]').value,
+        wallpaperStrength:Number(doc.querySelector('input[type="range"]').value)};
+    })()`);
+    assert.deepEqual(reloadedFields, fields,
+      'the new top-level document reads all committed fields from IndexedDB');
+    return { committedBeforeReload: saved.run.settingsCommitted, afterReload: {
+      runId: after.run.runId, intent: after.run.intent, settingsCommitted: after.run.settingsCommitted,
+    }, reloadedFields, timeOriginChanged: timeOriginAfterReload !== timeOriginBeforeReload };
+  });
+
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&natural-settings-replay=1');
+  await check('ten saved settings runs naturally complete and release resources through a five-second settle', async () => {
+    await cdp.call('Performance.enable');
+    const heapMetrics = async () => {
+      const { metrics = [] } = await cdp.call('Performance.getMetrics');
+      const values = Object.fromEntries(metrics.map(metric => [metric.name, metric.value]));
+      return {
+        available: Number.isFinite(values.JSHeapUsedSize),
+        usedJSHeapBytes: Number.isFinite(values.JSHeapUsedSize) ? values.JSHeapUsedSize : null,
+        totalJSHeapBytes: Number.isFinite(values.JSHeapTotalSize) ? values.JSHeapTotalSize : null,
+        timestamp: Number.isFinite(values.Timestamp) ? values.Timestamp : null,
+      };
+    };
+    const zeroResourceKeys = ['liveImages', 'liveBitmaps', 'liveCanvases', 'livePaths', 'liveRAF', 'liveObjectURLs'];
+    const initial = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();
+      return state?.phase==='playing'&&state.ready?state:false;
+    })()`), 15000, 'actual animation is ready before the first settings save');
+    let priorRunId = initial.runId;
+    let expectedTitle = null;
+    const cycles = [];
+
+    for (let round = 1; round <= 10; round++) {
+      const shortcut = await cdp.evaluate(`(()=>{
+        const event=new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true});
+        window.dispatchEvent(event);return event.defaultPrevented;
+      })()`);
+      assert.equal(shortcut, true, 'the parent shortcut opens settings for replay ' + round);
+      const panel = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+        const dialog=frame?.contentDocument.querySelector('dialog');
+        const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]')?.value;
+        return state.phase==='settings'&&dialog?.open?{state,title}:false;
+      })()`), 10000, 'settings panel opens before natural replay ' + round);
+      if (expectedTitle === null) expectedTitle = panel.title;
+      else assert.equal(panel.title, expectedTitle, 'replay ' + round + ' reads the previous committed title');
+      const nextTitle = 'Natural run ' + String(round).padStart(2, '0');
+      await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+        const title=doc.querySelector('input[aria-label^="启动标题"]');
+        title.value=${JSON.stringify(nextTitle)};title.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+      })()`);
+      const started = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status(),run=window.__startupAnimationRuns.at(-1);
+        return state.phase==='playing'&&state.ready&&state.runId>${priorRunId}
+          ?{state,run}:false;
+      })()`), 15000, 'save ' + round + ' creates a fresh ready play run');
+      assert.equal(started.run.intent, 'play');
+      assert.equal(started.run.settingsCommitted, true);
+      const playbackStartedAt = Date.now();
+      const completed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.runId===${started.state.runId}&&state.phase==='complete'
+          &&state.completion?.cause==='natural'&&!state.overlay?state:false;
+      })()`), 30000, 'settings-save replay ' + round + ' completes naturally');
+      const completedAt = Date.now();
+      assert.deepEqual(completed.completion, { cause: 'natural', beforeReady: false });
+      assert.equal(completed.completed, true);
+      assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[title=\\"Agent Skin startup\\"]").length'), 0,
+        'natural completion removes the child before the settle window');
+      const finalReport = await cdp.evaluate(`(()=>{
+        const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
+        return run.disposedReport;
+      })()`);
+      assert.equal(finalReport.completed, true);
+      assert.equal(finalReport.skipped, false);
+      assert.equal(finalReport.elapsed, finalReport.duration);
+      assert.ok(finalReport.jsFrame.rafIntervalMs?.count > 100, 'natural playback records actual rAF samples');
+      assert.ok(finalReport.jsFrame.renderSubmissionMs?.count > 100,
+        'natural playback records actual canvas submission samples');
+      for (const key of zeroResourceKeys) assert.equal(finalReport.resources[key], 0,
+        'natural completion releases ' + key);
+      assert.equal(finalReport.resources.framesPending, 0);
+      const heapAtComplete = await heapMetrics();
+
+      const settleStartedAt = process.hrtime.bigint();
+      while (process.hrtime.bigint() - settleStartedAt < 5_000_000_000n) await delay(25);
+      const settleElapsedMs = Number(process.hrtime.bigint() - settleStartedAt) / 1_000_000;
+      assert.ok(settleElapsedMs >= 5000, 'each natural run gets a full five-second settle observation');
+      const afterSettle = await cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
+        return {state,report:run.disposedReport,frameCount:document.querySelectorAll(
+          'iframe[title="Agent Skin startup"]').length};
+      })()`);
+      const heapAfterSettle = await heapMetrics();
+      assert.equal(afterSettle.state.runId, started.state.runId);
+      assert.equal(afterSettle.state.phase, 'complete');
+      assert.deepEqual(afterSettle.state.completion, { cause: 'natural', beforeReady: false });
+      assert.equal(afterSettle.frameCount, 0);
+      assert.deepEqual(afterSettle.report.resources, finalReport.resources,
+        'resources stay at their released counts for the full settle window');
+      for (const key of zeroResourceKeys) assert.equal(afterSettle.report.resources[key], 0);
+      cycles.push({
+        round,
+        runId: started.state.runId,
+        introTitle: nextTitle,
+        completion: completed.completion,
+        wallTimeFromReadyToCompleteMs: completedAt - playbackStartedAt,
+        settleElapsedMs,
+        rafIntervalMs: finalReport.jsFrame.rafIntervalMs,
+        renderSubmissionMs: finalReport.jsFrame.renderSubmissionMs,
+        releasedResources: finalReport.resources,
+        heapAtComplete,
+        heapAfterSettle,
+      });
+      expectedTitle = nextTitle;
+      priorRunId = started.state.runId;
+    }
+    assert.equal(cycles.length, 10);
+    return {
+      firstRunId: cycles[0].runId,
+      lastRunId: cycles.at(-1).runId,
+      cycles,
+      memory: {
+        javascriptHeapMetric: 'Chrome DevTools Performance.getMetrics JSHeapUsedSize/JSHeapTotalSize',
+        sampledAtNaturalCompleteAndAfterEachFiveSecondSettle: true,
+        systemMemoryIndependentlyMeasured: false,
+        limitation: 'No OS process RSS or whole-system memory sampler was run; JS heap metrics are not system-memory measurements.',
+      },
+    };
   });
 
   await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&settings-blocked=1');

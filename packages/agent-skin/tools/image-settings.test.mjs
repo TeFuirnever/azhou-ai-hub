@@ -922,3 +922,66 @@ test('load total timeout returns safe defaults, preserves the baseline, and leav
   assert.deepEqual(storage.state.record, stored);
   assert.equal(fixture.api.dispose(), true);
 });
+
+test('database open and read each time out after their five-second budget', async t => {
+  const defaults = {
+    avatar: 'data:image/png;base64,CCCC', artwork: 'data:image/png;base64,DDDD',
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Safe default', introCaption: '',
+    artworkSubtitle: 'Generated fixture', wallpaperStrength: 0,
+  };
+
+  await t.test('a pending open returns defaults at 5000 ms and ignores a late success', async () => {
+    const storage = makeIndexedDB(undefined, { holdOpen: true });
+    const fixture = makeFixture({ indexedDB: storage.indexedDB });
+    let settled = false;
+    const loading = fixture.api.load(defaults).then(value => { settled = true; return value; });
+    for (let attempt = 0; attempt < 10 && !storage.state.releaseOpen; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    assert.equal(typeof storage.state.releaseOpen, 'function');
+    assert.equal(fixture.timers.some(timer => timer.delay === 5_000 && !timer.cleared), true);
+
+    fixture.advance(4_999);
+    await Promise.resolve();
+    assert.equal(settled, false, 'the open budget does not expire early');
+    fixture.advance(1);
+    const loaded = await loading;
+    assert.equal(loaded.reason, 'operation-timeout');
+    assert.equal(loaded.settings.introTitle, 'Safe default');
+    assert.equal(loaded.baseline, undefined);
+
+    assert.equal(storage.state.releaseOpen(), true, 'the controlled request can report late success');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(storage.state.transactions.length, 0, 'late open success cannot start a read after fallback');
+    assert.equal(storage.state.record, undefined);
+    fixture.api.dispose();
+  });
+
+  await t.test('a pending get aborts at 5000 ms and cannot apply its late request result', async () => {
+    const storage = makeIndexedDB(undefined, { holdRequests: true });
+    const fixture = makeFixture({ indexedDB: storage.indexedDB });
+    let settled = false;
+    const loading = fixture.api.load(defaults).then(value => { settled = true; return value; });
+    for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    assert.equal(storage.state.heldRequests.length, 1, 'the read-only get remains pending');
+    const transaction = storage.state.transactions[0];
+    assert.equal(transaction.mode, 'readonly');
+
+    fixture.advance(4_999);
+    await Promise.resolve();
+    assert.equal(settled, false, 'the read budget does not expire early');
+    fixture.advance(1);
+    const loaded = await loading;
+    assert.equal(loaded.reason, 'operation-timeout');
+    assert.equal(loaded.settings.introTitle, 'Safe default');
+    assert.equal(transaction.aborted, true);
+
+    assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(transaction.completed, false, 'the late get cannot complete the aborted transaction');
+    assert.equal(storage.state.record, undefined);
+    fixture.api.dispose();
+  });
+});
