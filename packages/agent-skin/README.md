@@ -1,12 +1,14 @@
 # Agent Skin · Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，面向 AI 工具的外观定制；当前唯一适配宿主为 Codex。此副本保留既有 0.7.1/build 8 原生启动动画与壁纸运行时，并已包含同窗口 CDP 实现及设置流程。实现经过本地单元测试和隔离 Chrome/IndexedDB 验证，但尚未接管已安装 App 或 Pet，也不表示在官方 Codex 宿主中已启动或通过人工视觉验收。
+本目录是 Hub 的 canonical package `agent-skin`，面向 AI 工具的外观定制；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.8.0/build 9，保留既有 0.7.1/build 8 壁纸能力，并包含同窗口 CDP 实现及设置流程。实现经过本地单元测试和隔离 Chrome/IndexedDB 验证，但尚未接管已安装 App 或 Pet，也不表示在官方 Codex 宿主中已启动或通过人工视觉验收。
+
+Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
 2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
-女性 Q 版阿舟在实验室陪伴 Codex 启动。当前版本 **0.7.1 / build 8**，沿用 Swift / AppKit / WKWebView 和 HTML / CSS / SVG / WebGL。Codex 主界面使用保留 Q 版造型的全景实验室静态壁纸，独立启动动画保持原有节奏，没有新增第三方运行依赖。
+女性 Q 版阿舟在实验室陪伴 Codex 启动。当前固定版本 **0.8.0 / build 9**，沿用 Swift / AppKit / WKWebView 和 HTML / CSS / SVG / WebGL。Codex 主界面使用保留 Q 版造型的全景实验室静态壁纸，独立启动动画保持原有节奏，没有新增第三方运行依赖。
 
 **唯一日常入口：`~/Applications/阿舟启动 Codex.app`。** 构建生成隐藏的 `.build/azhou-payload` 安装载荷；安装验证成功后清理已核实的旧项目应用，项目 `dist` 不再保留第二份 `.app`。
 
@@ -119,7 +121,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟启动 Codex.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.7.1 / build 8 |
+| 版本 | 0.8.0 / build 9 |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 
@@ -132,6 +134,8 @@ python3 tools/install-macos.py --check
 ```
 
 启动回调只代表应用进程启动结果，不代表聊天页面或模型就绪。日志分开记录复用 / 打开、激活请求、真实前台应用及启动器退出。
+
+Hub 的 `run --mode launch` 使用已核验载荷版本评估启动器事件；热激活、控制器就绪和用户跳过各自有独立结果，壁纸失败不会改写启动器结果。独立 `smoke` 才评估动画播放是否完成。旧版本事件和当前版本事件使用各自解析规则，缺失字段、冲突 PID、重复启动边界或无效终态都会返回“行为未证实”。以上是适配器证据，不证明宿主已加载壁纸或用户看到目标画面。
 
 ## Codex 主界面壁纸
 

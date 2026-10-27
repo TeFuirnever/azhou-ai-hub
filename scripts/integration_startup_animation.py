@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -31,6 +32,32 @@ LEGACY_COMPONENT = "startup-animation"
 APP_NAME = "阿舟启动 Codex.app"
 EXECUTABLE = "AzhouCodexStartup"
 STARTUP_PAYLOAD_VERSION = "0.8.0"
+STARTUP_EVENT_SCHEMA = "azhou-startup.event.v1"
+STARTUP_EVENT_VERSION = (0, 8, 0)
+_VERSIONED_FAILURE_EVENTS = frozenset({"failure", "duplicate-entry", "lock-error", "startup-port-error"})
+_VERSIONED_LAUNCH_EVENTS = frozenset({
+    "launcher-start", "target-opened", "startup-installed", "target-activated",
+    "startup-ready", "startup-skipped", "startup-interrupted", "startup-failed",
+    "launcher-exit", *_VERSIONED_FAILURE_EVENTS,
+})
+_VERSIONED_SMOKE_EVENTS = frozenset({
+    "player-start", "playback-start", "animation-complete", "preview-result", "player-terminated",
+    "launcher-exit", "target-opened", "target-activated", "target-open-request", "target-reused",
+    "target-activation-request", "startup-installed", "startup-ready", "startup-skipped",
+    "startup-interrupted", "startup-failed", *_VERSIONED_FAILURE_EVENTS,
+})
+_VERSIONED_PROBE_EVENTS = frozenset({"probe", *_VERSIONED_FAILURE_EVENTS})
+_VERSIONED_DIAGNOSTIC_EVENTS = frozenset({
+    "startup-launcher-start", "startup-port-selected", "waiting-for-target", "target-open-request",
+    "target-launch-completion", "target-reused", "target-activation-request",
+    "target-activation-after-startup", "player-start", "playback-start", "animation-complete",
+    "preview-result", "player-terminated", "handoff-fade-start", "handoff-fade-complete",
+    "preview-launch-pending", "preview-promoted-to-launch", "reopen-existing-player",
+    "duplicate-ready-ignored", "snapshot-error", "snapshot-saved", "unhandled-message",
+    "window-close-as-skip", "window-created", "wallpaper-helper-start",
+    "wallpaper-helper-complete", "wallpaper-helper-failed", "wallpaper-result",
+    "wallpaper-port-unavailable",
+})
 PRIVATE_FILES = ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png")
 REGISTRY_IDS = ("local.azhou.codex-startup", "local.aemeath.startup", "local.aemeath.extension")
 LSREGISTER = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
@@ -49,6 +76,16 @@ def _hash(path: Path) -> str:
     if path.is_symlink() or not path.is_file():
         raise common.IntegrationError(f"required ordinary file missing: {path}")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _event_schema_for_version(version: str) -> str:
+    try:
+        parts = tuple(int(part) for part in version.split("."))
+    except (AttributeError, ValueError) as exc:
+        raise common.IntegrationError(f"invalid verified app version for event assessment: {version!r}") from exc
+    if len(parts) != 3 or any(part < 0 for part in parts):
+        raise common.IntegrationError(f"invalid verified app version for event assessment: {version!r}")
+    return "legacy" if parts < STARTUP_EVENT_VERSION else STARTUP_EVENT_SCHEMA
 
 
 def _private_manifest(directory: Path) -> dict[str, str]:
@@ -234,10 +271,12 @@ def inspect_bundle(source: Path, bundle: Path, *, hub_root: Path = ROOT,
         raise common.IntegrationError(f"native bundle verification failed: {exc}") from exc
     if (info.get("CFBundleShortVersionString"), str(info.get("CFBundleVersion"))) != (lock["runtime_version"], lock["runtime_build"]):
         raise common.IntegrationError("bundle version does not match the selected fixed source")
+    event_schema = _event_schema_for_version(str(info["CFBundleShortVersionString"]))
     verification = _verify_packaged_sources(bundle, native_root, info, marker)
     return {"path": str(bundle), "native_source_root": str(native_root), "source": origin,
             "bundle_id": info["CFBundleIdentifier"], "executable": info["CFBundleExecutable"],
             "version": info["CFBundleShortVersionString"], "build": str(info["CFBundleVersion"]),
+            "event_schema": event_schema,
             "sha256_tree": fingerprint, "input_sha256": marker["inputSHA256"],
             "verification": verification,
             "limits": "build marker/signature do not independently prove binary reproducibility; invocation and visual review are separate"}
@@ -437,9 +476,9 @@ def execution_plan(source: Path, bundle: Path, mode: str, *, target_pid: int | N
     command = [str(bundle / "Contents/MacOS" / EXECUTABLE)]
     scopes = {"smoke": "one-shot player preview; no target launch or wallpaper application",
               "probe": "read-only target identity/running-process probe",
-              "launch": "player and target launch/reuse, plus the existing coupled wallpaper attempt",
-              "wallpaper-status": "read-only live wallpaper verification; no launch or injection",
-              "disable-wallpaper": "remove only the native wallpaper state from the verified current page; does not close the host or its debugging port"}
+              "launch": "verified Codex startup assessment; hot activation, startup readiness and skip are reported separately from wallpaper",
+              "wallpaper-status": "read-only live wallpaper and optional startup status; no launch, injection, registration or log write",
+              "disable-wallpaper": "remove the Agent Skin startup controller and wallpaper from the verified current page; saved settings, host process and debugging port remain"}
     if mode not in scopes:
         raise common.IntegrationError("unknown native operation")
     if mode in ("smoke", "probe", "wallpaper-status"):
@@ -454,8 +493,10 @@ def execution_plan(source: Path, bundle: Path, mode: str, *, target_pid: int | N
         effects.append("native helper may write ~/Library/Logs/AzhouCodexStartup/{wallpaper.jsonl,latest.json}")
     if mode == "launch":
         effects.append("cold launch may enable a positive loopback debugging port for the lifetime of the Codex process; warm launch never restarts it")
+    event_schema = verified.get("event_schema") or _event_schema_for_version(str(verified.get("version", "")))
     return _plan(mode, bundle=verified, command=command, scope=scopes[mode], effects=effects,
-                 limits="no other harness adapter; no pure launcher-without-wallpaper mode in this source; visual review remains separate")
+                 event_schema=event_schema,
+                 limits="no other harness adapter; launch readiness does not prove playback completion; visual review remains separate")
 
 
 def _events(output: str) -> list[dict[str, Any]]:
@@ -470,13 +511,213 @@ def _events(output: str) -> list[dict[str, Any]]:
     return result
 
 
+def _versioned_events(output: str, launcher_path: str,
+                      consumed_names: frozenset[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    events: list[dict[str, Any]] = []
+    errors: list[str] = []
+    previous_seconds = -1.0
+    for line_number, line in enumerate(output.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except ValueError:
+            errors.append(f"line {line_number}: malformed JSON")
+            continue
+        if not isinstance(item, dict):
+            errors.append(f"line {line_number}: event is not an object")
+            continue
+        name = item.get("event")
+        if not isinstance(name, str) or not name:
+            errors.append(f"line {line_number}: missing event name")
+            continue
+        events.append(item)
+        if name not in consumed_names:
+            if name not in _VERSIONED_DIAGNOSTIC_EVENTS:
+                errors.append(f"line {line_number}: unsupported diagnostic event")
+            elif ("launcherPath" in item and item.get("launcherPath") != launcher_path):
+                errors.append(f"line {line_number}: diagnostic launcher path differs from verified bundle")
+            elif "launcherPID" in item and (isinstance(item["launcherPID"], bool)
+                                              or not isinstance(item["launcherPID"], int)
+                                              or item["launcherPID"] <= 0):
+                errors.append(f"line {line_number}: invalid diagnostic launcher PID")
+            continue
+        seconds = item.get("seconds")
+        pid = item.get("launcherPID")
+        if item.get("schema") != STARTUP_EVENT_SCHEMA:
+            errors.append(f"line {line_number}: unsupported event schema")
+        try:
+            numeric_seconds = float(seconds)
+            valid_seconds = (not isinstance(seconds, bool) and isinstance(seconds, (int, float))
+                             and math.isfinite(numeric_seconds) and numeric_seconds >= previous_seconds)
+        except (OverflowError, TypeError, ValueError):
+            valid_seconds = False
+            numeric_seconds = -1.0
+        if not valid_seconds:
+            errors.append(f"line {line_number}: invalid monotonic seconds")
+        else:
+            previous_seconds = numeric_seconds
+        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+            errors.append(f"line {line_number}: invalid launcher PID")
+        if item.get("launcherPath") != launcher_path:
+            errors.append(f"line {line_number}: launcher path differs from verified bundle")
+        for key in ("targetPID", "runId"):
+            if key in item:
+                value = item[key]
+                if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                    errors.append(f"line {line_number}: invalid event {key}")
+
+        if isinstance(name, str) and name in {"target-opened", "target-activated", "startup-installed", "startup-ready", "startup-skipped"}:
+            target_pid = item.get("targetPID")
+            if isinstance(target_pid, bool) or not isinstance(target_pid, int) or target_pid <= 0:
+                errors.append(f"line {line_number}: invalid target PID")
+        if isinstance(name, str) and name in {"startup-installed", "startup-ready", "startup-skipped"}:
+            run_id = item.get("runId")
+            if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
+                errors.append(f"line {line_number}: invalid startup run ID")
+        if (name == "startup-ready" and (item.get("ready") is not True
+                or not isinstance(item.get("phase"), str)
+                or item.get("phase") not in {"playing", "settings", "complete"})):
+            errors.append(f"line {line_number}: startup-ready does not match a ready controller phase")
+        if name == "startup-skipped":
+            completion = item.get("completion")
+            if (item.get("completed") is not True or item.get("overlay") is not False
+                    or not isinstance(completion, dict) or completion.get("cause") != "skip"
+                    or not isinstance(completion.get("beforeReady"), bool)):
+                errors.append(f"line {line_number}: startup-skipped does not match a completed skip")
+        if isinstance(name, str) and name in {"startup-interrupted", "startup-failed"}:
+            reason = item.get("reason")
+            if not isinstance(reason, str) or not reason:
+                errors.append(f"line {line_number}: missing startup failure reason")
+        if name == "launcher-exit":
+            outcome = item.get("outcome")
+            exit_code = item.get("exitCode")
+            allowed = {"activated": 0, "startup-ready": 0, "skipped": 0,
+                       "partial": 2, "behavior-not-proven": 1}
+            if (not isinstance(outcome, str) or outcome not in allowed
+                    or isinstance(exit_code, bool) or not isinstance(exit_code, int)
+                    or (isinstance(outcome, str) and outcome in allowed and exit_code != allowed[outcome])):
+                errors.append(f"line {line_number}: invalid launcher exit outcome")
+    return events, errors
+
+
+def _versioned_launch_assessment(events: list[dict[str, Any]], errors: list[str], result: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    not_proven = {"status": "not-attempted", "injection": "not-proven", "installed": False}
+    returncode = result.get("returncode")
+    if (errors or not events or isinstance(returncode, bool) or not isinstance(returncode, int)
+            or returncode not in (0, 1, 2)):
+        return "behavior-not-proven", not_proven
+    consumed = [item for item in events if item.get("event") in _VERSIONED_LAUNCH_EVENTS]
+    names = [item.get("event") for item in consumed]
+    launcher_pids = {item["launcherPID"] for item in consumed}
+    exits = [item for item in consumed if item.get("event") == "launcher-exit"]
+    if (len(launcher_pids) != 1 or names.count("launcher-start") != 1
+            or names[0] != "launcher-start" or len(exits) != 1 or names[-1] != "launcher-exit"
+            or exits[0].get("exitCode") != result.get("returncode")):
+        return "behavior-not-proven", not_proven
+    if {"failure", "duplicate-entry", "lock-error"} & set(names):
+        return "behavior-not-proven", not_proven
+
+    exit_event = exits[0]
+    activations = [item for item in consumed if item.get("event") == "target-activated"]
+    opened = [item for item in consumed if item.get("event") == "target-opened"]
+    installed = [item for item in consumed if item.get("event") == "startup-installed"]
+    outcomes = [item for item in consumed if item.get("event") in {
+        "startup-ready", "startup-skipped", "startup-interrupted", "startup-failed"}]
+
+    if activations:
+        if (len(activations) != 1 or opened or installed or outcomes
+                or exit_event.get("outcome") != "activated" or result.get("returncode") != 0):
+            return "behavior-not-proven", not_proven
+        return "activated", {"status": "not-attempted", "injection": "not-attempted", "installed": False}
+
+    if len(outcomes) != 1:
+        return "behavior-not-proven", not_proven
+    terminal = outcomes[0]
+    terminal_name = terminal["event"]
+    if len(opened) > 1 or len(installed) > 1:
+        return "behavior-not-proven", not_proven
+    if installed and (not opened or names.index("target-opened") > names.index("startup-installed")):
+        return "behavior-not-proven", not_proven
+    if opened and names.index("target-opened") > names.index(terminal_name):
+        return "behavior-not-proven", not_proven
+    if installed and names.index("startup-installed") > names.index(terminal_name):
+        return "behavior-not-proven", not_proven
+    target_pids = {item["targetPID"] for item in consumed if "targetPID" in item}
+    run_ids = {item["runId"] for item in consumed if "runId" in item}
+    if len(target_pids) > 1 or len(run_ids) > 1:
+        return "behavior-not-proven", not_proven
+    if terminal.get("targetPID") is not None and target_pids and terminal["targetPID"] not in target_pids:
+        return "behavior-not-proven", not_proven
+    if terminal.get("runId") is not None and run_ids and terminal["runId"] not in run_ids:
+        return "behavior-not-proven", not_proven
+    if terminal_name == "startup-ready":
+        if (len(opened) != 1 or len(installed) != 1 or names.index("target-opened") > names.index("startup-installed")
+                or names.index("startup-installed") > names.index("startup-ready")
+                or terminal.get("targetPID") != installed[0].get("targetPID")
+                or installed[0].get("targetPID") != opened[0].get("targetPID")
+                or terminal.get("runId") != installed[0].get("runId")
+                or exit_event.get("outcome") != "startup-ready" or result.get("returncode") != 0):
+            return "behavior-not-proven", not_proven
+        return "startup-ready", {"status": "ready", "injection": "installed", "installed": True,
+                                 "runId": terminal["runId"], "phase": terminal["phase"], "ready": True}
+    if terminal_name == "startup-skipped":
+        if (len(opened) != 1 or len(installed) != 1 or names.index("target-opened") > names.index("startup-installed")
+                or names.index("startup-installed") > names.index("startup-skipped")
+                or terminal.get("targetPID") != installed[0].get("targetPID")
+                or installed[0].get("targetPID") != opened[0].get("targetPID")
+                or terminal.get("runId") != installed[0].get("runId")
+                or exit_event.get("outcome") != "skipped" or result.get("returncode") != 0):
+            return "behavior-not-proven", not_proven
+        return "skipped", {"status": "skipped", "injection": "installed", "installed": True,
+                            "runId": terminal["runId"], "completed": True,
+                            "overlay": False, "completion": terminal["completion"]}
+    if terminal_name == "startup-interrupted":
+        if (exit_event.get("outcome") != "partial" or result.get("returncode") != 2
+                or any(item.get("event") in {"startup-ready", "startup-skipped"} for item in consumed)):
+            return "behavior-not-proven", not_proven
+        return "partial", {"status": "interrupted", "injection": "not-confirmed", "installed": bool(installed),
+                            "reason": terminal["reason"]}
+    if terminal_name == "startup-failed" and exit_event.get("outcome") == "behavior-not-proven" and result.get("returncode") == 1:
+        return "behavior-not-proven", {"status": "failed", "injection": "not-confirmed", "installed": bool(installed),
+                                        "reason": terminal["reason"]}
+    return "behavior-not-proven", not_proven
+
+
+def _versioned_smoke_passed(events: list[dict[str, Any]], errors: list[str], result: dict[str, Any]) -> bool:
+    if errors or result.get("returncode") != 0:
+        return False
+    consumed = [item for item in events if item.get("event") in _VERSIONED_SMOKE_EVENTS]
+    names = [item.get("event") for item in consumed]
+    if len({item["launcherPID"] for item in consumed}) != 1:
+        return False
+    required = ("player-start", "playback-start", "animation-complete", "preview-result", "player-terminated")
+    if any(names.count(name) != 1 for name in required):
+        return False
+    positions = [names.index(name) for name in required]
+    if positions != sorted(positions) or names[-1] != "player-terminated":
+        return False
+    forbidden = {"target-opened", "target-activated", "target-open-request", "target-reused",
+                 "target-activation-request", "startup-installed", "startup-ready", "startup-skipped",
+                 "startup-interrupted", "startup-failed", "startup-launcher-start",
+                 "target-launch-completion", "launcher-exit", "wallpaper-helper-start"}
+    if forbidden & {item.get("event") for item in events} or _VERSIONED_FAILURE_EVENTS & set(names):
+        return False
+    preview = consumed[positions[3]]
+    terminated = consumed[positions[4]]
+    return (preview.get("error", "") == "" and terminated.get("completed") is True
+            and terminated.get("failed") is False)
+
+
 def _wallpaper_assessment(mode: str, events: list[dict[str, Any]]) -> dict[str, Any]:
     if mode in ("smoke", "probe"):
-        return {"status": "not-attempted", "live_status_check": "not performed"}
+        return {"status": "not-attempted", "live_status_check": "not performed", "startup": None}
     latest: dict[str, Any] | None = None
     attempted = False
     for item in events:
-        name = item["event"]
+        name = item.get("event")
+        if not isinstance(name, str):
+            continue
         if name == "wallpaper-helper-start":
             attempted = True
         elif name == "wallpaper-helper-complete" and isinstance(item.get("result"), dict):
@@ -502,39 +743,77 @@ def _wallpaper_assessment(mode: str, events: list[dict[str, Any]]) -> dict[str, 
     else:
         status = "failed"
     return {"status": status, "native_state": latest.get("state") if latest else None,
-            "live_status_check": "performed" if mode == "wallpaper-status" else "not performed"}
+            "live_status_check": "performed" if mode == "wallpaper-status" else "not performed",
+            "startup": latest.get("startup") if isinstance(latest, dict) and isinstance(latest.get("startup"), dict) else None}
 
 
-def assess_execution(mode: str, result: dict[str, Any], bundle: Path) -> dict[str, Any]:
-    events = _events(result["stdout"])
-    names = {item["event"] for item in events}
-    passed = result["returncode"] == 0
-    if mode in ("smoke", "launch"):
-        required = {"player-start", "playback-start", "animation-complete", "player-terminated"}
-        required |= {"preview-result"} if mode == "smoke" else {"target-activation-request", "handoff-fade-complete"}
-        passed &= required <= names and not {"failure", "duplicate-entry", "lock-error"} & names
-        passed &= all(item.get("launcherPath") == str(bundle) for item in events)
-        passed &= any(item["event"] == "player-terminated" and item.get("completed") is True and item.get("failed") is False for item in events)
-        if mode == "smoke":
-            passed &= not {"target-open-request", "target-reused", "wallpaper-helper-start", "preview-promoted-to-launch"} & names
-            passed &= any(item["event"] == "preview-result" and not item.get("error") for item in events)
+def assess_execution(mode: str, result: dict[str, Any], bundle: Path, *,
+                     verified_bundle: dict[str, Any]) -> dict[str, Any]:
+    version = str(verified_bundle.get("version", ""))
+    event_schema = _event_schema_for_version(version)
+    if event_schema == STARTUP_EVENT_SCHEMA and mode in ("launch", "smoke", "probe"):
+        launcher_path = str(verified_bundle.get("path", bundle))
+        consumed_names = {"launch": _VERSIONED_LAUNCH_EVENTS, "smoke": _VERSIONED_SMOKE_EVENTS,
+                          "probe": _VERSIONED_PROBE_EVENTS}[mode]
+        events, errors = _versioned_events(result.get("stdout", ""), launcher_path, consumed_names)
+        if mode == "launch":
+            status, startup = _versioned_launch_assessment(events, errors, result)
+            playback_completion = "unobserved"
+            launcher_status = status
+        elif mode == "smoke":
+            passed = _versioned_smoke_passed(events, errors, result)
+            status = launcher_status = "behavior-passed" if passed else "behavior-not-proven"
+            startup = {"status": "not-run", "injection": "not-attempted"}
+            playback_completion = "completed" if passed else "unproven"
         else:
-            passed &= bool({"target-reused", "target-launch-completion"} & names)
-            passed &= any(item["event"] == "target-activation-request" and item.get("allowed") is True for item in events)
-    elif mode == "probe":
-        passed &= any(item["event"] == "probe" and item.get("launcherPath") == str(bundle)
-                      and item.get("targetBundleID") == "com.openai.codex" for item in events)
+            probes = [item for item in events if item.get("event") == "probe"]
+            passed = (not errors and result.get("returncode") == 0 and len(probes) == 1
+                      and len({item["launcherPID"] for item in probes}) == 1
+                      and not _VERSIONED_FAILURE_EVENTS.intersection(item.get("event") for item in events)
+                      and probes[0].get("targetBundleID") == "com.openai.codex")
+            status = "behavior-passed" if passed else "behavior-not-proven"
+            launcher_status = "not-run"
+            startup = {"status": "not-run", "injection": "not-attempted"}
+            playback_completion = "unobserved"
     else:
-        flag = "restored" if mode == "disable-wallpaper" else "applied"
-        passed &= any(item["event"] == "wallpaper-result" and item.get(flag) is True for item in events)
+        events = _events(result.get("stdout", ""))
+        names = {item["event"] for item in events}
+        passed = result.get("returncode") == 0
+        if mode in ("smoke", "launch"):
+            required = {"player-start", "playback-start", "animation-complete", "player-terminated"}
+            required |= {"preview-result"} if mode == "smoke" else {"target-activation-request", "handoff-fade-complete"}
+            passed &= required <= names and not {"failure", "duplicate-entry", "lock-error"} & names
+            passed &= all(item.get("launcherPath") == str(bundle) for item in events)
+            passed &= any(item["event"] == "player-terminated" and item.get("completed") is True and item.get("failed") is False for item in events)
+            if mode == "smoke":
+                passed &= not {"target-open-request", "target-reused", "wallpaper-helper-start", "preview-promoted-to-launch"} & names
+                passed &= any(item["event"] == "preview-result" and not item.get("error") for item in events)
+            else:
+                passed &= bool({"target-reused", "target-launch-completion"} & names)
+                passed &= any(item["event"] == "target-activation-request" and item.get("allowed") is True for item in events)
+        elif mode == "probe":
+            passed &= any(item["event"] == "probe" and item.get("launcherPath") == str(bundle)
+                          and item.get("targetBundleID") == "com.openai.codex" for item in events)
+        else:
+            flag = "restored" if mode == "disable-wallpaper" else "applied"
+            passed &= any(item["event"] == "wallpaper-result" and item.get(flag) is True for item in events)
+        launcher_status = ("behavior-passed" if passed else "behavior-not-proven") if mode in ("smoke", "launch") else "not-run"
+        status = "behavior-passed" if passed else "behavior-not-proven"
+        if mode == "launch" and passed:
+            status = "runtime-events-passed" if _wallpaper_assessment(mode, events)["status"] == "reported-applied" else "partial"
+        startup = {"schema": "legacy" if event_schema == "legacy" else event_schema,
+                   "status": "not-assessed" if mode == "launch" and event_schema == "legacy" else "not-run"}
+        playback_completion = "completed" if mode == "smoke" and passed else "unobserved"
+
     wallpaper = _wallpaper_assessment(mode, events)
-    launcher_status = ("behavior-passed" if passed else "behavior-not-proven") if mode in ("smoke", "launch") else "not-run"
-    status = "behavior-passed" if passed else "behavior-not-proven"
-    if mode == "launch" and passed:
-        status = "runtime-events-passed" if wallpaper["status"] == "reported-applied" else "partial"
-    return {"status": status, "mode": mode, "launcher_status": launcher_status,
+    if mode == "wallpaper-status" and wallpaper["startup"] is not None:
+        startup = wallpaper["startup"]
+    return {"status": status, "mode": mode, "event_schema": event_schema,
+            "launcher_status": launcher_status, "startup": startup,
+            "playback_completion": playback_completion,
             "wallpaper_status": wallpaper["status"], "wallpaper_evidence": wallpaper,
-            "events": events, "execution": result, "visual_review": "pending",
+            "events": events, "event_errors": errors if event_schema == STARTUP_EVENT_SCHEMA and mode in ("launch", "smoke", "probe") else [],
+            "execution": result, "visual_review": "pending",
             "limits": "native event evidence; no model readiness, visual quality or speed claim"}
 
 
@@ -611,7 +890,8 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
                 _approval(result, args.plan_id)
                 _mac()
                 plan = result
-                result = assess_execution(args.mode, _run(plan["command"], timeout=60), args.bundle)
+                result = assess_execution(args.mode, _run(plan["command"], timeout=60),
+                                          Path(plan["bundle"]["path"]), verified_bundle=plan["bundle"])
                 result["plan_id"] = plan["plan_id"]
                 if evidence:
                     common.write_receipt(evidence, result)

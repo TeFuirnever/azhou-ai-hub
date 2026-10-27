@@ -53,6 +53,7 @@ class AnimationIntegrationTests(unittest.TestCase):
 
     def fake_inspect(self, source, bundle, *, hub_root, _cleanup_snapshot_only=False):
         origin = common.inspect_source(animation.COMPONENT, source, hub_root=hub_root)
+        lock = common.load_lock(animation.COMPONENT, hub_root=hub_root)
         if bundle.is_symlink() or not bundle.is_dir():
             raise common.IntegrationError("invalid fixture bundle")
         digest = hashlib.sha256()
@@ -62,7 +63,9 @@ class AnimationIntegrationTests(unittest.TestCase):
             if path.is_file():
                 digest.update(path.relative_to(bundle).as_posix().encode("utf-8"))
                 digest.update(path.read_bytes())
-        return {"path": str(bundle), "sha256_tree": digest.hexdigest(), "native_source_root": str(self.snapshot), "source": origin}
+        return {"path": str(bundle), "version": lock["runtime_version"], "build": lock["runtime_build"],
+                "event_schema": animation._event_schema_for_version(lock["runtime_version"]),
+                "sha256_tree": digest.hexdigest(), "native_source_root": str(self.snapshot), "source": origin}
 
     def install(self):
         plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
@@ -486,7 +489,8 @@ class AnimationIntegrationTests(unittest.TestCase):
         self.assertEqual(registry_before, self.registry)
 
     def test_successful_exit_without_player_events_is_not_behavior_success(self):
-        result = animation.assess_execution("smoke", {"returncode": 0, "stdout": "", "stderr": ""}, self.payload)
+        result = animation.assess_execution("smoke", {"returncode": 0, "stdout": "", "stderr": ""},
+                                            self.payload, verified_bundle={"version": "0.7.1", "build": "8"})
         self.assertEqual("behavior-not-proven", result["status"])
 
     def test_complete_player_evidence_rejects_wrong_path_or_host_launch(self):
@@ -494,7 +498,9 @@ class AnimationIntegrationTests(unittest.TestCase):
                   ("player-start", "playback-start", "animation-complete", "preview-result", "player-terminated")]
         events[-1].update(completed=True, failed=False)
         def assess(items):
-            return animation.assess_execution("smoke", {"returncode": 0, "stdout": "\n".join(json.dumps(x) for x in items), "stderr": ""}, self.payload)
+            return animation.assess_execution(
+                "smoke", {"returncode": 0, "stdout": "\n".join(json.dumps(x) for x in items), "stderr": ""},
+                self.payload, verified_bundle={"version": "0.7.1", "build": "8"})
         self.assertEqual("behavior-passed", assess(events)["status"])
         self.assertEqual("behavior-not-proven", assess(events + [{"event": "target-reused", "launcherPath": str(self.payload)}])["status"])
         events[1]["launcherPath"] = "/another/app"
@@ -515,7 +521,8 @@ class AnimationIntegrationTests(unittest.TestCase):
         events[4]["allowed"] = True
         def assess(extra):
             return animation.assess_execution("launch", {"returncode": 0,
-                "stdout": "\n".join(json.dumps(x) for x in events + extra), "stderr": ""}, self.payload)
+                "stdout": "\n".join(json.dumps(x) for x in events + extra), "stderr": ""}, self.payload,
+                verified_bundle={"version": "0.7.1", "build": "8"})
         missing = assess([])
         self.assertEqual("behavior-passed", missing["launcher_status"])
         self.assertEqual("not-attempted", missing["wallpaper_status"])
