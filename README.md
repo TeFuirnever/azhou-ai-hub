@@ -87,7 +87,7 @@ Three complete projects live under `packages/`; they keep their own native layou
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | Optional native Codex plugin installation into an explicit target; review hook trust separately. |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | Optional native Codex profile installation; keep one workflow owner per task. |
-| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | Codex-only package identity. Its inherited native startup runtime remains in place while the same-window target is planned. Existing local App and Pet ownership still names the retained `codex-startup-animation` source. No program redistribution grant is recorded. |
+| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | Codex-only package identity. The same-window implementation is present in the canonical package and locally validated; it has not taken over the installed App or Pet, whose ownership still names the retained `codex-startup-animation` source. No program redistribution grant is recorded. |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json

@@ -70,7 +70,7 @@ function shortcut(event) {
     && typeof event.key === 'string' && event.key.toLowerCase() === 'b';
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive) {
+function mountOverlay(host, payload, runId, intent, assets, receive, settingsCommitted) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -104,7 +104,10 @@ function mountOverlay(host, payload, runId, intent, assets, receive) {
     setTimeout: bind('setTimeout'),
     clearTimeout: bind('clearTimeout'),
   });
-  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets });
+  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, settingsCommitted: settingsCommitted === true });
+  // Preserve the parent handler result for committed settings saves: the child
+  // uses it to report wallpaper-only failure after the IndexedDB commit. The
+  // shared handler still enforces the current frame source and runId.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
   return {
     element: frame,
@@ -115,7 +118,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive) {
         environment.performance, environment.indexedDB, environment.Image,
         environment.Path2D, environment.URL, environment.requestAnimationFrame,
         environment.cancelAnimationFrame, environment.setTimeout, environment.clearTimeout,
-        undefined, SEND, frameSpec,
+        undefined, SEND, frameSpec, dataProperty(payload, 'createImageSettings'),
       );
     },
     remove: () => frame.remove(),
@@ -139,6 +142,8 @@ class PageController {
     this.bodyObserver = null;
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
+    this.settingsCommitPending = false;
+    this.frameSettingsCommitted = false;
     this.state = {
       phase: 'loading',
       runId: 0,
@@ -210,6 +215,9 @@ class PageController {
     this.state.overlay = true;
     this.state.reason = '';
     this.state.completion = null;
+    const settingsCommitted = intent === 'play' && this.settingsCommitPending;
+    this.settingsCommitPending = false;
+    this.frameSettingsCommitted = settingsCommitted;
     const runId = this.state.runId;
     this.host.addEventListener('message', this.onMessage);
     this.watchdog = this.host.setTimeout(() => this.expire(runId), 25_000);
@@ -247,7 +255,9 @@ class PageController {
   #mountRun(runId) {
     if (!this.#isLoading(runId) || !this.document.body) return;
     try {
-      this.frame = mountOverlay(this.host, this.payload, runId, this.intent, this.assets, this.onMessage);
+      this.frame = mountOverlay(
+        this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted,
+      );
       this.frame.contentWindow.addEventListener('keydown', this.onFrameKeydown);
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
@@ -324,14 +334,17 @@ class PageController {
       return;
     }
     if (message.action === 'settings-close') {
-      if (this.state.ready && this.state.phase === 'settings') this.#beginRun('play');
+      if (this.state.ready && this.state.phase === 'settings') {
+        this.settingsCommitPending = true;
+        this.#beginRun('play');
+      }
       return;
     }
     if (message.action === 'background') {
       if (['loading', 'playing', 'settings'].includes(this.state.phase)) {
-        this.#applyWallpaper(message, this.state.runId, this.frame);
+        return this.#applyWallpaper(message, this.state.runId, this.frame);
       }
-      return;
+      return Promise.resolve({ applied: false, reason: 'operation-cancelled', imageDecoded: false });
     }
     if (message.action === 'restore') this.#dispose();
   }
@@ -342,25 +355,25 @@ class PageController {
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
       || message.strength < 0 || message.strength > 75) {
       this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-      return;
+      return { ...this.state.wallpaper };
     }
     if (message.strength === 0) {
       this.#disposeWallpaper();
       this.state.wallpaper = { applied: false, reason: 'disabled', imageDecoded: false };
-      return;
+      return { ...this.state.wallpaper };
     }
     if (typeof this.wallpaperApply !== 'function') {
       this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-      return;
+      return { ...this.state.wallpaper };
     }
     const isCurrent = () => generation === this.wallpaperGeneration && this.#isCurrentFrame(runId, frame);
     try {
       await this.wallpaperApply(Object.freeze({ image: message.image, strength: message.strength }), isCurrent);
-      if (!isCurrent()) return;
+      if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
       const current = wallpaperRecord(this.host);
       if (!current.supported) {
         this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-        return;
+        return { ...this.state.wallpaper };
       }
       this.wallpaperAPI = current.api;
       this.state.wallpaper = this.#wallpaperStatus(current.api);
@@ -370,6 +383,7 @@ class PageController {
     } catch {
       if (isCurrent()) this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
     }
+    return { ...this.state.wallpaper };
   }
 
   #wallpaperStatus(api) {

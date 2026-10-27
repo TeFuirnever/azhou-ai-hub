@@ -1,6 +1,6 @@
 # Agent Skin · Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，面向 AI 工具的外观定制；当前唯一适配宿主为 Codex。此副本仍包含既有 0.7.1/build 8 原生启动动画与壁纸运行时，Agent Skin 的同窗口 CDP 目标实现仍按后续工作单开发，本 README 不表示该目标已实现。
+本目录是 Hub 的 canonical package `agent-skin`，面向 AI 工具的外观定制；当前唯一适配宿主为 Codex。此副本保留既有 0.7.1/build 8 原生启动动画与壁纸运行时，并已包含同窗口 CDP 实现及设置流程。实现经过本地单元测试和隔离 Chrome/IndexedDB 验证，但尚未接管已安装 App 或 Pet，也不表示在官方 Codex 宿主中已启动或通过人工视觉验收。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 

@@ -87,7 +87,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
-| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | 仅提供 Codex 包身份。当前仍是继承的原生启动运行时，同窗口目标仍属计划中。现有本地 App 和 Pet 属主仍指向保留的 `codex-startup-animation` 源目录；程序再分发尚未获授权。 |
+| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | 仅适配 Codex。同窗口实现已进入 canonical package 并通过本地验证；尚未接管当前已安装的 App 或 Pet，其属主仍指向保留的 `codex-startup-animation` 源目录；程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json

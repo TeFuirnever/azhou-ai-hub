@@ -31,6 +31,7 @@ function makeFixture(options = {}) {
   const revoked = [];
   const created = [];
   const canvases = [];
+  const elements = [];
   const timers = [];
   const pausedYields = [];
   let now = 0;
@@ -44,31 +45,80 @@ function makeFixture(options = {}) {
       }
     } while (next);
   }
-  const image = {
-    naturalWidth: options.width ?? 2048,
-    naturalHeight: options.height ?? 1024,
-    onload: null,
-    onerror: null,
-    released: false,
-    removeAttribute(name) {
-      assert.equal(name, 'src');
-      image.released = true;
-    },
+  const images = [];
+  function makeElement(tagName) {
+    const attributes = new Map();
+    const element = {
+      tagName: tagName.toUpperCase(),
+      style: { cssText: '' },
+      children: [],
+      attributes,
+      disabled: false,
+      value: '',
+      textContent: '',
+      setAttribute(name, value) { attributes.set(name, String(value)); },
+      getAttribute(name) { return attributes.get(name) ?? null; },
+      addEventListener(type, listener) {
+        if (!element.listeners.has(type)) element.listeners.set(type, []);
+        element.listeners.get(type).push(listener);
+      },
+      append(...children) { for (const child of children) element.appendChild(child); },
+      appendChild(child) { element.children.push(child); child.parentNode = element; return child; },
+      remove() {
+        element.removed = true;
+        if (element.parentNode?.children) {
+          element.parentNode.children = element.parentNode.children.filter(child => child !== element);
+        }
+      },
+      removeAttribute(name) { attributes.delete(name); },
+      showModal() { element.open = true; },
+      close() { element.open = false; },
+      listeners: new Map(),
+    };
+    elements.push(element);
+    return element;
+  }
+  function makeImage(index) {
+    const dimensions = options.imageDimensions?.[index];
+    const current = {
+      naturalWidth: dimensions?.[0] ?? options.width ?? 2048,
+      naturalHeight: dimensions?.[1] ?? options.height ?? 1024,
+      onload: null,
+      onerror: null,
+      released: false,
+      removeAttribute(name) {
+        assert.equal(name, 'src');
+        current.released = true;
+      },
+    };
+    Object.defineProperty(current, 'src', {
+      set(value) {
+        if (!value) { current.released = true; return; }
+        current.released = false;
+        if (options.decode === 'pending') return;
+        queueMicrotask(() => {
+          if (current.released) return;
+          if (options.decode === 'error') current.onerror?.(new Error('decoder detail must not escape'));
+          else current.onload?.();
+        });
+      },
+    });
+    images.push(current);
+    return current;
+  }
+  const image = makeImage(0);
+  let imageInstances = 0;
+  const ImageConstructor = class {
+    constructor() {
+      const index = imageInstances++;
+      return index === 0 ? image : makeImage(index);
+    }
   };
-  Object.defineProperty(image, 'src', {
-    set(value) {
-      if (!value) { image.released = true; return; }
-      if (options.decode === 'pending') return;
-      queueMicrotask(() => {
-        if (image.released) return;
-        if (options.decode === 'error') image.onerror?.(new Error('decoder detail must not escape'));
-        else image.onload?.();
-      });
-    },
-  });
   const environment = {
     document: {
+      body: makeElement('body'),
       createElement(name) {
+        if (name !== 'canvas') return makeElement(name);
         assert.equal(name, 'canvas');
         const canvas = {
           width: 0,
@@ -95,7 +145,8 @@ function makeFixture(options = {}) {
         return canvas;
       },
     },
-    Image: class { constructor() { return image; } },
+    indexedDB: options.indexedDB,
+    Image: ImageConstructor,
     URL: {
       createObjectURL() { const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },
       revokeObjectURL(value) { revoked.push(value); },
@@ -129,7 +180,9 @@ function makeFixture(options = {}) {
   };
   return {
     api: createImageSettings(environment),
+    environment,
     image,
+    images,
     canvases,
     drawCalls,
     created,
@@ -141,7 +194,131 @@ function makeFixture(options = {}) {
       now += milliseconds;
       runDueTimers();
     },
+    elements,
   };
+}
+
+function makeIndexedDB(initialRecord, options = {}) {
+  const state = { record: initialRecord, puts: 0, putSuccesses: 0, completions: 0,
+    deletes: 0, clears: 0, opens: [], transactions: [], heldRequests: [], releaseOpen: null };
+  let hasStore = false;
+  const database = {
+    objectStoreNames: { contains: name => name === 'settings' && hasStore },
+    createObjectStore(name) { assert.equal(name, 'settings'); hasStore = true; },
+    close() {},
+    transaction(storeName, mode) {
+      assert.equal(storeName, 'settings');
+      assert.ok(mode === 'readonly' || mode === 'readwrite');
+      if (options.transactionFailure && mode === 'readwrite') throw options.transactionFailure;
+      let pendingRequests = 0;
+      let stagedRecord;
+      let aborted = false;
+      let transactionFinished = false;
+      let completionQueued = false;
+      const transaction = {
+        mode,
+        completed: false,
+        aborted: false,
+        error: null,
+        abort() {
+          if (aborted || transactionFinished) return;
+          aborted = true;
+          transaction.aborted = true;
+          queueMicrotask(() => {
+            transactionFinished = true;
+            transaction.onabort?.({ target: transaction });
+          });
+        },
+        request(kind, start) {
+          const request = { result: undefined, error: null };
+          pendingRequests++;
+          const release = (ignoreAbort = false) => {
+            if (aborted && !ignoreAbort) return false;
+            start(request);
+            if (kind === 'put' && !request.error) state.putSuccesses++;
+            options.afterRequest?.({ kind, request, transaction, state });
+            pendingRequests--;
+            if (pendingRequests === 0 && !completionQueued) {
+              completionQueued = true;
+              queueMicrotask(() => {
+                completionQueued = false;
+                if (aborted || transactionFinished || pendingRequests !== 0) return;
+                transactionFinished = true;
+                transaction.completed = true;
+                if (stagedRecord !== undefined) state.record = JSON.parse(JSON.stringify(stagedRecord));
+                state.completions++;
+                transaction.oncomplete?.({ target: transaction });
+              });
+            }
+            return true;
+          };
+          if (options.holdRequests) state.heldRequests.push({ kind, release });
+          else queueMicrotask(() => release());
+          return request;
+        },
+        objectStore(name) {
+          assert.equal(name, 'settings');
+          return {
+            get(key) {
+              assert.equal(key, 'images');
+              return transaction.request('get', request => {
+                request.result = state.record === undefined ? undefined : JSON.parse(JSON.stringify(state.record));
+                request.onsuccess?.({ target: request });
+              });
+            },
+            put(value, key) {
+              assert.equal(mode, 'readwrite');
+              assert.equal(key, 'images');
+              state.puts++;
+              return transaction.request('put', request => {
+                if (options.putError) {
+                  request.error = options.putError;
+                  request.onerror?.({ target: request });
+                  try { transaction.abort(); } catch {}
+                  return;
+                }
+                stagedRecord = JSON.parse(JSON.stringify(value));
+                request.result = key;
+                request.onsuccess?.({ target: request });
+              });
+            },
+            delete() { state.deletes++; throw new Error('unexpected delete'); },
+            clear() { state.clears++; throw new Error('unexpected clear'); },
+          };
+        },
+      };
+      state.transactions.push(transaction);
+      return transaction;
+    },
+  };
+  const indexedDB = {
+    open(name, version) {
+      state.opens.push({ name, version });
+      const request = { result: database, error: null, transaction: null };
+      const deliver = () => {
+        if (options.openBlocked) {
+          request.onblocked?.({ target: request });
+          return false;
+        }
+        if (!hasStore) {
+          request.transaction = {};
+          request.onupgradeneeded?.({ oldVersion: 0, newVersion: version, target: request });
+        }
+        queueMicrotask(() => request.onsuccess?.({ target: request }));
+        return true;
+      };
+      if (options.holdOpen) state.releaseOpen = () => {
+        if (!state.releaseOpen) return false;
+        state.releaseOpen = null;
+        return deliver();
+      };
+      else queueMicrotask(deliver);
+      return request;
+    },
+  };
+  state.releaseHeldRequests = (ignoreAbort = false) => state.heldRequests.splice(0)
+    .map(item => item.release(ignoreAbort));
+  return { indexedDB, state };
 }
 
 function edgeImageData() {
@@ -304,6 +481,7 @@ test('parallel imports reject as busy and canceling the active decode releases r
 
   await assert.rejects(fixture.api.importImage(makeFile(), 'avatar'), error =>
     error.reason === 'operation-busy');
+  await assert.rejects(fixture.api.save({}), error => error.reason === 'operation-busy');
   assert.equal(fixture.api.cancelImport(), true);
   await assert.rejects(active, error => error.reason === 'operation-cancelled');
   assert.equal(fixture.api.cancelImport(), false);
@@ -400,4 +578,347 @@ test('uniform artwork without usable edges is rejected and does not leak its inp
   await assert.rejects(fixture.api.importImage(makeFile(), 'artwork'), error =>
     error.reason === 'asset-invalid' && error.causeCode === 'contours-empty');
   assert.deepEqual(fixture.revoked, fixture.created);
+});
+
+test('loading settings without IndexedDB returns a copy of the supplied defaults', async () => {
+  const fixture = makeFixture();
+  const defaults = {
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Synthetic default',
+    introCaption: '',
+    artworkSubtitle: 'Generated only',
+    wallpaperStrength: 42,
+  };
+
+  const loaded = await fixture.api.load(defaults);
+
+  assert.equal(loaded.reason, 'settings-unavailable');
+  assert.equal(loaded.baseline, undefined);
+  assert.equal(loaded.settings.schemaVersion, 1);
+  assert.equal(loaded.settings.introCaption, '');
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.settings)), {
+    schemaVersion: 1,
+    ...defaults,
+  });
+});
+
+test('load returns the complete saved baseline from the v1 images record', async () => {
+  const record = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title',
+    introCaption: '',
+    artworkSubtitle: 'Saved subtitle',
+    wallpaperStrength: 17,
+  };
+  const storage = makeIndexedDB(record);
+  const fixture = makeFixture({
+    indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]],
+  });
+  const defaults = {
+    avatar: 'data:image/png;base64,CCCC',
+    artwork: 'data:image/png;base64,DDDD',
+    contours: [[[2, 2], [3, 3]]],
+    introTitle: 'Default title',
+    introCaption: 'Default caption',
+    artworkSubtitle: 'Default subtitle',
+    wallpaperStrength: 42,
+  };
+
+  const loaded = await fixture.api.load(defaults);
+
+  assert.equal(loaded.reason, '');
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.settings)), record);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.baseline)), record);
+  assert.deepEqual(storage.state.opens, [{ name: 'azhou-codex-startup', version: 1 }]);
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+});
+
+test('load falls back for an unknown record but returns its untouched baseline', async () => {
+  const unknown = { schemaVersion: 7, futureField: { keep: true } };
+  const storage = makeIndexedDB(unknown);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+  const defaults = {
+    avatar: 'data:image/png;base64,CCCC', artwork: 'data:image/png;base64,DDDD',
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Default', introCaption: 'Caption',
+    artworkSubtitle: 'Subtitle', wallpaperStrength: 42,
+  };
+
+  const loaded = await fixture.api.load(defaults);
+
+  assert.equal(loaded.reason, 'settings-invalid');
+  assert.equal(loaded.settings.introTitle, 'Default');
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.baseline)), unknown);
+  assert.deepEqual(storage.state.record, unknown);
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+});
+
+test('save returns only a committed complete record under the images key', async () => {
+  const candidate = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]],
+    introTitle: 'Saved title',
+    introCaption: '',
+    artworkSubtitle: 'Saved subtitle',
+    wallpaperStrength: 17,
+  };
+  const storage = makeIndexedDB(undefined);
+  const fixture = makeFixture({
+    indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]],
+  });
+  await fixture.api.load(candidate);
+
+  const saved = await fixture.api.save(candidate);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(saved)), candidate);
+  assert.deepEqual(JSON.parse(JSON.stringify(storage.state.record)), candidate);
+  assert.equal(storage.state.puts, 1);
+  assert.equal(storage.state.transactions.at(-1).mode, 'readwrite');
+});
+
+test('put request success followed by abort is still a failed settings save', async () => {
+  let observedBeforeComplete = '';
+  let saveOutcome = 'pending';
+  const storage = makeIndexedDB(undefined, {
+    afterRequest({ kind, transaction }) {
+      if (kind !== 'put') return;
+      observedBeforeComplete = saveOutcome;
+      transaction.abort();
+    },
+  });
+  const candidate = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Saved title', introCaption: '',
+    artworkSubtitle: 'Saved subtitle', wallpaperStrength: 17,
+  };
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  await fixture.api.load(candidate);
+  const result = fixture.api.save(candidate).then(
+    value => { saveOutcome = 'resolved'; return value; },
+    error => { saveOutcome = 'rejected'; throw error; },
+  );
+
+  await assert.rejects(result, error => error.causeCode === 'database-write-aborted');
+
+  assert.equal(observedBeforeComplete, 'pending');
+  assert.equal(storage.state.putSuccesses, 1);
+  assert.equal(storage.state.completions, 1, 'the preceding baseline read completed; the write transaction did not');
+  assert.equal(storage.state.transactions.at(-1).completed, false);
+  assert.equal(storage.state.record, undefined, 'an aborted write does not replace the prior value');
+});
+
+test('a blocked database open leaves the supplied defaults available without a baseline', async () => {
+  const storage = makeIndexedDB(undefined, { openBlocked: true });
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+  const defaults = {
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Default', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+
+  const loaded = await fixture.api.load(defaults);
+
+  assert.equal(loaded.reason, 'settings-blocked');
+  assert.equal(loaded.baseline, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.settings)), {
+    schemaVersion: 1,
+    ...defaults,
+  });
+  assert.equal(storage.state.transactions.length, 0);
+});
+
+test('the baseline is compared inside the write transaction and conflicts preserve the other page value', async () => {
+  const baseline = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Old title', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+  const storage = makeIndexedDB(baseline);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024], [512, 512], [1536, 1024]] });
+  const loaded = await fixture.api.load(baseline);
+  const otherPageValue = { ...baseline, introTitle: 'Other page committed' };
+  storage.state.record = otherPageValue;
+
+  await assert.rejects(fixture.api.save({ ...loaded.settings, introTitle: 'Local draft' }), error =>
+    error.reason === 'settings-conflict' && error.causeCode === 'baseline-changed');
+
+  assert.deepEqual(storage.state.record, otherPageValue);
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.transactions.at(-1).aborted, true);
+});
+
+test('quota errors and text-limit failures happen without replacing a committed record', async t => {
+  await t.test('quota error from put', async () => {
+    const quotaError = Object.assign(new Error('browser-specific quota detail'), { name: 'QuotaExceededError' });
+    const storage = makeIndexedDB(undefined, { putError: quotaError });
+    const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+    const defaults = {
+      schemaVersion: 1, avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+      contours: [[[0, 0], [1536, 1024]]], introTitle: 'Default', introCaption: '',
+      artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+    };
+    await fixture.api.load(defaults);
+
+    await assert.rejects(fixture.api.save({ ...defaults, introTitle: 'Candidate' }), error => {
+      assert.equal(error.reason, 'settings-quota');
+      assert.equal(error.causeCode, 'quota-exceeded');
+      assert.equal(error.message, 'settings-quota');
+      return true;
+    });
+
+    assert.equal(storage.state.record, undefined);
+    assert.equal(storage.state.puts, 1);
+    assert.equal(storage.state.transactions.at(-1).aborted, true);
+  });
+
+  await t.test('candidate UTF-16 text limit is checked before opening a write transaction', async () => {
+    const storage = makeIndexedDB(undefined);
+    const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+    const candidate = {
+      schemaVersion: 1, avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+      contours: [[[0, 0], [1536, 1024]]], introTitle: '12345678901234567', introCaption: '',
+      artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+    };
+    await fixture.api.load(candidate);
+
+    await assert.rejects(fixture.api.save(candidate), error => error.reason === 'settings-invalid');
+
+    assert.equal(storage.state.puts, 0);
+    assert.equal(storage.state.transactions.at(-1).mode, 'readonly');
+    assert.equal(storage.state.record, undefined);
+  });
+});
+
+test('a write timeout aborts the unfinished transaction and a late baseline callback cannot commit', async () => {
+  const options = { holdRequests: false };
+  const storage = makeIndexedDB(undefined, options);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  const candidate = {
+    schemaVersion: 1, avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Candidate', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+  await fixture.api.load(candidate);
+  options.holdRequests = true;
+  const saving = fixture.api.save(candidate);
+  for (let attempt = 0; attempt < 10 && storage.state.transactions.length < 2; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  const write = storage.state.transactions.at(-1);
+  assert.equal(write.mode, 'readwrite');
+
+  fixture.advance(5_000);
+  await assert.rejects(saving, error =>
+    error.reason === 'operation-timeout' && error.causeCode === 'database-write-timeout');
+  assert.equal(write.aborted, true);
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.record, undefined);
+
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(storage.state.puts, 0);
+  assert.equal(write.completed, false);
+  assert.equal(storage.state.record, undefined);
+});
+
+test('external dispose aborts a pending save and ignores its late request callback', async () => {
+  const options = { holdRequests: false };
+  const storage = makeIndexedDB(undefined, options);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  const candidate = {
+    schemaVersion: 1, avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Candidate', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+  await fixture.api.load(candidate);
+  options.holdRequests = true;
+  const saving = fixture.api.save(candidate);
+  for (let attempt = 0; attempt < 10 && storage.state.transactions.length < 2; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  const write = storage.state.transactions.at(-1);
+  assert.equal(write.mode, 'readwrite');
+
+  assert.equal(fixture.api.dispose(), true);
+  await assert.rejects(saving, error => error.reason === 'operation-cancelled');
+  assert.equal(write.aborted, true);
+  assert.equal(storage.state.record, undefined);
+
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(storage.state.puts, 0);
+  assert.equal(write.completed, false);
+  assert.equal(storage.state.record, undefined);
+});
+
+test('load total timeout returns safe defaults, preserves the baseline, and leaves the settings panel usable', async () => {
+  const stored = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Saved value', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+  const defaults = {
+    avatar: 'data:image/png;base64,CCCC', artwork: 'data:image/png;base64,DDDD',
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Safe default', introCaption: '',
+    artworkSubtitle: 'Generated only', wallpaperStrength: 0,
+  };
+  const options = { holdOpen: true, holdRequests: true };
+  const storage = makeIndexedDB(stored, options);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, decode: 'pending',
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  const loading = fixture.api.load(defaults);
+  for (let attempt = 0; attempt < 10 && !storage.state.releaseOpen; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  assert.equal(typeof storage.state.releaseOpen, 'function');
+
+  fixture.advance(4_500);
+  assert.equal(storage.state.releaseOpen(), true);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(storage.state.transactions.length, 1);
+  fixture.advance(4_500);
+  assert.deepEqual(storage.state.releaseHeldRequests(), [true]);
+  for (let attempt = 0; attempt < 10 && fixture.images.length < 2; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  assert.equal(fixture.images.length, 2, 'both stored PNGs have started decode validation');
+  const lateCallbacks = fixture.images.map(image => image.onload);
+  assert.ok(lateCallbacks.every(callback => typeof callback === 'function'));
+
+  fixture.advance(1_000);
+  const loaded = await loading;
+
+  assert.equal(loaded.reason, 'operation-timeout');
+  assert.equal(loaded.settings.introTitle, 'Safe default');
+  assert.equal(loaded.baseline.introTitle, 'Saved value');
+  assert.deepEqual(storage.state.record, stored);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+  assert.equal(fixture.api.openSettings(), true, 'the timeout fallback initializes a usable settings panel');
+  assert.equal(fixture.api.isSettingsOpen(), true);
+  const status = fixture.elements.find(element => element.getAttribute('aria-live') === 'polite');
+  assert.equal(status.textContent, '读取设置超时；当前使用默认值，已保存记录未改动。可以重试。');
+
+  lateCallbacks.forEach(callback => callback());
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(fixture.api.isSettingsOpen(), true, 'late stored-image decodes cannot close or revive the panel');
+  assert.equal(status.textContent, '读取设置超时；当前使用默认值，已保存记录未改动。可以重试。');
+  assert.deepEqual(storage.state.record, stored);
+  assert.equal(fixture.api.dispose(), true);
 });

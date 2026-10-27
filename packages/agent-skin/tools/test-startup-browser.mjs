@@ -175,12 +175,13 @@ try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
-  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, legacyWallpaperCSS, legacyWallpaperRenderer,
-    helperExpressionJSON] = await Promise.all([
+  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, imageSettingsSource, legacyWallpaperCSS,
+    legacyWallpaperRenderer, helperExpressionJSON] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, 'extension/renderer.mjs'), 'utf8'),
+    readFile(join(ROOT, 'image-settings.js'), 'utf8'),
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
@@ -192,7 +193,7 @@ try {
   const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
   assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'The local preview fixture has a replaceable module entry');
   const fixtureHTML = preview.slice(0, scriptStart)
-    + '<script src="/animation.js"></script><script type="module" src="/fixture.js"></script>'
+    + '<script src="/image-settings.js"></script><script src="/animation.js"></script><script type="module" src="/fixture.js"></script>'
     + preview.slice(scriptEnd);
   const pixelBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64');
   const pixelImage = 'data:image/png;base64,' + pixelBytes.toString('base64');
@@ -229,6 +230,7 @@ try {
       setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
     };
     const frameSpecs = [];
+    const animationRuns = [];
     const senders = new Map();
     const wallpaper = { version: '0.7.1', preview: true, image: ${JSON.stringify(pixelImage)},
       imageSHA256: ${JSON.stringify(imageSHA256)}, css: await fetch('/wallpaper.css').then(response => response.text()), strength: initialWallpaperStrength };
@@ -266,6 +268,13 @@ try {
         dispose() { overlay.remove(); },
       };
     };
+    const installActualAnimation = function (...args) {
+      const frameSpec = args[14];
+      const handle = window.installAnimation(...args);
+      animationRuns.push({ runId: frameSpec.runId, intent: frameSpec.intent,
+        settingsCommitted: frameSpec.settingsCommitted === true, assets: frameSpec.assets, handle });
+      return handle;
+    };
     const payload = url.searchParams.has('animation')
       ? (url.searchParams.has('animation-hold') ? function (...args) {
         const frameWindow = args[0];
@@ -283,8 +292,8 @@ try {
           }));
         };
         outerWindow.__animationPendingFrame = frameWindow;
-        return window.installAnimation(...args);
-      } : window.installAnimation)
+        return installActualAnimation(...args);
+      } : installActualAnimation)
       : fixturePayload;
     if (url.searchParams.has('animation') && typeof payload !== 'function') {
       throw new Error('animation installer is not exposed by the canonical source');
@@ -303,11 +312,30 @@ try {
       animationArtwork = await normalize(${JSON.stringify(animationArtworkSVG)}, 1536, 1024);
     }
     payload.assets = Object.freeze(url.searchParams.has('animation')
-      ? { wallpaper: ${JSON.stringify(pixelImage)}, avatar: animationAvatar, artwork: animationArtwork,
+      ? { wallpaper: ${JSON.stringify(pixelImage)}, wallpaperStrength: initialWallpaperStrength,
+          avatar: animationAvatar, artwork: animationArtwork,
           contours: ${JSON.stringify(animationContourFixture)}, introTitle: 'Synthetic agent',
           introCaption: 'SYNTHETIC / TEST', artworkSubtitle: 'Generated fixture only' }
       : { wallpaper: ${JSON.stringify(pixelImage)} });
+    if (url.searchParams.has('animation')) {
+      const createSettings = window.createImageSettings;
+      payload.createImageSettings = url.searchParams.has('settings-blocked')
+        ? environment => createSettings({ ...environment, indexedDB: {
+          open() { const request = {}; queueMicrotask(() => request.onblocked?.({ target: request })); return request; },
+        } })
+        : createSettings;
+    }
+    let wallpaperApplications = 0;
     payload.applyWallpaper = async (background, isCurrent) => {
+      wallpaperApplications++;
+      outerWindow.__fixtureWallpaperApplications = wallpaperApplications;
+      if (url.searchParams.has('wallpaper-fail') && wallpaperApplications === 1) {
+        throw new Error('synthetic wallpaper failure');
+      }
+      if (url.searchParams.get('wallpaper-hold') === String(wallpaperApplications)) {
+        await new Promise(resolve => { outerWindow.__releaseFixtureWallpaper = resolve; });
+        if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
+      }
       const state = await installRenderer({ ...wallpaper, image: background.image,
         strength: background.strength, isCurrent });
       const api = window.__azhouWallpaper;
@@ -357,6 +385,7 @@ try {
     outerWindow.__startupAPI = host.__azhouStartup;
     outerWindow.__startupInstallResult = result;
     outerWindow.__startupFrameSpecs = frameSpecs;
+    outerWindow.__startupAnimationRuns = animationRuns;
     outerWindow.__startupFixtureSend = (runId, message) => senders.get(runId)?.(message);
     outerWindow.__releaseBody = () => {
       bodyAvailable = true;
@@ -377,6 +406,7 @@ try {
     ['/csp-blob.html', ['text/html; charset=utf-8', fixtureHTML]],
     ['/fixture.js', ['text/javascript; charset=utf-8', fixtureModule]],
     ['/animation.js', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'animation.js'), 'utf8')]],
+    ['/image-settings.js', ['text/javascript; charset=utf-8', imageSettingsSource]],
     ['/wallpaper.css', ['text/css; charset=utf-8', wallpaperCSS]],
     ['/legacy-wallpaper.css', ['text/css; charset=utf-8', legacyWallpaperCSS]],
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
@@ -982,6 +1012,395 @@ try {
     assert.deepEqual(completed.completion, { cause: 'skip', beforeReady: false });
     assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[title=\\"Agent Skin startup\\"]").length'), 0);
     return { readyRun: { runId: state.runId, phase: state.phase, ready: state.ready }, beforeSkip, completed: completed.completion };
+  });
+
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&wallpaper-fail=1&wallpaper-hold=11');
+  await check('real settings UI handles both shortcuts, conflict without replay, ten saved replays, busy Esc, disposal, and late results', async () => {
+    const initial = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();
+      return state?.phase==='playing'&&state.ready?state:false;
+    })()`), 15000, 'actual animation play frame prepared with generated assets');
+    assert.equal(initial.wallpaper.reason, 'disabled', 'generated defaults disable host wallpaper before settings are saved');
+    const initialRun = await cdp.evaluate(`window.__startupAnimationRuns.at(-1)?.runId`);
+    assert.equal(initialRun, initial.runId);
+    assert.equal(await cdp.evaluate(`window.__startupAnimationRuns.at(-1)?.intent`), 'play');
+
+    const childShortcut = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      const event=new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true});
+      frame.contentWindow.dispatchEvent(event);
+      return {defaultPrevented:event.defaultPrevented,count:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+        dialog:frame.contentDocument.querySelector('dialog')?.open===true,state:window.__startupAPI.status()};
+    })()`);
+    assert.equal(childShortcut.defaultPrevented, true);
+    assert.equal(childShortcut.count, 1, 'opening from the child does not replace the run');
+    assert.equal(childShortcut.dialog, true, 'the actual child settings dialog opens');
+    assert.equal(childShortcut.state.phase, 'settings');
+    assert.equal(childShortcut.state.runId, initial.runId);
+    const unsavedDraft = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]'),doc=frame.contentDocument;
+      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      title.value='Discard draft';title.dispatchEvent(new Event('input',{bubbles:true}));
+      const strength=doc.querySelector('input[type="range"]');
+      strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
+      return {title:title.value,strength:strength.value,hostWallpaper:!!window.__azhouWallpaper,
+        wallpaper:window.__startupAPI.status().wallpaper};
+    })()`);
+    assert.deepEqual(unsavedDraft.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
+    assert.equal(unsavedDraft.hostWallpaper, false, 'editing the draft cannot apply a host wallpaper');
+    const childCancel = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+      return window.__startupAPI.status();
+    })()`);
+    const childCancelled = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();return state.phase==='complete'&&state.completion?.cause==='settings-cancel'?state:false;
+    })()`), 5000, 'child shortcut settings cancel');
+    assert.equal(childCancel.runId, initial.runId);
+    assert.deepEqual(childCancelled.completion, { cause: 'settings-cancel', beforeReady: false });
+    assert.equal(await cdp.evaluate(`window.__startupAnimationRuns.length`), 1,
+      'canceling an in-play draft does not create another animation run');
+
+    const parentShortcut = await cdp.evaluate(`(()=>{
+      const event=new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true});
+      window.dispatchEvent(event);
+      return {defaultPrevented:event.defaultPrevented,state:window.__startupAPI.status()};
+    })()`);
+    assert.equal(parentShortcut.defaultPrevented, true);
+    const settingsRun = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status(),frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      return state.phase==='settings'&&state.ready&&frame?.contentDocument.querySelector('dialog')?.open?state:false;
+    })()`), 15000, 'parent shortcut launches the actual settings-intent frame and opens its dialog');
+    assert.ok(settingsRun.runId > initial.runId);
+    assert.equal(await cdp.evaluate('window.__startupAnimationRuns.at(-1).intent'), 'settings');
+    assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
+      'the settings-intent frame does not apply a fallback or draft wallpaper');
+    const defaultPanel = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
+        strength:doc.querySelector('input[type="range"]').value,
+        wallpaper:window.__startupAPI.status().wallpaper};
+    })()`);
+    assert.equal(defaultPanel.title, 'Synthetic agent', 'the canceled draft was not persisted');
+    assert.equal(defaultPanel.strength, '0');
+    assert.deepEqual(defaultPanel.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
+    await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      title.value='Local draft';title.dispatchEvent(new Event('input',{bubbles:true}));
+      const strength=doc.querySelector('input[type="range"]');
+      strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
+    })()`);
+    assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
+      'editing an unopened run still has no host wallpaper side effect');
+
+    const externalCommit = await cdp.evaluate(`(async()=>{
+      const assets=window.__startupAnimationRuns[0].assets;
+      const api=window.createImageSettings({document,Image,URL,indexedDB,performance,
+        setTimeout:setTimeout.bind(window),clearTimeout:clearTimeout.bind(window)});
+      try{
+        const loaded=await api.load(assets);
+        const saved=await api.save({...loaded.settings,introTitle:'External',wallpaperStrength:42});
+        return {reason:loaded.reason,baseline:loaded.baseline,title:saved.introTitle,strength:saved.wallpaperStrength};
+      }finally{api.dispose();}
+    })()`);
+    assert.equal(externalCommit.reason, '');
+    assert.equal(externalCommit.baseline, undefined);
+    assert.equal(externalCommit.title, 'External');
+    assert.equal(externalCommit.strength, 42);
+    await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+    })()`);
+    const conflictStatus = await until(() => cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      const status=frame?.contentDocument.querySelector('[data-agent-skin-settings] [aria-live="polite"]');
+      return status?.textContent.includes('其他页面已更新设置')?status.textContent:false;
+    })()`), 10000, 'settings transaction detects a real concurrent page update');
+    const conflictState = await cdp.evaluate(`({state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      dialogOpen:document.querySelector('iframe[title="Agent Skin startup"]').contentDocument.querySelector('dialog')?.open})`);
+    assert.equal(conflictState.state.phase, 'settings');
+    assert.equal(conflictState.state.runId, settingsRun.runId);
+    assert.equal(conflictState.runCount, 2, 'failed save did not send settings-close or replay');
+    assert.equal(conflictState.frameCount, 1);
+    assert.equal(conflictState.dialogOpen, true);
+    assert.ok(conflictStatus.includes('其他页面已更新设置'));
+
+    await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentDocument.querySelector('button[aria-label="取消并关闭设置"]').click();
+    })()`);
+    const conflictCancelled = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();return state.phase==='complete'&&state.completion?.cause==='settings-cancel'?state:false;
+    })()`), 5000, 'cancel after conflict keeps the external record and avoids replay');
+    assert.equal(conflictCancelled.runId, settingsRun.runId);
+
+    await cdp.evaluate(`(()=>window.dispatchEvent(new KeyboardEvent('keydown',{
+      key:'b',metaKey:true,altKey:true,cancelable:true})))()`);
+    const retrySettings = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status(),frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      return state.phase==='settings'&&state.ready&&frame?.contentDocument.querySelector('dialog')?.open?state:false;
+    })()`), 15000, 'parent shortcut reopens settings after the failed baseline is refreshed');
+    assert.ok(retrySettings.runId > settingsRun.runId);
+    const retryValues = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
+        strength:doc.querySelector('input[type="range"]').value};
+    })()`);
+    assert.deepEqual(retryValues, { title: 'External', strength: '42' });
+    await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      title.value='Saved title';title.dispatchEvent(new Event('input',{bubbles:true}));
+      doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+    })()`);
+    const savedPlay = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();return state.phase==='playing'&&state.ready&&state.runId> ${retrySettings.runId}?state:false;
+    })()`), 15000, 'transaction complete starts the new play run');
+    const replay = await cdp.evaluate(`({run:window.__startupAnimationRuns.at(-1),applications:window.__fixtureWallpaperApplications || 0,
+      notice:document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('[data-agent-skin-wallpaper-result]')?.textContent,
+      state:window.__startupAPI.status()})`);
+    assert.equal(replay.run.intent, 'play');
+    assert.equal(replay.run.settingsCommitted, true);
+    assert.equal(replay.applications, 1);
+    assert.equal(replay.state.wallpaper.reason, 'wallpaper-unsupported');
+    assert.equal(replay.notice, '设置已保存，但壁纸未能应用。', 'post-commit wallpaper failure has a distinct child result');
+    const settingsResources = await cdp.evaluate(`(()=>{
+      const run=window.__startupAnimationRuns.find(item=>item.runId===${retrySettings.runId});
+      return run.handle.preview.report().resources;
+    })()`);
+    for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
+      assert.equal(settingsResources[resource], 0, 'old settings frame releases ' + resource + ' after replay');
+    }
+
+    await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true}));
+    })()`);
+    await until(() => cdp.evaluate(`document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('dialog')?.open`),
+      5000, 'child shortcut opens settings after persistence');
+    const persistedValues = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
+        strength:doc.querySelector('input[type="range"]').value};
+    })()`);
+    assert.deepEqual(persistedValues, { title: 'Saved title', strength: '42' },
+      'the replay child loaded committed fields before preparing the frame');
+
+    const settingsReplayRuns = [{ runId: savedPlay.runId, intent: replay.run.intent,
+      committed: replay.run.settingsCommitted, subtitle: 'Generated fixture only' }];
+    let currentReplayRunId = savedPlay.runId;
+    let expectedSubtitle = 'Generated fixture only';
+    for (let cycle = 2; cycle <= 10; cycle++) {
+      if (cycle > 2) {
+        await cdp.evaluate(`(()=>{
+          const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+          frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true}));
+        })()`);
+        await until(() => cdp.evaluate(`(()=>{
+          const state=window.__startupAPI.status();
+          const dialog=document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('dialog');
+          return state.phase==='settings'&&state.runId===${currentReplayRunId}&&dialog?.open?state:false;
+        })()`), 5000, 'child settings shortcut before saved replay ' + cycle);
+      }
+      const openedValues = await cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+        return {state:{phase:state.phase,runId:state.runId},
+          title:doc.querySelector('input[aria-label^="启动标题"]').value,
+          subtitle:doc.querySelector('textarea[aria-label^="背景字幕"]').value,
+          strength:doc.querySelector('input[type="range"]').value};
+      })()`);
+      assert.deepEqual(openedValues, { state: { phase: 'settings', runId: currentReplayRunId },
+        title: 'Saved title', subtitle: expectedSubtitle, strength: '42' },
+      'each replay reloads the committed record before settings opens again');
+      const nextSubtitle = 'Generated replay ' + cycle;
+      await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+        const subtitle=doc.querySelector('textarea[aria-label^="背景字幕"]');
+        subtitle.value=${JSON.stringify(nextSubtitle)};subtitle.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+      })()`);
+      const nextReplay = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='playing'&&state.ready&&state.runId>${currentReplayRunId}
+          &&window.__fixtureWallpaperApplications===${cycle}?{state,run:window.__startupAnimationRuns.at(-1)}:false;
+      })()`), 15000, 'settings save ' + cycle + ' creates a fresh play run');
+      assert.equal(nextReplay.run.intent, 'play');
+      assert.equal(nextReplay.run.settingsCommitted, true);
+      const released = await cdp.evaluate(`(()=>{
+        const run=window.__startupAnimationRuns.find(item=>item.runId===${currentReplayRunId});
+        return run.handle.preview.report().resources;
+      })()`);
+      for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
+        assert.equal(released[resource], 0, 'settings replay ' + cycle + ' releases old ' + resource);
+      }
+      settingsReplayRuns.push({ runId: nextReplay.state.runId, intent: nextReplay.run.intent,
+        committed: nextReplay.run.settingsCommitted, subtitle: nextSubtitle, released });
+      currentReplayRunId = nextReplay.state.runId;
+      expectedSubtitle = nextSubtitle;
+    }
+    assert.equal(settingsReplayRuns.length, 10, 'ten saved settings runs were prepared');
+    const lateRun = currentReplayRunId;
+    await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true}));
+    })()`);
+    await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status(),dialog=document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('dialog');
+      return state.phase==='settings'&&state.runId===${lateRun}&&dialog?.open?true:false;
+    })()`), 5000, 'settings shortcut opens the final replay before the held late result');
+    await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument;
+      const subtitle=doc.querySelector('textarea[aria-label^="背景字幕"]');
+      subtitle.value='Late wallpaper test';subtitle.dispatchEvent(new Event('input',{bubbles:true}));
+      doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+    })()`);
+    const lateApply = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='playing'&&state.ready&&state.runId>${lateRun}
+        &&window.__fixtureWallpaperApplications===11?{state,run:window.__startupAnimationRuns.at(-1)}:false;
+    })()`), 15000, 'late committed wallpaper result is held across disposal after ten saved replays');
+    assert.equal(lateApply.run.settingsCommitted, true);
+    assert.equal(lateApply.run.intent, 'play');
+    const secondSettingsResources = await cdp.evaluate(`(()=>{
+      const run=window.__startupAnimationRuns.find(item=>item.runId===${lateRun});
+      return run.handle.preview.report().resources;
+    })()`);
+    for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
+      assert.equal(secondSettingsResources[resource], 0, 'second settings replay releases ' + resource);
+    }
+    assert.equal(await cdp.evaluate('typeof window.__releaseFixtureWallpaper'), 'function');
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    await cdp.evaluate('window.__releaseFixtureWallpaper()');
+    const afterLate = await cdp.evaluate(`(()=>{
+      const held=window.__startupAnimationRuns.find(item=>item.runId===${lateApply.state.runId});
+      const resources=held.handle.preview.report().resources;
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      return {installed:Object.hasOwn(window,'__azhouStartup'),frameCount:frame?1:0,
+        wallpaper:!!window.__azhouWallpaper,resources};
+    })()`);
+    assert.equal(afterLate.installed, false);
+    assert.equal(afterLate.frameCount, 0);
+    assert.equal(afterLate.wallpaper, false);
+    for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
+      assert.equal(afterLate.resources[resource], 0, 'disposed replay releases ' + resource);
+    }
+
+    await navigate('/fixture.html?animation=1&no-initial-wallpaper=1');
+    const busyRun = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();return state?.phase==='playing'&&state.ready?state:false;
+    })()`), 15000, 'fresh actual animation for busy Escape and dispose check');
+    await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true}));
+    })()`);
+    await until(() => cdp.evaluate(`document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument.querySelector('dialog')?.open`),
+      5000, 'child shortcut opens the actual panel for busy Escape check');
+    const busyStart = await cdp.evaluate(`(async()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]'),win=frame.contentWindow,doc=frame.contentDocument;
+      const proto=win.HTMLImageElement.prototype;
+      let owner=proto,descriptor;
+      while(owner&&!descriptor){descriptor=Object.getOwnPropertyDescriptor(owner,'src');owner=Object.getPrototypeOf(owner);}
+      if(!descriptor?.set)throw new Error('image source setter unavailable in isolated Chrome');
+      Object.defineProperty(proto,'src',{configurable:true,enumerable:descriptor.enumerable,
+        get:descriptor.get,set(value){
+          if(String(value).startsWith('blob:')){win.__heldSettingsDecode={image:this,onload:this.onload};return;}
+          return descriptor.set.call(this,value);
+        }});
+      const canvas=doc.createElement('canvas');canvas.width=64;canvas.height=64;
+      const context=canvas.getContext('2d');context.fillStyle='#f6a55a';context.fillRect(0,0,64,64);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      const file=new win.File([blob],'generated-busy.png',{type:'image/png'});
+      const input=doc.querySelector('input[type="file"][aria-label="选择头像图片"]');
+      const transfer=new win.DataTransfer();transfer.items.add(file);input.files=transfer.files;
+      input.dispatchEvent(new win.Event('change',{bubbles:true}));
+      for(let attempt=0;attempt<30&&!win.__heldSettingsDecode;attempt++)
+        await new Promise(resolve=>win.setTimeout(resolve,0));
+      const disabled=input.disabled,open=doc.querySelector('dialog').open;
+      const fileInputs=[...doc.querySelectorAll('input[type="file"]')];
+      const footerButtons=[...doc.querySelectorAll('[data-agent-skin-settings] footer button')];
+      const save=footerButtons.at(-1),cancel=footerButtons.at(-2);
+      save.click();
+      const escape=new win.KeyboardEvent('keydown',{key:'Escape',cancelable:true});
+      win.dispatchEvent(escape);
+      const held=win.__heldSettingsDecode;
+      window.__releaseLateSettingsDecode=()=>held?.onload?.call(held.image);
+      return {disabled,otherImportDisabled:fileInputs[1]?.disabled===true,saveDisabled:save.disabled,
+        cancelDisabled:cancel.disabled,open,escapePrevented:escape.defaultPrevented,held:Boolean(held),
+        runId:window.__startupAPI.status().runId};
+    })()`);
+    assert.equal(busyStart.disabled, true, 'an active import locks settings controls synchronously');
+    assert.equal(busyStart.otherImportDisabled, true, 'a second image import is unavailable while busy');
+    assert.equal(busyStart.saveDisabled, true, 'save is unavailable while import is busy');
+    assert.equal(busyStart.cancelDisabled, true, 'local cancel is unavailable while import is busy');
+    assert.equal(busyStart.open, true);
+    assert.equal(busyStart.escapePrevented, true);
+    assert.equal(busyStart.held, true, 'the generated import decoder is held for the late-callback check');
+    assert.equal(busyStart.runId, busyRun.runId);
+    const busyStillOpen = await cdp.evaluate(`({phase:window.__startupAPI.status().phase,runId:window.__startupAPI.status().runId,
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      dialogOpen:document.querySelector('iframe[title="Agent Skin startup"]').contentDocument.querySelector('dialog')?.open})`);
+    assert.equal(busyStillOpen.phase, 'settings');
+    assert.equal(busyStillOpen.runId, busyRun.runId);
+    assert.equal(busyStillOpen.frameCount, 1);
+    assert.equal(busyStillOpen.dialogOpen, true, 'Esc cannot cancel while a child image operation is busy');
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    const busyResources = await cdp.evaluate('window.__startupAnimationRuns.at(-1).handle.preview.report().resources');
+    const lateImportAfterDispose = await cdp.evaluate(`(()=>{
+      const invoked=typeof window.__releaseLateSettingsDecode==='function';
+      window.__releaseLateSettingsDecode?.();
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      return {invoked,installed:Object.hasOwn(window,'__azhouStartup'),frameCount:frame?1:0,
+        animationRunCount:window.__startupAnimationRuns.length};
+    })()`);
+    assert.equal(lateImportAfterDispose.invoked, true);
+    assert.equal(lateImportAfterDispose.installed, false);
+    assert.equal(lateImportAfterDispose.frameCount, 0);
+    for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
+      assert.equal(busyResources[resource], 0, 'disposed busy-import frame releases ' + resource);
+    }
+    const lateSettingsImage = { removed: lateImportAfterDispose.frameCount === 0,
+      apiRemoved: !lateImportAfterDispose.installed, callbackInvoked: lateImportAfterDispose.invoked };
+    assert.equal(lateSettingsImage.removed, true);
+    assert.equal(lateSettingsImage.apiRemoved, true);
+    return { initialRun: initial.runId, childShortcut: { phase: childShortcut.state.phase, runId: childShortcut.state.runId },
+      childCancelled: childCancelled.completion, settingsRun: settingsRun.runId,
+      externalCommit, conflict: { status: conflictStatus, runId: conflictState.state.runId,
+        runCount: conflictState.runCount }, replay: { runId: savedPlay.runId, committed: replay.run.settingsCommitted,
+        wallpaper: replay.state.wallpaper, notice: replay.notice, released: settingsResources },
+      persistedValues, settingsReplayRuns, lateRun: lateApply.state.runId, afterLate,
+      busyEscape: { runId: busyRun.runId, busyStart, stillOpen: busyStillOpen,
+        lateSettingsImage, released: busyResources, afterDispose: lateImportAfterDispose },
+      secondReplayResources: secondSettingsResources };
+  });
+
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&settings-blocked=1');
+  await check('an unavailable settings database shows safe fallback status in playback and in the panel', async () => {
+    const state = await until(() => cdp.evaluate(`(()=>{
+      const value=window.__startupAPI?.status();
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      return value?.phase==='playing'&&value.ready&&frame?.contentDocument.querySelector('[data-agent-skin-settings-result]')?value:false;
+    })()`), 15000, 'normal play shows a non-sensitive settings fallback status');
+    const playbackNotice = await cdp.evaluate(`document.querySelector('iframe[title="Agent Skin startup"]')
+      .contentDocument.querySelector('[data-agent-skin-settings-result]').textContent`);
+    assert.equal(playbackNotice, '暂时无法载入已保存设置，动画正在使用默认设置。已保存记录未更改。');
+    const opened = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'b',metaKey:true,altKey:true,cancelable:true}));
+      return window.__startupAPI.status();
+    })()`);
+    const panelStatus = await until(() => cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Agent Skin startup"]')?.contentDocument;
+      const status=doc?.querySelector('[data-agent-skin-settings] [aria-live="polite"]');
+      return status?.textContent?status.textContent:false;
+    })()`), 5000, 'settings panel explains the unavailable database');
+    assert.equal(opened.phase, 'settings');
+    assert.equal(opened.runId, state.runId);
+    assert.equal(panelStatus, '暂时无法读取保存设置；当前使用默认设置，原记录未删除。');
+    assert.equal(panelStatus.includes('Synthetic'), false, 'status text does not expose stored profile values');
+    return { phase: state.phase, runId: state.runId, playbackNotice, panelStatus };
   });
 
   await check('portrait identity and dispersing layouts keep legal titles and captions inside the registered canvas', async () => {

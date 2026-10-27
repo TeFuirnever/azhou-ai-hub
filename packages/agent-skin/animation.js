@@ -12,7 +12,7 @@
 function installAnimation(
   window, document, location, performance, indexedDB, Image, Path2D, URL,
   requestAnimationFrame, cancelAnimationFrame, setTimeout, clearTimeout,
-  module, SEND, frameSpec,
+  module, SEND, frameSpec, createImageSettingsFactory,
 ) {
   'use strict';
 
@@ -29,7 +29,8 @@ function installAnimation(
     [0, 0], [0.12, 0.06], [0.35, 0.41], [0.56, 0.76],
     [0.66, 0.924], [0.72, 0.97], [0.77, 1], [1, 1],
   ];
-  const assets = frameSpec && frameSpec.assets;
+  let assets = frameSpec && frameSpec.assets;
+  const defaultAssets = assets;
   const nativeHandler = Boolean(window.webkit?.messageHandlers?.launcher);
   const nativePreviewMode = nativeHandler && window.__agentSkinNativeMode === 'preview';
   const browserPreviewMode = location?.protocol === 'file:' && !nativeHandler;
@@ -37,9 +38,9 @@ function installAnimation(
     && Boolean(document.getElementById('timeline') && document.getElementById('preview-controls'))
     && (nativePreviewMode || browserPreviewMode);
   const nativePreview = isLocalPreview && nativeHandler;
-  const title = typeof assets?.introTitle === 'string' ? assets.introTitle : '阿舟的 Agent 实验室';
-  const caption = typeof assets?.introCaption === 'string' ? assets.introCaption : 'AZHOU / AGENT LAB';
-  const subtitle = typeof assets?.artworkSubtitle === 'string' ? assets.artworkSubtitle : '和阿舟一起，把想法做出来。';
+  let title = typeof assets?.introTitle === 'string' ? assets.introTitle : '阿舟的 Agent 实验室';
+  let caption = typeof assets?.introCaption === 'string' ? assets.introCaption : 'AZHOU / AGENT LAB';
+  let subtitle = typeof assets?.artworkSubtitle === 'string' ? assets.artworkSubtitle : '和阿舟一起，把想法做出来。';
   let subtitleLines = [];
   let subtitleFontSize = 39;
   let subtitleLineHeight = 36;
@@ -55,10 +56,19 @@ function installAnimation(
     scattered: '线稿正在汇聚', drawing: '阿舟和背景正在显现', colorize: '同一幅画面正在上色',
     portrait: subtitle, shutter: '动画即将结束', complete: '已结束',
   };
-  const rawAvatar = typeof assets?.avatar === 'string' ? assets.avatar : assets?.avatar?.dataURL;
-  const rawArtwork = typeof assets?.artwork === 'string' ? assets.artwork : assets?.artwork?.dataURL;
-  const contours = assets?.contours || assets?.artwork?.contours;
+  let rawAvatar = typeof assets?.avatar === 'string' ? assets.avatar : assets?.avatar?.dataURL;
+  let rawArtwork = typeof assets?.artwork === 'string' ? assets.artwork : assets?.artwork?.dataURL;
+  let contours = assets?.contours || assets?.artwork?.contours;
   const existingStage = document.querySelector('[data-agent-skin-stage]');
+
+  let imageSettings = null;
+  try {
+    if (typeof createImageSettingsFactory === 'function') {
+      imageSettings = createImageSettingsFactory({
+        document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
+      });
+    }
+  } catch {}
 
   let root = existingStage;
   let canvas;
@@ -107,6 +117,7 @@ function installAnimation(
   let readySent = false;
   let startAfterPrepare = false;
   let reduced = false;
+  let settingsLoadReason = '';
   let scale = 1;
   let offsetX = 0;
   let offsetY = 0;
@@ -130,11 +141,11 @@ function installAnimation(
 
   function message(action, details = {}) {
     if (typeof SEND === 'function') {
-      SEND({ type: 'azhou-startup', action, runId: frameSpec?.runId, ...details });
-      return;
+      return SEND({ type: 'azhou-startup', action, runId: frameSpec?.runId, ...details });
     }
     const handler = window.webkit?.messageHandlers?.launcher;
-    if (handler && typeof handler.postMessage === 'function') handler.postMessage({ action, ...details });
+    if (handler && typeof handler.postMessage === 'function') return handler.postMessage({ action, ...details });
+    return undefined;
   }
 
   function clamp(value, low = 0, high = 1) {
@@ -1053,9 +1064,48 @@ function installAnimation(
     timeoutIds.clear();
   }
 
+  function applySettingsRecord(record) {
+    if (!record || typeof record !== 'object') return;
+    assets = record;
+    rawAvatar = typeof record.avatar === 'string' ? record.avatar : record.avatar?.dataURL;
+    rawArtwork = typeof record.artwork === 'string' ? record.artwork : record.artwork?.dataURL;
+    contours = record.contours || record.artwork?.contours;
+    title = typeof record.introTitle === 'string' ? record.introTitle : '阿舟的 Agent 实验室';
+    caption = typeof record.introCaption === 'string' ? record.introCaption : 'AZHOU / AGENT LAB';
+    subtitle = typeof record.artworkSubtitle === 'string' ? record.artworkSubtitle : '和阿舟一起，把想法做出来。';
+    STAGE_LABELS.portrait = subtitle;
+  }
+
+  function showWallpaperFailure() {
+    const notice = root.querySelector('[data-agent-skin-wallpaper-result]')
+      || createElement('div', root, { 'data-agent-skin-wallpaper-result': '', role: 'status' });
+    notice.textContent = '设置已保存，但壁纸未能应用。';
+    notice.style.cssText = 'position:absolute;z-index:4;left:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid #f2ca7977;border-radius:10px;background:#211f2beF;color:#fff4d2;box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
+  }
+
+  function showSettingsFallbackNotice() {
+    if (!settingsLoadReason || !root) return;
+    const notice = root.querySelector('[data-agent-skin-settings-result]')
+      || createElement('div', root, { 'data-agent-skin-settings-result': '', role: 'status' });
+    notice.textContent = '暂时无法载入已保存设置，动画正在使用默认设置。已保存记录未更改。';
+    notice.style.cssText = 'position:absolute;z-index:4;right:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid #ffffff38;border-radius:10px;background:#211f2beF;color:#fff8ef;box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
+  }
+
   async function prepare(currentGeneration) {
     if (disposed || currentGeneration !== generation) return;
     preparing = true;
+    if (imageSettings) {
+      try {
+        const loadedSettings = await imageSettings.load(defaultAssets);
+        if (disposed || currentGeneration !== generation) return;
+        settingsLoadReason = typeof loadedSettings?.reason === 'string' ? loadedSettings.reason : '';
+        applySettingsRecord(loadedSettings.settings);
+      } catch {
+        if (disposed || currentGeneration !== generation) return;
+        settingsLoadReason = 'settings-unavailable';
+        applySettingsRecord(defaultAssets);
+      }
+    }
     const stats = validateContours();
     const decodeResults = await Promise.allSettled([
       decodeImage(rawAvatar, 512, 512, currentGeneration),
@@ -1112,10 +1162,29 @@ function installAnimation(
     updateLayout();
     drawAt(elapsed, false);
     root.dataset.prewarmed = 'true';
+    showSettingsFallbackNotice();
     if (!readySent) {
       readySent = true;
       message('ready', { duration: DURATION });
     }
+    if (frameSpec?.intent === 'play') {
+      let wallpaperResult;
+      try {
+        wallpaperResult = message('background', {
+          image: rawArtwork,
+          strength: Number.isInteger(assets?.wallpaperStrength) ? assets.wallpaperStrength : 42,
+        });
+      } catch {}
+      if (frameSpec?.settingsCommitted === true) {
+        Promise.resolve(wallpaperResult).then(result => {
+          if (!disposed && currentGeneration === generation && result
+            && result.applied === false && result.reason !== 'disabled') showWallpaperFailure();
+        }).catch(() => {
+          if (!disposed && currentGeneration === generation) showWallpaperFailure();
+        });
+      }
+    }
+    if (frameSpec?.intent === 'settings') openSettingsPanel();
     if (frameSpec?.intent === 'play' || startAfterPrepare || (isLocalPreview && !nativePreview)) startClock();
   }
 
@@ -1211,13 +1280,50 @@ function installAnimation(
     panel.style.cssText = 'position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(700px,90vw);padding:18px 22px;border:1px solid #ffffff38;border-radius:12px;background:#18192bee;color:#fff8ef;text-align:center;box-shadow:0 12px 40px #0008';
   }
 
+  function openSettingsPanel() {
+    if (disposed || complete || !loaded || !readySent || !imageSettings
+      || frameSpec?.intent === 'preview' || imageSettings.isSettingsOpen()) return false;
+    const wasPlaying = rafId !== 0;
+    if (wasPlaying) pause();
+    const opened = imageSettings.openSettings({
+      onOpen() {
+        if (frameSpec?.intent === 'play') message('settings-open');
+      },
+      onCancel() { finish(true); },
+      onSaved() {
+        if (disposed) return;
+        stopClock();
+        generation++;
+        preparing = false;
+        releaseSceneResources();
+        message('settings-close');
+      },
+    });
+    if (!opened && wasPlaying && !disposed) startClock();
+    return opened;
+  }
+
   function onSkip() {
     finish(true);
   }
 
   function onKeydown(event) {
+    if (event.metaKey && event.altKey && typeof event.key === 'string' && event.key.toLowerCase() === 'b') {
+      event.preventDefault();
+      if (!imageSettings?.isSettingsOpen()) openSettingsPanel();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (frameSpec?.intent === 'settings' && !readySent) return;
+      if (imageSettings?.isSettingsOpen()) {
+        if (imageSettings.isBusy()) {
+          event.stopImmediatePropagation?.();
+          return;
+        }
+        imageSettings.cancelSettings();
+        return;
+      }
       finish(true);
       return;
     }
@@ -1269,6 +1375,7 @@ function installAnimation(
     window.removeEventListener('resize', updateLayout);
     window.visualViewport?.removeEventListener('resize', updateLayout);
     releaseSceneResources();
+    try { imageSettings?.dispose(); } catch {}
     return true;
   }
 
@@ -1286,6 +1393,7 @@ function installAnimation(
     };
     return {
       dispose,
+      openSettings: openSettingsPanel,
       preview,
     };
   }

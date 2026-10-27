@@ -10,6 +10,7 @@ function createImageSettings(environment) {
   const document = environment && environment.document;
   const ImageConstructor = environment && environment.Image;
   const URLObject = environment && environment.URL;
+  const indexedDB = environment && environment.indexedDB;
   const setTimer = environment && environment.setTimeout;
   const clearTimer = environment && environment.clearTimeout;
   const performance = environment && environment.performance;
@@ -17,8 +18,27 @@ function createImageSettings(environment) {
   const MAX_SOURCE_PIXELS = 48_000_000;
   const LARGE_SOURCE_PIXELS = 16_000_000;
   const PNG_PREFIX = 'data:image/png;base64,';
+  const DATABASE_NAME = 'azhou-codex-startup';
+  const DATABASE_VERSION = 1;
+  const STORE_NAME = 'settings';
+  const SETTINGS_KEY = 'images';
+  const MAX_RECORD_BYTES = 20 * 1024 * 1024;
+  const TEXT_LIMITS = Object.freeze({ introTitle: 16, introCaption: 48, artworkSubtitle: 60 });
   let generation = 0;
   let active = null;
+  let database = null;
+  let openingDatabase = null;
+  let disposed = false;
+  let currentSettings = null;
+  let currentBaseline;
+  let defaultRecord = null;
+  let loadReason = '';
+  let dialog = null;
+  let panelControls = null;
+  let draft = null;
+  let panelOpen = false;
+  let panelGeneration = 0;
+  let panelCallbacks = null;
 
   function makeError(reason, causeCode) {
     const error = new Error(reason);
@@ -61,6 +81,19 @@ function createImageSettings(environment) {
       try { URLObject.revokeObjectURL.call(URLObject, task.objectURL); } catch {}
       task.objectURL = null;
     }
+    for (const timer of task.validationTimers || []) {
+      try { clearTimer.call(environment, timer); } catch {}
+    }
+    task.validationTimers?.clear();
+    for (const image of task.validationImages || []) {
+      image.onload = null;
+      image.onerror = null;
+      try {
+        if (typeof image.removeAttribute === 'function') image.removeAttribute('src');
+        else image.src = 'data:,';
+      } catch {}
+    }
+    task.validationImages?.clear();
     for (const canvas of task.canvases) {
       try { canvas.width = 0; canvas.height = 0; } catch {}
     }
@@ -71,6 +104,11 @@ function createImageSettings(environment) {
     if (task.settled) return;
     task.settled = true;
     if (active === task) active = null;
+    if (!succeeded && task.transaction && !task.transactionFinished) {
+      const transaction = task.transaction;
+      task.transaction = null;
+      try { transaction.abort(); } catch {}
+    }
     release(task);
     const abortPending = task.abortPending;
     task.abortPending = null;
@@ -79,10 +117,99 @@ function createImageSettings(environment) {
       task.reject(value);
       if (abortPending) abortPending(value);
     }
+    updatePanelBusy();
   }
 
   function isCurrent(task) {
     return active === task && task.generation === generation && !task.settled;
+  }
+
+  function beginOperation(kind, timeout, onTimeout) {
+    const task = {
+      kind,
+      generation: ++generation,
+      startedAt: 0,
+      elapsedFallback: 0,
+      settled: false,
+      resolve: null,
+      reject: null,
+      abortPending: null,
+      decodeTimer: null,
+      prepareTimer: null,
+      validationTimers: new Set(),
+      validationImages: new Set(),
+      objectURL: null,
+      image: null,
+      canvases: [],
+      transaction: null,
+      transactionFinished: false,
+      failure: null,
+      baseline: undefined,
+      baselineKnown: false,
+    };
+    try { task.startedAt = performance.now.call(performance); } catch {}
+    active = task;
+    const promise = new Promise((resolve, reject) => {
+      task.resolve = resolve;
+      task.reject = reject;
+    });
+    if (Number.isFinite(timeout)) {
+      task.prepareTimer = setTimer.call(environment, () => {
+        const error = makeError('operation-timeout', 'prepare-timeout');
+        if (typeof onTimeout === 'function') onTimeout(task, error);
+        else finish(task, false, error);
+      }, timeout);
+    }
+    return { task, promise };
+  }
+
+  function decodeRecordImage(task, dataURL, width, height) {
+    return new Promise((resolve, reject) => {
+      if (!isCurrent(task)) { reject(makeError('operation-cancelled')); return; }
+      let image;
+      let timer = null;
+      const clear = () => {
+        if (timer !== null) {
+          try { clearTimer.call(environment, timer); } catch {}
+          task.validationTimers.delete(timer);
+          timer = null;
+        }
+      };
+      try {
+        image = new ImageConstructor();
+        task.validationImages.add(image);
+        image.onload = () => {
+          clear();
+          if (!isCurrent(task)) { reject(makeError('operation-cancelled')); return; }
+          if (image.naturalWidth !== width || image.naturalHeight !== height) {
+            reject(invalidData('invalid-dimensions'));
+          } else resolve(true);
+        };
+        image.onerror = () => { clear(); reject(invalidData('decode-failed')); };
+        timer = setTimer.call(environment, () => {
+          clear();
+          reject(makeError('operation-timeout', 'decode-timeout'));
+        }, 4_000);
+        task.validationTimers.add(timer);
+        image.src = dataURL;
+      } catch {
+        clear();
+        reject(invalidData('decode-failed'));
+      }
+    });
+  }
+
+  async function validateRecordImages(task, record) {
+    try {
+      await Promise.all([
+        decodeRecordImage(task, record.avatar, 512, 512),
+        decodeRecordImage(task, record.artwork, 1536, 1024),
+      ]);
+    } catch (error) {
+      if (error && (error.reason === 'operation-timeout' || error.reason === 'operation-cancelled')) throw error;
+      throw invalidData(error?.causeCode || 'decode-failed');
+    }
+    if (!isCurrent(task)) throw makeError('operation-cancelled');
   }
 
   function assertCurrent(task) {
@@ -95,6 +222,659 @@ function createImageSettings(environment) {
 
   function invalidData(causeCode) {
     return makeError('asset-invalid', causeCode);
+  }
+
+  function defaultSettings(defaults) {
+    const source = defaults && typeof defaults === 'object' ? defaults : {};
+    const dataURL = value => typeof value === 'string' ? value
+      : value && typeof value.dataURL === 'string' ? value.dataURL : '';
+    return {
+      schemaVersion: 1,
+      avatar: dataURL(source.avatar),
+      artwork: dataURL(source.artwork),
+      contours: Array.isArray(source.contours) ? source.contours.map(path =>
+        Array.isArray(path) ? path.map(point => Array.isArray(point) ? [...point] : point) : path) : [],
+      introTitle: typeof source.introTitle === 'string' ? source.introTitle : '阿舟的 Agent 实验室',
+      introCaption: typeof source.introCaption === 'string' ? source.introCaption : 'AZHOU / AGENT LAB',
+      artworkSubtitle: typeof source.artworkSubtitle === 'string' ? source.artworkSubtitle : '和阿舟一起，把想法做出来。',
+      wallpaperStrength: Number.isInteger(source.wallpaperStrength) && source.wallpaperStrength >= 0
+        && source.wallpaperStrength <= 75 ? source.wallpaperStrength : 42,
+    };
+  }
+
+  function storageError(reason, causeCode) {
+    return makeError(reason || 'settings-unavailable', causeCode);
+  }
+
+  function openDatabase() {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
+    if (database) return Promise.resolve(database);
+    if (openingDatabase) return openingDatabase;
+    if (!indexedDB || typeof indexedDB.open !== 'function') {
+      return Promise.reject(storageError('settings-unavailable', 'indexeddb-unavailable'));
+    }
+
+    openingDatabase = new Promise((resolve, reject) => {
+      let settled = false;
+      let request;
+      let timer = null;
+      const clear = () => {
+        if (timer !== null) {
+          try { clearTimer.call(environment, timer); } catch {}
+          timer = null;
+        }
+      };
+      const finish = (succeeded, value) => {
+        if (settled) return;
+        settled = true;
+        clear();
+        openingDatabase = null;
+        if (succeeded) resolve(value);
+        else reject(value);
+      };
+      try {
+        request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+        timer = setTimer.call(environment, () => finish(false,
+          makeError('operation-timeout', 'database-open-timeout')), 5_000);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          try {
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+          } catch {
+            try { request.transaction?.abort?.(); } catch {}
+          }
+        };
+        request.onblocked = () => finish(false, storageError('settings-blocked', 'database-blocked'));
+        request.onerror = () => finish(false, storageError('settings-unavailable', 'database-open-failed'));
+        request.onsuccess = () => {
+          const db = request.result;
+          if (settled || disposed) {
+            try { db.close(); } catch {}
+            if (!settled) finish(false, makeError('operation-cancelled'));
+            return;
+          }
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            try { db.close(); } catch {}
+            finish(false, storageError('settings-unavailable', 'settings-store-missing'));
+            return;
+          }
+          db.onversionchange = () => {
+            try { db.close(); } catch {}
+            if (database === db) database = null;
+          };
+          database = db;
+          finish(true, db);
+        };
+      } catch {
+        finish(false, storageError('settings-unavailable', 'database-open-failed'));
+      }
+    });
+    return openingDatabase;
+  }
+
+  function readStoredRecord(db, task) {
+    return new Promise((resolve, reject) => {
+      let transaction;
+      let request;
+      let value;
+      let sawResult = false;
+      let settled = false;
+      let timer = null;
+      let failure = null;
+      const clear = () => {
+        if (timer !== null) {
+          try { clearTimer.call(environment, timer); } catch {}
+          timer = null;
+        }
+      };
+      const finish = (succeeded, result) => {
+        if (settled) return;
+        settled = true;
+        clear();
+        if (succeeded) resolve(result);
+        else reject(result);
+      };
+      try {
+        transaction = db.transaction(STORE_NAME, 'readonly');
+        if (task) task.transaction = transaction;
+        timer = setTimer.call(environment, () => {
+          failure = makeError('operation-timeout', 'database-read-timeout');
+          try { transaction.abort(); } catch {}
+          finish(false, failure);
+        }, 5_000);
+        request = transaction.objectStore(STORE_NAME).get(SETTINGS_KEY);
+        request.onsuccess = () => { value = request.result; sawResult = true; };
+        request.onerror = () => { failure = storageError('settings-unavailable', 'database-read-failed'); };
+        transaction.oncomplete = () => {
+          if (task && task.transaction === transaction) task.transaction = null;
+          finish(sawResult, sawResult
+            ? value : (failure || storageError('settings-unavailable', 'database-read-failed')));
+        };
+        transaction.onerror = () => { failure ||= storageError('settings-unavailable', 'database-read-failed'); };
+        transaction.onabort = () => {
+          if (task && task.transaction === transaction) task.transaction = null;
+          finish(false, failure || storageError('settings-unavailable', 'database-read-aborted'));
+        };
+      } catch {
+        finish(false, storageError('settings-unavailable', 'database-read-failed'));
+      }
+    });
+  }
+
+  function own(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
+  }
+
+  function recordByteLength(value) {
+    const serialized = JSON.stringify(value);
+    if (typeof serialized !== 'string') throw invalidData('record-unserializable');
+    let bytes = 0;
+    for (let index = 0; index < serialized.length; index++) {
+      const code = serialized.charCodeAt(index);
+      if (code < 0x80) bytes += 1;
+      else if (code < 0x800) bytes += 2;
+      else if (code >= 0xd800 && code <= 0xdbff && index + 1 < serialized.length
+        && serialized.charCodeAt(index + 1) >= 0xdc00 && serialized.charCodeAt(index + 1) <= 0xdfff) {
+        bytes += 4;
+        index++;
+      } else bytes += 3;
+      if (bytes > MAX_RECORD_BYTES) throw invalidData('record-too-large');
+    }
+    return bytes;
+  }
+
+  function validContours(contours) {
+    if (!Array.isArray(contours) || contours.length > 1200) return false;
+    let points = 0;
+    for (const path of contours) {
+      if (!Array.isArray(path) || path.length < 2) return false;
+      points += path.length;
+      if (points > 300_000) return false;
+      for (const point of path) {
+        if (!Array.isArray(point) || point.length !== 2
+          || !Number.isFinite(point[0]) || point[0] < 0 || point[0] > 1536
+          || !Number.isFinite(point[1]) || point[1] < 0 || point[1] > 1024) return false;
+      }
+    }
+    return contours.length > 0;
+  }
+
+  function normalizeStoredRecord(value, defaults) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || value.schemaVersion !== 1) return null;
+    const knownKeys = new Set(['schemaVersion', 'avatar', 'artwork', 'contours', ...Object.keys(TEXT_LIMITS), 'wallpaperStrength']);
+    if (Object.keys(value).some(key => !knownKeys.has(key))) return null;
+    const record = { ...defaults };
+    for (const key of ['avatar', 'artwork']) {
+      if (own(value, key)) {
+        if (typeof value[key] !== 'string' || !value[key].startsWith(PNG_PREFIX)
+          || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(value[key])) return null;
+        const maximum = key === 'avatar' ? 2 * 1024 * 1024 : 12 * 1024 * 1024;
+        if (value[key].length > maximum) return null;
+        record[key] = value[key];
+      }
+    }
+    if (own(value, 'contours')) {
+      if (!validContours(value.contours)) return null;
+      record.contours = value.contours.map(path => path.map(point => [point[0], point[1]]));
+    } else if (own(value, 'artwork')) return null;
+    for (const [key, limit] of Object.entries(TEXT_LIMITS)) {
+      if (own(value, key)) {
+        if (typeof value[key] !== 'string' || value[key].length > limit) return null;
+        record[key] = value[key];
+      }
+    }
+    if (own(value, 'wallpaperStrength')) {
+      if (!Number.isInteger(value.wallpaperStrength) || value.wallpaperStrength < 0 || value.wallpaperStrength > 75) return null;
+      record.wallpaperStrength = value.wallpaperStrength;
+    }
+    try { recordByteLength(record); } catch { return null; }
+    return record;
+  }
+
+  async function load(defaults) {
+    const fallback = defaultSettings(defaults);
+    defaultRecord = fallback;
+    if (disposed) throw makeError('operation-cancelled');
+    if (active) {
+      loadReason = 'operation-busy';
+      return { settings: fallback, baseline: currentBaseline, reason: loadReason };
+    }
+    if (!indexedDB || typeof indexedDB.open !== 'function') {
+      currentSettings = fallback;
+      currentBaseline = undefined;
+      loadReason = 'settings-unavailable';
+      return { settings: fallback, baseline: undefined, reason: loadReason };
+    }
+    const { task, promise } = beginOperation('load', 10_000, (timedOutTask) => {
+      currentSettings = fallback;
+      if (timedOutTask.baselineKnown) currentBaseline = timedOutTask.baseline;
+      loadReason = 'operation-timeout';
+      if (timedOutTask.transaction && !timedOutTask.transactionFinished) {
+        const transaction = timedOutTask.transaction;
+        timedOutTask.transaction = null;
+        try { transaction.abort(); } catch {}
+      }
+      finish(timedOutTask, true, { settings: fallback, baseline: currentBaseline, reason: loadReason });
+    });
+    Promise.resolve().then(async () => {
+      let baseline;
+      try {
+        const db = await openDatabase();
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        baseline = await readStoredRecord(db, task);
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        task.baseline = baseline;
+        task.baselineKnown = true;
+        let settings = baseline === undefined ? fallback : normalizeStoredRecord(baseline, fallback);
+        let reason = '';
+        if (baseline !== undefined && !settings) {
+          settings = fallback;
+          reason = 'settings-invalid';
+        } else if (baseline !== undefined) {
+          try { await validateRecordImages(task, settings); }
+          catch (error) {
+            if (error?.reason === 'operation-cancelled') throw error;
+            settings = fallback;
+            reason = error?.reason === 'operation-timeout' ? 'operation-timeout' : 'settings-invalid';
+          }
+        }
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        currentSettings = settings;
+        currentBaseline = baseline;
+        loadReason = reason;
+        finish(task, true, { settings, baseline, reason });
+      } catch (error) {
+        if (task.settled) return;
+        if (error?.reason === 'operation-cancelled') {
+          finish(task, false, error);
+          return;
+        }
+        currentSettings = fallback;
+        currentBaseline = baseline;
+        loadReason = error && typeof error.reason === 'string' ? error.reason : 'settings-unavailable';
+        finish(task, true, {
+          settings: fallback,
+          baseline,
+          reason: loadReason,
+        });
+      }
+    });
+    return promise;
+  }
+
+  function recordEquals(left, right) {
+    if (left === undefined || right === undefined) return left === right;
+    try { return JSON.stringify(left) === JSON.stringify(right); }
+    catch { return false; }
+  }
+
+  function storageFailureFrom(error, operation) {
+    const name = error?.name;
+    if (name === 'QuotaExceededError') return makeError('settings-quota', 'quota-exceeded');
+    if (error?.reason && ['settings-conflict', 'settings-invalid', 'asset-invalid',
+      'operation-timeout', 'operation-cancelled', 'settings-quota', 'settings-unavailable'].includes(error.reason)) return error;
+    return storageError('settings-unavailable', operation + '-failed');
+  }
+
+  function saveInTransaction(task, db, candidate) {
+    let transaction;
+    let failure = null;
+    let timer = null;
+    const clear = () => {
+      if (timer !== null) {
+        try { clearTimer.call(environment, timer); } catch {}
+        timer = null;
+      }
+    };
+    try {
+      transaction = db.transaction(STORE_NAME, 'readwrite');
+      task.transaction = transaction;
+      timer = setTimer.call(environment, () => {
+        failure = makeError('operation-timeout', 'database-write-timeout');
+        try { transaction.abort(); } catch {}
+        finish(task, false, failure);
+      }, 5_000);
+      const store = transaction.objectStore(STORE_NAME);
+      const baselineRequest = store.get(SETTINGS_KEY);
+      baselineRequest.onerror = () => {
+        failure = storageFailureFrom(baselineRequest.error, 'database-read');
+      };
+      baselineRequest.onsuccess = () => {
+        if (!isCurrent(task)) {
+          failure = makeError('operation-cancelled');
+          try { transaction.abort(); } catch {}
+          return;
+        }
+        if (!recordEquals(baselineRequest.result, currentBaseline)) {
+          failure = makeError('settings-conflict', 'baseline-changed');
+          try { transaction.abort(); } catch {}
+          return;
+        }
+        try {
+          const putRequest = store.put(candidate, SETTINGS_KEY);
+          putRequest.onerror = () => { failure = storageFailureFrom(putRequest.error, 'database-write'); };
+        } catch (error) {
+          failure = storageFailureFrom(error, 'database-write');
+          try { transaction.abort(); } catch {}
+        }
+      };
+      transaction.oncomplete = () => {
+        clear();
+        task.transactionFinished = true;
+        if (task.transaction === transaction) task.transaction = null;
+        if (task.settled || !isCurrent(task)) return;
+        currentSettings = candidate;
+        currentBaseline = candidate;
+        finish(task, true, candidate);
+      };
+      transaction.onerror = () => {
+        failure ||= storageFailureFrom(transaction.error, 'database-write');
+      };
+      transaction.onabort = () => {
+        clear();
+        task.transactionFinished = true;
+        if (task.transaction === transaction) task.transaction = null;
+        if (!task.settled) finish(task, false, failure || storageError('settings-unavailable', 'database-write-aborted'));
+      };
+    } catch (error) {
+      clear();
+      if (task.transaction === transaction) task.transaction = null;
+      finish(task, false, storageFailureFrom(error, 'database-write'));
+    }
+  }
+
+  function save(candidate) {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
+    if (active) return Promise.reject(makeError('operation-busy'));
+    if (!indexedDB || typeof indexedDB.open !== 'function') {
+      return Promise.reject(storageError('settings-unavailable', 'indexeddb-unavailable'));
+    }
+    if (!validEnvironment()) return Promise.reject(invalidData('environment-unavailable'));
+    const { task, promise } = beginOperation('save', 10_000);
+    Promise.resolve().then(async () => {
+      try {
+        const base = currentSettings || defaultSettings(candidate);
+        const record = normalizeStoredRecord(candidate, base);
+        if (!record || !['avatar', 'artwork', 'contours', ...Object.keys(TEXT_LIMITS), 'wallpaperStrength']
+          .every(key => own(candidate, key))) throw makeError('settings-invalid');
+        await validateRecordImages(task, record);
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        const db = await openDatabase();
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        saveInTransaction(task, db, record);
+      } catch (error) {
+        if (!task.settled) finish(task, false,
+          error?.reason === 'operation-timeout' || error?.reason === 'operation-cancelled'
+            ? error : storageFailureFrom(error, 'candidate-validation'));
+      }
+    });
+    return promise;
+  }
+
+  function cloneSettings(value) {
+    return {
+      ...value,
+      contours: Array.isArray(value?.contours)
+        ? value.contours.map(path => path.map(point => [point[0], point[1]])) : [],
+    };
+  }
+
+  function displayError(reason) {
+    if (reason === 'settings-conflict') return '其他页面已更新设置。请取消后重新打开，再保存草稿。';
+    if (reason === 'settings-quota') return '存储空间不足。请更换图片后重试。';
+    if (reason === 'settings-blocked') return '设置数据库被其他页面阻塞。稍后可以重试。';
+    if (reason === 'operation-timeout') return '操作超时，面板已恢复，可以取消或重试。';
+    if (reason === 'settings-invalid' || reason === 'asset-invalid') return '候选设置无法验证，已保存内容保持不变。';
+    return '保存失败，已保存内容保持不变。';
+  }
+
+  function setPanelStatus(value, role = 'status') {
+    if (!panelControls?.status) return;
+    panelControls.status.textContent = String(value || '');
+    panelControls.status.setAttribute('role', role);
+  }
+
+  function updatePanelBusy() {
+    if (!panelControls) return;
+    const busy = Boolean(active);
+    for (const control of panelControls.controls) control.disabled = busy;
+    if (busy && active.kind === 'import') setPanelStatus('正在处理图片…');
+    else if (busy && active.kind === 'save') setPanelStatus('正在校验候选并保存…');
+  }
+
+  function truncateText(value, limit) {
+    let result = String(value ?? '').slice(0, limit);
+    if (result.length && result.charCodeAt(result.length - 1) >= 0xd800
+      && result.charCodeAt(result.length - 1) <= 0xdbff) result = result.slice(0, -1);
+    return result;
+  }
+
+  function updatePanelFields() {
+    if (!panelControls || !draft) return;
+    for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
+    panelControls.strength.value = String(draft.wallpaperStrength);
+    panelControls.strengthValue.textContent = String(draft.wallpaperStrength);
+  }
+
+  function buildSettingsPanel() {
+    if (dialog) return true;
+    if (!document || typeof document.createElement !== 'function' || !document.body) return false;
+    dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-labelledby', 'agent-skin-settings-title');
+    dialog.setAttribute('data-agent-skin-settings', '');
+    dialog.style.cssText = 'width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:0;border:1px solid #ffffff35;border-radius:18px;background:#171827;color:#fff8ef;box-shadow:0 24px 90px #000a;font:15px/1.45 system-ui,sans-serif';
+    const style = document.createElement('style');
+    style.textContent = '[data-agent-skin-settings]::backdrop{background:#080913b8;backdrop-filter:blur(5px)}[data-agent-skin-settings] input,[data-agent-skin-settings] textarea{box-sizing:border-box;width:100%;border:1px solid #ffffff35;border-radius:8px;padding:9px;background:#222437;color:#fff8ef;font:inherit}[data-agent-skin-settings] input[type=file]{padding:7px}[data-agent-skin-settings] input[type=range]{padding:0}[data-agent-skin-settings] button{border:1px solid #ffffff3b;border-radius:999px;padding:8px 14px;background:#26283d;color:#fff8ef;font:inherit;cursor:pointer}[data-agent-skin-settings] button:disabled,[data-agent-skin-settings] input:disabled,[data-agent-skin-settings] textarea:disabled{opacity:.58;cursor:wait}';
+    const content = document.createElement('section');
+    content.style.cssText = 'padding:22px 24px 20px';
+    const header = document.createElement('header');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px';
+    const heading = document.createElement('h2');
+    heading.id = 'agent-skin-settings-title';
+    heading.textContent = 'Agent Skin 设置';
+    heading.style.cssText = 'margin:0;font-size:20px';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    close.setAttribute('aria-label', '取消并关闭设置');
+    close.addEventListener('click', cancelSettings);
+    header.append(heading, close);
+    content.appendChild(header);
+
+    const fields = Object.create(null);
+    const controls = [close];
+    const addRow = (labelText, control) => {
+      const wrapper = document.createElement('label');
+      wrapper.style.cssText = 'display:grid;gap:5px;margin-top:14px';
+      const label = document.createElement('span');
+      label.textContent = labelText;
+      wrapper.append(label, control);
+      content.appendChild(wrapper);
+      controls.push(control);
+      return control;
+    };
+    const addFile = (role, label) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png,image/jpeg,image/webp';
+      input.setAttribute('aria-label', label);
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file || !panelOpen || active) return;
+        const panelAtStart = panelGeneration;
+        const importing = importImage(file, role);
+        updatePanelBusy();
+        try {
+          const result = await importing;
+          if (!panelOpen || panelAtStart !== panelGeneration) return;
+          if (role === 'avatar') draft.avatar = result.dataURL;
+          else { draft.artwork = result.dataURL; draft.contours = result.contours; }
+          setPanelStatus(result.warning === 'large-image'
+            ? '图片已准备；原图超过 16 MP，处理可能较慢。' : '图片已准备，可以保存。');
+        } catch (error) {
+          if (panelOpen && panelAtStart === panelGeneration) setPanelStatus(displayError(error?.reason), 'alert');
+        } finally {
+          input.value = '';
+          updatePanelBusy();
+        }
+      });
+      return addRow(label, input);
+    };
+    addFile('avatar', '选择头像图片');
+    addFile('artwork', '选择背景图片');
+
+    for (const [key, limit, label] of [
+      ['introTitle', 16, '启动标题（最多 16 个 UTF-16 字符单位）'],
+      ['introCaption', 48, '辅助文字（最多 48 个 UTF-16 字符单位）'],
+      ['artworkSubtitle', 60, '背景字幕（最多 60 个 UTF-16 字符单位）'],
+    ]) {
+      const control = key === 'artworkSubtitle' ? document.createElement('textarea') : document.createElement('input');
+      if (control.tagName === 'INPUT') control.type = 'text';
+      control.maxLength = limit;
+      control.setAttribute('aria-label', label);
+      control.addEventListener('input', () => {
+        const value = truncateText(control.value, limit);
+        if (control.value !== value) control.value = value;
+        if (draft) draft[key] = value;
+      });
+      fields[key] = control;
+      addRow(label, control);
+    }
+
+    const strength = document.createElement('input');
+    strength.type = 'range';
+    strength.min = '0';
+    strength.max = '75';
+    strength.step = '1';
+    strength.setAttribute('aria-label', '壁纸强度，0 到 75');
+    const strengthValue = document.createElement('output');
+    strengthValue.style.cssText = 'min-width:3ch;text-align:right';
+    strength.addEventListener('input', () => {
+      if (!draft) return;
+      draft.wallpaperStrength = Number(strength.value);
+      strengthValue.textContent = String(draft.wallpaperStrength);
+    });
+    const strengthRow = document.createElement('label');
+    strengthRow.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:14px';
+    const strengthLabel = document.createElement('span');
+    strengthLabel.textContent = '壁纸强度（0–75）';
+    strengthRow.append(strengthLabel, strengthValue, strength);
+    content.appendChild(strengthRow);
+    controls.push(strength);
+
+    const status = document.createElement('p');
+    status.style.cssText = 'min-height:1.5em;margin:14px 0 0;color:#d8d7e7';
+    status.setAttribute('aria-live', 'polite');
+    content.appendChild(status);
+    const actions = document.createElement('footer');
+    actions.style.cssText = 'display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px';
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.textContent = '恢复默认';
+    restore.addEventListener('click', () => {
+      if (active || !panelOpen) return;
+      draft = cloneSettings(defaultRecord || currentSettings);
+      updatePanelFields();
+      setPanelStatus('草稿已恢复为默认设置；已保存值尚未更改。');
+    });
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = '取消';
+    cancel.addEventListener('click', cancelSettings);
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.textContent = '保存并重播';
+    saveButton.addEventListener('click', async () => {
+      if (!panelOpen || active || !draft) return;
+      for (const key of Object.keys(TEXT_LIMITS)) draft[key] = truncateText(draft[key], TEXT_LIMITS[key]);
+      const panelAtStart = panelGeneration;
+      const saving = save(cloneSettings(draft));
+      updatePanelBusy();
+      try {
+        const saved = await saving;
+        if (!panelOpen || panelAtStart !== panelGeneration) return;
+        const callback = panelCallbacks?.onSaved;
+        closePanel('saved');
+        try { callback?.(saved); } catch {}
+      } catch (error) {
+        if (panelOpen && panelAtStart === panelGeneration) setPanelStatus(displayError(error?.reason), 'alert');
+      } finally {
+        updatePanelBusy();
+      }
+    });
+    controls.push(restore, cancel, saveButton);
+    actions.append(restore, cancel, saveButton);
+    content.appendChild(actions);
+    dialog.append(style, content);
+    document.body.appendChild(dialog);
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
+      cancelSettings();
+    });
+    panelControls = { controls, status, fields, strength, strengthValue };
+    return true;
+  }
+
+  function openSettings(callbacks = {}) {
+    if (disposed || panelOpen || !currentSettings || active || !buildSettingsPanel()) return false;
+    draft = cloneSettings(currentSettings);
+    panelCallbacks = callbacks && typeof callbacks === 'object' ? callbacks : {};
+    panelGeneration++;
+    panelOpen = true;
+    updatePanelFields();
+    if (loadReason === 'settings-invalid') setPanelStatus('保存记录无法识别；当前使用默认设置，原记录保留。', 'alert');
+    else if (loadReason === 'operation-timeout') setPanelStatus('读取设置超时；当前使用默认值，已保存记录未改动。可以重试。', 'alert');
+    else if (loadReason === 'settings-unavailable' || loadReason === 'settings-blocked') {
+      setPanelStatus('暂时无法读取保存设置；当前使用默认设置，原记录未删除。', 'alert');
+    } else setPanelStatus('');
+    try { dialog.showModal(); }
+    catch {
+      panelOpen = false;
+      panelCallbacks = null;
+      return false;
+    }
+    updatePanelBusy();
+    try { panelCallbacks.onOpen?.(); } catch {}
+    return true;
+  }
+
+  function closePanel(returnValue = '') {
+    if (!panelOpen) return false;
+    panelOpen = false;
+    panelGeneration++;
+    draft = null;
+    panelCallbacks = null;
+    try { dialog?.close(returnValue); } catch {}
+    return true;
+  }
+
+  function cancelSettings() {
+    if (!panelOpen || active) return false;
+    const callback = panelCallbacks?.onCancel;
+    closePanel('cancel');
+    try { callback?.(); } catch {}
+    return true;
+  }
+
+  function isSettingsOpen() { return panelOpen; }
+  function isBusy() { return active !== null; }
+
+  function dispose() {
+    if (disposed) return false;
+    disposed = true;
+    generation++;
+    panelGeneration++;
+    if (active) finish(active, false, makeError('operation-cancelled'));
+    panelOpen = false;
+    panelCallbacks = null;
+    draft = null;
+    try { dialog?.close('dispose'); } catch {}
+    try { dialog?.remove(); } catch {}
+    dialog = null;
+    panelControls = null;
+    try { database?.close(); } catch {}
+    database = null;
+    return true;
   }
 
   function detectType(bytes) {
@@ -430,6 +1210,7 @@ function createImageSettings(environment) {
   }
 
   async function importImage(file, role) {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
     if (!validEnvironment()) return Promise.reject(invalidData('environment-unavailable'));
     if (active) return Promise.reject(makeError('operation-busy'));
     if (role !== 'avatar' && role !== 'artwork') return Promise.reject(invalidData('invalid-role'));
@@ -439,6 +1220,7 @@ function createImageSettings(environment) {
     if (file.size > MAX_INPUT_BYTES) return Promise.reject(invalidData('file-too-large'));
 
     const task = {
+      kind: 'import',
       generation: ++generation,
       startedAt: 0,
       elapsedFallback: 0,
@@ -496,11 +1278,21 @@ function createImageSettings(environment) {
   }
 
   function cancelImport() {
-    if (!active) return false;
+    if (!active || active.kind !== 'import') return false;
     generation += 1;
     finish(active, false, makeError('operation-cancelled'));
     return true;
   }
 
-  return { importImage, cancelImport };
+  return {
+    load,
+    save,
+    importImage,
+    cancelImport,
+    openSettings,
+    cancelSettings,
+    isSettingsOpen,
+    isBusy,
+    dispose,
+  };
 }

@@ -51,6 +51,8 @@ CDP `Runtime.evaluate` 必须使用 `returnByValue=true`；安装可 `awaitPromi
 
 生产采用S同类闭包bridge：父端在mount时绑定`SEND(data)`，由该闭包补入source=currentFrame.contentWindow并调用统一handler；不依赖跨文档冒泡，也不接受data自报source。预览Adapter才用postMessage，必须仍以event.source核对其测试iframe；两条transport共享同一action/schema校验。mount显式设置`module=undefined`，绑定`window/document/location/performance/indexedDB/Image/Path2D/URL/requestAnimationFrame/cancelAnimationFrame/setTimeout/clearTimeout`；timer、事件监听及临时对象均登记在当前iframe清理域。这个同源about:blank是受信任载荷的执行环境，不是安全沙箱，禁止在其中运行用户脚本或任意HTML。
 
+生产闭包的`SEND(data)`保留统一handler的返回值；`background`返回当前父端核验后的壁纸结果，已提交设置的子页据此显示“已保存、壁纸未应用”等部分成功状态。该返回值沿用原bridge和source/runId校验，不新增消息通道；旧run或非当前frame的结果不得更新状态。
+
 在发ready前验证动画样式哨兵computedStyle、非零可视尺寸及两图实际解码；data图片或iframe样式被官方CSP阻断时返回page-unsupported/asset-invalid并清层。Blob壁纸的CSP/样式阻断只报告wallpaper-unsupported，不把它伪装成动画不可用。控制器可监听securitypolicyviolation作为诊断补充，但不能靠“未收到事件”判成功，不修改/放松宿主策略。生产验收同时检查这些策略在真实支持版本有效。
 
 同一套 Animation/Image Settings 用于独立预览；预览宿主只模拟消息，不执行可信进程发现。开发预览可使用回环服务器；正式运行不启动资源服务器，不改变官方包或 CSP。

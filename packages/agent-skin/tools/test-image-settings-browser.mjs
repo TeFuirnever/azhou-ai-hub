@@ -121,6 +121,7 @@ function browserChecks(maxInputBytes) {
       document: childDocument,
       Image: child.Image,
       URL: urlApi,
+      indexedDB: child.indexedDB,
       setTimeout: child.setTimeout.bind(child),
       clearTimeout: child.clearTimeout.bind(child),
       performance: child.performance,
@@ -221,6 +222,56 @@ function browserChecks(maxInputBytes) {
     const boundaryFile = new child.File([smallPng, padding], 'exact-30-mib.png', { type: 'image/png' });
     const boundary = await api.importImage(boundaryFile, 'avatar');
 
+    const defaults = {
+      avatar: crop.dataURL,
+      artwork: art.dataURL,
+      contours: art.contours,
+      introTitle: 'Generated base',
+      introCaption: '',
+      artworkSubtitle: 'Generated fixture only',
+      wallpaperStrength: 42,
+    };
+    const initiallyLoaded = await api.load(defaults);
+    const initialCandidate = {
+      schemaVersion: 1,
+      avatar: crop.dataURL,
+      artwork: art.dataURL,
+      contours: art.contours,
+      introTitle: 'Saved fixture',
+      introCaption: '',
+      artworkSubtitle: 'Generated fixture only',
+      wallpaperStrength: 27,
+    };
+    const initialCommit = await api.save(initialCandidate);
+
+    const secondPage = childDocument.createElement('iframe');
+    const secondPageLoaded = new Promise(resolve => secondPage.addEventListener('load', resolve, { once: true }));
+    secondPage.src = 'about:blank';
+    childDocument.body.append(secondPage);
+    await secondPageLoaded;
+    const secondWindow = secondPage.contentWindow;
+    const secondDocument = secondPage.contentDocument;
+    const secondAPI = createImageSettings({
+      document: secondDocument,
+      Image: secondWindow.Image,
+      URL: secondWindow.URL,
+      indexedDB: secondWindow.indexedDB,
+      setTimeout: secondWindow.setTimeout.bind(secondWindow),
+      clearTimeout: secondWindow.clearTimeout.bind(secondWindow),
+      performance: secondWindow.performance,
+    });
+    const secondPageBaseline = await secondAPI.load(defaults);
+    const winningCandidate = { ...initialCommit, introTitle: 'Page A wins' };
+    const competingCandidate = { ...secondPageBaseline.settings, introTitle: 'Page B stale' };
+    const winningCommit = await api.save(winningCandidate);
+    let conflictReason = '';
+    try { await secondAPI.save(competingCandidate); }
+    catch (error) { conflictReason = error.reason || ''; }
+    const reloaded = await api.load(defaults);
+    secondAPI.dispose();
+    secondPage.remove();
+    api.dispose();
+
     frame.remove();
     return {
       formats,
@@ -239,6 +290,16 @@ function browserChecks(maxInputBytes) {
       revokedCount: revoked.length,
       createdCount: created.length,
       idleCancelResult: api.cancelImport(),
+      storage: {
+        initialReason: initiallyLoaded.reason,
+        initialBaseline: initiallyLoaded.baseline,
+        initialTitle: initialCommit.introTitle,
+        secondPageLoadedTitle: secondPageBaseline.settings.introTitle,
+        winningTitle: winningCommit.introTitle,
+        conflictReason,
+        reloadedTitle: reloaded.settings.introTitle,
+        reloadedBaselineTitle: reloaded.baseline?.introTitle,
+      },
     };
   })();
 }
@@ -334,12 +395,21 @@ try {
   assert.deepEqual(result.boundaryDimensions, [512, 512]);
   assert.equal(result.revokedCount, result.createdCount);
   assert.equal(result.idleCancelResult, false);
+  assert.equal(result.storage.initialReason, '');
+  assert.equal(result.storage.initialBaseline, undefined);
+  assert.equal(result.storage.initialTitle, 'Saved fixture');
+  assert.equal(result.storage.secondPageLoadedTitle, 'Saved fixture');
+  assert.equal(result.storage.winningTitle, 'Page A wins');
+  assert.equal(result.storage.conflictReason, 'settings-conflict');
+  assert.equal(result.storage.reloadedTitle, 'Page A wins');
+  assert.equal(result.storage.reloadedBaselineTitle, 'Page A wins');
   console.log(JSON.stringify({
     status: 'PASS',
-    scope: 'synthetic PNG/JPEG/WebP decode, crop, transparent composite, same-crop contours, flat artwork rejection, 30 MiB valid input boundary',
+    scope: 'synthetic PNG/JPEG/WebP decode, crop, transparent composite, same-crop contours, flat artwork rejection, 30 MiB boundary, real IndexedDB save/reload and two-page conflict',
     formats: result.formats.map(item => item.type),
     boundaryBytes: result.boundarySize,
     objectURLsReleased: result.revokedCount + '/' + result.createdCount,
+    storage: result.storage,
   }, null, 2));
 } catch (error) {
   console.error(error.stack || String(error));
