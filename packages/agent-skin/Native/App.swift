@@ -39,6 +39,12 @@ final class NativeEventWriter: @unchecked Sendable {
         record["launcherPath"] = launcherPath
         sink(record)
     }
+
+    func emitProbe(targetPath: String, targetBundleID: String, running: [[String: Any]],
+                   frontmost: [String: Any], at uptime: TimeInterval? = nil) {
+        emit("probe", fields: ["targetPath": targetPath, "targetBundleID": targetBundleID,
+                               "running": running, "frontmost": frontmost], at: uptime)
+    }
 }
 
 struct NativeStartupStatus {
@@ -644,10 +650,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         }
         if args.contains("--probe") {
             targetURL = targetForCurrentMode()
-            log("probe", ["launcherPath": real(Bundle.main.bundleURL).path, "targetPath": targetURL?.path ?? "",
-                          "targetBundleID": targetURL.flatMap { Bundle(url: $0)?.bundleIdentifier } ?? "",
-                          "running": NSRunningApplication.runningApplications(withBundleIdentifier: targetID).map { appInfo($0) },
-                          "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
+            nativeEventWriter.emitProbe(
+                targetPath: targetURL?.path ?? "",
+                targetBundleID: targetURL.flatMap { Bundle(url: $0)?.bundleIdentifier } ?? "",
+                running: NSRunningApplication.runningApplications(withBundleIdentifier: targetID).map { appInfo($0) },
+                frontmost: appInfo(NSWorkspace.shared.frontmostApplication)
+            )
             terminating = true; NSApp.terminate(nil); return
         }
         if !preview { beginStartupEvents() }

@@ -58,6 +58,19 @@ struct StartupNativeTests {
         }
 
         do {
+            let (writer, records) = makeWriter(startedAt: 24, launcherPID: 124)
+            writer.emitProbe(targetPath: "/Applications/Codex.app", targetBundleID: "com.openai.codex",
+                             running: [], frontmost: [:], at: 25)
+            try write("probe-success", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 26, launcherPID: 126)
+            writer.emitProbe(targetPath: "", targetBundleID: "", running: [], frontmost: [:], at: 27)
+            try write("probe-failure", records())
+        }
+
+        do {
             let (writer, records) = makeWriter(startedAt: 30, launcherPID: 130)
             let stream = NativeStartupEventStream(writer: writer)
             stream.begin(at: 30)
@@ -135,6 +148,39 @@ struct StartupNativeTests {
             do { try operation(); fatalError("FAILED: \(label)") }
             catch { checks += 1 }
         }
+
+        var successfulProbeRecords: [[String: Any]] = []
+        let successfulProbeWriter = NativeEventWriter(
+            startedAt: 700, launcherPID: 170,
+            launcherPath: "/Applications/Agent Skin.app",
+            now: { 701 }, sink: { successfulProbeRecords.append($0) }
+        )
+        successfulProbeWriter.emitProbe(
+            targetPath: "/Applications/Codex.app", targetBundleID: "com.openai.codex",
+            running: [], frontmost: [:], at: 701
+        )
+        expect(successfulProbeRecords.count == 1
+               && successfulProbeRecords[0]["event"] as? String == "probe"
+               && successfulProbeRecords[0]["schema"] as? String == NativeEventWriter.schema
+               && successfulProbeRecords[0]["seconds"] as? Double == 1
+               && successfulProbeRecords[0]["launcherPID"] as? Int == 170
+               && successfulProbeRecords[0]["launcherPath"] as? String == "/Applications/Agent Skin.app"
+               && successfulProbeRecords[0]["targetBundleID"] as? String == "com.openai.codex",
+               "successful read-only probe uses the v1 writer envelope and verified identity fields")
+
+        var missingProbeRecords: [[String: Any]] = []
+        let missingProbeWriter = NativeEventWriter(
+            startedAt: 710, launcherPID: 171,
+            launcherPath: "/Applications/Agent Skin.app",
+            now: { 711 }, sink: { missingProbeRecords.append($0) }
+        )
+        missingProbeWriter.emitProbe(targetPath: "", targetBundleID: "", running: [], frontmost: [:], at: 711)
+        expect(missingProbeRecords.count == 1
+               && missingProbeRecords[0]["event"] as? String == "probe"
+               && missingProbeRecords[0]["schema"] as? String == NativeEventWriter.schema
+               && missingProbeRecords[0]["targetPath"] as? String == ""
+               && missingProbeRecords[0]["targetBundleID"] as? String == "",
+               "a missing target remains a schema-valid but unsuccessful read-only probe")
 
         let existing = StartupTargetFacts(
             pid: 4123,
