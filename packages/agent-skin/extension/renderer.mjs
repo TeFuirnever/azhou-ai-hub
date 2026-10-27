@@ -68,36 +68,34 @@ function wallpaperRecord(host) {
 function mountAppearanceEntry(document, openSettings) {
   const element = document.createElement('div');
   element.setAttribute('data-agent-skin-entry', 'appearance');
+  element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;z-index:2147483646;display:none';
   const shadow = element.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
-  style.textContent = `
-    :host { all: initial; position: fixed; left: 10px; bottom: 72px; z-index: 2147483646; }
-    button { all: initial; box-sizing: border-box; display: block; cursor: pointer;
-      width: 44px; padding: 6px 4px; border: 1px solid #bdb4cf; border-radius: 18px;
-      background: #f7f2fb; color: #30283e; box-shadow: 0 2px 8px #0002;
-      font: 12px/18px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; white-space: normal; }
-    button:hover { background: #eee4f7; }
-    button:focus-visible { outline: 2px solid #9670bb; outline-offset: 3px; }
-    @media (prefers-color-scheme: dark) {
-      button { background: #332c40; color: #f7f2fb; border-color: #79658e; }
-      button:hover { background: #44384f; }
-    }
-  `;
   const button = document.createElement('button');
+  // Match the animation's CSSOM path: a host may reject inline <style> blocks.
+  // System colors keep this owned control readable in either color scheme.
+  button.style.cssText = 'all:initial;box-sizing:border-box;display:block;cursor:pointer;width:44px;padding:6px 4px;border:1px solid #9685ac;border-radius:18px;color-scheme:light dark;background:Canvas;color:CanvasText;box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;text-align:center;white-space:normal;outline:2px solid transparent;outline-offset:3px';
   button.type = 'button';
   button.textContent = '阿舟外观';
   button.setAttribute('aria-label', '阿舟外观设置');
   button.setAttribute('aria-haspopup', 'dialog');
   button.title = '打开阿舟外观设置';
+  const onFocus = () => { button.style.outlineColor = '#9670bb'; };
+  const onBlur = () => { button.style.outlineColor = 'transparent'; };
   button.addEventListener('click', openSettings);
-  shadow.appendChild(style);
+  button.addEventListener('focus', onFocus);
+  button.addEventListener('blur', onBlur);
   shadow.appendChild(button);
   element.style.display = 'none';
   document.documentElement.appendChild(element);
   return {
     element, button,
     update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; },
-    remove() { button.removeEventListener('click', openSettings); element.remove(); },
+    remove() {
+      button.removeEventListener('click', openSettings);
+      button.removeEventListener('focus', onFocus);
+      button.removeEventListener('blur', onBlur);
+      element.remove();
+    },
   };
 }
 

@@ -187,14 +187,15 @@ end
 | 身份位图、Path2D、粒子 | Animation | 释放全部动画引用 | 释放 |
 | input Blob URL | Image Settings | 导入结束已撤销 | 仍有的撤销 |
 | wallpaper Blob URL、样式表 | Wallpaper | 保留一份静态已提交图 | 撤销/移除 |
-| source/message/keydown 监听 | Page Controller | 保留设置所需监听，不保留轮询 | 移除 |
+| message、外观入口及其事件 | Page Controller | 移除消息监听；保留点击入口与焦点反馈，不拦截设置快捷键 | 移除入口及事件 |
+| 有界 shell observer/timer | Builder wrapper / 当前轮次 | 已完成等待或随本轮 iframe 拆除取消 | 断开观察器、清除 timer，禁止迟到应用 |
 | owned 全局 | Page Controller | 保留 status/openSettings/dispose | 仅 identity 仍匹配时删除 |
 | 原始宿主属性/内联样式值及优先级 | Wallpaper | 保留 owned 快照 | 条件恢复，不覆盖宿主后来变更 |
 | IndexedDB | Image Settings | 保留 | 保留 |
 | CDP WebSocket、pending | 原生 Session | ready 后已关闭 | 接入失败时关闭 |
 | 官方进程 CDP 监听端口 | 官方进程 | 仍存在 | 仍存在，完整退出官方进程才关闭 |
 
-settings 状态没有持续动画，不运行常驻扫描。H 壁纸当前没有 MutationObserver，status在被调用时核查DOM；目标也不增加持续DOM扫描。仅在首次document.body尚未出现时允许临时观察器等待body；从安装开始计入25秒watchdog，body出现、超时或dispose时立即断开。任何回调均不得读取聊天文本或触发原生重注入。
+settings 状态没有持续动画，不运行常驻扫描。壁纸 status 在调用时核查 DOM。允许两类有界临时观察器：首次 document.body 尚未出现时等待 body，从安装开始计入 25 秒 watchdog，body 出现、超时或 dispose 时立即断开；本轮壁纸请求在 body 已存在但受支持 shell 尚未挂载时，最多等待 5 秒，继续沿用 renderer 的 root/frame/main-or-page 校验。shell 就绪或等待超时后断开并清 timer；skip、expire、dispose 拆除本轮 iframe 时，在该 DOM 变更回调中取消等待并清理。每个回调与委托 renderer 前均核验本轮仍有效，不得读取聊天文本、触发原生重注入或在后来挂载的页面上复活。
 
 首次加载、保存后重播和设置资源准备共用一个`expire(runId)`转换：先设置phase=timeout/reason=overlay-timeout、终结本轮并使generation失效，再清理iframe与临时资源。禁止只删除iframe却让status仍报playing；settings已成功打开后没有播放watchdog，设置内部操作使用RC4各自预算。没有新增轮询来代替这些事件和timer。
 
