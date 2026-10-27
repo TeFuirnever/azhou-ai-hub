@@ -99,6 +99,7 @@ jobs:
         working-directory: packages/agent-skin
         env:
           PYTHONDONTWRITEBYTECODE: "1"
+          AZHOU_RUN_NATIVE_EVENT_ASSESSMENT: "1"
         run: |
           node --test tools/startup.test.mjs
           node --test tools/image-settings.test.mjs

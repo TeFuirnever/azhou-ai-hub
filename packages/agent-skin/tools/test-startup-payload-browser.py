@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ import sys
 import tempfile
 
 PACKAGE = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = PACKAGE.parents[1]
 LEGACY_PACKAGE = PACKAGE.parent / "codex-startup-animation"
 BUILD_TEST = PACKAGE / "tools/test-startup-build.py"
 
@@ -52,6 +54,23 @@ def main() -> int:
         native = subprocess.run([sys.executable, "-B", "tools/test-startup-native.py"], cwd=root, check=False)
         if native.returncode:
             return native.returncode
+        if os.environ.get("AZHOU_RUN_NATIVE_EVENT_ASSESSMENT") == "1":
+            samples = root / ".build/native-event-samples"
+            emitted = subprocess.run(
+                [str(root / ".build/startup-native-tests"), "--emit-event-jsonl", str(samples)],
+                cwd=root, check=False,
+            )
+            if emitted.returncode:
+                return emitted.returncode
+            environment = os.environ.copy()
+            environment["AZHOU_AGENT_SKIN_NATIVE_EVENT_SAMPLES"] = str(samples)
+            assessment_test = REPOSITORY_ROOT / "tests/test_agent_skin_native_event_assessment.py"
+            assessed = subprocess.run(
+                [sys.executable, "-B", str(assessment_test)], cwd=REPOSITORY_ROOT,
+                env=environment, check=False,
+            )
+            if assessed.returncode:
+                return assessed.returncode
         browser_test = root / "tools/test-startup-browser.mjs"
         command = [node, str(browser_test), "--generated-payload", str(payload), "--out", str(args.out)]
         if args.chrome:
