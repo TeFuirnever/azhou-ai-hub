@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import CoreFoundation
+import CFNetwork
 import Darwin
 
 // A bounded, runtime-only wallpaper client. It never opens or terminates Codex.
@@ -223,6 +224,116 @@ private struct WallpaperTarget: Sendable {
     }
 }
 
+struct StartupTargetFacts: Sendable {
+    let pid: Int32
+    let bundle: URL
+    let executable: URL
+    let bundleID: String
+    let launchTime: TimeInterval?
+}
+
+enum StartupOutcome: Equatable {
+    case activated(pid: Int32)
+    case ready(runID: Int)
+    case skipped(runID: Int, beforeReady: Bool)
+    case partial(reason: String)
+    case failed(reason: String)
+}
+
+struct StartupFailure: LocalizedError {
+    let reason: String
+    let message: String
+    var errorDescription: String? { message }
+}
+
+enum StartupLaunchFlow {
+    @MainActor
+    static func run(
+        existing: StartupTargetFacts?,
+        validate: (StartupTargetFacts) throws -> Void,
+        activate: (StartupTargetFacts) throws -> Bool,
+        coldStart: () async throws -> StartupOutcome
+    ) async throws -> StartupOutcome {
+        guard let existing else { return try await coldStart() }
+        try validate(existing)
+        guard try activate(existing) else {
+            throw StartupFailure(reason: "target-identity", message: "已运行的 Codex 会话无法被确认激活。")
+        }
+        return .activated(pid: existing.pid)
+    }
+}
+
+protocol StartupOperationLock: AnyObject {
+    func release()
+}
+
+protocol StartupTargetSystem {
+    func validate(_ target: StartupTargetFacts) throws
+    func listeningPorts(_ target: StartupTargetFacts) throws -> [Int]
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock
+}
+
+private final class WallpaperOperationLock: StartupOperationLock {
+    private let descriptor: Int32
+    private let stateLock = NSLock()
+    private var released = false
+
+    static func path(uid: UInt32, pid: Int32) -> String {
+        URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("local.azhou.wallpaper-\(uid)-\(pid).lock").path
+    }
+
+    static func acquire(pid: Int32) throws -> WallpaperOperationLock {
+        let descriptor = Darwin.open(path(uid: getuid(), pid: pid), O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            throw WallpaperFailure(state: "busy", message: "该 Codex 进程已有壁纸或启动接入操作。")
+        }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            close(descriptor)
+            throw WallpaperFailure(state: "busy", message: "该 Codex 进程已有壁纸或启动接入操作。")
+        }
+        return WallpaperOperationLock(descriptor: descriptor)
+    }
+
+    private init(descriptor: Int32) { self.descriptor = descriptor }
+
+    func release() {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard !released else { return }
+        released = true
+        flock(descriptor, LOCK_UN)
+        close(descriptor)
+    }
+
+    deinit { release() }
+}
+
+struct CodexStartupTargetSystem: StartupTargetSystem {
+    private func target(_ facts: StartupTargetFacts) throws -> WallpaperTarget {
+        guard facts.bundleID == "com.openai.codex" else {
+            throw StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
+        }
+        let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime)
+        guard target.executable == facts.executable else {
+            throw StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
+        }
+        return target
+    }
+
+    func validate(_ facts: StartupTargetFacts) throws {
+        try target(facts).validateSignature()
+    }
+
+    func listeningPorts(_ facts: StartupTargetFacts) throws -> [Int] {
+        try target(facts).ports()
+    }
+
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock {
+        try WallpaperOperationLock.acquire(pid: pid)
+    }
+}
+
 private enum WallpaperCommand {
     private final class State: @unchecked Sendable {
         let lock = NSLock()
@@ -265,22 +376,109 @@ private enum WallpaperCommand {
     }
 }
 
-private final class WallpaperTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+protocol StartupTransport: AnyObject {
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]]
+    func connect(to url: URL, timeout: TimeInterval) throws
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any]
+    func close()
+}
+
+final class StartupCDPRequestState {
+    private let lock = NSLock()
+    private var serial = 0
+    private var pending = false
+
+    func begin() throws -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !pending, serial < Int.max else {
+            throw StartupFailure(reason: "protocol-error", message: "CDP 只允许一个待处理请求，且请求序号不可耗尽。")
+        }
+        pending = true
+        serial += 1
+        return serial
+    }
+
+    func finish() {
+        lock.lock()
+        pending = false
+        lock.unlock()
+    }
+}
+
+enum StartupCDPReply {
+    case event
+    case result([String: Any])
+}
+
+enum StartupCDPProtocol {
+    static func decode(_ data: Data, expectedID: Int) throws -> StartupCDPReply {
+        guard data.count <= 2 * 1024 * 1024,
+              let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw StartupFailure(reason: "protocol-error", message: "CDP 返回了无效或超限消息。")
+        }
+        guard let responseID = answer["id"] else {
+            guard answer["method"] is String else {
+                throw StartupFailure(reason: "protocol-error", message: "CDP 返回了无法识别的事件。")
+            }
+            return .event
+        }
+        guard integer(responseID) == expectedID else {
+            throw StartupFailure(reason: "protocol-error", message: "CDP 响应序号与当前待处理请求不匹配。")
+        }
+        guard answer["error"] == nil,
+              let result = answer["result"] as? [String: Any],
+              result["exceptionDetails"] == nil,
+              let value = (result["result"] as? [String: Any])?["value"] as? [String: Any] else {
+            throw StartupFailure(reason: "protocol-error", message: "Codex 页面没有返回有效的启动协议结果。")
+        }
+        return .result(value)
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        guard value.isFinite, value.rounded() == value, value >= 0, value <= Double(Int.max) else { return nil }
+        return number.intValue
+    }
+}
+
+final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTransport, @unchecked Sendable {
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil; configuration.httpCookieStorage = nil; configuration.urlCredentialStorage = nil
-        configuration.httpShouldSetCookies = false; configuration.connectionProxyDictionary = [:]
+        configuration.httpShouldSetCookies = false
+        configuration.connectionProxyDictionary = [
+            kCFNetworkProxiesHTTPEnable as String: 0,
+            kCFNetworkProxiesHTTPSEnable as String: 0,
+            kCFNetworkProxiesSOCKSEnable as String: 0,
+            kCFNetworkProxiesProxyAutoConfigEnable as String: 0,
+            kCFNetworkProxiesProxyAutoDiscoveryEnable as String: 0,
+        ]
         configuration.timeoutIntervalForRequest = 2; configuration.timeoutIntervalForResource = 30
         return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }()
     private var serial = 0
+    private var startupSocket: URLSessionWebSocketTask?
+    private let startupRequests = StartupCDPRequestState()
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
-    func close() { session.invalidateAndCancel() }
+    func close() {
+        startupSocket?.cancel(with: .normalClosure, reason: nil)
+        startupSocket = nil
+        session.invalidateAndCancel()
+    }
     func pages(port: Int) async throws -> [[String: Any]] {
+        try await pages(port: port, timeout: 2)
+    }
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
         let url = URL(string: "http://127.0.0.1:\(port)/json/list")!
-        var request = URLRequest(url: url); request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = 2
-        let (data, response) = try await session.data(for: request)
+        var request = URLRequest(url: url); request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = timeout
+        let data: Data
+        let response: URLResponse
+        do { (data, response) = try await session.data(for: request) }
+        catch let error as CancellationError { throw error }
+        catch { throw WallpaperFailure(state: "endpoint-unavailable", message: "本机 Codex 调试端口暂时没有响应。") }
         guard let response = response as? HTTPURLResponse, response.statusCode == 200, response.url == url,
               data.count < 2 * 1024 * 1024,
               let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
@@ -294,6 +492,58 @@ private final class WallpaperTransport: NSObject, URLSessionTaskDelegate, @unche
         var request = URLRequest(url: url); request.timeoutInterval = 30
         let task = session.webSocketTask(with: request); task.maximumMessageSize = 2 * 1024 * 1024; task.resume(); return task
     }
+    func connect(to url: URL, timeout: TimeInterval) throws {
+        guard startupSocket == nil, timeout > 0 else {
+            throw StartupFailure(reason: "protocol-error", message: "本次启动只允许一个已核验页面连接。")
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = min(30, timeout)
+        let task = session.webSocketTask(with: request)
+        task.maximumMessageSize = 2 * 1024 * 1024
+        task.resume()
+        startupSocket = task
+    }
+
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let id = try startupRequests.begin()
+        defer { startupRequests.finish() }
+        guard let socket = startupSocket, timeout > 0 else {
+            throw StartupFailure(reason: "protocol-error", message: "启动页面连接不可用。")
+        }
+        let request: [String: Any] = ["id": id, "method": "Runtime.evaluate", "params": [
+            "expression": source, "returnByValue": true, "awaitPromise": true,
+            "userGesture": false, "timeout": max(1, Int(min(timeout, 10) * 1000))]]
+        let data = try JSONSerialization.data(withJSONObject: request)
+        let expired = StartupTimeoutFlag()
+        let timeoutWork = DispatchWorkItem {
+            expired.set()
+            socket.cancel(with: .goingAway, reason: nil)
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutWork)
+        defer { timeoutWork.cancel() }
+        do {
+            try await socket.send(.string(String(decoding: data, as: UTF8.self)))
+            while true {
+                let message = try await socket.receive()
+                let incoming: Data
+                switch message {
+                case .string(let text): incoming = Data(text.utf8)
+                case .data(let bytes): incoming = bytes
+                @unknown default: throw StartupFailure(reason: "protocol-error", message: "CDP 返回了未知消息类型。")
+                }
+                switch try StartupCDPProtocol.decode(incoming, expectedID: id) {
+                case .event: continue
+                case .result(let value): return value
+                }
+            }
+        } catch let failure as StartupFailure {
+            throw failure
+        } catch {
+            throw StartupFailure(reason: expired.get() ? "attach-timeout" : "protocol-error",
+                                 message: expired.get() ? "CDP 请求超过本轮剩余时间。" : "CDP 连接或消息交换失败。")
+        }
+    }
+
     func evaluate(_ source: String, on socket: URLSessionWebSocketTask) async throws -> [String: Any] {
         serial += 1; let id = serial
         let request: [String: Any] = ["id": id, "method": "Runtime.evaluate", "params": [
@@ -325,6 +575,272 @@ private final class WallpaperTransport: NSObject, URLSessionTaskDelegate, @unche
             }
             return value
         }
+    }
+}
+
+private final class StartupTimeoutFlag {
+    private let lock = NSLock()
+    private var expired = false
+    func set() { lock.lock(); expired = true; lock.unlock() }
+    func get() -> Bool { lock.lock(); defer { lock.unlock() }; return expired }
+}
+
+private struct StartupStatus {
+    let runID: Int
+    let phase: String
+    let ready: Bool
+    let completed: Bool
+    let overlay: Bool
+    let reason: String
+    let completionCause: String?
+    let completionBeforeReady: Bool?
+
+    static func parse(_ value: Any?) -> StartupStatus? {
+        guard let raw = value as? [String: Any],
+              raw["owner"] as? String == "azhou-codex-startup",
+              integer(raw["version"]) == 1,
+              let phase = raw["phase"] as? String,
+              ["loading", "playing", "settings", "complete", "failed", "timeout", "disposed"].contains(phase),
+              let runID = integer(raw["runId"]), runID > 0,
+              let ready = boolean(raw["ready"]),
+              let completed = boolean(raw["completed"]),
+              let overlay = boolean(raw["overlay"]),
+              let reason = raw["reason"] as? String,
+              reason.isEmpty || validReasons.contains(reason),
+              let wallpaper = raw["wallpaper"] as? [String: Any],
+              boolean(wallpaper["applied"]) != nil,
+              let wallpaperReason = wallpaper["reason"] as? String,
+              wallpaperReason.isEmpty || validReasons.contains(wallpaperReason),
+              boolean(wallpaper["imageDecoded"]) != nil,
+              let completionRaw = raw["completion"] else { return nil }
+        let completionCause: String?
+        let completionBeforeReady: Bool?
+        if completionRaw is NSNull {
+            completionCause = nil
+            completionBeforeReady = nil
+        } else {
+            guard let completion = completionRaw as? [String: Any],
+                  let cause = completion["cause"] as? String,
+                  ["natural", "skip", "settings-cancel"].contains(cause),
+                  let beforeReady = boolean(completion["beforeReady"]) else { return nil }
+            completionCause = cause
+            completionBeforeReady = beforeReady
+        }
+        guard completed == (completionCause != nil) else { return nil }
+        switch phase {
+        case "loading": guard !ready, !completed, overlay else { return nil }
+        case "playing": guard ready, !completed, overlay else { return nil }
+        case "settings": guard ready, !completed, overlay else { return nil }
+        case "complete": guard completed, !overlay else { return nil }
+        case "failed", "timeout": guard !overlay, !reason.isEmpty else { return nil }
+        case "disposed": guard !overlay else { return nil }
+        default: return nil
+        }
+        return StartupStatus(runID: runID, phase: phase, ready: ready, completed: completed,
+                             overlay: overlay, reason: reason, completionCause: completionCause,
+                             completionBeforeReady: completionBeforeReady)
+    }
+
+    private static let validReasons: Set<String> = [
+        "target-missing", "target-identity", "listener-mismatch", "page-pending", "page-unsupported",
+        "owner-conflict", "protocol-error", "attach-timeout", "asset-invalid", "storage-unavailable",
+        "wallpaper-unsupported", "overlay-timeout", "ambiguous-main-page", "startup-active",
+        "startup-interrupted", "settings-conflict", "operation-timeout"
+    ]
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        guard value.isFinite, value.rounded() == value, value >= 0, value <= Double(Int.max) else { return nil }
+        return number.intValue
+    }
+
+    private static func boolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+}
+
+struct StartupConnector {
+    let target: StartupTargetFacts
+    let expectedPort: Int
+    let system: any StartupTargetSystem
+    let transport: any StartupTransport
+    let now: () -> TimeInterval
+    let sleep: (TimeInterval) async throws -> Void
+
+    init(
+        target: StartupTargetFacts,
+        expectedPort: Int,
+        system: any StartupTargetSystem,
+        transport: any StartupTransport,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        sleep: @escaping (TimeInterval) async throws -> Void = { seconds in
+            try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        }
+    ) {
+        self.target = target
+        self.expectedPort = expectedPort
+        self.system = system
+        self.transport = transport
+        self.now = now
+        self.sleep = sleep
+    }
+
+    func run(payload: String, deadline: TimeInterval) async -> StartupOutcome {
+        do { return try await attach(payload: payload, deadline: deadline) }
+        catch let error as StartupFailure { return .failed(reason: error.reason) }
+        catch let error as WallpaperFailure {
+            if error.state == "busy" { return .partial(reason: "startup-active") }
+            if ["target-mismatch", "target-changed", "signature-refused"].contains(error.state) {
+                return .failed(reason: "target-identity")
+            }
+            return .failed(reason: "protocol-error")
+        } catch { return .failed(reason: "protocol-error") }
+    }
+
+    private func attach(payload: String, deadline: TimeInterval) async throws -> StartupOutcome {
+        defer { transport.close() }
+        func requireBudget() throws {
+            guard now() < deadline else {
+                throw StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")
+            }
+        }
+        guard (1...65535).contains(expectedPort), !payload.isEmpty,
+              payload.utf8.count < 24 * 1024 * 1024 else {
+            throw StartupFailure(reason: "asset-invalid", message: "缺少有效的本地启动载荷。")
+        }
+        let operationLock = try system.acquireOperationLock(pid: target.pid)
+        defer { operationLock.release() }
+        try requireBudget()
+        try system.validate(target)
+        try requireBudget()
+        guard try system.listeningPorts(target).contains(expectedPort) else {
+            throw StartupFailure(reason: "listener-mismatch", message: "指定调试端口不属于已核验的 Codex 主进程。")
+        }
+        try requireBudget()
+
+        var selectedPage: [String: Any]?
+        while now() < deadline {
+            try requireBudget()
+            guard try system.listeningPorts(target).contains(expectedPort) else {
+                throw StartupFailure(reason: "listener-mismatch", message: "Codex 调试端口归属已变化。")
+            }
+            try requireBudget()
+            let remaining = deadline - now()
+            guard remaining > 0 else { break }
+            let pages: [[String: Any]]
+            do { pages = try await transport.pages(port: expectedPort, timeout: min(1.2, remaining)) }
+            catch let error as WallpaperFailure where error.state == "endpoint-unavailable" {
+                try await sleep(min(0.15, max(0, deadline - now())))
+                continue
+            }
+            let mainPages = pages.filter(WallpaperValidation.mainPage)
+            guard mainPages.count <= 1 else {
+                throw StartupFailure(reason: "ambiguous-main-page", message: "找到多个 Codex 主页面，本次启动接入已拒绝。")
+            }
+            if let page = mainPages.first { selectedPage = page; break }
+            try await sleep(min(0.15, max(0, deadline - now())))
+        }
+        guard let page = selectedPage else {
+            throw StartupFailure(reason: now() >= deadline ? "attach-timeout" : "page-pending",
+                                 message: "在本轮预算内未找到唯一的 Codex 主页面。")
+        }
+        guard let rawSocket = page["webSocketDebuggerUrl"] as? String else {
+            throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面没有可核验的调试连接。")
+        }
+        let pageSocket = try WallpaperValidation.pageSocket(rawSocket, port: expectedPort)
+        try system.validate(target)
+        try requireBudget()
+        guard try system.listeningPorts(target).contains(expectedPort) else {
+            throw StartupFailure(reason: "listener-mismatch", message: "选中主页面后调试端口归属已变化。")
+        }
+        try requireBudget()
+        try transport.connect(to: pageSocket, timeout: min(5, deadline - now()))
+
+        let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
+        guard let href = inspected["href"] as? String,
+              WallpaperValidation.mainPage(["type": "page", "url": href]),
+              let controllerPresent = Self.boolean(inspected["controllerPresent"]) else {
+            throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面在建立连接后已导航或不受支持。")
+        }
+        guard !controllerPresent else {
+            return .partial(reason: "startup-active")
+        }
+        try system.validate(target)
+        try requireBudget()
+        guard try system.listeningPorts(target).contains(expectedPort) else {
+            throw StartupFailure(reason: "listener-mismatch", message: "发送启动载荷前调试端口归属已变化。")
+        }
+        try requireBudget()
+        let install = try await transport.evaluate(try Self.installExpression(payload), timeout: min(10, deadline - now()))
+        guard let installed = Self.boolean(install["installed"]),
+              let alreadyActive = Self.boolean(install["alreadyActive"]) else {
+            throw StartupFailure(reason: "protocol-error", message: "启动载荷没有返回有效安装结果。")
+        }
+        guard installed else {
+            let reportedReason = install["reason"] as? String
+            let reason = reportedReason.flatMap { value in
+                ["owner-conflict", "page-unsupported", "asset-invalid", "storage-unavailable"].contains(value) ? value : nil
+            } ?? "protocol-error"
+            throw StartupFailure(reason: reason, message: "页面没有安装有效的启动控制器，本次未继续。")
+        }
+        guard !alreadyActive else { return .partial(reason: "startup-active") }
+
+        var runID: Int?
+        while now() < deadline {
+            let remaining = deadline - now()
+            guard remaining > 0 else { break }
+            let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, remaining))
+            guard response["href"] as? String == href else {
+                return .partial(reason: "startup-interrupted")
+            }
+            guard let missing = Self.boolean(response["missing"]) else {
+                throw StartupFailure(reason: "protocol-error", message: "页面没有返回有效的控制器状态标记。")
+            }
+            if missing { return .partial(reason: "startup-interrupted") }
+            guard let status = StartupStatus.parse(response["status"]) else {
+                throw StartupFailure(reason: "protocol-error", message: "启动控制器状态不符合协议 Schema。")
+            }
+            if let runID, status.runID != runID { return .partial(reason: "startup-interrupted") }
+            if runID == nil { runID = status.runID }
+            if status.phase == "failed" || status.phase == "timeout" {
+                return .failed(reason: status.reason)
+            }
+            if status.completionCause == "skip", status.completed, !status.overlay {
+                return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
+            }
+            if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
+                return .ready(runID: status.runID)
+            }
+            if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
+            try await sleep(min(0.1, max(0, deadline - now())))
+        }
+        return .failed(reason: "attach-timeout")
+    }
+
+    private static let inspectExpression = """
+    (() => { const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); return {href: location.href, controllerPresent: Boolean(d)}; })()
+    """
+    private static let statusExpression = """
+    (() => { const href = location.href; const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); if (!d || !("value" in d) || !d.value || typeof d.value.status !== "function") return {href, missing: true}; return {href, missing: false, status: d.value.status()}; })()
+    """
+
+    private static func installExpression(_ payload: String) throws -> String {
+        let encoded = try JSONSerialization.data(withJSONObject: [payload])
+        let array = String(decoding: encoded, as: UTF8.self)
+        guard array.first == "[", array.last == "]" else {
+            throw StartupFailure(reason: "asset-invalid", message: "本地启动载荷无法安全编码。")
+        }
+        let literal = String(array.dropFirst().dropLast())
+        return """
+        (() => { if (Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup')) return {installed: false, alreadyActive: false, reason: 'owner-conflict'}; return Promise.resolve((0, eval)(\(literal))).then(result => result); })()
+        """
+    }
+
+    private static func boolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
     }
 }
 
@@ -433,15 +949,11 @@ enum WallpaperCLI {
     private static func perform(_ request: WallpaperRequest, began: TimeInterval) async throws -> [String: Any] {
         let target = request.target, transport = WallpaperTransport()
         defer { transport.close() }
-        var lock: Int32 = -1
+        var operationLock: WallpaperOperationLock?
         if request.action == .apply || request.action == .restore {
-            let path = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("local.azhou.wallpaper-\(getuid())-\(target.pid).lock").path
-            lock = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
-            guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else {
-                if lock >= 0 { close(lock) }; throw WallpaperFailure(state: "busy", message: "该 Codex 进程已有壁纸操作，未重复注入。")
-            }
+            operationLock = try WallpaperOperationLock.acquire(pid: target.pid)
         }
-        defer { if lock >= 0 { flock(lock, LOCK_UN); close(lock) } }
+        defer { operationLock?.release() }
         if !request.cold, request.port == nil, try target.ports().isEmpty {
             return ["state": "needs-restart", "applied": false,
                     "message": "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。"]

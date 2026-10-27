@@ -2,7 +2,37 @@ import AppKit
 import WebKit
 import Darwin
 
-// Local, short-lived player. Wallpaper is a separate bounded runtime-only task.
+private final class StartupApplicationWaiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<NSRunningApplication, Error>?
+    private var completed = false
+    private var timeout: DispatchWorkItem?
+
+    init(_ continuation: CheckedContinuation<NSRunningApplication, Error>) {
+        self.continuation = continuation
+    }
+
+    func setTimeout(_ timeout: DispatchWorkItem) {
+        lock.lock()
+        if completed { lock.unlock(); timeout.cancel(); return }
+        self.timeout = timeout
+        lock.unlock()
+    }
+
+    func finish(_ result: Result<NSRunningApplication, Error>) {
+        lock.lock()
+        guard !completed, let continuation else { lock.unlock(); return }
+        completed = true
+        self.continuation = nil
+        let timeout = self.timeout
+        self.timeout = nil
+        lock.unlock()
+        timeout?.cancel()
+        continuation.resume(with: result)
+    }
+}
+
+// The native window is retained only for explicit preview and smoke runs.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
     private let args = CommandLine.arguments
@@ -13,8 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var lockFD: Int32 = -1
     private var ready = false, opening = false, requested = false, done = false
     private var terminating = false, failed = false, activated = false, promoted = false
-    private var wallpaperProcess: Process?, wallpaperResult: [String: Any]?
-    private var wallpaperStarted = false, wallpaperMayFinish = false
+    private var startupRequested = false, processExitCode: Int32 = 0
     private var snapshots: [DispatchWorkItem] = []
     private var preview: Bool { !promoted && (args.contains("--preview") || args.contains("--smoke-test")) }
     private func option(_ key: String) -> String? {
@@ -99,7 +128,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             terminating = true; NSApp.terminate(nil); return
         }
         guard lockInstance() else { terminating = true; NSApp.terminate(nil); return }
-        log("player-start", ["mode": preview ? "preview" : "launch", "targetPath": targetURL?.path ?? ""])
+        if !preview {
+            log("startup-launcher-start", ["targetPath": targetURL?.path ?? "", "deadlineSeconds": 60])
+            startTrustedSession()
+            return
+        }
+        log("player-start", ["mode": "preview", "targetPath": targetURL?.path ?? ""])
         let menu = NSMenu(), item = NSMenuItem(), submenu = NSMenu()
         menu.addItem(item); item.submenu = submenu
         submenu.addItem(withTitle: "退出阿舟启动 Codex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -158,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 self.log("playback-start", ["durationSeconds": duration, "window": self.windowGeometry()])
                 self.armWatchdog(max(25, duration + 12), "renderer-complete-timeout")
                 self.scheduleSnapshots(duration)
-                if !self.preview { self.startTarget() }
+                if !self.preview { self.startTrustedSession() }
             }
         case "complete":
             guard ready, !done, !failed else { return }
@@ -181,127 +215,223 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         default: log("unhandled-message", ["action": action])
         }
     }
-    private func startTarget() {
-        guard !requested, !terminating else { return }; requested = true
-        guard let url = targetURL, validTarget(url) == url else { fail("没有找到有效的 Codex 主程序。", "target-missing"); return }
-        if let existing = NSRunningApplication.runningApplications(withBundleIdentifier: targetID)
-            .first(where: { !$0.isTerminated && $0.bundleURL.map({ real($0) }) == url }) {
-            target = existing; log("target-reused", ["target": appInfo(existing)])
-            startWallpaper(existing, cold: false); finishIfReady("target-reused"); return
+    private func startupFacts(_ app: NSRunningApplication) throws -> StartupTargetFacts {
+        guard !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
+              let bundleID = app.bundleIdentifier else {
+            throw StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
         }
-        opening = true
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
-        configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
-        configuration.addsToRecentItems = false
-        let wallpaperPort = prepareWallpaperPort()
-        if let port = wallpaperPort {
-            // Pass a positive port: Chromium's port=0 also enables its
-            // AutomationControlled runtime feature. Never use zero as fallback.
-            configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(port)"]
-        } else {
-            let result: [String: Any] = ["state": "port-unavailable", "applied": false,
-                                        "message": "未能准备壁纸连接端口；Codex 将正常启动，本次不应用壁纸。"]
-            wallpaperStarted = true; wallpaperResult = result
-            log("wallpaper-port-unavailable", result); showWallpaperStatus(result)
+        return StartupTargetFacts(pid: app.processIdentifier, bundle: real(bundle), executable: real(executable),
+                                  bundleID: bundleID, launchTime: app.launchDate?.timeIntervalSince1970)
+    }
+
+    private func startupPayload() throws -> String {
+        guard let resources = Bundle.main.resourceURL else {
+            throw StartupFailure(reason: "asset-invalid", message: "缺少 Agent Skin 资源目录；本次不会启动或注入 Codex。")
         }
-        log("target-open-request", ["path": url.path, "bundleID": targetID])
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { [weak self] app, error in
-            DispatchQueue.main.async {
-                guard let self, !self.terminating else { return }; self.opening = false
-                if let error { self.fail("Codex 启动失败：\(error.localizedDescription)", "target-open-error"); return }
-                guard let app, !app.isTerminated, app.bundleIdentifier == self.targetID,
-                      app.bundleURL.map({ self.real($0) }) == url else { self.fail("系统返回的应用与核实路径不符。", "target-mismatch"); return }
-                self.target = app
-                self.log("target-launch-completion", ["target": self.appInfo(app), "rendererReadiness": "not-measured"])
-                if wallpaperPort != nil { self.startWallpaper(app, cold: true) }
-                self.finishIfReady("target-launch-completion")
+        let root = real(resources)
+        let source = root.appendingPathComponent("startup/install.js")
+        guard source.path.hasPrefix(root.path + "/"),
+              (try? source.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey]).isSymbolicLink) != true,
+              (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+              let bytes = try? Data(contentsOf: source), !bytes.isEmpty, bytes.count < 24 * 1024 * 1024,
+              let text = String(data: bytes, encoding: .utf8) else {
+            throw StartupFailure(reason: "asset-invalid", message: "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。")
+        }
+        return text
+    }
+
+    @MainActor
+    private func startTrustedSession() {
+        guard !startupRequested, !terminating else { return }
+        startupRequested = true; requested = true
+        guard let url = targetURL, validTarget(url) == url else {
+            finishStartup(.failed(reason: "target-missing"), promoted: promoted); return
+        }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: targetID).filter { !$0.isTerminated }
+        let matching = running.filter { $0.bundleURL.map({ real($0) }) == url }
+        guard running.isEmpty || (running.count == 1 && matching.count == 1) else {
+            finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
+        }
+        let existing: StartupTargetFacts?
+        if let app = matching.first {
+            guard let facts = try? startupFacts(app) else {
+                finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
             }
+            existing = facts
+        } else { existing = nil }
+
+        let system = CodexStartupTargetSystem()
+        let deadline = epoch + 60
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let outcome: StartupOutcome
+            do {
+                outcome = try await StartupLaunchFlow.run(
+                    existing: existing,
+                    validate: { try system.validate($0) },
+                    activate: { facts in
+                        guard let app = NSRunningApplication(processIdentifier: facts.pid), !app.isTerminated,
+                              app.bundleIdentifier == facts.bundleID,
+                              app.bundleURL.map({ self.real($0) }) == facts.bundle,
+                              app.executableURL.map({ self.real($0) }) == facts.executable,
+                              app.launchDate?.timeIntervalSince1970 == facts.launchTime else {
+                            throw StartupFailure(reason: "target-identity", message: "已核验的 Codex 进程发生变化。")
+                        }
+                        self.target = app
+                        let activated = app.activate(options: [])
+                        self.activated = activated
+                        return activated
+                    },
+                    coldStart: {
+                        let payload = try self.startupPayload()
+                        let port = try self.prepareStartupPort()
+                        self.opening = true
+                        let app = try await self.openCodex(url, port: port, deadline: deadline, system: system)
+                        self.opening = false
+                        self.target = app
+                        let facts = try self.startupFacts(app)
+                        return await StartupConnector(target: facts, expectedPort: port, system: system,
+                                                      transport: WallpaperTransport())
+                            .run(payload: payload, deadline: deadline)
+                    }
+                )
+            } catch let error as StartupFailure { outcome = .failed(reason: error.reason) }
+            catch { outcome = .failed(reason: "protocol-error") }
+            self.opening = false
+            self.finishStartup(outcome, promoted: self.promoted)
         }
     }
-    private func prepareWallpaperPort() -> Int? {
-        func refused(_ operation: String) -> Int? {
+
+    private func prepareStartupPort() throws -> Int {
+        func refused(_ operation: String) -> StartupFailure {
             let code = errno
-            log("wallpaper-port-error", ["operation": operation, "errno": Int(code)]); return nil
+            log("startup-port-error", ["operation": operation, "errno": Int(code)])
+            return StartupFailure(reason: "listener-mismatch", message: "未能准备 Codex 本机回环调试端口。")
         }
         let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-        guard descriptor >= 0 else { return refused("socket") }
+        guard descriptor >= 0 else { throw refused("socket") }
         defer { Darwin.close(descriptor) }
-        guard fcntl(descriptor, F_SETFD, FD_CLOEXEC) == 0 else { return refused("close-on-exec") }
+        guard fcntl(descriptor, F_SETFD, FD_CLOEXEC) == 0 else { throw refused("close-on-exec") }
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         address.sin_family = sa_family_t(AF_INET)
         address.sin_port = 0
         address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
         let bound = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
         }
-        guard bound == 0 else { return refused("bind-loopback") }
+        guard bound == 0 else { throw refused("bind-loopback") }
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         let named = withUnsafeMutablePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.getsockname(descriptor, $0, &length) }
         }
-        guard named == 0 else { return refused("getsockname") }
+        guard named == 0 else { throw refused("getsockname") }
         let port = Int(UInt16(bigEndian: address.sin_port))
         guard (1...65535).contains(port), address.sin_family == sa_family_t(AF_INET),
               address.sin_addr.s_addr == inet_addr("127.0.0.1") else {
-            log("wallpaper-port-error", ["operation": "validate-selected-port"]); return nil
+            throw StartupFailure(reason: "listener-mismatch", message: "分配的 Codex 回环端口无效。")
         }
-        // The reservation closes on return, before NSWorkspace launches Codex.
-        // Another process may win the bind-close race; the helper must still
-        // discover and verify Codex's actual PID-owned listener, with no retry
-        // that launches another app instance or terminates an existing one.
-        log("wallpaper-port-selected", ["port": port, "requiresTargetListenerVerification": true])
+        log("startup-port-selected", ["port": port, "requiresTargetListenerVerification": true])
         return port
     }
-    private func startWallpaper(_ app: NSRunningApplication, cold: Bool) {
-        guard !wallpaperStarted, !preview, !terminating, let executable = Bundle.main.executableURL,
-              let bundle = app.bundleURL, validTarget(bundle) == real(bundle) else { return }
-        wallpaperStarted = true
-        let requestID = UUID().uuidString, helper = Process()
-        helper.executableURL = executable
-        helper.arguments = ["--wallpaper-helper", "--action", "apply", "--target-pid", String(app.processIdentifier),
-                            "--target-bundle", real(bundle).path, "--request-id", requestID]
-        if let date = app.launchDate { helper.arguments?.append(contentsOf: ["--target-start-time", String(date.timeIntervalSince1970)]) }
-        if cold { helper.arguments?.append("--cold") }
-        helper.standardOutput = FileHandle.nullDevice; helper.standardError = FileHandle.nullDevice
-        helper.terminationHandler = { [weak self] task in
-            let result = WallpaperJournal.latest(requestID: requestID) ?? ["state": "unconfirmed", "applied": false,
-                "message": "壁纸辅助任务已结束，但没有可核实的完成记录。", "exitCode": Int(task.terminationStatus)]
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.wallpaperResult = result
-                self.log("wallpaper-helper-complete", ["result": result, "exitCode": Int(task.terminationStatus)])
-                if !self.terminating { self.showWallpaperStatus(result) }
+
+    private func openCodex(_ url: URL, port: Int, deadline: TimeInterval,
+                           system: CodexStartupTargetSystem) async throws -> NSRunningApplication {
+        guard deadline > ProcessInfo.processInfo.systemUptime else {
+            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            let waiter = StartupApplicationWaiter(continuation)
+            let timeout = DispatchWorkItem {
+                waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")))
+            }
+            waiter.setTimeout(timeout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + (deadline - ProcessInfo.processInfo.systemUptime), execute: timeout)
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
+            configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
+            configuration.addsToRecentItems = false
+            configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(port)"]
+            log("target-open-request", ["path": url.path, "bundleID": targetID, "debuggingPort": port])
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { [weak self] app, error in
+                DispatchQueue.main.async {
+                    guard let self else {
+                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "启动入口已结束。")))
+                        return
+                    }
+                    guard ProcessInfo.processInfo.systemUptime < deadline else {
+                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动超过 60 秒总预算。")))
+                        return
+                    }
+                    if error != nil {
+                        waiter.finish(.failure(StartupFailure(reason: "target-missing", message: "Codex 启动失败。")))
+                        return
+                    }
+                    guard let app, !app.isTerminated, app.bundleURL.map({ self.real($0) }) == url,
+                          app.bundleIdentifier == self.targetID else {
+                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")))
+                        return
+                    }
+                    do {
+                        try system.validate(self.startupFacts(app))
+                        waiter.finish(.success(app))
+                    } catch {
+                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")))
+                    }
+                }
             }
         }
-        wallpaperProcess = helper
-        do {
-            try helper.run()
-            log("wallpaper-helper-start", ["helperPID": Int(helper.processIdentifier), "target": appInfo(app),
-                                           "mode": cold ? "cold" : "warm", "deadlineSeconds": 30, "requestID": requestID])
-        } catch {
-            let result: [String: Any] = ["state": "helper-failed", "applied": false, "message": "壁纸辅助任务未能启动。"]
-            wallpaperResult = result; log("wallpaper-helper-failed", ["message": error.localizedDescription]); showWallpaperStatus(result)
-        }
     }
-    private func showWallpaperStatus(_ result: [String: Any]) {
-        guard ready else { return }
-        let state = result["state"] as? String ?? "unconfirmed"
-        let message = state == "applied" ? "阿舟壁纸已应用" : state == "needs-restart"
-            ? "壁纸未应用：请自行完全退出 Codex，再从阿舟入口启动。"
-            : "壁纸本次未确认生效；Codex 将正常打开。"
-        guard let data = try? JSONSerialization.data(withJSONObject: [message]), let json = String(data: data, encoding: .utf8) else { return }
-        // A separate text node survives the animation's normal phase updates.
-        // It adds no dialog, focus change, replay, or delay to the 7.8s sequence.
-        webView.evaluateJavaScript("""
-        (() => { const phase = document.getElementById('phase'); if (!phase) return;
-          let note = document.getElementById('wallpaper-status');
-          if (!note) { note = document.createElement('span'); note.id = 'wallpaper-status'; note.setAttribute('role','status');
-            note.style.letterSpacing = '0'; note.style.color = '#795f78'; phase.parentElement.appendChild(note); }
-          note.textContent = ' · ' + \(json)[0];
-        })()
-        """, completionHandler: nil)
+
+    private func finishStartup(_ outcome: StartupOutcome, promoted: Bool) {
+        switch outcome {
+        case .activated(let pid):
+            log("target-activated", ["targetPID": Int(pid)])
+            processExitCode = 0
+        case .ready(let runID):
+            log("startup-ready", ["runID": runID, "animationComplete": false])
+            processExitCode = 0
+            if let target, !target.isTerminated {
+                activated = target.activate(options: [])
+                log("target-activation-after-startup", ["allowed": activated, "targetPID": Int(target.processIdentifier)])
+            }
+        case .skipped(let runID, let beforeReady):
+            log("startup-skipped", ["runID": runID, "beforeReady": beforeReady])
+            processExitCode = 0
+            if let target, !target.isTerminated { activated = target.activate(options: []) }
+        case .partial(let reason):
+            log("startup-partial", ["reason": reason])
+            processExitCode = 2
+        case .failed(let reason):
+            log("startup-failed", ["reason": reason, "message": startupMessage(reason)])
+            processExitCode = 1
+        }
+        if case .failed(let reason) = outcome { fail(startupMessage(reason), reason); return }
+        if case .partial(let reason) = outcome { fail(startupMessage(reason), reason); return }
+        if promoted {
+            if done { finishIfReady("startup-ready") }
+            return
+        }
+        terminating = true
+        NSApp.terminate(nil)
+    }
+
+    private func startupMessage(_ reason: String) -> String {
+        switch reason {
+        case "target-missing": return "没有找到有效的 Codex 主程序。"
+        case "target-identity": return "Codex 进程身份或签名核验未通过。"
+        case "listener-mismatch": return "Codex 调试端口不属于已核验的主进程。"
+        case "page-pending": return "Codex 主页面尚未准备好。"
+        case "page-unsupported": return "当前 Codex 页面不符合启动接入要求。"
+        case "ambiguous-main-page": return "找到多个 Codex 主页面，本次启动接入已拒绝。"
+        case "owner-conflict", "startup-active": return "Codex 页面已有启动控制器，本次没有覆盖或重播。"
+        case "startup-interrupted": return "Codex 页面在启动接入期间发生变化。"
+        case "attach-timeout": return "Codex 启动接入超过 60 秒总预算。"
+        case "asset-invalid": return "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。"
+        default: return "Codex 启动接入未完成；Codex 进程保持运行。"
+        }
     }
     @discardableResult
     private func activateOnce(_ reason: String) -> Bool {
@@ -321,10 +451,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard activateOnce(reason) else {
             fail("系统没有接受 Codex 激活请求。请关闭此窗口后，从原应用入口打开。", "activation-rejected"); return
         }
-        terminating = true; wallpaperMayFinish = true; watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
-        log("handoff-fade-start", ["frontmost": appInfo(NSWorkspace.shared.frontmostApplication),
-                                   "wallpaper": wallpaperResult ?? ["state": "pending", "applied": false],
-                                   "wallpaperHelperStillFinishing": wallpaperProcess?.isRunning ?? false])
+        terminating = true; watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
+        log("handoff-fade-start", ["frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.28; self.window.animator().alphaValue = 0
         }, completionHandler: {
@@ -383,7 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             webView.evaluateJavaScript("window.launcherUI.promoteLaunch()") { [weak self] _, error in
                 guard let self else { return }
                 if let error { self.fail(error.localizedDescription, "preview-promotion-error"); return }
-                self.log("preview-promoted-to-launch"); self.startTarget()
+                self.log("preview-promoted-to-launch"); self.startTrustedSession()
             }
         }
         return false
@@ -399,14 +527,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func applicationWillTerminate(_ notification: Notification) {
         watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
-        if let helper = wallpaperProcess, helper.isRunning {
-            if wallpaperMayFinish { log("wallpaper-helper-finishing-after-handoff", ["helperPID": Int(helper.processIdentifier), "deadlineSeconds": 30]) }
-            else { helper.terminate(); log("wallpaper-helper-cancelled", ["helperPID": Int(helper.processIdentifier), "reason": "player-cancelled"]) }
-        }
         log("player-terminated", ["failed": failed, "completed": done, "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
         webView?.stopLoading(); webView?.configuration.userContentController.removeScriptMessageHandler(forName: "launcher")
         if lockFD >= 0 { flock(lockFD, LOCK_UN); close(lockFD); lockFD = -1 }
         try? logFile?.close()
+        if processExitCode != 0 { Darwin.exit(processExitCode) }
     }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url, url.isFileURL, let root = webRoot else { decisionHandler(.cancel); return }

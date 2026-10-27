@@ -71,7 +71,7 @@ jobs:
         run: bun test tests/ --path-ignore-patterns '**/tests/pi/**'
 
   startup-animation-macos:
-    name: Startup animation and Pet validation
+    name: Startup and Pet validation
     runs-on: macos-latest
     timeout-minutes: 10
     permissions:
@@ -95,6 +95,17 @@ jobs:
         run: |
           python -B tools/test-codex-pet.py
           python -B tools/test-import-codex-pet.py
+      - name: Run Agent Skin startup protocol checks
+        working-directory: packages/agent-skin
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          node --test tools/startup.test.mjs
+          python -B tools/test-startup-native.py
+          mkdir -p .build
+          xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
+            Native/App.swift Native/Wallpaper.swift -o .build/startup-app-compile \
+            -framework AppKit -framework WebKit
       - name: Run pure wallpaper validation
         working-directory: packages/codex-startup-animation
         run: |
