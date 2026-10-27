@@ -202,6 +202,48 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         wallpaper,
         animation,
         '''
+  function wallpaperShellState(isCurrent) {
+    if (typeof isCurrent === 'function' && !isCurrent()) return 'cancelled';
+    const applicationRoot = document.getElementById('root');
+    return document.body && applicationRoot
+      && applicationRoot.querySelector('[data-app-shell-frame]')
+      && applicationRoot.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]')
+      ? 'ready' : null;
+  }
+  function waitForWallpaperShell(isCurrent) {
+    const initial = wallpaperShellState(isCurrent);
+    if (initial) return Promise.resolve(initial);
+    const Observer = globalThis.MutationObserver;
+    if (typeof Observer !== 'function' || !document.documentElement) return Promise.resolve('unsupported');
+    return new Promise(resolve => {
+      let observer;
+      let timer;
+      let settled = false;
+      const finish = state => {
+        if (settled) return;
+        settled = true;
+        observer?.disconnect();
+        globalThis.clearTimeout(timer);
+        resolve(state);
+      };
+      const check = () => {
+        const state = wallpaperShellState(isCurrent);
+        if (state) finish(state);
+      };
+      try {
+        observer = new Observer(check);
+        observer.observe(document.documentElement, {
+          childList: true, subtree: true, attributes: true,
+          attributeFilter: ['data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'],
+        });
+      } catch {
+        finish('unsupported');
+        return;
+      }
+      timer = globalThis.setTimeout(() => finish(wallpaperShellState(isCurrent) || 'timeout'), 5000);
+      check();
+    });
+  }
   async function applyWallpaper(value, isCurrent) {
     if (!value || typeof value.image !== 'string' || typeof globalThis.crypto?.subtle?.digest !== 'function') {
       throw new TypeError('wallpaper-unsupported');
@@ -211,6 +253,11 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
     const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
     const imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
     if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
+    const shellState = await waitForWallpaperShell(isCurrent);
+    if (shellState === 'cancelled' || (typeof isCurrent === 'function' && !isCurrent())) {
+      return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
+    }
+    if (shellState !== 'ready') return { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
     return installRenderer({
       version: APP_VERSION, image: value.image, imageSHA256, css: WALLPAPER_CSS,
       strength: value.strength, isCurrent,
