@@ -19,7 +19,7 @@ function installAnimation(
   const WIDTH = 1536;
   const HEIGHT = 1024;
   const DURATION = 12000;
-  const IDENTITY_RELEASE_MS = 5080;
+  const IDENTITY_RELEASE_MS = 4740;
   const TILE = 48;
   const MAX_PATHS = 1200;
   const MAX_POINTS = 300000;
@@ -81,8 +81,9 @@ function installAnimation(
   let lineCanvas = null;
   let lineContext = null;
   let cachedPaths = [];
+  let pathFragments = [];
+  let pathFragmentSpan = 18;
   let particles = [];
-  let particleTargets = [];
   let resizeObserver = null;
   let pixelRatioQuery = null;
   let pixelRatioListener = null;
@@ -91,6 +92,7 @@ function installAnimation(
   let rafId = 0;
   const timeoutIds = new Set();
   let generation = 0;
+  let seekRequestGeneration = 0;
   let elapsed = 0;
   let origin = 0;
   let lastFrame = 0;
@@ -288,7 +290,10 @@ function installAnimation(
     const visibleLogicalWidth = Math.min(WIDTH, width / scale);
     fitSubtitle(visibleLogicalWidth);
     const identityLayoutChanged = fitIdentity(visibleLogicalWidth);
-    if (loaded && identityLayoutChanged) renderIdentityBitmap(generation).catch(() => {});
+    if (loaded && identityLayoutChanged) {
+      seekRequestGeneration++;
+      renderIdentityBitmap(generation).catch(() => {});
+    }
     if (loaded) drawAt(elapsed, false);
   }
 
@@ -384,7 +389,7 @@ function installAnimation(
   }
 
   function drawPulse(milliseconds) {
-    const pulse = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(milliseconds / 180));
+    const pulse = reduced ? 0.5 : 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(milliseconds / 180));
     context.strokeStyle = 'rgb(251 216 178)';
     context.globalAlpha = 0.18 + pulse * 0.3;
     context.lineWidth = 3;
@@ -406,7 +411,8 @@ function installAnimation(
   }
 
   function drawIdentityFragments(amount, scattered = false) {
-    if (!identityBitmap) return;
+    const source = identityBitmap || identityCanvas;
+    if (!source) return;
     const progress = smooth(amount);
     context.globalAlpha = 1;
     for (let index = 0; index < particles.length; index++) {
@@ -416,38 +422,44 @@ function installAnimation(
       const y = item.sy + (item.scatterY - item.sy) * drift;
       const opacity = scattered ? 0.95 : 1 - progress * 0.08;
       context.globalAlpha = opacity;
-      context.drawImage(identityBitmap, item.sx, item.sy, item.sw, item.sh, x, y, item.sw, item.sh);
+      context.drawImage(source, item.sx, item.sy, item.sw, item.sh, x, y, item.sw, item.sh);
     }
     context.globalAlpha = 1;
   }
 
-  function drawShardsIntoPaths(amount, milliseconds) {
+  function drawReducedDispersal(amount) {
     const progress = smooth(amount);
-    if (lineCanvas) {
+    const source = identityBitmap || identityCanvas;
+    if (source) {
+      context.globalAlpha = 1 - progress;
+      context.drawImage(source, 0, 0, WIDTH, HEIGHT);
+    }
+    drawPathFragments(1, true, progress);
+    context.globalAlpha = 1;
+  }
+
+  function drawPathFragments(amount, staticOnly = false, alpha = 1) {
+    const progress = clamp(amount);
+    const front = 1.5 * progress - 0.25;
+    const arrivalBand = clamp(pathFragmentSpan / WIDTH, 0.01, 0.12);
+    context.strokeStyle = 'rgba(255, 248, 239, .92)';
+    context.lineWidth = 2.4;
+    context.lineJoin = 'round';
+    context.lineCap = 'round';
+    for (let index = 0; index < pathFragments.length; index++) {
+      const item = pathFragments[index];
+      const localProgress = staticOnly ? 1 : smooth((front - item.centerX / WIDTH + arrivalBand) / (2 * arrivalBand));
+      const x = staticOnly ? item.centerX : item.scatterX + (item.centerX - item.scatterX) * localProgress;
+      const y = staticOnly ? item.centerY : item.scatterY + (item.centerY - item.scatterY) * localProgress;
+      context.globalAlpha = alpha;
       context.save();
-      context.beginPath();
-      context.rect(0, 0, WIDTH * clamp(1.5 * progress - 0.25), HEIGHT);
-      context.clip();
-      context.drawImage(lineCanvas, 0, 0);
+      context.translate(x, y);
+      context.rotate(staticOnly ? 0 : item.rotation * (1 - localProgress));
+      context.translate(-item.centerX, -item.centerY);
+      context.stroke(item.path);
       context.restore();
     }
-    context.fillStyle = 'rgba(255, 248, 239, .88)';
-    for (let index = 0; index < particleTargets.length; index++) {
-      const item = particleTargets[index];
-      const x = item.scatterX + (item.x - item.scatterX) * progress;
-      const y = item.scatterY + (item.y - item.scatterY) * progress;
-      const radius = 1.6 + smooth(1 - Math.abs(progress - 0.7)) * 1.8;
-      context.beginPath();
-      context.arc(x, y, radius, 0, Math.PI * 2);
-      context.fill();
-    }
-    if (!reduced && progress > 0 && progress < 1) {
-      const front = WIDTH * clamp(1.5 * progress - 0.25);
-      context.fillStyle = 'rgba(255, 218, 176, .9)';
-      context.beginPath();
-      context.arc(front, HEIGHT * 0.5 + Math.sin(milliseconds / 190) * 170, 7, 0, Math.PI * 2);
-      context.fill();
-    }
+    context.globalAlpha = 1;
   }
 
   function drawArtwork(alpha = 1) {
@@ -461,7 +473,7 @@ function installAnimation(
     drawArtwork(1);
     context.fillStyle = 'rgba(18, 18, 32, .16)';
     context.fillRect(0, 0, WIDTH, HEIGHT);
-    const progress = progressAt(milliseconds);
+    const progress = reduced ? progressAt(7430) : progressAt(milliseconds);
     context.fillStyle = 'rgba(16, 18, 28, .76)';
     context.fillRect(subtitlePanelX, 794, subtitlePanelWidth, 174);
     context.fillStyle = '#fff8ef';
@@ -489,16 +501,17 @@ function installAnimation(
       drawIdentity(smooth((milliseconds - 1150) / 500));
     } else if (phase === 'dispersing') {
       const amount = (milliseconds - 4180) / 560;
-      drawIdentityFragments(amount);
+      if (reduced) drawReducedDispersal(amount);
+      else drawIdentityFragments(amount);
     } else if (phase === 'scattered') {
-      drawIdentityFragments(1, true);
+      if (reduced) drawPathFragments(1, true);
+      else drawPathFragments(0);
     } else if (phase === 'drawing') {
       if (reduced) {
-        context.globalAlpha = smooth((milliseconds - 5080) / 2100);
-        if (lineCanvas) context.drawImage(lineCanvas, 0, 0);
-        context.globalAlpha = 1;
+        const opacity = 0.78 + smooth((milliseconds - 5080) / 2100) * 0.22;
+        drawPathFragments(1, true, opacity);
       } else {
-        drawShardsIntoPaths((milliseconds - 5080) / 2100, milliseconds);
+        drawPathFragments((milliseconds - 5080) / 2100);
       }
     } else if (phase === 'colorize') {
       if (lineCanvas) context.drawImage(lineCanvas, 0, 0);
@@ -509,8 +522,14 @@ function installAnimation(
       drawPortrait(milliseconds);
       const shutter = smooth((milliseconds - 11000) / 1000);
       context.fillStyle = '#10121c';
-      context.fillRect(0, 0, WIDTH * shutter * 0.5, HEIGHT);
-      context.fillRect(WIDTH * (1 - shutter * 0.5), 0, WIDTH * shutter * 0.5, HEIGHT);
+      if (reduced) {
+        context.globalAlpha = shutter;
+        context.fillRect(0, 0, WIDTH, HEIGHT);
+        context.globalAlpha = 1;
+      } else {
+        context.fillRect(0, 0, WIDTH * shutter * 0.5, HEIGHT);
+        context.fillRect(WIDTH * (1 - shutter * 0.5), 0, WIDTH * shutter * 0.5, HEIGHT);
+      }
     }
     updateUI(milliseconds);
   }
@@ -522,7 +541,10 @@ function installAnimation(
     renderScene(elapsed);
     const spent = Math.max(0, performance.now() - started);
     if (drawCount < drawSamples.length) drawSamples[drawCount++] = spent;
-    if (playbackFrame && elapsed >= IDENTITY_RELEASE_MS) releaseIdentityBitmap();
+    if (elapsed >= IDENTITY_RELEASE_MS) {
+      seekRequestGeneration++;
+      releaseIdentityBitmap();
+    }
   }
 
   function stopClock() {
@@ -535,6 +557,7 @@ function installAnimation(
 
   function finish(isSkipped = false) {
     if (disposed || complete) return false;
+    seekRequestGeneration++;
     if (isSkipped && preparing && !loaded) {
       generation++;
       preparing = false;
@@ -650,9 +673,11 @@ function installAnimation(
     lineContext = null;
     resources.releasedPaths += cachedPaths.length;
     resources.livePaths -= cachedPaths.length;
+    resources.releasedPaths += pathFragments.length;
+    resources.livePaths -= pathFragments.length;
     cachedPaths.length = 0;
+    pathFragments.length = 0;
     particles.length = 0;
-    particleTargets.length = 0;
     loaded = false;
   }
 
@@ -762,37 +787,15 @@ function installAnimation(
   }
 
   function preparePaths(stats) {
-    const span = Math.max(18, stats.length / 1400);
-    let nextSample = span;
-    let walked = 0;
     for (let pathIndex = 0; pathIndex < contours.length; pathIndex++) {
       const points = contours[pathIndex];
       const path = new Path2D();
       const first = pointXY(points[0]);
       path.moveTo(first[0], first[1]);
-      let previousX = first[0];
-      let previousY = first[1];
       for (let pointIndex = 1; pointIndex < points.length; pointIndex++) {
         const current = pointXY(points[pointIndex]);
-        const currentX = current[0];
-        const currentY = current[1];
-        path.lineTo(currentX, currentY);
-        const segmentLength = Math.hypot(currentX - previousX, currentY - previousY);
-        if (segmentLength > 0) {
-          while (walked + segmentLength >= nextSample) {
-            const fraction = (nextSample - walked) / segmentLength;
-            particleTargets.push({
-              x: previousX + (currentX - previousX) * fraction,
-              y: previousY + (currentY - previousY) * fraction,
-            });
-            nextSample += span;
-          }
-        }
-        walked += segmentLength;
-        previousX = currentX;
-        previousY = currentY;
+        path.lineTo(current[0], current[1]);
       }
-      particleTargets.push({ x: previousX, y: previousY });
       cachedPaths.push(path);
       resources.createdPaths++;
       resources.livePaths++;
@@ -810,7 +813,9 @@ function installAnimation(
     lineContext.lineCap = 'round';
     lineContext.strokeStyle = 'rgba(255, 248, 239, .92)';
     for (let index = 0; index < cachedPaths.length; index++) lineContext.stroke(cachedPaths[index]);
-    if (!particleTargets.length) throw new Error('asset-invalid');
+    resources.releasedPaths += cachedPaths.length;
+    resources.livePaths -= cachedPaths.length;
+    cachedPaths.length = 0;
   }
 
   function seedUnit(index, salt) {
@@ -819,6 +824,82 @@ function installAnimation(
     value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
     value ^= value >>> 16;
     return (value >>> 0) / 4294967296;
+  }
+
+  function finalizePathFragment(fragment) {
+    if (!fragment || fragment.length <= 0 || fragment.points.length < 2) return;
+    const midpoint = fragment.length / 2;
+    let distance = 0;
+    let centerX = fragment.points[0][0];
+    let centerY = fragment.points[0][1];
+    for (let index = 1; index < fragment.points.length; index++) {
+      const from = fragment.points[index - 1];
+      const to = fragment.points[index];
+      const segmentLength = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      if (distance + segmentLength >= midpoint) {
+        const fraction = segmentLength ? (midpoint - distance) / segmentLength : 0;
+        centerX = from[0] + (to[0] - from[0]) * fraction;
+        centerY = from[1] + (to[1] - from[1]) * fraction;
+        break;
+      }
+      distance += segmentLength;
+      centerX = to[0];
+      centerY = to[1];
+    }
+    const index = pathFragments.length;
+    const tile = particles[index % particles.length];
+    if (!tile) throw new Error('asset-invalid');
+    pathFragments.push({
+      path: fragment.path,
+      centerX,
+      centerY,
+      scatterX: tile.scatterX,
+      scatterY: tile.scatterY,
+      rotation: (seedUnit(index, 2) - 0.5) * 1.6,
+    });
+    resources.createdPaths++;
+    resources.livePaths++;
+  }
+
+  function preparePathFragments(stats) {
+    if (!particles.length) throw new Error('asset-invalid');
+    const span = pathFragmentSpan = Math.max(18, stats.length / 1400);
+    for (let pathIndex = 0; pathIndex < contours.length; pathIndex++) {
+      const points = contours[pathIndex];
+      let fragment = null;
+      for (let pointIndex = 1; pointIndex < points.length; pointIndex++) {
+        const from = pointXY(points[pointIndex - 1]);
+        const to = pointXY(points[pointIndex]);
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const segmentLength = Math.hypot(dx, dy);
+        if (!(segmentLength > 0)) continue;
+        let consumed = 0;
+        while (consumed < segmentLength) {
+          const startX = from[0] + dx * (consumed / segmentLength);
+          const startY = from[1] + dy * (consumed / segmentLength);
+          if (!fragment) {
+            const path = new Path2D();
+            path.moveTo(startX, startY);
+            fragment = { path, points: [[startX, startY]], length: 0 };
+          }
+          const remainingInFragment = span - fragment.length;
+          const stepLength = Math.min(remainingInFragment, segmentLength - consumed);
+          consumed += stepLength;
+          fragment.length += stepLength;
+          const endX = from[0] + dx * (consumed / segmentLength);
+          const endY = from[1] + dy * (consumed / segmentLength);
+          fragment.path.lineTo(endX, endY);
+          fragment.points.push([endX, endY]);
+          if (fragment.length >= span - 1e-6) {
+            finalizePathFragment(fragment);
+            fragment = null;
+          }
+        }
+      }
+      finalizePathFragment(fragment);
+    }
+    if (!pathFragments.length) throw new Error('asset-invalid');
   }
 
   function drawIdentityLayout() {
@@ -917,18 +998,17 @@ function installAnimation(
         const index = particles.length;
         const scatterX = clamp(left + TILE / 2 + (seedUnit(index, 0) - 0.5) * 390, 0, WIDTH);
         const scatterY = clamp(top + TILE / 2 + (seedUnit(index, 1) - 0.5) * 300, 0, HEIGHT);
-        const target = particleTargets[index % particleTargets.length];
         particles.push({
           sx: left, sy: top, sw: Math.min(TILE, WIDTH - left), sh: Math.min(TILE, HEIGHT - top),
-          scatterX, scatterY, targetX: target.x, targetY: target.y,
+          scatterX, scatterY,
         });
       }
     }
     if (!particles.length) throw new Error('asset-invalid');
-    for (let index = 0; index < particleTargets.length; index++) {
+    for (let index = 0; index < pathFragments.length; index++) {
       const particle = particles[index % particles.length];
-      particleTargets[index].scatterX = particle.scatterX;
-      particleTargets[index].scatterY = particle.scatterY;
+      pathFragments[index].scatterX = particle.scatterX;
+      pathFragments[index].scatterY = particle.scatterY;
     }
 
   }
@@ -1025,6 +1105,7 @@ function installAnimation(
       if (disposed || currentGeneration !== generation) return;
     } while (identityRenderedLayoutKey !== identityLayoutKey);
     if (disposed || currentGeneration !== generation) return;
+    preparePathFragments(stats);
     loaded = true;
     preparing = false;
     releaseStaleTimeouts();
@@ -1053,23 +1134,23 @@ function installAnimation(
 
   function seek(seconds) {
     if (disposed || !loaded) return false;
+    const requestGeneration = ++seekRequestGeneration;
     pause();
     const target = clamp(Number(seconds) * 1000, 0, DURATION);
     if (target < IDENTITY_RELEASE_MS && !identityBitmap && identityCanvas) {
       const currentGeneration = generation;
+      const layoutGeneration = identityLayoutGeneration;
       makeBitmap(identityCanvas, currentGeneration).then(bitmap => {
-        if (disposed || currentGeneration !== generation) {
+        if (disposed || currentGeneration !== generation || requestGeneration !== seekRequestGeneration
+            || elapsed >= IDENTITY_RELEASE_MS || layoutGeneration !== identityLayoutGeneration) {
           if (bitmap !== identityCanvas) closeBitmap(bitmap);
           return;
         }
+        if (identityBitmap && identityBitmap !== identityCanvas) releaseIdentityBitmap();
         identityBitmap = bitmap;
         identityBitmapOwned = bitmap !== identityCanvas;
-        elapsed = target;
-        complete = false;
-        skipped = false;
         drawAt(elapsed, false);
       }).catch(() => {});
-      return true;
     }
     elapsed = target;
     complete = false;
@@ -1081,6 +1162,7 @@ function installAnimation(
 
   function replay() {
     if (disposed) return false;
+    seekRequestGeneration++;
     if (loaded && !played && !complete && elapsed === 0) {
       startClock();
       return true;
@@ -1167,6 +1249,7 @@ function installAnimation(
     if (disposed) return false;
     disposed = true;
     generation++;
+    seekRequestGeneration++;
     stopClock();
     releaseStaleTimeouts();
     skipButton?.removeEventListener('click', onSkip);

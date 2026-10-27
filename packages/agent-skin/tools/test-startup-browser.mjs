@@ -1120,6 +1120,341 @@ try {
       ?window.launcherUI.report():false;
   })()`), 15000, 'generated animation images prewarm through the local preview shell');
   await cdp.evaluate('window.launcherUI.pause()');
+
+  const seekRaceCheck = 'public preview seek invalidates stale identity bitmaps across scrubs, skip, and disposal';
+  let seekHarnessScriptIdentifier = '';
+  if (!onlyChecks || onlyChecks.has(seekRaceCheck)) {
+    const installedScript = await cdp.call('Page.addScriptToEvaluateOnNewDocument', { source: `(()=>{
+      const nativeRAF=window.requestAnimationFrame.bind(window);
+      const nativeCancel=window.cancelAnimationFrame.bind(window);
+      const nativeBitmap=window.createImageBitmap.bind(window);
+      const pendingFrames=new Map(),pendingBitmaps=[];
+      let nextFrame=0,holdBitmaps=false;
+      window.requestAnimationFrame=callback=>{const id=++nextFrame;pendingFrames.set(id,callback);return id;};
+      window.cancelAnimationFrame=id=>{pendingFrames.delete(id);return nativeCancel(id);};
+      window.createImageBitmap=(...args)=>holdBitmaps
+        ?new Promise((resolve,reject)=>{
+          const stableArgs=args.slice();
+          if(stableArgs[0] instanceof HTMLCanvasElement){
+            const source=stableArgs[0],snapshot=document.createElement('canvas');
+            snapshot.width=source.width;snapshot.height=source.height;
+            snapshot.getContext('2d').drawImage(source,0,0);
+            stableArgs[0]=snapshot;
+          }
+          pendingBitmaps.push({args:stableArgs,resolve,reject});
+        })
+        :nativeBitmap(...args);
+      window.__agentSkinPublicHarness={pendingFrames,pendingBitmaps,
+        runNext(timestamp){const item=pendingFrames.entries().next().value;if(!item)return false;
+          pendingFrames.delete(item[0]);item[1](timestamp);return true;},
+        hold(){holdBitmaps=true;},
+        async resolveBitmap(index){const item=pendingBitmaps[index];if(!item)return false;
+          try{item.resolve(await nativeBitmap(...item.args));return true;}catch(error){item.reject(error);throw error;}},
+        restore(){window.requestAnimationFrame=nativeRAF;window.cancelAnimationFrame=nativeCancel;window.createImageBitmap=nativeBitmap;},
+      };
+    })()` });
+    seekHarnessScriptIdentifier = installedScript.identifier;
+    await cdp.call('Page.navigate', { url: pathToFileURL(join(animationPreviewDir, 'index.html')).href });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'seek-race preview load');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+      &&window.launcherUI?.report()?true:false`), 15000, 'seek-race preview prewarm');
+  }
+  await check(seekRaceCheck, async () => {
+    const pauseAtScattered = await cdp.evaluate(`(()=>{
+      window.launcherUI.pause();window.launcherUI.resume();
+      const advanced=window.__agentSkinPublicHarness.runNext(performance.now()+5080);
+      window.launcherUI.pause();
+      return {advanced,report:window.launcherUI.report()};
+    })()`);
+    assert.equal(pauseAtScattered.advanced, true, 'the actual public handle advances the captured natural frame');
+    assert.equal(pauseAtScattered.report.elapsed, 5.08);
+    assert.equal(pauseAtScattered.report.resources.liveBitmaps, 2,
+      'natural playback releases the identity bitmap after entering scattered');
+    await cdp.evaluate('window.__agentSkinPublicHarness.hold()');
+    assert.equal(await cdp.evaluate('window.launcherUI.seek(1)'), true);
+    assert.equal(await cdp.evaluate('window.launcherUI.seek(2)'), true);
+    assert.equal(await cdp.evaluate('window.launcherUI.seek(8)'), true);
+    const pending = await cdp.evaluate(`({count:window.__agentSkinPublicHarness.pendingBitmaps.length,
+      elapsed:window.launcherUI.report().elapsed})`);
+    assert.equal(pending.count, 2, 'both identity scrubs start a delayed bitmap request');
+    assert.equal(pending.elapsed, 8, 'the latest public seek is visible before either bitmap completes');
+
+    await cdp.evaluate('window.__agentSkinPublicHarness.resolveBitmap(1)');
+    await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,0))');
+    const afterSecond = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(afterSecond.elapsed, 8, 'the newer delayed bitmap cannot overwrite seek(8)');
+    await cdp.evaluate('window.__agentSkinPublicHarness.resolveBitmap(0)');
+    await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,0))');
+    const afterFirst = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(afterFirst.elapsed, 8, 'the older delayed bitmap cannot overwrite seek(8)');
+    assert.equal(afterFirst.resources.liveBitmaps, 2, 'both stale seek bitmaps are closed exactly once');
+    assert.equal(await cdp.evaluate('window.launcherUI.dispose()'), true);
+    const disposed = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(disposed.elapsed, 8);
+    for (const kind of ['Bitmaps', 'Canvases', 'Paths']) assert.equal(disposed.resources['live' + kind], 0);
+    assert.equal(disposed.resources.liveRAF, 0);
+
+    const previewURL = pathToFileURL(join(animationPreviewDir, 'index.html')).href;
+    await cdp.call('Page.navigate', { url: previewURL });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'skip-race preview reload');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+      &&window.launcherUI?.report()?true:false`), 15000, 'skip-race preview prewarm');
+    await cdp.evaluate(`(()=>{
+      window.launcherUI.pause();window.launcherUI.resume();
+      window.__agentSkinPublicHarness.runNext(performance.now()+5080);window.launcherUI.pause();
+      window.__agentSkinPublicHarness.hold();window.launcherUI.seek(1);window.launcherUI.skip();
+    })()`);
+    const skipped = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(skipped.completed, true);
+    assert.equal(skipped.skipped, true);
+    assert.equal(skipped.resources.liveBitmaps, 0);
+    await cdp.evaluate('window.__agentSkinPublicHarness.resolveBitmap(0)');
+    await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,0))');
+    const afterSkippedLateResult = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(afterSkippedLateResult.elapsed, 12);
+    assert.equal(afterSkippedLateResult.completed, true);
+    assert.equal(afterSkippedLateResult.resources.liveBitmaps, 0, 'a late result cannot revive a skipped scene');
+
+    await cdp.call('Page.navigate', { url: previewURL });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'dispose-race preview reload');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+      &&window.launcherUI?.report()?true:false`), 15000, 'dispose-race preview prewarm');
+    await cdp.evaluate(`(()=>{
+      window.launcherUI.pause();window.launcherUI.resume();
+      window.__agentSkinPublicHarness.runNext(performance.now()+5080);window.launcherUI.pause();
+      window.__agentSkinPublicHarness.hold();window.launcherUI.seek(1);window.launcherUI.dispose();
+    })()`);
+    const beforeLateDisposeResult = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(beforeLateDisposeResult.resources.liveBitmaps, 0);
+    await cdp.evaluate('window.__agentSkinPublicHarness.resolveBitmap(0)');
+    await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,0))');
+    const afterDisposedLateResult = await cdp.evaluate('window.launcherUI.report()');
+    assert.equal(afterDisposedLateResult.resources.liveBitmaps, 0, 'a late disposed result is closed without revival');
+    return { scatteredResources: pauseAtScattered.report.resources, finalElapsed: afterFirst.elapsed,
+      disposedResources: disposed.resources, skippedLateResources: afterSkippedLateResult.resources,
+      disposedLateResources: afterDisposedLateResult.resources };
+  });
+  if (!onlyChecks || onlyChecks.has(seekRaceCheck)) {
+    await cdp.call('Page.removeScriptToEvaluateOnNewDocument', { identifier: seekHarnessScriptIdentifier });
+    await cdp.call('Page.navigate', { url: pathToFileURL(join(animationPreviewDir, 'index.html')).href });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'preview restore after seek test');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+      &&window.launcherUI?.report()?true:false`), 15000, 'preview restore after seek test prewarm');
+  }
+
+  await check('reduced motion is static or opacity-only from initial preference and after a phase-four toggle', async () => {
+    const previewURL = pathToFileURL(join(animationPreviewDir, 'index.html')).href;
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await cdp.call('Page.navigate', { url: previewURL });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'reduced-motion preview load');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+      &&window.launcherUI?.report()?true:false`), 15000, 'reduced-motion preview prewarm');
+    const initial = await cdp.evaluate(`({reduced:window.launcherUI.report().reduced,
+      playing:document.querySelector('[data-agent-skin-stage]').dataset.playing})`);
+    assert.equal(initial.reduced, true, 'the renderer reads the reduced preference before its first playback');
+    assert.equal(await cdp.evaluate('window.launcherUI.pause()'), true);
+    try {
+    const traceAt = async seconds => cdp.evaluate(`(()=>{
+      const context=document.querySelector('canvas[data-agent-skin-canvas]').getContext('2d');
+      const proto=CanvasRenderingContext2D.prototype, names=['arc','beginPath','clearRect','drawImage','fill','fillRect',
+        'fillText','lineTo','moveTo','rect','restore','rotate','save','scale','setTransform','stroke','strokeRect','translate'];
+      const originals=new Map(),trace=[];
+      for(const name of names){
+        const original=proto[name];originals.set(name,original);
+        proto[name]=function(...args){
+          if(this.canvas?.hasAttribute('data-agent-skin-canvas'))
+            trace.push({name,args:args.map(arg=>arg instanceof Path2D?'Path2D':typeof arg==='object'?arg?.constructor?.name:arg)});
+          return original.apply(this,args);
+        };
+      }
+      try{
+        window.launcherUI.seek(${seconds});
+        const shape=trace.map(({name,args})=>[name,args]);
+        return {report:window.launcherUI.report(),shape};
+      }finally{for(const [name,original] of originals)proto[name]=original;}
+    })()`);
+    const compareShape = async (name, first, second) => {
+      const a=await traceAt(first),b=await traceAt(second);
+      assert.equal(a.report.stage, name, `${name} first sample stage`);
+      assert.equal(b.report.stage, name, `${name} second sample stage`);
+      assert.equal(a.report.reduced, true);
+      assert.equal(b.report.reduced, true);
+      assert.deepEqual(b.shape,a.shape,`${name} may change opacity while reduced, but not geometry`);
+      return { stage:name, first, second, commands:a.shape.length };
+    };
+
+    const checks=[];
+    checks.push(await compareShape('pulse',0.05,0.8));
+    checks.push(await compareShape('identity',1.3,3.7));
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    await until(() => cdp.evaluate('window.launcherUI.report().reduced===false'), 2000,
+      'reduced-motion preference turns off before the phase-four toggle');
+    const normalAtPhaseFour = await cdp.evaluate(`(()=>{
+      window.launcherUI.seek(4.2);
+      return {stage:window.launcherUI.report().stage,reduced:window.launcherUI.report().reduced};
+    })()`);
+    assert.deepEqual(normalAtPhaseFour,{stage:'dispersing',reduced:false});
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await until(() => cdp.evaluate('window.launcherUI.report().reduced===true'), 2000,
+      'reduced-motion preference toggles during identity dispersal');
+    checks.push(await compareShape('dispersing',4.2,4.68));
+    checks.push(await compareShape('scattered',4.75,5.0));
+    checks.push(await compareShape('drawing',5.2,6.8));
+    checks.push(await compareShape('colorize',7.19,7.4));
+    checks.push(await compareShape('portrait',7.5,10.8));
+    checks.push(await compareShape('shutter',11.1,11.9));
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    await until(() => cdp.evaluate('window.launcherUI.report().reduced===false'), 2000,
+      'reduced-motion preference restores after static render checks');
+    return { initialPreferenceBeforePlayback:initial.reduced, phaseFourToggle:normalAtPhaseFour,
+      opacityMayVary:true, stages:checks };
+    } finally {
+      await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+      await cdp.call('Page.navigate', { url: previewURL });
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+        &&window.launcherUI?.report()?true:false`), 15000, 'default preview restored after reduced-motion checks');
+    }
+  });
+
+  await check('scattered and drawing stages render bounded prewarmed path fragments sampled from identity tiles', async () => {
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    const previewURL = pathToFileURL(join(animationPreviewDir, 'index.html')).href;
+    const capture = seconds => cdp.evaluate(`(()=>{
+      const proto=CanvasRenderingContext2D.prototype,names=['arc','drawImage','stroke','translate','rotate'];
+      const originals=new Map(),state={strokes:0,nonPathStrokes:0,dots:0,drawImages:0,canvasImages:0,translates:[],rotations:[]};
+      for(const name of names){
+        const original=proto[name];originals.set(name,original);
+        proto[name]=function(...args){
+          if(this.canvas?.hasAttribute('data-agent-skin-canvas')){
+            if(name==='stroke'){if(args[0] instanceof Path2D)state.strokes++;else state.nonPathStrokes++;}
+            if(name==='arc')state.dots++;
+            if(name==='drawImage'){state.drawImages++;if(args[0] instanceof HTMLCanvasElement)state.canvasImages++;}
+            if(name==='translate')state.translates.push(args.slice(0,2));
+            if(name==='rotate')state.rotations.push(args[0]);
+          }
+          return original.apply(this,args);
+        };
+      }
+      try{window.launcherUI.seek(${seconds});return {...state,report:window.launcherUI.report()};}
+      finally{for(const [name,original]of originals)proto[name]=original;}
+    })()`);
+    const inspectVariant = async dir => {
+      await cdp.call('Page.navigate', { url: pathToFileURL(join(dir, 'index.html')).href });
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+        &&window.launcherUI?.report()?true:false`), 15000, 'fragment fixture prewarm');
+      await cdp.evaluate('window.launcherUI.pause()');
+      await cdp.evaluate('window.launcherUI.seek(4.73)');
+      const beforeRelease = await cdp.evaluate('window.launcherUI.report()');
+      const scattered = await capture(4.74);
+      assert.equal(scattered.report.stage,'scattered');
+      assert.equal(beforeRelease.resources.liveBitmaps,3,'the sampled identity bitmap is alive until the 4.74s boundary');
+      assert.equal(scattered.report.resources.liveBitmaps,2,'the identity bitmap is released at the scattered boundary');
+      assert.ok(scattered.strokes>=20,'scattered draws individual Path2D line fragments');
+      assert.equal(scattered.strokes,scattered.report.resources.livePaths,'each live prewarmed fragment renders as one path');
+      assert.equal(scattered.nonPathStrokes,0);
+      assert.equal(scattered.dots,0,'fragments use line geometry instead of point dots');
+      assert.equal(scattered.drawImages,0,'identity pixels are sampled before 4.74s and no image tiles persist into scattered');
+      assert.equal(scattered.rotations.length,scattered.strokes,'each segment has one fixed scatter transform');
+      const bounds = await cdp.evaluate(`(()=>{
+        const contours=window.AGENT_SKIN_ASSETS.contours;let length=0;
+        for(const points of contours)for(let index=1;index<points.length;index++)
+          length+=Math.hypot(points[index][0]-points[index-1][0],points[index][1]-points[index-1][1]);
+        const span=Math.max(18,length/1400);
+        return {length,span,fragments:Math.ceil(length/span)+contours.length};
+      })()`);
+      assert.ok(scattered.strokes<=bounds.fragments,
+        `segment count follows the span=max(18,totalLength/1400) bound: ${JSON.stringify(bounds)}`);
+      const drawingStart = await capture(5.08);
+      const drawingEnd = await capture(6.8);
+      const frontChecks = [5.6,6.2,6.8,7.17].map(seconds=>({seconds,promise:capture(seconds)}));
+      const frontFrames = await Promise.all(frontChecks.map(async frame=>({seconds:frame.seconds,...await frame.promise})));
+      assert.equal(drawingStart.report.stage,'drawing');
+      assert.equal(drawingEnd.report.stage,'drawing');
+      assert.equal(drawingStart.strokes,scattered.strokes);
+      assert.equal(drawingEnd.strokes,scattered.strokes);
+      assert.equal(drawingStart.drawImages,0,'the full line canvas stays cached until the post-transition color stage');
+      assert.equal(drawingEnd.drawImages,0);
+      for(const frame of frontFrames){
+        assert.equal(frame.report.stage,'drawing');
+        assert.equal(frame.strokes,scattered.strokes);
+        assert.equal(frame.drawImages,0);
+      }
+      const drawingScreenshot = await screenshot('animation-mid-drawing-' + (dir===animationPreviewDir?'english':'maximum-chinese') + '.png');
+      const scatterAnchors = scattered.translates.filter((_,index)=>index%2===0);
+      const startAnchors = drawingStart.translates.filter((_,index)=>index%2===0);
+      const endAnchors = drawingEnd.translates.filter((_,index)=>index%2===0);
+      assert.equal(scatterAnchors.length,scattered.strokes);
+      assert.notDeepEqual(startAnchors,endAnchors,'drawing transforms fragments from their scatter anchors toward their path targets');
+      assert.deepEqual(startAnchors,scatterAnchors,'the normalized sweep starts with all fragments at their seeded scatter targets');
+      const smooth=value=>{const amount=Math.max(0,Math.min(1,value));return amount*amount*(3-2*amount);};
+      const expectedAnchorsAt=frame=>{
+        const p=Math.max(0,Math.min(1,(frame.seconds-5.08)/2.1));
+        const front=1.5*p-0.25;
+        return scatterAnchors.map((source,index)=>{
+          const centerTranslate=scattered.translates[index*2+1];
+          const targetX=-centerTranslate[0],targetY=-centerTranslate[1];
+          const band=Math.max(0.01,Math.min(0.12,bounds.span/1536));
+          const progress=smooth((front-targetX/1536+band)/(2*band));
+          return [source[0]+(targetX-source[0])*progress,source[1]+(targetY-source[1])*progress];
+        });
+      };
+      const verifyFrontFrame=frame=>{
+        const actual=frame.translates.filter((_,index)=>index%2===0),expected=expectedAnchorsAt(frame);
+        assert.equal(actual.length,expected.length);
+        for(let index=0;index<actual.length;index++)for(let axis=0;axis<2;axis++)
+          assert.ok(Math.abs(actual[index][axis]-expected[index][axis])<0.02,
+            `front controls fragment ${index} at ${frame.seconds}s: ${JSON.stringify({actual:actual[index],expected:expected[index]})}`);
+        return actual;
+      };
+      for(const frame of frontFrames)verifyFrontFrame(frame);
+      for(const frame of frontFrames.filter(value=>value.seconds===5.6||value.seconds===6.2)){
+        const anchors=verifyFrontFrame(frame);
+        let leftProgress=0,leftCount=0,rightProgress=0,rightCount=0;
+        for(let index=0;index<scatterAnchors.length;index++){
+          const targetX=-scattered.translates[index*2+1][0];
+          const start=scatterAnchors[index],target=[targetX,-scattered.translates[index*2+1][1]];
+          const total=Math.hypot(target[0]-start[0],target[1]-start[1]);
+          const progress=total?Math.min(1,Math.hypot(anchors[index][0]-start[0],anchors[index][1]-start[1])/total):1;
+          if(targetX<1536*0.3){leftProgress+=progress;leftCount++;}
+          if(targetX>1536*0.7){rightProgress+=progress;rightCount++;}
+        }
+        assert.ok(leftCount>0&&rightCount>0);
+        leftProgress/=leftCount;rightProgress/=rightCount;
+        assert.ok(leftProgress>rightProgress,`the prescribed front reaches left targets before right targets at ${frame.seconds}s`);
+      }
+      const endpoints=frontFrames.find(value=>value.seconds===7.17);
+      const finalAnchors=verifyFrontFrame(endpoints);
+      const targetAnchors=scatterAnchors.map((_,index)=>[-scattered.translates[index*2+1][0],-scattered.translates[index*2+1][1]]);
+      assert.deepEqual(finalAnchors.map(point=>point.map(value=>Math.round(value*100)/100)),
+        targetAnchors.map(point=>point.map(value=>Math.round(value*100)/100)),
+        'the 1.5*p-0.25 front fully returns every fragment before colorize');
+      const colorize = await capture(7.18);
+      assert.equal(colorize.report.stage,'colorize');
+      assert.equal(colorize.canvasImages,1,'the final contour canvas is used after fragments reach their paths');
+      const scatterSignature = scatterAnchors.reduce((hash,point)=>{
+        for(const value of point)hash=Math.imul(hash^Math.round(value*100),16777619)>>>0;
+        return hash;
+      },2166136261);
+      return { name:dir===animationPreviewDir?'english':dir.split('-').at(-1),
+        bitmaps:{beforeRelease:beforeRelease.resources.liveBitmaps,atRelease:scattered.report.resources.liveBitmaps},
+        fragments:scattered.strokes,fragmentBound:bounds.fragments,scatterSignature,scatterCount:scatterAnchors.length,
+        scatterAnchors:scatterAnchors.slice(0,24),
+        drawingStartAnchors:startAnchors.slice(0,24),drawingEndAnchors:endAnchors.slice(0,24),
+        drawingScreenshot:drawingScreenshot.file,lineCanvasImagesAtColorize:colorize.canvasImages };
+    };
+    try {
+      const english = await inspectVariant(animationPreviewDir);
+      const chinese = await inspectVariant(identityVariants.find(value=>value.name==='maximum-chinese').dir);
+      assert.notEqual(english.scatterSignature,chinese.scatterSignature,
+        'scatter positions are sampled from each currently prepared identity canvas');
+      return { identityVariants:[english,chinese] };
+    } finally {
+      await cdp.call('Page.navigate', { url: previewURL });
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'
+        &&window.launcherUI?.report()?true:false`), 15000, 'default preview restored after fragment checks');
+    }
+  });
+
   await check('one RC3 canvas stays registered at all required times, viewport sizes and DPR values', async () => {
     const expectedStages = new Map([
       [0, 'pulse'], [1.15, 'identity'], [4.18, 'dispersing'], [4.74, 'scattered'],
