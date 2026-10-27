@@ -1,5 +1,7 @@
 # CDP 同窗口启动：运行契约
 
+2026-10-27 验收修订：设置入口以[冷启动验收修订](host-acceptance-fixes.md)为准，替代下文历史的 Command-Option-B 约定；其余运行协议保持有效。
+
 本文所有 MUST 均是 `DETAIL-2026-001` 的 **Planned（目标态）** 契约，不是 H 当前实现声明。S 参数快照和出处见[研读](source-analysis.md)；本文选择在 H 重实现的值以此处为准。入口、步骤和追溯见[详细设计](detailed-design.md)。
 
 产品已命名为 Agent Skin / `agent-skin`，首期只适配 Codex。该命名决定不改变本文的Codex页面全局、owner、消息、事件schema、数据库或App安装身份；包目录/Hub入口及旧来源衔接以详细设计§12和执行指南前置单N为准。

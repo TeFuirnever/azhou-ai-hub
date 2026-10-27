@@ -9,14 +9,31 @@ function controlledHost({ body = true } = {}) {
   const keyListeners = new Set();
   const observers = [];
   const frames = [];
+  const controls = [];
   const timers = [];
   const document = {
     documentElement: {
-      appendChild(frame) { frames.push(frame); frame.parentNode = this; },
+      appendChild(node) { if (node.contentWindow) frames.push(node); node.parentNode = this; },
     },
     activeElement: null,
     hasFocus: () => true,
     createElement(tag) {
+      if (tag !== 'iframe') {
+        const events = new Map();
+        const node = {
+          tagName: tag, style: {}, hidden: false, children: [], attributes: new Map(),
+          setAttribute(name, value) { this.attributes.set(name, value); },
+          appendChild(child) { this.children.push(child); return child; },
+          attachShadow() { this.shadowRoot = { appendChild: child => this.appendChild(child) }; return this.shadowRoot; },
+          addEventListener(type, listener) { events.set(type, listener); },
+          removeEventListener(type) { events.delete(type); },
+          click() { if (!this.disabled) events.get('click')?.(); },
+          focus() { document.activeElement = this; },
+          remove() { this.removed = true; },
+        };
+        controls.push(node);
+        return node;
+      }
       assert.equal(tag, 'iframe');
       const callbacks = [];
       const frameListeners = new Map();
@@ -92,9 +109,37 @@ function controlledHost({ body = true } = {}) {
     },
     clearTimeout(timer) { timer.cleared = true; },
   };
-  return { host, frames, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
+  return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
     keyListenerCount: () => keyListeners.size };
 }
+
+test('a visible appearance button opens settings after playback without a keyboard shortcut', () => {
+  const controlled = controlledHost();
+  const runs = [];
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runs.push(frameSpec);
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false }, controlled.frames[0].contentWindow);
+  const officialShortcut = { metaKey: true, altKey: true, key: 'b', prevented: false,
+    preventDefault() { this.prevented = true; } };
+  controlled.host.keydown(officialShortcut);
+  assert.equal(officialShortcut.prevented, false, 'the official browser shortcut is left to the host');
+  assert.equal(runs.length, 1);
+  const button = controlled.controls.find(node => node.tagName === 'button');
+  assert.ok(button, 'appearance settings has a clickable primary entry');
+  button.click();
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(runs[1].intent, 'settings');
+  assert.equal(runs.length, 2);
+  api.dispose();
+  assert.ok(controlled.controls.some(node => node.removed), 'dispose removes the owned entry');
+  button.click();
+  assert.equal(runs.length, 2, 'a disposed entry cannot reopen settings');
+});
 
 test('the real controller and default iframe mount execute an explicit parent-realm payload bridge', () => {
   const controlled = controlledHost();
@@ -245,10 +290,7 @@ test('play and settings frames share one controller and each new run gets fresh 
   firstFrame.contentWindow.flushAnimationFrame();
   assert.equal(api.status().phase, 'playing');
 
-  const childShortcut = { metaKey: true, altKey: true, key: 'b', prevented: false,
-    preventDefault() { this.prevented = true; } };
-  firstFrame.contentWindow.dispatch('keydown', childShortcut);
-  assert.equal(childShortcut.prevented, true);
+  assert.equal(api.openSettings(), true);
   assert.equal(api.status().phase, 'settings');
   assert.equal(controlled.frames.length, 1, 'playing opens settings in the owned iframe');
   assert.equal(controlled.timers[0].cleared, true, 'the settings phase has no loading watchdog');
@@ -290,10 +332,7 @@ test('complete opens a settings-intent frame and cancellation preserves the save
   assert.equal(api.status().phase, 'complete');
   assert.equal(controlled.frames[0].removed, true);
 
-  const parentShortcut = { metaKey: true, altKey: true, key: 'B', prevented: false,
-    preventDefault() { this.prevented = true; } };
-  controlled.host.keydown(parentShortcut);
-  assert.equal(parentShortcut.prevented, true);
+  controlled.controls.find(node => node.tagName === 'button').click();
   assert.equal(controlled.frames.length, 2);
   assert.equal(runs[1].intent, 'settings');
   assert.ok(runs[1].runId > runs[0].runId);

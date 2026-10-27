@@ -1308,11 +1308,6 @@ function installAnimation(
   }
 
   function onKeydown(event) {
-    if (event.metaKey && event.altKey && typeof event.key === 'string' && event.key.toLowerCase() === 'b') {
-      event.preventDefault();
-      if (!imageSettings?.isSettingsOpen()) openSettingsPanel();
-      return;
-    }
     if (event.key === 'Escape') {
       event.preventDefault();
       if (frameSpec?.intent === 'settings' && !readySent) return;

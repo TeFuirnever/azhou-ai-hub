@@ -65,9 +65,40 @@ function wallpaperRecord(host) {
   return { present: true, supported, api: supported ? api : null };
 }
 
-function shortcut(event) {
-  return event?.metaKey === true && event?.altKey === true
-    && typeof event.key === 'string' && event.key.toLowerCase() === 'b';
+function mountAppearanceEntry(document, openSettings) {
+  const element = document.createElement('div');
+  element.setAttribute('data-agent-skin-entry', 'appearance');
+  const shadow = element.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    :host { all: initial; position: fixed; left: 76px; bottom: 16px; z-index: 2147483646; }
+    button { all: initial; box-sizing: border-box; display: block; cursor: pointer;
+      padding: 8px 13px; border: 1px solid #bdb4cf; border-radius: 18px;
+      background: #f7f2fb; color: #30283e; box-shadow: 0 2px 8px #0002;
+      font: 13px/18px -apple-system, BlinkMacSystemFont, sans-serif; }
+    button:hover { background: #eee4f7; }
+    button:focus-visible { outline: 2px solid #9670bb; outline-offset: 3px; }
+    @media (prefers-color-scheme: dark) {
+      button { background: #332c40; color: #f7f2fb; border-color: #79658e; }
+      button:hover { background: #44384f; }
+    }
+  `;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = '阿舟外观';
+  button.setAttribute('aria-label', '阿舟外观设置');
+  button.setAttribute('aria-haspopup', 'dialog');
+  button.title = '打开阿舟外观设置';
+  button.addEventListener('click', openSettings);
+  shadow.appendChild(style);
+  shadow.appendChild(button);
+  element.style.display = 'none';
+  document.documentElement.appendChild(element);
+  return {
+    element, button,
+    update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; },
+    remove() { button.removeEventListener('click', openSettings); element.remove(); },
+  };
 }
 
 function mountOverlay(host, payload, runId, intent, assets, receive, settingsCommitted) {
@@ -140,6 +171,7 @@ class PageController {
     this.disposed = false;
     this.watchdog = null;
     this.bodyObserver = null;
+    this.appearanceEntry = null;
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
     this.settingsCommitPending = false;
@@ -155,18 +187,6 @@ class PageController {
       completion: null,
     };
     this.onMessage = (event) => this.#receive(event);
-    this.onParentKeydown = (event) => {
-      if (!shortcut(event)) return;
-      if (this.state.phase === 'settings') {
-        event.preventDefault?.();
-        return;
-      }
-      if (this.#openSettings()) event.preventDefault?.();
-    };
-    this.onFrameKeydown = (event) => {
-      if (!shortcut(event)) return;
-      if (this.#openSettings()) event.preventDefault?.();
-    };
     this.api = Object.freeze({
       owner: OWNER,
       version: VERSION,
@@ -189,9 +209,7 @@ class PageController {
     }
     this.wallpaperAPI = wallpaper.api;
     this.installed = true;
-    this.host.addEventListener('keydown', this.onParentKeydown);
     if (!this.#beginRun('play')) {
-      this.host.removeEventListener('keydown', this.onParentKeydown);
       this.installed = false;
       return { installed: false, alreadyActive: false, reason: PAGE_REASON };
     }
@@ -202,7 +220,8 @@ class PageController {
     if (this.disposed) return false;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
-    const focused = this.document?.activeElement;
+    const focused = this.document?.activeElement === this.appearanceEntry?.element
+      ? this.appearanceEntry.button : this.document?.activeElement;
     if (focused !== this.frame?.element && focused?.isConnected && typeof focused.focus === 'function') {
       this.savedFocus = focused;
     }
@@ -215,6 +234,7 @@ class PageController {
     this.state.overlay = true;
     this.state.reason = '';
     this.state.completion = null;
+    this.appearanceEntry?.update(false);
     const settingsCommitted = intent === 'play' && this.settingsCommitPending;
     this.settingsCommitPending = false;
     this.frameSettingsCommitted = settingsCommitted;
@@ -255,10 +275,10 @@ class PageController {
   #mountRun(runId) {
     if (!this.#isLoading(runId) || !this.document.body) return;
     try {
+      if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings());
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted,
       );
-      this.frame.contentWindow.addEventListener('keydown', this.onFrameKeydown);
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
         Promise.resolve(instance).then(
@@ -316,6 +336,7 @@ class PageController {
       this.state.completion = settingsCancel
         ? { cause: 'settings-cancel', beforeReady: false }
         : { cause: message.skipped ? 'skip' : 'natural', beforeReady: !this.state.ready };
+      this.appearanceEntry?.update(true);
       this.#clearWatchdog();
       this.host.removeEventListener('message', this.onMessage);
       this.#stopFrame();
@@ -476,7 +497,6 @@ class PageController {
     this.frameHandle = null;
     if (!frame) return;
     this.#restoreFocus(frame);
-    try { frame.contentWindow.removeEventListener('keydown', this.onFrameKeydown); } catch {}
     try { handle?.dispose?.(); } catch {}
     try { frame.remove(); } catch {}
   }
@@ -532,9 +552,10 @@ class PageController {
     this.state.phase = 'disposed';
     this.state.overlay = false;
     this.host.removeEventListener('message', this.onMessage);
-    this.host.removeEventListener('keydown', this.onParentKeydown);
     this.#stopFrame();
     this.#disposeWallpaper();
+    this.appearanceEntry?.remove();
+    this.appearanceEntry = null;
     const current = Object.getOwnPropertyDescriptor(this.host, GLOBAL_NAME);
     if (current && Object.hasOwn(current, 'value') && current.value === this.api) {
       delete this.host[GLOBAL_NAME];
