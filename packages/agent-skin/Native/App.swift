@@ -1,6 +1,492 @@
 import AppKit
 import WebKit
 import Darwin
+import CoreFoundation
+
+final class NativeEventWriter: @unchecked Sendable {
+    static let schema = "azhou-startup.event.v1"
+
+    private let startedAt: TimeInterval
+    private let launcherPID: Int
+    private let launcherPath: String
+    private let now: () -> TimeInterval
+    private let sink: ([String: Any]) -> Void
+    private let lock = NSLock()
+    private var lastSeconds: Double = 0
+
+    init(startedAt: TimeInterval, launcherPID: Int, launcherPath: String,
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         sink: @escaping ([String: Any]) -> Void) {
+        self.startedAt = startedAt
+        self.launcherPID = launcherPID
+        self.launcherPath = launcherPath
+        self.now = now
+        self.sink = sink
+    }
+
+    func emit(_ event: String, fields: [String: Any] = [:], at uptime: TimeInterval? = nil) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let elapsed = (uptime ?? now()) - startedAt
+        let seconds = elapsed.isFinite ? max(lastSeconds, max(0, elapsed)) : lastSeconds
+        lastSeconds = seconds
+        var record = fields
+        record["schema"] = Self.schema
+        record["event"] = event
+        record["seconds"] = seconds
+        record["launcherPID"] = launcherPID
+        record["launcherPath"] = launcherPath
+        sink(record)
+    }
+}
+
+struct NativeStartupStatus {
+    let runID: Int
+    let phase: String
+    let ready: Bool
+    let completed: Bool
+    let overlay: Bool
+    let completionCause: String?
+    let completionBeforeReady: Bool?
+
+    static func parse(_ value: Any?) -> NativeStartupStatus? {
+        guard let raw = value as? [String: Any],
+              raw["owner"] as? String == "azhou-codex-startup",
+              integer(raw["version"]) == 1,
+              let phase = raw["phase"] as? String,
+              ["loading", "playing", "settings", "complete", "failed", "timeout", "disposed"].contains(phase),
+              let runID = integer(raw["runId"]), runID > 0,
+              let ready = boolean(raw["ready"]),
+              let completed = boolean(raw["completed"]),
+              let overlay = boolean(raw["overlay"]),
+              let reason = raw["reason"] as? String,
+              reason.isEmpty || validReasons.contains(reason),
+              let wallpaper = raw["wallpaper"] as? [String: Any],
+              boolean(wallpaper["applied"]) != nil,
+              let wallpaperReason = wallpaper["reason"] as? String,
+              wallpaperReason.isEmpty || validReasons.contains(wallpaperReason),
+              boolean(wallpaper["imageDecoded"]) != nil,
+              let completionRaw = raw["completion"] else { return nil }
+
+        let completionCause: String?
+        let completionBeforeReady: Bool?
+        if completionRaw is NSNull {
+            completionCause = nil
+            completionBeforeReady = nil
+        } else {
+            guard let completion = completionRaw as? [String: Any],
+                  let cause = completion["cause"] as? String,
+                  ["natural", "skip", "settings-cancel"].contains(cause),
+                  let beforeReady = boolean(completion["beforeReady"]) else { return nil }
+            completionCause = cause
+            completionBeforeReady = beforeReady
+        }
+        guard completed == (completionCause != nil) else { return nil }
+        switch phase {
+        case "loading": guard !ready, !completed, overlay else { return nil }
+        case "playing", "settings": guard ready, !completed, overlay else { return nil }
+        case "complete": guard completed, !overlay else { return nil }
+        case "failed", "timeout": guard !overlay, !reason.isEmpty else { return nil }
+        case "disposed": guard !overlay else { return nil }
+        default: return nil
+        }
+        return NativeStartupStatus(runID: runID, phase: phase, ready: ready, completed: completed,
+                                   overlay: overlay, completionCause: completionCause,
+                                   completionBeforeReady: completionBeforeReady)
+    }
+
+    static func boolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+
+    private static let validReasons: Set<String> = [
+        "target-missing", "target-identity", "listener-mismatch", "page-pending", "page-unsupported",
+        "owner-conflict", "protocol-error", "attach-timeout", "asset-invalid", "storage-unavailable",
+        "wallpaper-unsupported", "overlay-timeout", "ambiguous-main-page", "startup-active",
+        "startup-interrupted", "settings-conflict", "operation-timeout"
+    ]
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        guard value.isFinite, value.rounded() == value, value >= 0, value <= Double(Int.max) else { return nil }
+        return number.intValue
+    }
+}
+
+struct NativeStartupObservation {
+    let targetPID: Int32
+    let installedAt: TimeInterval?
+    let status: NativeStartupStatus?
+    let statusAt: TimeInterval?
+}
+
+final class NativeStartupCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    let targetPID: Int32
+    private var installAt: TimeInterval?
+    private var installedRunID: Int?
+    private var status: NativeStartupStatus?
+    private var statusAt: TimeInterval?
+
+    init(targetPID: Int32) { self.targetPID = targetPID }
+
+    func observe(_ response: [String: Any], at uptime: TimeInterval) -> (runID: Int, installedAt: TimeInterval)? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if NativeStartupStatus.boolean(response["installed"]) == true,
+           NativeStartupStatus.boolean(response["alreadyActive"]) == false,
+           installAt == nil {
+            installAt = uptime
+        }
+        guard let rawStatus = response["status"], let observed = NativeStartupStatus.parse(rawStatus),
+              let installAt else { return nil }
+
+        if installedRunID == nil {
+            installedRunID = observed.runID
+            status = observed
+            statusAt = uptime
+            return (observed.runID, installAt)
+        }
+        guard installedRunID == observed.runID else { return nil }
+        status = observed
+        statusAt = uptime
+        return nil
+    }
+
+    func snapshot() -> NativeStartupObservation {
+        lock.lock()
+        defer { lock.unlock() }
+        return NativeStartupObservation(targetPID: targetPID, installedAt: installAt,
+                                        status: status, statusAt: statusAt)
+    }
+}
+
+enum NativeStartupFinalOutcome: Equatable {
+    case activated
+    case ready
+    case skipped
+    case partial(reason: String)
+    case behaviorNotProven(reason: String)
+
+    var exitCode: Int32 {
+        switch self {
+        case .activated, .ready, .skipped: return 0
+        case .partial: return 2
+        case .behaviorNotProven: return 1
+        }
+    }
+
+    var event: String {
+        switch self {
+        case .activated: return "target-activated"
+        case .ready: return "startup-ready"
+        case .skipped: return "startup-skipped"
+        case .partial: return "startup-interrupted"
+        case .behaviorNotProven: return "startup-failed"
+        }
+    }
+
+    var exitName: String {
+        switch self {
+        case .activated: return "activated"
+        case .ready: return "startup-ready"
+        case .skipped: return "skipped"
+        case .partial: return "partial"
+        case .behaviorNotProven: return "behavior-not-proven"
+        }
+    }
+
+    var reason: String? {
+        switch self {
+        case .partial(let reason), .behaviorNotProven(let reason): return reason
+        default: return nil
+        }
+    }
+}
+
+final class NativeStartupEventStream: @unchecked Sendable {
+    private let lock = NSLock()
+    private let writer: NativeEventWriter
+    private var begun = false
+    private var finalOutcome: NativeStartupFinalOutcome?
+    private var pendingFailure: String?
+    private var pendingInterruption: String?
+    private var openedPID: Int32?
+    private var installedPID: Int32?
+    private var installedRunID: Int?
+    private var exitEmitted = false
+
+    init(writer: NativeEventWriter) { self.writer = writer }
+
+    func begin(at uptime: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !begun else { return }
+        begun = true
+        writer.emit("launcher-start", at: uptime)
+    }
+
+    func targetOpened(pid: Int32, at uptime: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, pid > 0 else { return }
+        if let openedPID {
+            guard openedPID == pid else { return }
+            return
+        }
+        openedPID = pid
+        writer.emit("target-opened", fields: ["targetPID": Int(pid)], at: uptime)
+    }
+
+    func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, pid > 0, runID > 0,
+              openedPID == pid, installedPID == nil else { return }
+        installedPID = pid
+        installedRunID = runID
+        writer.emit("startup-installed", fields: ["targetPID": Int(pid), "runId": runID], at: uptime)
+    }
+
+    func portError(operation: String, errno: Int32, at uptime: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted else { return }
+        pendingFailure = "listener-mismatch"
+        writer.emit("startup-port-error", fields: ["reason": "listener-mismatch",
+                                                     "operation": operation, "errno": Int(errno)], at: uptime)
+    }
+
+    func latchFailure(_ reason: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, pendingFailure == nil else { return }
+        pendingFailure = Self.fixedReason(reason)
+    }
+
+    func latchInterruption(_ reason: String = "startup-interrupted") {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, pendingFailure == nil, pendingInterruption == nil else { return }
+        pendingInterruption = reason == "startup-interrupted" ? reason : "startup-interrupted"
+    }
+
+    var isPending: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return begun && finalOutcome == nil && !exitEmitted
+    }
+
+    @discardableResult
+    func resolve(_ outcome: StartupOutcome, observation: NativeStartupObservation?, at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted else { return nil }
+
+        let resolved: NativeStartupFinalOutcome
+        if let pendingFailure {
+            resolved = .behaviorNotProven(reason: pendingFailure)
+        } else if let pendingInterruption {
+            resolved = .partial(reason: pendingInterruption)
+        } else {
+            resolved = Self.finalOutcome(for: outcome, observation: observation,
+                                         openedPID: openedPID, installedPID: installedPID,
+                                         installedRunID: installedRunID)
+        }
+        finalOutcome = resolved
+        emitFinal(resolved, outcome: outcome, observation: observation, at: uptime)
+        return resolved
+    }
+
+    @discardableResult
+    func finish(at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, !exitEmitted else { return finalOutcome }
+        if finalOutcome == nil {
+            if let pendingFailure {
+                finalOutcome = .behaviorNotProven(reason: pendingFailure)
+            } else if let pendingInterruption {
+                finalOutcome = .partial(reason: pendingInterruption)
+            } else {
+                finalOutcome = .partial(reason: "startup-interrupted")
+            }
+            emitFinal(finalOutcome!, outcome: nil, observation: nil, at: uptime)
+        }
+        guard let finalOutcome else { return nil }
+        writer.emit("launcher-exit", fields: ["outcome": finalOutcome.exitName, "exitCode": Int(finalOutcome.exitCode)], at: uptime)
+        exitEmitted = true
+        return finalOutcome
+    }
+
+    private func emitFinal(_ final: NativeStartupFinalOutcome, outcome: StartupOutcome?,
+                           observation: NativeStartupObservation?, at uptime: TimeInterval) {
+        switch final {
+        case .activated:
+            if case .activated(let pid)? = outcome {
+                writer.emit("target-activated", fields: ["targetPID": Int(pid)], at: uptime)
+            }
+        case .ready:
+            guard let observation, let status = observation.status, let runID = installedRunID else { return }
+            writer.emit("startup-ready", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
+                                                    "ready": true, "phase": status.phase],
+                        at: observation.statusAt ?? uptime)
+        case .skipped:
+            guard let observation, let status = observation.status, let runID = installedRunID,
+                  let beforeReady = status.completionBeforeReady else { return }
+            writer.emit("startup-skipped", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
+                                                      "completed": true,
+                                                      "completion": ["cause": "skip", "beforeReady": beforeReady],
+                                                      "overlay": false],
+                        at: observation.statusAt ?? uptime)
+        case .partial(let reason), .behaviorNotProven(let reason):
+            writer.emit(final.event, fields: ["reason": reason], at: uptime)
+        }
+    }
+
+    private static func finalOutcome(for outcome: StartupOutcome, observation: NativeStartupObservation?,
+                                     openedPID: Int32?, installedPID: Int32?, installedRunID: Int?) -> NativeStartupFinalOutcome {
+        switch outcome {
+        case .activated(let pid):
+            return pid > 0 ? .activated : .behaviorNotProven(reason: "target-identity")
+        case .ready(let runID):
+            guard let observation, let status = observation.status,
+                  observation.targetPID > 0, openedPID == observation.targetPID,
+                  installedPID == observation.targetPID, installedRunID == runID,
+                  runID > 0, status.runID == runID, status.ready,
+                  ["playing", "settings", "complete"].contains(status.phase) else {
+                return .behaviorNotProven(reason: "protocol-error")
+            }
+            return .ready
+        case .skipped(let runID, let beforeReady):
+            guard let observation, let status = observation.status,
+                  observation.targetPID > 0, openedPID == observation.targetPID,
+                  installedPID == observation.targetPID, installedRunID == runID,
+                  runID > 0, status.runID == runID, status.completed, !status.overlay,
+                  status.completionCause == "skip", status.completionBeforeReady == beforeReady else {
+                return .behaviorNotProven(reason: "protocol-error")
+            }
+            return .skipped
+        case .partial(let reason) where reason == "startup-interrupted":
+            return .partial(reason: reason)
+        case .partial(let reason):
+            return .behaviorNotProven(reason: Self.fixedReason(reason))
+        case .failed(let reason):
+            return .behaviorNotProven(reason: Self.fixedReason(reason))
+        }
+    }
+
+    private static func fixedReason(_ reason: String) -> String {
+        let allowed: Set<String> = [
+            "target-missing", "target-identity", "listener-mismatch", "page-pending", "page-unsupported",
+            "owner-conflict", "protocol-error", "attach-timeout", "asset-invalid", "storage-unavailable",
+            "wallpaper-unsupported", "overlay-timeout", "ambiguous-main-page", "startup-active",
+            "startup-interrupted", "settings-conflict", "operation-timeout"
+        ]
+        return allowed.contains(reason) ? reason : "protocol-error"
+    }
+}
+
+final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
+    private let base: any StartupTransport
+    private let capture: NativeStartupCapture
+    private let events: NativeStartupEventStream
+    private let now: () -> TimeInterval
+
+    init(base: any StartupTransport, capture: NativeStartupCapture, events: NativeStartupEventStream,
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.base = base
+        self.capture = capture
+        self.events = events
+        self.now = now
+    }
+
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await base.pages(port: port, timeout: timeout)
+    }
+
+    func connect(to url: URL, timeout: TimeInterval) throws {
+        try base.connect(to: url, timeout: timeout)
+    }
+
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let response = try await base.evaluate(source, timeout: timeout)
+        if let installation = capture.observe(response, at: now()) {
+            events.startupInstalled(pid: capture.targetPID, runID: installation.runID, at: installation.installedAt)
+        }
+        return response
+    }
+
+    func close() { base.close() }
+}
+
+enum NativeSmokeReportValidator {
+    private static let resourceCounters = [
+        "createdImages", "releasedImages", "liveImages",
+        "createdBitmaps", "releasedBitmaps", "liveBitmaps",
+        "createdCanvases", "releasedCanvases", "liveCanvases",
+        "createdPaths", "releasedPaths", "livePaths",
+        "createdRAF", "cancelledRAF", "liveRAF",
+        "createdObjectURLs", "revokedObjectURLs", "liveObjectURLs",
+        "framesPending"
+    ]
+
+    static func isSuccessfulCompletion(skipped: Any?, reportJSON: String?, evaluationFailed: Bool) -> Bool {
+        guard !evaluationFailed,
+              NativeStartupStatus.boolean(skipped) == false,
+              let reportJSON, let data = reportJSON.data(using: .utf8),
+              let raw = try? JSONSerialization.jsonObject(with: data),
+              let report = raw as? [String: Any],
+              NativeStartupStatus.boolean(report["completed"]) == true,
+              NativeStartupStatus.boolean(report["skipped"]) == false,
+              NativeStartupStatus.boolean(report["reduced"]) != nil,
+              let elapsed = finiteNumber(report["elapsed"]),
+              let duration = finiteNumber(report["duration"]),
+              duration > 0, elapsed >= duration,
+              report["stage"] as? String == "complete",
+              finiteNumber(report["animationProgress"]) == 1,
+              let viewport = report["viewport"] as? [String: Any],
+              positiveNumber(viewport["width"]), positiveNumber(viewport["height"]),
+              positiveNumber(viewport["dpr"]),
+              let coordinateSize = report["coordinateSize"] as? [String: Any],
+              positiveNumber(coordinateSize["width"]), positiveNumber(coordinateSize["height"]),
+              let resources = report["resources"] as? [String: Any],
+              resourceCounters.allSatisfy({ finiteNumber(resources[$0]) != nil }),
+              finiteNumber(resources["framesPending"]) == 0,
+              let jsFrame = report["jsFrame"] as? [String: Any],
+              jsFrame["scope"] as? String == "JavaScript rAF interval and 2D canvas submission; excludes GPU/compositor/presentation timing",
+              validStats(jsFrame["rafIntervalMs"]), validStats(jsFrame["renderSubmissionMs"]) else {
+            return false
+        }
+        return true
+    }
+
+    private static func positiveNumber(_ value: Any?) -> Bool {
+        guard let number = finiteNumber(value) else { return false }
+        return number > 0
+    }
+
+    private static func finiteNumber(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        return value.isFinite ? value : nil
+    }
+
+    private static func validStats(_ value: Any?) -> Bool {
+        guard let value else { return false }
+        if value is NSNull { return true }
+        guard let stats = value as? [String: Any],
+              let count = finiteNumber(stats["count"]), count > 0, count.rounded() == count,
+              finiteNumber(stats["median"]) != nil,
+              finiteNumber(stats["p95"]) != nil,
+              finiteNumber(stats["max"]) != nil else { return false }
+        return true
+    }
+}
 
 private final class StartupApplicationWaiter: @unchecked Sendable {
     private let lock = NSLock()
@@ -37,15 +523,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
     private let args = CommandLine.arguments
     private let epoch = ProcessInfo.processInfo.systemUptime
+    private let logLock = NSLock()
     private var window: NSWindow!, webView: WKWebView!
     private var webRoot: URL?, targetURL: URL?, target: NSRunningApplication?
     private var logFile: FileHandle?, watchdog: Timer?
     private var lockFD: Int32 = -1
+    private var lockFailureReason: String?
     private var ready = false, opening = false, requested = false, done = false
     private var terminating = false, failed = false, activated = false, promoted = false
     private var startupRequested = false, processExitCode: Int32 = 0
+    private var startupEventStream: NativeStartupEventStream?
+    private var startupCapture: NativeStartupCapture?
+    private var smokeResultSucceeded = false
     private var snapshots: [DispatchWorkItem] = []
     private var preview: Bool { !promoted && (args.contains("--preview") || args.contains("--smoke-test")) }
+    private var smokeTest: Bool { args.contains("--smoke-test") }
+    private lazy var nativeEventWriter = NativeEventWriter(
+        startedAt: epoch,
+        launcherPID: Int(ProcessInfo.processInfo.processIdentifier),
+        launcherPath: real(Bundle.main.bundleURL).path,
+        sink: { [weak self] in self?.writeLogRecord($0) }
+    )
     private func option(_ key: String) -> String? {
         guard let i = args.firstIndex(of: key), i + 1 < args.count else { return nil }
         return args[i + 1]
@@ -75,10 +573,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         data["seconds"] = ((ProcessInfo.processInfo.systemUptime - epoch) * 1000).rounded() / 1000
         data["launcherPID"] = Int(ProcessInfo.processInfo.processIdentifier)
         data["launcherPath"] = real(Bundle.main.bundleURL).path
+        writeLogRecord(data)
+    }
+    private func writeLogRecord(_ data: [String: Any]) {
+        logLock.lock()
+        defer { logLock.unlock() }
         guard let json = try? JSONSerialization.data(withJSONObject: data, options: [.sortedKeys, .withoutEscapingSlashes]),
               let line = String(data: json, encoding: .utf8) else { return }
         print(line); fflush(stdout)
         try? logFile?.write(contentsOf: json + Data([10]))
+    }
+    private func beginStartupEvents() {
+        guard startupEventStream == nil else { return }
+        let stream = NativeStartupEventStream(writer: nativeEventWriter)
+        startupEventStream = stream
+        stream.begin(at: ProcessInfo.processInfo.systemUptime)
+    }
+    private func logSmokeEvent(_ event: String, _ fields: [String: Any] = [:]) {
+        guard smokeTest else { return }
+        nativeEventWriter.emit(event, fields: fields)
     }
     private func validTarget(_ candidate: URL) -> URL? {
         let url = real(candidate)
@@ -104,8 +617,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func lockInstance() -> Bool {
         let path = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(launcherID)-\(getuid()).lock").path
         lockFD = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
-        guard lockFD >= 0 else { log("lock-error", ["errno": errno]); return false }
+        guard lockFD >= 0 else {
+            lockFailureReason = "protocol-error"
+            log("lock-error", ["errno": errno])
+            return false
+        }
         guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
+            lockFailureReason = "startup-active"
             let existing = NSRunningApplication.runningApplications(withBundleIdentifier: launcherID)
                 .first { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !$0.isTerminated }
             let result = existing?.activate(options: []) ?? false
@@ -132,13 +650,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                           "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
             terminating = true; NSApp.terminate(nil); return
         }
-        guard lockInstance() else { terminating = true; NSApp.terminate(nil); return }
+        if !preview { beginStartupEvents() }
+        guard lockInstance() else {
+            if let stream = startupEventStream {
+                processExitCode = stream.resolve(.failed(reason: lockFailureReason ?? "protocol-error"),
+                                                 observation: nil, at: ProcessInfo.processInfo.systemUptime)?.exitCode ?? 1
+            } else if smokeTest {
+                failed = true
+                processExitCode = 1
+            }
+            terminating = true; NSApp.terminate(nil); return
+        }
         if !preview {
-            log("startup-launcher-start", ["targetPath": targetURL?.path ?? "", "deadlineSeconds": 60])
             startTrustedSession()
             return
         }
-        log("player-start", ["mode": "preview", "targetPath": targetURL?.path ?? ""])
+        if smokeTest { logSmokeEvent("player-start", ["mode": "smoke"]) }
+        else { log("player-start", ["mode": "preview", "targetPath": targetURL?.path ?? ""]) }
         let menu = NSMenu(), item = NSMenuItem(), submenu = NSMenu()
         menu.addItem(item); item.submenu = submenu
         submenu.addItem(withTitle: "退出阿舟启动 Codex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -200,7 +728,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             webView.evaluateJavaScript(preview ? "window.launcherUI.replay()" : "window.launcherUI.beginLaunch()") { [weak self] _, error in
                 guard let self, !self.terminating else { return }
                 if let error { self.fail(error.localizedDescription, "playback-start-error"); return }
-                self.log("playback-start", ["durationSeconds": duration, "window": self.windowGeometry()])
+                if self.smokeTest { self.logSmokeEvent("playback-start", ["durationSeconds": duration]) }
+                else { self.log("playback-start", ["durationSeconds": duration, "window": self.windowGeometry()]) }
                 self.armWatchdog(max(25, duration + 12), "renderer-complete-timeout")
                 self.scheduleSnapshots(duration)
                 if !self.preview { self.startTrustedSession() }
@@ -208,18 +737,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         case "complete":
             guard ready, !done, !failed else { return }
             done = true
-            log("animation-complete", ["report": body["report"] ?? [:]])
+            if smokeTest { logSmokeEvent("animation-complete") }
+            else { log("animation-complete", ["report": body["report"] ?? [:]]) }
             if preview {
                 watchdog?.invalidate()
+                let completionSkipped = body["skipped"]
                 // Native preview is deliberately one-shot: it cannot retain the
                 // application's identity and accidentally swallow a later launch.
                 webView.evaluateJavaScript("JSON.stringify(window.launcherUI.report())") { [weak self] result, error in
-                    self?.log("preview-result", ["reportJSON": result as? String ?? "", "error": error?.localizedDescription ?? "",
-                                                 "measurementScope": "front-end JS/rAF only, not GPU/presentation timing"])
-                    self?.terminating = true; NSApp.terminate(nil)
+                    guard let self else { return }
+                    let succeeded: Bool
+                    if self.smokeTest {
+                        succeeded = NativeSmokeReportValidator.isSuccessfulCompletion(
+                            skipped: completionSkipped,
+                            reportJSON: result as? String,
+                            evaluationFailed: error != nil
+                        )
+                    } else {
+                        succeeded = error == nil && (result as? String)?.isEmpty == false
+                    }
+                    if self.smokeTest {
+                        self.smokeResultSucceeded = succeeded
+                        if !succeeded { self.failed = true; self.processExitCode = 1 }
+                        self.logSmokeEvent("preview-result", ["success": succeeded])
+                    } else {
+                        self.log("preview-result", ["success": succeeded,
+                                                     "measurementScope": "front-end JS/rAF only, not GPU/presentation timing"])
+                    }
+                    self.terminating = true; NSApp.terminate(nil)
                 }
             } else { finishIfReady("animation-complete") }
         case "close":
+            if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
+            if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
             terminating = true; NSApp.terminate(nil)
         case "jsError": fail(body["message"] as? String ?? "动画脚本运行失败。", "javascript-error")
         case "assetError": fail(body["message"] as? String ?? "阿舟素材加载失败，请检查本地私有素材并重新构建。", "asset-error")
@@ -254,6 +804,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @MainActor
     private func startTrustedSession() {
         guard !startupRequested, !terminating else { return }
+        beginStartupEvents()
         startupRequested = true; requested = true
         targetURL = targetForCurrentMode()
         guard let url = targetURL, validTarget(url) == url else {
@@ -316,8 +867,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         self.opening = false
                         self.target = app
                         let facts = try self.startupFacts(app)
+                        let capture = NativeStartupCapture(targetPID: facts.pid)
+                        self.startupCapture = capture
+                        self.startupEventStream?.targetOpened(pid: facts.pid, at: ProcessInfo.processInfo.systemUptime)
+                        guard let eventStream = self.startupEventStream else {
+                            throw StartupFailure(reason: "protocol-error", message: "原生启动事件流不可用。")
+                        }
                         return await StartupConnector(target: facts, expectedPort: port, system: system,
-                                                      transport: WallpaperTransport())
+                                                      transport: NativeStartupEventTransport(
+                                                        base: WallpaperTransport(), capture: capture, events: eventStream
+                                                      ))
                             .run(payload: payload, deadline: attachDeadline)
                     }
                 )
@@ -331,7 +890,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func prepareStartupPort() throws -> Int {
         func refused(_ operation: String) -> StartupFailure {
             let code = errno
-            log("startup-port-error", ["operation": operation, "errno": Int(code)])
+            if let stream = startupEventStream {
+                stream.portError(operation: operation, errno: code, at: ProcessInfo.processInfo.systemUptime)
+            } else {
+                nativeEventWriter.emit("startup-port-error", fields: ["reason": "listener-mismatch",
+                                                                        "operation": operation, "errno": Int(code)])
+            }
             return StartupFailure(reason: "listener-mismatch", message: "未能准备 Codex 本机回环调试端口。")
         }
         let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
@@ -417,33 +981,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     private func finishStartup(_ outcome: StartupOutcome, promoted: Bool) {
-        if StartupFailureDelivery.deliver(
-            outcome, previewUI: promoted,
-            message: { self.startupMessage($0) },
-            log: { event, reason in self.log(event, ["reason": reason, "message": self.startupMessage(reason)]) },
-            setExitCode: { self.processExitCode = $0 },
-            showPreviewError: { message, reason in self.fail(message, reason) },
-            terminate: { _ in
-                self.terminating = true
-                NSApp.terminate(nil)
-            }
-        ) { return }
-        switch outcome {
-        case .activated(let pid):
-            log("target-activated", ["targetPID": Int(pid)])
-            processExitCode = 0
-        case .ready(let runID):
-            log("startup-ready", ["runID": runID, "animationComplete": false])
-            processExitCode = 0
+        beginStartupEvents()
+        guard let final = startupEventStream?.resolve(
+            outcome, observation: startupCapture?.snapshot(), at: ProcessInfo.processInfo.systemUptime
+        ) else { return }
+        processExitCode = final.exitCode
+        switch final {
+        case .activated:
+            break
+        case .ready:
             if let target, !target.isTerminated {
                 activated = target.activate(options: [])
                 log("target-activation-after-startup", ["allowed": activated, "targetPID": Int(target.processIdentifier)])
             }
-        case .skipped(let runID, let beforeReady):
-            log("startup-skipped", ["runID": runID, "beforeReady": beforeReady])
-            processExitCode = 0
+        case .skipped:
             if let target, !target.isTerminated { activated = target.activate(options: []) }
-        case .partial, .failed:
+        case .partial(let reason), .behaviorNotProven(let reason):
+            if promoted { fail(startupMessage(reason), reason) }
+            else { terminating = true; NSApp.terminate(nil) }
             return
         }
         if promoted {
@@ -499,8 +1054,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func fail(_ message: String, _ reason: String) {
         guard !failed, !terminating else { return }; failed = true
         watchdog?.invalidate(); snapshots.forEach { $0.cancel() }; window?.level = .normal
-        log("failure", ["reason": reason, "message": message, "target": appInfo(target)])
-        if args.contains("--smoke-test") { terminating = true; NSApp.terminate(nil); return }
+        log("failure", ["reason": reason, "targetPID": target.map { Int($0.processIdentifier) } ?? 0])
+        if smokeTest {
+            processExitCode = 1
+            terminating = true; NSApp.terminate(nil); return
+        }
+        if startupRequested { startupEventStream?.latchFailure(reason) }
         if ready, let data = try? JSONSerialization.data(withJSONObject: [message]), let json = String(data: data, encoding: .utf8) {
             window.makeKeyAndOrderFront(nil)
             webView.evaluateJavaScript("window.launcherUI.error(\(json)[0])") { [weak self] _, error in
@@ -553,17 +1112,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return false
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if preview || failed { terminating = true; NSApp.terminate(nil) }
+        if preview || failed {
+            if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
+            if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
+            terminating = true; NSApp.terminate(nil)
+        }
         else { done = true; log("window-close-as-skip"); finishIfReady("window-close") }
         return false
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if !terminating { if !preview && !failed { activateOnce("user-quit") }; terminating = true }
+        if !terminating {
+            if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
+            if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
+            else if !preview && !failed { activateOnce("user-quit") }
+            terminating = true
+        }
         return .terminateNow
     }
     func applicationWillTerminate(_ notification: Notification) {
         watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
-        log("player-terminated", ["failed": failed, "completed": done, "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
+        if smokeTest {
+            if !smokeResultSucceeded { failed = true; processExitCode = max(processExitCode, 1) }
+            logSmokeEvent("player-terminated", ["completed": done && smokeResultSucceeded && !failed,
+                                                 "failed": failed || !smokeResultSucceeded])
+        } else {
+            log("player-terminated", ["failed": failed, "completed": done, "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
+            if let final = startupEventStream?.finish(at: ProcessInfo.processInfo.systemUptime) {
+                processExitCode = final.exitCode
+            }
+        }
         webView?.stopLoading(); webView?.configuration.userContentController.removeScriptMessageHandler(forName: "launcher")
         if lockFD >= 0 { flock(lockFD, LOCK_UN); close(lockFD); lockFD = -1 }
         try? logFile?.close()
@@ -577,6 +1154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail("WebKit 渲染进程已结束。", "renderer-terminated") }
 }
+#if !AGENT_SKIN_NATIVE_EVENT_TESTS
 @main
 struct AzhouStartupMain {
     static func main() {
@@ -592,3 +1170,4 @@ struct AzhouStartupMain {
         withExtendedLifetime(delegate) { app.run() }
     }
 }
+#endif

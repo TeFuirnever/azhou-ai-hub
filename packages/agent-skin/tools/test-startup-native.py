@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and run the native startup protocol driver with fake host boundaries."""
+"""Compile and run native startup protocol and event tests with fake host boundaries."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     target = f"{platform.machine()}-apple-macos13.0"
     command = [
-        "xcrun", "--sdk", "macosx", "swiftc", "-target", target,
-        "Native/Wallpaper.swift", "Native/StartupNativeTests.swift",
-        "-o", str(output), "-framework", "AppKit",
+        "xcrun", "--sdk", "macosx", "swiftc", "-DAGENT_SKIN_NATIVE_EVENT_TESTS", "-target", target,
+        "Native/App.swift", "Native/Wallpaper.swift", "Native/StartupNativeTests.swift",
+        "-o", str(output), "-framework", "AppKit", "-framework", "WebKit",
     ]
     print("==> " + " ".join(command), flush=True)
     compiled = subprocess.run(command, cwd=ROOT, check=False)

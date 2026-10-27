@@ -5,8 +5,115 @@ import Darwin
 
 @main
 struct StartupNativeTests {
+    private static func emitEventSamples(to outputDirectory: URL) throws {
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+
+        func makeWriter(startedAt: TimeInterval, launcherPID: Int) -> (NativeEventWriter, () -> [[String: Any]]) {
+            var records: [[String: Any]] = []
+            let writer = NativeEventWriter(
+                startedAt: startedAt, launcherPID: launcherPID,
+                launcherPath: "/Applications/Agent Skin.app",
+                now: { startedAt + 100 }, sink: { records.append($0) }
+            )
+            return (writer, { records })
+        }
+
+        func write(_ name: String, _ records: [[String: Any]]) throws {
+            let lines = try records.map { record -> String in
+                let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys, .withoutEscapingSlashes])
+                guard let line = String(data: data, encoding: .utf8) else {
+                    throw StartupFailure(reason: "protocol-error", message: "event sample is not UTF-8")
+                }
+                return line
+            }
+            let file = outputDirectory.appendingPathComponent(name).appendingPathExtension("jsonl")
+            try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: file)
+            print(file.path)
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 10, launcherPID: 110)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 10)
+            stream.targetOpened(pid: 2110, at: 11)
+            stream.startupInstalled(pid: 2110, runID: 1, at: 12)
+            let observation = NativeStartupObservation(
+                targetPID: 2110, installedAt: 12,
+                status: NativeStartupStatus(runID: 1, phase: "playing", ready: true, completed: false,
+                                            overlay: true, completionCause: nil, completionBeforeReady: nil),
+                statusAt: 13
+            )
+            _ = stream.resolve(.ready(runID: 1), observation: observation, at: 13)
+            _ = stream.finish(at: 14)
+            try write("startup-ready", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 20, launcherPID: 120)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 20)
+            _ = stream.resolve(.activated(pid: 2120), observation: nil, at: 21)
+            _ = stream.finish(at: 22)
+            try write("target-activated", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 30, launcherPID: 130)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 30)
+            stream.targetOpened(pid: 2130, at: 31)
+            stream.startupInstalled(pid: 2130, runID: 3, at: 32)
+            let observation = NativeStartupObservation(
+                targetPID: 2130, installedAt: 32,
+                status: NativeStartupStatus(runID: 3, phase: "complete", ready: false, completed: true,
+                                            overlay: false, completionCause: "skip", completionBeforeReady: true),
+                statusAt: 33
+            )
+            _ = stream.resolve(.skipped(runID: 3, beforeReady: true), observation: observation, at: 33)
+            _ = stream.finish(at: 34)
+            try write("startup-skipped", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 40, launcherPID: 140)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 40)
+            stream.targetOpened(pid: 2140, at: 41)
+            stream.startupInstalled(pid: 2140, runID: 4, at: 42)
+            _ = stream.resolve(.partial(reason: "startup-interrupted"), observation: nil, at: 43)
+            _ = stream.finish(at: 44)
+            try write("startup-interrupted", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 50, launcherPID: 150)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 50)
+            stream.portError(operation: "bind-loopback", errno: 48, at: 51)
+            _ = stream.resolve(.failed(reason: "listener-mismatch"), observation: nil, at: 52)
+            _ = stream.finish(at: 53)
+            try write("startup-port-error", records())
+        }
+
+        do {
+            let (writer, records) = makeWriter(startedAt: 60, launcherPID: 160)
+            writer.emit("player-start", fields: ["mode": "smoke"], at: 60)
+            writer.emit("playback-start", fields: ["durationSeconds": 12], at: 61)
+            writer.emit("animation-complete", at: 62)
+            writer.emit("preview-result", fields: ["success": true], at: 63)
+            writer.emit("player-terminated", fields: ["completed": true, "failed": false], at: 64)
+            try write("smoke", records())
+        }
+    }
+
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--emit-event-jsonl") {
+            let path = index + 1 < CommandLine.arguments.count
+                ? CommandLine.arguments[index + 1] : ".build/native-event-samples"
+            try emitEventSamples(to: URL(fileURLWithPath: path, isDirectory: true))
+            return
+        }
         if CommandLine.arguments.dropFirst().contains("--emit-helper-expressions") {
             let expressions = [
                 "statusSource": WallpaperCLI.statusSource,
@@ -431,6 +538,10 @@ struct StartupNativeTests {
             _ = try StartupCDPProtocol.decode(Data(#"{"id":3,"result":{"exceptionDetails":{}}}"#.utf8), expectedID: 3)
         }
 
+        #if AGENT_SKIN_NATIVE_EVENT_TESTS
+        checks += try await nativeEventContractChecks()
+        #endif
+
         print("Startup native checks passed: \(checks). Scope: injected host facts and transport only; no real open/kill.")
     }
 }
@@ -508,3 +619,282 @@ private final class FakeStartupTransport: StartupTransport {
     }
     func close() { closeCount += 1 }
 }
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+@MainActor
+private func nativeEventContractChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: \(label)") }
+        checks += 1
+    }
+
+    func validStatus(_ runID: Int, phase: String, ready: Bool, completed: Bool,
+                     overlay: Bool, completion: Any) -> [String: Any] {
+        ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
+         "ready": ready, "completed": completed, "overlay": overlay, "reason": "",
+         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+         "completion": completion]
+    }
+
+    var now = 100.0
+    var records: [[String: Any]] = []
+    let writer = NativeEventWriter(startedAt: 100, launcherPID: 77,
+                                   launcherPath: "/Applications/Agent Skin.app",
+                                   now: { now }, sink: { records.append($0) })
+    let stream = NativeStartupEventStream(writer: writer)
+    stream.begin(at: 100)
+    stream.targetOpened(pid: 4123, at: 101)
+    let capture = NativeStartupCapture(targetPID: 4123)
+    let fake = FakeStartupTransport(evaluations: [
+        ["installed": true, "alreadyActive": false],
+        ["href": "app://-/index.html?initialRoute=%2F", "missing": false,
+         "status": validStatus(23, phase: "loading", ready: false, completed: false, overlay: true,
+                                completion: NSNull())],
+        ["href": "app://-/index.html?initialRoute=%2F", "missing": false,
+         "status": validStatus(23, phase: "playing", ready: true, completed: false, overlay: true,
+                                completion: NSNull())]
+    ], afterEvaluation: { _, index in now = 102 + Double(index) })
+    let observer = NativeStartupEventTransport(base: fake, capture: capture, events: stream, now: { now })
+    _ = try await observer.evaluate("test install", timeout: 1)
+    _ = try await observer.evaluate("test loading status", timeout: 1)
+    _ = try await observer.evaluate("test ready status", timeout: 1)
+    let readyResolution = stream.resolve(.ready(runID: 23), observation: capture.snapshot(), at: 104)
+    expect(readyResolution == .ready, "the native observer preserves the verified runId and final phase")
+    _ = stream.finish(at: 105)
+    expect(records.map { $0["event"] as? String ?? "" } == [
+        "launcher-start", "target-opened", "startup-installed", "startup-ready", "launcher-exit"
+    ], "cold readiness emits the contract sequence")
+    expect(records[2]["targetPID"] as? Int == 4123 && records[2]["runId"] as? Int == 23,
+           "startup-installed carries the observed target PID and status runId")
+    expect(records[3]["targetPID"] as? Int == 4123 && records[3]["runId"] as? Int == 23
+           && records[3]["ready"] as? Bool == true && records[3]["phase"] as? String == "playing",
+           "startup-ready carries a matching PID, runId, ready flag, and actual phase")
+    expect(records[4]["outcome"] as? String == "startup-ready" && records[4]["exitCode"] as? Int == 0,
+           "startup-ready exit outcome and code agree")
+    let elapsed = records.compactMap { ($0["seconds"] as? NSNumber)?.doubleValue }
+    expect(elapsed.count == records.count && elapsed.allSatisfy { $0.isFinite && $0 >= 0 }
+           && zip(elapsed, elapsed.dropFirst()).allSatisfy { $0 <= $1 },
+           "native event envelope seconds are finite, nonnegative, and monotonic")
+    expect(records.allSatisfy {
+        $0["schema"] as? String == NativeEventWriter.schema
+            && $0["launcherPID"] as? Int == 77
+            && $0["launcherPath"] as? String == "/Applications/Agent Skin.app"
+    }, "every consumed event has the v1 envelope")
+
+    var skipNow = 200.0
+    var skipRecords: [[String: Any]] = []
+    let skipWriter = NativeEventWriter(startedAt: 200, launcherPID: 78,
+                                       launcherPath: "/Applications/Agent Skin.app",
+                                       now: { skipNow }, sink: { skipRecords.append($0) })
+    let skipStream = NativeStartupEventStream(writer: skipWriter)
+    skipStream.begin(at: 200)
+    skipStream.targetOpened(pid: 4124, at: 201)
+    skipStream.startupInstalled(pid: 4124, runID: 24, at: 202)
+    let skippedStatus = NativeStartupStatus.parse(validStatus(
+        24, phase: "complete", ready: false, completed: true, overlay: false,
+        completion: ["cause": "skip", "beforeReady": true]
+    ))
+    let skippedObservation = NativeStartupObservation(targetPID: 4124, installedAt: 202,
+                                                       status: skippedStatus, statusAt: 203)
+    let skipResolution = skipStream.resolve(.skipped(runID: 24, beforeReady: true),
+                                              observation: skippedObservation, at: 204)
+    skipNow = 205
+    _ = skipStream.finish(at: 205)
+    expect(skipResolution == .skipped
+           && skipRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "target-opened", "startup-installed", "startup-skipped", "launcher-exit"
+           ], "pre-ready skip is distinct and keeps its own ordered result")
+    expect((skipRecords[3]["completion"] as? [String: Any])?["cause"] as? String == "skip"
+           && (skipRecords[3]["completion"] as? [String: Any])?["beforeReady"] as? Bool == true
+           && skipRecords[3]["completed"] as? Bool == true && skipRecords[3]["overlay"] as? Bool == false,
+           "startup-skipped reports only the observed skip completion")
+    expect(skipRecords[4]["outcome"] as? String == "skipped" && skipRecords[4]["exitCode"] as? Int == 0,
+           "skip exit outcome and code agree")
+
+    var failureRecords: [[String: Any]] = []
+    let failureWriter = NativeEventWriter(startedAt: 300, launcherPID: 79,
+                                          launcherPath: "/Applications/Agent Skin.app",
+                                          now: { 302 }, sink: { failureRecords.append($0) })
+    let failureStream = NativeStartupEventStream(writer: failureWriter)
+    failureStream.begin(at: 300)
+    let failed = failureStream.resolve(.failed(reason: "protocol-error"), observation: nil, at: 301)
+    let overwritten = failureStream.resolve(.ready(runID: 25), observation: nil, at: 302)
+    _ = failureStream.finish(at: 303)
+    expect(failed == .behaviorNotProven(reason: "protocol-error") && overwritten == nil
+           && failureRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "startup-failed", "launcher-exit"
+           ], "a later success cannot overwrite a startup failure")
+    expect(failureRecords[2]["outcome"] as? String == "behavior-not-proven"
+           && failureRecords[2]["exitCode"] as? Int == 1,
+           "failure exit outcome and code agree")
+
+    var portErrorRecords: [[String: Any]] = []
+    let portErrorWriter = NativeEventWriter(startedAt: 320, launcherPID: 85,
+                                            launcherPath: "/Applications/Agent Skin.app",
+                                            now: { 324 }, sink: { portErrorRecords.append($0) })
+    let portErrorStream = NativeStartupEventStream(writer: portErrorWriter)
+    portErrorStream.begin(at: 320)
+    portErrorStream.portError(operation: "bind-loopback", errno: 48, at: 321)
+    let portErrorResolution = portErrorStream.resolve(.ready(runID: 28), observation: nil, at: 322)
+    let portErrorOverwritten = portErrorStream.resolve(.ready(runID: 28), observation: nil, at: 323)
+    _ = portErrorStream.finish(at: 324)
+    expect(portErrorResolution == .behaviorNotProven(reason: "listener-mismatch")
+           && portErrorOverwritten == nil
+           && portErrorRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "startup-port-error", "startup-failed", "launcher-exit"
+           ], "a port failure is retained and cannot be overwritten by a later ready outcome")
+    expect(portErrorRecords[1]["schema"] as? String == NativeEventWriter.schema
+           && portErrorRecords[1]["reason"] as? String == "listener-mismatch"
+           && portErrorRecords[1]["operation"] as? String == "bind-loopback"
+           && portErrorRecords[1]["errno"] as? Int == 48
+           && portErrorRecords[3]["exitCode"] as? Int == 1,
+           "the port failure carries its v1 envelope, fixed reason, and bounded diagnostic fields")
+
+    var latchedFailureRecords: [[String: Any]] = []
+    let latchedFailureWriter = NativeEventWriter(startedAt: 350, launcherPID: 83,
+                                                 launcherPath: "/Applications/Agent Skin.app",
+                                                 now: { 354 }, sink: { latchedFailureRecords.append($0) })
+    let latchedFailureStream = NativeStartupEventStream(writer: latchedFailureWriter)
+    latchedFailureStream.begin(at: 350)
+    latchedFailureStream.latchFailure("javascript-error")
+    latchedFailureStream.targetOpened(pid: 4127, at: 351)
+    latchedFailureStream.startupInstalled(pid: 4127, runID: 27, at: 352)
+    let latchedStatus = NativeStartupStatus.parse(validStatus(
+        27, phase: "playing", ready: true, completed: false, overlay: true, completion: NSNull()
+    ))
+    let latchedObservation = NativeStartupObservation(targetPID: 4127, installedAt: 352,
+                                                      status: latchedStatus, statusAt: 353)
+    let latchedFailure = latchedFailureStream.resolve(.ready(runID: 27), observation: latchedObservation, at: 354)
+    _ = latchedFailureStream.finish(at: 355)
+    expect(latchedFailure == .behaviorNotProven(reason: "protocol-error")
+           && latchedFailureRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "target-opened", "startup-installed", "startup-failed", "launcher-exit"
+           ], "a latched failure retains real milestones but suppresses a later ready event")
+    expect(latchedFailureRecords[4]["outcome"] as? String == "behavior-not-proven"
+           && latchedFailureRecords[4]["exitCode"] as? Int == 1,
+           "a latched failure keeps the nonzero exit code")
+
+    var activeRecords: [[String: Any]] = []
+    let activeWriter = NativeEventWriter(startedAt: 375, launcherPID: 84,
+                                         launcherPath: "/Applications/Agent Skin.app",
+                                         now: { 377 }, sink: { activeRecords.append($0) })
+    let activeStream = NativeStartupEventStream(writer: activeWriter)
+    activeStream.begin(at: 375)
+    activeStream.targetOpened(pid: 4128, at: 376)
+    let active = activeStream.resolve(.partial(reason: "startup-active"), observation: nil, at: 377)
+    _ = activeStream.finish(at: 378)
+    expect(active == .behaviorNotProven(reason: "startup-active")
+           && activeRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "target-opened", "startup-failed", "launcher-exit"
+           ] && activeRecords[3]["outcome"] as? String == "behavior-not-proven"
+           && activeRecords[3]["exitCode"] as? Int == 1,
+           "an existing startup controller is a controlled refusal, not an interruption")
+
+    var interruptedRecords: [[String: Any]] = []
+    let interruptedWriter = NativeEventWriter(startedAt: 400, launcherPID: 80,
+                                              launcherPath: "/Applications/Agent Skin.app",
+                                              now: { 404 }, sink: { interruptedRecords.append($0) })
+    let interruptedStream = NativeStartupEventStream(writer: interruptedWriter)
+    interruptedStream.begin(at: 400)
+    interruptedStream.targetOpened(pid: 4125, at: 401)
+    interruptedStream.startupInstalled(pid: 4125, runID: 26, at: 402)
+    let interrupted = interruptedStream.resolve(.partial(reason: "startup-interrupted"), observation: nil, at: 403)
+    _ = interruptedStream.finish(at: 404)
+    expect(interrupted == .partial(reason: "startup-interrupted")
+           && interruptedRecords.map { $0["event"] as? String ?? "" } == [
+            "launcher-start", "target-opened", "startup-installed", "startup-interrupted", "launcher-exit"
+           ], "a real install prefix is retained before an interruption")
+    expect(interruptedRecords[4]["outcome"] as? String == "partial"
+           && interruptedRecords[4]["exitCode"] as? Int == 2,
+           "partial exit outcome and code agree")
+
+    var hotRecords: [[String: Any]] = []
+    let hotWriter = NativeEventWriter(startedAt: 500, launcherPID: 81,
+                                      launcherPath: "/Applications/Agent Skin.app",
+                                      now: { 502 }, sink: { hotRecords.append($0) })
+    let hotStream = NativeStartupEventStream(writer: hotWriter)
+    hotStream.begin(at: 500)
+    _ = hotStream.resolve(.activated(pid: 4126), observation: nil, at: 501)
+    _ = hotStream.finish(at: 502)
+    expect(hotRecords.map { $0["event"] as? String ?? "" } == [
+        "launcher-start", "target-activated", "launcher-exit"
+    ] && hotRecords[1]["targetPID"] as? Int == 4126,
+           "hot activation reports the checked target PID without installation events")
+    expect(hotRecords[2]["outcome"] as? String == "activated" && hotRecords[2]["exitCode"] as? Int == 0,
+           "activation exit outcome and code agree")
+
+    var smokeResources: [String: Int] = [:]
+    for key in [
+        "createdImages", "releasedImages", "liveImages",
+        "createdBitmaps", "releasedBitmaps", "liveBitmaps",
+        "createdCanvases", "releasedCanvases", "liveCanvases",
+        "createdPaths", "releasedPaths", "livePaths",
+        "createdRAF", "cancelledRAF", "liveRAF",
+        "createdObjectURLs", "revokedObjectURLs", "liveObjectURLs",
+        "framesPending"
+    ] { smokeResources[key] = 0 }
+    var smokeReport: [String: Any] = [
+        "elapsed": 12, "duration": 12, "completed": true, "skipped": false,
+        "reduced": false, "stage": "complete", "animationProgress": 1,
+        "viewport": ["width": 1440, "height": 900, "dpr": 1],
+        "coordinateSize": ["width": 1536, "height": 1024],
+        "resources": smokeResources,
+        "jsFrame": [
+            "rafIntervalMs": NSNull(), "renderSubmissionMs": NSNull(),
+            "scope": "JavaScript rAF interval and 2D canvas submission; excludes GPU/compositor/presentation timing"
+        ]
+    ]
+    func smokeReportJSON(_ value: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+        guard let json = String(data: data, encoding: .utf8) else { throw StartupFailure(reason: "protocol-error", message: "test") }
+        return json
+    }
+    let validSmokeReport = try smokeReportJSON(smokeReport)
+    expect(NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: validSmokeReport, evaluationFailed: false
+    ), "smoke accepts a complete non-skipped renderer report")
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: true, reportJSON: validSmokeReport, evaluationFailed: false
+    ), "the reachable Skip/Esc completion cannot pass smoke")
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: nil, reportJSON: validSmokeReport, evaluationFailed: false
+    ), "smoke rejects a completion message without its explicit skip state")
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: "{", evaluationFailed: false
+    ) && !NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: nil, evaluationFailed: false
+    ), "smoke rejects malformed or missing report JSON")
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: validSmokeReport, evaluationFailed: true
+    ), "smoke rejects a failed report evaluation")
+    smokeReport.removeValue(forKey: "resources")
+    let incompleteSmokeReport = try smokeReportJSON(smokeReport)
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: incompleteSmokeReport, evaluationFailed: false
+    ), "smoke rejects an incomplete renderer report")
+    smokeReport["resources"] = smokeResources
+    smokeReport["skipped"] = true
+    let skippedSmokeReport = try smokeReportJSON(smokeReport)
+    expect(!NativeSmokeReportValidator.isSuccessfulCompletion(
+        skipped: false, reportJSON: skippedSmokeReport, evaluationFailed: false
+    ), "smoke rejects a report that records a skipped completion")
+
+    var smokeRecords: [[String: Any]] = []
+    let smokeWriter = NativeEventWriter(startedAt: 600, launcherPID: 82,
+                                        launcherPath: "/Applications/Agent Skin.app",
+                                        now: { 601 }, sink: { smokeRecords.append($0) })
+    for event in ["player-start", "playback-start", "animation-complete", "preview-result"] {
+        smokeWriter.emit(event)
+    }
+    smokeWriter.emit("player-terminated", fields: ["completed": true, "failed": false])
+    expect(smokeRecords.map { $0["event"] as? String ?? "" } == [
+        "player-start", "playback-start", "animation-complete", "preview-result", "player-terminated"
+    ] && smokeRecords.last?["completed"] as? Bool == true && smokeRecords.last?["failed"] as? Bool == false,
+           "smoke keeps the independent five-event sequence and completion fields")
+    expect(smokeRecords.allSatisfy { $0["schema"] as? String == NativeEventWriter.schema },
+           "smoke events also carry the v1 envelope")
+
+    return checks
+}
+#endif
