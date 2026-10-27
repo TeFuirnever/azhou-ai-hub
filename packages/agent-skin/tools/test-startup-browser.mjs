@@ -190,13 +190,16 @@ try {
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
     options.generatedPayload ? readFile(options.generatedPayload, 'utf8') : Promise.resolve(null),
   ]);
-  const generatedPayloadRoute = generatedPayloadSource === null ? null : (() => {
-    const finalCall = 'return installStartup(installAnimation, globalThis);';
-    assert.equal(generatedPayloadSource.split(finalCall).length, 2,
-      'the builder output exposes one final host binding for isolated browser injection');
-    return generatedPayloadSource.replace(finalCall,
-      'return (globalThis.__generatedPayloadResult = installStartup(installAnimation, globalThis.__agentSkinFixtureHost));');
-  })();
+  const generatedPayloadRoute = generatedPayloadSource === null ? null : `(() => {
+    const host = globalThis.__agentSkinFixtureHost;
+    globalThis.__generatedPayloadResult = (function(window, location, document, globalThis) {
+      return ${generatedPayloadSource};
+    }).call(host, host, host.location, document, host);
+  })();`;
+  if (generatedPayloadSource !== null) {
+    assert.ok(generatedPayloadRoute.includes(generatedPayloadSource),
+      'the app-route realm adapter embeds the unmodified generated payload source');
+  }
   const helperExpressions = JSON.parse(helperExpressionJSON);
   assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'statusSource']);
   assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
@@ -234,8 +237,10 @@ try {
       hasFocus: document.hasFocus.bind(document),
       createElement: document.createElement.bind(document),
     };
-    const host = url.searchParams.has('generated-payload')
+    let host;
+    host = url.searchParams.has('generated-payload')
       ? new Proxy(window, { get(target, name) {
+        if (['window', 'self', 'top', 'globalThis'].includes(name)) return host;
         if (name === 'location') return new URL('app://-/index.html?initialRoute=%2F');
         if (name === 'document') return hostDocument;
         const value = Reflect.get(target, name, target);
@@ -2660,6 +2665,24 @@ try {
         return window.__startupInstallResult?.installed===true&&state?.phase==='playing'&&state.ready?state:false;
       })()`), 15000, 'builder-generated controller and animation ready');
       assert.equal(await cdp.evaluate('document.querySelectorAll(\'iframe[title="Agent Skin startup"]\').length'), 1);
+      const wallpaper = await until(() => cdp.evaluate(`(()=>{
+        const controller=window.__startupAPI.status().wallpaper;
+        const api=window.__azhouWallpaper?.status?.();
+        const style=document.querySelector('#azhou-wallpaper-style');
+        return controller.applied&&controller.imageDecoded&&api?.applied&&api.imageDecoded&&style
+          ?{controller,api,owner:window.__azhouWallpaper.owner,version:window.__azhouWallpaper.version,
+            styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,styleOwner:style.getAttribute('data-azhou-owner')}
+          :false;
+      })()`), 10000, 'builder-generated wallpaper applied and decoded in the app route realm');
+      assert.equal(wallpaper.controller.applied, true);
+      assert.equal(wallpaper.controller.imageDecoded, true);
+      assert.equal(wallpaper.api.applied, true);
+      assert.equal(wallpaper.api.imageDecoded, true);
+      assert.equal(wallpaper.owner, 'azhou.codex-startup-animation');
+      assert.equal(wallpaper.version, '0.8.0');
+      assert.equal(wallpaper.styleCount, 1);
+      assert.equal(wallpaper.styleOwner, 'azhou.codex-startup-animation');
+      await cdp.evaluate('window.__ticket05InitialWallpaperAPI=window.__azhouWallpaper;true');
       const firstRun = initial.runId;
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       await until(() => cdp.evaluate(`(()=>{
@@ -2681,6 +2704,24 @@ try {
         return state.runId>${firstRun}&&state.phase==='playing'&&state.ready?state:false;
       })()`), 15000, 'settings commit and generated payload replay');
       assert.ok(replay.runId > firstRun);
+      const replayWallpaper = await until(() => cdp.evaluate(`(()=>{
+        const startup=window.__startupAPI.status(),api=window.__azhouWallpaper;
+        const apiState=api?.status?.(),style=document.querySelector('#azhou-wallpaper-style');
+        return startup.runId===${replay.runId}&&api!==window.__ticket05InitialWallpaperAPI
+          &&startup.wallpaper.applied&&startup.wallpaper.imageDecoded&&apiState?.applied&&apiState.imageDecoded&&style
+          ?{controller:startup.wallpaper,api:apiState,owner:api.owner,version:api.version,
+            styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,styleOwner:style.getAttribute('data-azhou-owner')}
+          :false;
+      })()`), 10000, 'saved settings replay keeps the newly applied generated wallpaper');
+      assert.equal(replayWallpaper.controller.applied, true);
+      assert.equal(replayWallpaper.controller.imageDecoded, true);
+      assert.equal(replayWallpaper.api.applied, true);
+      assert.equal(replayWallpaper.api.imageDecoded, true);
+      assert.equal(replayWallpaper.owner, 'azhou.codex-startup-animation');
+      assert.equal(replayWallpaper.version, '0.8.0');
+      assert.equal(replayWallpaper.styleCount, 1);
+      assert.equal(replayWallpaper.styleOwner, 'azhou.codex-startup-animation');
+      assert.equal(await cdp.evaluate('delete window.__ticket05InitialWallpaperAPI'), true);
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       const persisted = await until(() => cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[title="Agent Skin startup"]');
@@ -2695,7 +2736,7 @@ try {
           wallpaper:!!window.__azhouWallpaper,styles:document.querySelectorAll('#azhou-wallpaper-style').length};
       })()`);
       assert.deepEqual(disposed, { owned: false, frames: 0, wallpaper: false, styles: 0 });
-      return { firstRun, replayRun: replay.runId, savedTitle: persisted, disposed };
+      return { firstRun, replayRun: replay.runId, wallpaper, replayWallpaper, savedTitle: persisted, disposed };
     });
   }
 
