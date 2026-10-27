@@ -1,5 +1,7 @@
 # 功能详细设计：Agent Skin 首期 Codex 适配
 
+2026-10-27 实机反馈后的设置入口与验收变更见[冷启动验收修订](host-acceptance-fixes.md)；其中的点击入口替代本文历史的 Command-Option-B 约定。
+
 ## 0. 文档控制与阅读入口
 
 | 字段 | 内容 |

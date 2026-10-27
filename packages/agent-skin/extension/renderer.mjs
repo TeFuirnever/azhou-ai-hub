@@ -71,11 +71,11 @@ function mountAppearanceEntry(document, openSettings) {
   const shadow = element.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
-    :host { all: initial; position: fixed; left: 76px; bottom: 16px; z-index: 2147483646; }
+    :host { all: initial; position: fixed; left: 10px; bottom: 72px; z-index: 2147483646; }
     button { all: initial; box-sizing: border-box; display: block; cursor: pointer;
-      padding: 8px 13px; border: 1px solid #bdb4cf; border-radius: 18px;
+      width: 44px; padding: 6px 4px; border: 1px solid #bdb4cf; border-radius: 18px;
       background: #f7f2fb; color: #30283e; box-shadow: 0 2px 8px #0002;
-      font: 13px/18px -apple-system, BlinkMacSystemFont, sans-serif; }
+      font: 12px/18px -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; white-space: normal; }
     button:hover { background: #eee4f7; }
     button:focus-visible { outline: 2px solid #9670bb; outline-offset: 3px; }
     @media (prefers-color-scheme: dark) {
