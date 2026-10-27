@@ -72,7 +72,7 @@ class AgentSkinLegacyCleanupTests(unittest.TestCase):
         self.lock = common.load_lock("startup-animation", hub_root=self.hub)
         self.snapshot = common.snapshot_source("startup-animation", self.legacy_source, self.workspace, hub_root=self.hub)
 
-    def test_agent_skin_can_plan_cleanup_from_an_unchanged_legacy_snapshot(self) -> None:
+    def install_legacy_receipt_fixture(self) -> tuple[Path, Path, bytes]:
         target_root = state.state_path(self.workspace, "hub", "test-installations", "startup-animation")
         target = target_root / animation.APP_NAME
         resources = target / "Contents/Resources"
@@ -115,7 +115,10 @@ class AgentSkinLegacyCleanupTests(unittest.TestCase):
             "source_lock_sha256": common.plan_digest(self.lock),
         }
         common.write_receipt(record, receipt)
-        original_receipt = record.read_bytes()
+        return target, record, record.read_bytes()
+
+    def test_agent_skin_can_plan_cleanup_from_an_unchanged_legacy_snapshot(self) -> None:
+        target, record, original_receipt = self.install_legacy_receipt_fixture()
 
         verifier_path = self.legacy_source / "tools/verify-artifacts.py"
         verifier_path.write_text("raise RuntimeError('live verifier must not be used')\n", encoding="utf-8")
@@ -127,6 +130,82 @@ class AgentSkinLegacyCleanupTests(unittest.TestCase):
         self.assertEqual(str(self.snapshot), plan["target"]["native_source_root"])
         self.assertEqual(str(self.legacy_source), plan["target"]["source"]["source"])
         self.assertEqual(original_receipt, record.read_bytes())
+
+    def test_legacy_receipt_blocks_new_install_then_public_cleanup_preserves_other_registrations(self) -> None:
+        target, record, original_receipt = self.install_legacy_receipt_fixture()
+        with patch.object(animation, "inspect_bundle") as inspect:
+            with self.assertRaisesRegex(common.IntegrationError, "legacy startup-animation test install.*test-uninstall"):
+                animation.test_install_plan(self.agent_source, self.snapshot / "unused-payload", self.workspace,
+                                            hub_root=self.hub)
+            inspect.assert_not_called()
+        self.assertEqual(original_receipt, record.read_bytes())
+        self.assertEqual("startup-animation", common.read_receipt(record)["component"])
+
+        production = str(self.base / "production" / animation.APP_NAME)
+        unrelated = str(self.base / "other-project" / "Other.app")
+        registry = {name: [] for name in animation.REGISTRY_IDS}
+        registry[animation.REGISTRY_IDS[0]] = sorted([str(target), production])
+        registry[animation.REGISTRY_IDS[1]] = [unrelated]
+        commands = []
+
+        def inventory(_tool: Path) -> dict[str, list[str]]:
+            return {name: list(paths) for name, paths in registry.items()}
+
+        def native(command: list[str], **_options: object) -> dict[str, object]:
+            commands.append(command)
+            if command[0] == animation.LSREGISTER:
+                self.assertEqual([animation.LSREGISTER, "-u", str(target)], command)
+                registry[animation.REGISTRY_IDS[0]].remove(str(target))
+            else:
+                self.assertEqual(["/bin/ps", "-axo", "pid=,comm="], command)
+            return {"command": command, "returncode": 0, "stdout": "", "stderr": ""}
+
+        with patch.object(animation, "_registry_inventory", side_effect=inventory), \
+                patch.object(animation, "_run", side_effect=native):
+            plan = animation.test_uninstall_plan(self.agent_source, self.workspace, hub_root=self.hub)
+            self.assertEqual("startup-animation", plan["target"]["source"]["component"])
+            result = animation.test_uninstall(self.agent_source, self.workspace, plan["plan_id"], hub_root=self.hub)
+
+        self.assertEqual("test-uninstalled", result["status"])
+        self.assertEqual([production], result["registry_after"][animation.REGISTRY_IDS[0]])
+        self.assertEqual([unrelated], result["registry_after"][animation.REGISTRY_IDS[1]])
+        self.assertFalse(target.exists())
+        self.assertFalse(record.exists())
+        self.assertEqual(1, sum(command[0] == animation.LSREGISTER for command in commands))
+
+    def test_apply_rechecks_legacy_owner_before_committing_new_test_install(self) -> None:
+        payload = self.snapshot / ".build/azhou-payload"
+        payload.mkdir(parents=True)
+        (payload / "bundle-data").write_text("new Agent Skin bundle", encoding="utf-8")
+        workspace = self.base / "race-workspace"
+        target, record = animation._test_paths(workspace)
+        legacy_target, legacy_record = animation._test_paths(workspace, "startup-animation")
+
+        with patch.object(animation, "inspect_bundle", side_effect=lambda source, bundle, **_kwargs: {
+                "path": str(bundle), "sha256_tree": "bundle digest", "native_source_root": str(self.snapshot),
+                "source": {"source": str(source), "source_lock_sha256": "source digest"}}):
+            plan = animation.test_install_plan(self.agent_source, payload, workspace, hub_root=self.hub)
+
+            original_copytree = animation.shutil.copytree
+
+            def copy_then_add_legacy_owner(source: Path, destination: Path, **kwargs: object) -> None:
+                original_copytree(source, destination, **kwargs)
+                legacy_target.mkdir(parents=True)
+                common.write_receipt(legacy_record, {
+                    "schema": "azhou-hub.animation-test-install.v1", "component": "startup-animation",
+                    "path": str(legacy_target), "sha256_tree": "old receipt digest",
+                    "source_lock_sha256": "old source digest",
+                })
+
+            with patch.object(animation.shutil, "copytree", side_effect=copy_then_add_legacy_owner):
+                with self.assertRaisesRegex(common.IntegrationError, "legacy startup-animation test install.*test-uninstall"):
+                    animation.test_install(self.agent_source, payload, workspace, plan["plan_id"], hub_root=self.hub)
+
+        self.assertTrue(legacy_target.is_dir())
+        self.assertEqual("startup-animation", common.read_receipt(legacy_record)["component"])
+        self.assertFalse(target.exists())
+        self.assertFalse(record.exists())
+        self.assertEqual([], list(target.parent.glob(".test-install-*")))
 
     def test_a_plan_reviewed_under_the_legacy_package_name_cannot_build_agent_skin(self) -> None:
         assets = self.base / "private-inputs"

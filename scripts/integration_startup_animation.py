@@ -232,6 +232,14 @@ def _test_paths(workspace: Path, component: str = COMPONENT) -> tuple[Path, Path
     return directory / APP_NAME, directory / "receipt.json"
 
 
+def _reject_legacy_test_owner(workspace: Path) -> None:
+    target, record = _test_paths(workspace, LEGACY_COMPONENT)
+    if target.exists() or target.is_symlink() or record.exists() or record.is_symlink():
+        raise common.IntegrationError(
+            "legacy startup-animation test installation still occupies this workspace; "
+            "remove it with the agent-skin test-uninstall command before creating a new test installation")
+
+
 def _owned_test(workspace: Path) -> tuple[Path, Path, dict[str, Any], str]:
     owned = []
     for component in (COMPONENT, LEGACY_COMPONENT):
@@ -295,6 +303,8 @@ def _require_stopped(target: Path) -> None:
 
 
 def test_install_plan(source: Path, payload: Path, workspace: Path, *, hub_root: Path = ROOT) -> dict[str, Any]:
+    workspace = _directory(workspace, exists=False)
+    _reject_legacy_test_owner(workspace)
     verified = inspect_bundle(source, payload, hub_root=hub_root)
     if Path(verified["native_source_root"]) == Path(verified["source"]["source"]):
         raise common.IntegrationError(
@@ -339,6 +349,7 @@ def test_install(source: Path, payload: Path, workspace: Path, plan_id: str, *, 
             raise common.IntegrationError("payload changed during test installation")
         if target.exists() or target.is_symlink() or record.exists() or record.is_symlink():
             raise common.IntegrationError("test installation target became occupied")
+        _reject_legacy_test_owner(workspace)
         staged.rename(target)
         installed = True
         common.write_receipt(record, {"schema": "azhou-hub.animation-test-install.v1", "component": COMPONENT,
