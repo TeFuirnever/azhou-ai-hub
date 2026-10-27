@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 import stat
 import sys
-import tomllib
 import types
 
 try:
@@ -78,30 +77,25 @@ def _allowed_targets(codex_home: Path, skills_dir: Path, installer) -> set[Path]
             *(codex_home / f"agents/{name}.toml" for name in installer.ROLE_MODELS)}
 
 
-def _reject_pstack(codex_home: Path, installer) -> None:
-    """Keep the existing one-orchestrator contract; ambiguity is not opt-in."""
-    sheet = codex_home / "pstack-models.md"
-    if sheet.exists() or sheet.is_symlink():
-        raise common.IntegrationError("pstack model policy exists in this target; select a separate Codex home")
-    raw = installer.regular_bytes(codex_home / "config.toml")
-    config = tomllib.loads(raw.decode("utf-8")) if raw else {}
-    def contains_pstack(value):
-        if isinstance(value, dict):
-            return any(contains_pstack(k) or contains_pstack(v) for k, v in value.items())
-        if isinstance(value, list):
-            return any(contains_pstack(v) for v in value)
-        return isinstance(value, str) and ("pstack-claude" in value or "pstack@" in value)
-    if contains_pstack(config):
-        raise common.IntegrationError("pstack registration exists in this target; orchestrators cannot be chained")
-    plugins = codex_home / "plugins"
-    if plugins.is_symlink():
-        raise common.IntegrationError("plugin directory is a symlink; pstack absence cannot be established")
-    if plugins.exists():
-        for path in plugins.rglob(".codex-plugin/plugin.json"):
-            installer.check_parents(path)
-            data = installer.regular_bytes(path)
-            if data and json.loads(data).get("name") == "pstack":
-                raise common.IntegrationError("pstack plugin exists in this target; select a separate Codex home")
+def _pstack_coexistence(codex_home: Path, skills_dir: Path, installer) -> dict:
+    """One verdict, from the Kit's own shipped implementation.
+
+    The Hub entry and the Kit's direct entry must reach the same conclusion
+    for the same target, so the judgment lives in the hash-verified installer
+    module and both entries call it. Registration plus the sheet's routing
+    switch decide compatibility; a sheet or visible Skills alone is not
+    routing evidence, and one plugin copy under the native plugins tree
+    already counts as registration.
+    """
+    try:
+        verdict = installer.pstack_coexistence(codex_home, skills_dir)
+    except common.IntegrationError:
+        raise
+    except Exception as exc:
+        raise common.IntegrationError(f"pstack compatibility could not be established: {exc}") from exc
+    if not verdict["compatible"]:
+        raise common.IntegrationError(verdict["reason"])
+    return verdict
 
 
 def _receipt(path: Path, codex_home: Path, skills_dir: Path, installer) -> dict | None:
@@ -136,16 +130,29 @@ def _receipt(path: Path, codex_home: Path, skills_dir: Path, installer) -> dict 
     return receipt
 
 
+def _mode_text(mode: int | None) -> str:
+    return f"{mode:o}" if mode is not None else "absent"
+
+
+def _difference(expected: dict, current: dict) -> str:
+    """Render one owned target's recorded-versus-observed difference."""
+    return (f"(recorded sha256 {expected['sha256']}, found sha256 {current['sha256']}, "
+            f"mode {_mode_text(expected['mode'])} found {_mode_text(current['mode'])})")
+
+
 def _assert_unchanged(receipt: dict, installer) -> None:
     for name, expected in receipt["after"].items():
-        if _fingerprint(Path(name), installer) != expected:
-            raise common.IntegrationError(f"installed target changed; refusing automatic restore or overwrite: {name}")
+        current = _fingerprint(Path(name), installer)
+        if current != expected:
+            raise common.IntegrationError(
+                f"installed target changed; refusing automatic restore or overwrite: {name} " + _difference(expected, current))
 
 
 def _assert_recoverable(receipt: dict, installer) -> None:
     for name, after in receipt["after"].items():
-        if _fingerprint(Path(name), installer) not in (receipt["before"][name], after):
-            raise common.IntegrationError(f"concurrent edit prevents recovery: {name}")
+        current = _fingerprint(Path(name), installer)
+        if current not in (receipt["before"][name], after):
+            raise common.IntegrationError(f"concurrent edit prevents recovery: {name} " + _difference(after, current))
 
 
 def make_plan(source: Path, workspace: Path, codex_home: Path, skills_dir: Path,
@@ -158,7 +165,7 @@ def make_plan(source: Path, workspace: Path, codex_home: Path, skills_dir: Path,
         if target == source or source in target.parents:
             raise common.IntegrationError("runtime and target writes must remain outside the read-only source")
     installer = _module(source, "install_codex.py", hub_root=hub_root)
-    _reject_pstack(codex_home, installer)
+    pstack = _pstack_coexistence(codex_home, skills_dir, installer)
     native = installer.build_plan(source, codex_home, skills_dir)
     common.inspect_source(COMPONENT, source, hub_root=hub_root)
     receipt_path = _receipt_path(workspace, codex_home, skills_dir)
@@ -180,7 +187,8 @@ def make_plan(source: Path, workspace: Path, codex_home: Path, skills_dir: Path,
         "changes": {str(p): hashlib.sha256(raw).hexdigest() for p, raw in sorted(native["changes"].items())},
         "receipt": str(receipt_path), "native_preflight": "performed by apply before target writes",
         "execution_evidence": "native discovery is not model invocation",
-        "composition": "one workflow owner per task; do not chain pstack and astra-orchestrator",
+        "composition": "one workflow owner per task; ordinary tasks keep these defaults, a user-selected pstack workflow owns its task",
+        "coexistence": pstack,
         "restore": "restore only this Hub invocation's exact changes; pre-existing installation is restored, not removed",
     }
     summary["plan_id"] = common.plan_digest(summary)
@@ -206,7 +214,7 @@ def apply(source: Path, workspace: Path, codex_home: Path, skills_dir: Path, cod
     installer = _module(snapshot, "install_codex.py", hub_root=hub_root)
     plan = installer.build_plan(snapshot, codex_home, skills_dir)
     native, runtime = _native_checks(snapshot, codex_home, plan, Path(summary["codex_bin"]), hub_root=hub_root)
-    _reject_pstack(codex_home, installer)
+    _pstack_coexistence(codex_home, skills_dir, installer)
     # Native preflight may take time. Bind all writes to the reviewed before-state.
     if {str(p): _fingerprint(p, installer) for p in sorted(plan["watched"])} != summary["before"]:
         raise common.IntegrationError("target changed during native preflight")

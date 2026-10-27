@@ -29,6 +29,8 @@ One task owns one lease and one task branch. Do not share a leased worktree acro
 
 If Treehouse `v2.3.0` or newer is unavailable, do not install or upgrade it implicitly. Report the missing capability. A direct `git worktree add` fallback requires explicit user approval and becomes a manually managed, long-lived exception.
 
+If `get` reports every slot in use or dirty, do not delete or force anything. A slot that `treehouse status` shows as `available` and whose `git status --porcelain` is empty (only ignored-file noise) can be leased in place: `treehouse lease <name> --lease-holder "$LEASE_HOLDER" --json` is a state-only operation that never resets or touches the worktree. Select or create the task branch yourself afterwards; `lease` hands the slot over in whatever state it stands.
+
 ## Work and verification
 
 - Keep generated caches and dependencies inside the leased worktree or normal external caches; do not commit pool state.

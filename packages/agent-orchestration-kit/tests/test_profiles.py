@@ -164,6 +164,21 @@ class BalancedProfileTests(unittest.TestCase):
             self.assertNotIn("sandbox_mode", agent)
         self.assertNotIn("/Users/", (directory / "AGENTS.md").read_text())
 
+    def test_balanced_coexistence_rules(self):
+        directory = ROOT / "profiles" / "azhou-balanced"
+        instructions = (directory / "AGENTS.md").read_text()
+        skill = (directory / "agents" / "skills" / "astra-orchestrator" / "SKILL.md").read_text()
+        for text in (instructions, skill):
+            self.assertIn("that workflow owns the task's decomposition, stages, child dispatch, and verification", text)
+            self.assertIn("A status question or an added constraint within the same task keeps", text)
+            self.assertIn("returns to these defaults", text)
+            self.assertIn("running children to a recoverable boundary", text)
+            self.assertIn("no orchestrator chains into another" if text is instructions
+                          else "never chains into another orchestrator", text)
+        self.assertIn("leave the active root model unchanged", instructions)
+        self.assertIn("a selected custom-role file overrides the explicit fields it sets", skill)
+        self.assertIn("do not attach a named role to them", skill)
+
     def test_balanced_project_selection_and_default(self):
         for choice in ("7", "azhou-balanced", ""):
             with self.subTest(choice=choice), tempfile.TemporaryDirectory() as target:

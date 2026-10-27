@@ -32,7 +32,9 @@ Requirements: Python 3.11 or newer, and a Codex runtime supporting standalone na
 
 The scripts resolve profiles and helper files relative to their own package directory, so they can also be invoked by path from another working directory. The workflow guides below show `./setup.sh` commands from `packages/agent-orchestration-kit`.
 
-`CODEX_HOME` is respected; otherwise the config directory is `~/.codex`. The personal Skill directory defaults to `~/.agents/skills`, independently of `CODEX_HOME`. Explicit `--codex-home` and `--skills-dir` are available for controlled targets. An alternate Skill location must be discoverable by the selected Codex runtime for native verification to pass. Paths are resolved at execution; profile templates contain no personal username.
+`CODEX_HOME` is respected; otherwise the config directory is `~/.codex`. The personal Skill directory defaults to `~/.agents/skills`, independently of `CODEX_HOME`. Explicit `--codex-home` and `--skills-dir` are available for controlled targets. An alternate Skill location must be discoverable by the selected Codex runtime for native verification to pass; this entry verifies discovery from its own package directory, so isolated workspace Skill roots belong to the Hub entry described in the Hub [integration runbook](../../docs/integrations.md). Paths are resolved at execution; profile templates contain no personal username.
+
+A target that natively registers the pstack plugin is installable only when its model sheet carries the exact `session hook: off` line — the same verdict both public entries share; an armed target is refused with that reason until it is converted through a reviewed plan. One Codex home can hold both packages with pstack's SessionStart auto-routing off and its Skills available per task; the whole loop (both install orders, repeats, conversion, both removal orders) is recorded natively on the acceptance client in the Hub's [native acceptance record](../../evidence/pstack-orchestrator-native-acceptance-2026-10-26.md).
 
 ## What installation owns
 
@@ -58,6 +60,19 @@ On success, the journal is removed. An identical second installation has zero ch
 
 Recovery refuses unexpected target paths or conflicting edits. A journal that needs manual attention is retained rather than discarded. There is no scheduled cleanup task.
 
+## Exiting a completed installation
+
+Uninstall is the owned exit for a completed installation. It is deliberately a separate command from `--recover` above, which only restores an interrupted transaction:
+
+```sh
+./packages/agent-orchestration-kit/setup.sh --uninstall
+./packages/agent-orchestration-kit/setup.sh --uninstall --dry-run
+```
+
+With the same `--codex-home`/`--skills-dir` as the installation, uninstall reads `agent-orchestration-kit/state.json` and restores only what this kit owns: the managed `config.toml` settings return to their recorded pre-install values, the marked `AGENTS.md` block is replaced by the recorded original or removed, files the installation created (the six roles, the Skill, the ownership record) are deleted, and files that already existed with matching content are left byte-for-byte. Whole files are never restored, so unrelated configuration and files another module wrote later — a pstack model sheet, a plugin cache, extra roles — stay in place; a shared pstack installation keeps its retained mode.
+
+The exit is transactional like the install: a write failure rolls back, an interrupted uninstall leaves the recovery journal for `--recover` (which returns the target to the installed state so the exit can be retried), and repeating uninstall on a target where every owned file was removed is a clean no-op. Pre-existing adopted files intentionally remain after the exit, so a later repeat over them reports them for manual review instead of deleting content the kit no longer owns. A user-modified owned key, file or block stops the exit and prints each difference (installed versus found value or digest) instead of overwriting it. A missing or unreadable ownership record never becomes a guessed history: kit-owned-looking files without a record are reported for manual review, and a target with no owned footprint reports nothing to uninstall.
+
 The one-time migration keeps `~/.codex/agent-orchestration-kit/legacy-recovery.json`: deduplicated unique pre-install values, historical run identifiers, and a cleanup inventory. It contains personal recovery data and is deliberately **not in Git**. See [the migration and acceptance report](guides/migration-2026-10-25.md).
 
 ## Native loading and permissions
@@ -80,6 +95,7 @@ Official contracts: [Subagents](https://developers.openai.com/codex/subagents), 
 |---|---|
 | Project brand / local directory | `agent-orchestration-kit` |
 | Default command | `./setup.sh` installs current-user `azhou-balanced` |
+| Owned exit | `./setup.sh --uninstall` restores the recorded pre-install owned scope |
 | Legacy shell project installer | `./setup.sh --project` |
 | Existing Windows project installer | `setup.ps1` retained; menu adds balanced profile |
 | Skill invocation | `$astra-orchestrator` retained |

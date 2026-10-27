@@ -219,6 +219,35 @@ def check_treehouse_config(root: Path) -> list[str]:
     return errors
 
 
+def check_integration_provenance_versions(root: Path) -> list[str]:
+    """A provenance row must declare the same runtime version its package ships.
+
+    Packages without a concrete manifest version (unreleased or absent) are not
+    enforced: there is nothing machine-readable to compare against. The declared
+    column once lagged a full release and only review caught it.
+    """
+    path = root / "docs/integration-provenance.md"
+    if not path.is_file():
+        return []
+    rows = _markdown_table_rows(path.read_text(encoding="utf-8"))
+    errors: list[str] = []
+    for manifest_path in sorted((root / "packages").glob("*/hub-package.json")):
+        try:
+            version = json.loads(manifest_path.read_text(encoding="utf-8")).get("version")
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(version, str) or not version[:1].isdigit():
+            continue
+        slug = manifest_path.parent.name
+        for row in rows:
+            if any(f"packages/{slug}" in cell for cell in row) and f"`{version}`" not in row[-1]:
+                errors.append(
+                    "integration provenance declares a different runtime version than "
+                    f"{manifest_path.relative_to(root).as_posix()} (shipped {version})"
+                )
+    return errors
+
+
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     bundled_roots = (
         "packages/pstack-agent-harness/plugins/pstack/skills/",
@@ -1171,6 +1200,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     errors.extend(check_required(root))
     errors.extend(check_treehouse_config(root))
+    errors.extend(check_integration_provenance_versions(root))
     errors.extend(check_skill_discovery(files, root))
     errors.extend(check_skill_brand_contract(root))
     errors.extend(check_memory_credit_contract(root))

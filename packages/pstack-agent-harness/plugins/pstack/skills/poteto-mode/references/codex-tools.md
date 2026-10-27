@@ -36,6 +36,7 @@ Enabling `multi_agent` does not lift the host's thread limit. A thread-limit err
 poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "pstack:poteto-agent"`, `run_in_background: true`). On Codex:
 
 - There is no `poteto-agent` subagent type. Route an ad-hoc subagent through poteto-mode's style by dispatching a `spawn_agent` whose instructions tell it to read the `poteto-mode` skill in full first.
+- A home may also install named custom roles (for example the Agent Orchestration Kit's `explorer`, `worker`, `reviewer`). They belong to that orchestrator's ordinary delegation. pstack's dispatches are ad-hoc: pass the explicit model and `reasoning_effort` from the sheet and select no named role, because on Codex a selected custom-role file overrides the explicit fields it sets. Never attach a named role to a pstack child.
 - `spawn_agent` calls already run concurrently with your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue.
 - When a role value carries `@<level>`, or the `default effort` line names a level, pass that level as `spawn_agent`'s `reasoning_effort` and keep the dispatch otherwise unchanged. `session` passes no `reasoning_effort`.
 - There is no `comment-sicko` subagent type either. The **no-comments** skill spawns it on Claude Code; on Codex dispatch a `spawn_agent` whose instructions tell it to read `poteto-mode/references/agents/comment-sicko.md` in full first.
@@ -53,6 +54,14 @@ Skills name Claude defaults (a single-role default for code/prose/judgment, a wo
 - Diverse-model panels (`arena`, `architect`, `interrogate`, `how` critics, `reflect`): the adversarial signal comes from model diversity, so use the distinct Codex models available to you. A good default panel on ChatGPT is `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`. If only one model family is reachable, vary reasoning effort and note in the verdict that diversity was reduced.
 
 `/setup-pstack` writes the configured model list. On Codex, set it to your Codex model slugs.
+
+## Task ownership beside a named-role orchestrator
+
+A Codex home can carry an orchestrator's host defaults — root model, named roles, concurrency — alongside pstack's shared Skills or plugin. Those defaults govern ordinary tasks. pstack takes over a task only when the user explicitly selects a pstack workflow for it or accepts it for the current task; a Skill being visible in the directory, a model sheet existing, or reference material loading is not selection.
+
+While pstack owns the task, it owns the decomposition, stages, child dispatch, and verification; the orchestrator's global instruction block and its orchestrator Skill add no second flow on top. A status question or an added constraint within the same task keeps pstack as the owner. A new task after this one completes returns to the host defaults; ownership does not persist and pstack starts no background service to keep it. When the user switches workflows mid-task, bring pstack's running children to a recoverable boundary — wait for, stop, or close them, per poteto-mode's [Subagents](../SKILL.md#subagents) — before the next workflow starts.
+
+Dispatch follows the Subagent policy above: ad-hoc `spawn_agent`, explicit model and `reasoning_effort` from the sheet, no named custom role. Selecting a pstack workflow does not switch the active root session model. If the host rejects an explicitly requested model, that is a model error: fall back only to a model the sheet declares and the host supports, and report the model you chose and why; never report a fallback as the requested model succeeding. A capacity error is not a model rejection (see above). A required independent review that cannot run stays blocked. User instructions, project rules, permissions, and concurrency limits apply on both paths, and pstack never chains into another orchestrator.
 
 ## Session routing hook
 

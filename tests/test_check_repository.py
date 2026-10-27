@@ -14,6 +14,7 @@ from scripts.check_repository import (
     check_chat_presentation_examples,
     check_command_surface,
     check_fidelity_axis, check_azhou_description_brand,
+    check_integration_provenance_versions,
     check_invocation_axis,
     check_legacy_broadcast_delimiter,
     check_markdown_links,
@@ -53,6 +54,48 @@ class RouterCoverageTest(unittest.TestCase):
             )
             self.assertIn("router coverage missing: super-arch-doc", errors)
             self.assertNotIn("router coverage missing: super-eli5", errors)
+
+
+class IntegrationProvenanceVersionsTest(unittest.TestCase):
+    def test_declared_versions_match_shipped_packages(self) -> None:
+        self.assertEqual([], check_integration_provenance_versions(ROOT))
+
+    def test_stale_version_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "packages" / "pstack-agent-harness"
+            package.mkdir(parents=True)
+            (package / "hub-package.json").write_text('{"version": "0.9.200"}\n', encoding="utf-8")
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "integration-provenance.md").write_text(
+                "| Integration | Runtime version and rights |\n"
+                "| --- | --- |\n"
+                "| pstack | [packages/pstack-agent-harness](x) | `0.9.103`; MIT |\n",
+                encoding="utf-8",
+            )
+            errors = check_integration_provenance_versions(root)
+            self.assertIn(
+                "integration provenance declares a different runtime version than "
+                "packages/pstack-agent-harness/hub-package.json (shipped 0.9.200)",
+                errors,
+            )
+
+    def test_unreleased_manifest_version_is_not_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "packages" / "agent-orchestration-kit"
+            package.mkdir(parents=True)
+            (package / "hub-package.json").write_text('{"version": "unreleased"}\n', encoding="utf-8")
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "integration-provenance.md").write_text(
+                "| Integration | Runtime version and rights |\n"
+                "| --- | --- |\n"
+                "| Model router | Unreleased package; Apache-2.0 |\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_integration_provenance_versions(root))
 
 
 class SkillPlatformViewTest(unittest.TestCase):

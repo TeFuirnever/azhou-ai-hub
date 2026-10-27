@@ -151,6 +151,41 @@ const rules = [
     file: "reflect/SKILL.md",
     phrase: "Add nothing beside a transcript path",
   },
+  {
+    source: "#339 a selected pstack workflow owns the task",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "it owns the decomposition, stages, child dispatch, and verification",
+  },
+  {
+    source: "#339 visibility is not selection",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "a Skill being visible in the directory, a model sheet existing, or reference material loading is not selection",
+  },
+  {
+    source: "#339 same-goal follow-ups keep the owner",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "A status question or an added constraint within the same task keeps pstack as the owner",
+  },
+  {
+    source: "#339 ownership ends with the task and no service keeps it",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "ownership does not persist and pstack starts no background service to keep it",
+  },
+  {
+    source: "#339 a mid-task switch drains running children first",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "bring pstack's running children to a recoverable boundary",
+  },
+  {
+    source: "#339 explicit dispatch selects no named role",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "a selected custom-role file overrides the explicit fields it sets",
+  },
+  {
+    source: "#339 a fallback is reported, never passed off as the request",
+    file: "poteto-mode/references/codex-tools.md",
+    phrase: "never report a fallback as the requested model succeeding",
+  },
 ];
 
 describe("port-local skill rules", () => {

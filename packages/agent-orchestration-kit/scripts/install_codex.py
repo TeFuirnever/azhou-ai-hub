@@ -38,6 +38,9 @@ SETTINGS = {
     "agents.default_subagent_reasoning_effort": "max",
 }
 MANAGED = tuple(SETTINGS) + ("agents.max_threads",)
+PSTACK_SHEET = "pstack-models.md"
+PSTACK_HOOK_OFF = "session hook: off"
+PSTACK_COEXISTENCE_SCHEMA = "agent-orchestration-kit.pstack-coexistence.v1"
 
 
 class InstallError(Exception):
@@ -261,6 +264,96 @@ def check_parents(path):
             raise InstallError(f"Expected directory: {parent}")
 
 
+def pstack_sheet_hook(raw):
+    """The sheet's routing switch, mirroring pstack's read-sheet.sh decoding
+    and the SessionStart hook's exact-line match. ``None`` means no sheet
+    exists; an undecodable sheet counts as missing, so injection stays on."""
+    if raw is None:
+        return None
+    try:
+        text = raw.decode("utf-16") if raw.startswith(b"\xff\xfe") else raw.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return "on"
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    lines = [line[:-1] if line.endswith("\r") else line for line in text.split("\n")]
+    return "off" if PSTACK_HOOK_OFF in lines else "on"
+
+
+def _contains_pstack(value):
+    if isinstance(value, dict):
+        return any(_contains_pstack(key) or _contains_pstack(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_pstack(item) for item in value)
+    return isinstance(value, str) and ("pstack-claude" in value or "pstack@" in value)
+
+
+def pstack_coexistence(codex_home, skills_dir=None):
+    """Evidence-separated pstack diagnosis for one Codex home.
+
+    A model sheet or visible pstack Skills alone never proves that tasks are
+    auto-routed. One plugin copy in the native plugins tree already counts as
+    native registration, so auto-routing reads as armed whenever registration
+    exists and the sheet does not carry the exact ``off`` line that stops the
+    SessionStart hook — an orphaned copy is conservatively armed, never
+    silently compatible. Hook trust and live runs are host state and stay
+    unknown to any file-level check. This one implementation is the
+    compatibility verdict for both the Kit's direct entry and the Hub's
+    model-router entry.
+    """
+    sheet_path = codex_home / PSTACK_SHEET
+    raw_sheet = regular_bytes(sheet_path)
+    hook = pstack_sheet_hook(raw_sheet)
+    plugins = codex_home / "plugins"
+    if plugins.is_symlink():
+        raise InstallError(f"Plugin directory is a symbolic link; pstack state cannot be established: {plugins}")
+    copies = 0
+    if plugins.exists():
+        for manifest_path in plugins.rglob(".codex-plugin/plugin.json"):
+            check_parents(manifest_path)
+            data = regular_bytes(manifest_path)
+            if not data:
+                continue
+            try:
+                registered_name = json.loads(data).get("name")
+            except ValueError as exc:
+                raise InstallError(f"Unreadable plugin manifest: {manifest_path}") from exc
+            if registered_name == "pstack":
+                copies += 1
+    if copies > 1:
+        raise InstallError(f"Duplicate pstack plugin copies in this target; inspect them before installing: {copies} found")
+    raw_config = regular_bytes(codex_home / "config.toml")
+    config_registered = raw_config is not None and _contains_pstack(tomllib.loads(raw_config.decode("utf-8")))
+    shared_skills = None
+    if skills_dir is not None:
+        shared_skills = (Path(skills_dir) / "poteto-mode" / "SKILL.md").is_file()
+    registered = copies == 1 or config_registered
+    if not registered:
+        auto_routing, compatible = "not-armed", True
+        reason = ("no native pstack registration in this target; a model sheet, visible pstack Skills, "
+                  "or foreign plugin files alone are not routing evidence")
+    elif hook == "off":
+        auto_routing, compatible = "off", True
+        reason = "pstack SessionStart auto-routing is switched off by the model sheet"
+    else:
+        auto_routing, compatible = "on", False
+        reason = ("pstack auto-routing is armed in this target: native registration exists and "
+                  f"{sheet_path} does not carry the exact line '{PSTACK_HOOK_OFF}'. Set that line "
+                  "in the sheet (or remove pstack from this home) before installing the Kit here")
+    return {
+        "schema": PSTACK_COEXISTENCE_SCHEMA,
+        "model_sheet_present": raw_sheet is not None,
+        "session_hook": hook,
+        "native_plugin_present": copies == 1,
+        "config_registration_present": config_registered,
+        "shared_skills_visible": shared_skills,
+        "auto_routing": auto_routing,
+        "hook_trust": "unknown; only the host's /hooks review decides whether the hook runs",
+        "compatible": compatible,
+        "reason": reason,
+    }
+
+
 def source_files(root):
     profile = root / "profiles" / PROFILE
     def read_source(path):
@@ -303,6 +396,12 @@ def source_files(root):
     return files, legacy
 
 
+def _state_targets(codex_home, skills_dir):
+    targets = {f"agents/{name}.toml": codex_home / f"agents/{name}.toml" for name in ROLE_MODELS}
+    targets["skill"] = skills_dir / "astra-orchestrator/SKILL.md"
+    return targets
+
+
 def build_plan(root, codex_home, skills_dir):
     """Preflight only: reads files and returns a fully reviewable write plan."""
     files, legacy = source_files(root)
@@ -312,11 +411,13 @@ def build_plan(root, codex_home, skills_dir):
     transaction = codex_home / ".agent-orchestration-kit-transaction"
     if transaction.exists() or transaction.is_symlink():
         raise InstallError(f"Unfinished transaction at {transaction}; inspect it and run --recover with the same target paths")
-    targets = {key: codex_home / key for key in files if key.startswith("agents/")}
-    targets["skill"] = skills_dir / "astra-orchestrator/SKILL.md"
+    targets = _state_targets(codex_home, skills_dir)
     for path in [config_path, instructions_path, state_path, *targets.values()]:
         check_parents(path)
         regular_bytes(path)
+    pstack = pstack_coexistence(codex_home, skills_dir)
+    if not pstack["compatible"]:
+        raise InstallError(pstack["reason"])
     raw_config = regular_bytes(config_path)
     text = raw_config.decode() if raw_config is not None else ""
     config = tomllib.loads(text)
@@ -408,7 +509,7 @@ def build_plan(root, codex_home, skills_dir):
         changes[state_path] = content
     return {"changes": changes, "watched": watched, "transaction": transaction,
             "config_text": merged.decode(), "roles": {k: files[f"agents/{k}.toml"] for k in ROLE_MODELS},
-            "skill_path": targets["skill"], "manifest": manifest}
+            "skill_path": targets["skill"], "manifest": manifest, "pstack_coexistence": pstack}
 
 
 def atomic_write(path, data, mode=0o600):
@@ -436,11 +537,15 @@ def missing_directories(paths):
 
 def restore(journal, transaction):
     # Refuse to clobber edits made by a different actor since our write.
+    # ``after_sha256`` is ``None`` for a file this operation deleted, so an
+    # absent file is the expected post-operation state, not a concurrent edit.
     for item in journal["files"]:
         current = regular_bytes(Path(item["path"]))
         original = base64.b64decode(item["before"]) if item["before"] is not None else None
-        if current != original and (current is None or sha(current) != item["after_sha256"]):
-            raise InstallError(f"Concurrent edit prevents automatic rollback: {item['path']}; recovery journal retained")
+        current_sha = sha(current) if current is not None else None
+        if current != original and current_sha != item["after_sha256"]:
+            raise InstallError(f"Concurrent edit prevents automatic rollback: {item['path']} "
+                               f"(recorded sha256 {item['after_sha256']}, found sha256 {current_sha}); recovery journal retained")
     for item in reversed(journal["files"]):
         path = Path(item["path"])
         before = base64.b64decode(item["before"]) if item["before"] is not None else None
@@ -522,6 +627,189 @@ def recover(codex_home, skills_dir):
     restore(journal, tx)
 
 
+def strip_owned_block(text, block):
+    """Reverse the installer's managed-block write exactly.
+
+    The installer appends ``<separator><block>\\n`` (separator ``\\n\\n`` when
+    personal instructions existed) or replaces a previous block in place. This
+    removes the block, the one newline written after it, and the separator
+    written before it; anything the user added outside the block stays.
+    """
+    index = text.index(block)
+    before, after = text[:index], text[index + len(block):]
+    if after.startswith("\n"):
+        after = after[1:]
+    if before.endswith("\n\n"):
+        before = before[:-2]
+    return before + after
+
+
+def build_uninstall_plan(codex_home, skills_dir):
+    """Preflight an owned exit from a completed installation; reads only.
+
+    Uninstall restores the pre-install managed content recorded in the
+    ownership record — owned ``config.toml`` keys, the instruction block and
+    files this installation created — and never whole files, so unrelated
+    configuration and anything another module wrote later stays in place.
+    Pre-existing files the installation adopted are left byte-for-byte. A
+    user-modified owned key, file or block stops the exit with the observed
+    difference instead of overwriting it. This is the completed-installation
+    exit; an interrupted install or uninstall is recovered with ``--recover``.
+    """
+    codex_home, skills_dir = Path(codex_home), Path(skills_dir)
+    transaction = codex_home / ".agent-orchestration-kit-transaction"
+    if transaction.exists() or transaction.is_symlink():
+        raise InstallError(f"Unfinished transaction at {transaction}; run --recover with the same target paths first (interrupted-operation recovery, not uninstall)")
+    state_path = codex_home / "agent-orchestration-kit/state.json"
+    config_path = codex_home / "config.toml"
+    instructions_path = codex_home / "AGENTS.md"
+    for path in [config_path, instructions_path, state_path]:
+        check_parents(path)
+    targets = _state_targets(codex_home, skills_dir)
+    for path in targets.values():
+        check_parents(path)
+    raw_state = regular_bytes(state_path)
+    if raw_state is None:
+        instructions = regular_bytes(instructions_path)
+        footprints = []
+        if instructions is not None and BEGIN.encode() in instructions:
+            footprints.append(str(instructions_path))
+        for path in sorted(targets.values()):
+            if regular_bytes(path) is not None:
+                footprints.append(str(path))
+        if footprints:
+            raise InstallError("Kit-owned-looking files exist without the ownership record; their source is unknown and nothing is removed automatically: "
+                               + ", ".join(footprints))
+        return {"schema": "agent-orchestration-kit.uninstall.v1", "operation": "noop", "changes": {}, "watched": {},
+                "removed_files": [], "retained_pre_existing": [], "config_restored": {},
+                "instruction_block": "nothing installed",
+                "behavior": "no ownership record and no owned files; nothing to uninstall"}
+    try:
+        state = json.loads(raw_state)
+    except ValueError as exc:
+        raise InstallError(f"Unreadable ownership record: {state_path}") from exc
+    if (not isinstance(state, dict) or state.get("schema") != 1
+            or state.get("project") != "agent-orchestration-kit"
+            or not isinstance(state.get("targets"), dict) or not isinstance(state.get("files"), dict)
+            or not isinstance(state.get("applied_config"), dict) or not isinstance(state.get("original_config"), dict)):
+        raise InstallError("Unrecognized installation ownership record; inspect it before uninstalling")
+    if state["targets"] != {k: str(v) for k, v in targets.items()}:
+        raise InstallError("Installed target paths changed; inspect the ownership record before uninstalling")
+    for key in MANAGED:
+        if key not in state["applied_config"] or key not in state["original_config"]:
+            raise InstallError(f"The ownership record lacks the recorded value for {key}; no automatic restore")
+    for key, value in state["original_config"].items():
+        if not isinstance(value, dict) or not isinstance(value.get("present"), bool) or (value["present"] and "value" not in value):
+            raise InstallError(f"The ownership record has an invalid pre-install value for {key}; no automatic restore")
+    differences = []
+    raw_config = regular_bytes(config_path)
+    text = raw_config.decode() if raw_config is not None else ""
+    config = tomllib.loads(text)
+    for key in MANAGED:
+        observed = lookup(config, key)
+        recorded = state["applied_config"][key]
+        if observed != recorded:
+            differences.append(f"{key} (installed {json.dumps(recorded, sort_keys=True)}, found {json.dumps(observed, sort_keys=True)})")
+    adopted = set(state.get("adopted_existing") or [])
+    removed, retained = [], []
+    for key, path in sorted(targets.items()):
+        recorded = state["files"].get(key)
+        if not isinstance(recorded, str):
+            raise InstallError(f"The ownership record has no fingerprint for {key}; no automatic restore")
+        before = regular_bytes(path)
+        digest = sha(before) if before is not None else None
+        if digest != recorded:
+            differences.append(f"{path} (recorded sha256 {recorded}, found {'missing' if digest is None else 'sha256 ' + digest})")
+        elif key in adopted:
+            retained.append(str(path))
+        else:
+            removed.append(str(path))
+    before_instructions = regular_bytes(instructions_path)
+    instructions = before_instructions.decode() if before_instructions is not None else ""
+    block = owned_block(instructions)
+    recorded_block = state["files"].get("instructions")
+    if not isinstance(recorded_block, str):
+        raise InstallError("The ownership record has no instruction fingerprint; no automatic restore")
+    if block is None or sha(block.encode()) != recorded_block:
+        found = "absent" if block is None else f"sha256 {sha(block.encode())}"
+        differences.append(f"{instructions_path} managed block (recorded sha256 {recorded_block}, found {found})")
+    if differences:
+        raise InstallError("User-modified owned content stops uninstall; review the differences, restore them, or remove the owned scope manually: "
+                           + "; ".join(differences))
+    original_settings = {key: value["value"] for key, value in state["original_config"].items() if value["present"]}
+    merged = merge_config(text, original_settings)
+    if "original_instruction_block" in state:
+        result_instructions = instructions.replace(block, state["original_instruction_block"], 1)
+        instruction_action = "restore the recorded pre-install instruction block"
+    else:
+        result_instructions = strip_owned_block(instructions, block)
+        instruction_action = "remove the installed instruction block (none existed before installation)"
+    changes = {}
+    if merged.encode() != raw_config:
+        changes[config_path] = merged.encode()
+    if result_instructions.encode() != before_instructions:
+        changes[instructions_path] = result_instructions.encode()
+    for name in removed:
+        changes[Path(name)] = None
+    changes[state_path] = None
+    watched = {config_path: raw_config, instructions_path: before_instructions,
+               state_path: raw_state, **{Path(name): regular_bytes(Path(name)) for name in removed}}
+    return {"schema": "agent-orchestration-kit.uninstall.v1", "operation": "uninstall",
+            "transaction": transaction, "watched": watched, "changes": changes,
+            "config_restored": dict(sorted(state["original_config"].items())),
+            "instruction_block": instruction_action,
+            "removed_files": removed, "retained_pre_existing": retained,
+            "behavior": "restore only owned settings, the managed instruction block and created files; unrelated files, later additions and other modules are left alone"}
+
+
+def apply_uninstall(plan, write=atomic_write):
+    """Commit the owned exit, or restore exact originals on failure.
+
+    ``write`` is injected by independent fault tests. A temporary journal
+    survives abnormal termination; ``--recover`` restores it, which returns the
+    target to the installed state so the exit can be retried.
+    """
+    if not plan.get("changes"):
+        return {"status": "uninstalled", "changed_files_count": 0,
+                "removed_files": plan.get("removed_files", []),
+                "retained_pre_existing": plan.get("retained_pre_existing", [])}
+    for path, before in plan["watched"].items():
+        check_parents(path)
+        if regular_bytes(path) != before:
+            raise InstallError(f"File changed after preflight: {path}")
+    tx = plan["transaction"]
+    tx.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tx.mkdir(mode=0o700)
+    except FileExistsError as exc:
+        raise InstallError(f"Another installation or recovery transaction exists: {tx}") from exc
+    journal = {"schema": 1, "created_directories": [], "files": []}
+    for path, desired in plan["changes"].items():
+        journal["files"].append({"path": str(path),
+                                 "before": base64.b64encode(plan["watched"][path]).decode("ascii"),
+                                 "mode": stat.S_IMODE(path.stat().st_mode),
+                                 "after_sha256": sha(desired) if desired is not None else None})
+    try:
+        atomic_write(tx / "journal.json", json_bytes(journal))
+        for path, desired in plan["changes"].items():
+            check_parents(path)
+            if regular_bytes(path) != plan["watched"][path]:
+                raise InstallError(f"File changed during uninstall: {path}")
+            if desired is None:
+                path.unlink()
+            else:
+                write(path, desired, stat.S_IMODE(path.stat().st_mode))
+    except BaseException as exc:
+        try:
+            restore(journal, tx)
+        except BaseException as rollback_error:
+            raise InstallError(f"Uninstall failed ({exc}); rollback needs attention: {rollback_error}") from exc
+        raise InstallError(f"Uninstall failed; all touched files restored: {exc}") from exc
+    shutil.rmtree(tx)
+    return {"status": "uninstalled", "changed_files_count": len(plan["changes"]),
+            "removed_files": plan["removed_files"], "retained_pre_existing": plan["retained_pre_existing"]}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Install agent-orchestration-kit's azhou-balanced Codex profile for this user")
     parser.add_argument("--codex-home", type=Path, default=Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))))
@@ -529,6 +817,8 @@ def main():
     parser.add_argument("--codex-bin", help="Explicit Codex runtime; default prefers the macOS App runtime")
     parser.add_argument("--dry-run", action="store_true", help="Run preflight and print changes without installing")
     parser.add_argument("--recover", action="store_true", help="Restore a retained interrupted transaction, then exit")
+    parser.add_argument("--uninstall", action="store_true",
+                        help="Exit a completed installation: restore owned settings, the instruction block and created files; unrelated content is untouched")
     args = parser.parse_args()
     try:
         # Reject user symlinks before canonicalizing macOS system path aliases.
@@ -537,9 +827,27 @@ def main():
                 raise InstallError(f"Review symbolic installation root before installing: {raw}")
         codex_home = args.codex_home.expanduser().absolute().resolve()
         skills_dir = args.skills_dir.expanduser().absolute().resolve()
+        if args.uninstall and args.recover:
+            raise InstallError("--uninstall exits a completed installation; --recover restores an interrupted operation; choose one")
         if args.recover:
             recover(codex_home, skills_dir)
-            print("Interrupted installation restored. Re-run ./setup.sh when ready.")
+            print("Interrupted operation restored to its pre-interruption state. Re-run ./setup.sh to install, or ./setup.sh --uninstall to exit a completed installation.")
+            return 0
+        if args.uninstall:
+            plan = build_uninstall_plan(codex_home, skills_dir)
+            summary = {key: plan[key] for key in ("operation", "config_restored", "instruction_block",
+                                                  "removed_files", "retained_pre_existing", "behavior")}
+            print(json.dumps(summary, indent=2))
+            if plan["operation"] == "noop":
+                print("Nothing owned by this installation remains; no target files written.")
+                return 0
+            if args.dry_run:
+                print("Uninstall preflight passed; no target files written.")
+                return 0
+            result = apply_uninstall(plan)
+            print(json.dumps(result, indent=2))
+            print("Uninstalled. Owned settings, the instruction block and created files were restored or removed; unrelated files, later additions and other modules were left alone.")
+            print("An interrupted install or uninstall is a different case: re-run with --recover.")
             return 0
         from codex_native import select_runtime, preflight_runtime, validate_config, verify_native
         runtime = select_runtime(args.codex_bin)
@@ -547,7 +855,8 @@ def main():
         plan = build_plan(ROOT, codex_home, skills_dir)
         validate_config(runtime, plan["config_text"], plan["roles"])
         print(json.dumps({"profile": PROFILE, "runtime": runtime, "codex_home": str(codex_home),
-                          "skill": str(plan["skill_path"]), "changed_files": [str(p) for p in plan["changes"]]}, indent=2))
+                          "skill": str(plan["skill_path"]), "changed_files": [str(p) for p in plan["changes"]],
+                          "pstack_coexistence": plan["pstack_coexistence"]}, indent=2))
         if args.dry_run:
             print("Preflight passed; no target files written.")
             return 0
