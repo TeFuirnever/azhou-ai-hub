@@ -42,8 +42,19 @@ class AgentSkinComponentTests(unittest.TestCase):
 
         current = common.load_lock("agent-skin")
         legacy = common.load_lock("startup-animation")
-        for field in ("repository", "local_source_origin", "commit", "runtime_version", "runtime_build", "build_inputs"):
+        for field in ("repository", "local_source_origin", "commit", "runtime_version", "runtime_build"):
             self.assertEqual(legacy[field], current[field], field)
+        legacy_inputs = set(legacy["build_inputs"])
+        self.assertEqual(
+            legacy["build_inputs"],
+            [name for name in current["build_inputs"] if name in legacy_inputs],
+            "the canonical package keeps every frozen launcher input in order",
+        )
+        self.assertEqual(
+            [name for name in current["build_inputs"] if name not in legacy_inputs],
+            ["image-settings.js"],
+            "the canonical Agent Skin package adds only its image settings input",
+        )
 
 
 class AgentSkinLegacyCleanupTests(unittest.TestCase):

@@ -40,6 +40,16 @@ function installAnimation(
   const title = typeof assets?.introTitle === 'string' ? assets.introTitle : '阿舟的 Agent 实验室';
   const caption = typeof assets?.introCaption === 'string' ? assets.introCaption : 'AZHOU / AGENT LAB';
   const subtitle = typeof assets?.artworkSubtitle === 'string' ? assets.artworkSubtitle : '和阿舟一起，把想法做出来。';
+  let subtitleLines = [];
+  let subtitleFontSize = 39;
+  let subtitleLineHeight = 36;
+  let subtitlePanelX = 160;
+  let subtitlePanelWidth = 1216;
+  let subtitleTextWidth = 1120;
+  let identitySafeWidth = 1330;
+  let identityLayoutKey = '';
+  let identityRenderedLayoutKey = '';
+  let identityLayoutGeneration = 0;
   const STAGE_LABELS = {
     pulse: '实验室正在亮起来', identity: '阿舟正在准备工作台', dispersing: '头像与文字散成线稿',
     scattered: '线稿正在汇聚', drawing: '阿舟和背景正在显现', colorize: '同一幅画面正在上色',
@@ -74,10 +84,12 @@ function installAnimation(
   let particles = [];
   let particleTargets = [];
   let resizeObserver = null;
+  let pixelRatioQuery = null;
+  let pixelRatioListener = null;
   let mediaQuery = null;
   let mediaListener = null;
   let rafId = 0;
-  let timeoutIds = [];
+  const timeoutIds = new Set();
   let generation = 0;
   let elapsed = 0;
   let origin = 0;
@@ -103,6 +115,8 @@ function installAnimation(
   let drawCount = 0;
   const gapSamples = new window.Float32Array(2048);
   const drawSamples = new window.Float32Array(2048);
+  const releasedImages = new WeakSet();
+  const closedBitmaps = new WeakSet();
   const resources = {
     createdImages: 0, releasedImages: 0, liveImages: 0,
     createdBitmaps: 0, releasedBitmaps: 0, liveBitmaps: 0,
@@ -123,6 +137,41 @@ function installAnimation(
 
   function clamp(value, low = 0, high = 1) {
     return Math.max(low, Math.min(high, value));
+  }
+
+  function fitSubtitle(visibleLogicalWidth) {
+    subtitlePanelWidth = Math.max(260, Math.min(1216, visibleLogicalWidth - 32));
+    subtitlePanelX = (WIDTH - subtitlePanelWidth) / 2;
+    subtitleTextWidth = Math.max(224, subtitlePanelWidth - 36);
+    const maxCharacters = Math.max(8, Math.floor(subtitleTextWidth / 32));
+    subtitleLines = [];
+    let line = '';
+    for (const character of subtitle) {
+      const punctuation = /^[，。！？；：、）》」』】]$/u.test(character);
+      if (line && line.length + character.length > maxCharacters && punctuation) {
+        subtitleLines.push(line + character);
+        line = '';
+      } else {
+        if (line && line.length + character.length > maxCharacters) {
+          subtitleLines.push(line);
+          line = '';
+        }
+        line += character;
+      }
+    }
+    if (line) subtitleLines.push(line);
+    const narrow = visibleLogicalWidth < 650;
+    subtitleFontSize = narrow ? 22 : subtitleLines.length > 1 ? 32 : 39;
+    subtitleLineHeight = narrow ? 25 : 36;
+  }
+
+  function fitIdentity(visibleLogicalWidth) {
+    const nextWidth = Math.max(240, Math.min(1330, visibleLogicalWidth - 48));
+    const nextKey = String(Math.round(nextWidth));
+    if (nextKey === identityLayoutKey) return false;
+    identitySafeWidth = nextWidth;
+    identityLayoutKey = nextKey;
+    return true;
   }
 
   function smooth(value) {
@@ -223,7 +272,10 @@ function installAnimation(
     const rect = root.getBoundingClientRect();
     const width = Math.max(1, rect.width || window.innerWidth || WIDTH);
     const height = Math.max(1, rect.height || window.innerHeight || HEIGHT);
-    pixelRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const nextPixelRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const pixelRatioChanged = pixelRatio !== nextPixelRatio;
+    pixelRatio = nextPixelRatio;
+    if (pixelRatioChanged) observePixelRatio(true);
     const backingWidth = Math.max(1, Math.ceil(width * pixelRatio));
     const backingHeight = Math.max(1, Math.ceil(height * pixelRatio));
     if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
@@ -233,16 +285,44 @@ function installAnimation(
     scale = Math.max(width / WIDTH, height / HEIGHT);
     offsetX = (width - WIDTH * scale) / 2;
     offsetY = (height - HEIGHT * scale) / 2;
+    const visibleLogicalWidth = Math.min(WIDTH, width / scale);
+    fitSubtitle(visibleLogicalWidth);
+    const identityLayoutChanged = fitIdentity(visibleLogicalWidth);
+    if (loaded && identityLayoutChanged) renderIdentityBitmap(generation).catch(() => {});
     if (loaded) drawAt(elapsed, false);
   }
 
   function installLayoutObserver() {
     if (typeof window.ResizeObserver === 'function') {
       resizeObserver = new window.ResizeObserver(updateLayout);
-      resizeObserver.observe(root);
-    } else {
-      window.addEventListener('resize', updateLayout);
+      try { resizeObserver.observe(root, { box: 'device-pixel-content-box' }); }
+      catch { resizeObserver.observe(root); }
     }
+    window.addEventListener('resize', updateLayout);
+    window.visualViewport?.addEventListener('resize', updateLayout);
+    observePixelRatio();
+  }
+
+  function observePixelRatio(rebind = false) {
+    if (typeof window.matchMedia !== 'function') return;
+    if (pixelRatioQuery && pixelRatioListener && !rebind) return;
+    if (pixelRatioQuery && pixelRatioListener) {
+      if (typeof pixelRatioQuery.removeEventListener === 'function') pixelRatioQuery.removeEventListener('change', pixelRatioListener);
+      else if (typeof pixelRatioQuery.removeListener === 'function') pixelRatioQuery.removeListener(pixelRatioListener);
+      pixelRatioQuery = null;
+      pixelRatioListener = null;
+    }
+    const ratio = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const query = window.matchMedia(`(resolution: ${ratio}dppx)`);
+    const changed = () => {
+      if (pixelRatioQuery !== query) return;
+      updateLayout();
+      if (pixelRatioQuery === query) observePixelRatio(true);
+    };
+    pixelRatioQuery = query;
+    pixelRatioListener = changed;
+    if (typeof query.addEventListener === 'function') query.addEventListener('change', changed);
+    else if (typeof query.addListener === 'function') query.addListener(changed);
   }
 
   function sortedStats(samples, count) {
@@ -383,15 +463,21 @@ function installAnimation(
     context.fillRect(0, 0, WIDTH, HEIGHT);
     const progress = progressAt(milliseconds);
     context.fillStyle = 'rgba(16, 18, 28, .76)';
-    context.fillRect(160, 844, 1216, 112);
+    context.fillRect(subtitlePanelX, 794, subtitlePanelWidth, 174);
     context.fillStyle = '#fff8ef';
     context.textAlign = 'center';
-    context.font = '600 39px system-ui, sans-serif';
-    context.fillText(subtitle, WIDTH / 2, 900, 1120);
+    context.font = `600 ${subtitleFontSize}px system-ui, sans-serif`;
+    const blockHeight = subtitleLines.length * subtitleLineHeight;
+    const firstBaseline = 830 + Math.max(0, (122 - blockHeight) / 2) + subtitleFontSize;
+    for (let index = 0; index < subtitleLines.length; index++) {
+      context.fillText(subtitleLines[index], WIDTH / 2, firstBaseline + index * subtitleLineHeight, subtitleTextWidth);
+    }
+    const progressWidth = Math.min(756, subtitlePanelWidth * 0.65);
+    const progressX = (WIDTH - progressWidth) / 2;
     context.fillStyle = 'rgba(255, 248, 239, .28)';
-    context.fillRect(390, 938, 756, 4);
+    context.fillRect(progressX, 807, progressWidth, 4);
     context.fillStyle = '#fff0d5';
-    context.fillRect(390, 938, 756 * progress, 4);
+    context.fillRect(progressX, 807, progressWidth * progress, 4);
   }
 
   function renderScene(milliseconds) {
@@ -449,6 +535,11 @@ function installAnimation(
 
   function finish(isSkipped = false) {
     if (disposed || complete) return false;
+    if (isSkipped && preparing && !loaded) {
+      generation++;
+      preparing = false;
+      startAfterPrepare = false;
+    }
     stopClock();
     elapsed = DURATION;
     skipped = Boolean(isSkipped);
@@ -518,14 +609,16 @@ function installAnimation(
   }
 
   function closeBitmap(value) {
-    if (!value || typeof value.close !== 'function') return;
+    if (!value || typeof value.close !== 'function' || closedBitmaps.has(value)) return;
+    closedBitmaps.add(value);
     value.close();
     resources.releasedBitmaps++;
     resources.liveBitmaps--;
   }
 
   function releaseImage(value) {
-    if (!value) return;
+    if (!value || releasedImages.has(value)) return;
+    releasedImages.add(value);
     try { value.src = ''; } catch {}
     resources.releasedImages++;
     resources.liveImages--;
@@ -563,25 +656,31 @@ function installAnimation(
     loaded = false;
   }
 
-  function timeoutPromise(promise, milliseconds, generationAtStart) {
+  function timeoutPromise(promise, milliseconds, generationAtStart, releaseLateValue) {
     return new Promise((resolve, reject) => {
       let settled = false;
       const timeout = setTimeout(() => {
         if (settled) return;
         settled = true;
+        timeoutIds.delete(timeout);
         reject(new Error('operation-timeout'));
       }, milliseconds);
-      timeoutIds.push(timeout);
+      timeoutIds.add(timeout);
       Promise.resolve(promise).then(value => {
-        if (settled) return;
+        if (settled) { releaseLateValue?.(value); return; }
         settled = true;
         clearTimeout(timeout);
-        if (generationAtStart !== generation || disposed) reject(new Error('operation-cancelled'));
+        timeoutIds.delete(timeout);
+        if (generationAtStart !== generation || disposed) {
+          releaseLateValue?.(value);
+          reject(new Error('operation-cancelled'));
+        }
         else resolve(value);
       }, error => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
+        timeoutIds.delete(timeout);
         reject(error);
       });
     });
@@ -616,7 +715,15 @@ function installAnimation(
 
   function makeBitmap(source, generationAtStart) {
     if (typeof window.createImageBitmap !== 'function') return Promise.resolve(source);
-    return timeoutPromise(window.createImageBitmap(source), 10000, generationAtStart).then(bitmap => {
+    let operation;
+    try { operation = window.createImageBitmap(source); }
+    catch { return Promise.reject(new Error('asset-invalid')); }
+    return timeoutPromise(operation, 10000, generationAtStart, bitmap => {
+      if (typeof bitmap?.close !== 'function') return;
+      resources.createdBitmaps++;
+      resources.liveBitmaps++;
+      closeBitmap(bitmap);
+    }).then(bitmap => {
       resources.createdBitmaps++;
       resources.liveBitmaps++;
       return bitmap;
@@ -714,40 +821,89 @@ function installAnimation(
     return (value >>> 0) / 4294967296;
   }
 
-  function prepareIdentityBitmap(generationAtStart) {
-    identityCanvas = document.createElement('canvas');
-    identityCanvas.width = WIDTH;
-    identityCanvas.height = HEIGHT;
-    resources.createdCanvases++;
-    resources.liveCanvases++;
-    identityContext = identityCanvas.getContext('2d', { alpha: true });
+  function drawIdentityLayout() {
+    if (!identityCanvas) {
+      identityCanvas = document.createElement('canvas');
+      identityCanvas.width = WIDTH;
+      identityCanvas.height = HEIGHT;
+      resources.createdCanvases++;
+      resources.liveCanvases++;
+      identityContext = identityCanvas.getContext('2d', { alpha: true });
+    }
     if (!identityContext) throw new Error('asset-invalid');
     identityContext.clearRect(0, 0, WIDTH, HEIGHT);
     identityContext.save();
+    const centerX = WIDTH / 2;
+    const centerY = 378;
+    const avatarSize = Math.min(512, Math.max(280, identitySafeWidth - 112));
+    const avatarRadius = avatarSize / 2 - 14;
+    const ringRadius = avatarSize / 2 + 2;
+    const haloRadius = avatarSize / 2 + 14;
     identityContext.fillStyle = 'rgba(248, 211, 183, .14)';
     identityContext.beginPath();
-    identityContext.arc(768, 378, 270, 0, Math.PI * 2);
+    identityContext.arc(centerX, centerY, haloRadius, 0, Math.PI * 2);
     identityContext.fill();
     identityContext.save();
     identityContext.beginPath();
-    identityContext.arc(768, 378, 242, 0, Math.PI * 2);
+    identityContext.arc(centerX, centerY, avatarRadius, 0, Math.PI * 2);
     identityContext.clip();
-    identityContext.drawImage(avatarBitmap, 512, 122, 512, 512);
+    identityContext.drawImage(avatarBitmap, centerX - avatarSize / 2, centerY - avatarSize / 2, avatarSize, avatarSize);
     identityContext.restore();
     identityContext.strokeStyle = 'rgba(255, 246, 226, .9)';
     identityContext.lineWidth = 4;
     identityContext.beginPath();
-    identityContext.arc(768, 378, 258, 0, Math.PI * 2);
+    identityContext.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
     identityContext.stroke();
-    identityContext.textAlign = 'center';
-    identityContext.fillStyle = '#fff8ef';
-    identityContext.font = '700 82px system-ui, sans-serif';
-    identityContext.fillText(title, 768, 760, 1330);
-    identityContext.fillStyle = 'rgba(255, 248, 239, .76)';
-    identityContext.font = '600 28px system-ui, sans-serif';
-    identityContext.fillText(caption, 768, 824, 1280);
-    identityContext.restore();
 
+    const textWidth = Math.max(192, identitySafeWidth - 24);
+    const titleBaseline = centerY + haloRadius + 112;
+    let titleFontSize = 82;
+    if (title) {
+      identityContext.font = `700 ${titleFontSize}px system-ui, sans-serif`;
+      const measuredTitleWidth = identityContext.measureText(title).width;
+      if (measuredTitleWidth > textWidth) {
+        titleFontSize = Math.max(20, titleFontSize * textWidth / measuredTitleWidth);
+      }
+      identityContext.textAlign = 'center';
+      identityContext.fillStyle = '#fff8ef';
+      identityContext.font = `700 ${titleFontSize}px system-ui, sans-serif`;
+      identityContext.fillText(title, centerX, titleBaseline, textWidth);
+    }
+
+    if (caption) {
+      const captionFontSize = 28;
+      const captionLines = [];
+      let line = '';
+      identityContext.font = `600 ${captionFontSize}px system-ui, sans-serif`;
+      for (const character of caption) {
+        const candidate = line + character;
+        const punctuation = /^[，。！？；：、）》」』】]$/u.test(character);
+        if (line && identityContext.measureText(candidate).width > textWidth && punctuation) {
+          captionLines.push(line + character);
+          line = '';
+        } else if (line && identityContext.measureText(candidate).width > textWidth) {
+          captionLines.push(line);
+          line = character;
+        } else {
+          line = candidate;
+        }
+      }
+      if (line) captionLines.push(line);
+      identityContext.fillStyle = 'rgba(255, 248, 239, .76)';
+      identityContext.textAlign = 'center';
+      const firstCaptionBaseline = title
+        ? titleBaseline + Math.max(40, Math.min(64, titleFontSize * 0.78))
+        : titleBaseline;
+      for (let index = 0; index < captionLines.length; index++) {
+        identityContext.fillText(captionLines[index], centerX,
+          firstCaptionBaseline + index * 36, textWidth);
+      }
+    }
+    identityContext.restore();
+  }
+
+  function buildIdentityFragments() {
+    particles.length = 0;
     const pixels = identityContext.getImageData(0, 0, WIDTH, HEIGHT).data;
     for (let top = 96; top < 900; top += TILE) {
       for (let left = 96; left < WIDTH - 96; left += TILE) {
@@ -774,14 +930,33 @@ function installAnimation(
       particleTargets[index].scatterX = particle.scatterX;
       particleTargets[index].scatterY = particle.scatterY;
     }
+
+  }
+
+  function renderIdentityBitmap(generationAtStart) {
+    drawIdentityLayout();
+    buildIdentityFragments();
+    identityRenderedLayoutKey = identityLayoutKey;
+    const layoutGeneration = ++identityLayoutGeneration;
+    releaseIdentityBitmap();
+    identityBitmap = identityCanvas;
+    identityBitmapOwned = false;
     return makeBitmap(identityCanvas, generationAtStart).then(bitmap => {
-      if (generationAtStart !== generation || disposed) {
+      if (generationAtStart !== generation || layoutGeneration !== identityLayoutGeneration
+          || identityRenderedLayoutKey !== identityLayoutKey || disposed) {
         if (bitmap !== identityCanvas) closeBitmap(bitmap);
-        return;
+        return false;
       }
+      if (identityBitmap && identityBitmap !== identityCanvas) releaseIdentityBitmap();
       identityBitmap = bitmap;
       identityBitmapOwned = bitmap !== identityCanvas;
+      if (loaded) drawAt(elapsed, false);
+      return true;
     });
+  }
+
+  function prepareIdentityBitmap(generationAtStart) {
+    return renderIdentityBitmap(generationAtStart);
   }
 
   function drawReducedDrawing(milliseconds) {
@@ -794,18 +969,24 @@ function installAnimation(
   }
 
   function releaseStaleTimeouts() {
-    for (let index = 0; index < timeoutIds.length; index++) clearTimeout(timeoutIds[index]);
-    timeoutIds.length = 0;
+    for (const timeout of timeoutIds) clearTimeout(timeout);
+    timeoutIds.clear();
   }
 
   async function prepare(currentGeneration) {
     if (disposed || currentGeneration !== generation) return;
     preparing = true;
     const stats = validateContours();
-    const decoded = await Promise.all([
+    const decodeResults = await Promise.allSettled([
       decodeImage(rawAvatar, 512, 512, currentGeneration),
       decodeImage(rawArtwork, WIDTH, HEIGHT, currentGeneration),
     ]);
+    const decoded = decodeResults.map(result => result.status === 'fulfilled' ? result.value : null);
+    const decodeFailure = decodeResults.find(result => result.status === 'rejected');
+    if (decodeFailure) {
+      for (const image of decoded) releaseImage(image);
+      throw decodeFailure.reason;
+    }
     if (disposed || currentGeneration !== generation) {
       releaseImage(decoded[0]);
       releaseImage(decoded[1]);
@@ -813,10 +994,22 @@ function installAnimation(
     }
     avatarImage = decoded[0];
     artworkImage = decoded[1];
-    const images = await Promise.all([
+    const bitmapResults = await Promise.allSettled([
       makeBitmap(avatarImage, currentGeneration),
       makeBitmap(artworkImage, currentGeneration),
     ]);
+    const images = bitmapResults.map(result => result.status === 'fulfilled' ? result.value : null);
+    const bitmapFailure = bitmapResults.find(result => result.status === 'rejected');
+    if (bitmapFailure) {
+      for (let index = 0; index < bitmapResults.length; index++) {
+        const result = bitmapResults[index];
+        if (result.status === 'fulfilled' && result.value !== decoded[index]) closeBitmap(result.value);
+        releaseImage(decoded[index]);
+      }
+      avatarImage = null;
+      artworkImage = null;
+      throw bitmapFailure.reason;
+    }
     if (disposed || currentGeneration !== generation) {
       if (images[0] !== avatarImage) closeBitmap(images[0]); else releaseImage(images[0]);
       if (images[1] !== artworkImage) closeBitmap(images[1]); else releaseImage(images[1]);
@@ -827,7 +1020,10 @@ function installAnimation(
     if (avatarBitmap !== avatarImage) { releaseImage(avatarImage); avatarImage = null; }
     if (artworkBitmap !== artworkImage) { releaseImage(artworkImage); artworkImage = null; }
     preparePaths(stats);
-    await prepareIdentityBitmap(currentGeneration);
+    do {
+      await prepareIdentityBitmap(currentGeneration);
+      if (disposed || currentGeneration !== generation) return;
+    } while (identityRenderedLayoutKey !== identityLayoutKey);
     if (disposed || currentGeneration !== generation) return;
     loaded = true;
     preparing = false;
@@ -982,8 +1178,13 @@ function installAnimation(
       if (typeof mediaQuery.removeEventListener === 'function') mediaQuery.removeEventListener('change', mediaListener);
       else if (typeof mediaQuery.removeListener === 'function') mediaQuery.removeListener(mediaListener);
     }
+    if (pixelRatioQuery && pixelRatioListener) {
+      if (typeof pixelRatioQuery.removeEventListener === 'function') pixelRatioQuery.removeEventListener('change', pixelRatioListener);
+      else if (typeof pixelRatioQuery.removeListener === 'function') pixelRatioQuery.removeListener(pixelRatioListener);
+    }
     resizeObserver?.disconnect();
-    if (!resizeObserver) window.removeEventListener('resize', updateLayout);
+    window.removeEventListener('resize', updateLayout);
+    window.visualViewport?.removeEventListener('resize', updateLayout);
     releaseSceneResources();
     return true;
   }
@@ -1051,5 +1252,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined'
     undefined, sendPreview,
     Object.freeze({ runId: 'local-preview', intent: 'preview', protocolVersion: 1, assets: settings }),
   );
-  if (!environment.webkit?.messageHandlers?.launcher) environment.launcherUI = localHandle.preview;
+  if (!environment.webkit?.messageHandlers?.launcher) {
+    environment.launcherUI = Object.assign(localHandle.preview, { dispose: localHandle.dispose });
+  }
 }

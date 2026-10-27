@@ -14,18 +14,22 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const options = {
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   out: join(ROOT, '.build/startup-browser-evidence'),
+  only: [],
 };
 for (let index = 2; index < process.argv.length; index++) {
   const key = process.argv[index];
   if (key === '--help') {
-    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence]');
+    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--only <exact check name>]');
     process.exit(0);
   }
-  if (!['--chrome', '--out'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
-  options[key.slice(2)] = process.argv[++index];
+  if (!['--chrome', '--out', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  const value = process.argv[++index];
+  if (key === '--only') options.only.push(value);
+  else options[key.slice(2)] = value;
 }
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
+const onlyChecks = options.only.length ? new Set(options.only) : null;
 
 const report = {
   schema: 1,
@@ -66,6 +70,10 @@ async function until(operation, milliseconds = 10000, label = 'condition') {
 }
 
 async function check(name, operation) {
+  if (onlyChecks && !onlyChecks.has(name)) {
+    report.checks.push({ name, skipped: true });
+    return null;
+  }
   const started = Date.now();
   try {
     const details = await operation();
@@ -258,7 +266,26 @@ try {
         dispose() { overlay.remove(); },
       };
     };
-    const payload = url.searchParams.has('animation') ? window.installAnimation : fixturePayload;
+    const payload = url.searchParams.has('animation')
+      ? (url.searchParams.has('animation-hold') ? function (...args) {
+        const frameWindow = args[0];
+        const createBitmap = frameWindow.createImageBitmap.bind(frameWindow);
+        frameWindow.__fixtureHeldBitmapRequests = 0;
+        frameWindow.__fixtureHeldBitmapReleases = 0;
+        frameWindow.createImageBitmap = source => {
+          frameWindow.__fixtureHeldBitmapRequests++;
+          return createBitmap(source).then(bitmap => new Promise(resolve => {
+            outerWindow.setTimeout(() => resolve({
+              width: bitmap.width,
+              height: bitmap.height,
+              close() { frameWindow.__fixtureHeldBitmapReleases++; bitmap.close(); },
+            }), 800);
+          }));
+        };
+        outerWindow.__animationPendingFrame = frameWindow;
+        return window.installAnimation(...args);
+      } : window.installAnimation)
+      : fixturePayload;
     if (url.searchParams.has('animation') && typeof payload !== 'function') {
       throw new Error('animation installer is not exposed by the canonical source');
     }
@@ -381,6 +408,12 @@ try {
     copyFile(join(ROOT, 'style.css'), join(animationPreviewDir, 'style.css')),
     copyFile(join(ROOT, 'animation.js'), join(animationPreviewDir, 'animation.js')),
   ]);
+  const maximumSubtitle = '和阿舟一起，把复杂问题拆清楚；再整理线索、验证方法、修正错误，把每个想法一步步做成可以复用的真实结果。并分享可复用成果。';
+  assert.equal(maximumSubtitle.length, 60, 'the synthetic subtitle fixture reaches the 60 UTF-16 code-unit limit');
+  const maximumIntroTitle = '阿舟陪你把复杂问题拆清楚再做吧！';
+  const maximumIntroCaption = '帮助你梳理线索、拆解任务、验证假设、记录过程，并把可复用的方法应用到项目中，留下清楚可靠的结果。';
+  assert.equal(maximumIntroTitle.length, 16, 'the synthetic intro title fixture reaches the 16 UTF-16 code-unit limit');
+  assert.equal(maximumIntroCaption.length, 48, 'the synthetic intro caption fixture reaches the 48 UTF-16 code-unit limit');
   const syntheticDefaults = `
     (() => {
       function png(width, height, paint) {
@@ -417,11 +450,78 @@ try {
           [[0, 700], [240, 390], [452, 690], [700, 300], [988, 710], [1220, 420], [1536, 720]],
           [[0, 812], [270, 690], [560, 820], [830, 930], [1110, 800], [1320, 720], [1536, 770]],
         ],
-        introTitle: 'Synthetic agent', introCaption: 'SYNTHETIC / TEST', artworkSubtitle: 'Generated fixture only',
+        introTitle: 'Synthetic agent', introCaption: 'SYNTHETIC / TEST', artworkSubtitle: ${JSON.stringify(maximumSubtitle)},
       };
     })();
   `;
   await writeFile(join(animationDefaultsDir, 'defaults.js'), syntheticDefaults, 'utf8');
+  const identityVariants = [
+    { name: 'english', title: 'Synthetic agent', caption: 'SYNTHETIC / TEST' },
+    { name: 'maximum-chinese', title: maximumIntroTitle, caption: maximumIntroCaption },
+    { name: 'empty', title: '', caption: '' },
+  ];
+  for (const variant of identityVariants) {
+    const variantDir = join(profile, 'agent-skin-preview-identity-' + variant.name);
+    const variantDefaultsDir = join(variantDir, 'assets/defaults');
+    await mkdir(variantDefaultsDir, { recursive: true });
+    await Promise.all([
+      copyFile(join(ROOT, 'index.html'), join(variantDir, 'index.html')),
+      copyFile(join(ROOT, 'style.css'), join(variantDir, 'style.css')),
+      copyFile(join(ROOT, 'animation.js'), join(variantDir, 'animation.js')),
+    ]);
+    const identityDefaults = syntheticDefaults.replace(
+      "introTitle: 'Synthetic agent', introCaption: 'SYNTHETIC / TEST'",
+      'introTitle: ' + JSON.stringify(variant.title) + ', introCaption: ' + JSON.stringify(variant.caption),
+    );
+    assert.notEqual(identityDefaults, syntheticDefaults);
+    await writeFile(join(variantDefaultsDir, 'defaults.js'), identityDefaults, 'utf8');
+    variant.dir = variantDir;
+  }
+  const upperPreviewDir = join(profile, 'agent-skin-preview-upper');
+  const upperDefaultsDir = join(upperPreviewDir, 'assets/defaults');
+  await mkdir(upperDefaultsDir, { recursive: true });
+  await Promise.all([
+    copyFile(join(ROOT, 'index.html'), join(upperPreviewDir, 'index.html')),
+    copyFile(join(ROOT, 'style.css'), join(upperPreviewDir, 'style.css')),
+    copyFile(join(ROOT, 'animation.js'), join(upperPreviewDir, 'animation.js')),
+  ]);
+  const upperDefaults = `
+    (() => {
+      function png(width, height, seed) {
+        const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+        const context = canvas.getContext('2d'); const image = context.createImageData(width, height);
+        let value = seed >>> 0;
+        for (let offset = 0; offset < image.data.length; offset += 4) {
+          value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+          image.data[offset] = value >>> 24;
+          value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+          image.data[offset + 1] = value >>> 24;
+          value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+          image.data[offset + 2] = value >>> 24;
+          image.data[offset + 3] = 255;
+        }
+        context.putImageData(image, 0, 0);
+        return canvas.toDataURL('image/png');
+      }
+      const contours = [];
+      for (let pathIndex = 0; pathIndex < 1200; pathIndex++) {
+        const points = [];
+        for (let pointIndex = 0; pointIndex < 250; pointIndex++) {
+          points.push([
+            (pathIndex * 73 + pointIndex * 17 + 13) % 1537,
+            (pathIndex * 41 + pointIndex * 29 + 7) % 1025,
+          ]);
+        }
+        contours.push(points);
+      }
+      window.AGENT_SKIN_ASSETS = {
+        avatar: png(512, 512, 0x31840c0f), artwork: png(1536, 1024, 0x5eed1234), contours,
+        introTitle: 'Synthetic upper-bound agent', introCaption: 'SYNTHETIC / RESOURCE TEST',
+        artworkSubtitle: ${JSON.stringify(maximumSubtitle)},
+      };
+    })();
+  `;
+  await writeFile(join(upperDefaultsDir, 'defaults.js'), upperDefaults, 'utf8');
   chrome = spawn(options.chrome, [
     '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
     '--disable-default-apps', '--disable-sync', '--disable-extensions', '--disable-component-update', '--no-pings',
@@ -884,6 +984,132 @@ try {
     return { readyRun: { runId: state.runId, phase: state.phase, ready: state.ready }, beforeSkip, completed: completed.completion };
   });
 
+  await check('portrait identity and dispersing layouts keep legal titles and captions inside the registered canvas', async () => {
+    const cases = [];
+    for (const variant of identityVariants) {
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 1440, height: 900, screenWidth: 1440, screenHeight: 900,
+        deviceScaleFactor: 1, mobile: false,
+      });
+      await cdp.call('Page.navigate', { url: pathToFileURL(join(variant.dir, 'index.html')).href });
+      await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, variant.name + ' identity page load');
+      await until(() => cdp.evaluate(`(()=>{
+        const root=document.querySelector('[data-agent-skin-stage]');
+        return root?.dataset.prewarmed==='true'&&window.launcherUI?.report()?true:false;
+      })()`), 15000, variant.name + ' identity assets prewarm');
+      await cdp.evaluate('window.launcherUI.pause()');
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 390, height: 844, screenWidth: 390, screenHeight: 844,
+        deviceScaleFactor: 1, mobile: false,
+      });
+      const portrait = await until(() => cdp.evaluate(`(()=>{
+        const viewport=window.launcherUI.report().viewport;
+        return viewport.width===390&&viewport.height===844?viewport:false;
+      })()`), 3000, variant.name + ' responsive portrait relayout');
+      await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+      const variantStages = [];
+      for (const [seconds, expectedStage] of [[1.65, 'identity'], [4.18, 'dispersing'], [4.74, 'scattered']]) {
+        await cdp.evaluate(`window.launcherUI.seek(${seconds})`);
+        const state = await cdp.evaluate(`(()=>{
+          const canvas=document.querySelector('[data-agent-skin-canvas]');
+          const report=window.launcherUI.report();
+          const scale=Math.max(innerWidth/1536,innerHeight/1024);
+          const offsetX=(innerWidth-1536*scale)/2,offsetY=(innerHeight-1024*scale)/2;
+          const inViewport=(x,y)=>x*scale+offsetX>=0&&x*scale+offsetX<innerWidth
+            &&y*scale+offsetY>=0&&y*scale+offsetY<innerHeight;
+          const samples=[];
+          for(let y=64;y<960;y+=8)for(let x=64;x<1472;x+=8){
+            const px=Math.round((x*scale+offsetX)*devicePixelRatio),py=Math.round((y*scale+offsetY)*devicePixelRatio);
+            if(px<0||py<0||px>=canvas.width||py>=canvas.height)continue;
+            const data=canvas.getContext('2d').getImageData(px,py,1,1).data;
+            if(data[0]>55||data[1]>55||data[2]>55)samples.push({x,y});
+          }
+          return {stage:report.stage,progress:report.animationProgress,viewport:report.viewport,
+            sampleCount:samples.length,offscreenSamples:samples.filter(point=>!inViewport(point.x,point.y)).length,
+            identityTextSamples:samples.filter(point=>point.y>=590&&point.y<850).length,
+            crop:{scale,offsetX,offsetY},resources:report.resources};
+        })()`);
+        const screenshotFile = `identity-${variant.name}-${String(seconds).replace('.', 'p')}s.png`;
+        const shot = await screenshot(screenshotFile);
+        assert.equal(state.stage, expectedStage, variant.name + ' stage at ' + seconds);
+        assert.ok(state.sampleCount > 5, variant.name + ' identity art remains visible at ' + seconds + ': ' + JSON.stringify(state));
+        if (seconds === 1.65 && (variant.title || variant.caption)) {
+          assert.ok(state.identityTextSamples > 5, variant.name + ' identity text remains visible within the portrait canvas: ' + JSON.stringify(state));
+        }
+        assert.equal(state.offscreenSamples, 0, variant.name + ' visible identity samples remain inside the portrait viewport: ' + JSON.stringify(state));
+        assert.equal(state.resources.liveRAF, 0, variant.name + ' preview remains paused while seeking');
+        variantStages.push({ seconds, ...state, screenshot: shot.file });
+      }
+      cases.push({ name: variant.name, titleCodeUnits: variant.title.length,
+        captionCodeUnits: variant.caption.length, portrait, stages: variantStages });
+    }
+    return { viewport: { width: 390, height: 844, dpr: 1 }, cases };
+  });
+
+  await navigate('/fixture.html?animation=1&animation-hold=1&no-initial-wallpaper=1');
+  await check('skip while decoded ImageBitmaps are pending completes before ready and closes late bitmaps', async () => {
+    const held = await until(() => cdp.evaluate(`(()=>{
+      const frame=window.__animationPendingFrame;
+      return frame?.__fixtureHeldBitmapRequests>=2
+        ?{requests:frame.__fixtureHeldBitmapRequests,releases:frame.__fixtureHeldBitmapReleases}:false;
+    })()`), 10000, 'both real decoded animation bitmaps held before ready');
+    const before = await cdp.evaluate(`({state:window.__startupAPI.status(),
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length})`);
+    assert.equal(before.state.phase, 'loading');
+    assert.equal(before.state.ready, false);
+    assert.equal(before.state.overlay, true);
+    assert.equal(before.frameCount, 1);
+    assert.equal(held.requests, 2);
+    await cdp.evaluate(`(()=>{
+      const button=document.querySelector('iframe[title="Agent Skin startup"]').contentDocument.querySelector('[data-agent-skin-skip]');
+      button.click();button.click();
+    })()`);
+    const completed = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&!state.overlay?state:false;
+    })()`), 3000, 'early skip completes and removes the unready overlay');
+    assert.equal(completed.ready, false);
+    assert.deepEqual(completed.completion, { cause: 'skip', beforeReady: true });
+    await until(() => cdp.evaluate('window.__animationPendingFrame.__fixtureHeldBitmapReleases===2'), 3000,
+      'stale image bitmap results close after early completion');
+    await delay(100);
+    const after = await cdp.evaluate(`({state:window.__startupAPI.status(),
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      requests:window.__animationPendingFrame.__fixtureHeldBitmapRequests,
+      releases:window.__animationPendingFrame.__fixtureHeldBitmapReleases})`);
+    assert.deepEqual(after.state.completion, completed.completion);
+    assert.equal(after.state.ready, false, 'a late decode cannot emit ready after early completion');
+    assert.equal(after.frameCount, 0);
+    assert.equal(after.requests, after.releases);
+    return { before: { phase: before.state.phase, ready: before.state.ready, held },
+      completion: completed.completion, after: { phase: after.state.phase, ready: after.state.ready,
+        frameCount: after.frameCount, requests: after.requests, releases: after.releases } };
+  });
+
+  await cdp.call('Page.addScriptToEvaluateOnNewDocument', { source: `(()=>{
+    const prototype=window.MediaQueryList?.prototype;if(!prototype)return;
+    const state={added:0,removed:0,active:0,windowResize:0,visualViewportResize:0,queryCount:0};
+    const queries=[];
+    window.addEventListener('resize',()=>state.windowResize++);
+    window.visualViewport?.addEventListener('resize',()=>state.visualViewportResize++);
+    Object.defineProperty(window,'__agentSkinResolutionWatch',{value:state,configurable:true});
+    const matchMedia=window.matchMedia.bind(window);
+    window.matchMedia=function(expression){
+      const query=matchMedia(expression);
+      if(String(expression).startsWith('(resolution:')){queries.push(query);state.queryCount++;}
+      return query;
+    };
+    state.dispatchLatest=()=>queries.at(-1)?.dispatchEvent(new Event('change'))===true;
+    const add=prototype.addEventListener,remove=prototype.removeEventListener;
+    prototype.addEventListener=function(type,listener,options){
+      if(type==='change'&&this.media?.startsWith('(resolution:')){state.added++;state.active++;}
+      return add.call(this,type,listener,options);
+    };
+    prototype.removeEventListener=function(type,listener,options){
+      if(type==='change'&&this.media?.startsWith('(resolution:')){state.removed++;state.active--;}
+      return remove.call(this,type,listener,options);
+    };
+  })()` });
   await cdp.call('Page.navigate', { url: pathToFileURL(join(animationPreviewDir, 'index.html')).href });
   await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'synthetic Agent Skin preview load');
   const animationReady = await until(() => cdp.evaluate(`(()=>{
@@ -899,6 +1125,8 @@ try {
       [0, 'pulse'], [1.15, 'identity'], [4.18, 'dispersing'], [4.74, 'scattered'],
       [5.08, 'drawing'], [7.18, 'colorize'], [7.43, 'portrait'], [11, 'shutter'], [12, 'complete'],
     ]);
+    const subtitle = await cdp.evaluate('window.AGENT_SKIN_ASSETS.artworkSubtitle');
+    assert.equal(subtitle.length, 60, 'portrait uses the longest legal subtitle fixture');
     const sizes = [
       { name: 'wide', width: 1440, height: 900 },
       { name: 'compact', width: 980, height: 640 },
@@ -911,6 +1139,14 @@ try {
           width: size.width, height: size.height, screenWidth: size.width, screenHeight: size.height,
           deviceScaleFactor: dpr, mobile: false,
         });
+        await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        let injectedResolutionChange = false;
+        const observedDPR = await cdp.evaluate('window.launcherUI.report().viewport.dpr');
+        if (observedDPR !== dpr) {
+          injectedResolutionChange = await cdp.evaluate('window.__agentSkinResolutionWatch.dispatchLatest()');
+          assert.equal(injectedResolutionChange, true, 'the active resolution MediaQueryList receives a change event');
+          await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        }
         const actualViewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})');
         assert.deepEqual(actualViewport, { width: size.width, height: size.height, dpr },
           `emulated viewport for ${size.name} at DPR ${dpr}`);
@@ -920,8 +1156,12 @@ try {
             const root=document.querySelector('[data-agent-skin-stage]');
             const canvas=root.querySelector('canvas[data-agent-skin-canvas]');
             const report=window.launcherUI.report();
+            const rect=element=>{const value=element.getBoundingClientRect();return {left:value.left,top:value.top,right:value.right,bottom:value.bottom};};
             return {stage:report.stage,progress:report.animationProgress,viewport:report.viewport,
               backing:{width:canvas.width,height:canvas.height},css:{width:canvas.clientWidth,height:canvas.clientHeight},
+              skip:rect(root.querySelector('[data-agent-skin-skip]')),
+              controls:rect(document.querySelector('#preview-controls')),
+              headerRight:rect(document.querySelector('.preview-heading span:last-child')),
               prewarmed:root.dataset.prewarmed,coordinateSize:canvas.dataset.coordinateSize};
           })()`);
           assert.equal(state.stage, expectedStage, `phase at ${seconds}s`);
@@ -931,7 +1171,11 @@ try {
           assert.equal(state.css.height, size.height, JSON.stringify(state));
           assert.equal(state.backing.width, size.width * dpr);
           assert.equal(state.backing.height, size.height * dpr);
-          matrix.push({ size: size.name, dpr, seconds, ...state });
+          const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+          const layout = JSON.stringify({ size: size.name, dpr, skip: state.skip, controls: state.controls, headerRight: state.headerRight });
+          assert.equal(overlaps(state.skip, state.controls), false, `skip remains outside the preview control bar: ${layout}`);
+          assert.equal(overlaps(state.skip, state.headerRight), false, `skip remains outside the heading text: ${layout}`);
+          matrix.push({ size: size.name, dpr, seconds, injectedResolutionChange, ...state });
           await screenshot(`animation-${size.name}-dpr${dpr}-${String(seconds).replace('.', 'p')}s.png`);
         }
       }
@@ -948,6 +1192,7 @@ try {
       return {stage:window.launcherUI.report().stage,pixel:[pixel[0],pixel[1],pixel[2],pixel[3]]};
     })()`);
     await cdp.call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const beforeColor = await samplePixel(7.17);
     const colorizeStart = await samplePixel(7.18);
     const portraitColor = await samplePixel(7.43);
@@ -958,7 +1203,139 @@ try {
     assert.equal(beforeColor.stage, 'drawing');
     assert.equal(colorizeStart.stage, 'colorize');
     assert.equal(portraitColor.stage, 'portrait');
-    return { screenshotCount: matrix.length, matrix, colorRegistration: { beforeColor, colorizeStart, portraitColor }, prewarmed: animationReady.resources };
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    const reducedState = await until(() => cdp.evaluate(`window.launcherUI.report().reduced === true
+      ?window.launcherUI.report():false`), 2000, 'real browser reduced-motion media change');
+    await cdp.evaluate('window.launcherUI.seek(5.7)');
+    const reducedDrawing = await cdp.evaluate(`({state:window.launcherUI.report(),
+      visibleProgress:document.querySelector('[data-agent-skin-progress]').textContent})`);
+    assert.equal(reducedDrawing.state.stage, 'drawing');
+    assert.equal(reducedDrawing.state.reduced, true);
+    await screenshot('animation-reduced-motion-drawing.png');
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    await until(() => cdp.evaluate('window.launcherUI.report().reduced === false'), 2000, 'reduced-motion media restoration');
+    return { subtitleLength: subtitle.length, screenshotCount: matrix.length, matrix,
+      colorRegistration: { beforeColor, colorizeStart, portraitColor }, prewarmed: animationReady.resources };
+  });
+
+  await check('DPR watcher rebinds across scale changes and disposal releases its listener and scene resources', async () => {
+    const beforeDPR = await cdp.evaluate('window.__agentSkinResolutionWatch');
+    assert.equal(beforeDPR.active, 1, 'one resolution listener is bound after the viewport matrix');
+    await cdp.call('Emulation.setDeviceMetricsOverride', {
+      width: 1440, height: 900, screenWidth: 1440, screenHeight: 900,
+      deviceScaleFactor: 2, mobile: false,
+    });
+    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    if (await cdp.evaluate('window.launcherUI.report().viewport.dpr') !== 2) {
+      assert.equal(await cdp.evaluate('window.__agentSkinResolutionWatch.dispatchLatest()'), true,
+        'the active resolution MediaQueryList receives a change event');
+    }
+    let rebound;
+    try {
+      rebound = await until(() => cdp.evaluate(`(()=>{
+        const report=window.launcherUI.report(),watch=window.__agentSkinResolutionWatch;
+        return report.viewport.dpr===2&&report.resources.liveRAF===0&&watch.active===1&&watch.added>1
+          ?{report,watch}:false;
+      })()`), 3000, 'resolution observer rebinds at DPR 2');
+    } catch (error) {
+      const snapshot = await cdp.evaluate(`({report:window.launcherUI.report(),watch:window.__agentSkinResolutionWatch,
+        resolution1:matchMedia('(resolution: 1dppx)').matches,resolution2:matchMedia('(resolution: 2dppx)').matches})`);
+      throw new Error(`${error.message}; snapshot=${JSON.stringify(snapshot)}`);
+    }
+    assert.equal(rebound.watch.added, rebound.watch.removed + 1);
+    const started = await cdp.evaluate('window.launcherUI.replay()');
+    assert.equal(started, true);
+    const playing = await until(() => cdp.evaluate(`(()=>{
+      const root=document.querySelector('[data-agent-skin-stage]'),state=window.launcherUI.report();
+      return root.dataset.prewarmed==='true'&&root.dataset.playing==='true'&&state.elapsed>0?state:false;
+    })()`), 10000, 'replay after DPR observer rebind');
+    assert.equal(playing.viewport.dpr, 2);
+    assert.equal(playing.resources.liveRAF, 1);
+    assert.ok(playing.resources.liveBitmaps > 0);
+    const disposed = await cdp.evaluate('window.launcherUI.dispose()');
+    assert.equal(disposed, true);
+    const afterDispose = await cdp.evaluate(`({report:window.launcherUI.report(),watch:window.__agentSkinResolutionWatch})`);
+    assert.equal(afterDispose.watch.active, 0);
+    assert.equal(afterDispose.watch.added, afterDispose.watch.removed);
+    for (const kind of ['Images', 'Bitmaps', 'Canvases', 'Paths']) {
+      assert.equal(afterDispose.report.resources['live' + kind], 0, `${kind} are released at disposal`);
+    }
+    assert.equal(afterDispose.report.resources.liveRAF, 0);
+    assert.equal(afterDispose.report.resources.framesPending, 0);
+    await delay(120);
+    const settled = await cdp.evaluate('window.launcherUI.report()');
+    assert.deepEqual(settled.resources, afterDispose.report.resources, 'disposed resources and frame counts stay stable');
+    assert.deepEqual(await cdp.evaluate('window.__agentSkinResolutionWatch'), afterDispose.watch);
+    const replayAfterDispose = await cdp.evaluate('window.launcherUI.replay()');
+    assert.equal(replayAfterDispose, false, 'a disposed preview cannot replay');
+
+    const previewURL = pathToFileURL(join(animationPreviewDir, 'index.html')).href;
+    await cdp.call('Page.navigate', { url: previewURL });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'preview reload for late bitmap race');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'`),
+      10000, 'fresh preview prewarm before late bitmap race');
+    await cdp.evaluate(`(()=>{
+      window.launcherUI.pause();
+      const original=window.createImageBitmap.bind(window),pending=[];
+      window.__fixtureOriginalCreateImageBitmap=original;
+      window.__fixturePendingBitmaps=pending;
+      window.createImageBitmap=source=>new Promise(resolve=>{
+        let stableSource=source;
+        if(source instanceof HTMLCanvasElement){
+          stableSource=document.createElement('canvas');
+          stableSource.width=source.width;stableSource.height=source.height;
+          stableSource.getContext('2d').drawImage(source,0,0);
+        }
+        pending.push({source:stableSource,resolve});
+      });
+      return window.launcherUI.replay();
+    })()`);
+    await until(() => cdp.evaluate('window.__fixturePendingBitmaps.length===2'),
+      10000, 'two replay bitmaps held before identity bitmap preparation');
+    await cdp.evaluate(`Promise.all(window.__fixturePendingBitmaps.slice(0,2).map(async item=>{
+      item.resolve(await window.__fixtureOriginalCreateImageBitmap(item.source));
+    }))`);
+    await until(() => cdp.evaluate('window.__fixturePendingBitmaps.length===3'),
+      10000, 'identity bitmap held after the replay artwork bitmaps resolve');
+    const heldResources = await cdp.evaluate('window.launcherUI.report().resources');
+    assert.equal(heldResources.liveBitmaps, 2);
+    assert.equal(heldResources.liveRAF, 0);
+    assert.equal(await cdp.evaluate('window.launcherUI.dispose()'), true);
+    const lateDisposed = await cdp.evaluate(`({report:window.launcherUI.report(),watch:window.__agentSkinResolutionWatch,
+      prewarmed:document.querySelector('[data-agent-skin-stage]').dataset.prewarmed,
+      playing:document.querySelector('[data-agent-skin-stage]').dataset.playing})`);
+    assert.equal(lateDisposed.watch.active, 0);
+    assert.equal(lateDisposed.prewarmed, 'false');
+    assert.equal(lateDisposed.playing, 'false');
+    assert.equal(lateDisposed.report.resources.liveBitmaps, 0);
+    assert.equal(lateDisposed.report.resources.liveRAF, 0);
+    assert.equal(await cdp.evaluate('window.launcherUI.replay()'), false);
+    await cdp.evaluate(`(async()=>{
+      const item=window.__fixturePendingBitmaps[2];
+      const bitmap=await window.__fixtureOriginalCreateImageBitmap(item.source);
+      item.source.width=0;item.source.height=0;item.resolve(bitmap);
+    })()`);
+    const lateSettled = await until(() => cdp.evaluate(`(()=>{
+      const state=window.launcherUI.report(),resources=state.resources;
+      return resources.liveBitmaps===0&&resources.createdBitmaps===resources.releasedBitmaps
+        &&resources.liveRAF===0&&resources.framesPending===0
+        ?{state,prewarmed:document.querySelector('[data-agent-skin-stage]').dataset.prewarmed}:false;
+    })()`), 3000, 'late bitmap closes without reviving disposed preview');
+    assert.equal(lateSettled.prewarmed, 'false');
+    await delay(120);
+    const afterLateSettle = await cdp.evaluate('window.launcherUI.report().resources');
+    assert.deepEqual(afterLateSettle, lateSettled.state.resources, 'late callbacks cannot add frames or resources after disposal');
+
+    await cdp.call('Page.navigate', { url: previewURL });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'preview reload for following checks');
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.prewarmed==='true'`),
+      10000, 'preview ready for following checks');
+    await cdp.evaluate('window.launcherUI.pause()');
+    return { beforeDPR, rebound: rebound.watch, playing: playing.resources,
+      disposed: afterDispose.watch, finalResources: settled.resources, settleMs: 120,
+      replayAfterDispose, heldResources, lateDispose: { watcher: lateDisposed.watch,
+        resources: lateDisposed.report.resources, replayAfterDispose: false },
+      lateSettledResources: afterLateSettle, lateSettleMs: 120 };
   });
 
   await check('local preview controls pause, resume, seek and replay the same prepared scene', async () => {
@@ -1036,8 +1413,147 @@ try {
       jsFrame: settled.report.jsFrame, settleSeconds: 5, rootCount: settled.rootCount, iframeCount: settled.iframeCount };
   });
 
+  await check('skip and Escape finish idempotently at the first second, a transition, and the final second', async () => {
+    const results = [];
+    for (const [seconds, input] of [[0.4, 'button'], [4.5, 'escape'], [11.6, 'button']]) {
+      await cdp.evaluate("document.querySelector('#replay').click()");
+      await until(() => cdp.evaluate(`(()=>{
+        const root=document.querySelector('[data-agent-skin-stage]');
+        return root.dataset.prewarmed==='true'&&root.dataset.playing==='true';
+      })()`), 10000, 'phase skip replay prewarm');
+      await cdp.evaluate('window.launcherUI.pause()');
+      await cdp.evaluate(`window.launcherUI.seek(${seconds})`);
+      const stage = await cdp.evaluate('window.launcherUI.report().stage');
+      if (input === 'escape') {
+        await cdp.evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}))");
+      } else {
+        await cdp.evaluate("document.querySelector('[data-agent-skin-skip]').click();document.querySelector('[data-agent-skin-skip]').click()");
+      }
+      const state = await cdp.evaluate(`(()=>{
+        const root=document.querySelector('[data-agent-skin-stage]');
+        return {completed:root.dataset.completed==='true',report:window.launcherUI.report()};
+      })()`);
+      assert.equal(state.completed, true);
+      assert.equal(state.report.completed, true);
+      assert.equal(state.report.skipped, true);
+      assert.equal(state.report.resources.liveRAF, 0);
+      results.push({ seconds, phase: stage, input, skipped: state.report.skipped, resources: state.report.resources });
+    }
+    assert.equal(results[0].phase, 'pulse');
+    assert.equal(results[1].phase, 'dispersing');
+    assert.equal(results[2].phase, 'shutter');
+    return results;
+  });
+
+  await check('one upper-bound natural replay with the 60-unit Chinese subtitle settles without resource growth', async () => {
+    await cdp.call('Page.navigate', { url: pathToFileURL(join(upperPreviewDir, 'index.html')).href });
+    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'upper subtitle fixture page load');
+    const prepared = await until(() => cdp.evaluate(`(()=>{
+      const root=document.querySelector('[data-agent-skin-stage]'),state=window.launcherUI?.report();
+      return root?.dataset.prewarmed==='true'&&state?state:false;
+    })()`), 30000, 'upper path fixture and longest subtitle prewarm');
+    const bounds = await cdp.evaluate(`(()=>{
+      const assets=window.AGENT_SKIN_ASSETS;
+      return {contourPaths:assets.contours.length,
+        contourPoints:assets.contours.reduce((sum,path)=>sum+path.length,0),
+        subtitleCodeUnits:assets.artworkSubtitle.length,subtitle:assets.artworkSubtitle};
+    })()`);
+    assert.equal(bounds.contourPaths, 1200);
+    assert.equal(bounds.contourPoints, 300000);
+    assert.equal(bounds.subtitleCodeUnits, 60);
+    const completed = await until(() => cdp.evaluate(`(()=>{
+      const root=document.querySelector('[data-agent-skin-stage]'),state=window.launcherUI.report();
+      return root.dataset.completed==='true'&&state.completed&&state.stage==='complete'
+        &&state.resources.liveRAF===0&&state.resources.liveImages===0&&state.resources.liveBitmaps===0
+        &&state.resources.liveCanvases===0&&state.resources.livePaths===0?state:false;
+    })()`), 30000, 'one natural upper-bound replay completes and releases resources');
+    assert.equal(completed.elapsed, 12);
+    assert.ok(completed.jsFrame.rafIntervalMs?.count > 100);
+    assert.ok(completed.jsFrame.renderSubmissionMs?.count > 100);
+    const settleBaseline = { resources: completed.resources, jsFrame: completed.jsFrame };
+    await delay(5000);
+    const afterSettle = await cdp.evaluate('window.launcherUI.report()');
+    assert.deepEqual({ resources: afterSettle.resources, jsFrame: afterSettle.jsFrame }, settleBaseline);
+    return { bounds: { contourPaths: bounds.contourPaths, contourPoints: bounds.contourPoints,
+      subtitleCodeUnits: bounds.subtitleCodeUnits }, initialResources: prepared.resources,
+      elapsedSeconds: completed.elapsed, resources: completed.resources, jsFrame: completed.jsFrame,
+      settleSeconds: 5, measurementScope: completed.jsFrame.scope };
+  });
+
+  await check('RC6 default and upper path-limit fixtures naturally complete ten 12-second replays with five-second settle checks', async () => {
+    const limits = {
+      avatarDataURLChars: 2 * 1024 * 1024,
+      artworkDataURLChars: 12 * 1024 * 1024,
+      contourPaths: 1200,
+      contourPoints: 300000,
+      serializedRecordChars: 20 * 1024 * 1024,
+    };
+    const fixtures = [
+      { name: 'default', dir: animationPreviewDir, expectedPaths: 4, expectedPoints: 20 },
+      { name: 'upper', dir: upperPreviewDir, expectedPaths: 1200, expectedPoints: 300000 },
+    ];
+    const result = [];
+    for (const fixture of fixtures) {
+      await cdp.call('Page.navigate', { url: pathToFileURL(join(fixture.dir, 'index.html')).href });
+      await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, fixture.name + ' fixture page load');
+      const prewarmed = await until(() => cdp.evaluate(`(()=>{
+        const root=document.querySelector('[data-agent-skin-stage]');
+        return window.launcherUI&&root?.dataset.prewarmed==='true'?window.launcherUI.report():false;
+      })()`), 30000, fixture.name + ' fixture image and path prewarm');
+      const assetBounds = await cdp.evaluate(`(()=>{
+        const assets=window.AGENT_SKIN_ASSETS;
+        const pointCount=assets.contours.reduce((total,path)=>total+path.length,0);
+        const record=JSON.stringify({avatar:assets.avatar,artwork:assets.artwork,contours:assets.contours,
+          introTitle:assets.introTitle,introCaption:assets.introCaption,artworkSubtitle:assets.artworkSubtitle});
+        return {avatarDataURLChars:assets.avatar.length,artworkDataURLChars:assets.artwork.length,
+          contourPaths:assets.contours.length,contourPoints:pointCount,serializedRecordChars:record.length,
+          resources:window.launcherUI.report().resources};
+      })()`);
+      assert.ok(assetBounds.avatarDataURLChars <= limits.avatarDataURLChars, 'avatar data URL stays within its configured bound');
+      assert.ok(assetBounds.artworkDataURLChars <= limits.artworkDataURLChars, 'artwork data URL stays within its configured bound');
+      assert.ok(assetBounds.contourPaths <= limits.contourPaths && assetBounds.contourPaths === fixture.expectedPaths);
+      assert.ok(assetBounds.contourPoints <= limits.contourPoints && assetBounds.contourPoints === fixture.expectedPoints);
+      assert.ok(assetBounds.serializedRecordChars <= limits.serializedRecordChars, 'serialized settings record stays within its configured bound');
+      await cdp.evaluate('window.launcherUI.pause()');
+
+      const rounds = [];
+      for (let index = 0; index < 10; index++) {
+        const startedAt = Date.now();
+        await cdp.evaluate("document.querySelector('#replay').click()");
+        await until(() => cdp.evaluate(`(()=>{
+          const root=document.querySelector('[data-agent-skin-stage]');
+          return root.dataset.prewarmed==='true'&&root.dataset.playing==='true'
+            &&window.launcherUI.report().elapsed>0;
+        })()`), 30000, fixture.name + ' natural playback start ' + (index + 1));
+        const completed = await until(() => cdp.evaluate(`(()=>{
+          const root=document.querySelector('[data-agent-skin-stage]');
+          const state=window.launcherUI.report();
+          return root.dataset.completed==='true'&&state.completed&&state.stage==='complete'
+            &&state.resources.liveRAF===0&&state.resources.liveImages===0&&state.resources.liveBitmaps===0
+            &&state.resources.liveCanvases===0&&state.resources.livePaths===0?state:false;
+        })()`), 30000, fixture.name + ' natural animation completion ' + (index + 1));
+        assert.equal(completed.elapsed, 12);
+        assert.ok(completed.jsFrame.rafIntervalMs?.count > 100, 'natural replay records actual rAF intervals');
+        assert.ok(completed.jsFrame.renderSubmissionMs?.count > 100, 'natural replay records actual canvas submission work');
+        const settleBaseline = { resources: completed.resources, jsFrame: completed.jsFrame };
+        await delay(5000);
+        const afterSettle = await cdp.evaluate('window.launcherUI.report()');
+        assert.deepEqual({ resources: afterSettle.resources, jsFrame: afterSettle.jsFrame }, settleBaseline,
+          fixture.name + ' resources and frame samples stay stable for five seconds after complete');
+        assert.equal(afterSettle.resources.framesPending, 0);
+        assert.equal(afterSettle.resources.liveObjectURLs, 0);
+        rounds.push({ round: index + 1, wallTimeMs: Date.now() - startedAt,
+          elapsedSeconds: completed.elapsed, resources: completed.resources, jsFrame: completed.jsFrame });
+      }
+      result.push({ fixture: fixture.name, assetBounds, initialResources: prewarmed.resources, rounds });
+    }
+    return { limits, fixtures: result, measurementScope: 'JS rAF interval and 2D canvas submission only; GPU/compositor/presentation/system-memory timing not measured' };
+  });
+
   report.finishedAt = new Date().toISOString();
-  report.passed = report.checks.length > 0 && report.checks.every(item => item.passed);
+  report.selectedChecks = options.only;
+  report.passed = report.checks.some(item => item.passed)
+    && report.checks.every(item => item.passed || item.skipped);
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);
@@ -1046,10 +1562,11 @@ try {
   report.finishedAt = new Date().toISOString();
   report.passed = !report.fatalError && !report.cleanupError && report.cleanup?.ownChromeStopped
     && report.cleanup.temporaryProfileRemoved && report.cleanup.serverClosed
-    && report.checks.length > 0 && report.checks.every(item => item.passed);
+    && report.checks.some(item => item.passed)
+    && report.checks.every(item => item.passed || item.skipped);
   await mkdir(options.out, { recursive: true });
   await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
-    checks: report.checks.map(({ name, passed }) => ({ name, passed })), fatalError: report.fatalError }));
+    checks: report.checks.map(({ name, passed, skipped }) => ({ name, passed, skipped })), fatalError: report.fatalError }));
   if (!report.passed) process.exitCode = 1;
 }

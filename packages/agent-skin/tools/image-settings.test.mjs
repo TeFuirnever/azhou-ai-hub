@@ -384,6 +384,16 @@ test('diagonal edges remain traceable through eight-neighbor contour continuatio
   assert.ok(result.contours.some(path => path.length >= 8));
 });
 
+test('rectangular contours keep a straight continuation through an eight-neighbor branch', async () => {
+  const fixture = makeFixture({ imageData: edgeImageData() });
+
+  const result = await fixture.api.importImage(makeFile(), 'artwork');
+
+  assert.equal(result.contours.length, 1, 'the connected rectangle should stay one contour');
+  assert.ok(result.contours[0].length > 300, 'the contour should cover the rectangle rather than a short branch');
+  assert.deepEqual(fixture.revoked, fixture.created);
+});
+
 test('uniform artwork without usable edges is rejected and does not leak its input URL', async () => {
   const fixture = makeFixture({ imageData: uniformImageData() });
 

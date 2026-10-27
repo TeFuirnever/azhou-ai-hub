@@ -16,7 +16,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #fbd8b2; outline-
 
 .preview { position: relative; width: 100%; height: 100%; min-height: 280px; background: #10121c; }
 .preview-heading {
-  position: absolute; z-index: 2; top: 18px; left: 24px; right: 24px;
+  position: absolute; z-index: 2; top: 18px; left: 24px; right: 150px;
   display: flex; justify-content: space-between; gap: 18px; pointer-events: none;
   color: #fff8ef; font-size: 11px; letter-spacing: .06em; opacity: .72;
 }
@@ -37,7 +37,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #fbd8b2; outline-
 }
 [data-agent-skin-skip] kbd { margin-left: 6px; border: 1px solid #ffffff55; border-radius: 4px; padding: 2px 4px; font: 10px ui-monospace, monospace; }
 .controls {
-  position: absolute; z-index: 3; bottom: 18px; left: 50%; transform: translateX(-50%);
+  position: absolute; z-index: 3; top: 48px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 18px; width: min(660px, calc(100vw - 48px));
   padding: 10px 16px; border: 1px solid #ffffff26; border-radius: 12px;
   background: #18192bcc; color: #fff8ef; backdrop-filter: blur(14px);
@@ -51,15 +51,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid #fbd8b2; outline-
 body.agent-skin-native-launch .preview-heading,
 body.agent-skin-native-launch .controls { display: none !important; }
 body.agent-skin-native-launch [data-agent-skin-progress] { display: none !important; }
+body.agent-skin-native .preview-heading { display: none !important; }
+[data-agent-skin-stage][data-stage="portrait"] [data-agent-skin-stage-text] { display: none; }
+[data-agent-skin-stage][data-stage="portrait"] [data-agent-skin-progress] { display: none; }
 
 @media (hover: hover) and (pointer: fine) {
   [data-agent-skin-skip]:hover { background: #34364bbb; }
 }
 @media (max-width: 520px) {
   .preview-heading { left: 14px; right: 14px; font-size: 9px; }
-  .controls { bottom: 10px; gap: 10px; width: calc(100vw - 24px); padding: 8px 10px; }
+  .preview-heading span:last-child { display: none; }
+  .controls { top: 42px; gap: 10px; width: calc(100vw - 24px); padding: 8px 10px; }
   #elapsed { font-size: 8px; }
-  [data-agent-skin-skip] { right: 12px; top: 12px; }
+  [data-agent-skin-skip] { right: 12px !important; top: 96px !important; padding: 6px 12px !important; font-size: 12px !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }

@@ -322,8 +322,9 @@ function createImageSettings(environment) {
         const candidateY = Math.floor(candidate / width);
         const outgoingX = candidateX - x;
         const outgoingY = candidateY - y;
+        const outgoingLength = Math.hypot(outgoingX, outgoingY) || 1;
         const dot = previous < 0
-          ? 0 : (incomingX * outgoingX + incomingY * outgoingY) / incomingLength;
+          ? 0 : (incomingX * outgoingX + incomingY * outgoingY) / (incomingLength * outgoingLength);
         const candidateStrength = magnitude[candidate];
         if (dot > bestDot || (dot === bestDot && candidateStrength > bestStrength)) {
           best = candidate;
