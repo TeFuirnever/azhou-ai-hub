@@ -295,7 +295,7 @@ export async function installRenderer(payload) {
     root.style.setProperty(WASH_PROPERTY, wash);
     root.setAttribute(ATTRIBUTE, 'active');
     document.head.appendChild(style);
-    const result = status();
+    let result = status();
     if (!result.applied) throw problem('styles-not-effective: ' + JSON.stringify(result));
     if (active) {
       const release = active[RELEASE_KEY];
@@ -312,7 +312,10 @@ export async function installRenderer(payload) {
         root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
         root.style.setProperty(WASH_PROPERTY, wash);
         root.setAttribute(ATTRIBUTE, 'active');
-        if (!status().applied) throw problem('styles-not-effective-after-replacement');
+        result = status();
+        if (!result.applied) throw problem('styles-not-effective-after-replacement');
+        Object.defineProperty(api, BASELINE_KEY, { value: original });
+        globalThis.__azhouWallpaper = api;
       }
     }
     if (!active) {

@@ -1035,6 +1035,10 @@ private struct WallpaperRequest: Sendable {
 
 enum WallpaperCLI {
     static func handles(_ arguments: [String]) -> Bool { arguments.contains("--wallpaper-helper") || arguments.contains("--wallpaper-status") }
+    static func exitCode(for state: String) -> Int32 {
+        ["applied", "restored", "ready"].contains(state) ? 0 : 2
+    }
+    static let restoreMessage = "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。"
     static let statusSource = """
     (() => { const u = new URL(location.href);
       if (window.top !== window || u.protocol !== 'app:' || u.hostname !== '-' || u.pathname !== '/index.html'
@@ -1154,7 +1158,7 @@ enum WallpaperCLI {
         if let data = try? JSONSerialization.data(withJSONObject: base, options: [.sortedKeys, .withoutEscapingSlashes]) {
             try? FileHandle.standardOutput.write(contentsOf: data + Data([10]))
         }
-        return ["applied", "restored", "ready"].contains(base["state"] as? String ?? "") ? 0 : 2
+        return exitCode(for: base["state"] as? String ?? "")
     }
 
     private static func perform(_ request: WallpaperRequest, began: TimeInterval) async throws -> [String: Any] {
@@ -1268,7 +1272,7 @@ enum WallpaperCLI {
                     if request.action == .restore {
                         guard states.allSatisfy({ $0["applied"] as? Bool != true }) else { throw WallpaperFailure(state: "restore-unconfirmed", message: "复查时壁纸仍存在。") }
                         return ["state": "restored", "applied": false, "restored": true, "port": port, "pageCount": states.count,
-                                "message": "已移除本次运行中的阿舟壁纸；Codex 与调试端口保持原状态。"]
+                                "message": restoreMessage]
                     }
                     let requiredVersion = request.action == .apply ? expectedVersion : nil
                     let verified = WallpaperValidation.verifiedPages(states, version: requiredVersion)

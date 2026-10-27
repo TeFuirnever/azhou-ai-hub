@@ -132,6 +132,7 @@ class PageController {
     this.frame = null;
     this.frameHandle = null;
     this.wallpaperAPI = null;
+    this.wallpaperGeneration = 0;
     this.installed = false;
     this.disposed = false;
     this.watchdog = null;
@@ -196,6 +197,10 @@ class PageController {
     if (this.disposed) return false;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
+    const focused = this.document?.activeElement;
+    if (focused !== this.frame?.element && focused?.isConnected && typeof focused.focus === 'function') {
+      this.savedFocus = focused;
+    }
     this.#stopFrame();
     this.intent = intent;
     this.state.phase = 'loading';
@@ -332,6 +337,7 @@ class PageController {
   }
 
   async #applyWallpaper(message, runId, frame) {
+    const generation = ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
       || message.strength < 0 || message.strength > 75) {
@@ -347,7 +353,7 @@ class PageController {
       this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
       return;
     }
-    const isCurrent = () => this.#isCurrentFrame(runId, frame);
+    const isCurrent = () => generation === this.wallpaperGeneration && this.#isCurrentFrame(runId, frame);
     try {
       await this.wallpaperApply(Object.freeze({ image: message.image, strength: message.strength }), isCurrent);
       if (!isCurrent()) return;
@@ -444,8 +450,7 @@ class PageController {
 
   #restoreFocus(frame) {
     const ownedFocus = this.document?.activeElement === frame.element;
-    const pageBlurred = typeof this.document?.hasFocus === 'function' && !this.document.hasFocus();
-    if ((ownedFocus || pageBlurred) && this.savedFocus?.isConnected && typeof this.savedFocus.focus === 'function') {
+    if (ownedFocus && this.savedFocus?.isConnected && typeof this.savedFocus.focus === 'function') {
       try { this.savedFocus.focus(); } catch {}
     }
   }

@@ -166,12 +166,19 @@ try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
-  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer] = await Promise.all([
+  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, legacyWallpaperCSS, legacyWallpaperRenderer,
+    helperExpressionJSON] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, 'extension/renderer.mjs'), 'utf8'),
+    readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
+    readFile(join(ROOT, '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
+    readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
   ]);
+  const helperExpressions = JSON.parse(helperExpressionJSON);
+  assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'statusSource']);
+  assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
   const scriptStart = preview.lastIndexOf('<script type="module">');
   const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
   assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'The local preview fixture has a replaceable module entry');
@@ -182,9 +189,11 @@ try {
   const fixtureModule = `
     import { installStartup } from '/extension/renderer.mjs';
     import { installRenderer } from '/wallpaper/renderer.js';
+    import { installRenderer as installLegacyWallpaper } from '/legacy/wallpaper/renderer.js';
     const outerWindow = window;
     const url = new URL(location.href);
     let bodyAvailable = !url.searchParams.has('hold-body');
+    const initialWallpaperStrength = url.searchParams.has('no-initial-wallpaper') ? 0 : 42;
     const hostDocument = {
       get documentElement() { return document.documentElement; },
       get body() { return bodyAvailable ? document.body : undefined; },
@@ -201,7 +210,8 @@ try {
     const frameSpecs = [];
     const senders = new Map();
     const wallpaper = { version: '0.7.1', preview: true, image: ${JSON.stringify(pixelImage)},
-      imageSHA256: ${JSON.stringify(imageSHA256)}, css: await fetch('/wallpaper.css').then(response => response.text()), strength: 42 };
+      imageSHA256: ${JSON.stringify(imageSHA256)}, css: await fetch('/wallpaper.css').then(response => response.text()), strength: initialWallpaperStrength };
+    const legacyWallpaper = { ...wallpaper, css: await fetch('/legacy-wallpaper.css').then(response => response.text()) };
     const payload = function (frameWindow, frameDocument, _location, _performance, _indexedDB,
       _Image, _Path2D, _URL, requestAnimationFrame, _cancelAnimationFrame, _setTimeout, _clearTimeout,
       _module, SEND, frameSpec) {
@@ -213,9 +223,17 @@ try {
       overlay.setAttribute('aria-label', 'Synthetic Agent Skin ' + frameSpec.intent);
       overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:transparent';
       frameDocument.body.appendChild(overlay);
+      if (frameSpec.intent === 'settings') {
+        const settingsInput = frameDocument.createElement('input');
+        settingsInput.id = 'startup-fixture-settings-input';
+        settingsInput.setAttribute('aria-label', 'Synthetic settings input');
+        frameDocument.body.appendChild(settingsInput);
+      }
       requestAnimationFrame(() => {
-        SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
-          image: frameSpec.assets.wallpaper, strength: 42 });
+        if (!url.searchParams.has('legacy')) {
+          SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+            image: frameSpec.assets.wallpaper, strength: initialWallpaperStrength });
+        }
         SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
       });
       return {
@@ -241,19 +259,40 @@ try {
     document.getElementById('root').appendChild(unknownDecoration);
     if (url.searchParams.has('hold-decode')) {
       const original = HTMLImageElement.prototype.decode;
-      let release;
+      const decodeGates = [], pendingGates = new Set();
       HTMLImageElement.prototype.decode = function () {
         return original.call(this).then(() => new Promise(resolve => {
-          outerWindow.__decodePending = true;
-          release = resolve;
+          const index = decodeGates.length;
+          decodeGates.push({ resolve, source: this.src });
+          pendingGates.add(index);
+          outerWindow.__decodeGateCount = decodeGates.length;
+          outerWindow.__decodePending = pendingGates.size > 0;
         }));
       };
-      outerWindow.__releaseDecode = () => { release?.(); HTMLImageElement.prototype.decode = original; };
+      outerWindow.__releaseDecodeAt = index => {
+        decodeGates[index]?.resolve();
+        pendingGates.delete(index);
+        outerWindow.__decodePending = pendingGates.size > 0;
+        if (!pendingGates.size) HTMLImageElement.prototype.decode = original;
+      };
+      outerWindow.__releaseDecode = () => outerWindow.__releaseDecodeAt(0);
       const createURL = URL.createObjectURL.bind(URL), revokeURL = URL.revokeObjectURL.bind(URL), urls = new Set();
       URL.createObjectURL = value => { const result = createURL(value); urls.add(result); outerWindow.__fixtureBlobCount = urls.size; return result; };
       URL.revokeObjectURL = value => { urls.delete(value); outerWindow.__fixtureBlobCount = urls.size; return revokeURL(value); };
     }
-    const result = installStartup(payload, host);
+    let legacyWallpaperAPI;
+    if (url.searchParams.has('legacy')) {
+      try {
+        await installLegacyWallpaper(legacyWallpaper);
+        legacyWallpaperAPI = window.__azhouWallpaper;
+        Object.defineProperty(host, '__azhouWallpaper', { value: legacyWallpaperAPI, configurable: true, writable: true });
+        outerWindow.__legacyWallpaperAPI = legacyWallpaperAPI;
+      } catch (error) { outerWindow.__legacyWallpaperError = String(error?.message || error); }
+    }
+    const result = url.searchParams.has('legacy-only')
+      ? { installed: false, alreadyActive: false, reason: 'fixture-no-controller' }
+      : installStartup(payload, host);
+    outerWindow.__fixtureHost = host;
     outerWindow.__startupAPI = host.__azhouStartup;
     outerWindow.__startupInstallResult = result;
     outerWindow.__startupFrameSpecs = frameSpecs;
@@ -277,7 +316,9 @@ try {
     ['/csp-blob.html', ['text/html; charset=utf-8', fixtureHTML]],
     ['/fixture.js', ['text/javascript; charset=utf-8', fixtureModule]],
     ['/wallpaper.css', ['text/css; charset=utf-8', wallpaperCSS]],
+    ['/legacy-wallpaper.css', ['text/css; charset=utf-8', legacyWallpaperCSS]],
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
+    ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
   ]);
   server = createServer((request, response) => {
@@ -340,6 +381,30 @@ try {
     await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
   }
+  async function evaluateNativeHelper(name, { startup = 'actual', wallpaper = 'actual' } = {}) {
+    const source = helperExpressions[name];
+    assert.equal(typeof source, 'string', 'native helper expression is emitted by the compiled Swift test target');
+    const binding = (kind, name) => {
+      if (kind === 'none') return 'undefined';
+      if (kind === 'unknown') return "({ owner: 'fixture-unknown-owner' })";
+      if (kind !== 'actual') throw new Error('Unknown native helper binding: ' + kind);
+      return name === 'startup'
+        ? 'actualWindow.__fixtureHost?.__azhouStartup'
+        : '(actualWindow.__azhouWallpaper || actualWindow.__fixtureHost?.__azhouWallpaper)';
+    };
+    const expression = `(()=>{
+      const actualWindow=document.defaultView;
+      const window={};window.top=window;
+      const location=new URL('app://-/index.html?initialRoute=%2F');
+      const globalThis={};
+      const startup=${binding(startup, 'startup')};
+      const wallpaper=${binding(wallpaper, 'wallpaper')};
+      if(startup!==undefined)Object.defineProperty(globalThis,'__azhouStartup',{value:startup,configurable:true});
+      if(wallpaper!==undefined)Object.defineProperty(globalThis,'__azhouWallpaper',{value:wallpaper,configurable:true});
+      return (${source});
+    })()`;
+    return cdp.evaluate(expression);
+  }
   async function screenshot(name) {
     await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const viewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme})');
@@ -391,6 +456,27 @@ try {
     assert.equal(details.surfaces.menuAfter, details.surfaces.menuBefore);
     return { state, details };
   });
+  await check('compiled native helper status and apply guard execute against the live fixture API objects', async () => {
+    const before = await cdp.evaluate(`({runId:window.__startupAPI.status().runId,
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length})`);
+    const status = await evaluateNativeHelper('statusSource');
+    assert.equal(status.applied, true);
+    assert.equal(status.startup.installed, true);
+    assert.equal(status.startup.owner, 'azhou-codex-startup');
+    assert.equal(status.startup.phase, 'playing');
+    const active = await evaluateNativeHelper('applyGuardSource');
+    assert.deepEqual(active, { state: 'startup-active', applied: false });
+    const unknownStartup = await evaluateNativeHelper('applyGuardSource', { startup: 'unknown', wallpaper: 'none' });
+    assert.deepEqual(unknownStartup, { state: 'owner-conflict', applied: false });
+    const unknownWallpaper = await evaluateNativeHelper('applyGuardSource', { startup: 'none', wallpaper: 'unknown' });
+    assert.deepEqual(unknownWallpaper, { state: 'owner-conflict', applied: false });
+    const after = await cdp.evaluate(`({runId:window.__startupAPI.status().runId,
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length})`);
+    assert.deepEqual(after, before, 'status and apply guards are read-only');
+    return { status, active, unknownStartup, unknownWallpaper, before, after };
+  });
   await check('deep and light synthetic host screenshots preserve controls and unknown decoration', async () => {
     const shots = [];
     for (const [theme, file] of [['dark', 'startup-wallpaper-dark.png'], ['light', 'startup-wallpaper-light.png']]) {
@@ -426,6 +512,7 @@ try {
     await cdp.evaluate(`window.__startupFixtureSend(${play.runId},{type:'azhou-startup',action:'complete',runId:${play.runId},skipped:false})`);
     assert.equal((await cdp.evaluate('window.__startupAPI.status()')).phase, 'complete');
     assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[title=\\"Agent Skin startup\\"]").length'), 0);
+    assert.equal(await cdp.evaluate(`(()=>{const input=document.querySelector('textarea');input.focus();return document.activeElement===input;})()`), true);
     const shortcut = await cdp.evaluate(`(()=>{
       const event=new KeyboardEvent('keydown',{key:'B',metaKey:true,altKey:true,cancelable:true});
       const dispatched=window.dispatchEvent(event);
@@ -439,11 +526,32 @@ try {
     })()`), 10000, 'settings-intent ready');
     const spec = await cdp.evaluate('window.__startupFrameSpecs.at(-1)');
     assert.equal(spec.intent, 'settings');
+    assert.equal(await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentDocument.querySelector('#startup-fixture-settings-input').focus();
+      return document.activeElement===frame;
+    })()`), true);
     await cdp.evaluate(`window.__startupFixtureSend(${settings.runId},{type:'azhou-startup',action:'complete',runId:${settings.runId},skipped:true})`);
     const cancelled = await cdp.evaluate('window.__startupAPI.status()');
     assert.equal(cancelled.phase, 'complete');
     assert.deepEqual(cancelled.completion, { cause: 'settings-cancel', beforeReady: false });
-    return { settings: { runId: settings.runId, phase: settings.phase }, completion: cancelled.completion };
+    assert.equal(await cdp.evaluate(`document.activeElement===document.querySelector('textarea')`), true,
+      'cancel restores the host control focused before the settings iframe opened');
+
+    assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
+    const secondSettings = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();return state.phase==='settings'&&state.ready?state:false;
+    })()`), 10000, 'second settings-intent ready');
+    await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[title="Agent Skin startup"]');
+      frame.contentDocument.querySelector('#startup-fixture-settings-input').focus();
+      document.querySelector('#theme').focus();
+    })()`);
+    await cdp.evaluate(`window.__startupFixtureSend(${secondSettings.runId},{type:'azhou-startup',action:'complete',runId:${secondSettings.runId},skipped:true})`);
+    assert.equal(await cdp.evaluate('document.activeElement===document.querySelector("#theme")'), true,
+      'cleanup leaves a later host focus change alone');
+    return { settings: { runId: settings.runId, phase: settings.phase }, completion: cancelled.completion,
+      restoredHostFocus: true, preservedLaterFocus: true };
   });
   await check('completed page remains editable and wallpaper survives animation completion', async () => {
     const result = await cdp.evaluate(`(()=>{
@@ -480,6 +588,118 @@ try {
       image: 'host-image', imagePriority: 'important', wash: 'host-wash', washPriority: 'important',
       styleConnected: true, styleChanged: true, wallpaperGlobal: false });
     return result;
+  });
+
+  await navigate('/fixture.html?hold-decode=1&no-initial-wallpaper=1');
+  await check('a same-run disable invalidates a real pending wallpaper decode before DOM commit', async () => {
+    const state = await until(() => cdp.evaluate(`(()=>{
+      const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
+    })()`), 10000, 'playing with wallpaper initially disabled');
+    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
+    await until(() => cdp.evaluate('window.__decodeGateCount===1'), 10000, 'first real decode gate');
+    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:0})`);
+    const disabled = await cdp.evaluate('window.__startupAPI.status()');
+    assert.equal(disabled.wallpaper.applied, false);
+    assert.equal(disabled.wallpaper.reason, 'disabled');
+    await cdp.evaluate('window.__releaseDecodeAt(0)');
+    await until(() => cdp.evaluate('window.__decodePending===false'), 5000, 'stale decode completion');
+    await cdp.evaluate('new Promise(resolve=>setTimeout(resolve,150))');
+    const after = await cdp.evaluate(`({wallpaper:window.__startupAPI.status().wallpaper,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper'),
+      wallpaperGlobal:!!window.__azhouWallpaper})`);
+    assert.equal(after.wallpaper.applied, false);
+    assert.equal(after.wallpaper.reason, 'disabled');
+    assert.equal(after.styleCount, 0);
+    assert.equal(after.rootAttribute, null);
+    assert.equal(after.wallpaperGlobal, false);
+    return { before: { runId: state.runId, phase: state.phase }, disabled, after };
+  });
+
+  await navigate('/fixture.html?hold-decode=1&no-initial-wallpaper=1');
+  await check('out-of-order nonzero background requests keep the last requested appearance', async () => {
+    const state = await until(() => cdp.evaluate(`(()=>{
+      const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
+    })()`), 10000, 'playing with wallpaper initially disabled');
+    const sendBackground = strength => cdp.evaluate(`window.__startupFixtureSend(${state.runId},{
+      type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:${strength}})`);
+    await sendBackground(42);
+    await until(() => cdp.evaluate('window.__decodeGateCount===1'), 10000, 'first nonzero decode gate');
+    await sendBackground(22);
+    await until(() => cdp.evaluate('window.__decodeGateCount===2'), 10000, 'second nonzero decode gate');
+    await cdp.evaluate('window.__releaseDecodeAt(1)');
+    const latest = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();return state.wallpaper.applied&&state.wallpaper.washMatched?state:false;
+    })()`), 10000, 'latest nonzero background commit');
+    const committed = await cdp.evaluate(`({wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),
+      image:document.documentElement.style.getPropertyValue('--azhou-wallpaper-image'),
+      wallpaper:window.__azhouWallpaper.status()})`);
+    assert.equal(latest.wallpaper.applied, true);
+    await cdp.evaluate('window.__releaseDecodeAt(0)');
+    await until(() => cdp.evaluate('window.__decodePending===false&&window.__fixtureBlobCount===1'), 5000, 'stale request Blob cleanup');
+    const after = await cdp.evaluate(`({wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),
+      image:document.documentElement.style.getPropertyValue('--azhou-wallpaper-image'),
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      wallpaper:window.__startupAPI.status().wallpaper})`);
+    assert.equal(after.wash, committed.wash);
+    assert.equal(after.image, committed.image);
+    assert.equal(after.styleCount, 1);
+    assert.equal(after.wallpaper.applied, true);
+    assert.equal(after.wallpaper.washMatched, true);
+    return { latestStrength: 22, committed, after };
+  });
+
+  await navigate('/fixture.html?legacy=1&legacy-only=1');
+  await check('compiled native helpers recognize the exact legacy wallpaper without a controller and restore it', async () => {
+    const before = await evaluateNativeHelper('statusSource', { startup: 'none' });
+    assert.equal(before.applied, true);
+    assert.deepEqual(before.startup, { installed: false });
+    assert.deepEqual(await evaluateNativeHelper('applyGuardSource', { startup: 'none' }), { state: 'ready', applied: false });
+    await cdp.evaluate("window.__fixtureSavedValue='fixture-saved-wallpaper-strength-42'");
+    const restored = await evaluateNativeHelper('restoreSource', { startup: 'none' });
+    assert.deepEqual(restored, { restored: true, applied: false });
+    const after = await cdp.evaluate(`({savedValue:window.__fixtureSavedValue,wallpaper:!!window.__azhouWallpaper,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
+    assert.deepEqual(after, { savedValue: 'fixture-saved-wallpaper-strength-42', wallpaper: false,
+      styleCount: 0, rootAttribute: null });
+    return { before, restored, after };
+  });
+
+  await navigate('/fixture.html?legacy=1');
+  await check('candidate replaces and owns the frozen legacy 0.7.1 wallpaper after its real dispose', async () => {
+    const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
+      legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
+    assert.equal(setup.legacyError, '', JSON.stringify(setup));
+    assert.equal(setup.legacyApplied, true, JSON.stringify(setup));
+    assert.equal(setup.controller, true, JSON.stringify(setup));
+    const state = await until(() => cdp.evaluate(`(()=>{
+      const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
+    })()`), 10000, 'controller ready after frozen legacy wallpaper takeover');
+    assert.equal(await cdp.evaluate('window.__azhouWallpaper===window.__legacyWallpaperAPI'), true,
+      'legacy wallpaper remains the active owner until this controlled takeover request');
+    await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
+    await until(() => cdp.evaluate('window.__startupAPI.status().wallpaper.applied'), 10000, 'candidate wallpaper after legacy dispose');
+    const committed = await cdp.evaluate(`({state:window.__startupAPI.status(),
+      legacySame:window.__azhouWallpaper===window.__legacyWallpaperAPI,
+      owner:window.__azhouWallpaper?.owner,version:window.__azhouWallpaper?.version,
+      wallpaperStatus:window.__azhouWallpaper?.status(),
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
+    assert.equal(state.wallpaper.applied, true);
+    assert.equal(committed.state.wallpaper.applied, true);
+    assert.equal(committed.legacySame, false);
+    assert.equal(committed.owner, 'azhou.codex-startup-animation');
+    assert.equal(committed.version, '0.7.1');
+    assert.equal(committed.wallpaperStatus.applied, true);
+    assert.equal(committed.styleCount, 1);
+    assert.equal(committed.rootAttribute, 'active');
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    const restored = await cdp.evaluate(`({startup:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
+      wallpaper:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
+    assert.deepEqual(restored, { startup: false, wallpaper: false, styleCount: 0, rootAttribute: null });
+    return { committed, restored };
   });
 
   await navigate('/fixture.html?hold-body=1');
@@ -530,6 +750,23 @@ try {
       return { phase: state.phase, ready: state.ready, wallpaper: state.wallpaper };
     });
   }
+
+  await navigate('/fixture.html');
+  await check('compiled native restore removes active startup and wallpaper while preserving the saved value', async () => {
+    await until(() => cdp.evaluate(`(()=>{const state=window.__startupAPI?.status();return state?.phase==='playing'&&state.ready&&state.wallpaper.applied?state:false;})()`),
+      10000, 'active controller and wallpaper for native restore');
+    await cdp.evaluate("window.__fixtureSavedValue='fixture-saved-wallpaper-strength-42'");
+    const restored = await evaluateNativeHelper('restoreSource');
+    assert.deepEqual(restored, { restored: true, applied: false, startup: true });
+    const after = await cdp.evaluate(`({savedValue:window.__fixtureSavedValue,
+      startup:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),wallpaper:!!window.__azhouWallpaper,
+      frameCount:document.querySelectorAll('iframe[title="Agent Skin startup"]').length,
+      styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper')})`);
+    assert.deepEqual(after, { savedValue: 'fixture-saved-wallpaper-strength-42', startup: false,
+      wallpaper: false, frameCount: 0, styleCount: 0, rootAttribute: null });
+    return { restored, after };
+  });
 
   report.finishedAt = new Date().toISOString();
   report.passed = report.checks.length > 0 && report.checks.every(item => item.passed);

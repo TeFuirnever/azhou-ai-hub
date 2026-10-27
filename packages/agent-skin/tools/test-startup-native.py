@@ -28,7 +28,31 @@ def main() -> int:
     compiled = subprocess.run(command, cwd=ROOT, check=False)
     if compiled.returncode:
         return compiled.returncode
-    return subprocess.run([str(output)], cwd=ROOT, check=False).returncode
+    tested = subprocess.run([str(output)], cwd=ROOT, check=False)
+    if tested.returncode:
+        return tested.returncode
+
+    emitted = subprocess.run(
+        [str(output), "--emit-helper-expressions"], cwd=ROOT,
+        check=False, capture_output=True, text=True,
+    )
+    if emitted.returncode:
+        print(emitted.stderr, file=sys.stderr, end="")
+        return emitted.returncode
+    try:
+        import json
+
+        expressions = json.loads(emitted.stdout)
+        expected = {"statusSource", "applyGuardSource", "restoreSource"}
+        if set(expressions) != expected or not all(isinstance(expressions[key], str) and expressions[key] for key in expected):
+            raise ValueError("native helper expression output has an unexpected shape")
+    except (ValueError, TypeError) as error:
+        print(f"FAILED: native helper expression output is invalid: {error}", file=sys.stderr)
+        return 1
+    receipt = ROOT / ".build/startup-helper-expressions.json"
+    receipt.write_text(json.dumps(expressions, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"Native helper expressions emitted for isolated browser checks: {receipt}")
+    return 0
 
 
 if __name__ == "__main__":

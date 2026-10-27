@@ -7,6 +7,18 @@ import Darwin
 struct StartupNativeTests {
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.dropFirst().contains("--emit-helper-expressions") {
+            let expressions = [
+                "statusSource": WallpaperCLI.statusSource,
+                "applyGuardSource": WallpaperCLI.applyGuardSource,
+                "restoreSource": WallpaperCLI.restoreSource,
+            ]
+            let bytes = try JSONSerialization.data(withJSONObject: expressions, options: [.sortedKeys])
+            guard let text = String(data: bytes, encoding: .utf8) else { fatalError("helper expressions are not UTF-8") }
+            print(text)
+            return
+        }
+
         var checks = 0
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
@@ -50,6 +62,13 @@ struct StartupNativeTests {
                && WallpaperCLI.restoreSource.contains("azhou.codex-startup-animation")
                && WallpaperCLI.restoreSource.contains("0.7.1"),
                "explicit restore supports the controller and exact known legacy wallpaper version")
+        expect(WallpaperCLI.exitCode(for: "applied") == 0
+               && WallpaperCLI.exitCode(for: "restored") == 0
+               && WallpaperCLI.exitCode(for: "ready") == 0
+               && WallpaperCLI.exitCode(for: "not-applied") == 2,
+               "helper status keeps its established success and not-applied exit codes")
+        expect(WallpaperCLI.restoreMessage == "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。",
+               "restore receipt scopes page cleanup and confirms saved-value and Codex preservation")
 
         let lockPID = Int32.max
         let lockPath = WallpaperOperationLock.path(uid: Darwin.getuid(), pid: lockPID)

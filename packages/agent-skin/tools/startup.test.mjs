@@ -219,6 +219,8 @@ test('dispose is idempotent and removes only its owned frame and listener', () =
 
 test('play and settings frames share one controller and each new run gets fresh identity', () => {
   const controlled = controlledHost();
+  const hostFocus = { isConnected: true, focus() { controlled.host.document.activeElement = this; } };
+  controlled.host.document.activeElement = hostFocus;
   const runs = [];
   const payload = function (_window, _document, _location, _performance, _indexedDB,
     _Image, _Path2D, _URL, raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
@@ -251,6 +253,7 @@ test('play and settings frames share one controller and each new run gets fresh 
   assert.equal(controlled.frames.length, 1, 'playing opens settings in the owned iframe');
   assert.equal(controlled.timers[0].cleared, true, 'the settings phase has no loading watchdog');
 
+  controlled.host.document.activeElement = firstFrame;
   const save = { type: 'azhou-startup', action: 'settings-close', runId: runs[0].runId };
   controlled.host.send(save, firstFrame.contentWindow);
   assert.equal(controlled.frames.length, 2, 'save creates one fresh play frame');
@@ -263,6 +266,11 @@ test('play and settings frames share one controller and each new run gets fresh 
 
   controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: true }, firstFrame.contentWindow);
   assert.equal(api.status().phase, 'playing', 'a late old frame cannot finish the current run');
+  controlled.host.document.activeElement = controlled.frames[1];
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[1].runId, skipped: false },
+    controlled.frames[1].contentWindow);
+  assert.equal(controlled.host.document.activeElement, hostFocus,
+    'replay does not replace the saved host focus with the old owned iframe');
 });
 
 test('complete opens a settings-intent frame and cancellation preserves the saved state', () => {
@@ -361,6 +369,73 @@ test('a late wallpaper callback cannot update a disposed run', async () => {
   assert.equal(controlled.listenerCount(), 0);
   assert.equal(controlled.keyListenerCount(), 0);
   assert.equal(controlled.timers[0].cleared, true);
+});
+
+test('a newer disabled background invalidates an earlier decode within the same run', async () => {
+  const controlled = controlledHost();
+  let isCurrent;
+  let release;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    raf(() => SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId }));
+    return { dispose() {} };
+  };
+  payload.applyWallpaper = (_background, current) => new Promise(resolve => { isCurrent = current; release = resolve; });
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  const frame = controlled.frames[0];
+  assert.equal(isCurrent(), true);
+  frame.contentWindow.flushAnimationFrame();
+  controlled.host.send({ type: 'azhou-startup', action: 'background', runId: api.status().runId,
+    image: 'data:image/png;base64,aGVsbG8=', strength: 0 }, frame.contentWindow);
+  assert.equal(api.status().wallpaper.reason, 'disabled');
+  assert.equal(isCurrent(), false, 'strength zero supersedes pending wallpaper work');
+  release({ applied: true });
+  await Promise.resolve();
+  assert.equal(api.status().wallpaper.reason, 'disabled');
+});
+
+test('a fresh settings frame restores its captured host focus without stealing a later focus change', () => {
+  const controlled = controlledHost();
+  const hostInput = { isConnected: true, focusCount: 0,
+    focus() { this.focusCount += 1; controlled.host.document.activeElement = this; } };
+  const laterButton = { isConnected: true, focusCount: 0,
+    focus() { this.focusCount += 1; controlled.host.document.activeElement = this; } };
+  controlled.host.document.activeElement = { isConnected: true, focus() {} };
+  const runs = [];
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runs.push(frameSpec);
+    raf(() => SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId }));
+    return { dispose() {} };
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  controlled.frames[0].contentWindow.flushAnimationFrame();
+  controlled.host.document.activeElement = hostInput;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false },
+    controlled.frames[0].contentWindow);
+
+  assert.equal(api.openSettings(), true);
+  controlled.frames[1].contentWindow.flushAnimationFrame();
+  controlled.host.document.activeElement = controlled.frames[1];
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[1].runId, skipped: true },
+    controlled.frames[1].contentWindow);
+  assert.equal(controlled.host.document.activeElement, hostInput,
+    'cancel restores the host control focused immediately before the settings iframe opened');
+  assert.equal(hostInput.focusCount, 1);
+
+  assert.equal(api.openSettings(), true);
+  controlled.frames[2].contentWindow.flushAnimationFrame();
+  controlled.host.document.activeElement = controlled.frames[2];
+  controlled.host.document.activeElement = laterButton;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[2].runId, skipped: true },
+    controlled.frames[2].contentWindow);
+  assert.equal(controlled.host.document.activeElement, laterButton,
+    'cleanup does not replace a later host focus change');
+  assert.equal(laterButton.focusCount, 0);
 });
 
 test('only the exact supported wallpaper owner is composed and disposed', () => {
