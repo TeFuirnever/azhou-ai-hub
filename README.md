@@ -23,6 +23,8 @@ https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 > 🦊 Hero generated under the `github_readme_image_16_9` profile contract (1280×720, lossless PNG): the Azhou fox (canonical reference) stamping an approval seal, rendered by the local Azhou imagegen pipeline (Qwen-Image-2.1 edit, seed 7 of the 2026-10-25 batch) with the claim lines overlaid deterministically. Reviewed at 120/240/360 px; maintainer (IP owner) visual approval recorded 2026-10-25.
 
+Product direction: [Myself first, community-ready](docs/principles.md), with human-facing Skills, harness-respecting UI personalization and quality-constrained Orchestrator Kit efficiency. See the [roadmap](docs/roadmap.md) for planned work; principles do not extend support or change existing licenses.
+
 Most skill repositories stop at prompts. Azhou AI Hub treats each skill as a product: a precise trigger, a portable runtime package, reproducible setup, deterministic gates, honest evaluation, provenance, and a human-controlled evolution path.
 
 No universal framework. No model-specific copy of the same skill. No benchmark answer hidden inside the runtime package.

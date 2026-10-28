@@ -15,6 +15,8 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 
 ## Repository shape
 
+- Follow [product principles](docs/principles.md) and the [roadmap](docs/roadmap.md) for direction; they do not override current runtime contracts, support evidence or legal grants.
+
 - [`docs/skill-standard.md`](docs/skill-standard.md) is the project authority for every skill's package, setup, brand lifecycle, evidence, evaluation, evolution, and closeout.
 - [`docs/integrations.md`](docs/integrations.md) governs the three optional projects under `packages/`. Maintain their canonical package sources, preserve original-import provenance, and fingerprint current `runtime_paths` inputs for each plan. Keep native installation ownership and installation/discovery/invocation evidence distinct. They do not become canonical Skills or bypass the orchestrator composition rule.
 - Keep every skill independently installable under `skills/<canonical-name>/`; keep development-only evaluation material under repository-level `benchmarks/`.
