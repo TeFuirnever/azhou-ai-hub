@@ -230,7 +230,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             self.assertEqual(actual_identity, artifacts.IDENTITY)
             self.assertEqual(info["CFBundleIdentifier"], "local.azhou.codex-startup")
             self.assertEqual(info["CFBundleExecutable"], "AzhouCodexStartup")
-            self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]), ("Azhou Next Lab", "Azhou Next Lab"))
+            self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]), ("阿舟新实验室", "阿舟新实验室"))
             artifacts.verify_localized_names(artifacts.PAYLOAD, info)
             defaults = (artifacts.PAYLOAD / "Contents/Resources/web/assets/defaults/contours.js").read_text(
                 encoding="utf-8")
@@ -246,7 +246,16 @@ class BuildOwnedThemeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="agent-skin-legacy-publish-test-") as temporary:
             root = (Path(temporary) / "source").resolve()
             clone_source_tree(root)
+            metadata_path = root / "hub-package.json"
+            current_metadata = metadata_path.read_bytes()
+            old_metadata = json.loads(current_metadata)
+            old_metadata['runtime_build'] = '10'
+            metadata_path.write_text(json.dumps(old_metadata), encoding='utf-8')
             legacy, artifacts = build_staged_product(root, "legacy")
+            info_path = legacy / 'Contents/Info.plist'
+            info = plistlib.loads(info_path.read_bytes())
+            info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab'
+            info_path.write_bytes(plistlib.dumps(info))
             resources = legacy / "Contents/Resources"
             defaults_path = resources / "web/assets/defaults/contours.js"
             defaults_prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
@@ -286,7 +295,8 @@ class BuildOwnedThemeTests(unittest.TestCase):
 
             artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
             os.replace(legacy, artifacts.PAYLOAD)
-            current, _ = build_staged_product(root, "legacy-upgrade")
+            metadata_path.write_bytes(current_metadata)
+            current, artifacts = build_staged_product(root, "legacy-upgrade")
             publish_with_test_native_tools(artifacts, current)
 
             installed_marker = artifacts.read_marker(artifacts.PAYLOAD, required=True)
@@ -295,6 +305,27 @@ class BuildOwnedThemeTests(unittest.TestCase):
                 (artifacts.PAYLOAD / "Contents/Resources/web/assets/defaults/contours.js").read_text(
                     encoding="utf-8")[len(defaults_prefix):-len(defaults_suffix)])
             self.assertIn("themeConfig", installed_assets)
+
+    def test_publish_upgrades_theme_build10_with_previous_english_fallback_name(self):
+        with tempfile.TemporaryDirectory(prefix='agent-skin-theme-build10-upgrade-') as temporary:
+            root = (Path(temporary) / 'source').resolve()
+            clone_source_tree(root)
+            metadata_path = root / 'hub-package.json'
+            current_metadata = metadata_path.read_bytes()
+            old_metadata = json.loads(current_metadata)
+            old_metadata['runtime_build'] = '10'
+            metadata_path.write_text(json.dumps(old_metadata), encoding='utf-8')
+            previous, artifacts = build_staged_product(root, 'previous-theme')
+            info_path = previous / 'Contents/Info.plist'
+            info = plistlib.loads(info_path.read_bytes())
+            info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab'
+            info_path.write_bytes(plistlib.dumps(info))
+            artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(previous, artifacts.PAYLOAD)
+            metadata_path.write_bytes(current_metadata)
+            current, artifacts = build_staged_product(root, 'current-theme')
+            publish_with_test_native_tools(artifacts, current)
+            self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)['build'], APP_BUILD)
 
     def test_same_version_old_build_is_not_skipped_by_strict_product_verification(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-old-build-check-test-") as temporary:
@@ -412,7 +443,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             self.assertEqual(parsed_info["CFBundleIdentifier"], "local.azhou.codex-startup")
             self.assertEqual(parsed_info["CFBundleExecutable"], "AzhouCodexStartup")
             self.assertEqual((parsed_info["CFBundleName"], parsed_info["CFBundleDisplayName"]),
-                             ("Azhou Demo Lab", "Azhou Demo Lab"))
+                             ("阿舟演示实验室", "阿舟演示实验室"))
             self.assertEqual(info["CFBundleIdentifier"], artifacts.IDENTITY[0])
             artifacts.verify_localized_names(bundle, parsed_info)
 
@@ -683,6 +714,30 @@ class StartupBuildTests(unittest.TestCase):
         (resources / "zh-Hans.lproj/InfoPlist.strings").write_text("invalid\n", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "localized display-name"):
             self.verifier.verify_localized_names(self.bundle, info)
+
+    def test_finder_display_name_uses_the_generated_localized_resources(self):
+        info = self.verifier.write_bundle_info(self.bundle)
+        theme = self.verifier.load_theme_config(self.root)
+        app = Path(self.temporary.name) / 'finder-probe' / theme['identity']['installationName']
+        resources = app / 'Contents/Resources'
+        resources.mkdir(parents=True)
+        shutil.copy2(self.bundle / 'Contents/Info.plist', app / 'Contents/Info.plist')
+        for language in ('en', 'zh-Hans'):
+            shutil.copytree(self.bundle / f'Contents/Resources/{language}.lproj', resources / f'{language}.lproj')
+        probe = '''import Foundation
+let path = CommandLine.arguments[1]
+// Finder follows the system language, not a helper process AppleLanguages override.
+let systemLanguages = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String] ?? Locale.preferredLanguages
+let expected = systemLanguages.first?.lowercased().hasPrefix("zh") == true ? "阿舟 AI 实验室" : "Azhou AI Lab"
+let actual = FileManager.default.displayName(atPath: path)
+guard actual == expected else { fputs("Finder display mismatch: \\(actual) != \\(expected)\\n", stderr); exit(1) }
+for (language, name) in [("en", "Azhou AI Lab"), ("zh-Hans", "阿舟 AI 实验室")] {
+ let localized = Bundle(path: path + "/Contents/Resources/" + language + ".lproj")!
+ guard localized.localizedString(forKey: "CFBundleDisplayName", value: nil, table: "InfoPlist") == name else { exit(2) }
+}
+'''
+        result = subprocess.run(['xcrun', 'swift', '-e', probe, str(app)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_verifier_rejects_a_builder_source_omitted_from_input_manifest(self):
         original = self.verifier.INPUT_FILES

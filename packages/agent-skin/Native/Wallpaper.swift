@@ -6,11 +6,46 @@ import Darwin
 
 // A bounded, runtime-only wallpaper client. It never opens or terminates Codex.
 // The launcher invokes this mode in the same executable, without a second .app.
+enum WallpaperMessages {
+    private static let systemLocale = WallpaperMessageLocale(preferredLanguages: Locale.preferredLanguages)
+
+    static func localized(chinese: String, english: String) -> String {
+        systemLocale.localized(chinese: chinese, english: english)
+    }
+
+    static func localized(chinese: String, english: String, preferredLanguages: [String]) -> String {
+        WallpaperMessageLocale(preferredLanguages: preferredLanguages).localized(chinese: chinese, english: english)
+    }
+
+    static func prepareForRun() { _ = systemLocale }
+}
+
+private struct WallpaperMessageLocale {
+    private let isChinese: Bool
+
+    init(preferredLanguages: [String]) {
+        isChinese = preferredLanguages.lazy.compactMap { language -> Bool? in
+            let normalized = language.replacingOccurrences(of: "_", with: "-").lowercased()
+            if normalized == "zh" || normalized.hasPrefix("zh-") { return true }
+            if normalized == "en" || normalized.hasPrefix("en-") { return false }
+            return nil
+        }.first ?? false
+    }
+
+    func localized(chinese: String, english: String) -> String { isChinese ? chinese : english }
+}
+
 enum WallpaperAction: String, Sendable { case apply, doctor, status, restore }
 
 struct WallpaperFailure: LocalizedError {
     let state: String
     let message: String
+
+    init(state: String, chinese: String, english: String) {
+        self.state = state
+        self.message = WallpaperMessages.localized(chinese: chinese, english: english)
+    }
+
     var errorDescription: String? { message }
 }
 
@@ -20,9 +55,9 @@ enum WallpaperValidation {
         for row in records.split(separator: "\n") {
             if row.first == "p" {
                 owner = Int32(row.dropFirst())
-                guard owner == pid else { throw WallpaperFailure(state: "target-mismatch", message: "监听端口不属于已核实的 Codex 进程。") }
+                guard owner == pid else { throw WallpaperFailure(state: "target-mismatch", chinese: "监听端口不属于已核实的 Codex 进程。", english: "The listening port does not belong to the verified Codex process.") }
             } else if row.first == "n" {
-                guard owner == pid else { throw WallpaperFailure(state: "target-mismatch", message: "监听记录缺少已核实的进程身份。") }
+                guard owner == pid else { throw WallpaperFailure(state: "target-mismatch", chinese: "监听记录缺少已核实的进程身份。", english: "The listener record has no verified process identity.") }
                 let address = String(row.dropFirst())
                 guard let colon = address.lastIndex(of: ":"), let port = Int(address[address.index(after: colon)...]),
                       (1...65535).contains(port) else { continue }
@@ -44,7 +79,7 @@ enum WallpaperValidation {
         guard let parts = URLComponents(string: raw), parts.scheme == "ws", parts.host == "127.0.0.1",
               parts.port == port, parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
               parts.path.range(of: "^/devtools/page/[A-Za-z0-9._-]+$", options: .regularExpression) != nil,
-              let url = parts.url else { throw WallpaperFailure(state: "endpoint-refused", message: "拒绝非本机、非目标端口或非页面调试地址。") }
+              let url = parts.url else { throw WallpaperFailure(state: "endpoint-refused", chinese: "拒绝非本机、非目标端口或非页面调试地址。", english: "Refused a non-loopback, wrong-port, or non-page debugging address.") }
         return url
     }
 
@@ -132,7 +167,10 @@ enum WallpaperValidation {
             "verifiedPageCount": priorStates.filter { verifiedState($0, version: version) }.count,
             "uninspectedPageCount": max(0, totalPages - priorStates.count - 1),
             "pages": pages, "verificationIssues": issues.sorted(),
-            "message": "壁纸应用未完成，已停止后续页面；已处理页面与失败原因见 pages。",
+            "message": WallpaperMessages.localized(
+                chinese: "壁纸应用未完成，已停止后续页面；已处理页面与失败原因见 pages。",
+                english: "Wallpaper application did not finish. Remaining pages were skipped; see pages for completed pages and the failure reason."
+            ),
         ]
     }
 
@@ -186,11 +224,11 @@ private struct WallpaperTarget: Sendable {
               let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated,
               app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == realBundle,
               app.executableURL.map(Self.real) == binary else {
-            throw WallpaperFailure(state: "target-mismatch", message: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。")
+            throw WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
         }
         if let launchTime {
             guard let date = app.launchDate, abs(date.timeIntervalSince1970 - launchTime) < 0.01 else {
-                throw WallpaperFailure(state: "target-changed", message: "Codex 进程已变化；未连接壁纸。")
+                throw WallpaperFailure(state: "target-changed", chinese: "Codex 进程已变化；未连接壁纸。", english: "The Codex process changed; wallpaper was not connected.")
             }
         }
         self.pid = pid; self.bundle = realBundle; self.executable = binary; self.launchDate = app.launchDate
@@ -207,14 +245,14 @@ private struct WallpaperTarget: Sendable {
               app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == bundle,
               app.executableURL.map(Self.real) == executable,
               launchDate == nil || app.launchDate == launchDate else {
-            throw WallpaperFailure(state: "target-changed", message: "已核实的 Codex 进程已退出或发生变化。")
+            throw WallpaperFailure(state: "target-changed", chinese: "已核实的 Codex 进程已退出或发生变化。", english: "The verified Codex process exited or changed.")
         }
         let process = try WallpaperCommand.run("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
                                               timeout: try commandTimeout(2, deadline: deadline))
         let fields = process.trimmingCharacters(in: .whitespacesAndNewlines).split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
         guard fields.count == 2, UInt32(fields[0]) == getuid(),
               Self.real(URL(fileURLWithPath: String(fields[1]))) == executable else {
-            throw WallpaperFailure(state: "target-mismatch", message: "目标进程用户或执行路径与已核实的 Codex 不符。")
+            throw WallpaperFailure(state: "target-mismatch", chinese: "目标进程用户或执行路径与已核实的 Codex 不符。", english: "The target process user or executable path does not match the verified Codex.")
         }
     }
     func validateSignature(deadline: TimeInterval? = nil) throws {
@@ -236,7 +274,7 @@ private enum StartupBundleSignature {
         let resolved = bundle.resolvingSymlinksInPath().standardizedFileURL
         guard resolved.pathExtension.lowercased() == "app",
               let package = Bundle(url: resolved), package.bundleIdentifier == "com.openai.codex" else {
-            throw WallpaperFailure(state: "signature-refused", message: "Codex 应用路径或 Bundle ID 无效。")
+            throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用路径或 Bundle ID 无效。", english: "The Codex app path or bundle ID is invalid.")
         }
         let timeout: TimeInterval
         if let deadline {
@@ -250,7 +288,7 @@ private enum StartupBundleSignature {
         } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
             throw error
         } catch {
-            throw WallpaperFailure(state: "signature-refused", message: "Codex 应用签名未通过 Apple 锚点、Bundle ID 和 Team ID 核验。")
+            throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用签名未通过 Apple 锚点、Bundle ID 和 Team ID 核验。", english: "The Codex app signature did not pass Apple anchor, bundle ID, and team ID verification.")
         }
     }
 }
@@ -407,11 +445,11 @@ final class WallpaperOperationLock: StartupOperationLock {
     static func acquire(pid: Int32) throws -> WallpaperOperationLock {
         let descriptor = Darwin.open(path(uid: getuid(), pid: pid), O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else {
-            throw WallpaperFailure(state: "busy", message: "该 Codex 进程已有壁纸或启动接入操作。")
+            throw WallpaperFailure(state: "busy", chinese: "该 Codex 进程已有壁纸或启动接入操作。", english: "A wallpaper or startup attachment operation is already active for this Codex process.")
         }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
             close(descriptor)
-            throw WallpaperFailure(state: "busy", message: "该 Codex 进程已有壁纸或启动接入操作。")
+            throw WallpaperFailure(state: "busy", chinese: "该 Codex 进程已有壁纸或启动接入操作。", english: "A wallpaper or startup attachment operation is already active for this Codex process.")
         }
         return WallpaperOperationLock(descriptor: descriptor)
     }
@@ -475,7 +513,7 @@ private enum WallpaperCommand {
     }
     static func run(_ file: String, _ arguments: [String], timeout: TimeInterval = 2, emptyExit: Int32? = nil) throws -> String {
         state.lock.lock(); let cancelled = state.cancelled; state.lock.unlock()
-        if cancelled { throw WallpaperFailure(state: "cancelled", message: "壁纸任务已取消。") }
+        if cancelled { throw WallpaperFailure(state: "cancelled", chinese: "壁纸任务已取消。", english: "The wallpaper task was cancelled.") }
         let process = Process(), pipe = Pipe(), stopped = DispatchSemaphore(value: 0)
         process.executableURL = URL(fileURLWithPath: file); process.arguments = arguments
         process.standardOutput = pipe; process.standardError = pipe
@@ -484,19 +522,19 @@ private enum WallpaperCommand {
         state.lock.lock()
         if state.cancelled {
             state.lock.unlock(); if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            throw WallpaperFailure(state: "cancelled", message: "壁纸任务已取消。")
+            throw WallpaperFailure(state: "cancelled", chinese: "壁纸任务已取消。", english: "The wallpaper task was cancelled.")
         }
         state.active.append(process); state.lock.unlock()
         defer { state.lock.lock(); state.active.removeAll { $0 === process }; state.lock.unlock() }
         if stopped.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
             if stopped.wait(timeout: .now() + 0.2) == .timedOut { kill(process.processIdentifier, SIGKILL) }
-            throw WallpaperFailure(state: "inspection-timeout", message: "目标进程核查超时；未继续连接壁纸。")
+            throw WallpaperFailure(state: "inspection-timeout", chinese: "目标进程核查超时；未继续连接壁纸。", english: "The target process inspection timed out; wallpaper was not connected.")
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         guard process.terminationStatus == 0 else {
             if process.terminationStatus == emptyExit { return "" }
-            throw WallpaperFailure(state: "inspection-failed", message: "目标进程或签名核查未通过。")
+            throw WallpaperFailure(state: "inspection-failed", chinese: "目标进程或签名核查未通过。", english: "The target process or signature did not pass verification.")
         }
         return String(data: data, encoding: .utf8) ?? ""
     }
@@ -604,11 +642,11 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         let response: URLResponse
         do { (data, response) = try await session.data(for: request) }
         catch let error as CancellationError { throw error }
-        catch { throw WallpaperFailure(state: "endpoint-unavailable", message: "本机 Codex 调试端口暂时没有响应。") }
+        catch { throw WallpaperFailure(state: "endpoint-unavailable", chinese: "本机 Codex 调试端口暂时没有响应。", english: "The local Codex debugging port did not respond.") }
         guard let response = response as? HTTPURLResponse, response.statusCode == 200, response.url == url,
               data.count < 2 * 1024 * 1024,
               let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw WallpaperFailure(state: "endpoint-unavailable", message: "该本机端口没有返回有效的页面调试列表。")
+            throw WallpaperFailure(state: "endpoint-unavailable", chinese: "该本机端口没有返回有效的页面调试列表。", english: "The local port did not return a valid page debugging list.")
         }
         return entries.filter(WallpaperValidation.mainPage)
     }
@@ -693,12 +731,16 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
                                   "image-decode-failed", "styles-not-effective", "namespace-conflict", "style-id-conflict"]
                 let category = description.contains("AZHOU_WALLPAPER:") ? categories.first(where: { description.contains($0) }) : nil
                 let pending = category == "unsupported-shell-no-surfaces" || category == "page-changed-during-decode"
-                throw WallpaperFailure(state: pending ? "renderer-not-ready" : "renderer-rejected",
-                                       message: pending ? "Codex 主界面尚未准备好，正在有限等待。" : "壁纸脚本未通过页面验证：\(category ?? "renderer-exception")。")
+                let failure = category ?? "renderer-exception"
+                throw WallpaperFailure(
+                    state: pending ? "renderer-not-ready" : "renderer-rejected",
+                    chinese: pending ? "Codex 主界面尚未准备好，正在有限等待。" : "壁纸脚本未通过页面验证：\(failure)。",
+                    english: pending ? "The Codex main window is not ready; waiting briefly." : "The wallpaper script failed page verification: \(failure)."
+                )
             }
             guard answer["error"] == nil, let result = answer["result"] as? [String: Any],
                   let value = (result["result"] as? [String: Any])?["value"] as? [String: Any] else {
-                throw WallpaperFailure(state: "renderer-rejected", message: "Codex 页面没有确认壁纸操作；未标记应用成功。")
+                throw WallpaperFailure(state: "renderer-rejected", chinese: "Codex 页面没有确认壁纸操作；未标记应用成功。", english: "The Codex page did not confirm the wallpaper operation; it was not marked as applied.")
             }
             return value
         }
@@ -1016,24 +1058,24 @@ private struct WallpaperRequest: Sendable {
         }
         let shortcut = arguments.contains("--wallpaper-status")
         guard let action = WallpaperAction(rawValue: shortcut ? "status" : option("--action") ?? "apply") else {
-            throw WallpaperFailure(state: "invalid-request", message: "壁纸操作必须为 apply、doctor、status 或 restore。")
+            throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作必须为 apply、doctor、status 或 restore。", english: "The wallpaper action must be apply, doctor, status, or restore.")
         }
         var suppliedPID = option("--target-pid"), suppliedBundle = option("--target-bundle")
         var launchTime = option("--target-start-time").flatMap(Double.init)
         if shortcut, suppliedPID == nil, suppliedBundle == nil {
             let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex").filter { !$0.isTerminated }
             guard candidates.count == 1, let app = candidates.first, let bundle = app.bundleURL else {
-                throw WallpaperFailure(state: "target-unavailable", message: "未找到唯一的正在运行的 Codex；状态检查不会启动应用。")
+                throw WallpaperFailure(state: "target-unavailable", chinese: "未找到唯一的正在运行的 Codex；状态检查不会启动应用。", english: "Could not identify exactly one running Codex app; the status check will not launch it.")
             }
             suppliedPID = String(app.processIdentifier); suppliedBundle = bundle.path; launchTime = app.launchDate?.timeIntervalSince1970
         }
         guard let textPID = suppliedPID, let pid = Int32(textPID), pid > 0,
               let path = suppliedBundle, path.hasPrefix("/") else {
-            throw WallpaperFailure(state: "invalid-request", message: "壁纸操作需要明确的目标 PID 和绝对应用路径。")
+            throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作需要明确的目标 PID 和绝对应用路径。", english: "A wallpaper action requires an explicit target PID and absolute app path.")
         }
         if let rawPort = option("--port") {
             guard option("--target-pid") != nil, let value = Int(rawPort), (1...65535).contains(value) else {
-                throw WallpaperFailure(state: "invalid-request", message: "指定端口时必须同时指定并核实目标 PID；端口范围为 1–65535。")
+                throw WallpaperFailure(state: "invalid-request", chinese: "指定端口时必须同时指定并核实目标 PID；端口范围为 1–65535。", english: "When specifying a port, also specify and verify the target PID; the port range is 1–65535.")
             }
             port = value
         } else { port = nil }
@@ -1047,7 +1089,12 @@ enum WallpaperCLI {
     static func exitCode(for state: String) -> Int32 {
         ["applied", "restored", "ready"].contains(state) ? 0 : 2
     }
-    static let restoreMessage = "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。"
+    static var restoreMessage: String {
+        WallpaperMessages.localized(
+            chinese: "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。",
+            english: "Removed startup decoration and settings entry from this page. Saved values were preserved. Codex and its debug port were left unchanged."
+        )
+    }
     static let statusSource = """
     (() => { const u = new URL(location.href);
       if (window.top !== window || u.protocol !== 'app:' || u.hostname !== '-' || u.pathname !== '/index.html'
@@ -1129,6 +1176,7 @@ enum WallpaperCLI {
         func result() -> [String: Any] { lock.lock(); defer { lock.unlock() }; return value ?? [:] }
     }
     static func run(_ arguments: [String]) -> Int32 {
+        WallpaperMessages.prepareForRun()
         let began = ProcessInfo.processInfo.systemUptime
         var action = arguments.contains("--wallpaper-status") ? "status" : "apply"
         if !arguments.contains("--wallpaper-status"), let index = arguments.firstIndex(of: "--action"), index + 1 < arguments.count { action = arguments[index + 1] }
@@ -1139,11 +1187,11 @@ enum WallpaperCLI {
         // User cancellation stops only this helper and its own inspection tools.
         signal(SIGTERM, SIG_IGN)
         let cancellation = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
-        cancellation.setEventHandler { completion.finish(["state": "cancelled", "applied": false, "message": "本次壁纸任务已取消；Codex 保持运行。"] ) }
+        cancellation.setEventHandler { completion.finish(["state": "cancelled", "applied": false, "message": WallpaperMessages.localized(chinese: "本次壁纸任务已取消；Codex 保持运行。", english: "This wallpaper task was cancelled; Codex remains running.")]) }
         cancellation.resume()
         // The process itself returns after this deadline, even if an OS request
         // stops responding. No timer or detached worker survives process exit.
-        let timeout = DispatchWorkItem { completion.finish(["state": "timeout", "applied": false, "message": "壁纸连接超过 30 秒，已停止；Codex 保持运行。"] ) }
+        let timeout = DispatchWorkItem { completion.finish(["state": "timeout", "applied": false, "message": WallpaperMessages.localized(chinese: "壁纸连接超过 30 秒，已停止；Codex 保持运行。", english: "The wallpaper connection exceeded 30 seconds and stopped; Codex remains running.")]) }
         DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
         let task = Task.detached {
             do {
@@ -1151,12 +1199,12 @@ enum WallpaperCLI {
                 var result: [String: Any]
                 do { result = try await perform(request, began: began) }
                 catch let error as WallpaperFailure { result = ["state": error.state, "applied": false, "message": error.message] }
-                catch { result = ["state": "connection-failed", "applied": false, "message": "壁纸连接未完成；Codex 保持运行。"] }
+                catch { result = ["state": "connection-failed", "applied": false, "message": WallpaperMessages.localized(chinese: "壁纸连接未完成；Codex 保持运行。", english: "The wallpaper connection did not finish; Codex remains running.")] }
                 result["targetPID"] = Int(request.target.pid); result["targetPath"] = request.target.bundle.path
                 result["requestID"] = request.requestID; result["action"] = request.action.rawValue
                 completion.finish(result)
             } catch let error as WallpaperFailure { completion.finish(["state": error.state, "applied": false, "message": error.message]) }
-            catch { completion.finish(["state": "invalid-request", "applied": false, "message": "无法核实壁纸操作目标。"] ) }
+            catch { completion.finish(["state": "invalid-request", "applied": false, "message": WallpaperMessages.localized(chinese: "无法核实壁纸操作目标。", english: "Could not verify the wallpaper operation target.")]) }
         }
         completion.signal.wait(); timeout.cancel(); task.cancel(); cancellation.cancel(); WallpaperCommand.cancelAll()
         base.merge(completion.result()) { _, value in value }
@@ -1180,7 +1228,7 @@ enum WallpaperCLI {
         defer { operationLock?.release() }
         if !request.cold, request.port == nil, try target.ports().isEmpty {
             return ["state": "needs-restart", "applied": false,
-                    "message": "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。"]
+                    "message": WallpaperMessages.localized(chinese: "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。", english: "The current Codex session has no wallpaper connection. Quit Codex completely, then launch it from the Azhou entry; this operation did not restart Codex or change the work session.")]
         }
         try target.validateSignature()
         let expectedVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
@@ -1190,7 +1238,7 @@ enum WallpaperCLI {
                   (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,
                   let bytes = try? Data(contentsOf: url), bytes.count < 24 * 1024 * 1024,
                   let text = String(data: bytes, encoding: .utf8), !text.isEmpty else {
-                throw WallpaperFailure(state: "resource-missing", message: "缺少已打包的阿舟壁纸脚本，请重新构建并安装。")
+                throw WallpaperFailure(state: "resource-missing", chinese: "缺少已打包的阿舟壁纸脚本，请重新构建并安装。", english: "The bundled Azhou wallpaper script is missing; rebuild and install the app.")
             }
             source = text
         }
@@ -1199,40 +1247,40 @@ enum WallpaperCLI {
             try Task.checkCancellation(); try target.validate()
             let owned = try target.ports()
             if let port = request.port, !owned.contains(port) {
-                throw WallpaperFailure(state: "endpoint-refused", message: "指定端口不是该 Codex 主进程独占的 IPv4 回环监听端口。")
+                throw WallpaperFailure(state: "endpoint-refused", chinese: "指定端口不是该 Codex 主进程独占的 IPv4 回环监听端口。", english: "The specified port is not an IPv4 loopback listener owned exclusively by this Codex main process.")
             }
             let ports = request.port.map { [$0] } ?? owned
             if ports.isEmpty && !request.cold {
                 return ["state": "needs-restart", "applied": false,
-                        "message": "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。"]
+                        "message": WallpaperMessages.localized(chinese: "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。", english: "The current Codex session has no wallpaper connection. Quit Codex completely, then launch it from the Azhou entry; this operation did not restart Codex or change the work session.")]
             }
             for port in ports.prefix(12) {
                 do {
                     let pages = try await transport.pages(port: port); sawEndpoint = true
                     if pages.isEmpty { lastState = "main-page-unavailable"; continue }
-                    guard pages.count <= 12 else { throw WallpaperFailure(state: "page-count-refused", message: "主页面数量超出本次有限壁纸操作范围。") }
+                    guard pages.count <= 12 else { throw WallpaperFailure(state: "page-count-refused", chinese: "主页面数量超出本次有限壁纸操作范围。", english: "The number of main pages exceeds this bounded wallpaper operation's limit.") }
                     if request.action == .doctor {
                         return ["state": "ready", "applied": false, "canApply": true, "port": port, "pageCount": pages.count,
-                                "message": "已找到已核实 Codex 的本机主页面；此诊断没有注入壁纸。"]
+                                "message": WallpaperMessages.localized(chinese: "已找到已核实 Codex 的本机主页面；此诊断没有注入壁纸。", english: "Found the verified Codex main page on this device; this diagnostic did not inject wallpaper.")]
                     }
                     var states: [[String: Any]] = []
                     for page in pages {
                         try Task.checkCancellation(); try target.validate()
                         guard try target.ports().contains(port), let raw = page["webSocketDebuggerUrl"] as? String else {
-                            throw WallpaperFailure(state: "endpoint-changed", message: "目标监听或页面地址已变化，停止本次壁纸操作。")
+                            throw WallpaperFailure(state: "endpoint-changed", chinese: "目标监听或页面地址已变化，停止本次壁纸操作。", english: "The target listener or page address changed; this wallpaper operation has stopped.")
                         }
                         let socket = transport.socket(try WallpaperValidation.pageSocket(raw, port: port))
                         defer { socket.cancel(with: .normalClosure, reason: nil) }
                         if request.action == .apply {
                             let ownership = try await transport.evaluate(Self.applyGuardSource, on: socket)
                             if ownership["state"] as? String == "startup-active" {
-                                throw WallpaperFailure(state: "startup-active", message: "当前页面已有 Agent Skin 启动控制器；独立壁纸应用已拒绝。")
+                                throw WallpaperFailure(state: "startup-active", chinese: "当前页面已有 Agent Skin 启动控制器；独立壁纸应用已拒绝。", english: "This page already has the Agent Skin startup controller; standalone wallpaper application was refused.")
                             }
                             if ownership["state"] as? String == "owner-conflict" {
-                                throw WallpaperFailure(state: "owner-conflict", message: "当前页面的壁纸或启动所有者未知；本次未覆盖。")
+                                throw WallpaperFailure(state: "owner-conflict", chinese: "当前页面的壁纸或启动所有者未知；本次未覆盖。", english: "The wallpaper or startup owner on this page is unknown; nothing was overwritten.")
                             }
                             guard ownership["state"] as? String == "ready" else {
-                                throw WallpaperFailure(state: "owner-conflict", message: "当前页面没有返回可核验的壁纸所有权状态；本次未覆盖。")
+                                throw WallpaperFailure(state: "owner-conflict", chinese: "当前页面没有返回可核验的壁纸所有权状态；本次未覆盖。", english: "This page did not return verifiable wallpaper ownership state; nothing was overwritten.")
                             }
                             let applied: [String: Any]
                             do { applied = try await transport.evaluate(source, on: socket) }
@@ -1254,9 +1302,9 @@ enum WallpaperCLI {
                             let restored = try await transport.evaluate(restoreSource, on: socket)
                             guard restored["restored"] as? Bool == true else {
                                 if restored["reason"] as? String == "owner-conflict" {
-                                    throw WallpaperFailure(state: "owner-conflict", message: "当前页面的壁纸或启动所有者未知；本次未覆盖或删除。")
+                                    throw WallpaperFailure(state: "owner-conflict", chinese: "当前页面的壁纸或启动所有者未知；本次未覆盖或删除。", english: "The wallpaper or startup owner on this page is unknown; nothing was overwritten or removed.")
                                 }
-                                throw WallpaperFailure(state: "restore-unconfirmed", message: "页面没有确认移除壁纸。")
+                                throw WallpaperFailure(state: "restore-unconfirmed", chinese: "页面没有确认移除壁纸。", english: "The page did not confirm wallpaper removal.")
                             }
                         }
                         let state: [String: Any]
@@ -1279,7 +1327,7 @@ enum WallpaperCLI {
                         states.append(state)
                     }
                     if request.action == .restore {
-                        guard states.allSatisfy({ $0["applied"] as? Bool != true }) else { throw WallpaperFailure(state: "restore-unconfirmed", message: "复查时壁纸仍存在。") }
+                        guard states.allSatisfy({ $0["applied"] as? Bool != true }) else { throw WallpaperFailure(state: "restore-unconfirmed", chinese: "复查时壁纸仍存在。", english: "The wallpaper was still present during recheck.") }
                         return ["state": "restored", "applied": false, "restored": true, "port": port, "pageCount": states.count,
                                 "message": restoreMessage]
                     }
@@ -1296,9 +1344,13 @@ enum WallpaperCLI {
                         "applied": verified, "port": port, "pageCount": states.count,
                         "version": versions.count == 1 ? versions.first! : "",
                         "pages": pageDiagnostics, "verificationIssues": issues.sorted(),
-                        "verificationScope": "runtime image and decorative-layer checks; visual inspection is separate",
-                        "message": verified ? "已复查当前 Codex 页面中的阿舟壁纸。"
-                            : "当前页面未通过壁纸图层核查；请查看 verificationIssues 与 pages。",
+                        "verificationScope": WallpaperMessages.localized(
+                            chinese: "运行时检查图像与装饰图层；视觉效果需另行检查。",
+                            english: "Runtime image and decorative-layer checks; visual inspection is separate."
+                        ),
+                        "message": verified
+                            ? WallpaperMessages.localized(chinese: "已复查当前 Codex 页面中的阿舟壁纸。", english: "Rechecked the Azhou wallpaper on the current Codex pages.")
+                            : WallpaperMessages.localized(chinese: "当前页面未通过壁纸图层核查；请查看 verificationIssues 与 pages。", english: "The current pages did not pass wallpaper layer verification; see verificationIssues and pages."),
                     ]
                     for key in WallpaperValidation.inspectionFlags {
                         result[key] = states.allSatisfy { WallpaperValidation.trueBoolean($0[key]) }
@@ -1316,11 +1368,11 @@ enum WallpaperCLI {
             }
             if !request.cold && !sawEndpoint {
                 return ["state": "needs-restart", "applied": false,
-                        "message": "当前 Codex 没有可核实的页面调试连接。请自行完全退出后再从阿舟入口启动；未重启当前会话。"]
+                        "message": WallpaperMessages.localized(chinese: "当前 Codex 没有可核实的页面调试连接。请自行完全退出后再从阿舟入口启动；未重启当前会话。", english: "The current Codex session has no verifiable page debugging connection. Quit it completely, then relaunch from the Azhou entry; the session was not restarted.")]
             }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
         return ["state": "timeout", "applied": false, "reason": lastState,
-                "message": "在有限等待时间内未完成壁纸确认；Codex 保持运行，动画交接不受影响。"]
+                "message": WallpaperMessages.localized(chinese: "在有限等待时间内未完成壁纸确认；Codex 保持运行，动画交接不受影响。", english: "Wallpaper confirmation did not finish within the bounded wait. Codex remains running, and animation handoff is unaffected.")]
     }
 }

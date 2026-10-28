@@ -28,6 +28,8 @@
 
 显示名称不参与安装归属证明。Bundle ID `local.azhou.codex-startup`、可执行文件 `AzhouCodexStartup`、日志和 IndexedDB 身份保持现有合同；安装器仍核验来源、载荷、唯一登记与恢复条件。具体安装步骤见 [installation-lifecycle.md](installation-lifecycle.md)。
 
+从 build 11 开始，Info.plist 中的默认 Bundle 名称与固定安装文件名（去掉 `.app`）保持一致，让 Finder 能识别中英文 `InfoPlist.strings`。Finder 显示语言由 macOS 决定；应用内界面跟随官方宿主，独立维护命令的人类可读消息跟随系统首选语言。测试分别检查系统 Finder 显示结果和两种资源选择，不把进程语言覆盖当作系统 Finder 语言切换。
+
 主题改名与来源接管可以一起执行：`--migrate-from` 仍须证明旧来源记录、旧构建载荷、已安装入口、签名与指纹全部吻合，并核对唯一登记。旧名称可以不同于新目标，但只能是受管 Applications 目录中的直接 `.app` 入口。中断后的重试使用回执记录的精确旧路径，不按名称猜测归属。
 
 用户图片、文字和强度继续使用 `azhou-codex-startup` 数据库、`settings` store 的 `images` 记录，schemaVersion 1 不变。构建主题、官方偏好、系统偏好和 bot 头像不进入用户记录。保存继续采用完整候选校验与事务内基线冲突检查；取消、配额、超时和资源释放沿用现有合同。恢复默认只修改草稿，保存后才替换用户覆盖。

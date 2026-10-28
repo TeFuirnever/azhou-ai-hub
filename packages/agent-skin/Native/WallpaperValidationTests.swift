@@ -14,6 +14,14 @@ struct WallpaperValidationTests {
             do { try operation(); fatalError("FAILED: \(label)") }
             catch { checks += 1 }
         }
+        try expect(WallpaperMessages.localized(
+            chinese: "壁纸操作未完成。", english: "The wallpaper operation did not finish.",
+            preferredLanguages: ["en-GB"]
+        ) == "The wallpaper operation did not finish.", "wallpaper messages follow an English system preference")
+        try expect(WallpaperMessages.localized(
+            chinese: "壁纸操作未完成。", english: "The wallpaper operation did not finish.",
+            preferredLanguages: ["zh-Hans"]
+        ) == "壁纸操作未完成。", "wallpaper messages follow a Chinese system preference")
         try expect(try WallpaperValidation.loopbackPorts("p123\nn127.0.0.1:49221\n", pid: 123) == [49221], "exact PID loopback listener")
         try expect(try WallpaperValidation.loopbackPorts("p123\nn127.0.0.1:49221\nn*:49221\n", pid: 123).isEmpty, "wildcard on the same port is refused")
         try expect(try WallpaperValidation.loopbackPorts("p123\nn[::1]:49221\nn192.168.1.2:49222\n", pid: 123).isEmpty, "non-IPv4-loopback listeners are refused")

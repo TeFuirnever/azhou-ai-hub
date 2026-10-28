@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
 const options = {
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   out: join(ROOT, '.build/startup-browser-evidence'),
@@ -3684,7 +3685,7 @@ try {
       })()`);
       assert.equal(themePage.appName, '阿舟 AI 实验室');
       assert.equal(themePage.botName, '阿舟');
-      assert.equal(themePage.version, '0.9.0 · 10');
+      assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);
       assert.equal(themePage.sections, 4);
       assert.equal(themePage.source, '构建默认值');
       const draft = await cdp.evaluate(`(()=>{

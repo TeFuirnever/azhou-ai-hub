@@ -414,8 +414,8 @@ def write_bundle_info(path):
     info = {
         'CFBundleExecutable': IDENTITY[1],
         'CFBundleIdentifier': IDENTITY[0],
-        'CFBundleName': identity['appName']['en'],
-        'CFBundleDisplayName': identity['appName']['en'],
+        'CFBundleName': Path(identity['installationName']).stem,
+        'CFBundleDisplayName': Path(identity['installationName']).stem,
         'CFBundleDevelopmentRegion': 'en',
         'CFBundleLocalizations': ['en', 'zh-Hans'],
         'CFBundleIconFile': ICON_NAME,
@@ -672,6 +672,8 @@ def verify_startup(path, info, marker, *, current_source=True):
     if not isinstance(preview_assets, dict):
         raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
     has_theme_config = 'themeConfig' in preview_assets
+    if not has_theme_config and (expected_version, expected_build) != ('0.9.0', '10'):
+        raise RuntimeError('Only verified 0.9.0/build 10 payloads may omit themeConfig.')
     expected_asset_keys = current_asset_keys if has_theme_config else legacy_asset_keys
     if (set(preview_assets) != expected_asset_keys
             or (current_source and not has_theme_config)
@@ -755,10 +757,14 @@ def verify_startup(path, info, marker, *, current_source=True):
 def verify_localized_names(path, info, theme_config=None, *, legacy=False):
     if legacy:
         app_name = LEGACY_DEFAULT_APP_NAME
+        fallback_name = app_name['en']
     else:
         theme = theme_config or load_theme_config(ROOT)
         app_name = theme['identity']['appName']
-    if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (app_name['en'], app_name['en']):
+        # Verified build 10 payloads predate the Finder basename correction.
+        previous_names = theme['identity']['version'] == '0.9.0' and theme['identity']['build'] == '10'
+        fallback_name = app_name['en'] if previous_names else Path(theme['identity']['installationName']).stem
+    if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (fallback_name, fallback_name):
         raise RuntimeError('Native bundle fallback display name does not match its verified theme.')
     resources = Path(path) / 'Contents/Resources'
     def localized_strings(name):

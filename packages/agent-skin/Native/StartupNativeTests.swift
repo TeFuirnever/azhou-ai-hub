@@ -265,7 +265,11 @@ struct StartupNativeTests {
                && WallpaperCLI.exitCode(for: "ready") == 0
                && WallpaperCLI.exitCode(for: "not-applied") == 2,
                "helper status keeps its established success and not-applied exit codes")
-        expect(WallpaperCLI.restoreMessage == "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。",
+        expect(WallpaperCLI.restoreMessage == WallpaperMessages.localized(
+            chinese: "已移除本页启动美化及设置入口；已保存值保留；Codex 与调试端口保持原状态。",
+            english: "Removed startup decoration and settings entry from this page. Saved values were preserved. Codex and its debug port were left unchanged.",
+            preferredLanguages: Locale.preferredLanguages
+        ),
                "restore receipt scopes page cleanup and confirms saved-value and Codex preservation")
 
         let lockPID = Int32.max
@@ -684,7 +688,7 @@ private final class FakeStartupTransport: StartupTransport {
         requestTimeouts.append(timeout)
         if pageFailures > 0 {
             pageFailures -= 1
-            throw WallpaperFailure(state: "endpoint-unavailable", message: "temporary")
+            throw WallpaperFailure(state: "endpoint-unavailable", chinese: "临时错误", english: "Temporary error.")
         }
         return pageResponses
     }
