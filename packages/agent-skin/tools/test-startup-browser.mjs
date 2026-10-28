@@ -1247,6 +1247,98 @@ try {
     return { settings: { runId: settings.runId, phase: settings.phase }, completion: cancelled.completion,
       restoredHostFocus: true, preservedLaterFocus: true };
   });
+  async function verifySidebarUpdatePlacement() {
+    const state = await cdp.evaluate('window.__startupAPI.status()');
+    if (state.phase === 'playing') {
+      await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'complete',runId:${state.runId},skipped:false})`);
+      await until(() => cdp.evaluate('window.__startupAPI.status().phase === "complete"'), 3000, 'entry is visible');
+    }
+    try {
+      await cdp.evaluate(`(()=>{
+        const update=document.createElement('button');
+        update.id='fixture-download-update';update.textContent='Download update';
+        update.style.cssText='position:fixed;left:28px;bottom:80px;width:48px;height:48px;z-index:100';
+        const profile=document.createElement('button');
+        profile.id='fixture-profile';profile.textContent='Profile';
+        profile.style.cssText='position:fixed;left:28px;bottom:8px;width:48px;height:48px;z-index:100';
+        document.querySelector('.sidebar').appendChild(update);
+        document.querySelector('.sidebar').appendChild(profile);
+      })()`);
+      const readResult = () => cdp.evaluate(`(()=>{
+        const update=document.querySelector('#fixture-download-update'),r=update.getBoundingClientRect();
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),e=entry.getBoundingClientRect();
+        const width=Math.max(0,Math.min(e.right,r.right)-Math.max(e.left,r.left));
+        const height=Math.max(0,Math.min(e.bottom,r.bottom)-Math.max(e.top,r.top));
+        const profile=document.querySelector('#fixture-profile'),p=profile.getBoundingClientRect();
+        const profileArea=Math.max(0,Math.min(e.right,p.right)-Math.max(e.left,p.left))
+          *Math.max(0,Math.min(e.bottom,p.bottom)-Math.max(e.top,p.top));
+        return {area:width*height,profileArea,hit:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===update,
+          profileHit:document.elementFromPoint(p.left+p.width/2,p.top+p.height/2)===profile,
+          update:{x:r.x,y:r.y,width:r.width,height:r.height},entry:{x:e.x,y:e.y,width:e.width,height:e.height}};
+      })()`);
+      const result = await until(async () => {
+        const value = await readResult();
+        return value.area === 0 && value.profileArea === 0 && value.hit && value.profileHit ? value : false;
+      }, 1500, 'appearance entry moves away from the update button');
+      assert.equal(result.area, 0, 'appearance must not cover the update control: '+JSON.stringify(result));
+      assert.equal(result.hit, true, 'update control must remain clickable');
+      assert.equal(result.profileHit, true, 'profile control must remain clickable');
+      await screenshot('appearance-entry-update-and-profile.png');
+      return result;
+    } finally {
+      await cdp.evaluate("document.querySelector('#fixture-download-update')?.remove();document.querySelector('#fixture-profile')?.remove()");
+    }
+  }
+  await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
+  await check('appearance entry hides when the sidebar has no safe gap and returns afterward', async () => {
+    try {
+      await cdp.evaluate(`(()=>{
+        const side=document.querySelector('.sidebar');
+        for(let top=0;top<innerHeight;top+=48){
+          const item=document.createElement('button');item.dataset.fixtureCrowded='1';
+          item.style.cssText='position:fixed;left:10px;top:'+top+'px;width:48px;height:48px;z-index:100';
+          side.appendChild(item);
+        }
+      })()`);
+      await until(() => cdp.evaluate(`getComputedStyle(document.querySelector('[data-agent-skin-entry="appearance"]')).visibility==='hidden'`),
+        1500, 'entry yields to a full sidebar');
+      assert.equal(await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        return getComputedStyle(entry.shadowRoot.querySelector('button')).visibility;
+      })()`), 'hidden', 'the shadow button inherits the hidden state');
+      assert.equal(await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),r=entry.getBoundingClientRect();
+        return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.hasAttribute('data-fixture-crowded');
+      })()`), true, 'the host control remains clickable with no available gap');
+      await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.hidden=true)`);
+      await until(() => cdp.evaluate(`getComputedStyle(document.querySelector('[data-agent-skin-entry="appearance"]')).visibility==='visible'`),
+        1500, 'entry returns when hidden host controls free space');
+      return { crowded: 'hidden', restored: 'visible' };
+    } finally {
+      await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.remove())`);
+    }
+  });
+  await check('appearance entry repositions when sidebar controls scroll', async () => {
+    try {
+      await cdp.evaluate(`(()=>{
+        const scroller=document.createElement('div');scroller.id='fixture-sidebar-scroll';
+        scroller.style.cssText='position:fixed;left:10px;bottom:0;width:60px;height:180px;overflow:auto;z-index:100';
+        const content=document.createElement('div');content.style.cssText='position:relative;height:400px';
+        const item=document.createElement('button');item.id='fixture-scrolled-button';
+        item.style.cssText='position:absolute;top:200px;left:8px;width:48px;height:48px';
+        content.appendChild(item);scroller.appendChild(content);document.querySelector('.sidebar').appendChild(scroller);
+      })()`);
+      await cdp.evaluate(`document.querySelector('#fixture-sidebar-scroll').scrollTop=130`);
+      await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),e=entry.getBoundingClientRect();
+        const item=document.querySelector('#fixture-scrolled-button'),r=item.getBoundingClientRect();
+        return getComputedStyle(entry).visibility==='hidden'||e.bottom<=r.top||e.top>=r.bottom;
+      })()`), 1500, 'entry moves when a sidebar button scrolls into its previous position');
+      return { scrolled: true };
+    } finally {
+      await cdp.evaluate(`document.querySelector('#fixture-sidebar-scroll')?.remove()`);
+    }
+  });
   await check('appearance entry geometry in collapsed-sidebar narrow viewport', async () => {
     const state = await cdp.evaluate('window.__startupAPI.status()');
     if (state.phase === 'playing') {
@@ -3424,6 +3516,17 @@ try {
   });
 
   if (options.generatedPayload) {
+    await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+    await check('generated appearance entry avoids sidebar update and profile controls', async () => {
+      await until(() => cdp.evaluate(`window.__startupAPI?.status().phase==='playing' && window.__startupAPI.status().ready`),
+        15000, 'generated animation ready before sidebar check');
+      assert.equal(await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;button.click();return true;
+      })()`), true);
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 5000, 'generated animation skipped');
+      return verifySidebarUpdatePlacement();
+    });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
     await check('generated wallpaper survives a shell mounted after natural animation completion', async () => {
       const completed = await until(() => cdp.evaluate(`(()=>{

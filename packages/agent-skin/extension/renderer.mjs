@@ -136,7 +136,7 @@ function appearanceText(factory, appearance, themeConfig) {
     appearanceLabel: 'Azhou appearance settings', overlayLabel: 'Azhou startup animation' })[key] };
 }
 
-function mountAppearanceEntry(document, openSettings, assets, factory, appearance) {
+function mountAppearanceEntry(document, openSettings, assets, factory, appearance, host) {
   const element = document.createElement('div');
   element.setAttribute('data-agent-skin-entry', 'appearance');
   element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;z-index:2147483646;display:none';
@@ -144,7 +144,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const button = document.createElement('button');
   // Match the animation's CSSOM path: a host may reject inline <style> blocks.
   // System colors keep this owned control readable in either color scheme.
-  button.style.cssText = 'all:initial;box-sizing:border-box;display:flex;align-items:center;gap:7px;cursor:pointer;min-height:44px;padding:5px 9px 5px 5px;border:1px solid var(--app-color-border,var(--color-border,transparent));border-radius:14px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;outline:2px solid transparent;outline-offset:3px';
+  button.style.cssText = 'all:initial;visibility:inherit;box-sizing:border-box;display:flex;align-items:center;gap:7px;cursor:pointer;min-height:44px;padding:5px 9px 5px 5px;border:1px solid var(--app-color-border,var(--color-border,transparent));border-radius:14px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;outline:2px solid transparent;outline-offset:3px';
   button.type = 'button';
   const avatar = assets?.entryAvatar;
   if (typeof avatar === 'string' && avatar.length <= 2 * 1024 * 1024
@@ -157,6 +157,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   }
   const label = document.createElement('span');
   button.appendChild(label);
+  let position = () => {};
   const setAppearance = value => {
     const text = appearanceText(factory, value, assets?.themeConfig);
     label.textContent = text.t('characterName');
@@ -164,6 +165,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     button.setAttribute('aria-label', text.t('appearanceLabel'));
     button.style.colorScheme = value.theme;
     element.setAttribute('lang', value.locale);
+    position();
   };
   setAppearance(appearance);
   button.setAttribute('aria-haspopup', 'dialog');
@@ -175,10 +177,59 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   shadow.appendChild(button);
   element.style.display = 'none';
   document.documentElement.appendChild(element);
+  const page = document.documentElement.ownerDocument ?? document;
+  let observer, pending, relevantControls = [];
+  position = () => {
+    if (element.style.display === 'none' || typeof page.querySelectorAll !== 'function'
+      || typeof element.getBoundingClientRect !== 'function') return;
+    const rect = element.getBoundingClientRect();
+    const height = document.documentElement.clientHeight;
+    if (!rect.width || !rect.height || !height) return;
+    const controls = Array.from(page.querySelectorAll('button, a[href], [role="button"], input, textarea, select'))
+      .map(control => ({ control, bounds: control.getBoundingClientRect() }))
+      .filter(({ bounds }) => bounds.width > 0 && bounds.height > 0 && bounds.top < height && bounds.bottom > 0
+        && bounds.left < rect.right && bounds.right > rect.left);
+    relevantControls = controls.map(({ control }) => control);
+    const bounds = controls.map(item => item.bounds);
+    const desired = height - 72 - rect.height;
+    const candidates = [desired, ...bounds.flatMap(other => [other.top - rect.height - 8, other.bottom + 8])];
+    const available = candidates.filter(top => top >= 8 && top + rect.height <= height - 8
+      && bounds.every(other => top + rect.height + 8 <= other.top || top >= other.bottom + 8));
+    if (!available.length) { element.style.visibility = 'hidden'; return; }
+    element.style.visibility = 'visible';
+    const top = available.reduce((best, candidate) =>
+      Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best);
+    const bottom = `${height - top - rect.height}px`;
+    if (element.style.bottom !== bottom) element.style.bottom = bottom;
+  };
+  const schedule = () => {
+    if (pending !== undefined || element.style.display === 'none') return;
+    pending = host.setTimeout(() => { pending = undefined; position(); }, 80);
+  };
+  const touchesEntryColumn = node => {
+    if (typeof node?.getBoundingClientRect !== 'function') return false;
+    const target = node.getBoundingClientRect(), entry = element.getBoundingClientRect();
+    return target.width > 0 && target.left < entry.right && target.right > entry.left;
+  };
+  const onScroll = event => { if (event.target === page || touchesEntryColumn(event.target)) schedule(); };
+  if (typeof page.querySelectorAll === 'function' && typeof host.MutationObserver === 'function') {
+    observer = new host.MutationObserver(records => {
+      if (records.some(record => record.target !== element && (touchesEntryColumn(record.target)
+        || relevantControls.some(control => record.target === control || record.target.contains?.(control))))) schedule();
+    });
+    observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
+    host.addEventListener?.('resize', schedule);
+    host.addEventListener?.('scroll', onScroll, true);
+  }
   return {
     element, button, setAppearance,
-    update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; },
+    update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; if (visible) position(); },
     remove() {
+      observer?.disconnect();
+      if (pending !== undefined) host.clearTimeout(pending);
+      host.removeEventListener?.('resize', schedule);
+      host.removeEventListener?.('scroll', onScroll, true);
       button.removeEventListener('click', openSettings);
       button.removeEventListener('focus', onFocus);
       button.removeEventListener('blur', onBlur);
@@ -376,7 +427,7 @@ class PageController {
     if (!this.#isLoading(runId) || !this.document.body) return;
     try {
       if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings(),
-        this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance);
+        this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host);
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted, this.appearance,
       );

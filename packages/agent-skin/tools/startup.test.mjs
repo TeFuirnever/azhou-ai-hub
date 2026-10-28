@@ -82,9 +82,9 @@ function controlledHost({ body = true } = {}) {
     document,
     MutationObserver: class MutationObserver {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
-      observe() { this.observing = true; }
+      observe(_target, options) { this.observing = true; this.options = options; }
       disconnect() { this.disconnected = true; this.observing = false; }
-      trigger() { if (this.observing) this.callback([]); }
+      trigger(records = []) { if (this.observing) this.callback(records); }
     },
     addEventListener(type, listener) {
       if (type === 'message') listeners.add(listener);
@@ -112,6 +112,68 @@ function controlledHost({ body = true } = {}) {
   return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
     keyListenerCount: () => keyListeners.size };
 }
+
+test('appearance entry avoids dynamic sidebar controls and stops observing on dispose', () => {
+  const fixture = controlledHost();
+  const doc = fixture.host.document;
+  const originalCreate = doc.createElement;
+  let blockers = [];
+  let resize, scroll;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.ownerDocument = { querySelectorAll: () => blockers };
+  doc.createElement = tag => {
+    const node = originalCreate(tag);
+    if (tag === 'div') node.getBoundingClientRect = () => ({ left: 10, right: 170, width: 160, height: 44 });
+    return node;
+  };
+  const add = fixture.host.addEventListener;
+  const remove = fixture.host.removeEventListener;
+  fixture.host.addEventListener = (type, fn) => { if (type === 'resize') resize = fn; else if (type === 'scroll') scroll = fn; else add(type, fn); };
+  fixture.host.removeEventListener = (type, fn) => { if (type === 'resize' && resize === fn) resize = undefined; else if (type === 'scroll' && scroll === fn) scroll = undefined; else remove(type, fn); };
+  let run;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    run = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId: run });
+  }, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: run, skipped: false }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.tagName === 'div');
+  assert.equal(entry.style.bottom, '72px');
+  const obstacle = (top, bottom) => ({ getBoundingClientRect: () => ({ left: 28, right: 76, width: 48,
+    height: bottom - top, top, bottom }) });
+  blockers = [obstacle(672, 720), obstacle(744, 792)];
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  assert.ok(observer);
+  const sidebar = { getBoundingClientRect: () => ({ left: 0, right: 200, width: 200 }) };
+  const unrelated = { getBoundingClientRect: () => ({ left: 300, right: 700, width: 400 }) };
+  const before = fixture.timers.length;
+  observer.trigger([{ target: unrelated }]);
+  assert.equal(fixture.timers.length, before, 'unrelated chat mutations do not scan the page');
+  observer.trigger([{ target: sidebar }]);
+  const pending = fixture.timers.at(-1);
+  pending.callback();
+  assert.equal(entry.style.bottom, '136px');
+  const covering = obstacle(0, 800);
+  blockers = [covering];
+  scroll({ target: sidebar });
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.visibility, 'hidden', 'no safe position leaves host controls unobstructed');
+  blockers = [];
+  covering.getBoundingClientRect = () => ({ left: 0, right: 0, width: 0, height: 0 });
+  observer.trigger([{ target: covering }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.bottom, '72px');
+  assert.equal(entry.style.visibility, 'visible', 'the entry returns once space is available');
+  resize();
+  fixture.timers.at(-1).callback();
+  observer.trigger([{ target: sidebar }]);
+  const last = fixture.timers.at(-1);
+  api.dispose();
+  assert.equal(observer.disconnected, true);
+  assert.equal(last.cleared, true);
+  assert.equal(resize, undefined);
+  assert.equal(scroll, undefined);
+});
 
 test('a visible appearance button opens settings after playback without a keyboard shortcut', () => {
   const controlled = controlledHost();
