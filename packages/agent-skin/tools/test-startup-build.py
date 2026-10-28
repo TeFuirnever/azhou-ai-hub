@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import struct
 import subprocess
@@ -155,7 +158,166 @@ def clone_source_tree(destination: Path, *, private: bool = True) -> None:
                       lambda x, y: (x % 256, y % 256, 90, 255))
 
 
+def build_staged_product(root: Path, label: str):
+    bundle = root / ".build" / f"azhou-stage.{label}" / "azhou-payload"
+    bundle.mkdir(parents=True)
+    builder = load_module(BUILDER_PATH, f"agent_skin_publish_builder_{label}")
+
+    def build_vision_outputs(command, **kwargs):
+        if command[0] == "xcrun":
+            return subprocess.CompletedProcess(command, 0)
+        synthetic_png(Path(command[3]), 512, 512, lambda x, y: (240, 80, 30, 255))
+        synthetic_png(Path(command[4]), 1536, 1024, lambda x, y: (30, 70, 110, 255))
+        Path(command[5]).write_text(json.dumps([[[10, 20], [30, 40]]]), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    with mock.patch.object(builder.subprocess, "check_output", return_value="arm64\n"), \
+            mock.patch.object(builder.subprocess, "run", side_effect=build_vision_outputs):
+        builder.build_startup(bundle, root=root)
+
+    artifacts = load_module(root / "tools/verify-artifacts.py", f"agent_skin_publish_artifacts_{label}")
+    wallpaper = load_module(root / "tools/build-wallpaper.py", f"agent_skin_publish_wallpaper_{label}")
+    wallpaper.package(bundle)
+    artifacts.write_bundle_info(bundle)
+    executable = bundle / "Contents/MacOS/AzhouCodexStartup"
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    executable.write_bytes(b"synthetic executable")
+    executable.chmod(0o755)
+    icon = bundle / "Contents/Resources/AzhouAppIcon.icns"
+    icon.write_bytes(b"icns" + (12).to_bytes(4, "big") + b"test")
+    artifacts.write_marker(bundle)
+    return bundle, artifacts
+
+
+def simulated_swap(left: Path, right: Path) -> None:
+    backup = Path(left).parent / ".publish-test-backup"
+    os.replace(right, backup)
+    os.replace(left, right)
+    os.replace(backup, left)
+
+
+def publish_with_test_native_tools(artifacts, staged: Path) -> None:
+    signed = subprocess.CompletedProcess(["codesign"], 0)
+    with mock.patch.object(artifacts.subprocess, "run", return_value=signed), \
+            mock.patch.object(artifacts, "swap", side_effect=simulated_swap), \
+            contextlib.redirect_stdout(io.StringIO()):
+        artifacts.publish(staged)
+
+
 class BuildOwnedThemeTests(unittest.TestCase):
+    def test_publish_rebuilds_existing_payload_after_theme_edit(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-theme-rebuild-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            first, artifacts = build_staged_product(root, "theme-first")
+            publish_with_test_native_tools(artifacts, first)
+
+            config_path = root / "theme-config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["identity"]["appName"] = {"zh-CN": "阿舟新实验室", "en": "Azhou Next Lab"}
+            config["identity"]["botName"] = {"zh-CN": "小舟", "en": "Zhou"}
+            config["identity"]["installationName"] = "阿舟新实验室.app"
+            config["startup"]["text"]["introCaption"] = {
+                "zh-CN": "阿舟正在出发", "en": "Azhou is ready",
+            }
+            config["wallpaper"]["strength"] = 21
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            rebuilt, _ = build_staged_product(root, "theme-rebuilt")
+            publish_with_test_native_tools(artifacts, rebuilt)
+
+            actual_identity, info = artifacts.identity(artifacts.PAYLOAD)
+            self.assertEqual(actual_identity, artifacts.IDENTITY)
+            self.assertEqual(info["CFBundleIdentifier"], "local.azhou.codex-startup")
+            self.assertEqual(info["CFBundleExecutable"], "AzhouCodexStartup")
+            self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]), ("Azhou Next Lab", "Azhou Next Lab"))
+            artifacts.verify_localized_names(artifacts.PAYLOAD, info)
+            defaults = (artifacts.PAYLOAD / "Contents/Resources/web/assets/defaults/contours.js").read_text(
+                encoding="utf-8")
+            prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
+            assets = json.loads(defaults[len(prefix):-3])
+            self.assertEqual(assets["themeConfig"]["identity"]["installationName"], "阿舟新实验室.app")
+            self.assertEqual(assets["wallpaperStrength"], 21)
+            self.assertEqual(assets["themeConfig"]["startup"]["text"], config["startup"]["text"])
+            marker = artifacts.read_marker(artifacts.PAYLOAD, required=True)
+            self.assertEqual(marker["inputs"]["theme-config.json"], hashlib.sha256(config_path.read_bytes()).hexdigest())
+
+    def test_publish_upgrades_build10_payload_without_theme_config(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-legacy-publish-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            legacy, artifacts = build_staged_product(root, "legacy")
+            resources = legacy / "Contents/Resources"
+            defaults_path = resources / "web/assets/defaults/contours.js"
+            defaults_prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
+            defaults_suffix = ");\n"
+            defaults = defaults_path.read_text(encoding="utf-8")
+            preview_assets = json.loads(defaults[len(defaults_prefix):-len(defaults_suffix)])
+            preview_assets.pop("themeConfig")
+            legacy_defaults = defaults_prefix + json.dumps(preview_assets, ensure_ascii=False, separators=(",", ":")) + defaults_suffix
+            defaults_path.write_text(legacy_defaults, encoding="utf-8")
+
+            install_path = resources / "startup/install.js"
+            script = install_path.read_text(encoding="utf-8")
+            assets_prefix = "const DEFAULT_ASSETS = Object.freeze("
+            assets_start = script.index(assets_prefix) + len(assets_prefix)
+            assets_end = script.index(");\n", assets_start)
+            script_assets = json.loads(script[assets_start:assets_end])
+            script_assets.pop("themeConfig")
+            script = (script[:assets_start]
+                      + json.dumps(script_assets, ensure_ascii=False, separators=(",", ":"))
+                      + script[assets_end:])
+            install_path.write_text(script, encoding="utf-8")
+
+            marker_path = legacy / artifacts.MARKER
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["inputs"].pop("theme-config.json")
+            marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
+            marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                   encoding="utf-8")
+            manifest_path = resources / "startup/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["sourceInputs"].pop("theme-config.json")
+            manifest["inputSHA256"] = marker["inputSHA256"]
+            for relative in manifest["outputs"]:
+                manifest["outputs"][relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                      encoding="utf-8")
+
+            artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(legacy, artifacts.PAYLOAD)
+            current, _ = build_staged_product(root, "legacy-upgrade")
+            publish_with_test_native_tools(artifacts, current)
+
+            installed_marker = artifacts.read_marker(artifacts.PAYLOAD, required=True)
+            self.assertIn("theme-config.json", installed_marker["inputs"])
+            installed_assets = json.loads(
+                (artifacts.PAYLOAD / "Contents/Resources/web/assets/defaults/contours.js").read_text(
+                    encoding="utf-8")[len(defaults_prefix):-len(defaults_suffix)])
+            self.assertIn("themeConfig", installed_assets)
+
+    def test_same_version_old_build_is_not_skipped_by_strict_product_verification(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-old-build-check-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            bundle, artifacts = build_staged_product(root, "old-build")
+            info_path = bundle / "Contents/Info.plist"
+            with info_path.open("rb") as stream:
+                info = plistlib.load(stream)
+            info["CFBundleVersion"] = "9"
+            with info_path.open("wb") as stream:
+                plistlib.dump(info, stream)
+            marker_path = bundle / artifacts.MARKER
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["build"] = "9"
+            marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                   encoding="utf-8")
+
+            signed = subprocess.CompletedProcess(["codesign"], 0)
+            with mock.patch.object(artifacts.subprocess, "run", return_value=signed):
+                with self.assertRaisesRegex(RuntimeError, "version/build"):
+                    artifacts.verify_product(bundle)
+
     def test_build_startup_embeds_theme_config_and_verifies_it(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-theme-test-") as temporary:
             root = (Path(temporary) / "source").resolve()

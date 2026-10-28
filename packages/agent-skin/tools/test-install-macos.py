@@ -393,6 +393,40 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
         self.assert_clean()
 
+    def test_theme_rename_and_source_handoff_retire_the_verified_previous_name(self):
+        m = self.module
+        previous_name = m.DESTINATION.with_name('阿舟之前的主题.app')
+        old_root, old_record = self.old_owned_install(installed_path=previous_name)
+        result = m.install(migrate_from=str(old_root))
+        self.assertEqual(result['sourceHandoff']['oldSHA256'], old_record['sha256Tree'])
+        self.assertFalse(previous_name.exists())
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assert_clean()
+
+    def test_theme_rename_handoff_retry_keeps_the_exact_old_entry_after_cleanup_failure(self):
+        m = self.module
+        previous_name = m.DESTINATION.with_name('阿舟之前的主题.app')
+        old_root, _ = self.old_owned_install(installed_path=previous_name)
+        self.fail_unregister_once.add(previous_name)
+        with self.assertRaises(subprocess.CalledProcessError):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(m.read_receipt()['sourceHandoff']['oldInstalledPath'], str(previous_name))
+        result = m.install(migrate_from=str(old_root))
+        self.assertEqual(result['status'], 'consolidated')
+        self.assertFalse(previous_name.exists())
+        self.assert_clean()
+
+    def test_theme_rename_handoff_cannot_adopt_an_entry_outside_managed_applications(self):
+        m = self.module
+        outside = self.base / 'unmanaged/阿舟.app'
+        old_root, _ = self.old_owned_install(installed_path=outside)
+        before = m.fingerprint(outside)
+        with self.assertRaisesRegex(RuntimeError, '没有证明当前入口归属'):
+            m.install(migrate_from=str(old_root))
+        self.assertEqual(m.fingerprint(outside), before)
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertEqual(self.swap_calls, 0)
+
     def test_legacy_handoff_rechecks_old_owner_before_first_publication(self):
         m = self.module
         legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')

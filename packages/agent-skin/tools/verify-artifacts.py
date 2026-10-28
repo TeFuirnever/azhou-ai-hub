@@ -71,7 +71,7 @@ def _locale_map(value, label: str, *, max_length: int, allow_empty: bool = False
     return value
 
 
-def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
+def _private_input_path(value, label: str) -> PurePosixPath:
     if not isinstance(value, str) or not value or '\\' in value:
         raise RuntimeError(f'{label} must be a relative assets/private path.')
     relative = PurePosixPath(value)
@@ -79,6 +79,11 @@ def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
             or len(relative.parts) < 3 or relative.parts[:2] != ('assets', 'private')
             or any(part in ('', '.', '..') for part in relative.parts)):
         raise RuntimeError(f'{label} must stay inside assets/private.')
+    return relative
+
+
+def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
+    relative = _private_input_path(value, label)
     root = Path(root)
     target = root.joinpath(*relative.parts)
     current = root
@@ -95,10 +100,7 @@ def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
     return target
 
 
-def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dict:
-    """Load and validate the single build-owned theme contract."""
-    root = Path(root)
-    config = _read_source_json(root, 'theme-config.json', 'theme config')
+def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
     if set(config) != {'identity', 'startup', 'wallpaper'}:
         raise RuntimeError('theme-config.json has an unsupported top-level shape.')
     identity = config.get('identity')
@@ -114,10 +116,8 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
             or installation_name != app_name['zh-CN'] + '.app'
             or any(ord(character) < 32 or ord(character) == 127 for character in installation_name)):
         raise RuntimeError('theme-config.json installationName must be a safe .app basename matching the Chinese app name.')
-    icon_input = _private_input(root, identity.get('iconInput'), 'identity.iconInput', required=require_inputs)
-    entry_avatar_input = _private_input(
-        root, identity.get('entryAvatarInput'), 'identity.entryAvatarInput', required=require_inputs,
-    )
+    icon_input = _private_input_path(identity.get('iconInput'), 'identity.iconInput')
+    entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
     if icon_input == entry_avatar_input:
         raise RuntimeError('theme-config.json iconInput and entryAvatarInput must be distinct assets.')
 
@@ -142,7 +142,6 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
             or minimum != 0 or maximum != 75 or not minimum <= strength <= maximum):
         raise RuntimeError('theme-config.json wallpaper min/max must be 0/75 and strength must be within that runtime range.')
 
-    package = load_package_metadata(root)
     output = {
         'identity': {
             'appName': app_name,
@@ -150,13 +149,47 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
             'installationName': installation_name,
             'iconInput': identity['iconInput'],
             'entryAvatarInput': identity['entryAvatarInput'],
-            'version': package['runtime_version'],
-            'build': package['runtime_build'],
+            'version': version,
+            'build': build,
         },
         'startup': {'durationMs': duration_ms, 'text': text},
         'wallpaper': {'strength': strength, 'min': minimum, 'max': maximum},
     }
     return output
+
+
+def validate_embedded_theme_config(value, version: str, build: str) -> dict:
+    """Validate a theme stored in a bundle without consulting current source files."""
+    if not isinstance(value, dict) or not isinstance(value.get('identity'), dict):
+        raise RuntimeError('Embedded themeConfig must be a JSON object with identity metadata.')
+    identity = value['identity']
+    if set(identity) != {'appName', 'botName', 'installationName', 'iconInput', 'entryAvatarInput', 'version', 'build'}:
+        raise RuntimeError('Embedded themeConfig identity fields are invalid.')
+    if identity.get('version') != version or str(identity.get('build')) != str(build):
+        raise RuntimeError('Embedded themeConfig release does not match its startup manifest.')
+    source_config = {
+        'identity': {key: identity[key] for key in (
+            'appName', 'botName', 'installationName', 'iconInput', 'entryAvatarInput',
+        )},
+        'startup': value.get('startup'),
+        'wallpaper': value.get('wallpaper'),
+    }
+    validated = _validate_theme_config_data(source_config, version, str(build))
+    if validated != value:
+        raise RuntimeError('Embedded themeConfig is not in the normalized build-owned shape.')
+    return validated
+
+
+def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dict:
+    """Load and validate the single build-owned theme contract."""
+    root = Path(root)
+    config = _read_source_json(root, 'theme-config.json', 'theme config')
+    package = load_package_metadata(root)
+    theme = _validate_theme_config_data(config, package['runtime_version'], package['runtime_build'])
+    if require_inputs:
+        _private_input(root, theme['identity']['iconInput'], 'identity.iconInput', required=True)
+        _private_input(root, theme['identity']['entryAvatarInput'], 'identity.entryAvatarInput', required=True)
+    return theme
 
 
 VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version', 'runtime_build'))
@@ -173,6 +206,17 @@ STARTUP_REQUIRED_INPUTS = (
     'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+# Exact 0.9.0/build 10 source contract from before theme-config.json was added.
+LEGACY_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json',
+)
+LEGACY_STARTUP_ASSET_KEYS = frozenset({
+    'avatar', 'entryAvatar', 'artwork', 'artworkSHA256', 'contours', 'wallpaperStrength',
+})
+# Pre-theme-config 0.9.0/build 10 bundles embedded these native names.
+LEGACY_DEFAULT_APP_NAME = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
 STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
@@ -512,14 +556,40 @@ def _read_json(path, label):
     return value
 
 
-def verify_startup(path, info, marker):
-    """Validate the current startup bundle against its source marker and resources."""
-    if not set(STARTUP_REQUIRED_INPUTS).issubset(INPUT_FILES):
+def _parse_default_assets(data: bytes) -> dict:
+    prefix = b'window.AGENT_SKIN_ASSETS = Object.freeze('
+    suffix = b');\n'
+    if not data.startswith(prefix) or not data.endswith(suffix):
+        raise RuntimeError('web/assets/defaults/contours.js 不符合 AGENT_SKIN_ASSETS 固定格式。')
+    try:
+        value = json.loads(data[len(prefix):-len(suffix)].decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError('默认素材 JavaScript 不是受控 JSON 数据。') from exc
+    if not isinstance(value, dict):
+        raise RuntimeError('默认素材对象必须是受控 JSON 对象。')
+    return value
+
+
+def _payload_theme_config(path, version: str, build: str):
+    defaults = Path(path) / 'Contents/Resources/web/assets/defaults/contours.js'
+    if defaults.is_symlink() or not defaults.is_file():
+        raise RuntimeError(f'启动载荷缺少实体默认素材文件：{defaults}')
+    assets = _parse_default_assets(defaults.read_bytes())
+    if 'themeConfig' not in assets:
+        return None
+    return validate_embedded_theme_config(assets['themeConfig'], version, build)
+
+
+def verify_startup(path, info, marker, *, current_source=True):
+    """Validate startup files against their source marker; staged builds can require current inputs."""
+    if current_source and not set(STARTUP_REQUIRED_INPUTS).issubset(INPUT_FILES):
         missing = sorted(set(STARTUP_REQUIRED_INPUTS) - set(INPUT_FILES))
         raise RuntimeError('启动构建源码未纳入 INPUT_FILES：' + ', '.join(missing))
-    if (info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))) != (VERSION, BUILD):
+    expected_version = VERSION if current_source else marker.get('version')
+    expected_build = BUILD if current_source else str(marker.get('build'))
+    if (info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))) != (expected_version, expected_build):
         raise RuntimeError('启动载荷 App version/build 与当前 verifier 不一致。')
-    if (marker.get('version'), marker.get('build')) != (VERSION, BUILD):
+    if (marker.get('version'), marker.get('build')) != (expected_version, expected_build):
         raise RuntimeError('启动载荷来源标记的版本与当前 verifier 不一致。')
     if not isinstance(marker.get('inputs'), dict) or marker.get('inputSHA256') != aggregate_inputs(marker['inputs']):
         raise RuntimeError('启动载荷来源输入摘要无效。')
@@ -549,25 +619,30 @@ def verify_startup(path, info, marker):
     manifest = _read_json(manifest_path, 'startup manifest')
     if (not isinstance(manifest, dict) or type(manifest.get('schema')) is not int or manifest.get('schema') != 1
             or type(manifest.get('protocolVersion')) is not int or manifest.get('protocolVersion') != 1
-            or manifest.get('appVersion') != VERSION or str(manifest.get('appBuild')) != BUILD
+            or manifest.get('appVersion') != expected_version or str(manifest.get('appBuild')) != expected_build
             or manifest.get('inputSHA256') != marker['inputSHA256']):
         raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
 
     source_inputs = manifest.get('sourceInputs')
-    if not isinstance(source_inputs, dict) or set(source_inputs) != set(STARTUP_REQUIRED_INPUTS):
+    allowed_source_inputs = {frozenset(STARTUP_REQUIRED_INPUTS)}
+    if not current_source:
+        allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
+    if (not isinstance(source_inputs, dict)
+            or frozenset(source_inputs) not in allowed_source_inputs):
         raise RuntimeError('startup manifest 的 sourceInputs 清单不完整。')
-    for name in STARTUP_REQUIRED_INPUTS:
+    for name in source_inputs:
         digest = source_inputs.get(name)
         if (not isinstance(digest, str) or re.fullmatch(r'[0-9a-f]{64}', digest) is None
                 or marker['inputs'].get(name) != digest):
             raise RuntimeError(f'启动构建源码未被来源标记覆盖：{name}')
 
-    metadata_path = ROOT / 'hub-package.json'
-    package = _read_json(metadata_path, 'hub package manifest')
-    if (package.get('runtime_version') != VERSION or str(package.get('runtime_build')) != BUILD
-            or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('build_inputs', []))
-            or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
-        raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
+    if current_source:
+        metadata_path = ROOT / 'hub-package.json'
+        package = _read_json(metadata_path, 'hub package manifest')
+        if (package.get('runtime_version') != VERSION or str(package.get('runtime_build')) != BUILD
+                or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('build_inputs', []))
+                or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
+            raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
 
     outputs = manifest.get('outputs')
     if not isinstance(outputs, dict) or set(outputs) != set(STARTUP_OUTPUTS):
@@ -589,23 +664,32 @@ def verify_startup(path, info, marker):
         if source_digest != hashlib.sha256(copied).hexdigest():
             raise RuntimeError(f'预览源码与标记来源不一致：web/{source_name}')
 
-    defaults = output_bytes['web/assets/defaults/contours.js']
-    prefix = b'window.AGENT_SKIN_ASSETS = Object.freeze('
-    suffix = b');\n'
-    if not defaults.startswith(prefix) or not defaults.endswith(suffix):
-        raise RuntimeError('web/assets/defaults/contours.js 不符合 AGENT_SKIN_ASSETS 固定格式。')
-    try:
-        preview_assets = json.loads(defaults[len(prefix):-len(suffix)].decode('utf-8'))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError('默认素材 JavaScript 不是受控 JSON 数据。') from exc
-    required_asset_keys = {
+    preview_assets = _parse_default_assets(output_bytes['web/assets/defaults/contours.js'])
+    current_asset_keys = {
         'avatar', 'entryAvatar', 'artwork', 'artworkSHA256', 'contours', 'wallpaperStrength', 'themeConfig',
     }
-    if not isinstance(preview_assets, dict) or set(preview_assets) != required_asset_keys:
+    legacy_asset_keys = LEGACY_STARTUP_ASSET_KEYS
+    if not isinstance(preview_assets, dict):
         raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
-    theme_config = load_theme_config(ROOT)
-    if preview_assets.get('themeConfig') != theme_config:
-        raise RuntimeError('startup themeConfig does not match the build-owned theme config and package version.')
+    has_theme_config = 'themeConfig' in preview_assets
+    expected_asset_keys = current_asset_keys if has_theme_config else legacy_asset_keys
+    if (set(preview_assets) != expected_asset_keys
+            or (current_source and not has_theme_config)
+            or (has_theme_config and frozenset(source_inputs) != frozenset(STARTUP_REQUIRED_INPUTS))
+            or (not has_theme_config and frozenset(source_inputs) != frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))):
+        raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
+    if has_theme_config:
+        if current_source:
+            theme_config = load_theme_config(ROOT)
+            if preview_assets.get('themeConfig') != theme_config:
+                raise RuntimeError('startup themeConfig does not match the build-owned theme config and package version.')
+        else:
+            theme_config = validate_embedded_theme_config(
+                preview_assets.get('themeConfig'), expected_version, expected_build,
+            )
+    else:
+        theme_config = None
+    expected_wallpaper_strength = theme_config['wallpaper']['strength'] if theme_config else 42
     image_details = {}
     for key, relative, size_limit in (
         ('avatar', 'web/assets/defaults/avatar.png', MAX_AVATAR_DATA_URL_BYTES),
@@ -650,7 +734,7 @@ def verify_startup(path, info, marker):
             'contourPointCount': point_count,
             'contourArtworkSHA256': artwork_sha,
         }
-            or preview_assets.get('wallpaperStrength') != theme_config['wallpaper']['strength']):
+            or preview_assets.get('wallpaperStrength') != expected_wallpaper_strength):
         raise RuntimeError('startup manifest 默认图像、线稿配准或文字默认值无效。')
 
     assets_prefix = 'const DEFAULT_ASSETS = Object.freeze('
@@ -668,11 +752,14 @@ def verify_startup(path, info, marker):
     return manifest
 
 
-def verify_localized_names(path, info):
-    theme = load_theme_config(ROOT)
-    app_name = theme['identity']['appName']
+def verify_localized_names(path, info, theme_config=None, *, legacy=False):
+    if legacy:
+        app_name = LEGACY_DEFAULT_APP_NAME
+    else:
+        theme = theme_config or load_theme_config(ROOT)
+        app_name = theme['identity']['appName']
     if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (app_name['en'], app_name['en']):
-        raise RuntimeError('Native bundle fallback display name does not match theme-config.json.')
+        raise RuntimeError('Native bundle fallback display name does not match its verified theme.')
     resources = Path(path) / 'Contents/Resources'
     def localized_strings(name):
         quoted = json.dumps(name, ensure_ascii=False)
@@ -693,17 +780,24 @@ def verify_localized_names(path, info):
             raise RuntimeError(f'Native localized display-name resource is incorrect: {relative}')
 
 
-def verify_product(path):
+def verify_product(path, *, current_source=True):
     info = require(path, IDENTITY)
     marker = read_marker(path, required=True)
     if marker['projectID'] != PROJECT_ID or marker['projectRoot'] != str(ROOT):
         raise RuntimeError(f'来源不属于当前项目，保留未处理：{path}')
-    if (info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))) == (VERSION, BUILD):
+    is_current_release = (
+        info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))
+    ) == (VERSION, BUILD)
+    is_current_version = info.get('CFBundleShortVersionString') == VERSION
+    if is_current_release and current_source:
         verify_localized_names(path, info)
     verify_icon(path, info)
     verify_wallpaper(path, info, marker)
-    if info.get('CFBundleShortVersionString') == VERSION:
-        verify_startup(path, info, marker)
+    if is_current_version:
+        verify_startup(path, info, marker, current_source=current_source)
+        if not current_source:
+            theme = _payload_theme_config(path, marker['version'], marker['build'])
+            verify_localized_names(path, info, theme_config=theme, legacy=theme is None)
     subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(path)], check=True)
     return info
 
@@ -735,7 +829,7 @@ def publish(staged):
         raise RuntimeError('拒绝替换符号链接构建载荷。')
     if PAYLOAD.exists():
         # Every affected existing object must be this project's verified payload.
-        verify_product(PAYLOAD)
+        verify_product(PAYLOAD, current_source=False)
         marker = staged.parent / '.preserve-original'
         marker.write_text(str(staged) + '\n', encoding='utf-8')
         try:

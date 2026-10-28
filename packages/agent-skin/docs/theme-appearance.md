@@ -26,6 +26,8 @@
 
 显示名称不参与安装归属证明。Bundle ID `local.azhou.codex-startup`、可执行文件 `AzhouCodexStartup`、日志和 IndexedDB 身份保持现有合同；安装器仍核验来源、载荷、唯一登记与恢复条件。具体安装步骤见 [installation-lifecycle.md](installation-lifecycle.md)。
 
+主题改名与来源接管可以一起执行：`--migrate-from` 仍须证明旧来源记录、旧构建载荷、已安装入口、签名与指纹全部吻合，并核对唯一登记。旧名称可以不同于新目标，但只能是受管 Applications 目录中的直接 `.app` 入口。中断后的重试使用回执记录的精确旧路径，不按名称猜测归属。
+
 用户图片、文字和强度继续使用 `azhou-codex-startup` 数据库、`settings` store 的 `images` 记录，schemaVersion 1 不变。构建主题、官方偏好、系统偏好和 bot 头像不进入用户记录。保存继续采用完整候选校验与事务内基线冲突检查；取消、配额、超时和资源释放沿用现有合同。恢复默认只修改草稿，保存后才替换用户覆盖。
 
 私有路径必须在实体 `assets/private/` 内，不接受穿越或符号链接。启动文案上限为 UTF-16 16/48/60 单位；背景强度范围和 12 秒阶段结构是现有运行契约，不是新增调节项。更改这些限制需要实现和验证运行时，不能只修改 JSON。

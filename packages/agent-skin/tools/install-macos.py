@@ -119,6 +119,17 @@ def migration_root(value):
     return old_root
 
 
+def managed_install_path(value):
+    """Limit receipt paths to one direct app entry; ownership still requires full proof."""
+    if not isinstance(value, str):
+        return None
+    path = Path(value)
+    if (not path.is_absolute() or str(path) != value
+            or path.parent != DESTINATION.parent or path.suffix != '.app'):
+        return None
+    return path
+
+
 def old_install_proof(old_root):
     """Authorize exactly the currently installed old-root package, never a root wildcard."""
     record_path = old_root / '.local/installation.json'
@@ -131,8 +142,7 @@ def old_install_proof(old_root):
     if not isinstance(record, dict):
         raise RuntimeError('旧安装记录格式无效，不能接管。')
     installed_path = record.get('installedPath')
-    allowed_installed_paths = (str(DESTINATION), str(DESTINATION.with_name(HELPERS['LEGACY_NAME'])))
-    if not isinstance(installed_path, str) or installed_path not in allowed_installed_paths:
+    if managed_install_path(installed_path) is None:
         raise RuntimeError('旧安装记录没有证明当前入口归属，不能接管。')
     required = {'schema': 2, 'projectID': PROJECT_ID, 'projectRoot': str(old_root),
                 'installedPath': installed_path, 'sourcePath': str(old_source),
@@ -193,7 +203,10 @@ def pending_legacy_handoff(old_root, source_hash, record):
             or previous.get('newRoot') != str(ROOT) or previous.get('newSHA256') != source_hash
             or not re.fullmatch(r'[0-9a-f]{64}', str(previous.get('oldSHA256', '')))):
         return None
-    legacy_path = DESTINATION.with_name(HELPERS['LEGACY_NAME'])
+    legacy_path = managed_install_path(previous.get('oldInstalledPath',
+                                                   str(DESTINATION.with_name(HELPERS['LEGACY_NAME']))))
+    if legacy_path is None or legacy_path == DESTINATION:
+        return None
     retired = any(item.get('path') == str(legacy_path)
                   and item.get('bundleID') == EXPECTED[0]
                   and item.get('executable') == EXPECTED[1]
@@ -475,6 +488,7 @@ def install(check_only=False, migrate_from=None):
                            'sourcePath': str(SOURCE), 'sha256Tree': source_hash,
                            'bundleID': EXPECTED[0], 'executable': EXPECTED[1],
                            'sourceHandoff': {'oldRoot': handoff['oldRoot'],
+                                             'oldInstalledPath': handoff['installedPath'],
                                              'oldSHA256': handoff['oldSHA256'],
                                              'newRoot': str(ROOT), 'newSHA256': source_hash}}
                 save_receipt(pending)
@@ -503,6 +517,7 @@ def install(check_only=False, migrate_from=None):
                   'managedFingerprints': sorted(managed_hashes), 'retiredArtifacts': list(historical.values())}
         if handoff is not None:
             result['sourceHandoff'] = {'oldRoot': handoff['oldRoot'], 'oldSHA256': handoff['oldSHA256'],
+                                       'oldInstalledPath': handoff['installedPath'],
                                        'newRoot': str(ROOT), 'newSHA256': source_hash}
         elif trusted_receipt(record) and isinstance(record.get('sourceHandoff'), dict):
             result['sourceHandoff'] = record['sourceHandoff']
