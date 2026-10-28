@@ -24,6 +24,8 @@
 
 `theme-config.json` 是构建所有的主题定义，包含双语显示身份、私有身份资源路径、启动默认文案和背景默认强度。构建器校验此文件，把完整定义随现有 `assets` 注入启动载荷与独立预览；本地化工厂、设置页、Info.plist/InfoPlist.strings、原生窗口和菜单使用该构建结果。配置及构建器均纳入现有输入指纹，不另加常驻服务或可写全局配置。
 
+保留的 `--wallpaper-helper` 维护入口也使用同一 `wallpaper.strength` 构建默认值，包含 `0`；它不读取或写入用户 IndexedDB 覆盖。
+
 显示名称不参与安装归属证明。Bundle ID `local.azhou.codex-startup`、可执行文件 `AzhouCodexStartup`、日志和 IndexedDB 身份保持现有合同；安装器仍核验来源、载荷、唯一登记与恢复条件。具体安装步骤见 [installation-lifecycle.md](installation-lifecycle.md)。
 
 主题改名与来源接管可以一起执行：`--migrate-from` 仍须证明旧来源记录、旧构建载荷、已安装入口、签名与指纹全部吻合，并核对唯一登记。旧名称可以不同于新目标，但只能是受管 Applications 目录中的直接 `.app` 入口。中断后的重试使用回执记录的精确旧路径，不按名称猜测归属。

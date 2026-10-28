@@ -472,6 +472,31 @@ class BuildOwnedThemeTests(unittest.TestCase):
                         artifacts.load_theme_config(root)
 
 
+class WallpaperThemeBuildTests(unittest.TestCase):
+    def test_helper_payload_uses_the_shared_zero_and_custom_default_strength(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-wallpaper-strength-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root, private=False)
+            synthetic_png(root / "assets/private/wallpaper-scene-q-v3.png", 1024, 512,
+                          lambda x, y: (30, 70, 110, 255))
+            wallpaper = load_module(root / "tools/build-wallpaper.py", "agent_skin_strength_wallpaper")
+            config_path = root / "theme-config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            for strength in (0, 17):
+                with self.subTest(strength=strength):
+                    config["wallpaper"]["strength"] = strength
+                    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+                    bundle = root / f".build/azhou-stage.strength-{strength}/azhou-payload"
+                    bundle.mkdir(parents=True)
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        wallpaper.package(bundle)
+                    script = (bundle / "Contents/Resources/wallpaper/install.js").read_text(encoding="utf-8")
+                    argument = script.rsplit("return await installRenderer(", 1)[1].removesuffix(");\n})()\n")
+                    payload = json.loads(argument)
+                    self.assertEqual(payload.get("strength"), strength,
+                                     "the helper must use the same configured default as startup, including zero")
+
+
 class StartupBuildTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

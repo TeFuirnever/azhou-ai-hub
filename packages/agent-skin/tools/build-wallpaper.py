@@ -21,6 +21,7 @@ def package(bundle):
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
     bundle = artifacts.staged_path(bundle)
+    theme = artifacts.load_theme_config(ROOT)
     source = ROOT / 'assets/private/wallpaper-scene-q-v3.png'
     if source.is_symlink() or not source.is_file():
         raise RuntimeError('Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.')
@@ -41,7 +42,8 @@ def package(bundle):
     css = (ROOT / 'wallpaper/wallpaper.css').read_text()
     payload = {'version': artifacts.VERSION,
                'image': 'data:image/png;base64,' + base64.b64encode(data).decode('ascii'),
-               'imageSHA256': hashlib.sha256(data).hexdigest(), 'css': css}
+               'imageSHA256': hashlib.sha256(data).hexdigest(), 'css': css,
+               'strength': theme['wallpaper']['strength']}
     expression = '(async () => {\n' + renderer.replace(prefix, 'async function installRenderer(', 1)
     expression += '\nreturn await installRenderer(' + json.dumps(payload, ensure_ascii=False) + ');\n})()\n'
     target = bundle / 'Contents/Resources/wallpaper'
