@@ -19,6 +19,19 @@ test('localization follows only the explicitly supplied host locale', () => {
   assert.equal(localization.t('characterName'), '阿舟');
 });
 
+test('build-owned names and startup text follow locale without becoming preferences', () => {
+  const localization = createLocalization({ locale: 'en', themeConfig: {
+    identity: { botName: { en: 'Azhou build', 'zh-CN': '阿舟构建' } },
+    startup: { text: { introTitle: { en: 'Built lab', 'zh-CN': '构建实验室' } } },
+  } });
+  assert.equal(localization.t('characterName'), 'Azhou build');
+  assert.equal(localization.t('animation.title.default'), 'Built lab');
+  localization.setLocale('zh-CN');
+  assert.equal(localization.t('characterName'), '阿舟构建');
+  assert.equal(localization.t('animation.title.default'), '构建实验室');
+  assert.equal(localization.t('animation.subtitle.default'), '和阿舟一起，把想法做出来。');
+});
+
 test('localization defaults safely to Chinese without a host locale', () => {
   const localization = createLocalization({ navigator: { language: 'en-US' } });
 

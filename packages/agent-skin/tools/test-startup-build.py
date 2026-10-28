@@ -15,12 +15,14 @@ import sys
 import tempfile
 import unittest
 import zlib
+from unittest import mock
 
 
 PACKAGE = Path(__file__).resolve().parents[1]
 BUILDER_PATH = PACKAGE / "tools/build-startup.py"
-APP_VERSION = "0.9.0"
-APP_BUILD = "10"
+APP_PACKAGE = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
+APP_VERSION = APP_PACKAGE["runtime_version"]
+APP_BUILD = str(APP_PACKAGE["runtime_build"])
 BUILD_FILES = (
     "Native/App.swift",
     "Native/InstallRegistry.swift",
@@ -43,6 +45,7 @@ BUILD_FILES = (
     "tools/build-startup-assets.swift",
     "tools/verify-artifacts.py",
     "hub-package.json",
+    "theme-config.json",
 )
 
 
@@ -150,6 +153,161 @@ def clone_source_tree(destination: Path, *, private: bool = True) -> None:
         (private_dir / "scene.js").write_text("window.AZHOU_WORKING_IMAGE = 'synthetic';\n")
         synthetic_png(private_dir / "app-icon/source.png", 1024, 1024,
                       lambda x, y: (x % 256, y % 256, 90, 255))
+
+
+class BuildOwnedThemeTests(unittest.TestCase):
+    def test_build_startup_embeds_theme_config_and_verifies_it(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-theme-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            package_path = root / "hub-package.json"
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+            package["runtime_version"] = "9.8.7"
+            package["runtime_build"] = "123"
+            package_path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
+            app_version, app_build = package["runtime_version"], package["runtime_build"]
+            bundle = root / ".build/azhou-stage.test/azhou-payload"
+            bundle.mkdir(parents=True)
+            builder = load_module(BUILDER_PATH, "agent_skin_theme_builder")
+
+            def build_vision_outputs(command, **kwargs):
+                if command[0] == "xcrun":
+                    return subprocess.CompletedProcess(command, 0)
+                synthetic_png(Path(command[3]), 512, 512, lambda x, y: (240, 80, 30, 255))
+                synthetic_png(Path(command[4]), 1536, 1024, lambda x, y: (30, 70, 110, 255))
+                Path(command[5]).write_text(json.dumps([[[10, 20], [30, 40]]]), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(builder.subprocess, "check_output", return_value="arm64\n"), \
+                    mock.patch.object(builder.subprocess, "run", side_effect=build_vision_outputs):
+                builder.build_startup(bundle, root=root)
+
+            artifacts = builder.load_artifacts(root)
+            manifest_path = bundle / "Contents/Resources/startup/manifest.json"
+            defaults_path = bundle / "Contents/Resources/web/assets/defaults/contours.js"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            defaults = defaults_path.read_text(encoding="utf-8")
+            prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
+            preview_assets = json.loads(defaults[len(prefix):-3])
+            self.assertEqual(set(preview_assets), {
+                "avatar", "entryAvatar", "artwork", "artworkSHA256", "contours", "wallpaperStrength", "themeConfig",
+            })
+            expected_theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))
+            expected_theme["identity"].update({"version": app_version, "build": app_build})
+
+            self.assertEqual(preview_assets["themeConfig"], expected_theme)
+            self.assertEqual(preview_assets["wallpaperStrength"], expected_theme["wallpaper"]["strength"])
+            self.assertIn("theme-config.json", manifest["sourceInputs"])
+            self.assertEqual((manifest["appVersion"], manifest["appBuild"]), (app_version, app_build))
+            self.assertIn(f'const APP_VERSION = "{app_version}";',
+                          (bundle / "Contents/Resources/startup/install.js").read_text(encoding="utf-8"))
+            marker_inputs = artifacts.source_inputs()
+            marker = {"version": app_version, "build": app_build,
+                      "inputSHA256": artifacts.aggregate_inputs(marker_inputs), "inputs": marker_inputs}
+            verifier = load_module(root / "tools/verify-artifacts.py", "agent_skin_theme_artifacts")
+            verifier.verify_startup(bundle, {
+                "CFBundleShortVersionString": app_version,
+                "CFBundleVersion": app_build,
+            }, marker)
+
+    def test_custom_theme_names_reach_payload_and_localized_bundle_without_changing_install_identity(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-custom-theme-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            config_path = root / "theme-config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["identity"]["appName"] = {"zh-CN": "阿舟演示实验室", "en": "Azhou Demo Lab"}
+            config["identity"]["botName"] = {"zh-CN": "小舟", "en": "Zhou"}
+            config["identity"]["installationName"] = "阿舟演示实验室.app"
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            bundle = root / ".build/azhou-stage.test/azhou-payload"
+            bundle.mkdir(parents=True)
+            builder = load_module(BUILDER_PATH, "agent_skin_custom_theme_builder")
+
+            def build_vision_outputs(command, **kwargs):
+                if command[0] == "xcrun":
+                    return subprocess.CompletedProcess(command, 0)
+                synthetic_png(Path(command[3]), 512, 512, lambda x, y: (240, 80, 30, 255))
+                synthetic_png(Path(command[4]), 1536, 1024, lambda x, y: (30, 70, 110, 255))
+                Path(command[5]).write_text(json.dumps([[[10, 20], [30, 40]]]), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0)
+
+            with mock.patch.object(builder.subprocess, "check_output", return_value="arm64\n"), \
+                    mock.patch.object(builder.subprocess, "run", side_effect=build_vision_outputs):
+                builder.build_startup(bundle, root=root)
+
+            artifacts = builder.load_artifacts(root)
+            defaults_path = bundle / "Contents/Resources/web/assets/defaults/contours.js"
+            defaults = defaults_path.read_text(encoding="utf-8")
+            prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
+            assets = json.loads(defaults[len(prefix):-3])
+            self.assertEqual(assets["themeConfig"]["identity"]["appName"], config["identity"]["appName"])
+            self.assertEqual(assets["themeConfig"]["identity"]["installationName"], "阿舟演示实验室.app")
+
+            info = artifacts.write_bundle_info(bundle)
+            actual_identity, parsed_info = artifacts.identity(bundle)
+            self.assertEqual(actual_identity, artifacts.IDENTITY)
+            self.assertEqual(parsed_info["CFBundleIdentifier"], "local.azhou.codex-startup")
+            self.assertEqual(parsed_info["CFBundleExecutable"], "AzhouCodexStartup")
+            self.assertEqual((parsed_info["CFBundleName"], parsed_info["CFBundleDisplayName"]),
+                             ("Azhou Demo Lab", "Azhou Demo Lab"))
+            self.assertEqual(info["CFBundleIdentifier"], artifacts.IDENTITY[0])
+            artifacts.verify_localized_names(bundle, parsed_info)
+
+    def test_theme_config_rejects_private_asset_path_escape_before_writing(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-unsafe-theme-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            config_path = root / "theme-config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["identity"]["iconInput"] = "assets/private/../../outside.png"
+            config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+            bundle = root / ".build/azhou-stage.test/azhou-payload"
+            bundle.mkdir(parents=True)
+            builder = load_module(BUILDER_PATH, "agent_skin_unsafe_theme_builder")
+
+            with self.assertRaisesRegex(RuntimeError, "assets/private"):
+                builder.build_startup(bundle, root=root)
+            self.assertFalse((bundle / "Contents/Resources/startup/install.js").exists())
+
+    def test_theme_config_matches_fixed_runtime_ranges_and_editable_text_limits(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-theme-limits-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            config_path = root / "theme-config.json"
+            base = json.loads(config_path.read_text(encoding="utf-8"))
+            builder = load_module(BUILDER_PATH, "agent_skin_theme_limits_builder")
+            artifacts = builder.load_artifacts(root)
+
+            cleared_text = json.loads(json.dumps(base))
+            for values in cleared_text["startup"]["text"].values():
+                values.update({"zh-CN": "", "en": ""})
+            config_path.write_text(json.dumps(cleared_text, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual(artifacts.load_theme_config(root)["startup"]["text"], cleared_text["startup"]["text"])
+
+            invalid_cases = (
+                ("duration", lambda value: value["startup"].update(durationMs=12001), "exactly 12000"),
+                ("name control", lambda value: value["identity"]["appName"].update(en="Azhou\nLab"),
+                 "control or invalid Unicode"),
+                ("name length", lambda value: value["identity"]["appName"].update(en="x" * 65),
+                 "64-UTF-16-code-unit"),
+                ("wallpaper minimum", lambda value: value["wallpaper"].update(min=1), "min/max must be 0/75"),
+                ("wallpaper maximum", lambda value: value["wallpaper"].update(max=76), "min/max must be 0/75"),
+                ("title limit", lambda value: value["startup"]["text"]["introTitle"].update(en="x" * 17),
+                 "16-UTF-16-code-unit"),
+                ("caption UTF-16 limit",
+                 lambda value: value["startup"]["text"]["introCaption"].update({"zh-CN": "🙂" * 25}),
+                 "48-UTF-16-code-unit"),
+                ("subtitle limit", lambda value: value["startup"]["text"]["artworkSubtitle"].update(en="x" * 61),
+                 "60-UTF-16-code-unit"),
+            )
+            for label, update, message in invalid_cases:
+                with self.subTest(label=label):
+                    invalid = json.loads(json.dumps(base))
+                    update(invalid)
+                    config_path.write_text(json.dumps(invalid, ensure_ascii=False), encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError, message):
+                        artifacts.load_theme_config(root)
 
 
 class StartupBuildTests(unittest.TestCase):
@@ -312,17 +470,13 @@ class StartupBuildTests(unittest.TestCase):
                 result = subprocess.run(["bash", "tools/build-macos.sh"], cwd=self.root,
                                         capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertIn("working.png", result.stderr)
-                self.assertIn("scene.js", result.stderr)
-                self.assertIn("wallpaper-scene-q-v3.png", result.stderr)
-                self.assertIn("entry-avatar.png", result.stderr)
-                self.assertIn("app-icon/source.png", result.stderr)
+                self.assertIn(name, result.stderr)
                 self.assertEqual({item.name for item in build_root.iterdir()}, original_children)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(original)
 
     def test_builder_sources_are_hashed_and_listed_as_build_inputs(self):
-        required = {"tools/build-startup.py", "tools/build-startup-assets.swift", "localization.js"}
+        required = {"tools/build-startup.py", "tools/build-startup-assets.swift", "localization.js", "theme-config.json"}
         verifier_inputs = set(self.verifier.INPUT_FILES)
         package = json.loads((self.root / "hub-package.json").read_text(encoding="utf-8"))
         self.assertTrue(required <= verifier_inputs)
@@ -333,25 +487,15 @@ class StartupBuildTests(unittest.TestCase):
 
     def test_native_display_names_are_localized_with_the_canonical_install_basename(self):
         build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
-        self.assertIn('"CFBundleDisplayName" = "Azhou AI Lab";', build_script)
-        self.assertIn('"CFBundleDisplayName" = "阿舟 AI 实验室";', build_script)
-        self.assertIn('install-macos.sh 安装到 ~/Applications/阿舟 AI 实验室.app', build_script)
-        self.assertIn("NAME = '阿舟 AI 实验室.app'", (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
-        bundle = Path(self.temporary.name) / "localized-display.app"
-        resources = bundle / "Contents/Resources"
-        for language, label in (("en", "Azhou AI Lab"), ("zh-Hans", "阿舟 AI 实验室")):
-            strings = resources / f"{language}.lproj/InfoPlist.strings"
-            strings.parent.mkdir(parents=True, exist_ok=True)
-            strings.write_text(f'"CFBundleDisplayName" = "{label}";\n"CFBundleName" = "{label}";\n',
-                               encoding="utf-8")
-        self.verifier.verify_localized_names(bundle, {
-            "CFBundleName": "Azhou AI Lab", "CFBundleDisplayName": "Azhou AI Lab",
-        })
+        self.assertIn('python3 tools/verify-artifacts.py --write-bundle-info "$bundle"', build_script)
+        self.assertIn("NAME = load_theme_config(ROOT)['identity']['installationName']",
+                      (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
+        info = self.verifier.write_bundle_info(self.bundle)
+        self.verifier.verify_localized_names(self.bundle, info)
+        resources = self.bundle / "Contents/Resources"
         (resources / "zh-Hans.lproj/InfoPlist.strings").write_text("invalid\n", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "localized display-name"):
-            self.verifier.verify_localized_names(bundle, {
-                "CFBundleName": "Azhou AI Lab", "CFBundleDisplayName": "Azhou AI Lab",
-            })
+            self.verifier.verify_localized_names(self.bundle, info)
 
     def test_verifier_rejects_a_builder_source_omitted_from_input_manifest(self):
         original = self.verifier.INPUT_FILES

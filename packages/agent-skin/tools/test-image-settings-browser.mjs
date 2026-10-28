@@ -470,7 +470,7 @@ try {
   assert.deepEqual(result.appearance, {
     locale: 'en',
     dialogCount: 1,
-    title: 'Azhou · Appearance',
+    title: 'Azhou · Theme & Appearance',
     appearanceAvatar: true,
     appearanceAvatarAlt: '',
     fieldLabel: 'Startup title (up to 16 characters)',

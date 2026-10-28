@@ -17,11 +17,9 @@ import zlib
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENTRY_AVATAR_INPUT = 'assets/private/entry-avatar.png'
 PRIVATE_STARTUP_INPUTS = (
     'assets/private/working.png',
     'assets/private/wallpaper-scene-q-v3.png',
-    ENTRY_AVATAR_INPUT,
 )
 PREVIEW_SOURCES = ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js')
 ASSET_JS_PREFIX = 'window.AGENT_SKIN_ASSETS = Object.freeze('
@@ -42,30 +40,25 @@ def load_artifacts(root: Path):
     return module
 
 
-def _require_private_inputs(root: Path) -> None:
+def _require_private_inputs(root: Path, theme_config: dict) -> None:
     private = root / 'assets/private'
     if private.is_symlink() or not private.is_dir():
         raise RuntimeError('缺少实体私有素材目录 assets/private；source-only 构建不能生成启动默认图。')
-    for name in PRIVATE_STARTUP_INPUTS:
+    configured = theme_config['identity']
+    for name in (*PRIVATE_STARTUP_INPUTS, configured['entryAvatarInput'], configured['iconInput']):
         path = root / name
         if path.is_symlink() or not path.is_file():
             raise RuntimeError(f'缺少本地启动默认素材 {name}；source-only 构建失败。')
 
 
-def _check_metadata(root: Path, artifacts) -> dict:
+def _check_metadata(root: Path, artifacts, theme_config: dict) -> dict:
     missing = set(artifacts.STARTUP_REQUIRED_INPUTS) - set(artifacts.INPUT_FILES)
     if missing:
         raise RuntimeError('startup builder source missing from verify-artifacts INPUT_FILES: '
                            + ', '.join(sorted(missing)))
-    path = root / 'hub-package.json'
-    if path.is_symlink() or not path.is_file():
-        raise RuntimeError('Missing hub-package.json build metadata.')
-    try:
-        package = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise RuntimeError('hub-package.json is not valid build metadata.') from exc
-    if (package.get('runtime_version') != artifacts.VERSION
-            or str(package.get('runtime_build')) != artifacts.BUILD
+    package = artifacts.load_package_metadata(root)
+    if (package.get('runtime_version') != theme_config['identity']['version']
+            or package.get('runtime_build') != theme_config['identity']['build']
             or not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(package.get('build_inputs', []))
             or not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
         raise RuntimeError('Hub package build inputs/runtime paths do not match the startup builder sources and version.')
@@ -295,8 +288,9 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
     bundle = artifacts.staged_path(bundle)
-    _require_private_inputs(root)
-    _check_metadata(root, artifacts)
+    theme_config = artifacts.load_theme_config(root, require_inputs=True)
+    _require_private_inputs(root, theme_config)
+    _check_metadata(root, artifacts, theme_config)
     inputs = artifacts.source_inputs()
     if not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(inputs):
         raise RuntimeError('Startup manifest cannot bind every required source input.')
@@ -345,7 +339,8 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
             raise RuntimeError('Vision helper did not return valid startup contour data.') from exc
 
     avatar = avatar_path.read_bytes()
-    entry_avatar = (root / ENTRY_AVATAR_INPUT).read_bytes()
+    entry_avatar_input = root / theme_config['identity']['entryAvatarInput']
+    entry_avatar = entry_avatar_input.read_bytes()
     artwork = artwork_path.read_bytes()
     avatar_dimensions = _png_data(avatar, 'avatar.png')
     entry_avatar_dimensions = _png_data(entry_avatar, 'entry-avatar.png')
@@ -369,12 +364,13 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
         'artwork': artwork_data_url,
         'artworkSHA256': artwork_sha,
         'contours': contours,
-        'wallpaperStrength': 42,
+        'wallpaperStrength': theme_config['wallpaper']['strength'],
+        'themeConfig': theme_config,
     }
     (defaults_dir / 'contours.js').write_text(
         ASSET_JS_PREFIX + _json_literal(assets) + ASSET_JS_SUFFIX, encoding='utf-8',
     )
-    shutil.copyfile(root / ENTRY_AVATAR_INPUT, entry_avatar_path)
+    shutil.copyfile(entry_avatar_input, entry_avatar_path)
     wallpaper_css = (root / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
     install_script = _build_script(root, assets, wallpaper_css, artifacts)
     install_path = startup_dir / 'install.js'

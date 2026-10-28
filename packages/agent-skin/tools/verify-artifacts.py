@@ -7,7 +7,7 @@ import hashlib
 import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import plistlib
 import re
 import shutil
@@ -17,7 +17,6 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'dist'  # Legacy location; only the installer may retire its apps.
-NAME = '阿舟 AI 实验室.app'
 LEGACY_NAME = '阿舟启动 Codex.app'
 IDENTITY = ('local.azhou.codex-startup', 'AzhouCodexStartup')
 LEGACY = {
@@ -29,20 +28,150 @@ PAYLOAD = ROOT / '.build/azhou-payload'
 REGISTRY_TOOL = ROOT / '.build/azhou-install-registry'
 MARKER = Path('Contents/Resources/azhou-build.json')
 PROJECT_ID = 'azhou.codex-startup-animation'
-VERSION = '0.9.0'
-BUILD = '10'
 ICON_NAME = 'AzhouAppIcon.icns'
+
+
+def _read_source_json(root: Path, relative: str, label: str) -> dict:
+    path = Path(root) / relative
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f'Missing {label}: {path}')
+    try:
+        value = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f'{label} is not valid JSON: {path}') from exc
+    if not isinstance(value, dict):
+        raise RuntimeError(f'{label} must be a JSON object: {path}')
+    return value
+
+
+def load_package_metadata(root: Path = ROOT) -> dict:
+    package = _read_source_json(root, 'hub-package.json', 'hub package manifest')
+    version = package.get('runtime_version')
+    raw_build = package.get('runtime_build')
+    if (not isinstance(version, str) or re.fullmatch(r'[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?', version) is None
+            or isinstance(raw_build, bool) or not isinstance(raw_build, (str, int))
+            or re.fullmatch(r'[0-9]+', str(raw_build)) is None):
+        raise RuntimeError('hub-package.json runtime_version/runtime_build are invalid.')
+    package['runtime_version'] = version
+    package['runtime_build'] = str(raw_build)
+    return package
+
+
+def _locale_map(value, label: str, *, max_length: int, allow_empty: bool = False) -> dict:
+    if not isinstance(value, dict) or set(value) != {'zh-CN', 'en'}:
+        raise RuntimeError(f'{label} must define exactly zh-CN and en values.')
+    for locale, text in value.items():
+        if not isinstance(text, str) or (not allow_empty and not text.strip()):
+            raise RuntimeError(f'{label}.{locale} is not safe display text.')
+        if any(ord(character) < 32 or 0x7f <= ord(character) <= 0x9f
+               or 0xd800 <= ord(character) <= 0xdfff for character in text):
+            raise RuntimeError(f'{label}.{locale} contains a control or invalid Unicode character.')
+        if len(text.encode('utf-16-le')) // 2 > max_length:
+            raise RuntimeError(f'{label}.{locale} exceeds the {max_length}-UTF-16-code-unit runtime limit.')
+    return value
+
+
+def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
+    if not isinstance(value, str) or not value or '\\' in value:
+        raise RuntimeError(f'{label} must be a relative assets/private path.')
+    relative = PurePosixPath(value)
+    if (relative.is_absolute() or relative.as_posix() != value
+            or len(relative.parts) < 3 or relative.parts[:2] != ('assets', 'private')
+            or any(part in ('', '.', '..') for part in relative.parts)):
+        raise RuntimeError(f'{label} must stay inside assets/private.')
+    root = Path(root)
+    target = root.joinpath(*relative.parts)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f'{label} cannot pass through a symlink: {current}')
+    try:
+        target.resolve(strict=required).relative_to(root.resolve())
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise RuntimeError(f'{label} must resolve to an existing path inside assets/private.') from exc
+    if required and not target.is_file():
+        raise RuntimeError(f'{label} is missing or is not a regular file: {value}')
+    return target
+
+
+def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dict:
+    """Load and validate the single build-owned theme contract."""
+    root = Path(root)
+    config = _read_source_json(root, 'theme-config.json', 'theme config')
+    if set(config) != {'identity', 'startup', 'wallpaper'}:
+        raise RuntimeError('theme-config.json has an unsupported top-level shape.')
+    identity = config.get('identity')
+    if not isinstance(identity, dict) or set(identity) != {
+            'appName', 'botName', 'installationName', 'iconInput', 'entryAvatarInput'}:
+        raise RuntimeError('theme-config.json identity fields are invalid.')
+    app_name = _locale_map(identity.get('appName'), 'identity.appName', max_length=64)
+    bot_name = _locale_map(identity.get('botName'), 'identity.botName', max_length=32)
+    installation_name = identity.get('installationName')
+    if (not isinstance(installation_name, str) or len(installation_name) > 255
+            or '/' in installation_name or '\\' in installation_name
+            or not installation_name.endswith('.app')
+            or installation_name != app_name['zh-CN'] + '.app'
+            or any(ord(character) < 32 or ord(character) == 127 for character in installation_name)):
+        raise RuntimeError('theme-config.json installationName must be a safe .app basename matching the Chinese app name.')
+    icon_input = _private_input(root, identity.get('iconInput'), 'identity.iconInput', required=require_inputs)
+    entry_avatar_input = _private_input(
+        root, identity.get('entryAvatarInput'), 'identity.entryAvatarInput', required=require_inputs,
+    )
+    if icon_input == entry_avatar_input:
+        raise RuntimeError('theme-config.json iconInput and entryAvatarInput must be distinct assets.')
+
+    startup = config.get('startup')
+    if not isinstance(startup, dict) or set(startup) != {'durationMs', 'text'}:
+        raise RuntimeError('theme-config.json startup fields are invalid.')
+    duration_ms = startup.get('durationMs')
+    if type(duration_ms) is not int or duration_ms != 12000:
+        raise RuntimeError('theme-config.json startup.durationMs must be exactly 12000; the runtime animation duration is fixed.')
+    text = startup.get('text')
+    if not isinstance(text, dict) or set(text) != {'introTitle', 'introCaption', 'artworkSubtitle'}:
+        raise RuntimeError('theme-config.json startup.text fields are invalid.')
+    text_limits = {'introTitle': 16, 'introCaption': 48, 'artworkSubtitle': 60}
+    for key, value in text.items():
+        _locale_map(value, f'startup.text.{key}', max_length=text_limits[key], allow_empty=True)
+
+    wallpaper = config.get('wallpaper')
+    if not isinstance(wallpaper, dict) or set(wallpaper) != {'strength', 'min', 'max'}:
+        raise RuntimeError('theme-config.json wallpaper fields are invalid.')
+    strength, minimum, maximum = wallpaper.get('strength'), wallpaper.get('min'), wallpaper.get('max')
+    if (any(type(value) is not int for value in (strength, minimum, maximum))
+            or minimum != 0 or maximum != 75 or not minimum <= strength <= maximum):
+        raise RuntimeError('theme-config.json wallpaper min/max must be 0/75 and strength must be within that runtime range.')
+
+    package = load_package_metadata(root)
+    output = {
+        'identity': {
+            'appName': app_name,
+            'botName': bot_name,
+            'installationName': installation_name,
+            'iconInput': identity['iconInput'],
+            'entryAvatarInput': identity['entryAvatarInput'],
+            'version': package['runtime_version'],
+            'build': package['runtime_build'],
+        },
+        'startup': {'durationMs': duration_ms, 'text': text},
+        'wallpaper': {'strength': strength, 'min': minimum, 'max': maximum},
+    }
+    return output
+
+
+VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version', 'runtime_build'))
+NAME = load_theme_config(ROOT)['identity']['installationName']
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift',
     'tools/build-macos.sh', 'tools/build-wallpaper.py', 'tools/build-startup.py',
-    'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json',
+    'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
     'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
     'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
-    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
 STARTUP_OUTPUTS = (
     'startup/install.js',
@@ -225,6 +354,48 @@ def verify_icon(path, info):
     if (len(header) != 8 or header[:4] != b'icns'
             or int.from_bytes(header[4:8], 'big') != icon.stat().st_size or icon.stat().st_size <= 8):
         raise RuntimeError(f'应用图标 ICNS 容器无效：{icon}')
+
+
+def write_bundle_info(path):
+    """Write localized bundle names from the validated theme; retain fixed app identity."""
+    path = staged_path(path)
+    theme = load_theme_config(ROOT, require_inputs=True)
+    identity = theme['identity']
+    contents = path / 'Contents'
+    if contents.is_symlink() or not contents.is_dir():
+        raise RuntimeError(f'缺少实体应用 Contents 目录：{contents}')
+    info_path = contents / 'Info.plist'
+    if info_path.is_symlink():
+        raise RuntimeError(f'拒绝覆写符号链接 Info.plist：{info_path}')
+    info = {
+        'CFBundleExecutable': IDENTITY[1],
+        'CFBundleIdentifier': IDENTITY[0],
+        'CFBundleName': identity['appName']['en'],
+        'CFBundleDisplayName': identity['appName']['en'],
+        'CFBundleDevelopmentRegion': 'en',
+        'CFBundleLocalizations': ['en', 'zh-Hans'],
+        'CFBundleIconFile': ICON_NAME,
+        'CFBundlePackageType': 'APPL',
+        'CFBundleShortVersionString': VERSION,
+        'CFBundleVersion': BUILD,
+        'LSMinimumSystemVersion': '13.0',
+        'LSUIElement': True,
+        'NSHighResolutionCapable': True,
+    }
+    with info_path.open('wb') as stream:
+        plistlib.dump(info, stream, fmt=plistlib.FMT_XML, sort_keys=False)
+    resources = contents / 'Resources'
+    resources.mkdir(parents=True, exist_ok=True)
+    for locale, name in (('en', identity['appName']['en']), ('zh-Hans', identity['appName']['zh-CN'])):
+        localized = resources / f'{locale}.lproj/InfoPlist.strings'
+        if localized.is_symlink():
+            raise RuntimeError(f'拒绝覆写符号链接本地化名称：{localized}')
+        localized.parent.mkdir(parents=True, exist_ok=True)
+        quoted = json.dumps(name, ensure_ascii=False)
+        localized.write_text(
+            f'"CFBundleDisplayName" = {quoted};\n"CFBundleName" = {quoted};\n', encoding='utf-8',
+        )
+    return info
 
 
 def verify_wallpaper(path, info, marker):
@@ -427,9 +598,14 @@ def verify_startup(path, info, marker):
         preview_assets = json.loads(defaults[len(prefix):-len(suffix)].decode('utf-8'))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError('默认素材 JavaScript 不是受控 JSON 数据。') from exc
-    required_asset_keys = {'avatar', 'entryAvatar', 'artwork', 'artworkSHA256', 'contours', 'wallpaperStrength'}
+    required_asset_keys = {
+        'avatar', 'entryAvatar', 'artwork', 'artworkSHA256', 'contours', 'wallpaperStrength', 'themeConfig',
+    }
     if not isinstance(preview_assets, dict) or set(preview_assets) != required_asset_keys:
         raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
+    theme_config = load_theme_config(ROOT)
+    if preview_assets.get('themeConfig') != theme_config:
+        raise RuntimeError('startup themeConfig does not match the build-owned theme config and package version.')
     image_details = {}
     for key, relative, size_limit in (
         ('avatar', 'web/assets/defaults/avatar.png', MAX_AVATAR_DATA_URL_BYTES),
@@ -474,7 +650,7 @@ def verify_startup(path, info, marker):
             'contourPointCount': point_count,
             'contourArtworkSHA256': artwork_sha,
         }
-            or preview_assets.get('wallpaperStrength') != 42):
+            or preview_assets.get('wallpaperStrength') != theme_config['wallpaper']['strength']):
         raise RuntimeError('startup manifest 默认图像、线稿配准或文字默认值无效。')
 
     assets_prefix = 'const DEFAULT_ASSETS = Object.freeze('
@@ -493,18 +669,17 @@ def verify_startup(path, info, marker):
 
 
 def verify_localized_names(path, info):
-    if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != ('Azhou AI Lab', 'Azhou AI Lab'):
-        raise RuntimeError('Native bundle fallback display name must be Azhou AI Lab.')
+    theme = load_theme_config(ROOT)
+    app_name = theme['identity']['appName']
+    if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (app_name['en'], app_name['en']):
+        raise RuntimeError('Native bundle fallback display name does not match theme-config.json.')
     resources = Path(path) / 'Contents/Resources'
+    def localized_strings(name):
+        quoted = json.dumps(name, ensure_ascii=False)
+        return f'"CFBundleDisplayName" = {quoted};\n"CFBundleName" = {quoted};\n'
     expected = {
-        'en.lproj/InfoPlist.strings': (
-            '"CFBundleDisplayName" = "Azhou AI Lab";\n'
-            '"CFBundleName" = "Azhou AI Lab";\n'
-        ),
-        'zh-Hans.lproj/InfoPlist.strings': (
-            '"CFBundleDisplayName" = "阿舟 AI 实验室";\n'
-            '"CFBundleName" = "阿舟 AI 实验室";\n'
-        ),
+        'en.lproj/InfoPlist.strings': localized_strings(app_name['en']),
+        'zh-Hans.lproj/InfoPlist.strings': localized_strings(app_name['zh-CN']),
     }
     for relative, text in expected.items():
         candidate = resources / relative
@@ -597,6 +772,7 @@ if __name__ == '__main__':
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--publish', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-marker', metavar='STAGED_PAYLOAD')
+    actions.add_argument('--write-bundle-info', metavar='STAGED_PAYLOAD')
     actions.add_argument('--check-inputs', metavar='STAGED_PAYLOAD')
     options = parser.parse_args()
     try:
@@ -604,6 +780,8 @@ if __name__ == '__main__':
             publish(options.publish)
         elif options.write_marker:
             write_marker(options.write_marker)
+        elif options.write_bundle_info:
+            write_bundle_info(options.write_bundle_info)
         elif options.check_inputs:
             check_inputs(options.check_inputs)
         else:

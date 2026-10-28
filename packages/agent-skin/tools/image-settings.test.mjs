@@ -160,6 +160,8 @@ function makeFixture(options = {}) {
     indexedDB: options.indexedDB,
     localization: options.localization,
     appearanceAvatar: options.appearanceAvatar,
+    themeConfig: options.themeConfig,
+    getAppearance: options.getAppearance,
     Image: ImageConstructor,
     URL: {
       createObjectURL() { const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },
@@ -618,6 +620,42 @@ test('loading settings without IndexedDB returns a copy of the supplied defaults
   });
 });
 
+test('one appearance page shows build identity, editable groups and live inherited state without persisting them', async () => {
+  const themeConfig = {
+    identity: { appName: { 'zh-CN': '阿舟 AI 实验室', en: 'Azhou AI Lab' },
+      botName: { 'zh-CN': '阿舟', en: 'Azhou' }, version: '0.9.0', build: '10',
+      installationName: '阿舟 AI 实验室.app', iconInput: 'assets/private/app-icon/source.png',
+      entryAvatarInput: 'assets/private/entry-avatar.png' },
+    startup: { durationMs: 12000 }, wallpaper: { strength: 42, min: 0, max: 75 },
+  };
+  let appearance = { locale: 'zh-CN', theme: 'dark', reducedMotion: false, colors: { surface: '#10121c' } };
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const fixture = makeFixture({ localization, themeConfig, getAppearance: () => appearance });
+  const loaded = await fixture.api.load({ avatar: '', artwork: '', contours: [] });
+  assert.equal(fixture.api.openSettings(), true);
+  const sections = fixture.elements.filter(element => element.getAttribute('data-agent-skin-settings-section'));
+  assert.deepEqual(sections.map(element => element.getAttribute('data-agent-skin-settings-section')),
+    ['identity', 'startup', 'workspace', 'inherited']);
+  const value = key => fixture.elements.find(element => element.getAttribute('data-agent-skin-setting-value') === key);
+  assert.equal(value('appName').textContent, '阿舟 AI 实验室');
+  assert.equal(value('version').textContent, '0.9.0 · 10');
+  assert.equal(value('theme').textContent, '深色');
+  assert.equal(value('reducedMotion').textContent, '关闭');
+  assert.equal(value('surface').textContent, '#10121c');
+  assert.match(value('installation').textContent, /theme-config.json/);
+  assert.match(value('installation').textContent, /build-macos.sh/);
+  assert.equal(loaded.settings.themeConfig, undefined);
+  assert.equal(loaded.settings.reducedMotion, undefined);
+  appearance = { ...appearance, locale: 'en', theme: 'light', reducedMotion: true };
+  localization.setLocale('en');
+  fixture.api.refreshAppearance();
+  assert.equal(value('appName').textContent, 'Azhou AI Lab');
+  assert.equal(value('theme').textContent, 'Light');
+  assert.equal(value('reducedMotion').textContent, 'On');
+  assert.equal(fixture.api.cancelSettings(), true);
+  fixture.api.dispose();
+});
+
 test('the settings dialog follows host locale changes without replacing the dialog or draft', async () => {
   const localization = createLocalization({ locale: 'zh-CN' });
   const fixture = makeFixture({ localization, appearanceAvatar: 'data:image/png;base64,AAAA' });
@@ -660,7 +698,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(status.textContent,
     'Saved settings are temporarily unavailable. Defaults are in use; the record was kept.');
   assert.equal(fixture.elements.find(element => element.id === 'agent-skin-settings-title').textContent,
-    'Azhou · Appearance');
+    'Azhou · Theme & Appearance');
   assert.equal(dialog.style.getPropertyValue('color-scheme'), 'inherit');
   assert.equal(dialog.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
   assert.equal(dialog.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');

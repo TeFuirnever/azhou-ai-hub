@@ -84,11 +84,13 @@ function hostAppearance(host) {
     const value = tokens.map(token => style?.getPropertyValue?.(token)?.trim()).find(Boolean);
     if (value) colors[key] = value;
   }
-  return Object.freeze({ locale, theme, colors: Object.freeze(colors) });
+  const reducedMotion = typeof host.matchMedia === 'function'
+    ? host.matchMedia('(prefers-reduced-motion: reduce)').matches : undefined;
+  return Object.freeze({ locale, theme, colors: Object.freeze(colors), reducedMotion });
 }
 
-function appearanceText(factory, appearance) {
-  if (typeof factory === 'function') return factory({ locale: appearance.locale });
+function appearanceText(factory, appearance, themeConfig) {
+  if (typeof factory === 'function') return factory({ locale: appearance.locale, themeConfig });
   // Minimal payloads remain supported without a localization factory.
   return { t: key => ({ characterName: 'Azhou', openAppearance: 'Open appearance settings',
     appearanceLabel: 'Azhou appearance settings', overlayLabel: 'Azhou startup animation' })[key] };
@@ -116,7 +118,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const label = document.createElement('span');
   button.appendChild(label);
   const setAppearance = value => {
-    const text = appearanceText(factory, value);
+    const text = appearanceText(factory, value, assets?.themeConfig);
     label.textContent = text.t('characterName');
     button.title = text.t('openAppearance');
     button.setAttribute('aria-label', text.t('appearanceLabel'));
@@ -219,6 +221,8 @@ class PageController {
     this.bodyObserver = null;
     this.appearanceEntry = null;
     this.appearanceObserver = null;
+    this.motionQuery = null;
+    this.onMotionChange = () => this.#updateAppearance();
     this.appearance = hostAppearance(host);
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
@@ -368,6 +372,10 @@ class PageController {
   }
 
   #observeAppearance() {
+    if (typeof this.host.matchMedia === 'function') {
+      this.motionQuery = this.host.matchMedia('(prefers-reduced-motion: reduce)');
+      this.motionQuery.addEventListener('change', this.onMotionChange);
+    }
     const root = this.document.documentElement;
     if (typeof root.getAttribute !== 'function' || typeof this.host.MutationObserver !== 'function') return;
     this.appearanceObserver = new this.host.MutationObserver(() => this.#updateAppearance());
@@ -627,6 +635,8 @@ class PageController {
     this.state.phase = 'disposed';
     this.appearanceObserver?.disconnect();
     this.appearanceObserver = null;
+    this.motionQuery?.removeEventListener('change', this.onMotionChange);
+    this.motionQuery = null;
     this.state.overlay = false;
     this.host.removeEventListener('message', this.onMessage);
     this.#stopFrame();

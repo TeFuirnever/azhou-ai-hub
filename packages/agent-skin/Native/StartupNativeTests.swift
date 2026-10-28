@@ -145,6 +145,24 @@ struct StartupNativeTests {
             checks += 1
         }
 
+        let themeBundleURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".bundle")
+        defer { try? FileManager.default.removeItem(at: themeBundleURL) }
+        for (language, name) in [("en", "Azhou Test Lab"), ("zh-Hans", "阿舟测试实验室")] {
+            let folder = themeBundleURL.appendingPathComponent("Contents/Resources/" + language + ".lproj")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let data = try PropertyListSerialization.data(fromPropertyList: ["CFBundleDisplayName": name], format: .xml, options: 0)
+            try data.write(to: folder.appendingPathComponent("InfoPlist.strings"))
+        }
+        let themeInfo = try PropertyListSerialization.data(fromPropertyList: [
+            "CFBundleIdentifier": "local.azhou.theme-test", "CFBundlePackageType": "BNDL",
+            "CFBundleDisplayName": "Azhou Test Fallback", "CFBundleDevelopmentRegion": "en",
+        ], format: .xml, options: 0)
+        try themeInfo.write(to: themeBundleURL.appendingPathComponent("Contents/Info.plist"))
+        let themeBundle = Bundle(url: themeBundleURL)!
+        expect(NativeDisplayLocale.chinese.displayName(in: themeBundle) == "阿舟测试实验室"
+            && NativeDisplayLocale.english.displayName(in: themeBundle) == "Azhou Test Lab",
+            "native UI reads configured bundle names for the verified locale")
+
         expect(NativeDisplayLocale.systemFallback(preferredLanguages: ["zh-Hans-CN"]) == .chinese,
                "native preview follows the macOS Chinese locale before an official host locale is ready")
         expect(NativeDisplayLocale.systemFallback(preferredLanguages: ["en-US"]) == .english,

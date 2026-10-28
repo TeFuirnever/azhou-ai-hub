@@ -39,7 +39,7 @@ function installAnimation(
   let localization = null;
   try {
     if (typeof createLocalizationFactory === 'function') {
-      localization = createLocalizationFactory({ locale: initialLocale });
+      localization = createLocalizationFactory({ locale: initialLocale, themeConfig: assets?.themeConfig });
     }
   } catch {}
   let locale = initialLocale;
@@ -123,6 +123,9 @@ function installAnimation(
       imageSettings = createImageSettingsFactory({
         document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
         localization, appearanceAvatar: frameSpec?.assets?.entryAvatar,
+        themeConfig: assets?.themeConfig,
+        getAppearance: () => ({ ...appearance, reducedMotion: reduced,
+          source: frameSpec?.intent === 'preview' ? 'preview' : 'official' }),
       });
     }
   } catch {}
@@ -1532,6 +1535,7 @@ function installAnimation(
 
   function setReduced(value) {
     reduced = Boolean(value);
+    imageSettings?.refreshAppearance?.();
     if (loaded) drawAt(elapsed, false);
   }
 
@@ -1549,6 +1553,9 @@ function installAnimation(
 
   function updateAppearance(nextAppearance) {
     if (disposed || !nextAppearance || typeof nextAppearance !== 'object') return false;
+    if (typeof nextAppearance.reducedMotion === 'boolean' && nextAppearance.reducedMotion !== reduced) {
+      setReduced(nextAppearance.reducedMotion);
+    }
     let changed = false;
     let localeChanged = false;
     if (typeof nextAppearance.locale === 'string') {
@@ -1581,6 +1588,7 @@ function installAnimation(
     }
     applyAppearanceStyles();
     refreshLocalizedUI();
+    imageSettings?.refreshAppearance?.();
     if (changed) {
       appearanceRevision++;
       lastStaticRenderKey = '';

@@ -277,7 +277,7 @@ try {
         if (name === 'location') return new URL('app://-/index.html?initialRoute=%2F');
         if (name === 'document') return hostDocument;
         const value = Reflect.get(target, name, target);
-        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle'].includes(name)
+        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle', 'matchMedia'].includes(name)
           && typeof value === 'function' ? value.bind(target) : value;
       } })
       : {
@@ -285,6 +285,7 @@ try {
         MutationObserver, addEventListener: window.addEventListener.bind(window),
         removeEventListener: window.removeEventListener.bind(window),
         getComputedStyle: window.getComputedStyle.bind(window),
+        matchMedia: window.matchMedia.bind(window),
         setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
       };
     let generatedInstallResult;
@@ -866,7 +867,7 @@ try {
   async function appearanceEntryMetrics() {
     return cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const shadow=entry?.shadowRoot,button=shadow?.querySelector('button[aria-label="阿舟外观设置"]');
+      const shadow=entry?.shadowRoot,button=shadow?.querySelector('button[aria-label="阿舟主题与外观"]');
       if(!entry||!button)return null;
       const rect=button.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2;
       const target=document.elementFromPoint(x,y),shadowTarget=shadow.elementFromPoint?.(x,y);
@@ -914,7 +915,7 @@ try {
   async function clickAppearanceEntry() {
     const point = await cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟外观设置"]');
+      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
       if(!button)return false;
       const rect=button.getBoundingClientRect();
       return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
@@ -925,7 +926,7 @@ try {
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
     return cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟外观设置"]');
+      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
       return {focused:!!button&&document.activeElement===entry&&entry.shadowRoot.activeElement===button,
         state:window.__startupAPI.status()};
     })()`);
@@ -1181,7 +1182,7 @@ try {
       'the synthetic appearance button stays compact without an avatar: ' + JSON.stringify(entry.rect));
     assert.equal(entry.padding, '5px 9px 5px 5px');
     assert.equal(entry.buttonText, '阿舟');
-    assert.equal(entry.buttonAriaLabel, '阿舟外观设置');
+    assert.equal(entry.buttonAriaLabel, '阿舟主题与外观');
     assert.equal(entry.entryHit, true);
     assert.equal(entry.buttonHit, true);
     assert.equal(entry.inputHit, true);
@@ -1214,7 +1215,7 @@ try {
     assert.deepEqual(cancelled.completion, { cause: 'settings-cancel', beforeReady: false });
     const focusAfterButtonCancel = await cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟外观设置"]');
+      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
       return {visible:entry?.style.display==='block',documentFocus:document.activeElement===entry,
         shadowFocus:entry?.shadowRoot?.activeElement===button};
     })()`);
@@ -1918,8 +1919,8 @@ try {
     assert.equal(before.frameAria, '阿舟启动动画');
     assert.equal(before.stageLabel, '阿舟启动动画');
     assert.equal(before.entryText, '阿舟');
-    assert.equal(before.entryAria, '阿舟外观设置');
-    assert.equal(before.entryTitle, '打开外观设置');
+    assert.equal(before.entryAria, '阿舟主题与外观');
+    assert.equal(before.entryTitle, '打开主题与外观');
     assert.ok(before.drawnText.includes('Synthetic agent'), 'explicit asset title remains in the identity canvas');
     assert.ok(before.drawnText.includes('SYNTHETIC / TEST'), 'explicit asset caption remains in the identity canvas');
 
@@ -1940,7 +1941,7 @@ try {
     })()`);
     assert.equal(draftBefore.title, 'Draft survives');
     assert.equal(draftBefore.strength, '33');
-    assert.equal(draftBefore.heading, '阿舟 · 外观设置');
+    assert.equal(draftBefore.heading, '阿舟 · 主题与外观');
     assert.equal(draftBefore.titleLabel, '启动标题（最多 16 个字符）');
 
     await cdp.evaluate(`(()=>{
@@ -1956,7 +1957,7 @@ try {
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),button=entry?.shadowRoot?.querySelector('button');
       const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[type="text"]');
       if(!frame||frame.title!=='Azhou startup animation'||doc.documentElement.lang!=='en'
-        ||doc.documentElement.dataset.theme!=='light'||dialog?.querySelector('h2')?.textContent!=='Azhou · Appearance'
+        ||doc.documentElement.dataset.theme!=='light'||dialog?.querySelector('h2')?.textContent!=='Azhou · Theme & Appearance'
         ||title?.getAttribute('aria-label')!=='Startup title (up to 16 characters)')return false;
       return {runId:window.__startupAPI.status().runId,phase:window.__startupAPI.status().phase,
         frameCount:document.querySelectorAll('iframe').length,runCount:window.__startupAnimationRuns.length,
@@ -1985,8 +1986,8 @@ try {
       surface: '#f8fafc', text: '#172033', muted: '#536176', border: '#cbd5e1',
     });
     assert.equal(updated.entryText, 'Azhou');
-    assert.equal(updated.entryAria, 'Azhou appearance settings');
-    assert.equal(updated.entryTitle, 'Open appearance settings');
+    assert.equal(updated.entryAria, 'Azhou theme and appearance');
+    assert.equal(updated.entryTitle, 'Open theme and appearance');
     assert.equal(updated.rootAria, 'Azhou startup animation');
     const englishStages = {
       pulse: 'The lab is lighting up', identity: 'Azhou is setting up the workspace',
@@ -1996,13 +1997,29 @@ try {
       shutter: 'The animation is almost finished', complete: 'Finished',
     };
     assert.equal(updated.stageText, englishStages[updated.stage]);
-    assert.equal(updated.heading, 'Azhou · Appearance');
+    assert.equal(updated.heading, 'Azhou · Theme & Appearance');
     assert.equal(updated.title, 'Draft survives');
     assert.equal(updated.strength, '33');
     assert.equal(updated.titleLabel, 'Startup title (up to 16 characters)');
     assert.ok(updated.drawnText.includes('Synthetic agent'), 'appearance changes preserve and redraw explicit default text');
-    assert.equal(/language|theme|语言|主题/i.test(updated.settingsText), false,
-      'the settings dialog has no language or theme controls');
+    const inheritedSettings = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[title="Azhou startup animation"]').contentDocument;
+      const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
+      return {theme:value('theme'),locale:value('locale'),surface:value('surface'),
+        sections:[...doc.querySelectorAll('[data-agent-skin-settings-section]')].map(el=>el.dataset.agentSkinSettingsSection),
+        preferenceControls:doc.querySelectorAll('select,input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length};
+    })()`);
+    assert.deepEqual(inheritedSettings, { theme: 'Light', locale: 'en', surface: '#f8fafc',
+      sections: ['identity', 'startup', 'workspace', 'inherited'], preferenceControls: 0 });
+    await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await until(() => cdp.evaluate(`document.querySelector('iframe[title="Azhou startup animation"]').contentDocument
+      .querySelector('[data-agent-skin-setting-value="reducedMotion"]').textContent==='On'`), 5000, 'system motion readout')
+      .catch(async error => { throw new Error(error.message + ': ' + JSON.stringify(await cdp.evaluate(`({
+        outer:matchMedia('(prefers-reduced-motion: reduce)').matches,
+        inner:document.querySelector('iframe').contentWindow.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        reduced:window.__startupAnimationRuns.at(-1).handle.preview.report().reduced,
+        readout:document.querySelector('iframe').contentDocument.querySelector('[data-agent-skin-setting-value="reducedMotion"]').textContent})`))); });
+    await cdp.call('Emulation.setEmulatedMedia', { features: [] });
     assert.equal(updated.recordKeys.some(key => key === 'locale' || key === 'theme'), false,
       'appearance preferences are absent from the animation assets record shape');
 
@@ -3476,7 +3493,7 @@ try {
       const canceledSettings = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-        const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟外观设置"]');
+        const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
         return state.phase==='complete'&&state.completion?.cause==='settings-cancel'
           &&document.activeElement===entry&&entry.shadowRoot.activeElement===button?state:false;
       })()`), 5000, 'generated payload settings cancellation restores the appearance button focus');
@@ -3659,6 +3676,17 @@ try {
         const frame=document.querySelector('iframe[aria-label]');
         return window.__startupAPI.status().phase==='settings'&&frame?.contentDocument.querySelector('dialog')?.open===true;
       })()`), 5000, 'generated payload settings panel');
+      const themePage = await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
+        return {appName:value('appName'),botName:value('botName'),version:value('version'),
+          source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length};
+      })()`);
+      assert.equal(themePage.appName, '阿舟 AI 实验室');
+      assert.equal(themePage.botName, '阿舟');
+      assert.equal(themePage.version, '0.9.0 · 10');
+      assert.equal(themePage.sections, 4);
+      assert.equal(themePage.source, '构建默认值');
       const draft = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
         const title=doc.querySelector('input[aria-label^="启动标题"]');

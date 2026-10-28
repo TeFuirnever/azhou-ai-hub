@@ -27,7 +27,8 @@
     "wallpaper/wallpaper.css",
     "index.html",
     "style.css",
-    "animation.js"
+    "animation.js",
+    "theme-config.json"
   ],
   "runtime_paths": [
     ".gitignore",
@@ -35,6 +36,7 @@
     "UPSTREAM.md",
     "MIGRATION-INVENTORY.md",
     "hub-package.json",
+    "theme-config.json",
     "Native/App.swift",
     "Native/InstallRegistry.swift",
     "Native/Wallpaper.swift",
@@ -78,6 +80,7 @@
     "docs/installation-lifecycle.md",
     "docs/azhou-startup-design.md",
     "docs/module-redesign-0.9.0.md",
+    "docs/theme-appearance.md",
     "docs/azhou-startup-verification.md",
     "docs/azhou-vivid-maximized-verification.md",
     "docs/azhou-installation-verification.md",

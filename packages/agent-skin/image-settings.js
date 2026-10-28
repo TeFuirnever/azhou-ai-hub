@@ -9,6 +9,7 @@
 function createImageSettings(environment) {
   const document = environment && environment.document;
   const localization = environment && environment.localization;
+  const themeConfig = environment?.themeConfig;
   const appearanceAvatar = environment && typeof environment.appearanceAvatar === 'string'
     && environment.appearanceAvatar.length <= 2 * 1024 * 1024
     && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(environment.appearanceAvatar)
@@ -33,7 +34,7 @@ function createImageSettings(environment) {
     'animation.title.default': '阿舟 AI 实验室',
     'animation.caption.default': 'AZHOU / AI LAB',
     'animation.subtitle.default': '和阿舟一起，把想法做出来。',
-    'settings.title': '阿舟 · 外观设置',
+    'settings.title': '阿舟 · 主题与外观',
     'settings.close': '取消并关闭设置',
     'settings.avatar.label': '启动头像',
     'settings.artwork.label': '背景图片',
@@ -295,7 +296,7 @@ function createImageSettings(environment) {
       introCaption: typeof source.introCaption === 'string' ? source.introCaption : translate('animation.caption.default'),
       artworkSubtitle: typeof source.artworkSubtitle === 'string' ? source.artworkSubtitle : translate('animation.subtitle.default'),
       wallpaperStrength: Number.isInteger(source.wallpaperStrength) && source.wallpaperStrength >= 0
-        && source.wallpaperStrength <= 75 ? source.wallpaperStrength : 42,
+          && source.wallpaperStrength <= 75 ? source.wallpaperStrength : themeConfig?.wallpaper?.strength ?? 42,
     };
   }
 
@@ -622,6 +623,7 @@ function createImageSettings(environment) {
         if (task.settled || !isCurrent(task)) return;
         currentSettings = candidate;
         currentBaseline = candidate;
+        loadReason = '';
         finish(task, true, candidate);
       };
       transaction.onerror = () => {
@@ -722,6 +724,16 @@ function createImageSettings(environment) {
       translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
     status.textContent = panelStatus ? translate(panelStatus.key) : '';
     status.setAttribute('role', panelStatus?.role || 'status');
+    refreshAppearance();
+  }
+
+  function refreshAppearance() {
+    if (!panelControls || disposed) return false;
+    for (const item of panelControls.readouts) {
+      try { item.element.textContent = item.value(); }
+      catch { item.element.textContent = translate('settings.unknown'); }
+    }
+    return true;
   }
 
   function handleLocaleChange() {
@@ -788,6 +800,14 @@ function createImageSettings(environment) {
     for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
     panelControls.strength.value = String(draft.wallpaperStrength);
     panelControls.strengthValue.textContent = String(draft.wallpaperStrength);
+    for (const [role, preview] of Object.entries(panelControls.previews)) {
+      const value = draft[role];
+      preview.hidden = !value;
+      preview.style.setProperty('display', value ? 'block' : 'none');
+      if (value) preview.src = value;
+      else preview.removeAttribute('src');
+    }
+    refreshAppearance();
   }
 
   function buildSettingsPanel() {
@@ -796,7 +816,7 @@ function createImageSettings(environment) {
     dialog = document.createElement('dialog');
     dialog.setAttribute('aria-labelledby', 'agent-skin-settings-title');
     dialog.setAttribute('data-agent-skin-settings', '');
-    dialog.style.cssText = 'color-scheme:inherit;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #000a;font:15px/1.45 system-ui,sans-serif';
+    dialog.style.cssText = 'box-sizing:border-box;color-scheme:inherit;width:min(740px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #0006;font:14px/1.5 system-ui,sans-serif';
     dialog.style.setProperty('color-scheme', 'inherit');
     dialog.style.setProperty('border-color', 'var(--agent-skin-border, CanvasText)');
     dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
@@ -808,7 +828,7 @@ function createImageSettings(environment) {
     const heading = document.createElement('h2');
     heading.id = 'agent-skin-settings-title';
     heading.textContent = translate('settings.title');
-    heading.style.cssText = 'margin:0;font-size:20px';
+    heading.style.cssText = 'min-width:0;flex:1;margin:0;font-size:20px';
     if (appearanceAvatar) {
       const identityAvatar = document.createElement('img');
       identityAvatar.setAttribute('data-agent-skin-appearance-avatar', '');
@@ -833,6 +853,61 @@ function createImageSettings(environment) {
     const labels = Object.create(null);
     const ariaLabels = [];
     const controls = [close];
+    const readouts = [];
+    const previews = {};
+    let section = content;
+    const addText = (key, parent = section, tag = 'p') => {
+      const element = document.createElement(tag);
+      element.style.cssText = tag === 'h3' ? 'margin:0;font-size:16px' : 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+      labels[key] = { element, params: {} };
+      element.textContent = translate(key);
+      parent.appendChild(element);
+      return element;
+    };
+    const addSection = (name, note) => {
+      section = document.createElement('section');
+      section.setAttribute('data-agent-skin-settings-section', name);
+      section.setAttribute('aria-labelledby', `agent-skin-section-${name}`);
+      section.style.cssText = 'min-width:0;margin-top:22px;padding-top:20px;border-top:1px solid var(--agent-skin-border,CanvasText)';
+      content.appendChild(section);
+      addText(`settings.section.${name}`, section, 'h3').id = `agent-skin-section-${name}`;
+      addText(note);
+    };
+    const addInfo = (key, labelKey, value) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px 20px;margin-top:10px;min-width:0';
+      const label = addText(labelKey, row, 'span');
+      label.style.cssText += ';flex:1 1 180px;margin:0';
+      const element = document.createElement('span');
+      element.style.cssText = 'min-width:0;flex:1 1 220px;overflow-wrap:anywhere';
+      element.setAttribute('data-agent-skin-setting-value', key);
+      readouts.push({ element, value });
+      row.appendChild(element);
+      section.appendChild(row);
+    };
+    const localized = values => values?.[localization?.locale || 'zh-CN'] || translate('settings.unknown');
+    const inherited = key => {
+      try { return environment.getAppearance?.()?.[key]; } catch { return undefined; }
+    };
+    addText('settings.draft.note', content);
+    addSection('identity', 'settings.identity.note');
+    addInfo('appName', 'settings.appName', () => localized(themeConfig?.identity?.appName));
+    addInfo('botName', 'settings.botName', () => localized(themeConfig?.identity?.botName));
+    addInfo('version', 'settings.version', () => themeConfig?.identity?.version && themeConfig?.identity?.build
+      ? `${themeConfig.identity.version} · ${themeConfig.identity.build}` : translate('settings.unknown'));
+    const identitySection = section;
+    const buildDetails = document.createElement('details');
+    buildDetails.style.cssText = 'margin-top:14px';
+    addText('settings.buildDetails', buildDetails, 'summary').style.cssText = 'cursor:pointer';
+    identitySection.appendChild(buildDetails);
+    section = buildDetails;
+    addInfo('icon', 'settings.icon', () => themeConfig?.identity?.iconInput || translate('settings.unknown'));
+    addInfo('botAvatar', 'settings.botAvatar', () => themeConfig?.identity?.entryAvatarInput || translate('settings.unknown'));
+    addInfo('installationName', 'settings.installationName', () => themeConfig?.identity?.installationName || translate('settings.unknown'));
+    const installation = addText('settings.installation');
+    installation.setAttribute('data-agent-skin-setting-value', 'installation');
+    section = identitySection;
+    addSection('startup', 'settings.startup.note');
     const addRow = (key, control, params = {}, ariaKey = key) => {
       const wrapper = document.createElement('label');
       wrapper.style.cssText = 'display:grid;gap:5px;margin-top:14px';
@@ -842,7 +917,7 @@ function createImageSettings(environment) {
       control.setAttribute('aria-label', translate(ariaKey, params));
       ariaLabels.push({ control, key: ariaKey, params });
       wrapper.append(label, control);
-      content.appendChild(wrapper);
+      section.appendChild(wrapper);
       controls.push(control);
       return control;
     };
@@ -866,6 +941,7 @@ function createImageSettings(environment) {
           if (!panelOpen || panelAtStart !== panelGeneration) return;
           if (role === 'avatar') draft.avatar = result.dataURL;
           else { draft.artwork = result.dataURL; draft.contours = result.contours; }
+          updatePanelFields();
           setPanelStatus(result.warning === 'large-image'
             ? 'settings.status.imageLarge' : 'settings.status.imageReady');
         } catch (error) {
@@ -880,18 +956,26 @@ function createImageSettings(environment) {
       button.setAttribute('data-agent-skin-image-action', role);
       button.textContent = translate(actionKey);
       styleButton(button);
+      button.style.setProperty('justify-self', 'start');
       button.addEventListener('click', () => {
         if (panelOpen && !active) input.click?.();
       });
       const rowAction = addRow(key, button, {}, actionKey);
       controls.push(input);
-      content.appendChild(input);
+      section.appendChild(input);
+      const preview = document.createElement('img');
+      preview.setAttribute('alt', '');
+      preview.setAttribute('data-agent-skin-image-preview', role);
+      preview.style.cssText = role === 'avatar'
+        ? 'display:block;width:72px;height:72px;object-fit:cover;border-radius:16px;margin-top:10px'
+        : 'display:block;width:100%;max-height:190px;object-fit:cover;border-radius:10px;margin-top:10px';
+      previews[role] = preview;
+      section.appendChild(preview);
       buttons[actionKey] = button;
       return rowAction;
     };
     const buttons = Object.create(null);
     addFile('avatar', 'settings.avatar.label', 'settings.button.choosePortrait');
-    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
 
     for (const [key, limit, labelKey] of [
       ['introTitle', 16, 'settings.introTitle.label'],
@@ -911,6 +995,9 @@ function createImageSettings(environment) {
       addRow(labelKey, control, { limit });
     }
 
+    addSection('workspace', 'settings.workspace.note');
+    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
+    addInfo('layout', 'settings.layout', () => translate('settings.layout.value'));
     const strength = document.createElement('input');
     strength.type = 'range';
     strength.min = '0';
@@ -929,8 +1016,20 @@ function createImageSettings(environment) {
     const strengthLabel = document.createElement('span');
     strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
     strengthRow.append(strengthLabel, strengthValue, strength);
-    content.appendChild(strengthRow);
+    section.appendChild(strengthRow);
     controls.push(strength);
+
+    addSection('inherited', 'settings.inherited.note');
+    addInfo('preferenceSource', 'settings.preferenceSource', () => ['official', 'preview'].includes(inherited('source'))
+      ? translate(`settings.preferenceSource.${inherited('source')}`) : translate('settings.unknown'));
+    addInfo('locale', 'settings.locale', () => inherited('locale') || localization?.locale || translate('settings.unknown'));
+    addInfo('theme', 'settings.theme', () => ['light', 'dark'].includes(inherited('theme'))
+      ? translate(`settings.theme.${inherited('theme')}`) : translate('settings.unknown'));
+    addInfo('reducedMotion', 'settings.reducedMotion', () => typeof inherited('reducedMotion') === 'boolean'
+      ? translate(inherited('reducedMotion') ? 'settings.on' : 'settings.off') : translate('settings.unknown'));
+    addInfo('surface', 'settings.surface', () => inherited('colors')?.surface || translate('settings.unknown'));
+    addInfo('source', 'settings.source', () => translate(loadReason
+      ? 'settings.source.unavailable' : currentBaseline === undefined ? 'settings.source.defaults' : 'settings.source.user'));
 
     const status = document.createElement('p');
     status.style.cssText = 'min-height:1.5em;margin:14px 0 0';
@@ -938,7 +1037,7 @@ function createImageSettings(environment) {
     status.setAttribute('aria-live', 'polite');
     content.appendChild(status);
     const actions = document.createElement('footer');
-    actions.style.cssText = 'display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px';
+    actions.style.cssText = 'position:sticky;bottom:0;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px;padding:12px 0;background:var(--agent-skin-surface,Canvas);border-top:1px solid var(--agent-skin-border,CanvasText)';
     const restore = document.createElement('button');
     restore.type = 'button';
     styleButton(restore);
@@ -986,7 +1085,7 @@ function createImageSettings(environment) {
       cancelSettings();
     });
     panelControls = {
-      controls, status, fields, strength, strengthValue, heading, close, labels, ariaLabels,
+      controls, status, fields, strength, strengthValue, heading, close, labels, ariaLabels, readouts, previews,
       buttons: {
         ...buttons,
         'settings.button.restore': restore,
@@ -1486,6 +1585,7 @@ function createImageSettings(environment) {
     cancelSettings,
     isSettingsOpen,
     isBusy,
+    refreshAppearance,
     dispose,
   };
 }

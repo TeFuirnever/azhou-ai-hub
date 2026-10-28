@@ -550,16 +550,21 @@ enum NativeDisplayLocale: Equatable {
     }
 
     var displayName: String {
-        switch self {
-        case .chinese: return "阿舟 AI 实验室"
-        case .english: return "Azhou AI Lab"
-        }
+        displayName(in: .main)
+    }
+
+    func displayName(in bundle: Bundle) -> String {
+        let fallback = bundle.infoDictionary?["CFBundleDisplayName"] as? String ?? "Azhou"
+        let language = self == .chinese ? "zh-Hans" : "en"
+        guard let path = bundle.path(forResource: language, ofType: "lproj"),
+              let localized = Bundle(path: path) else { return fallback }
+        return localized.localizedString(forKey: "CFBundleDisplayName", value: fallback, table: "InfoPlist")
     }
 
     var quitTitle: String {
         switch self {
-        case .chinese: return "退出阿舟 AI 实验室"
-        case .english: return "Quit Azhou AI Lab"
+        case .chinese: return "退出\(displayName)"
+        case .english: return "Quit \(displayName)"
         }
     }
 

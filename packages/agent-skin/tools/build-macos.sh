@@ -2,27 +2,35 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ ! -d assets/private || ! -f assets/private/working.png || ! -f assets/private/scene.js \
-  || ! -f assets/private/wallpaper-scene-q-v3.png || ! -f assets/private/entry-avatar.png \
-  || ! -f assets/private/app-icon/source.png ]]; then
-  printf '%s\n' '缺少本地阿舟素材（working.png、scene.js、wallpaper-scene-q-v3.png、entry-avatar.png 或 app-icon/source.png）。请先准备本地私有素材。' >&2
+  || ! -f assets/private/wallpaper-scene-q-v3.png ]]; then
+  printf '%s\n' '缺少本地阿舟素材（working.png、scene.js、wallpaper-scene-q-v3.png）。请先准备本地私有素材。' >&2
   exit 1
 fi
-python3 - <<'PRIVATE_CHECK'
+theme_json="$(python3 - <<'PRIVATE_CHECK'
+import importlib.util
+import json
 import struct
 import subprocess
 from pathlib import Path
-for name in ['.build', '.build/module-cache', '.build/azhou-payload', '.build/azhou-install-registry', 'dist', 'assets/private', 'assets/private/app-icon']:
+
+spec = importlib.util.spec_from_file_location('agent_skin_artifacts', 'tools/verify-artifacts.py')
+artifacts = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(artifacts)
+theme = artifacts.load_theme_config(Path.cwd(), require_inputs=True)
+for name in ['.build', '.build/module-cache', '.build/azhou-payload', '.build/azhou-install-registry', 'dist', 'assets/private']:
     if Path(name).is_symlink():
         raise SystemExit('拒绝通过符号链接构建：' + name)
 tracked = subprocess.check_output(['git', 'ls-files', '--', 'assets/private', 'dist', '.build', '.local']).decode().strip()
 if tracked:
     raise SystemExit('私有素材、构建或验收产物进入 Git 跟踪范围，停止构建：\n' + tracked)
-for name in ['assets/private/working.png', 'assets/private/working-v2.png', 'assets/private/wallpaper-scene-q-v3.png', 'assets/private/entry-avatar.png', 'assets/private/scene.js', 'assets/private/app-icon/source.png', 'dist/check.app', '.build/check.app', '.local/check']:
+for name in ['assets/private/working.png', 'assets/private/working-v2.png', 'assets/private/wallpaper-scene-q-v3.png',
+             theme['identity']['entryAvatarInput'], theme['identity']['iconInput'], 'assets/private/scene.js',
+             'dist/check.app', '.build/check.app', '.local/check']:
     if subprocess.run(['git', 'check-ignore', '-q', '--', name]).returncode:
         raise SystemExit('缺少私有产物 ignore 规则：' + name)
-icon_source = Path('assets/private/app-icon/source.png')
+icon_source = Path(theme['identity']['iconInput'])
 if icon_source.is_symlink() or not icon_source.is_file():
-    raise SystemExit('缺少实体私有图标源图 assets/private/app-icon/source.png。')
+    raise SystemExit('缺少 theme-config.json 指定的实体私有图标源图。')
 with icon_source.open('rb') as stream:
     header = stream.read(24)
 if len(header) != 24 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
@@ -30,7 +38,11 @@ if len(header) != 24 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b
 icon_width, icon_height = struct.unpack('>II', header[16:24])
 if icon_width != icon_height or icon_width < 1024:
     raise SystemExit(f'图标源图须为至少 1024×1024 的方形 PNG，实际 {icon_width}×{icon_height}。')
+print(json.dumps(theme, ensure_ascii=False, separators=(',', ':')))
 PRIVATE_CHECK
+ )"
+theme_icon_input="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["iconInput"])')"
+theme_installation_name="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["installationName"])')"
 mkdir -p .build/module-cache
 stage_root="$(mktemp -d "$PWD/.build/azhou-stage.XXXXXX")"
 cleanup_stage() {
@@ -43,34 +55,7 @@ cleanup_stage() {
 trap cleanup_stage EXIT
 bundle="$stage_root/azhou-payload"
 mkdir -p "$bundle/Contents/MacOS"
-cat > "$bundle/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>AzhouCodexStartup</string>
-<key>CFBundleIdentifier</key><string>local.azhou.codex-startup</string>
-<key>CFBundleName</key><string>Azhou AI Lab</string>
-<key>CFBundleDisplayName</key><string>Azhou AI Lab</string>
-<key>CFBundleDevelopmentRegion</key><string>en</string>
-<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
-<key>CFBundleIconFile</key><string>AzhouAppIcon.icns</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.9.0</string>
-<key>CFBundleVersion</key><string>10</string>
-<key>LSMinimumSystemVersion</key><string>13.0</string>
-<key>LSUIElement</key><true/>
-<key>NSHighResolutionCapable</key><true/>
-</dict></plist>
-PLIST
-mkdir -p "$bundle/Contents/Resources/en.lproj" "$bundle/Contents/Resources/zh-Hans.lproj"
-cat > "$bundle/Contents/Resources/en.lproj/InfoPlist.strings" <<'STRINGS'
-"CFBundleDisplayName" = "Azhou AI Lab";
-"CFBundleName" = "Azhou AI Lab";
-STRINGS
-cat > "$bundle/Contents/Resources/zh-Hans.lproj/InfoPlist.strings" <<'STRINGS'
-"CFBundleDisplayName" = "阿舟 AI 实验室";
-"CFBundleName" = "阿舟 AI 实验室";
-STRINGS
+python3 tools/verify-artifacts.py --write-bundle-info "$bundle"
 python3 tools/verify-artifacts.py --write-marker "$bundle"
 /usr/bin/xcrun --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache \
   Native/App.swift Native/Wallpaper.swift -o "$bundle/Contents/MacOS/AzhouCodexStartup" -framework AppKit -framework WebKit
@@ -78,7 +63,7 @@ python3 tools/verify-artifacts.py --write-marker "$bundle"
   Native/InstallRegistry.swift -o "$stage_root/azhou-install-registry" -framework AppKit -framework CoreServices
 python3 tools/build-wallpaper.py --bundle "$bundle"
 python3 tools/build-startup.py --bundle "$bundle"
-icon_source="$PWD/assets/private/app-icon/source.png"
+icon_source="$PWD/$theme_icon_input"
 iconset="$stage_root/AzhouAppIcon.iconset"
 mkdir -p "$iconset"
 for icon_size in 16 32 128 256 512; do
@@ -96,4 +81,4 @@ codesign --verify --strict "$bundle"
 python3 tools/verify-artifacts.py --publish "$bundle"
 mv -f "$stage_root/azhou-install-registry" .build/azhou-install-registry
 printf '%s\n' '构建完成：.build/azhou-payload（隐藏构建载荷，不是日常启动入口）。' \
-  '请运行 bash tools/install-macos.sh 安装到 ~/Applications/阿舟 AI 实验室.app 并清理已核实的旧项目入口。'
+  "请运行 bash tools/install-macos.sh 安装到 ~/Applications/$theme_installation_name 并清理已核实的旧项目入口。"
