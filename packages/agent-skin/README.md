@@ -10,9 +10,9 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 当前固定版本 **0.9.0 / build 10**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
-**唯一日常入口：`~/Applications/阿舟启动 Codex.app`。** 构建生成隐藏的 `.build/azhou-payload` 安装载荷；安装验证成功后清理已核实的旧项目应用，项目 `dist` 不再保留第二份 `.app`。
+**唯一日常入口：`~/Applications/阿舟 AI 实验室.app`。** 构建生成隐藏的 `.build/azhou-payload` 安装载荷；安装验证成功后清理已核实的旧项目应用，项目 `dist` 不再保留第二份 `.app`。
 
-物理安装路径保留上述旧名称，以继续使用原有安装归属检查；显示名称通过本地化 bundle 元数据更新。内部 Bundle ID、可执行文件名、日志路径和存储键保持稳定。安装器不会仅因显示名相同而接管其他应用。
+物理文件名与显示名称均使用新产品名。安装器先验证新入口，再按原有身份、来源、签名和指纹规则退役已归属的旧名入口 `阿舟启动 Codex.app`；内部 Bundle ID、可执行文件名、日志路径和存储键保持稳定。安装器不会仅因显示名相同而接管其他应用。
 
 改版范围、官方设置来源与本地验证边界见 [0.9.0 改版验证](docs/module-redesign-0.9.0.md)。
 
@@ -44,7 +44,7 @@ bash tools/build-macos.sh
 bash tools/install-macos.sh
 
 # 仅在明确获准启动实际入口时运行，这会启动 Codex。
-open "$HOME/Applications/阿舟启动 Codex.app"
+open "$HOME/Applications/阿舟 AI 实验室.app"
 ```
 
 只构建时运行 `bash tools/build-macos.sh`，输出 `.build/azhou-payload`。旧的 `bash tools/build-extension.sh` 兼容入口转发到同一构建。载荷不是日常启动入口；安装使用上面的统一命令。
@@ -58,7 +58,7 @@ open "$HOME/Applications/阿舟启动 Codex.app"
 open index.html
 
 # 安装版的真实原生窗口，只预览，结束后退出。
-"$HOME/Applications/阿舟启动 Codex.app/Contents/MacOS/AzhouCodexStartup" --preview
+"$HOME/Applications/阿舟 AI 实验室.app/Contents/MacOS/AzhouCodexStartup" --preview
 ```
 
 原生动画默认最大化到当前屏幕 `visibleFrame`，保留菜单栏 / Dock 的区域，不创建独立全屏 Space；允许手动调整窗口。网页预览铺满当前浏览器视口。两者使用同一场景布局；浏览器额外显示预览控制，正式启动隐藏它们。
@@ -124,7 +124,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 
 | 项目 | 值 |
 | --- | --- |
-| 日常入口 | ~/Applications/阿舟启动 Codex.app |
+| 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
 | 版本 | 0.9.0 / build 10 |
@@ -134,7 +134,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 本机核实的官方应用路径为 `/Applications/ChatGPT.app`，Bundle ID 为 `com.openai.codex`；每次运行仍重新核对实际目标与进程。Codex 已运行时，入口核验并激活同一进程后退出，不打开播放器，也不向现有页面注入或重播动画。Codex 未运行时，入口先启动官方应用；主窗口就绪后，通过核验的回环 CDP 在该窗口安装 `startup/install.js` 并播放动画，使动画与工作页面处于同一窗口。启动接入总预算为 60 秒，其中签名预检最多 15 秒、页面接入最多 45 秒。启动器不退出官方应用，也不修改其安装包。
 
 ```sh
-"$HOME/Applications/阿舟启动 Codex.app/Contents/MacOS/AzhouCodexStartup" --probe
+"$HOME/Applications/阿舟 AI 实验室.app/Contents/MacOS/AzhouCodexStartup" --probe
 python3 tools/verify-artifacts.py
 python3 tools/install-macos.py --check
 ```
@@ -164,7 +164,7 @@ Hub 的 `run --mode launch` 使用已核验载荷版本评估启动器事件；�
 以下状态检查只读取当前实际运行状态，不启动程序、不注入、不登记、不写日志，也不会把历史成功记录当作本次成功：
 
 ```sh
-"$HOME/Applications/阿舟启动 Codex.app/Contents/MacOS/AzhouCodexStartup" --wallpaper-status
+"$HOME/Applications/阿舟 AI 实验室.app/Contents/MacOS/AzhouCodexStartup" --wallpaper-status
 ```
 
 未应用或无法核实时会返回非零状态；这不表示 Codex 主程序启动失败。壁纸操作记录位于 `~/Library/Logs/AzhouCodexStartup/wallpaper.jsonl` 和 `latest.json`，记录状态与核实结果，不写入聊天内容、完整脚本或图片数据。
@@ -176,7 +176,7 @@ Hub 的 `run --mode launch` 使用已核验载荷版本评估启动器事件；�
 构建与安装的职责固定如下：
 
 1. 构建只生成隐藏、无 `.app` 后缀的安装载荷，并记录来源、版本和构建输入摘要。
-2. 安装先核验载荷，原子更新 `~/Applications/阿舟启动 Codex.app`，验证签名与完整内容指纹。
+2. 安装先核验载荷，原子更新 `~/Applications/阿舟 AI 实验室.app`，验证签名与完整内容指纹。
 3. 对用户Applications和项目dist范围内已证实属于本项目的额外应用，重新核验后定点注销并删除；同版本同内容副本也属于重复入口。
 4. 登记规范安装路径，再复扫实体应用与三个历史项目Bundle ID的全部系统登记路径；仍有冲突则返回失败，不宣称入口唯一。
 

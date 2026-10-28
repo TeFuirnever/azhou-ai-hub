@@ -6,9 +6,11 @@
 
 唯一日常启动路径为：
 
-`~/Applications/阿舟启动 Codex.app`
+`~/Applications/阿舟 AI 实验室.app`
 
 身份为 `local.azhou.codex-startup / AzhouCodexStartup`。构建载荷位于忽略目录 `.build/azhou-payload`，无 `.app` 后缀。构建、安装及失败保留的事务暂存载荷同样不使用 `.app` 后缀。正常工作流程不保留 `dist/*.app` 构建副本。
+
+旧规范路径为 `~/Applications/阿舟启动 Codex.app`。更名沿用现有退役机制：先验证新入口，再核实旧包的身份、来源、签名和完整指纹后定点注销、退役；名称本身不构成归属证明。其他源目录的安装仍须通过 `--migrate-from` 的精确旧记录与旧载荷检查。用户设置数据库不随 App 文件名迁移。
 
 曾经保留 `dist/阿舟启动 Codex.app` 与Applications副本的做法会让两份实体被系统同时登记；版本及内容相同也会造成两个入口。因此“安装内容一致”和“入口唯一”是两项独立的验收条件。
 
@@ -54,7 +56,7 @@ python3 tools/install-macos.py --check
 
 ```sh
 .build/azhou-install-registry inventory
-.build/azhou-install-registry register "$HOME/Applications/阿舟启动 Codex.app"
+.build/azhou-install-registry register "$HOME/Applications/阿舟 AI 实验室.app"
 ```
 
 它使用公开的 `NSWorkspace.urlsForApplications(withBundleIdentifier:)` 查询三个项目身份的全部URL，保留不存在的旧路径记录；通过 `LSRegisterURL` 登记唯一规范路径。不能用只返回一个“首选应用”的API证明没有重复。

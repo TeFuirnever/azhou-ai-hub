@@ -17,7 +17,8 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'dist'  # Legacy location; only the installer may retire its apps.
-NAME = '阿舟启动 Codex.app'
+NAME = '阿舟 AI 实验室.app'
+LEGACY_NAME = '阿舟启动 Codex.app'
 IDENTITY = ('local.azhou.codex-startup', 'AzhouCodexStartup')
 LEGACY = {
     'Aemeath Startup.app': ('local.aemeath.startup', 'AemeathStartup'),

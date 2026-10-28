@@ -130,15 +130,19 @@ def old_install_proof(old_root):
     record = json.loads(record_path.read_text())
     if not isinstance(record, dict):
         raise RuntimeError('旧安装记录格式无效，不能接管。')
+    installed_path = record.get('installedPath')
+    allowed_installed_paths = (str(DESTINATION), str(DESTINATION.with_name(HELPERS['LEGACY_NAME'])))
+    if not isinstance(installed_path, str) or installed_path not in allowed_installed_paths:
+        raise RuntimeError('旧安装记录没有证明当前入口归属，不能接管。')
     required = {'schema': 2, 'projectID': PROJECT_ID, 'projectRoot': str(old_root),
-                'installedPath': str(DESTINATION), 'sourcePath': str(old_source),
+                'installedPath': installed_path, 'sourcePath': str(old_source),
                 'bundleID': EXPECTED[0], 'executable': EXPECTED[1]}
     if (any(record.get(key) != value for key, value in required.items())
             or record.get('status') not in ('installed', 'current', 'consolidated')
             or not re.fullmatch(r'[0-9a-f]{64}', str(record.get('sha256Tree', '')))):
         raise RuntimeError('旧安装记录没有证明当前入口归属，不能接管。')
     old_hash = record['sha256Tree']
-    for path in (old_source, DESTINATION):
+    for path in (old_source, Path(installed_path)):
         info = HELPERS['require'](path, EXPECTED)
         marker = HELPERS['read_marker'](path, required=True)
         if (marker['projectID'] != PROJECT_ID or marker['projectRoot'] != str(old_root)
@@ -155,7 +159,7 @@ def old_install_proof(old_root):
         raise RuntimeError('旧输出目录不是实体目录，不能接管。')
     if old_dist.exists() and any(path.suffix.lower() == '.app' for path in old_dist.iterdir()):
         raise RuntimeError('旧输出目录仍有应用，不能接管。')
-    return {'oldRoot': str(old_root), 'installedPath': str(DESTINATION), 'oldSHA256': old_hash}
+    return {'oldRoot': str(old_root), 'installedPath': installed_path, 'oldSHA256': old_hash}
 
 
 def recheck_handoff(old_root, expected):
@@ -179,6 +183,31 @@ def retired_records(record):
                 and re.fullmatch(r'[0-9a-f]{64}', str(item.get('sha256Tree', '')))):
             accepted.append(item)
     return accepted
+
+
+def pending_legacy_handoff(old_root, source_hash, record):
+    if not trusted_receipt(record) or record.get('status') not in ('source-handoff-pending', 'cleanup-pending'):
+        return None
+    previous = record.get('sourceHandoff')
+    if (not isinstance(previous, dict) or previous.get('oldRoot') != str(old_root)
+            or previous.get('newRoot') != str(ROOT) or previous.get('newSHA256') != source_hash
+            or not re.fullmatch(r'[0-9a-f]{64}', str(previous.get('oldSHA256', '')))):
+        return None
+    legacy_path = DESTINATION.with_name(HELPERS['LEGACY_NAME'])
+    retired = any(item.get('path') == str(legacy_path)
+                  and item.get('bundleID') == EXPECTED[0]
+                  and item.get('executable') == EXPECTED[1]
+                  and item.get('sha256Tree') == previous['oldSHA256']
+                  and item.get('proof') == 'verified-source-handoff'
+                  for item in retired_records(record))
+    if ((record.get('status') == 'cleanup-pending' and not retired)
+            or not (legacy_path.exists() or legacy_path.is_symlink())):
+        return None
+    proof = old_install_proof(old_root)
+    if (proof['installedPath'] != str(legacy_path)
+            or proof['oldSHA256'] != previous['oldSHA256']):
+        raise RuntimeError('旧安装与待完成的来源接管记录不一致，不能继续清理。')
+    return proof
 
 
 def scan_apps(source_info, source_hash, record, handoff=None):
@@ -225,13 +254,16 @@ def scan_apps(source_info, source_hash, record, handoff=None):
                              'sha256Tree': fingerprint(path), 'versionKey': version_key(info)}
             except (OSError, ValueError, RuntimeError) as error:
                 conflicts.append(f'无法核实的项目候选已保留：{path}；{error}')
+    legacy_install_paths = (DESTINATION, DESTINATION.with_name(HELPERS['LEGACY_NAME']))
+    legacy_dist_paths = (DIST / HELPERS['NAME'], DIST / HELPERS['LEGACY_NAME'])
     old_receipt = (record.get('sha256Tree') == LEGACY_SHA256
-                   and record.get('installedPath') == str(DESTINATION)
-                   and record.get('sourcePath') == str(DIST / HELPERS['NAME'])
+                   and record.get('installedPath') in tuple(str(path) for path in legacy_install_paths)
+                   and record.get('sourcePath') in tuple(str(path) for path in legacy_dist_paths)
                    and record.get('bundleID') == EXPECTED[0] and record.get('version') == '0.5.0')
     history = trusted_receipt(record) and LEGACY_SHA256 in record.get('managedFingerprints', [])
     matching = [entry for entry in raw.values() if entry['sha256Tree'] == LEGACY_SHA256]
-    paired = any(entry['path'] == DESTINATION for entry in matching) and any(entry['path'].parent == DIST for entry in matching)
+    paired = (any(entry['path'] in legacy_install_paths for entry in matching)
+              and any(entry['path'] in legacy_dist_paths for entry in matching))
     legacy_proven = old_receipt or history or paired
     confirmed = []
     for entry in raw.values():
@@ -243,14 +275,15 @@ def scan_apps(source_info, source_hash, record, handoff=None):
             if entry['sha256Tree'] == source_hash:
                 proof = 'current-payload-fingerprint'
             elif marker:
-                old_entry = (handoff is not None and path == DESTINATION
+                old_entry = (handoff is not None and str(path) == handoff['installedPath']
                              and entry['sha256Tree'] == handoff['oldSHA256']
                              and marker.get('projectID') == PROJECT_ID
                              and marker.get('projectRoot') == handoff['oldRoot'])
                 if not old_entry and (marker.get('projectID') != PROJECT_ID or marker.get('projectRoot') != str(ROOT)):
                     raise RuntimeError('来源标记属于其他项目或路径')
                 proof = 'verified-source-handoff' if old_entry else 'project-build-marker'
-            elif (legacy_proven and entry['sha256Tree'] == LEGACY_SHA256 and entry['identity'] == EXPECTED
+            elif (legacy_proven and entry['path'] in (*legacy_install_paths, *legacy_dist_paths)
+                  and entry['sha256Tree'] == LEGACY_SHA256 and entry['identity'] == EXPECTED
                   and entry['info'].get('CFBundleShortVersionString') == '0.5.0'
                   and str(entry['info'].get('CFBundleVersion')) == '2'):
                 proof = 'verified-0.5.0-fingerprint'
@@ -352,6 +385,8 @@ def install_payload(source_hash, original, before_swap=None):
         else:
             if DESTINATION.exists() or DESTINATION.is_symlink():
                 raise RuntimeError('规范入口被其他操作创建，未覆盖。')
+            if before_swap is not None:
+                before_swap()
             os.rename(staged, DESTINATION)
             try:
                 verify(DESTINATION)
@@ -404,13 +439,23 @@ def install(check_only=False, migrate_from=None):
                 already_current = fingerprint(DESTINATION) == source_hash
             except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError):
                 pass
-        handoff = None if old_root is None or already_current else old_install_proof(old_root)
+        handoff = None
+        if old_root is not None:
+            handoff = (pending_legacy_handoff(old_root, source_hash, record)
+                       if already_current else old_install_proof(old_root))
         candidates, _ = scan_apps(source_info, source_hash, record, handoff)
         inventory = registry_inventory()
         validate_registry_scope(inventory, candidates, record)
         if handoff is not None:
-            expected_registry = {identity[0]: ({DESTINATION} if identity == EXPECTED else set()) for identity in KNOWN}
-            if inventory != expected_registry:
+            handoff_path = Path(handoff['installedPath'])
+            expected_registry = {identity[0]: ({handoff_path} if identity == EXPECTED else set()) for identity in KNOWN}
+            retry_paths_valid = False
+            if already_current and handoff_path != DESTINATION:
+                allowed_paths = {handoff_path, DESTINATION}
+                retry_paths_valid = (inventory[EXPECTED[0]] <= allowed_paths
+                                     and all(not paths for bundle_id, paths in inventory.items()
+                                             if bundle_id != EXPECTED[0]))
+            if inventory != expected_registry and not retry_paths_valid:
                 raise RuntimeError('旧应用登记不唯一，不能接管。')
         original = next((entry for entry in candidates if entry['path'] == DESTINATION), None)
         current = original is not None and original['sha256Tree'] == source_hash

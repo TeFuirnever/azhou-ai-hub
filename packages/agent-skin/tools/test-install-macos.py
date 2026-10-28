@@ -49,6 +49,7 @@ class InstallerTests(unittest.TestCase):
         self.failure = None
         self.swap_calls = 0
         self.sticky_unregister = set()
+        self.fail_unregister_once = set()
         self.mutate_source_during_copy = False
         self.mutate_old_during_copy = None
         self.capture = io.StringIO()
@@ -88,42 +89,65 @@ class InstallerTests(unittest.TestCase):
         self.registry[self.module.EXPECTED[0]].add(destination)
         return destination
 
-    def old_pair(self):
+    def old_pair(self, installed_path=None):
         m = self.module
-        self.bundle(m.DESTINATION, version='0.5.0', build='2', marker=False, body='known old')
-        old = self.clone(m.DIST / m.HELPERS['NAME'], m.DESTINATION)
-        self.registry[m.EXPECTED[0]].add(m.DESTINATION)
+        installed_path = (Path(installed_path) if installed_path is not None
+                          else m.DESTINATION.with_name(m.HELPERS['LEGACY_NAME']))
+        self.bundle(installed_path, version='0.5.0', build='2', marker=False, body='known old')
+        old = self.clone(m.DIST / m.HELPERS['LEGACY_NAME'], installed_path)
+        self.registry[m.EXPECTED[0]].add(installed_path)
         # Test packages contain no private assets; pin their own known digest.
-        m.LEGACY_SHA256 = m.fingerprint(m.DESTINATION)
+        m.LEGACY_SHA256 = m.fingerprint(installed_path)
         record = m.receipt_path()
         record.parent.mkdir(parents=True)
-        record.write_text(json.dumps({'sha256Tree': m.LEGACY_SHA256, 'installedPath': str(m.DESTINATION),
+        record.write_text(json.dumps({'sha256Tree': m.LEGACY_SHA256, 'installedPath': str(installed_path),
                                       'sourcePath': str(old), 'bundleID': m.EXPECTED[0], 'version': '0.5.0'}))
         return old
 
-    def old_owned_install(self):
+    def old_owned_install(self, installed_path=None):
         m = self.module
+        installed_path = Path(installed_path) if installed_path is not None else m.DESTINATION
         old_root = self.base / 'old-project'
         old_root.mkdir()
         old_root = old_root.resolve()
-        self.bundle(m.DESTINATION, version='0.5.0', build='2', body='old owner')
-        marker_path = m.DESTINATION / m.HELPERS['MARKER']
+        self.bundle(installed_path, version='0.5.0', build='2', body='old owner')
+        marker_path = installed_path / m.HELPERS['MARKER']
         marker = json.loads(marker_path.read_text())
         marker['projectRoot'] = str(old_root)
         marker_path.write_text(json.dumps(marker))
         old_source = old_root / '.build/azhou-payload'
         old_source.parent.mkdir(parents=True)
-        shutil.copytree(m.DESTINATION, old_source)
-        old_hash = m.fingerprint(m.DESTINATION)
+        shutil.copytree(installed_path, old_source)
+        old_hash = m.fingerprint(installed_path)
         record = {'schema': 2, 'projectID': m.PROJECT_ID, 'projectRoot': str(old_root),
-                  'status': 'installed', 'installedPath': str(m.DESTINATION),
+                  'status': 'installed', 'installedPath': str(installed_path),
                   'sourcePath': str(old_source), 'sha256Tree': old_hash,
                   'bundleID': m.EXPECTED[0], 'executable': m.EXPECTED[1],
                   'version': '0.5.0', 'build': '2'}
         (old_root / '.local').mkdir()
         (old_root / '.local/installation.json').write_text(json.dumps(record))
-        self.registry[m.EXPECTED[0]].add(m.DESTINATION)
+        self.registry[m.EXPECTED[0]].add(installed_path)
         return old_root, record
+
+    def leave_pending_handoff_after_removal_failure(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_root, _ = self.old_owned_install(installed_path=legacy)
+        real_rmtree = shutil.rmtree
+        fail_once = {'pending': True}
+
+        def fail_old_entry_once(path, *args, **kwargs):
+            if Path(path) == legacy and fail_once['pending']:
+                fail_once['pending'] = False
+                raise OSError('injected old entry removal failure')
+            return real_rmtree(path, *args, **kwargs)
+
+        with patch.object(m.shutil, 'rmtree', side_effect=fail_old_entry_once):
+            with self.assertRaisesRegex(OSError, 'injected old entry removal failure'):
+                m.install(migrate_from=str(old_root))
+        self.assertTrue(legacy.is_dir())
+        self.assertEqual(self.registry[m.EXPECTED[0]], set())
+        return legacy, old_root
 
     def run_command(self, command, **options):
         m = self.module
@@ -140,6 +164,9 @@ class InstallerTests(unittest.TestCase):
         elif command[0] == m.LSREGISTER:
             self.assertEqual(command[1], '-u')
             path = Path(command[2])
+            if path in self.fail_unregister_once:
+                self.fail_unregister_once.remove(path)
+                raise subprocess.CalledProcessError(1, command)
             if path not in self.sticky_unregister:
                 for paths in self.registry.values():
                     paths.discard(path)
@@ -185,6 +212,56 @@ class InstallerTests(unittest.TestCase):
         self.assert_clean()
         self.assertEqual(self.module.install()['status'], 'current')
         self.assert_clean()
+
+    def test_legacy_050_receipt_and_pair_prove_only_the_legacy_canonical_path(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_source = m.DIST / '阿舟启动 Codex.app'
+        self.bundle(legacy, version='0.5.0', build='2', marker=False, body='known old')
+        old_source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(legacy, old_source)
+        self.registry[m.EXPECTED[0]].add(legacy)
+        m.LEGACY_SHA256 = m.fingerprint(legacy)
+        record = m.receipt_path()
+        record.parent.mkdir(parents=True)
+        record.write_text(json.dumps({
+            'sha256Tree': m.LEGACY_SHA256, 'installedPath': str(legacy),
+            'sourcePath': str(old_source), 'bundleID': m.EXPECTED[0], 'version': '0.5.0',
+        }))
+
+        result = m.install()
+
+        self.assertEqual(result['status'], 'installed')
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertFalse(legacy.exists())
+        self.assertFalse(old_source.exists())
+        self.assertIn((m.LSREGISTER, '-u', str(legacy)), self.commands)
+        self.assert_clean()
+
+    def test_legacy_050_fingerprint_does_not_authorize_a_renamed_alias(self):
+        m = self.module
+        alias = m.DESTINATION.with_name('Renamed copy.app')
+        old_source = m.DIST / '阿舟启动 Codex.app'
+        self.bundle(alias, version='0.5.0', build='2', marker=False, body='known old')
+        old_source.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(alias, old_source)
+        self.registry[m.EXPECTED[0]].add(alias)
+        m.LEGACY_SHA256 = m.fingerprint(alias)
+        record = m.receipt_path()
+        record.parent.mkdir(parents=True)
+        record.write_text(json.dumps({
+            'sha256Tree': m.LEGACY_SHA256, 'installedPath': str(alias),
+            'sourcePath': str(old_source), 'bundleID': m.EXPECTED[0], 'version': '0.5.0',
+        }))
+        before = m.fingerprint(alias)
+
+        with self.assertRaisesRegex(RuntimeError, '不足以证明'):
+            m.install()
+
+        self.assertEqual(m.fingerprint(alias), before)
+        self.assertTrue(old_source.exists())
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertFalse(any(command[0] == m.LSREGISTER for command in self.commands))
 
     def test_upgrade_registers_canonical_without_unregistering_it(self):
         m = self.module
@@ -234,6 +311,29 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(alias.exists())
         self.assert_clean()
 
+    def test_canonical_name_retires_same_root_legacy_entry_and_preserves_other_apps(self):
+        m = self.module
+        legacy = m.DESTINATION.parent / '阿舟启动 Codex.app'
+        self.bundle(legacy, version='0.5.0', build='2', body='old canonical name')
+        self.registry[m.EXPECTED[0]].add(legacy)
+        official = m.DESTINATION.parent / 'Codex.app'
+        self.bundle(official, identity=('com.openai.codex', 'Codex'), marker=False)
+        unrelated = m.DESTINATION.parent / 'Unrelated.app'
+        self.bundle(unrelated, identity=('org.example.unrelated', 'Unrelated'), marker=False)
+        preserved = (m.fingerprint(official), m.fingerprint(unrelated))
+
+        result = m.install()
+
+        self.assertEqual(m.HELPERS['NAME'], '阿舟 AI 实验室.app')
+        self.assertEqual(m.DESTINATION.name, '阿舟 AI 实验室.app')
+        self.assertEqual(result['installedPath'], str(m.DESTINATION))
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertFalse(legacy.exists())
+        self.assertNotIn(legacy, self.registry[m.EXPECTED[0]])
+        self.assertIn((m.LSREGISTER, '-u', str(legacy)), self.commands)
+        self.assertEqual((m.fingerprint(official), m.fingerprint(unrelated)), preserved)
+        self.assert_clean()
+
     def test_higher_version_is_preserved(self):
         m = self.module
         path = m.DESTINATION.parent / 'Future.app'
@@ -275,6 +375,109 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result['sourceHandoff']['newRoot'], str(m.ROOT))
         self.assertEqual(m.HELPERS['read_marker'](m.DESTINATION)['projectRoot'], str(m.ROOT))
         self.assertEqual(m.install(True)['status'], 'current')
+        self.assert_clean()
+
+    def test_source_handoff_moves_verified_legacy_basename_to_new_canonical_path(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_root, old_record = self.old_owned_install(installed_path=legacy)
+        self.assertFalse(m.DESTINATION.exists())
+
+        result = m.install(migrate_from=str(old_root))
+
+        self.assertEqual(result['status'], 'installed')
+        self.assertEqual(result['sourceHandoff']['oldSHA256'], old_record['sha256Tree'])
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertFalse(legacy.exists())
+        self.assertIn((m.LSREGISTER, '-u', str(legacy)), self.commands)
+        self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
+        self.assert_clean()
+
+    def test_legacy_handoff_rechecks_old_owner_before_first_publication(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_root, _ = self.old_owned_install(installed_path=legacy)
+        self.mutate_old_during_copy = old_root / '.build/azhou-payload'
+
+        with self.assertRaisesRegex(RuntimeError, '不一致'):
+            m.install(migrate_from=str(old_root))
+
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertTrue(legacy.is_dir())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {legacy})
+        self.assertFalse(any(command[0] == m.LSREGISTER for command in self.commands))
+        self.assertEqual(self.swap_calls, 0)
+
+    def test_legacy_handoff_retry_finishes_after_publication_before_cleanup_receipt(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_root, _ = self.old_owned_install(installed_path=legacy)
+        publish = m.install_payload
+
+        def interrupt_after_publication(*args, **kwargs):
+            publish(*args, **kwargs)
+            raise RuntimeError('injected interruption after publication')
+
+        with patch.object(m, 'install_payload', side_effect=interrupt_after_publication):
+            with self.assertRaisesRegex(RuntimeError, 'injected interruption after publication'):
+                m.install(migrate_from=str(old_root))
+        self.assertEqual(m.read_receipt()['status'], 'source-handoff-pending')
+        self.assertTrue(legacy.is_dir())
+
+        result = m.install(migrate_from=str(old_root))
+        self.assertEqual(result['registeredProjectPathCount'], 1)
+        self.assertFalse(legacy.exists())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
+        self.assert_clean()
+
+    def test_legacy_handoff_retry_finishes_after_old_entry_unregistration_fails(self):
+        m = self.module
+        legacy = m.DESTINATION.with_name('阿舟启动 Codex.app')
+        old_root, old_record = self.old_owned_install(installed_path=legacy)
+        self.fail_unregister_once.add(legacy)
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            m.install(migrate_from=str(old_root))
+
+        self.assertEqual(m.fingerprint(m.DESTINATION), m.fingerprint(m.SOURCE))
+        self.assertTrue(legacy.is_dir())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {legacy})
+        pending = m.read_receipt()
+        self.assertEqual(pending['status'], 'cleanup-pending')
+        self.assertEqual(pending['sourceHandoff']['oldRoot'], str(old_root))
+        self.assertEqual(pending['sourceHandoff']['oldSHA256'], old_record['sha256Tree'])
+
+        self.commands.clear()
+        result = m.install(migrate_from=str(old_root))
+
+        self.assertEqual(result['status'], 'consolidated')
+        self.assertFalse(legacy.exists())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
+        self.assertIn((m.LSREGISTER, '-u', str(legacy)), self.commands)
+        self.assert_clean()
+
+    def test_legacy_handoff_retry_finishes_after_old_entry_removal_fails(self):
+        m = self.module
+        legacy, old_root = self.leave_pending_handoff_after_removal_failure()
+        self.commands.clear()
+        result = m.install(migrate_from=str(old_root))
+
+        self.assertFalse(legacy.exists())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
+        self.assertEqual(result['registeredProjectPathCount'], 1)
+        self.assert_clean()
+
+    def test_legacy_handoff_retry_accepts_only_new_entry_after_removal_fails(self):
+        m = self.module
+        legacy, old_root = self.leave_pending_handoff_after_removal_failure()
+        self.registry[m.EXPECTED[0]].add(m.DESTINATION)
+        self.commands.clear()
+
+        result = m.install(migrate_from=str(old_root))
+
+        self.assertFalse(legacy.exists())
+        self.assertEqual(self.registry[m.EXPECTED[0]], {m.DESTINATION})
+        self.assertEqual(result['registeredProjectPathCount'], 1)
         self.assert_clean()
 
     def test_handoff_rejects_receipt_or_payload_mismatch(self):
@@ -407,17 +610,18 @@ class InstallerTests(unittest.TestCase):
 
     def test_source_change_during_copy_does_not_replace_old_install(self):
         m = self.module
+        legacy = m.DESTINATION.with_name(m.HELPERS['LEGACY_NAME'])
         old = self.old_pair()
-        before = m.fingerprint(m.DESTINATION)
+        before = m.fingerprint(legacy)
         self.mutate_source_during_copy = True
         with self.assertRaisesRegex(RuntimeError, '复制期间发生变化'):
             m.install()
-        self.assertEqual(m.fingerprint(m.DESTINATION), before)
+        self.assertEqual(m.fingerprint(legacy), before)
         self.assertTrue(old.exists())
 
     def test_atomic_swap_failure_preserves_original(self):
         m = self.module
-        self.old_pair()
+        self.old_pair(installed_path=m.DESTINATION)
         before = m.fingerprint(m.DESTINATION)
         self.failure = 'swap'
         with self.assertRaises(OSError):
@@ -427,7 +631,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_post_swap_failure_rolls_back(self):
         m = self.module
-        self.old_pair()
+        self.old_pair(installed_path=m.DESTINATION)
         before = m.fingerprint(m.DESTINATION)
         self.failure = 'verify'
         with self.assertRaises(subprocess.CalledProcessError):
@@ -437,7 +641,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_rollback_failure_keeps_original_without_app_suffix(self):
         m = self.module
-        self.old_pair()
+        self.old_pair(installed_path=m.DESTINATION)
         before = m.fingerprint(m.DESTINATION)
         self.failure = 'rollback'
         with self.assertRaisesRegex(RuntimeError, '原包保留'):

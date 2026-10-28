@@ -6,7 +6,7 @@ import Foundation
 // hide, unregister, remove, or reset anything. The installer owns filesystem
 // verification and any targeted, host-supported lsregister maintenance.
 private let projectID = "azhou.codex-startup-animation"
-private let applicationName = "阿舟启动 Codex.app"
+private let applicationName = "阿舟 AI 实验室.app"
 private let currentIdentity = ("local.azhou.codex-startup", "AzhouCodexStartup")
 private let knownBundleIDs = [
     "local.azhou.codex-startup",

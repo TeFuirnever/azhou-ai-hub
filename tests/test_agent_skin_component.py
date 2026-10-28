@@ -92,7 +92,7 @@ class AgentSkinLegacyCleanupTests(unittest.TestCase):
 
     def install_legacy_receipt_fixture(self) -> tuple[Path, Path, bytes]:
         target_root = state.state_path(self.workspace, "hub", "test-installations", "startup-animation")
-        target = target_root / animation.APP_NAME
+        target = target_root / "阿舟启动 Codex.app"
         resources = target / "Contents/Resources"
         (target / "Contents/MacOS").mkdir(parents=True)
         (target / "Contents/MacOS/AzhouCodexStartup").write_text("frozen app\n", encoding="utf-8")

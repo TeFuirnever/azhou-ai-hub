@@ -331,11 +331,12 @@ class StartupBuildTests(unittest.TestCase):
         for source in required:
             self.assertIn(source, self.marker["inputs"])
 
-    def test_native_display_names_are_localized_without_changing_install_path(self):
+    def test_native_display_names_are_localized_with_the_canonical_install_basename(self):
         build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
         self.assertIn('"CFBundleDisplayName" = "Azhou AI Lab";', build_script)
         self.assertIn('"CFBundleDisplayName" = "阿舟 AI 实验室";', build_script)
-        self.assertIn('install-macos.sh 安装到 ~/Applications/阿舟启动 Codex.app', build_script)
+        self.assertIn('install-macos.sh 安装到 ~/Applications/阿舟 AI 实验室.app', build_script)
+        self.assertIn("NAME = '阿舟 AI 实验室.app'", (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
         bundle = Path(self.temporary.name) / "localized-display.app"
         resources = bundle / "Contents/Resources"
         for language, label in (("en", "Azhou AI Lab"), ("zh-Hans", "阿舟 AI 实验室")):

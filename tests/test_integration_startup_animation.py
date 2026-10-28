@@ -71,6 +71,11 @@ class AnimationIntegrationTests(unittest.TestCase):
         plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
         return animation.test_install(self.source, self.payload, self.workspace, plan["plan_id"], hub_root=self.hub)
 
+    def test_new_test_install_uses_the_product_application_name(self):
+        with patch.object(animation, "inspect_bundle", side_effect=self.fake_inspect):
+            plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
+        self.assertEqual("阿舟 AI 实验室.app", Path(plan["target"]).name)
+
     def test_build_cli_defaults_to_canonical_package_without_source_flag(self):
         from contextlib import redirect_stdout
         import io
@@ -394,6 +399,20 @@ class AnimationIntegrationTests(unittest.TestCase):
                     animation.test_uninstall(self.source, self.workspace, plan["plan_id"], hub_root=self.hub)
             self.assertTrue(target.exists())
             self.assertTrue(record.exists())
+
+    def test_owned_cleanup_keeps_support_for_the_previous_application_name(self):
+        _, target, record, native = self.owned_snapshot_fixture()
+        previous = target.with_name("阿舟启动 Codex.app")
+        target.rename(previous)
+        receipt = common.read_receipt(record)
+        receipt["path"] = str(previous)
+        common.write_receipt(record, receipt)
+        before = record.read_bytes()
+        with patch.object(animation.runpy, "run_path", return_value=native):
+            plan = animation.test_uninstall_plan(self.source, self.workspace, hub_root=self.hub)
+        self.assertEqual(str(previous), plan["target"]["path"])
+        self.assertEqual(before, record.read_bytes())
+        self.assertTrue(previous.is_dir())
 
     def test_owned_cleanup_uses_frozen_snapshot_after_live_package_edit_and_removal(self):
         snapshot, target, record, native = self.owned_snapshot_fixture()

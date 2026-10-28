@@ -96,4 +96,4 @@ codesign --verify --strict "$bundle"
 python3 tools/verify-artifacts.py --publish "$bundle"
 mv -f "$stage_root/azhou-install-registry" .build/azhou-install-registry
 printf '%s\n' '构建完成：.build/azhou-payload（隐藏构建载荷，不是日常启动入口）。' \
-  '请运行 bash tools/install-macos.sh 安装到 ~/Applications/阿舟启动 Codex.app 并清理已核实的旧项目入口。'
+  '请运行 bash tools/install-macos.sh 安装到 ~/Applications/阿舟 AI 实验室.app 并清理已核实的旧项目入口。'

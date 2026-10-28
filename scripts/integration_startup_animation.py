@@ -29,7 +29,8 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = "agent-skin"
 LEGACY_COMPONENT = "startup-animation"
-APP_NAME = "阿舟启动 Codex.app"
+APP_NAME = "阿舟 AI 实验室.app"
+LEGACY_APP_NAME = "阿舟启动 Codex.app"
 EXECUTABLE = "AzhouCodexStartup"
 STARTUP_PAYLOAD_VERSION = "0.8.0"
 STARTUP_EVENT_SCHEMA = "azhou-startup.event.v1"
@@ -293,7 +294,8 @@ def _test_paths(workspace: Path, component: str = COMPONENT) -> tuple[Path, Path
         raise common.IntegrationError("unknown Hub test-installation component")
     workspace = _directory(workspace, exists=False)
     directory = state.state_path(workspace, "hub", "test-installations", component)
-    return directory / APP_NAME, directory / "receipt.json"
+    name = LEGACY_APP_NAME if component == LEGACY_COMPONENT else APP_NAME
+    return directory / name, directory / "receipt.json"
 
 
 def _reject_legacy_test_owner(workspace: Path) -> None:
@@ -308,10 +310,15 @@ def _owned_test(workspace: Path) -> tuple[Path, Path, dict[str, Any], str]:
     owned = []
     for component in (COMPONENT, LEGACY_COMPONENT):
         target, record = _test_paths(workspace, component)
-        if record.exists() or record.is_symlink() or target.exists() or target.is_symlink():
+        allowed_targets = {record.parent / APP_NAME, record.parent / LEGACY_APP_NAME}
+        present_targets = {path for path in allowed_targets if path.exists() or path.is_symlink()}
+        if record.exists() or record.is_symlink() or present_targets:
             receipt = common.read_receipt(record)
+            raw_target = receipt.get("path")
+            target = Path(raw_target) if isinstance(raw_target, str) else None
             if (receipt.get("schema") != "azhou-hub.animation-test-install.v1"
-                    or receipt.get("component") != component or receipt.get("path") != str(target)):
+                    or receipt.get("component") != component or target not in allowed_targets
+                    or present_targets - {target}):
                 raise common.IntegrationError("test-installation ownership does not match this workspace")
             owned.append((target, record, receipt, component))
     if len(owned) != 1:
@@ -384,7 +391,9 @@ def test_install_plan(source: Path, payload: Path, workspace: Path, *, hub_root:
     target, record = _test_paths(workspace)
     current = False
     if target.exists() or target.is_symlink() or record.exists() or record.is_symlink():
-        _, _, receipt, _ = _owned_test(workspace)
+        owned_target, _, receipt, _ = _owned_test(workspace)
+        if owned_target != target:
+            raise common.IntegrationError("test installation uses the old application name; remove it with test-uninstall first")
         installed = inspect_bundle(source, target, hub_root=hub_root)
         if receipt.get("sha256_tree") != installed["sha256_tree"] or installed["sha256_tree"] != verified["sha256_tree"]:
             raise common.IntegrationError("existing test installation changed or belongs to another build; preserve it")
