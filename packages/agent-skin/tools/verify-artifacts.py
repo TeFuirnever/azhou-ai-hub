@@ -195,17 +195,20 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
 VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version', 'runtime_build'))
 NAME = load_theme_config(ROOT)['identity']['installationName']
 INPUT_FILES = (
-    'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift',
-    'tools/build-macos.sh', 'tools/build-wallpaper.py', 'tools/build-startup.py',
+    'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
+    'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
-    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+# Builds 11/12 are installed locally and used this exact pre-extraction input set.
+PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS = tuple(name for name in STARTUP_REQUIRED_INPUTS
+                                            if name not in {'wallpaper/apply.js', 'extension/bootstrap.mjs'})
 # Exact 0.9.0/build 10 source contract from before theme-config.json was added.
 LEGACY_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
@@ -624,7 +627,10 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
 
     source_inputs = manifest.get('sourceInputs')
-    allowed_source_inputs = {frozenset(STARTUP_REQUIRED_INPUTS)}
+    allowed_theme_inputs = {frozenset(STARTUP_REQUIRED_INPUTS)}
+    if not current_source and expected_version == '0.9.0' and expected_build in {'11', '12'}:
+        allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
+    allowed_source_inputs = set(allowed_theme_inputs)
     if not current_source:
         allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
     if (not isinstance(source_inputs, dict)
@@ -677,7 +683,7 @@ def verify_startup(path, info, marker, *, current_source=True):
     expected_asset_keys = current_asset_keys if has_theme_config else legacy_asset_keys
     if (set(preview_assets) != expected_asset_keys
             or (current_source and not has_theme_config)
-            or (has_theme_config and frozenset(source_inputs) != frozenset(STARTUP_REQUIRED_INPUTS))
+            or (has_theme_config and frozenset(source_inputs) not in allowed_theme_inputs)
             or (not has_theme_config and frozenset(source_inputs) != frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))):
         raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
     if has_theme_config:
@@ -749,7 +755,10 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup/install.js 默认素材对象无效。') from exc
     if bundled_assets != preview_assets:
         raise RuntimeError('启动载荷与预览没有使用同一组默认图像和线稿。')
-    if 'return installStartup(installAnimation, globalThis);' not in script:
+    legacy_entry = 'return installStartup(installAnimation, globalThis);' in script
+    bootstrap_entry = ('return bootstrapStartup({' in script
+                       and 'return installStartup(installAnimation, host);' in script)
+    if not (legacy_entry or bootstrap_entry):
         raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
     return manifest
 

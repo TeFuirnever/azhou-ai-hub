@@ -32,6 +32,7 @@ def main() -> int:
     parser.add_argument("--chrome", type=Path, help="optional Chrome executable path")
     parser.add_argument("--only", action="append", default=[], help="run one named browser check; may be repeated")
     args = parser.parse_args()
+    args.out = args.out.resolve()
     if sys.platform != "darwin" or shutil.which("xcrun") is None:
         parser.exit(2, "builder-generated browser validation requires macOS Vision and xcrun.\n")
     node = shutil.which("node")

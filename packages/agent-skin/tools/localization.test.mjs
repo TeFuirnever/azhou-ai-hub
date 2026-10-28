@@ -7,7 +7,9 @@ import vm from 'node:vm';
 
 const SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'localization.js');
 const source = await readFile(SOURCE_PATH, 'utf8');
-const createLocalization = vm.runInNewContext(`${source}\ncreateLocalization`, {});
+const localizationContext = {};
+new vm.Script(source, { filename: SOURCE_PATH }).runInNewContext(localizationContext);
+const { createLocalization } = localizationContext;
 
 test('localization follows only the explicitly supplied host locale', () => {
   const localization = createLocalization({ locale: 'en', navigator: { language: 'zh-CN' } });

@@ -633,8 +633,13 @@ class PageController {
       this.wallpaperRequest = { image: message.image, strength: message.strength };
       this.wallpaperDisabled = false;
     }
+    // The workspace may mount after the animation finishes. Natural completion
+    // removes only the overlay; skip, replacement and disposal still cancel work.
     const isCurrent = () => generation === this.wallpaperGeneration
-      && (retry ? this.#isCurrentRetry(runId, generation) : this.#isCurrentFrame(runId, frame));
+      && (retry ? this.#isCurrentRetry(runId, generation)
+        : this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
+          && this.state.phase === 'complete' && this.state.completion?.cause === 'natural'
+          && this.#ownsStartupController()));
     if (typeof this.wallpaperApply !== 'function') {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };

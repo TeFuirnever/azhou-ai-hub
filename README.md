@@ -309,6 +309,8 @@ The same command checks repository policy, all unit tests, three public benchmar
 
 ## Project
 
+Agent Skin also has a package gate: `python packages/agent-skin/tools/test-unit-coverage.py` on macOS requires at least 95% unit-test line coverage for every production language and the complete package. Its Required CI job is separate from browser functional tests and installed-app acceptance. See [Agent Skin testing and acceptance](packages/agent-skin/docs/testing.md) for the full scope, dependencies and Finder/Dock, cold-start, wallpaper and installation cases.
+
 - [Roadmap](docs/roadmap.md)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)

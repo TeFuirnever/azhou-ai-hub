@@ -425,6 +425,38 @@ test('body wait expiry uses the same run transition and cannot mount later', () 
   assert.equal(controlled.frames.length, 0);
 });
 
+test('wallpaper can finish after natural playback but is cancelled by skip or disposal', async () => {
+  for (const completion of ['natural', 'skip', 'dispose']) {
+    const controlled = controlledHost();
+    let finishWallpaper, stillCurrent;
+    const runs = [];
+    const payload = (...args) => {
+      const SEND = args[13], frameSpec = args[14];
+      runs.push(frameSpec);
+      SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+      return { dispose() {} };
+    };
+    payload.applyWallpaper = (_request, isCurrent) => new Promise(resolve => {
+      stillCurrent = isCurrent;
+      finishWallpaper = resolve;
+    });
+    installStartup(payload, controlled.host);
+    const api = controlled.host.__azhouStartup;
+    const source = controlled.frames[0].contentWindow;
+    controlled.host.send({ type: 'azhou-startup', action: 'ready', runId: runs[0].runId }, source);
+    if (completion === 'dispose') api.dispose();
+    else controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId,
+      skipped: completion === 'skip' }, source);
+    assert.equal(stillCurrent(), completion === 'natural', completion);
+    finishWallpaper({ applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-timeout' });
+    await Promise.resolve();
+    await Promise.resolve();
+    if (completion === 'natural') assert.equal(api.status().wallpaper.failureCode, 'shell-timeout');
+    api.dispose();
+  }
+});
+
 test('a late wallpaper callback cannot update a disposed run', async () => {
   const controlled = controlledHost();
   let finishWallpaper;

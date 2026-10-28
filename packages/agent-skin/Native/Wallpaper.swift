@@ -205,6 +205,9 @@ enum WallpaperJournal {
     }
     private static func isLink(_ url: URL) -> Bool { (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true }
     static func latest(requestID: String) -> [String: Any]? {
+        latest(requestID: requestID, directory: directory)
+    }
+    static func latest(requestID: String, directory: URL) -> [String: Any]? {
         let url = directory.appendingPathComponent("latest.json")
         guard !isLink(directory), !isLink(url), let data = try? Data(contentsOf: url),
               let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -212,6 +215,9 @@ enum WallpaperJournal {
         return result
     }
     static func record(_ result: [String: Any]) {
+        record(result, directory: directory)
+    }
+    static func record(_ result: [String: Any], directory: URL) {
         do {
             guard !isLink(directory) else { return }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
@@ -231,20 +237,75 @@ enum WallpaperJournal {
     }
 }
 
+struct CodexBundleFacts: Sendable {
+    let identifier: String?
+    let executableURL: URL?
+}
+
+struct CodexProcessFacts: Sendable {
+    let processIdentifier: Int32
+    let isTerminated: Bool
+    let bundleIdentifier: String?
+    let bundleURL: URL?
+    let executableURL: URL?
+    let launchDate: Date?
+}
+
+struct CodexTargetEnvironment: @unchecked Sendable {
+    let mainBundleURL: URL
+    let bundleFacts: (URL) -> CodexBundleFacts?
+    let processFacts: (Int32) -> CodexProcessFacts?
+    let runningProcesses: (String) -> [CodexProcessFacts]
+    let isExecutableFile: (URL) -> Bool
+    let runCommand: (_ file: String, _ arguments: [String], _ timeout: TimeInterval, _ emptyExit: Int32?) throws -> String
+    let currentUID: () -> UInt32
+    let now: () -> TimeInterval
+
+    static var live: CodexTargetEnvironment {
+        CodexTargetEnvironment(
+            mainBundleURL: Bundle.main.bundleURL,
+            bundleFacts: { url in
+                guard let bundle = Bundle(url: url) else { return nil }
+                return CodexBundleFacts(identifier: bundle.bundleIdentifier, executableURL: bundle.executableURL)
+            },
+            processFacts: { pid in
+                NSRunningApplication(processIdentifier: pid).map(Self.facts)
+            },
+            runningProcesses: { identifier in
+                NSRunningApplication.runningApplications(withBundleIdentifier: identifier).map(Self.facts)
+            },
+            isExecutableFile: { FileManager.default.isExecutableFile(atPath: $0.path) },
+            runCommand: { file, arguments, timeout, emptyExit in
+                try WallpaperCommand.run(file, arguments, timeout: timeout, emptyExit: emptyExit)
+            },
+            currentUID: { getuid() },
+            now: { ProcessInfo.processInfo.systemUptime }
+        )
+    }
+
+    private static func facts(_ app: NSRunningApplication) -> CodexProcessFacts {
+        CodexProcessFacts(processIdentifier: app.processIdentifier, isTerminated: app.isTerminated,
+                          bundleIdentifier: app.bundleIdentifier, bundleURL: app.bundleURL,
+                          executableURL: app.executableURL, launchDate: app.launchDate)
+    }
+}
+
 private struct WallpaperTarget: Sendable {
     let pid: Int32, bundle: URL, executable: URL, launchDate: Date?
     let commandDeadline: TimeInterval?
+    private let environment: CodexTargetEnvironment
     private static func real(_ url: URL) -> URL { url.resolvingSymlinksInPath().standardizedFileURL }
-    init(pid: Int32, bundle: URL, launchTime: TimeInterval?, commandDeadline: TimeInterval? = nil) throws {
+    init(pid: Int32, bundle: URL, launchTime: TimeInterval?, commandDeadline: TimeInterval? = nil,
+         environment: CodexTargetEnvironment = .live) throws {
         let realBundle = Self.real(bundle)
         guard pid > 0, realBundle.pathExtension.lowercased() == "app",
-              realBundle != Self.real(Bundle.main.bundleURL),
+              realBundle != Self.real(environment.mainBundleURL),
               !realBundle.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }),
-              let package = Bundle(url: realBundle), package.bundleIdentifier == "com.openai.codex",
+              let package = environment.bundleFacts(realBundle), package.identifier == "com.openai.codex",
               let binary = package.executableURL.map(Self.real),
               binary.path.hasPrefix(realBundle.appendingPathComponent("Contents/MacOS").path + "/"),
-              FileManager.default.isExecutableFile(atPath: binary.path),
-              let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated,
+              environment.isExecutableFile(binary),
+              let app = environment.processFacts(pid), !app.isTerminated,
               app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == realBundle,
               app.executableURL.map(Self.real) == binary else {
             throw WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
@@ -256,36 +317,37 @@ private struct WallpaperTarget: Sendable {
         }
         self.pid = pid; self.bundle = realBundle; self.executable = binary; self.launchDate = app.launchDate
         self.commandDeadline = commandDeadline
+        self.environment = environment
         try validate(deadline: commandDeadline)
     }
     private func commandTimeout(_ maximum: TimeInterval, deadline: TimeInterval? = nil) throws -> TimeInterval {
         guard let deadline = deadline ?? commandDeadline else { return maximum }
         return try StartupBudget.boundedTimeout(maximum: maximum, stageDeadline: deadline,
-                                                totalDeadline: deadline, now: ProcessInfo.processInfo.systemUptime)
+                                                totalDeadline: deadline, now: environment.now())
     }
     func validate(deadline: TimeInterval? = nil) throws {
-        guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated,
+        guard let app = environment.processFacts(pid), !app.isTerminated,
               app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == bundle,
               app.executableURL.map(Self.real) == executable,
               launchDate == nil || app.launchDate == launchDate else {
             throw WallpaperFailure(state: "target-changed", chinese: "已核实的 Codex 进程已退出或发生变化。", english: "The verified Codex process exited or changed.")
         }
-        let process = try WallpaperCommand.run("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
-                                              timeout: try commandTimeout(2, deadline: deadline))
+        let process = try environment.runCommand("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
+                                                 try commandTimeout(2, deadline: deadline), nil)
         let fields = process.trimmingCharacters(in: .whitespacesAndNewlines).split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
-        guard fields.count == 2, UInt32(fields[0]) == getuid(),
+        guard fields.count == 2, UInt32(fields[0]) == environment.currentUID(),
               Self.real(URL(fileURLWithPath: String(fields[1]))) == executable else {
             throw WallpaperFailure(state: "target-mismatch", chinese: "目标进程用户或执行路径与已核实的 Codex 不符。", english: "The target process user or executable path does not match the verified Codex.")
         }
     }
     func validateSignature(deadline: TimeInterval? = nil) throws {
-        try StartupBundleSignature.verify(bundle, deadline: deadline ?? commandDeadline)
+        try StartupBundleSignature.verify(bundle, deadline: deadline ?? commandDeadline, environment: environment)
         try validate(deadline: deadline)
     }
     func ports(deadline: TimeInterval? = nil) throws -> [Int] {
         try validate(deadline: deadline)
-        let records = try WallpaperCommand.run("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-Fpn"],
-                                              timeout: try commandTimeout(3, deadline: deadline), emptyExit: 1)
+        let records = try environment.runCommand("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-Fpn"],
+                                                 try commandTimeout(3, deadline: deadline), 1)
         return try WallpaperValidation.loopbackPorts(records, pid: pid)
     }
 }
@@ -293,21 +355,21 @@ private struct WallpaperTarget: Sendable {
 private enum StartupBundleSignature {
     private static let requirement = "=anchor apple generic and identifier \"com.openai.codex\" and certificate leaf[subject.OU] = \"2DC432GLL2\""
 
-    static func verify(_ bundle: URL, deadline: TimeInterval?) throws {
+    static func verify(_ bundle: URL, deadline: TimeInterval?, environment: CodexTargetEnvironment = .live) throws {
         let resolved = bundle.resolvingSymlinksInPath().standardizedFileURL
         guard resolved.pathExtension.lowercased() == "app",
-              let package = Bundle(url: resolved), package.bundleIdentifier == "com.openai.codex" else {
+              let package = environment.bundleFacts(resolved), package.identifier == "com.openai.codex" else {
             throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用路径或 Bundle ID 无效。", english: "The Codex app path or bundle ID is invalid.")
         }
         let timeout: TimeInterval
         if let deadline {
             timeout = try StartupBudget.boundedTimeout(maximum: 12, stageDeadline: deadline,
-                                                       totalDeadline: deadline, now: ProcessInfo.processInfo.systemUptime)
+                                                       totalDeadline: deadline, now: environment.now())
         } else { timeout = 12 }
         do {
-            _ = try WallpaperCommand.run("/usr/bin/codesign",
-                                         ["--verify", "--deep", "--strict", "-R", requirement, resolved.path],
-                                         timeout: timeout)
+            _ = try environment.runCommand("/usr/bin/codesign",
+                                           ["--verify", "--deep", "--strict", "-R", requirement, resolved.path],
+                                           timeout, nil)
         } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
             throw error
         } catch {
@@ -455,6 +517,12 @@ protocol StartupTargetSystem {
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock
 }
 
+extension StartupTargetSystem {
+    func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        try validate(target, deadline: deadline)
+    }
+}
+
 final class WallpaperOperationLock: StartupOperationLock {
     private let descriptor: Int32
     private let stateLock = NSLock()
@@ -492,12 +560,16 @@ final class WallpaperOperationLock: StartupOperationLock {
 }
 
 struct CodexStartupTargetSystem: StartupTargetSystem {
+    private let environment: CodexTargetEnvironment
+
+    init(environment: CodexTargetEnvironment = .live) { self.environment = environment }
+
     private func target(_ facts: StartupTargetFacts, deadline: TimeInterval? = nil) throws -> WallpaperTarget {
         guard facts.bundleID == "com.openai.codex" else {
             throw StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
         }
         let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime,
-                                         commandDeadline: deadline)
+                                         commandDeadline: deadline, environment: environment)
         guard target.executable == facts.executable else {
             throw StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
         }
@@ -505,11 +577,15 @@ struct CodexStartupTargetSystem: StartupTargetSystem {
     }
 
     func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {
-        try StartupBundleSignature.verify(bundle, deadline: deadline)
+        try StartupBundleSignature.verify(bundle, deadline: deadline, environment: environment)
     }
 
     func validate(_ facts: StartupTargetFacts, deadline: TimeInterval) throws {
         try target(facts, deadline: deadline).validateSignature(deadline: deadline)
+    }
+
+    func validateProcess(_ facts: StartupTargetFacts, deadline: TimeInterval) throws {
+        try target(facts, deadline: deadline).validate(deadline: deadline)
     }
 
     func listeningPorts(_ facts: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
@@ -521,7 +597,39 @@ struct CodexStartupTargetSystem: StartupTargetSystem {
     }
 }
 
-private enum WallpaperCommand {
+protocol WallpaperTargetResolver {
+    func resolveTarget(pid: Int32?, bundle: URL?, launchTime: TimeInterval?) throws -> StartupTargetFacts
+}
+
+extension CodexStartupTargetSystem: WallpaperTargetResolver {
+    func resolveTarget(pid: Int32?, bundle: URL?, launchTime: TimeInterval?) throws -> StartupTargetFacts {
+        let resolvedPID: Int32
+        let resolvedBundle: URL
+        let resolvedLaunchTime: TimeInterval?
+        if pid == nil, bundle == nil, launchTime == nil {
+            let candidates = environment.runningProcesses("com.openai.codex").filter { !$0.isTerminated }
+            guard candidates.count == 1, let app = candidates.first, let appBundle = app.bundleURL else {
+                throw WallpaperFailure(state: "target-unavailable", chinese: "未找到唯一的正在运行的 Codex；状态检查不会启动应用。", english: "Could not identify exactly one running Codex app; the status check will not launch it.")
+            }
+            resolvedPID = app.processIdentifier
+            resolvedBundle = appBundle
+            resolvedLaunchTime = app.launchDate?.timeIntervalSince1970
+        } else {
+            guard let pid, let bundle else {
+                throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作需要明确的目标 PID 和绝对应用路径。", english: "A wallpaper action requires an explicit target PID and absolute app path.")
+            }
+            resolvedPID = pid
+            resolvedBundle = bundle
+            resolvedLaunchTime = launchTime
+        }
+        let target = try WallpaperTarget(pid: resolvedPID, bundle: resolvedBundle, launchTime: resolvedLaunchTime,
+                                        environment: environment)
+        return StartupTargetFacts(pid: target.pid, bundle: target.bundle, executable: target.executable,
+                                  bundleID: "com.openai.codex", launchTime: target.launchDate?.timeIntervalSince1970)
+    }
+}
+
+enum WallpaperCommand {
     private final class State: @unchecked Sendable {
         let lock = NSLock()
         var active: [Process] = []
@@ -630,8 +738,45 @@ enum StartupCDPProtocol {
     }
 }
 
-final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTransport, @unchecked Sendable {
+protocol WallpaperPageSession: AnyObject {
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any]
+    func close()
+}
+
+protocol WallpaperOperationTransport: AnyObject {
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]]
+    func pageSession(_ url: URL) -> any WallpaperPageSession
+    func close()
+}
+
+protocol WallpaperSocketTask: AnyObject {
+    var maximumMessageSize: Int { get set }
+    func resume()
+    func send(_ message: URLSessionWebSocketTask.Message) async throws
+    func receive() async throws -> URLSessionWebSocketTask.Message
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
+}
+
+extension URLSessionWebSocketTask: WallpaperSocketTask {}
+
+private final class URLSessionWallpaperPageSession: WallpaperPageSession {
+    private let transport: WallpaperTransport
+    private let socket: any WallpaperSocketTask
+    init(transport: WallpaperTransport, socket: any WallpaperSocketTask) {
+        self.transport = transport
+        self.socket = socket
+    }
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try await transport.evaluate(source, on: socket, timeout: timeout)
+    }
+    func close() { socket.cancel(with: .normalClosure, reason: nil) }
+}
+
+final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTransport, WallpaperOperationTransport, @unchecked Sendable {
+    private let sessionOverride: URLSession?
+    private let socketFactory: ((URLRequest) -> any WallpaperSocketTask)?
     private lazy var session: URLSession = {
+        if let sessionOverride { return sessionOverride }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil; configuration.httpCookieStorage = nil; configuration.urlCredentialStorage = nil
         configuration.httpShouldSetCookies = false
@@ -646,8 +791,14 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }()
     private var serial = 0
-    private var startupSocket: URLSessionWebSocketTask?
+    private var startupSocket: (any WallpaperSocketTask)?
     private let startupRequests = StartupCDPRequestState()
+    override convenience init() { self.init(session: nil, socketFactory: nil) }
+    init(session: URLSession?, socketFactory: ((URLRequest) -> any WallpaperSocketTask)? = nil) {
+        sessionOverride = session
+        self.socketFactory = socketFactory
+        super.init()
+    }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
     func close() {
@@ -673,11 +824,20 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         }
         return entries.filter(WallpaperValidation.mainPage)
     }
-    func socket(_ url: URL) -> URLSessionWebSocketTask {
+    private func socketTask(for request: URLRequest) -> any WallpaperSocketTask {
+        let task = socketFactory?(request) ?? session.webSocketTask(with: request)
+        task.maximumMessageSize = 2 * 1024 * 1024
+        task.resume()
+        return task
+    }
+    func socket(_ url: URL) -> any WallpaperSocketTask {
         // The 2s HTTP-list timeout must not cut off the renderer's bounded 4s
         // image decode. Each CDP exchange still has its own 6s cancellation.
         var request = URLRequest(url: url); request.timeoutInterval = 30
-        let task = session.webSocketTask(with: request); task.maximumMessageSize = 2 * 1024 * 1024; task.resume(); return task
+        return socketTask(for: request)
+    }
+    func pageSession(_ url: URL) -> any WallpaperPageSession {
+        URLSessionWallpaperPageSession(transport: self, socket: socket(url))
     }
     func connect(to url: URL, timeout: TimeInterval) throws {
         guard startupSocket == nil, timeout > 0 else {
@@ -685,10 +845,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = min(30, timeout)
-        let task = session.webSocketTask(with: request)
-        task.maximumMessageSize = 2 * 1024 * 1024
-        task.resume()
-        startupSocket = task
+        startupSocket = socketTask(for: request)
     }
 
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
@@ -732,7 +889,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         }
     }
 
-    func evaluate(_ source: String, on socket: URLSessionWebSocketTask, timeout: TimeInterval = 5) async throws -> [String: Any] {
+    func evaluate(_ source: String, on socket: any WallpaperSocketTask, timeout: TimeInterval = 5) async throws -> [String: Any] {
         serial += 1; let id = serial
         let request: [String: Any] = ["id": id, "method": "Runtime.evaluate", "params": [
             "expression": source, "returnByValue": true, "awaitPromise": true, "userGesture": false, "timeout": Int(timeout * 1000)]]
@@ -1033,14 +1190,14 @@ struct StartupConnector {
         } catch { /* Cleanup is best effort and never delays closing past the budget. */ }
     }
 
-    private static let inspectExpression = """
+    static let inspectExpression = """
     (() => { const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); return {href: location.href, controllerPresent: Boolean(d)}; })()
     """
-    private static let statusExpression = """
+    static let statusExpression = """
     (() => { const href = location.href; const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); if (!d || !("value" in d) || !d.value || typeof d.value.status !== "function") return {href, missing: true}; return {href, missing: false, status: d.value.status()}; })()
     """
 
-    private static func disposeExpression(_ href: String) throws -> String {
+    static func disposeExpression(_ href: String) throws -> String {
         let encoded = try JSONSerialization.data(withJSONObject: [href])
         let array = String(decoding: encoded, as: UTF8.self)
         guard array.first == "[", array.last == "]" else {
@@ -1052,7 +1209,7 @@ struct StartupConnector {
         """
     }
 
-    private static func installExpression(_ payload: String, expectedHref: String) throws -> String {
+    static func installExpression(_ payload: String, expectedHref: String) throws -> String {
         // The trusted builder emits one self-contained installer expression;
         // keep it inside the single bounded CDP evaluation instead of reparsing it.
         let encoded = try JSONSerialization.data(withJSONObject: [expectedHref])
@@ -1072,9 +1229,9 @@ struct StartupConnector {
     }
 }
 
-private struct WallpaperRequest: Sendable {
-    let action: WallpaperAction, target: WallpaperTarget, port: Int?, cold: Bool, requestID: String
-    init(_ arguments: [String]) throws {
+struct WallpaperRequest: Sendable {
+    let action: WallpaperAction, target: StartupTargetFacts, port: Int?, cold: Bool, requestID: String
+    init(_ arguments: [String], resolver: any WallpaperTargetResolver) throws {
         func option(_ name: String) -> String? {
             guard let index = arguments.firstIndex(of: name), index + 1 < arguments.count else { return nil }
             return arguments[index + 1]
@@ -1083,26 +1240,26 @@ private struct WallpaperRequest: Sendable {
         guard let action = WallpaperAction(rawValue: shortcut ? "status" : option("--action") ?? "apply") else {
             throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作必须为 apply、retry、doctor、status 或 restore。", english: "The wallpaper action must be apply, retry, doctor, status, or restore.")
         }
-        var suppliedPID = option("--target-pid"), suppliedBundle = option("--target-bundle")
-        var launchTime = option("--target-start-time").flatMap(Double.init)
+        let suppliedPID = option("--target-pid")
+        let suppliedBundle = option("--target-bundle")
+        let launchTime = option("--target-start-time").flatMap(Double.init)
+        let target: StartupTargetFacts
         if shortcut, suppliedPID == nil, suppliedBundle == nil {
-            let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex").filter { !$0.isTerminated }
-            guard candidates.count == 1, let app = candidates.first, let bundle = app.bundleURL else {
-                throw WallpaperFailure(state: "target-unavailable", chinese: "未找到唯一的正在运行的 Codex；状态检查不会启动应用。", english: "Could not identify exactly one running Codex app; the status check will not launch it.")
+            target = try resolver.resolveTarget(pid: nil, bundle: nil, launchTime: nil)
+        } else {
+            guard let textPID = suppliedPID, let pid = Int32(textPID), pid > 0,
+                  let path = suppliedBundle, path.hasPrefix("/") else {
+                throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作需要明确的目标 PID 和绝对应用路径。", english: "A wallpaper action requires an explicit target PID and absolute app path.")
             }
-            suppliedPID = String(app.processIdentifier); suppliedBundle = bundle.path; launchTime = app.launchDate?.timeIntervalSince1970
-        }
-        guard let textPID = suppliedPID, let pid = Int32(textPID), pid > 0,
-              let path = suppliedBundle, path.hasPrefix("/") else {
-            throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作需要明确的目标 PID 和绝对应用路径。", english: "A wallpaper action requires an explicit target PID and absolute app path.")
+            target = try resolver.resolveTarget(pid: pid, bundle: URL(fileURLWithPath: path), launchTime: launchTime)
         }
         if let rawPort = option("--port") {
-            guard option("--target-pid") != nil, let value = Int(rawPort), (1...65535).contains(value) else {
+            guard suppliedPID != nil, let value = Int(rawPort), (1...65535).contains(value) else {
                 throw WallpaperFailure(state: "invalid-request", chinese: "指定端口时必须同时指定并核实目标 PID；端口范围为 1–65535。", english: "When specifying a port, also specify and verify the target PID; the port range is 1–65535.")
             }
             port = value
         } else { port = nil }
-        self.action = action; self.target = try WallpaperTarget(pid: pid, bundle: URL(fileURLWithPath: path), launchTime: launchTime)
+        self.action = action; self.target = target
         self.cold = arguments.contains("--cold"); self.requestID = option("--request-id") ?? UUID().uuidString
     }
 }
@@ -1222,8 +1379,32 @@ enum WallpaperCLI {
         func result() -> [String: Any] { lock.lock(); defer { lock.unlock() }; return value ?? [:] }
     }
     static func run(_ arguments: [String]) -> Int32 {
+        let system = CodexStartupTargetSystem()
+        return run(
+            arguments, resolver: system, system: system, transportFactory: { WallpaperTransport() },
+            now: { ProcessInfo.processInfo.systemUptime },
+            expectedVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            sourceLoader: packagedWallpaperSource,
+            sleep: { seconds in try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000)) },
+            journal: { WallpaperJournal.record($0) },
+            output: { data in try? FileHandle.standardOutput.write(contentsOf: data) }
+        )
+    }
+
+    static func run(
+        _ arguments: [String],
+        resolver: any WallpaperTargetResolver,
+        system: any StartupTargetSystem,
+        transportFactory: @escaping () -> any WallpaperOperationTransport,
+        now: @escaping () -> TimeInterval,
+        expectedVersion: String,
+        sourceLoader: @escaping () throws -> String,
+        sleep: @escaping (TimeInterval) async throws -> Void,
+        journal: ([String: Any]) -> Void,
+        output: (Data) -> Void
+    ) -> Int32 {
         WallpaperMessages.prepareForRun()
-        let began = ProcessInfo.processInfo.systemUptime
+        let began = now()
         var action = arguments.contains("--wallpaper-status") ? "status" : "apply"
         if !arguments.contains("--wallpaper-status"), let index = arguments.firstIndex(of: "--action"), index + 1 < arguments.count { action = arguments[index + 1] }
         var base: [String: Any] = ["event": "wallpaper-result", "action": action, "applied": false,
@@ -1241,9 +1422,14 @@ enum WallpaperCLI {
         DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
         let task = Task.detached {
             do {
-                let request = try WallpaperRequest(arguments)
+                let request = try WallpaperRequest(arguments, resolver: resolver)
                 var result: [String: Any]
-                do { result = try await perform(request, began: began) }
+                do {
+                    result = try await perform(
+                        request, began: began, system: system, transport: transportFactory(),
+                        now: now, expectedVersion: expectedVersion, sourceLoader: sourceLoader, sleep: sleep
+                    )
+                }
                 catch let error as WallpaperFailure { result = ["state": error.state, "applied": false, "message": error.message] }
                 catch { result = ["state": "connection-failed", "applied": false, "message": WallpaperMessages.localized(chinese: "壁纸连接未完成；Codex 保持运行。", english: "The wallpaper connection did not finish; Codex remains running.")] }
                 result["targetPID"] = Int(request.target.pid); result["targetPath"] = request.target.bundle.path
@@ -1257,41 +1443,53 @@ enum WallpaperCLI {
         if base["requestID"] == nil, let index = arguments.firstIndex(of: "--request-id"), index + 1 < arguments.count { base["requestID"] = arguments[index + 1] }
         base["seconds"] = ((ProcessInfo.processInfo.systemUptime - began) * 1000).rounded() / 1000
         base["timestamp"] = ISO8601DateFormatter().string(from: Date())
-        if action == "apply" || action == "retry" || action == "restore" { WallpaperJournal.record(base) }
+        if action == "apply" || action == "retry" || action == "restore" { journal(base) }
         if let data = try? JSONSerialization.data(withJSONObject: base, options: [.sortedKeys, .withoutEscapingSlashes]) {
-            try? FileHandle.standardOutput.write(contentsOf: data + Data([10]))
+            output(data + Data([10]))
         }
         return exitCode(for: base["state"] as? String ?? "")
     }
 
-    private static func perform(_ request: WallpaperRequest, began: TimeInterval) async throws -> [String: Any] {
-        let target = request.target, transport = WallpaperTransport()
+    private static func packagedWallpaperSource() throws -> String {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("wallpaper/install.js"),
+              (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,
+              let bytes = try? Data(contentsOf: url), bytes.count < 24 * 1024 * 1024,
+              let text = String(data: bytes, encoding: .utf8), !text.isEmpty else {
+            throw WallpaperFailure(state: "resource-missing", chinese: "缺少已打包的阿舟壁纸脚本，请重新构建并安装。", english: "The bundled Azhou wallpaper script is missing; rebuild and install the app.")
+        }
+        return text
+    }
+
+    static func perform(
+        _ request: WallpaperRequest,
+        began: TimeInterval,
+        system: any StartupTargetSystem,
+        transport: any WallpaperOperationTransport,
+        now: () -> TimeInterval,
+        expectedVersion: String,
+        sourceLoader: () throws -> String,
+        sleep: (TimeInterval) async throws -> Void
+    ) async throws -> [String: Any] {
+        let target = request.target
         defer { transport.close() }
-        var operationLock: WallpaperOperationLock?
+        var operationLock: (any StartupOperationLock)?
         if request.action == .apply || request.action == .retry || request.action == .restore {
-            operationLock = try WallpaperOperationLock.acquire(pid: target.pid)
+            operationLock = try system.acquireOperationLock(pid: target.pid)
         }
         defer { operationLock?.release() }
-        if !request.cold, request.port == nil, try target.ports().isEmpty {
+        if !request.cold, request.port == nil, try system.listeningPorts(target, deadline: began + 30).isEmpty {
             return ["state": "needs-restart", "applied": false,
                     "message": WallpaperMessages.localized(chinese: "当前 Codex 未开放壁纸连接。请自行完全退出 Codex，再从阿舟入口启动；本次没有重启或更改工作会话。", english: "The current Codex session has no wallpaper connection. Quit Codex completely, then launch it from the Azhou entry; this operation did not restart Codex or change the work session.")]
         }
-        try target.validateSignature()
-        let expectedVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        try system.validate(target, deadline: began + 30)
         var source = ""
         if request.action == .apply {
-            guard let url = Bundle.main.resourceURL?.appendingPathComponent("wallpaper/install.js"),
-                  (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,
-                  let bytes = try? Data(contentsOf: url), bytes.count < 24 * 1024 * 1024,
-                  let text = String(data: bytes, encoding: .utf8), !text.isEmpty else {
-                throw WallpaperFailure(state: "resource-missing", chinese: "缺少已打包的阿舟壁纸脚本，请重新构建并安装。", english: "The bundled Azhou wallpaper script is missing; rebuild and install the app.")
-            }
-            source = text
+            source = try sourceLoader()
         }
         var sawEndpoint = false, lastState = "endpoint-unavailable"
-        while ProcessInfo.processInfo.systemUptime - began < 28 {
-            try Task.checkCancellation(); try target.validate()
-            let owned = try target.ports()
+        while now() - began < 28 {
+            try Task.checkCancellation(); try system.validateProcess(target, deadline: began + 30)
+            let owned = try system.listeningPorts(target, deadline: began + 30)
             if let port = request.port, !owned.contains(port) {
                 throw WallpaperFailure(state: "endpoint-refused", chinese: "指定端口不是该 Codex 主进程独占的 IPv4 回环监听端口。", english: "The specified port is not an IPv4 loopback listener owned exclusively by this Codex main process.")
             }
@@ -1302,7 +1500,7 @@ enum WallpaperCLI {
             }
             for port in ports.prefix(12) {
                 do {
-                    let pages = try await transport.pages(port: port); sawEndpoint = true
+                    let pages = try await transport.pages(port: port, timeout: 2); sawEndpoint = true
                     if pages.isEmpty { lastState = "main-page-unavailable"; continue }
                     guard pages.count <= 12 else { throw WallpaperFailure(state: "page-count-refused", chinese: "主页面数量超出本次有限壁纸操作范围。", english: "The number of main pages exceeds this bounded wallpaper operation's limit.") }
                     if request.action == .doctor {
@@ -1312,14 +1510,14 @@ enum WallpaperCLI {
                     var states: [[String: Any]] = []
                     var retries: [[String: Any]] = []
                     for page in pages {
-                        try Task.checkCancellation(); try target.validate()
-                        guard try target.ports().contains(port), let raw = page["webSocketDebuggerUrl"] as? String else {
+                        try Task.checkCancellation(); try system.validateProcess(target, deadline: began + 30)
+                        guard try system.listeningPorts(target, deadline: began + 30).contains(port), let raw = page["webSocketDebuggerUrl"] as? String else {
                             throw WallpaperFailure(state: "endpoint-changed", chinese: "目标监听或页面地址已变化，停止本次壁纸操作。", english: "The target listener or page address changed; this wallpaper operation has stopped.")
                         }
-                        let socket = transport.socket(try WallpaperValidation.pageSocket(raw, port: port))
-                        defer { socket.cancel(with: .normalClosure, reason: nil) }
+                        let socket = transport.pageSession(try WallpaperValidation.pageSocket(raw, port: port))
+                        defer { socket.close() }
                         if request.action == .apply {
-                            let ownership = try await transport.evaluate(Self.applyGuardSource, on: socket)
+                            let ownership = try await socket.evaluate(applyGuardSource, timeout: 6)
                             if ownership["state"] as? String == "startup-active" {
                                 throw WallpaperFailure(state: "startup-active", chinese: "当前页面已有 Agent Skin 启动控制器；独立壁纸应用已拒绝。", english: "This page already has the Agent Skin startup controller; standalone wallpaper application was refused.")
                             }
@@ -1330,7 +1528,7 @@ enum WallpaperCLI {
                                 throw WallpaperFailure(state: "owner-conflict", chinese: "当前页面没有返回可核验的壁纸所有权状态；本次未覆盖。", english: "This page did not return verifiable wallpaper ownership state; nothing was overwritten.")
                             }
                             let applied: [String: Any]
-                            do { applied = try await transport.evaluate(source, on: socket) }
+                            do { applied = try await socket.evaluate(source, timeout: 6) }
                             catch let error as WallpaperFailure where error.state == "renderer-rejected" {
                                 var result = WallpaperValidation.applicationFailure(
                                     priorStates: states, failedState: nil, totalPages: pages.count,
@@ -1347,11 +1545,11 @@ enum WallpaperCLI {
                             }
                         } else if request.action == .retry {
                             // Do not start page work that could outlive this helper's total deadline.
-                            guard 28 - (ProcessInfo.processInfo.systemUptime - began) >= retryEvaluationTimeout + 1 else {
+                            guard 28 - (now() - began) >= retryEvaluationTimeout + 1 else {
                                 return ["state": "timeout", "applied": false, "reason": "retry-budget-exhausted",
                                         "pageCount": pages.count, "completedPageCount": states.count, "retries": retries]
                             }
-                            let recovery = try await transport.evaluate(retrySource, on: socket, timeout: retryEvaluationTimeout)
+                            let recovery = try await socket.evaluate(retrySource, timeout: retryEvaluationTimeout)
                             if let state = recovery["state"] as? String {
                                 let category = ["owner-conflict", "retry-unavailable", "retry-failed"].contains(state)
                                     ? state : "retry-failed"
@@ -1376,7 +1574,7 @@ enum WallpaperCLI {
                             }
                             retries.append(receipt)
                             if let reason = WallpaperValidation.retryFailure(recovery) {
-                                let inspected = try await transport.evaluate(statusSource, on: socket)
+                                let inspected = try await socket.evaluate(statusSource, timeout: 6)
                                 var failedPage = WallpaperValidation.diagnostic(inspected, index: states.count, version: nil)
                                 failedPage.merge(WallpaperValidation.failureDiagnostic(wallpaper)) { _, value in value }
                                 return ["state": retried ? "retry-failed" : "retry-refused", "applied": false,
@@ -1385,7 +1583,7 @@ enum WallpaperCLI {
                                         "pages": [failedPage]]
                             }
                         } else if request.action == .restore {
-                            let restored = try await transport.evaluate(restoreSource, on: socket)
+                            let restored = try await socket.evaluate(restoreSource, timeout: 6)
                             guard restored["restored"] as? Bool == true else {
                                 if restored["reason"] as? String == "owner-conflict" {
                                     throw WallpaperFailure(state: "owner-conflict", chinese: "当前页面的壁纸或启动所有者未知；本次未覆盖或删除。", english: "The wallpaper or startup owner on this page is unknown; nothing was overwritten or removed.")
@@ -1394,7 +1592,7 @@ enum WallpaperCLI {
                             }
                         }
                         let state: [String: Any]
-                        do { state = try await transport.evaluate(statusSource, on: socket) }
+                        do { state = try await socket.evaluate(statusSource, timeout: 6) }
                         catch let error as WallpaperFailure where request.action == .apply && error.state == "renderer-rejected" {
                             var result = WallpaperValidation.applicationFailure(
                                 priorStates: states, failedState: nil, totalPages: pages.count,
@@ -1402,7 +1600,7 @@ enum WallpaperCLI {
                             result["port"] = port
                             return result
                         }
-                        try target.validate()
+                        try system.validateProcess(target, deadline: began + 30)
                         if request.action == .apply && !WallpaperValidation.verifiedState(state, version: expectedVersion) {
                             var result = WallpaperValidation.applicationFailure(
                                 priorStates: states, failedState: state, totalPages: pages.count,
@@ -1457,7 +1655,7 @@ enum WallpaperCLI {
                 return ["state": "needs-restart", "applied": false,
                         "message": WallpaperMessages.localized(chinese: "当前 Codex 没有可核实的页面调试连接。请自行完全退出后再从阿舟入口启动；未重启当前会话。", english: "The current Codex session has no verifiable page debugging connection. Quit it completely, then relaunch from the Azhou entry; the session was not restarted.")]
             }
-            try await Task.sleep(nanoseconds: 250_000_000)
+            try await sleep(0.25)
         }
         return ["state": "timeout", "applied": false, "reason": lastState,
                 "message": WallpaperMessages.localized(chinese: "在有限等待时间内未完成壁纸确认；Codex 保持运行，动画交接不受影响。", english: "Wallpaper confirmation did not finish within the bounded wait. Codex remains running, and animation handoff is unaffected.")]

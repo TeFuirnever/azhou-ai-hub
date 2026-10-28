@@ -29,9 +29,11 @@ APP_BUILD = str(APP_PACKAGE["runtime_build"])
 BUILD_FILES = (
     "Native/App.swift",
     "Native/InstallRegistry.swift",
+    "Native/InstallRegistryCore.swift",
     "Native/Wallpaper.swift",
     "Native/StartupNativeTests.swift",
     "extension/renderer.mjs",
+    "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
     "index.html",
@@ -39,8 +41,10 @@ BUILD_FILES = (
     "animation.js",
     "wallpaper/renderer.js",
     "wallpaper/wallpaper.css",
+    "wallpaper/apply.js",
     "wallpaper/preview.html",
     "tools/build-macos.sh",
+    "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
     "tools/test-startup-native.py",
@@ -53,6 +57,11 @@ BUILD_FILES = (
 
 
 def load_module(path: Path, name: str):
+    path = Path(path)
+    if path.name in {"verify-artifacts.py", "build-wallpaper.py", "build-preflight.py"}:
+        canonical = PACKAGE / "tools" / path.name
+        if path.resolve() != canonical.resolve() and path.read_bytes() != canonical.read_bytes():
+            raise AssertionError(f"coverage-mapped source differs from canonical source: {path}")
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
@@ -281,12 +290,16 @@ class BuildOwnedThemeTests(unittest.TestCase):
             marker_path = legacy / artifacts.MARKER
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
             marker["inputs"].pop("theme-config.json")
+            marker["inputs"].pop("wallpaper/apply.js")
+            marker["inputs"].pop("extension/bootstrap.mjs")
             marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
             marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
                                    encoding="utf-8")
             manifest_path = resources / "startup/manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest["sourceInputs"].pop("theme-config.json")
+            manifest["sourceInputs"].pop("wallpaper/apply.js")
+            manifest["sourceInputs"].pop("extension/bootstrap.mjs")
             manifest["inputSHA256"] = marker["inputSHA256"]
             for relative in manifest["outputs"]:
                 manifest["outputs"][relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()

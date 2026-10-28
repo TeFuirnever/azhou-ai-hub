@@ -73,7 +73,7 @@ jobs:
   startup-animation-macos:
     name: Startup and Pet validation
     runs-on: macos-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -103,6 +103,7 @@ jobs:
         run: |
           node --test tools/startup.test.mjs
           node --test tools/image-settings.test.mjs
+          node --test tools/localization.test.mjs
           python -B tools/test-startup-build.py
           node tools/test-image-settings-browser.mjs
           python -B tools/test-startup-payload-browser.py --out "$RUNNER_TEMP/agent-skin-browser-evidence"
@@ -117,6 +118,41 @@ jobs:
           xcrun --sdk macosx swiftc Native/Wallpaper.swift Native/WallpaperValidationTests.swift \
             -o .build/wallpaper-validation-tests -framework AppKit
           .build/wallpaper-validation-tests
+
+  agent-skin-unit-coverage:
+    name: Agent Skin full production UT coverage
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.15.0"
+      - name: Install unit coverage dependency
+        run: python -m pip install --only-binary=:all: coverage==7.16.2 Pillow==12.3.0
+      - name: Prepare isolated Bash unit tooling
+        working-directory: packages/agent-skin
+        run: python -B tools/test-setup-unit-tools.py --github-env "$GITHUB_ENV" --github-path "$GITHUB_PATH"
+      - name: Require 95 percent for every production language
+        working-directory: packages/agent-skin
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python -B tools/test-coverage-policy.py
+          python -B tools/test-functional-verdict.py
+          python -B tools/test-bootstrap-unit-tools.py
+          python -B tools/test-unit-coverage.py
 
   benchmarks:
     name: Benchmark integrity
@@ -198,6 +234,7 @@ jobs:
       - verify-windows
       - pstack-native
       - startup-animation-macos
+      - agent-skin-unit-coverage
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -207,6 +244,7 @@ jobs:
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
       ANIMATION_RESULT: ${{ needs.startup-animation-macos.result }}
+      AGENT_SKIN_COVERAGE_RESULT: ${{ needs.agent-skin-unit-coverage.result }}
     steps:
       - name: Require every CI gate
         run: |
@@ -216,3 +254,4 @@ jobs:
           test "$WINDOWS_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
           test "$ANIMATION_RESULT" = "success"
+          test "$AGENT_SKIN_COVERAGE_RESULT" = "success"

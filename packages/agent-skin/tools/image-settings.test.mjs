@@ -9,9 +9,13 @@ const SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'image-s
 const LOCALIZATION_SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'localization.js');
 const MAX_INPUT_BYTES = 31_457_280;
 const source = await readFile(SOURCE_PATH, 'utf8');
-const createImageSettings = vm.runInNewContext(`${source}\ncreateImageSettings`, {});
+const imageSettingsContext = {};
+new vm.Script(source, { filename: SOURCE_PATH }).runInNewContext(imageSettingsContext);
+const { createImageSettings } = imageSettingsContext;
 const localizationSource = await readFile(LOCALIZATION_SOURCE_PATH, 'utf8');
-const createLocalization = vm.runInNewContext(`${localizationSource}\ncreateLocalization`, {});
+const localizationContext = {};
+new vm.Script(localizationSource, { filename: LOCALIZATION_SOURCE_PATH }).runInNewContext(localizationContext);
+const { createLocalization } = localizationContext;
 const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 
 function makeFile({ size = 64, type = 'image/png', signature = PNG_SIGNATURE } = {}) {

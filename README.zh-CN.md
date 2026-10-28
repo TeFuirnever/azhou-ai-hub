@@ -309,6 +309,8 @@ python scripts/verify.py
 
 ## 项目入口
 
+Agent Skin 另有包级门禁：在 macOS 执行 `python packages/agent-skin/tools/test-unit-coverage.py`，要求每种生产语言及完整包的 UT 行覆盖率至少 95%。该 Required CI 作业与浏览器功能回归、已安装应用验收分别判定。完整统计范围、依赖及 Finder/Dock、冷启动、壁纸、安装升级用例见 [Agent Skin 测试与验收](packages/agent-skin/docs/testing.md)。
+
 - [路线图](docs/roadmap.md)
 - [变更记录](CHANGELOG.md)
 - [安全政策](SECURITY.md)

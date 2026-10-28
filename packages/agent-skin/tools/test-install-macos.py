@@ -685,6 +685,249 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(m.fingerprint(temporary[0] / 'payload'), before)
         self.assertFalse(list(temporary[0].rglob('*.app')))
 
+    def test_install_helper_boundaries_reject_bad_receipts_roots_and_locks(self):
+        m = self.module
+        with self.assertRaisesRegex(RuntimeError, '版本格式未知'):
+            m.version_key({'CFBundleShortVersionString': 'future', 'CFBundleVersion': '3'})
+        self.assertIsNone(m.managed_install_path(None))
+        self.assertIsNone(m.managed_install_path('relative.app'))
+        self.assertIsNone(m.managed_install_path(str(self.base / 'outside.app')))
+        self.assertEqual(m.managed_install_path(str(m.DESTINATION)), m.DESTINATION)
+
+        local = m.ROOT / '.local'
+        link_target = self.base / 'receipt-dir'
+        link_target.mkdir()
+        local.symlink_to(link_target, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, '符号链接读取或写入安装记录'):
+            m.receipt_path()
+        local.unlink()
+        local.mkdir()
+        m.receipt_path().write_text('[]')
+        with self.assertRaisesRegex(RuntimeError, '安装记录格式未知'):
+            m.read_receipt()
+
+        with self.assertRaisesRegex(RuntimeError, '安装锁目录不是实体目录'):
+            with m.file_lock(self.base / 'missing-lock-dir/install.lock'):
+                pass
+        lock_link = self.base / 'lock-link'
+        lock_link.symlink_to(link_target, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, '安装锁目录不是实体目录'):
+            with m.file_lock(lock_link / 'install.lock'):
+                pass
+        lock_path = self.base / 'busy.lock'
+        with m.file_lock(lock_path):
+            with self.assertRaisesRegex(RuntimeError, '另一个项目安装正在进行'):
+                with m.file_lock(lock_path):
+                    pass
+
+        with self.assertRaisesRegex(RuntimeError, '必须是不同于当前项目'):
+            m.migration_root('relative-root')
+        with self.assertRaisesRegex(RuntimeError, '必须是不同于当前项目'):
+            m.migration_root(str(m.ROOT))
+        old_root = self.base / 'old-project-root'
+        old_root.mkdir()
+        old_link = self.base / 'old-project-link'
+        old_link.symlink_to(old_root, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, '必须是不同于当前项目'):
+            m.migration_root(str(old_link))
+
+        with self.assertRaisesRegex(RuntimeError, '旧安装记录目录不是实体目录'):
+            with m.install_lock(False, old_root):
+                pass
+
+        trusted = {'projectID': m.PROJECT_ID, 'projectRoot': str(m.ROOT),
+                   'status': 'source-handoff-pending'}
+        source_hash = m.fingerprint(m.SOURCE)
+        canonical_previous = {'oldRoot': str(old_root), 'newRoot': str(m.ROOT),
+                              'newSHA256': source_hash, 'oldSHA256': 'a' * 64,
+                              'oldInstalledPath': str(m.DESTINATION)}
+        self.assertIsNone(m.pending_legacy_handoff(old_root, source_hash,
+                                                   {**trusted, 'sourceHandoff': canonical_previous}))
+        legacy_previous = {**canonical_previous,
+                           'oldInstalledPath': str(m.DESTINATION.with_name(m.HELPERS['LEGACY_NAME']))}
+        self.assertIsNone(m.pending_legacy_handoff(
+            old_root, source_hash,
+            {**trusted, 'status': 'cleanup-pending', 'sourceHandoff': legacy_previous},
+        ))
+
+    def test_old_install_proof_and_pending_handoff_reject_untrusted_record_states(self):
+        m = self.module
+        old_root = self.base / 'empty-old-project'
+        old_root.mkdir()
+        with self.assertRaisesRegex(RuntimeError, '记录或构建载荷缺失'):
+            m.old_install_proof(old_root)
+
+        old_root, _ = self.old_owned_install()
+        record_path = old_root / '.local/installation.json'
+        valid = record_path.read_bytes()
+        record_path.write_text('[]')
+        with self.assertRaisesRegex(RuntimeError, '安装记录格式无效'):
+            m.old_install_proof(old_root)
+        record = json.loads(valid)
+        record['status'] = 'unknown'
+        record_path.write_text(json.dumps(record))
+        with self.assertRaisesRegex(RuntimeError, '没有证明当前入口归属'):
+            m.old_install_proof(old_root)
+
+        record_path.write_bytes(valid)
+        old_dist = old_root / 'dist'
+        old_dist.write_text('not a directory')
+        with self.assertRaisesRegex(RuntimeError, '旧输出目录不是实体目录'):
+            m.old_install_proof(old_root)
+        old_dist.unlink()
+        old_dist.mkdir()
+        (old_dist / 'remaining.app').mkdir()
+        with self.assertRaisesRegex(RuntimeError, '旧输出目录仍有应用'):
+            m.old_install_proof(old_root)
+
+        shutil.rmtree(old_root)
+        source_hash = m.fingerprint(m.SOURCE)
+        self.assertIsNone(m.pending_legacy_handoff(old_root, source_hash, {}))
+        trusted = {'projectID': m.PROJECT_ID, 'projectRoot': str(m.ROOT), 'status': 'cleanup-pending'}
+        self.assertIsNone(m.pending_legacy_handoff(old_root, source_hash, trusted))
+
+        legacy = m.DESTINATION.with_name(m.HELPERS['LEGACY_NAME'])
+        old_root, old_record = self.old_owned_install(installed_path=legacy)
+        source_hash = m.fingerprint(m.SOURCE)
+        bad_previous = {'oldRoot': str(old_root), 'newRoot': str(m.ROOT), 'newSHA256': source_hash,
+                        'oldSHA256': '0' * 64, 'oldInstalledPath': str(legacy)}
+        bad_receipt = {**trusted, 'status': 'source-handoff-pending', 'sourceHandoff': bad_previous,
+                       'retiredArtifacts': [{'path': str(legacy), 'bundleID': m.EXPECTED[0],
+                                             'executable': m.EXPECTED[1], 'sha256Tree': '0' * 64,
+                                             'proof': 'verified-source-handoff'}]}
+        with self.assertRaisesRegex(RuntimeError, '待完成的来源接管记录不一致'):
+            m.pending_legacy_handoff(old_root, source_hash, bad_receipt)
+
+    def test_scan_and_registry_inventory_reject_unsafe_managed_entries(self):
+        m = self.module
+        app_parent = m.DESTINATION.parent
+        outside = self.base / 'outside-applications'
+        outside.mkdir()
+        app_parent.symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, '符号链接目录'):
+            m.scan_apps(m.verify(m.SOURCE), m.fingerprint(m.SOURCE), {})
+        app_parent.unlink()
+
+        m.DIST.write_text('not a directory')
+        with self.assertRaisesRegex(RuntimeError, '应用目录不是目录'):
+            m.scan_apps(m.verify(m.SOURCE), m.fingerprint(m.SOURCE), {})
+        m.DIST.unlink()
+        m.DIST.mkdir()
+        (m.DIST / 'linked.app').symlink_to(m.SOURCE, target_is_directory=True)
+        (m.DIST / 'unreadable.app').mkdir()
+
+        mismatched = m.DIST / 'mismatched.app'
+        info = {'CFBundleIdentifier': m.EXPECTED[0], 'CFBundleExecutable': 'UnexpectedExecutable',
+                'CFBundlePackageType': 'APPL'}
+        executable = mismatched / 'Contents/Info.plist'
+        executable.parent.mkdir(parents=True)
+        executable.write_bytes(plistlib.dumps(info))
+
+        missing_web = m.DIST / 'missing-web.app'
+        self.bundle(missing_web)
+        (missing_web / 'Contents/Resources/web/index.html').unlink()
+
+        with self.assertRaisesRegex(RuntimeError, '应用归属或版本存在冲突'):
+            m.scan_apps(m.verify(m.SOURCE), m.fingerprint(m.SOURCE), {})
+
+        valid_groups = [{'bundleID': identity[0], 'urls': []} for identity in m.KNOWN]
+        with patch.object(m.subprocess, 'check_output', return_value=json.dumps({'schema': 2,
+                                                                                 'applications': valid_groups})):
+            with self.assertRaisesRegex(RuntimeError, '返回未知格式'):
+                m.registry_inventory()
+        with patch.object(m.subprocess, 'check_output', return_value=json.dumps({'schema': 1,
+                                                                                 'applications': valid_groups[:-1]})):
+            with self.assertRaisesRegex(RuntimeError, '没有覆盖全部已知项目 ID'):
+                m.registry_inventory()
+        relative_groups = [dict(item) for item in valid_groups]
+        relative_groups[0] = {'bundleID': m.KNOWN[0][0], 'urls': [{'path': 'relative.app'}]}
+        with patch.object(m.subprocess, 'check_output', return_value=json.dumps({'schema': 1,
+                                                                                 'applications': relative_groups})):
+            with self.assertRaisesRegex(RuntimeError, '非绝对路径'):
+                m.registry_inventory()
+
+    def test_scan_preserves_non_directory_at_canonical_entry_and_unchanged_checks_fingerprint(self):
+        m = self.module
+        m.DESTINATION.parent.mkdir(parents=True)
+        m.DESTINATION.write_text('not an app bundle')
+        with self.assertRaisesRegex(RuntimeError, '规范入口不是实体应用'):
+            m.scan_apps(m.verify(m.SOURCE), m.fingerprint(m.SOURCE), {})
+
+        info = m.verify(m.SOURCE)
+        entry = {'path': m.SOURCE, 'identity': m.EXPECTED,
+                 'versionKey': m.version_key(info), 'sha256Tree': '0' * 64}
+        with self.assertRaisesRegex(RuntimeError, '候选在核查后发生变化'):
+            m.unchanged(entry)
+
+    def test_install_rejects_conflicting_modes_invalid_payload_and_mutating_source(self):
+        m = self.module
+        old_root = self.base / 'old-for-mode-check'
+        old_root.mkdir()
+        with self.assertRaisesRegex(RuntimeError, '只读检查与来源接管不能同时执行'):
+            m.install(True, str(old_root))
+
+        app_source = self.base / 'not-a-payload.app'
+        app_source.mkdir()
+        with patch.object(m, 'SOURCE', app_source), self.assertRaisesRegex(RuntimeError, '无 .app 后缀'):
+            m.install()
+
+        actual = m.fingerprint(m.SOURCE)
+        calls = 0
+        def change_between_checks(_path):
+            nonlocal calls
+            calls += 1
+            return actual if calls == 1 else 'f' * 64
+        with patch.object(m, 'fingerprint', side_effect=change_between_checks), \
+                self.assertRaisesRegex(RuntimeError, '核查期间发生变化'):
+            m.install()
+        self.assertEqual(calls, 2)
+
+    def test_recheck_handoff_rejects_entry_path_change_after_proof(self):
+        m = self.module
+        old_root, _ = self.old_owned_install()
+        expected = m.old_install_proof(old_root)
+        alternate = m.DESTINATION.with_name('Verified alternate.app')
+        shutil.copytree(m.DESTINATION, alternate)
+        record_path = old_root / '.local/installation.json'
+        record = json.loads(record_path.read_text())
+        record['installedPath'] = str(alternate)
+        record_path.write_text(json.dumps(record))
+        with self.assertRaisesRegex(RuntimeError, '归属在交换前发生变化'):
+            m.recheck_handoff(old_root, expected)
+
+    def test_new_install_payload_rolls_back_or_preserves_temporary_after_failed_retraction(self):
+        m = self.module
+        source_hash = m.fingerprint(m.SOURCE)
+        real_verify = m.verify
+
+        def fail_published_app(path):
+            if Path(path) == m.DESTINATION:
+                raise RuntimeError('injected installed-entry verification failure')
+            return real_verify(path)
+
+        with patch.object(m, 'verify', side_effect=fail_published_app):
+            with self.assertRaisesRegex(RuntimeError, 'installed-entry verification failure'):
+                m.install_payload(source_hash, None)
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
+        real_rename = os.rename
+        def fail_retraction(source, destination):
+            if Path(source) == m.DESTINATION and Path(destination).name == 'payload':
+                raise OSError('injected retraction failure')
+            return real_rename(source, destination)
+
+        with patch.object(m, 'verify', side_effect=fail_published_app), \
+                patch.object(m.os, 'rename', side_effect=fail_retraction):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
+                m.install_payload(source_hash, None)
+        retained = list(m.DESTINATION.parent.glob('.azhou-install-*'))
+        self.assertEqual(len(retained), 1)
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertTrue(retained[0].is_dir())
+        shutil.rmtree(m.DESTINATION)
+        shutil.rmtree(retained[0])
+
 
 if __name__ == '__main__':
     print('Scope: isolated filesystem tests; codesign, ditto, NSWorkspace registry and atomic syscall are mocked.')

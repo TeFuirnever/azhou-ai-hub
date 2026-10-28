@@ -496,11 +496,11 @@ enum NativeSmokeReportValidator {
 
 private final class StartupApplicationWaiter: @unchecked Sendable {
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<NSRunningApplication, Error>?
+    private var continuation: CheckedContinuation<any NativeApplication, Error>?
     private var completed = false
     private var timeout: DispatchWorkItem?
 
-    init(_ continuation: CheckedContinuation<NSRunningApplication, Error>) {
+    init(_ continuation: CheckedContinuation<any NativeApplication, Error>) {
         self.continuation = continuation
     }
 
@@ -511,7 +511,7 @@ private final class StartupApplicationWaiter: @unchecked Sendable {
         lock.unlock()
     }
 
-    func finish(_ result: Result<NSRunningApplication, Error>) {
+    func finish(_ result: Result<any NativeApplication, Error>) {
         lock.lock()
         guard !completed, let continuation else { lock.unlock(); return }
         completed = true
@@ -629,17 +629,367 @@ enum NativeDisplayLocale: Equatable {
     }
 }
 
+@MainActor
+protocol NativeApplication: AnyObject {
+    var processIdentifier: Int32 { get }
+    var bundleIdentifier: String? { get }
+    var bundleURL: URL? { get }
+    var executableURL: URL? { get }
+    var launchTime: TimeInterval? { get }
+    var isTerminated: Bool { get }
+    var isActive: Bool { get }
+    var isHidden: Bool { get }
+    @discardableResult func activate() -> Bool
+}
+
+@MainActor
+final class SystemNativeApplication: NativeApplication {
+    let application: NSRunningApplication
+    private let activateBody: () -> Bool
+    init(_ application: NSRunningApplication, activate: (() -> Bool)? = nil) {
+        self.application = application
+        self.activateBody = activate ?? { application.activate(options: []) }
+    }
+    var processIdentifier: Int32 { application.processIdentifier }
+    var bundleIdentifier: String? { application.bundleIdentifier }
+    var bundleURL: URL? { application.bundleURL }
+    var executableURL: URL? { application.executableURL }
+    var launchTime: TimeInterval? { application.launchDate?.timeIntervalSince1970 }
+    var isTerminated: Bool { application.isTerminated }
+    var isActive: Bool { application.isActive }
+    var isHidden: Bool { application.isHidden }
+    func activate() -> Bool { activateBody() }
+}
+
+@MainActor
+protocol NativeInstanceLock: AnyObject {
+    func release()
+}
+
+@MainActor
+private final class FileDescriptorNativeInstanceLock: NativeInstanceLock {
+    private var descriptor: Int32
+    init(_ descriptor: Int32) { self.descriptor = descriptor }
+    func release() {
+        guard descriptor >= 0 else { return }
+        flock(descriptor, LOCK_UN)
+        Darwin.close(descriptor)
+        descriptor = -1
+    }
+}
+
+enum NativeLockAcquisition {
+    case acquired(any NativeInstanceLock)
+    case busy
+    case failed(Int32)
+}
+
+struct NativeLoopbackPortError: Error {
+    let operation: String
+    let code: Int32
+}
+
+@MainActor
+protocol NativeAppRuntime: AnyObject {
+    var arguments: [String] { get }
+    var epoch: TimeInterval { get }
+    var uptime: TimeInterval { get }
+    var processIdentifier: Int { get }
+    var bundleURL: URL { get }
+    var resourceURL: URL? { get }
+    func appearanceTheme() -> String
+    var frontmostApplication: (any NativeApplication)? { get }
+    func runningApplications(bundleIdentifier: String) -> [any NativeApplication]
+    func application(processIdentifier: Int32) -> (any NativeApplication)?
+    func urlForApplication(bundleIdentifier: String) -> URL?
+    func openApplication(at url: URL, debuggingPort: Int,
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void)
+    func acquireInstanceLock(identifier: String) -> NativeLockAcquisition
+    func allocateLoopbackPort() throws -> Int
+    func makeStartupTargetSystem() -> any StartupTargetSystem
+    func makeStartupTransport(capture: NativeStartupCapture, events: NativeStartupEventStream) -> any StartupTransport
+    func systemFallbackLocale() -> NativeDisplayLocale
+    func setAccessoryPolicy()
+    func activateIgnoringOtherApps()
+    func terminate()
+    func exit(code: Int32)
+    func writeStandardOutput(_ line: String)
+}
+
+@MainActor
+final class SystemNativeAppRuntime: NativeAppRuntime {
+    private let openApplicationBody: (URL, NSWorkspace.OpenConfiguration,
+                                      @escaping (NSRunningApplication?, Error?) -> Void) -> Void
+    private let setAccessoryPolicyBody: () -> Void
+    private let activateIgnoringOtherAppsBody: () -> Void
+    private let terminateBody: () -> Void
+    private let exitBody: (Int32) -> Void
+    private let standardOutputBody: (String) -> Void
+
+    init(openApplication: ((URL, NSWorkspace.OpenConfiguration,
+                           @escaping (NSRunningApplication?, Error?) -> Void) -> Void)? = nil,
+         setAccessoryPolicy: (() -> Void)? = nil,
+         activateIgnoringOtherApps: (() -> Void)? = nil,
+         terminate: (() -> Void)? = nil,
+         exit: ((Int32) -> Void)? = nil,
+         standardOutput: ((String) -> Void)? = nil) {
+        self.openApplicationBody = openApplication ?? { url, configuration, completion in
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { application, error in
+                DispatchQueue.main.async { completion(application, error) }
+            }
+        }
+        self.setAccessoryPolicyBody = setAccessoryPolicy ?? { NSApp.setActivationPolicy(.accessory) }
+        self.activateIgnoringOtherAppsBody = activateIgnoringOtherApps ?? { NSApp.activate(ignoringOtherApps: true) }
+        self.terminateBody = terminate ?? { NSApp.terminate(nil) }
+        self.exitBody = exit ?? { Darwin.exit($0) }
+        self.standardOutputBody = standardOutput ?? { print($0); fflush(stdout) }
+    }
+
+    var arguments: [String] { CommandLine.arguments }
+    var epoch: TimeInterval { ProcessInfo.processInfo.systemUptime }
+    var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
+    var processIdentifier: Int { Int(ProcessInfo.processInfo.processIdentifier) }
+    var bundleURL: URL { Bundle.main.bundleURL }
+    var resourceURL: URL? { Bundle.main.resourceURL }
+    func appearanceTheme() -> String {
+        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
+    }
+    var frontmostApplication: (any NativeApplication)? {
+        NSWorkspace.shared.frontmostApplication.map { SystemNativeApplication($0) }
+    }
+    func runningApplications(bundleIdentifier: String) -> [any NativeApplication] {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).map { SystemNativeApplication($0) }
+    }
+    func application(processIdentifier: Int32) -> (any NativeApplication)? {
+        NSRunningApplication(processIdentifier: processIdentifier).map { SystemNativeApplication($0) }
+    }
+    func urlForApplication(bundleIdentifier: String) -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+    }
+    func openApplication(at url: URL, debuggingPort: Int,
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
+        configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
+        configuration.addsToRecentItems = false
+        configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(debuggingPort)"]
+        openApplicationBody(url, configuration) { application, error in
+            completion(application.map { SystemNativeApplication($0) }, error)
+        }
+    }
+    func acquireInstanceLock(identifier: String) -> NativeLockAcquisition {
+        let path = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("\(identifier)-\(getuid()).lock").path
+        let descriptor = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { return .failed(errno) }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            let code = errno
+            Darwin.close(descriptor)
+            return (code == EWOULDBLOCK || code == EAGAIN) ? .busy : .failed(code)
+        }
+        return .acquired(FileDescriptorNativeInstanceLock(descriptor))
+    }
+    func allocateLoopbackPort() throws -> Int {
+        func failure(_ operation: String) -> NativeLoopbackPortError { NativeLoopbackPortError(operation: operation, code: errno) }
+        let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        guard descriptor >= 0 else { throw failure("socket") }
+        defer { Darwin.close(descriptor) }
+        guard fcntl(descriptor, F_SETFD, FD_CLOEXEC) == 0 else { throw failure("close-on-exec") }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0 else { throw failure("bind-loopback") }
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.getsockname(descriptor, $0, &length) }
+        }
+        guard named == 0 else { throw failure("getsockname") }
+        let port = Int(UInt16(bigEndian: address.sin_port))
+        guard (1...65535).contains(port), address.sin_family == sa_family_t(AF_INET),
+              address.sin_addr.s_addr == inet_addr("127.0.0.1") else {
+            throw NativeLoopbackPortError(operation: "verify-loopback", code: 0)
+        }
+        return port
+    }
+    func makeStartupTargetSystem() -> any StartupTargetSystem { CodexStartupTargetSystem() }
+    func makeStartupTransport(capture: NativeStartupCapture, events: NativeStartupEventStream) -> any StartupTransport {
+        NativeStartupEventTransport(base: WallpaperTransport(), capture: capture, events: events)
+    }
+    func systemFallbackLocale() -> NativeDisplayLocale { NativeDisplayLocale.systemFallback() }
+    func setAccessoryPolicy() { setAccessoryPolicyBody() }
+    func activateIgnoringOtherApps() { activateIgnoringOtherAppsBody() }
+    func terminate() { terminateBody() }
+    func exit(code: Int32) { exitBody(code) }
+    func writeStandardOutput(_ line: String) { standardOutputBody(line) }
+}
+
+@MainActor
+protocol NativeScheduledAction: AnyObject {
+    func cancel()
+}
+
+@MainActor
+protocol NativePlayerPresentation: AnyObject {
+    var geometry: [String: Any] { get }
+    func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
+                      messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate)
+    func loadPlayer(page: URL, allowingReadAccessTo root: URL)
+    func updateLabels(_ locale: NativeDisplayLocale)
+    func showReady()
+    func setNormalLevel()
+    func makeVisible()
+    func orderOut()
+    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?)
+    func fadeOut(duration: TimeInterval, completion: @escaping () -> Void)
+    func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) -> any NativeScheduledAction
+    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void)
+    func stopLoading()
+    func removeMessageHandler(named name: String)
+    func showError(title: String, message: String, closeTitle: String)
+}
+
+@MainActor
+private final class NativeTimerAction: NativeScheduledAction {
+    private let timer: Timer
+    init(_ timer: Timer) { self.timer = timer }
+    func cancel() { timer.invalidate() }
+}
+
+@MainActor
+final class AppKitNativePlayerPresentation: NativePlayerPresentation {
+    private var window: NSWindow?
+    private var webView: WKWebView?
+    private var appMenuItem: NSMenuItem?
+    private var quitMenuItem: NSMenuItem?
+    private let activateApp: () -> Void
+    private let makeVisibleBody: (NSWindow) -> Void
+    private let runAlert: (NSAlert) -> Void
+
+    init(activateApp: (() -> Void)? = nil,
+         makeVisible: ((NSWindow) -> Void)? = nil,
+         runAlert: ((NSAlert) -> Void)? = nil) {
+        self.activateApp = activateApp ?? { NSApp.activate(ignoringOtherApps: true) }
+        self.makeVisibleBody = makeVisible ?? { $0.makeKeyAndOrderFront(nil) }
+        self.runAlert = runAlert ?? { _ = $0.runModal() }
+    }
+
+    var geometry: [String: Any] {
+        guard let window else { return [:] }
+        func rectInfo(_ rect: NSRect) -> [String: Double] {
+            ["x": Double(rect.origin.x), "y": Double(rect.origin.y),
+             "width": Double(rect.width), "height": Double(rect.height)]
+        }
+        let screen = window.screen ?? NSScreen.main
+        return ["frame": rectInfo(window.frame),
+                "visibleFrame": screen.map { rectInfo($0.visibleFrame) } ?? [:],
+                "contentBounds": rectInfo(window.contentView?.bounds ?? .zero),
+                "screen": screen?.localizedName ?? "", "backingScale": window.backingScaleFactor]
+    }
+
+    func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
+                      messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate) {
+        let menu = NSMenu(), item = NSMenuItem(), submenu = NSMenu()
+        menu.addItem(item); item.submenu = submenu; appMenuItem = item
+        quitMenuItem = submenu.addItem(withTitle: locale.quitTitle,
+                                       action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        NSApp.mainMenu = menu
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        let available = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let window = NSWindow(contentRect: available,
+                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        self.window = window
+        window.title = locale.displayName; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.delegate = messageHandler as? NSWindowDelegate
+        window.backgroundColor = NSColor(srgbRed: 241/255, green: 234/255, blue: 223/255, alpha: 1)
+        window.minSize = NSSize(width: min(640, available.width), height: min(420, available.height))
+        window.setFrame(available, display: false)
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.add(messageHandler, name: "launcher")
+        let nativeAppearance: [String: String] = ["locale": locale.identifier, "theme": theme]
+        let nativeAppearanceJSON = (try? JSONSerialization.data(withJSONObject: nativeAppearance, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"locale\":\"en\",\"theme\":\"light\"}"
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: "window.__agentSkinNativeMode = '\(mode)'; window.__agentSkinAppearance = Object.freeze(\(nativeAppearanceJSON));",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+        let webView = WKWebView(frame: window.contentView!.bounds, configuration: configuration)
+        self.webView = webView
+        webView.autoresizingMask = [.width, .height]; webView.navigationDelegate = navigationDelegate
+        webView.underPageBackgroundColor = window.backgroundColor
+        if #available(macOS 13.3, *), inspect { webView.isInspectable = true }
+        window.contentView!.addSubview(webView)
+    }
+    func loadPlayer(page: URL, allowingReadAccessTo root: URL) {
+        webView?.loadFileURL(page, allowingReadAccessTo: root)
+    }
+
+    func updateLabels(_ locale: NativeDisplayLocale) {
+        appMenuItem?.title = locale.displayName
+        quitMenuItem?.title = locale.quitTitle
+        window?.title = locale.displayName
+    }
+    func showReady() {
+        window?.level = .floating
+        if let window { makeVisibleBody(window) }
+        activateApp()
+    }
+    func setNormalLevel() { window?.level = .normal }
+    func makeVisible() { if let window { makeVisibleBody(window) } }
+    func orderOut() { window?.orderOut(nil) }
+    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
+        guard let webView else { completion?(nil, CocoaError(.fileNoSuchFile)); return }
+        webView.evaluateJavaScript(source, completionHandler: completion)
+    }
+    func fadeOut(duration: TimeInterval, completion: @escaping () -> Void) {
+        guard let window else { completion(); return }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = duration
+            window.animator().alphaValue = 0
+        }, completionHandler: completion)
+    }
+    func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) -> any NativeScheduledAction {
+        NativeTimerAction(Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in action() })
+    }
+    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void) {
+        guard let webView else { completion(nil, CocoaError(.fileNoSuchFile)); return }
+        webView.takeSnapshot(with: nil, completionHandler: completion)
+    }
+    func stopLoading() { webView?.stopLoading() }
+    func removeMessageHandler(named name: String) {
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: name)
+    }
+    func showError(title: String, message: String, closeTitle: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: closeTitle)
+        activateApp()
+        runAlert(alert)
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
-    private let args = CommandLine.arguments
-    private let epoch = ProcessInfo.processInfo.systemUptime
+    private let runtime: any NativeAppRuntime
+    private let args: [String]
+    private let epoch: TimeInterval
     private let logLock = NSLock()
-    private var window: NSWindow!, webView: WKWebView!
-    private var appMenuItem: NSMenuItem?, quitMenuItem: NSMenuItem?
-    private var displayLocale = NativeDisplayLocale.systemFallback()
-    private var webRoot: URL?, targetURL: URL?, target: NSRunningApplication?
-    private var logFile: FileHandle?, watchdog: Timer?
-    private var lockFD: Int32 = -1
+    private var presentation: (any NativePlayerPresentation)?
+    private var displayLocale: NativeDisplayLocale
+    private var webRoot: URL?, targetURL: URL?, target: (any NativeApplication)?
+    private var logFile: FileHandle?, watchdog: (any NativeScheduledAction)?
+    private var instanceLock: (any NativeInstanceLock)?
     private var lockFailureReason: String?
     private var ready = false, opening = false, requested = false, done = false
     private var terminating = false, failed = false, activated = false, promoted = false
@@ -647,38 +997,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var startupEventStream: NativeStartupEventStream?
     private var startupCapture: NativeStartupCapture?
     private var smokeResultSucceeded = false
-    private var snapshots: [DispatchWorkItem] = []
+    private var snapshots: [any NativeScheduledAction] = []
     private var preview: Bool { !promoted && (args.contains("--preview") || args.contains("--smoke-test")) }
     private var smokeTest: Bool { args.contains("--smoke-test") }
     private lazy var nativeEventWriter = NativeEventWriter(
         startedAt: epoch,
-        launcherPID: Int(ProcessInfo.processInfo.processIdentifier),
-        launcherPath: real(Bundle.main.bundleURL).path,
+        launcherPID: runtime.processIdentifier,
+        launcherPath: real(runtime.bundleURL).path,
         sink: { [weak self] in self?.writeLogRecord($0) }
     )
+    init(runtime: (any NativeAppRuntime)? = nil,
+         presentation: (any NativePlayerPresentation)? = nil) {
+        let runtime = runtime ?? SystemNativeAppRuntime()
+        self.runtime = runtime
+        self.args = runtime.arguments
+        self.epoch = runtime.epoch
+        self.displayLocale = runtime.systemFallbackLocale()
+        self.presentation = presentation
+        super.init()
+    }
     private func option(_ key: String) -> String? {
         guard let i = args.firstIndex(of: key), i + 1 < args.count else { return nil }
         return args[i + 1]
     }
     private func real(_ url: URL) -> URL { url.resolvingSymlinksInPath().standardizedFileURL }
     private func updateNativeDisplayLabels() {
-        appMenuItem?.title = displayLocale.displayName
-        quitMenuItem?.title = displayLocale.quitTitle
-        window?.title = displayLocale.displayName
-    }
-    private func rectInfo(_ rect: NSRect) -> [String: Double] {
-        ["x": Double(rect.origin.x), "y": Double(rect.origin.y),
-         "width": Double(rect.width), "height": Double(rect.height)]
+        presentation?.updateLabels(displayLocale)
     }
     private func windowGeometry() -> [String: Any] {
-        guard let window else { return [:] }
-        let screen = window.screen ?? NSScreen.main
-        return ["frame": rectInfo(window.frame),
-                "visibleFrame": screen.map { rectInfo($0.visibleFrame) } ?? [:],
-                "contentBounds": rectInfo(window.contentView?.bounds ?? .zero),
-                "screen": screen?.localizedName ?? "", "backingScale": window.backingScaleFactor]
+        presentation?.geometry ?? [:]
     }
-    private func appInfo(_ app: NSRunningApplication?) -> [String: Any] {
+    private func appInfo(_ app: (any NativeApplication)?) -> [String: Any] {
         guard let app else { return [:] }
         return ["pid": Int(app.processIdentifier), "bundleID": app.bundleIdentifier ?? "",
                 "path": app.bundleURL.map { real($0).path } ?? "", "active": app.isActive,
@@ -687,9 +1036,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func log(_ event: String, _ fields: [String: Any] = [:]) {
         var data = fields
         data["event"] = event
-        data["seconds"] = ((ProcessInfo.processInfo.systemUptime - epoch) * 1000).rounded() / 1000
-        data["launcherPID"] = Int(ProcessInfo.processInfo.processIdentifier)
-        data["launcherPath"] = real(Bundle.main.bundleURL).path
+        data["seconds"] = ((runtime.uptime - epoch) * 1000).rounded() / 1000
+        data["launcherPID"] = runtime.processIdentifier
+        data["launcherPath"] = real(runtime.bundleURL).path
         writeLogRecord(data)
     }
     private func writeLogRecord(_ data: [String: Any]) {
@@ -697,14 +1046,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         defer { logLock.unlock() }
         guard let json = try? JSONSerialization.data(withJSONObject: data, options: [.sortedKeys, .withoutEscapingSlashes]),
               let line = String(data: json, encoding: .utf8) else { return }
-        print(line); fflush(stdout)
+        runtime.writeStandardOutput(line)
         try? logFile?.write(contentsOf: json + Data([10]))
     }
     private func beginStartupEvents() {
         guard startupEventStream == nil else { return }
         let stream = NativeStartupEventStream(writer: nativeEventWriter)
         startupEventStream = stream
-        stream.begin(at: ProcessInfo.processInfo.systemUptime)
+        stream.begin(at: runtime.uptime)
     }
     private func logSmokeEvent(_ event: String, _ fields: [String: Any] = [:]) {
         guard smokeTest else { return }
@@ -712,7 +1061,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func validTarget(_ candidate: URL) -> URL? {
         let url = real(candidate)
-        guard url.pathExtension.lowercased() == "app", url != real(Bundle.main.bundleURL),
+        guard url.pathExtension.lowercased() == "app", url != real(runtime.bundleURL),
               !url.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }),
               let bundle = Bundle(url: url), bundle.bundleIdentifier == targetID,
               let executable = bundle.executableURL.map({ real($0) }),
@@ -721,9 +1070,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return url
     }
     private func resolveTarget() -> URL? {
-        var candidates = NSRunningApplication.runningApplications(withBundleIdentifier: targetID).compactMap { $0.bundleURL }
+        var candidates = runtime.runningApplications(bundleIdentifier: targetID).compactMap { $0.bundleURL }
         candidates += [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: targetID) { candidates.append(url) }
+        if let url = runtime.urlForApplication(bundleIdentifier: targetID) { candidates.append(url) }
         return candidates.compactMap { validTarget($0) }.first
     }
     private func targetForCurrentMode() -> URL? {
@@ -732,25 +1081,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         }
     }
     private func lockInstance() -> Bool {
-        let path = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(launcherID)-\(getuid()).lock").path
-        lockFD = Darwin.open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
-        guard lockFD >= 0 else {
+        switch runtime.acquireInstanceLock(identifier: launcherID) {
+        case .acquired(let lock):
+            instanceLock = lock
+            return true
+        case .failed(let code):
             lockFailureReason = "protocol-error"
-            log("lock-error", ["errno": errno])
+            log("lock-error", ["errno": Int(code)])
+            return false
+        case .busy:
+            lockFailureReason = "startup-active"
+            let existing = runtime.runningApplications(bundleIdentifier: launcherID)
+                .first { $0.processIdentifier != runtime.processIdentifier && !$0.isTerminated }
+            let result = existing?.activate() ?? false
+            log("duplicate-entry", ["existing": appInfo(existing), "activationRequested": result])
             return false
         }
-        guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
-            lockFailureReason = "startup-active"
-            let existing = NSRunningApplication.runningApplications(withBundleIdentifier: launcherID)
-                .first { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && !$0.isTerminated }
-            let result = existing?.activate(options: []) ?? false
-            log("duplicate-entry", ["existing": appInfo(existing), "activationRequested": result])
-            close(lockFD); lockFD = -1; return false
-        }
-        return true
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        runtime.setAccessoryPolicy()
         if let path = StartupLogPolicy.filePath(arguments: args) {
             do {
                 let url = URL(fileURLWithPath: path)
@@ -764,21 +1113,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             nativeEventWriter.emitProbe(
                 targetPath: targetURL?.path ?? "",
                 targetBundleID: targetURL.flatMap { Bundle(url: $0)?.bundleIdentifier } ?? "",
-                running: NSRunningApplication.runningApplications(withBundleIdentifier: targetID).map { appInfo($0) },
-                frontmost: appInfo(NSWorkspace.shared.frontmostApplication)
+                running: runtime.runningApplications(bundleIdentifier: targetID).map { appInfo($0) },
+                frontmost: appInfo(runtime.frontmostApplication)
             )
-            terminating = true; NSApp.terminate(nil); return
+            terminating = true; runtime.terminate(); return
         }
         if !preview { beginStartupEvents() }
         guard lockInstance() else {
             if let stream = startupEventStream {
                 processExitCode = stream.resolve(.failed(reason: lockFailureReason ?? "protocol-error"),
-                                                 observation: nil, at: ProcessInfo.processInfo.systemUptime)?.exitCode ?? 1
+                                                 observation: nil, at: runtime.uptime)?.exitCode ?? 1
             } else if smokeTest {
                 failed = true
                 processExitCode = 1
             }
-            terminating = true; NSApp.terminate(nil); return
+            terminating = true; runtime.terminate(); return
         }
         if !preview {
             startTrustedSession()
@@ -786,62 +1135,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         }
         if smokeTest { logSmokeEvent("player-start", ["mode": "smoke"]) }
         else { log("player-start", ["mode": "preview", "targetPath": targetURL?.path ?? ""]) }
-        let menu = NSMenu(), item = NSMenuItem(), submenu = NSMenu()
-        menu.addItem(item); item.submenu = submenu; appMenuItem = item
-        quitMenuItem = submenu.addItem(withTitle: displayLocale.quitTitle,
-                                       action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        NSApp.mainMenu = menu
-        let screen = NSScreen.main ?? NSScreen.screens.first
-        let available = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        window = NSWindow(contentRect: available,
-                          styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = displayLocale.displayName; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
-        window.isReleasedWhenClosed = false; window.delegate = self
-        window.backgroundColor = NSColor(srgbRed: 241/255, green: 234/255, blue: 223/255, alpha: 1)
-        window.minSize = NSSize(width: min(640, available.width), height: min(420, available.height))
-        // Maximize this player's entire frame inside the usable screen area.
-        // This does not invoke macOS full-screen mode or create another Space.
-        window.setFrame(available, display: false)
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        configuration.userContentController.add(self, name: "launcher")
+        if presentation == nil { presentation = AppKitNativePlayerPresentation() }
         let nativeMode = preview ? "preview" : "launch"
-        let nativeTheme = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
-        let nativeAppearance: [String: String] = ["locale": displayLocale.identifier, "theme": nativeTheme]
-        let nativeAppearanceJSON = (try? JSONSerialization.data(withJSONObject: nativeAppearance, options: [.sortedKeys]))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"locale\":\"en\",\"theme\":\"light\"}"
-        configuration.userContentController.addUserScript(WKUserScript(
-            source: "window.__agentSkinNativeMode = '\(nativeMode)'; window.__agentSkinAppearance = Object.freeze(\(nativeAppearanceJSON));",
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
-        ))
-        webView = WKWebView(frame: window.contentView!.bounds, configuration: configuration)
-        webView.autoresizingMask = [.width, .height]; webView.navigationDelegate = self
-        webView.underPageBackgroundColor = window.backgroundColor
-        if #available(macOS 13.3, *), args.contains("--inspect") { webView.isInspectable = true }
-        window.contentView!.addSubview(webView)
-        guard let resources = Bundle.main.resourceURL else { fail(displayLocale.message(for: "resources-missing"), "resources-missing"); return }
+        presentation?.createPlayer(locale: displayLocale, mode: nativeMode, theme: runtime.appearanceTheme(),
+                                   inspect: args.contains("--inspect"), messageHandler: self, navigationDelegate: self)
+        guard let resources = runtime.resourceURL else { fail(displayLocale.message(for: "resources-missing"), "resources-missing"); return }
         let root = resources.appendingPathComponent("web", isDirectory: true)
         webRoot = real(root)
         let page = root.appendingPathComponent("index.html")
         guard FileManager.default.fileExists(atPath: page.path) else { fail(displayLocale.message(for: "page-missing"), "page-missing"); return }
         // Keep the window invisible until the renderer reports decoded assets.
-        webView.loadFileURL(page, allowingReadAccessTo: root)
+        presentation?.loadPlayer(page: page, allowingReadAccessTo: root)
         armWatchdog(20, "renderer-ready-timeout")
         log("window-created", windowGeometry())
     }
     private func armWatchdog(_ seconds: Double, _ reason: String) {
-        watchdog?.invalidate()
-        watchdog = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+        watchdog?.cancel()
+        watchdog = presentation?.schedule(after: seconds) { [weak self] in
             guard let self, !self.terminating else { return }
             let failureReason = self.done ? "target-launch-timeout" : reason
             self.fail(self.displayLocale.message(for: failureReason), failureReason)
         }
     }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame, !terminating else { return }
-        let body = message.body as? [String: Any] ?? [:]
-        let action = message.body as? String ?? body["action"] as? String ?? ""
+        receivePlayerMessage(body: message.body, isMainFrame: message.frameInfo.isMainFrame)
+    }
+
+    func receivePlayerMessage(body: Any, isMainFrame: Bool) {
+        guard isMainFrame, !terminating else { return }
+        let rawBody = body
+        let body = rawBody as? [String: Any] ?? [:]
+        let action = rawBody as? String ?? body["action"] as? String ?? ""
         switch action {
         case "ready":
             guard !ready else { log("duplicate-ready-ignored"); return }
@@ -852,8 +1176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             ready = true
             let milliseconds = (body["duration"] as? NSNumber)?.doubleValue ?? 0
             let duration = milliseconds.isFinite && milliseconds > 0 ? milliseconds / 1000 : 0
-            window.level = .floating; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
-            webView.evaluateJavaScript(preview ? "window.launcherUI.replay()" : "window.launcherUI.beginLaunch()") { [weak self] _, error in
+            presentation?.showReady()
+            presentation?.evaluateJavaScript(preview ? "window.launcherUI.replay()" : "window.launcherUI.beginLaunch()") { [weak self] _, error in
                 guard let self, !self.terminating else { return }
                 if let error { self.fail(error.localizedDescription, "playback-start-error"); return }
                 if self.smokeTest { self.logSmokeEvent("playback-start", ["durationSeconds": duration]) }
@@ -868,11 +1192,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             if smokeTest { logSmokeEvent("animation-complete") }
             else { log("animation-complete", ["report": body["report"] ?? [:]]) }
             if preview {
-                watchdog?.invalidate()
+                watchdog?.cancel()
                 let completionSkipped = body["skipped"]
                 // Native preview is deliberately one-shot: it cannot retain the
                 // application's identity and accidentally swallow a later launch.
-                webView.evaluateJavaScript("JSON.stringify(window.launcherUI.report())") { [weak self] result, error in
+                presentation?.evaluateJavaScript("JSON.stringify(window.launcherUI.report())") { [weak self] result, error in
                     guard let self else { return }
                     let succeeded: Bool
                     if self.smokeTest {
@@ -892,29 +1216,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         self.log("preview-result", ["success": succeeded,
                                                      "measurementScope": "front-end JS/rAF only, not GPU/presentation timing"])
                     }
-                    self.terminating = true; NSApp.terminate(nil)
+                    self.terminating = true; self.runtime.terminate()
                 }
             } else { finishIfReady("animation-complete") }
         case "close":
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
-            terminating = true; NSApp.terminate(nil)
+            terminating = true; runtime.terminate()
         case "jsError": fail(displayLocale.message(for: "javascript-error"), "javascript-error")
         case "assetError": fail(displayLocale.message(for: "asset-error"), "asset-error")
         default: log("unhandled-message", ["action": action])
         }
     }
-    private func startupFacts(_ app: NSRunningApplication) throws -> StartupTargetFacts {
+    private func startupFacts(_ app: any NativeApplication) throws -> StartupTargetFacts {
         guard !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
               let bundleID = app.bundleIdentifier else {
             throw StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
         }
         return StartupTargetFacts(pid: app.processIdentifier, bundle: real(bundle), executable: real(executable),
-                                  bundleID: bundleID, launchTime: app.launchDate?.timeIntervalSince1970)
+                                  bundleID: bundleID, launchTime: app.launchTime)
     }
 
     private func startupPayload() throws -> String {
-        guard let resources = Bundle.main.resourceURL else {
+        guard let resources = runtime.resourceURL else {
             throw StartupFailure(reason: "asset-invalid", message: "缺少 Agent Skin 资源目录；本次不会启动或注入 Codex。")
         }
         let root = real(resources)
@@ -938,7 +1262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard let url = targetURL, validTarget(url) == url else {
             finishStartup(.failed(reason: "target-missing"), promoted: promoted); return
         }
-        let running = NSRunningApplication.runningApplications(withBundleIdentifier: targetID).filter { !$0.isTerminated }
+        let running = runtime.runningApplications(bundleIdentifier: targetID).filter { !$0.isTerminated }
         let matching = running.filter { $0.bundleURL.map({ real($0) }) == url }
         guard running.isEmpty || (running.count == 1 && matching.count == 1) else {
             finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
@@ -951,8 +1275,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             existing = facts
         } else { existing = nil }
 
-        let system = CodexStartupTargetSystem()
-        let budget = StartupBudget(startedAt: ProcessInfo.processInfo.systemUptime)
+        let system = runtime.makeStartupTargetSystem()
+        let budget = StartupBudget(startedAt: runtime.uptime)
         Task { @MainActor [weak self] in
             guard let self else { return }
             let outcome: StartupOutcome
@@ -971,25 +1295,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     },
                     validate: { try system.validate($0, deadline: budget.preflightDeadline) },
                     activate: { facts in
-                        guard let app = NSRunningApplication(processIdentifier: facts.pid), !app.isTerminated,
+                        guard let app = self.runtime.application(processIdentifier: facts.pid), !app.isTerminated,
                               app.bundleIdentifier == facts.bundleID,
                               app.bundleURL.map({ self.real($0) }) == facts.bundle,
                               app.executableURL.map({ self.real($0) }) == facts.executable,
-                              app.launchDate?.timeIntervalSince1970 == facts.launchTime else {
+                              app.launchTime == facts.launchTime else {
                             throw StartupFailure(reason: "target-identity", message: "已核验的 Codex 进程发生变化。")
                         }
                         self.target = app
-                        let activated = app.activate(options: [])
+                        let activated = app.activate()
                         self.activated = activated
                         return activated
                     },
                     coldStart: {
                         let payload = try self.startupPayload()
-                        guard ProcessInfo.processInfo.systemUptime < budget.totalDeadline else {
+                        guard self.runtime.uptime < budget.totalDeadline else {
                             throw StartupFailure(reason: "attach-timeout", message: "Codex 启动已超过 60 秒总预算。")
                         }
                         let port = try self.prepareStartupPort()
-                        let attachDeadline = budget.attachDeadline(startedAt: ProcessInfo.processInfo.systemUptime)
+                        let attachDeadline = budget.attachDeadline(startedAt: self.runtime.uptime)
                         self.opening = true
                         let app = try await self.openCodex(url, port: port, deadline: attachDeadline, system: system)
                         self.opening = false
@@ -997,14 +1321,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         let facts = try self.startupFacts(app)
                         let capture = NativeStartupCapture(targetPID: facts.pid)
                         self.startupCapture = capture
-                        self.startupEventStream?.targetOpened(pid: facts.pid, at: ProcessInfo.processInfo.systemUptime)
+                        self.startupEventStream?.targetOpened(pid: facts.pid, at: self.runtime.uptime)
                         guard let eventStream = self.startupEventStream else {
                             throw StartupFailure(reason: "protocol-error", message: "原生启动事件流不可用。")
                         }
                         return await StartupConnector(target: facts, expectedPort: port, system: system,
-                                                      transport: NativeStartupEventTransport(
-                                                        base: WallpaperTransport(), capture: capture, events: eventStream
-                                                      ))
+                                                      transport: self.runtime.makeStartupTransport(capture: capture, events: eventStream))
                             .run(payload: payload, deadline: attachDeadline)
                     }
                 )
@@ -1016,50 +1338,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     private func prepareStartupPort() throws -> Int {
-        func refused(_ operation: String) -> StartupFailure {
-            let code = errno
+        do {
+            let port = try runtime.allocateLoopbackPort()
+            log("startup-port-selected", ["port": port, "requiresTargetListenerVerification": true])
+            return port
+        } catch let error as NativeLoopbackPortError {
             if let stream = startupEventStream {
-                stream.portError(operation: operation, errno: code, at: ProcessInfo.processInfo.systemUptime)
+                stream.portError(operation: error.operation, errno: error.code, at: runtime.uptime)
             } else {
                 nativeEventWriter.emit("startup-port-error", fields: ["reason": "listener-mismatch",
-                                                                        "operation": operation, "errno": Int(code)])
+                                                                        "operation": error.operation, "errno": Int(error.code)])
             }
-            return StartupFailure(reason: "listener-mismatch", message: "未能准备 Codex 本机回环调试端口。")
+            throw StartupFailure(reason: "listener-mismatch", message: "未能准备 Codex 本机回环调试端口。")
+        } catch {
+            throw StartupFailure(reason: "listener-mismatch", message: "未能准备 Codex 本机回环调试端口。")
         }
-        let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-        guard descriptor >= 0 else { throw refused("socket") }
-        defer { Darwin.close(descriptor) }
-        guard fcntl(descriptor, F_SETFD, FD_CLOEXEC) == 0 else { throw refused("close-on-exec") }
-        var address = sockaddr_in()
-        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = 0
-        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
-        let bound = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        guard bound == 0 else { throw refused("bind-loopback") }
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let named = withUnsafeMutablePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.getsockname(descriptor, $0, &length) }
-        }
-        guard named == 0 else { throw refused("getsockname") }
-        let port = Int(UInt16(bigEndian: address.sin_port))
-        guard (1...65535).contains(port), address.sin_family == sa_family_t(AF_INET),
-              address.sin_addr.s_addr == inet_addr("127.0.0.1") else {
-            throw StartupFailure(reason: "listener-mismatch", message: "分配的 Codex 回环端口无效。")
-        }
-        log("startup-port-selected", ["port": port, "requiresTargetListenerVerification": true])
-        return port
     }
 
     private func openCodex(_ url: URL, port: Int, deadline: TimeInterval,
-                           system: CodexStartupTargetSystem) async throws -> NSRunningApplication {
+                           system: any StartupTargetSystem) async throws -> any NativeApplication {
         let openTimeout = try StartupBudget.boundedTimeout(
             maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
-            now: ProcessInfo.processInfo.systemUptime
+            now: runtime.uptime
         )
         return try await withCheckedThrowingContinuation { continuation in
             let waiter = StartupApplicationWaiter(continuation)
@@ -1068,19 +1368,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             }
             waiter.setTimeout(timeout)
             DispatchQueue.main.asyncAfter(deadline: .now() + openTimeout, execute: timeout)
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
-            configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
-            configuration.addsToRecentItems = false
-            configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(port)"]
             log("target-open-request", ["path": url.path, "bundleID": targetID, "debuggingPort": port])
-            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { [weak self] app, error in
+            runtime.openApplication(at: url, debuggingPort: port) { [weak self] app, error in
                 DispatchQueue.main.async {
                     guard let self else {
                         waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "启动入口已结束。")))
                         return
                     }
-                    guard ProcessInfo.processInfo.systemUptime < deadline else {
+                    guard self.runtime.uptime < deadline else {
                         waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
                         return
                     }
@@ -1111,7 +1406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func finishStartup(_ outcome: StartupOutcome, promoted: Bool) {
         beginStartupEvents()
         guard let final = startupEventStream?.resolve(
-            outcome, observation: startupCapture?.snapshot(), at: ProcessInfo.processInfo.systemUptime
+            outcome, observation: startupCapture?.snapshot(), at: runtime.uptime
         ) else { return }
         processExitCode = final.exitCode
         switch final {
@@ -1119,14 +1414,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             break
         case .ready:
             if let target, !target.isTerminated {
-                activated = target.activate(options: [])
+                activated = target.activate()
                 log("target-activation-after-startup", ["allowed": activated, "targetPID": Int(target.processIdentifier)])
             }
         case .skipped:
-            if let target, !target.isTerminated { activated = target.activate(options: []) }
+            if let target, !target.isTerminated { activated = target.activate() }
         case .partial(let reason), .behaviorNotProven(let reason):
             if promoted { fail(startupMessage(reason), reason) }
-            else { terminating = true; NSApp.terminate(nil) }
+            else { terminating = true; runtime.terminate() }
             return
         }
         if promoted {
@@ -1134,7 +1429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             return
         }
         terminating = true
-        NSApp.terminate(nil)
+        runtime.terminate()
     }
 
     private func startupMessage(_ reason: String) -> String {
@@ -1144,7 +1439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func activateOnce(_ reason: String) -> Bool {
         if activated { return true }
         guard let target, !target.isTerminated else { return false }
-        let result = target.activate(options: [])
+        let result = target.activate()
         activated = result
         log("target-activation-request", ["reason": reason, "allowed": result, "target": appInfo(target)])
         return result
@@ -1153,40 +1448,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard done, !preview, !terminating, !failed else { return }
         if let target, target.isTerminated { fail(displayLocale.message(for: "target-exited"), "target-exited"); return }
         guard !opening, let target, !target.isTerminated else {
-            webView.evaluateJavaScript("window.launcherUI.waiting()"); log("waiting-for-target"); return
+            presentation?.evaluateJavaScript("window.launcherUI.waiting()", completion: nil)
+            log("waiting-for-target"); return
         }
         guard activateOnce(reason) else {
             fail(displayLocale.message(for: "activation-rejected"), "activation-rejected"); return
         }
-        terminating = true; watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
-        log("handoff-fade-start", ["frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.28; self.window.animator().alphaValue = 0
-        }, completionHandler: {
-            self.log("handoff-fade-complete", ["frontmost": self.appInfo(NSWorkspace.shared.frontmostApplication), "target": self.appInfo(self.target)])
-            self.window.orderOut(nil); NSApp.terminate(nil)
-        })
+        terminating = true; watchdog?.cancel(); snapshots.forEach { $0.cancel() }
+        log("handoff-fade-start", ["frontmost": appInfo(runtime.frontmostApplication)])
+        presentation?.fadeOut(duration: 0.28) {
+            self.log("handoff-fade-complete", ["frontmost": self.appInfo(self.runtime.frontmostApplication), "target": self.appInfo(self.target)])
+            self.presentation?.orderOut(); self.runtime.terminate()
+        }
     }
     private func fail(_ message: String, _ reason: String) {
         guard !failed, !terminating else { return }; failed = true
-        watchdog?.invalidate(); snapshots.forEach { $0.cancel() }; window?.level = .normal
+        watchdog?.cancel(); snapshots.forEach { $0.cancel() }; presentation?.setNormalLevel()
         log("failure", ["reason": reason, "targetPID": target.map { Int($0.processIdentifier) } ?? 0])
         if smokeTest {
             processExitCode = 1
-            terminating = true; NSApp.terminate(nil); return
+            terminating = true; runtime.terminate(); return
         }
         if startupRequested { startupEventStream?.latchFailure(reason) }
         if ready, let data = try? JSONSerialization.data(withJSONObject: [message]), let json = String(data: data, encoding: .utf8) {
-            window.makeKeyAndOrderFront(nil)
-            webView.evaluateJavaScript("window.launcherUI.error(\(json)[0])") { [weak self] _, error in
+            presentation?.makeVisible()
+            presentation?.evaluateJavaScript("window.launcherUI.error(\(json)[0])") { [weak self] _, error in
                 if error != nil { self?.nativeError(message) }
             }
         } else { nativeError(message) }
     }
     private func nativeError(_ message: String) {
-        let alert = NSAlert(); alert.messageText = displayLocale.displayName; alert.informativeText = message
-        alert.addButton(withTitle: displayLocale.closeTitle); NSApp.activate(ignoringOtherApps: true); alert.runModal()
-        terminating = true; NSApp.terminate(nil)
+        presentation?.showError(title: displayLocale.displayName, message: message, closeTitle: displayLocale.closeTitle)
+        terminating = true; runtime.terminate()
     }
     private func scheduleSnapshots(_ duration: Double) {
         guard let directory = option("--snapshot") else { return }
@@ -1194,13 +1487,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         catch { log("snapshot-error", ["message": error.localizedDescription]); return }
         let times = (option("--snapshot-times") ?? "0.4,1.4,2.3,3.5,5.5,7.3").split(separator: ",").compactMap { Double($0) }
         for (i, seconds) in times.enumerated() where seconds.isFinite && seconds >= 0 && (duration == 0 || seconds < duration) {
-            let work = DispatchWorkItem { [weak self] in
+            let work = presentation?.schedule(after: seconds) { [weak self] in
                 guard let self, !self.terminating else { return }
                 let base = URL(fileURLWithPath: directory).appendingPathComponent(String(format: "%02d-%.2fs", i + 1, seconds))
-                self.webView.evaluateJavaScript("JSON.stringify(window.launcherUI.report())") { result, _ in
+                self.presentation?.evaluateJavaScript("JSON.stringify(window.launcherUI.report())") { result, _ in
                     if let report = result as? String { try? report.write(to: base.appendingPathExtension("json"), atomically: true, encoding: .utf8) }
                 }
-                self.webView.takeSnapshot(with: nil) { [weak self] image, error in
+                self.presentation?.takeSnapshot { [weak self] image, error in
                     guard let data = image?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: data),
                           let png = bitmap.representation(using: .png, properties: [:]) else {
                         self?.log("snapshot-error", ["message": error?.localizedDescription ?? "no image"]); return
@@ -1209,17 +1502,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     catch { self?.log("snapshot-error", ["message": error.localizedDescription]) }
                 }
             }
-            snapshots.append(work); DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+            if let work { snapshots.append(work) }
         }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         guard !terminating else { return false }
-        if ready || failed { window?.makeKeyAndOrderFront(nil) }
+        if ready || failed { presentation?.makeVisible() }
         log("reopen-existing-player", ["launchRequested": requested, "completed": done])
         if preview && !done && !failed && !args.contains("--smoke-test") {
             promoted = true
             guard ready else { log("preview-launch-pending"); return false }
-            webView.evaluateJavaScript("window.launcherUI.promoteLaunch()") { [weak self] _, error in
+            presentation?.evaluateJavaScript("window.launcherUI.promoteLaunch()") { [weak self] _, error in
                 guard let self else { return }
                 if let error { self.fail(error.localizedDescription, "preview-promotion-error"); return }
                 self.log("preview-promoted-to-launch"); self.startTrustedSession()
@@ -1231,7 +1524,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if preview || failed {
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
-            terminating = true; NSApp.terminate(nil)
+            terminating = true; runtime.terminate()
         }
         else { done = true; log("window-close-as-skip"); finishIfReady("window-close") }
         return false
@@ -1246,21 +1539,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return .terminateNow
     }
     func applicationWillTerminate(_ notification: Notification) {
-        watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
+        watchdog?.cancel(); snapshots.forEach { $0.cancel() }
         if smokeTest {
             if !smokeResultSucceeded { failed = true; processExitCode = max(processExitCode, 1) }
             logSmokeEvent("player-terminated", ["completed": done && smokeResultSucceeded && !failed,
                                                  "failed": failed || !smokeResultSucceeded])
         } else {
-            log("player-terminated", ["failed": failed, "completed": done, "frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
-            if let final = startupEventStream?.finish(at: ProcessInfo.processInfo.systemUptime) {
+            log("player-terminated", ["failed": failed, "completed": done, "frontmost": appInfo(runtime.frontmostApplication)])
+            if let final = startupEventStream?.finish(at: runtime.uptime) {
                 processExitCode = final.exitCode
             }
         }
-        webView?.stopLoading(); webView?.configuration.userContentController.removeScriptMessageHandler(forName: "launcher")
-        if lockFD >= 0 { flock(lockFD, LOCK_UN); close(lockFD); lockFD = -1 }
+        presentation?.stopLoading(); presentation?.removeMessageHandler(named: "launcher")
+        instanceLock?.release(); instanceLock = nil
         try? logFile?.close()
-        if processExitCode != 0 { Darwin.exit(processExitCode) }
+        if processExitCode != 0 { runtime.exit(code: processExitCode) }
     }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url, url.isFileURL, let root = webRoot else { decisionHandler(.cancel); return }

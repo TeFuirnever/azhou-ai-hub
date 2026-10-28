@@ -271,6 +271,7 @@ try {
       get activeElement() { return document.activeElement; },
       hasFocus: document.hasFocus.bind(document),
       createElement: document.createElement.bind(document),
+      getElementById: document.getElementById.bind(document),
     };
     let host;
     host = url.searchParams.has('generated-payload')
@@ -279,7 +280,7 @@ try {
         if (name === 'location') return new URL('app://-/index.html?initialRoute=%2F');
         if (name === 'document') return hostDocument;
         const value = Reflect.get(target, name, target);
-        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle', 'matchMedia'].includes(name)
+        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle', 'matchMedia', 'atob'].includes(name)
           && typeof value === 'function' ? value.bind(target) : value;
       } })
       : {
@@ -3423,6 +3424,26 @@ try {
   });
 
   if (options.generatedPayload) {
+    await navigate('/fixture.html?generated-payload=1&hold-shell=1');
+    await check('generated wallpaper survives a shell mounted after natural animation completion', async () => {
+      const completed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='complete'&&state.completion?.cause==='natural'?state:false;
+      })()`), 20000, 'natural animation finishes before shell mount');
+      assert.equal(completed.wallpaper.failureCode, undefined,
+        'wallpaper keeps waiting beyond the old five-second deadline and natural completion');
+      assert.equal(await cdp.evaluate('window.__releaseShell()'), true);
+      const applied = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status(),wallpaper=window.__azhouWallpaper?.status();
+        return state.wallpaper.applied&&wallpaper?.imageDecoded?{state,wallpaper,
+          observers:window.__fixtureMutationObserverStats(),
+          frames:document.querySelectorAll('iframe[aria-label]').length}:false;
+      })()`), 5000, 'late shell receives wallpaper without replay');
+      assert.equal(applied.state.runId, completed.runId);
+      assert.equal(applied.frames, 0);
+      assert.equal(applied.observers.wallpaperShellWait.active, 0);
+      return applied;
+    });
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
     await check('builder-generated wallpaper waits for a late supported shell and remains after animation completion', async () => {
@@ -3621,9 +3642,9 @@ try {
       const timedOut = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         return state.wallpaper.reason==='wallpaper-unsupported'?state:false;
-      })()`), 6500, 'wallpaper unsupported after bounded shell wait');
+      })()`), 65000, 'wallpaper unsupported after bounded shell wait');
       const elapsedMs = Date.now() - started;
-      assert.ok(elapsedMs >= 3500 && elapsedMs <= 6500,
+      assert.ok(elapsedMs >= 58000 && elapsedMs <= 65000,
         'the wallpaper request remains pending for the bounded shell wait before returning unsupported');
       assert.equal(timedOut.wallpaper.failureCode, 'shell-timeout');
       assert.equal(timedOut.wallpaper.failureStage, 'shell');
@@ -3631,7 +3652,7 @@ try {
         observers:window.__fixtureMutationObserverStats(),shellCount:document.querySelectorAll('[data-app-shell-frame]').length,
         styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
         wallpaperOwner:window.__azhouWallpaper?.owner||null})`);
-      assert.equal(timedOut.phase, 'playing');
+      assert.equal(timedOut.phase, 'complete');
       assert.equal(after.state.wallpaper.applied, false);
       assert.equal(after.observers.wallpaperShellWait.active, 0);
       assert.ok(after.observers.wallpaperShellWait.disconnectCalls > 0);
@@ -3650,13 +3671,6 @@ try {
       assert.equal(late.observers.wallpaperShellWait.active, 0);
       assert.equal(late.styleCount, 0);
       assert.equal(late.wallpaperOwner, null);
-      const skipped = await cdp.evaluate(`(()=>{
-        const frame=document.querySelector('iframe[aria-label]');
-        const button=frame?.contentDocument.querySelector('[data-agent-skin-skip]');
-        if(!button)return false;
-        button.click();return true;
-      })()`);
-      assert.equal(skipped, true);
       const completed = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         return state.phase==='complete'?state:false;

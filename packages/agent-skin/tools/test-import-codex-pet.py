@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -364,6 +367,152 @@ class CandidateImportTests(unittest.TestCase):
         self.assertEqual(result["status"], "unknown-target")
         self.assertEqual(tree_bytes(self.source), source_before)
         self.assertEqual(tree_bytes(self.target), target_before)
+
+    def test_python_entrypoint_covers_plan_apply_validation_and_safe_path_errors(self):
+        def invoke(*args):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = IMPORT.main(["--from-project", str(self.source), "--project-root", str(self.target), *args])
+            return code, json.loads(output.getvalue())
+
+        code, result = invoke("--apply")
+        self.assertEqual((code, result["status"]), (2, "invalid"))
+        code, result = invoke("--plan-id", "0" * 64)
+        self.assertEqual((code, result["status"]), (2, "invalid"))
+
+        code, plan = invoke()
+        self.assertEqual((code, plan["status"]), (0, "candidate-import-plan"))
+        code, applied = invoke("--apply", "--plan-id", plan["planId"])
+        self.assertEqual((code, applied["status"]), (0, "imported"))
+        code, repeated = invoke("--apply", "--plan-id", plan["planId"])
+        self.assertEqual((code, repeated["status"]), (0, "already-imported"))
+
+        code, stale = invoke("--apply", "--plan-id", "f" * 64)
+        self.assertEqual((code, stale["status"]), (3, "stale-plan"))
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = IMPORT.main(["--from-project", str(self.fixture.root / "absent"),
+                                "--project-root", str(self.target)])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "invalid")
+
+        link = self.fixture.root / "target-link"
+        link.symlink_to(self.target, target_is_directory=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = IMPORT.main(["--from-project", str(self.source), "--project-root", str(link)])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "invalid")
+
+        nested = self.source / "nested-target"
+        nested.mkdir()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = IMPORT.main(["--from-project", str(self.source), "--project-root", str(nested)])
+        self.assertEqual(code, 2)
+        self.assertIn("不能相同、包含或重叠", json.loads(output.getvalue())["error"])
+
+    def test_import_recovery_cleans_only_bound_temps_and_maps_stale_conflicts(self):
+        plan, plan_id, blobs, _ = IMPORT.build_plan(self.source, self.target)
+        name = IMPORT.PRIVATE_INPUTS[0]
+        final = self.target / name
+        final.parent.mkdir(parents=True, exist_ok=True)
+        final.write_bytes(blobs[name])
+        temporary = IMPORT.private_temp_path(self.target, name, plan_id)
+        temporary.write_bytes(blobs[name][:3])
+        IMPORT.safe_copy_private(self.target, plan["source"], blobs, plan_id,
+                                 plan["target"]["privateInputs"])
+        self.assertFalse(temporary.exists())
+        self.assertEqual(final.read_bytes(), blobs[name])
+        self.assertEqual((self.target / IMPORT.PRIVATE_INPUTS[1]).read_bytes(),
+                         blobs[IMPORT.PRIVATE_INPUTS[1]])
+
+        real_build_plan = IMPORT.build_plan
+        with patch.object(IMPORT, "build_plan", side_effect=PET.PetError("target-conflict", "changed before plan")):
+            with self.assertRaises(PET.PetError) as raised:
+                IMPORT.apply_import(self.source, self.target, plan_id)
+        self.assertEqual(raised.exception.code, "stale-plan")
+
+        calls = 0
+        def change_after_lock(source, target):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return real_build_plan(source, target)
+            raise PET.PetError("source-conflict", "changed after lock")
+        with patch.object(IMPORT, "build_plan", side_effect=change_after_lock):
+            _, current_plan_id, _, _ = real_build_plan(self.source, self.target)
+            with self.assertRaises(PET.PetError) as raised:
+                IMPORT.apply_import(self.source, self.target, current_plan_id)
+        self.assertEqual(raised.exception.code, "stale-plan")
+        self.assertEqual(calls, 2)
+
+    def test_apply_race_to_completed_receipt_and_unknown_target_passthrough(self):
+        plan, plan_id, _, _ = IMPORT.build_plan(self.source, self.target)
+        real_build_plan = IMPORT.build_plan
+        calls = 0
+        def complete_after_lock(source, target):
+            nonlocal calls
+            calls += 1
+            current_plan, current_id, blobs, receipt = real_build_plan(source, target)
+            if calls == 1:
+                return current_plan, current_id, blobs, receipt
+            return current_plan, current_id, blobs, {"status": "complete"}
+        with patch.object(IMPORT, "build_plan", side_effect=complete_after_lock):
+            result = IMPORT.apply_import(self.source, self.target, plan_id)
+        self.assertEqual(result["status"], "already-imported")
+        self.assertEqual(calls, 2)
+
+        with patch.object(IMPORT, "build_plan", side_effect=PET.PetError("unknown-target", "preserve target")):
+            with self.assertRaises(PET.PetError) as raised:
+                IMPORT.apply_import(self.source, self.target, plan_id)
+        self.assertEqual(raised.exception.code, "unknown-target")
+
+        output = io.StringIO()
+        with patch.object(sys, "argv", [str(HERE / "import-codex-pet.py"), "--from-project", str(self.source),
+                                         "--project-root", str(self.target)]), \
+                contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as result:
+            runpy.run_path(str(HERE / "import-codex-pet.py"), run_name="__main__")
+        self.assertEqual(result.exception.code, 0)
+        self.assertEqual(json.loads(output.getvalue())["status"], "candidate-import-plan")
+
+    def test_target_nonregular_state_and_private_symlink_remain_unknown(self):
+        plan, plan_id, blobs, _ = IMPORT.build_plan(self.source, self.target)
+        state = PET.state_dir(self.target, create=True)
+        fifo = state / "nonregular-state"
+        os.mkfifo(fifo)
+        receipt = {"status": "in-progress", "planId": plan_id, "plan": plan}
+        with self.assertRaisesRegex(PET.PetError, "状态类型未知"):
+            IMPORT.verify_import_state(self.target, plan["source"], receipt, blobs)
+        fifo.unlink()
+
+        private = self.target / IMPORT.PRIVATE_INPUTS[0]
+        private.parent.mkdir(parents=True, exist_ok=True)
+        private.symlink_to(self.source / IMPORT.PRIVATE_INPUTS[0])
+
+        original_path = IMPORT.target_input_path
+        def raced_input_path(target, name):
+            return private if name == IMPORT.PRIVATE_INPUTS[0] else original_path(target, name)
+        with patch.object(IMPORT, "target_input_path", side_effect=raced_input_path):
+            with self.assertRaisesRegex(PET.PetError, "符号链接目标主题图"):
+                IMPORT.target_input_state(self.target, plan["source"])
+
+        receipt = {"planId": plan_id, "status": "in-progress", "plan": plan}
+        with patch.object(IMPORT, "target_input_path", return_value=private):
+            with self.assertRaisesRegex(PET.PetError, "符号链接目标主题图"):
+                IMPORT.current_private_matches(self.target, blobs, receipt)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = IMPORT.main(["--from-project", str(self.source), "--project-root", str(self.target)])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "unknown-target")
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = IMPORT.main(["--from-project", "relative-source", "--project-root", str(self.target)])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "invalid")
 
 
 if __name__ == "__main__":

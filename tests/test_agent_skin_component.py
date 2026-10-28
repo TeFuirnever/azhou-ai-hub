@@ -57,8 +57,9 @@ class AgentSkinComponentTests(unittest.TestCase):
         )
         self.assertEqual(
             [name for name in current["build_inputs"] if name not in legacy_inputs],
-            ["tools/build-startup.py", "tools/build-startup-assets.swift", "hub-package.json",
-             "extension/renderer.mjs", "image-settings.js", "localization.js", "theme-config.json"],
+            ["Native/InstallRegistryCore.swift", "tools/build-preflight.py", "tools/build-startup.py",
+             "tools/build-startup-assets.swift", "hub-package.json", "extension/renderer.mjs", "extension/bootstrap.mjs",
+             "image-settings.js", "localization.js", "wallpaper/apply.js", "theme-config.json"],
             "the canonical Agent Skin package adds its complete startup builder and renderer inputs",
         )
 

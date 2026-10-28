@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -621,6 +622,162 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(result["runtime"], "pending-refresh-selection")
         self.assertFalse((self.project / ".local").exists())
         self.assertFalse(self.codex.exists())
+
+    def test_python_cli_main_routes_prepare_validate_status_and_generation_error(self):
+        def invoke(*args):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = PET.main(["--project-root", str(self.project), "--codex-home", str(self.codex), *args])
+            return code, json.loads(output.getvalue())
+
+        code, prepared = invoke("prepare")
+        self.assertEqual(code, 0)
+        self.assertEqual(prepared["status"], "generation-required")
+
+        code, validated = invoke("validate", "--run", str(self.run), "--snapshot", str(self.snapshot))
+        self.assertEqual(code, 0)
+        self.assertEqual(validated["status"], "validated")
+
+        code, current = invoke("status")
+        self.assertEqual(code, 0)
+        self.assertEqual(current["status"], "status")
+        self.assertEqual(current["installed"]["status"], "absent")
+
+        code, unavailable = invoke("sync")
+        self.assertEqual(code, 3)
+        self.assertEqual(unavailable["status"], "generation-required")
+        self.assertIn("next", unavailable)
+
+        code, invalid_args = invoke("status", "--run", str(self.run))
+        self.assertEqual(code, 2)
+        self.assertIn("--run 与 --snapshot 必须同时提供", invalid_args["error"])
+
+        self.package()
+        code, selected = invoke("validate")
+        self.assertEqual(code, 0)
+        self.assertEqual(selected["status"], "validated")
+        code, packaged = invoke("package", "--run", str(self.run), "--snapshot", str(self.snapshot))
+        self.assertEqual(code, 0)
+        self.assertEqual(packaged["status"], "packaged")
+        with patch.object(PET, "install_package", return_value={"status": "mock-installed"}):
+            code, synced = invoke("sync", "--run", str(self.run), "--snapshot", str(self.snapshot))
+        self.assertEqual(code, 0)
+        self.assertEqual(synced["status"], "mock-installed")
+
+        stdout = io.StringIO()
+        with patch.object(sys, "argv", [str(HERE / "manage-codex-pet.py"), "status",
+                                         "--project-root", str(self.project), "--codex-home", str(self.codex)]), \
+                contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as exit_code:
+            runpy.run_path(str(HERE / "manage-codex-pet.py"), run_name="__main__")
+        self.assertEqual(exit_code.exception.code, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["status"], "status")
+
+        real_codex = self.root / "real-codex-home"
+        real_codex.mkdir()
+        codex_link = self.root / "codex-home-link"
+        codex_link.symlink_to(real_codex, target_is_directory=True)
+        code, link_error = invoke("status", "--codex-home", str(codex_link))
+        self.assertEqual(code, 2)
+        self.assertEqual(link_error["states"]["status"], "unverified")
+
+    def test_validation_qa_accepts_mapping_shape_and_rejects_unparseable_direction_or_warning(self):
+        raw = {name: (self.run / name).read_bytes() for name in PET.QA_FILES}
+        semantics = json.loads(raw[PET.QA_FILES[3]])
+        semantics["directions"] = {
+            item["direction"]: {"pass": item["pass"]} for item in semantics["directions"]
+        }
+        raw[PET.QA_FILES[3]] = PET.json_bytes(semantics)
+        result = PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
+        self.assertEqual(set(result), set(PET.QA_FILES))
+
+        first_angle = next(iter(semantics["directions"]))
+        semantics["directions"]["north"] = semantics["directions"].pop(first_angle)
+        bad_angle = dict(raw)
+        bad_angle[PET.QA_FILES[3]] = PET.json_bytes(semantics)
+        with self.assertRaisesRegex(PET.PetError, "方向必须"):
+            PET.validate_qa(bad_angle, PET.sha(self.atlas_a), self.rev)
+
+        blind = json.loads(raw[PET.QA_FILES[4]])
+        blind["warnings"] = ["unreviewed blind warning"]
+        raw[PET.QA_FILES[4]] = PET.json_bytes(blind)
+        with self.assertRaisesRegex(PET.PetError, "盲测 warning"):
+            PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
+        self.assertFalse(PET.passed({"status": "failed"}))
+
+    def test_status_reports_invalid_source_transaction_and_installed_receipt(self):
+        pets = self.codex / "pets"
+        pets.mkdir(parents=True)
+        transaction = PET.journal_path(pets)
+        PET.atomic_json(transaction, {"fixture": "not an install claim"})
+        result = PET.status(self.project, self.codex)
+        self.assertEqual(result["transaction"]["status"], "recovery-required")
+
+        target = pets / PET.PET_ID
+        target.mkdir()
+        result = PET.status(self.project, self.codex)
+        self.assertIn(result["installed"]["status"], ("invalid", "unknown-target"))
+
+        theme = self.project / "pet/theme.json"
+        valid = theme.read_bytes()
+        theme.write_text("{")
+        try:
+            result = PET.status(self.project, self.codex)
+            self.assertEqual(result["source"]["status"], "invalid")
+        finally:
+            theme.write_bytes(valid)
+
+    def test_recovery_without_backup_accepts_only_exact_previous_owner_and_keeps_missing_target_pending(self):
+        old_project = self.make_old_install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        old = PET.installed_facts(target, old_project)
+        tx = "c" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        journal = {
+            "owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+            "previousProjectRoot": str(old_project), "transaction": tx,
+            "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": True,
+            "candidateAtlasSHA256": PET.sha(self.atlas_b), "candidateThemeRevision": self.rev,
+            "previousAtlasSHA256": old["atlasSHA256"], "previousThemeRevision": old["themeRevision"],
+            "previousManifestSHA256": old["manifestSHA256"],
+        }
+        journal_file = PET.journal_path(pets)
+        PET.atomic_json(journal_file, journal)
+        self.assertEqual(PET.recover_install(pets, self.project), "restored-pre-install-state")
+        self.assertTrue(target.is_dir())
+        self.assertFalse(stage.exists())
+        self.assertFalse(journal_file.exists())
+
+        PET.remove_tree(target)
+        PET.atomic_json(journal_file, journal)
+        with self.assertRaisesRegex(PET.PetError, "正式目标与旧包均缺失"):
+            PET.recover_install(pets, self.project)
+        self.assertTrue(journal_file.exists())
+
+    def test_json_parser_cleanup_and_package_history_are_deterministic(self):
+        with self.assertRaisesRegex(PET.PetError, "JSON 无效"):
+            PET.parse(b"\xff")
+
+        with tempfile.TemporaryDirectory(prefix="agent-skin-pet-atomic-json-") as temporary:
+            path = Path(temporary) / "receipt.json"
+            with patch.object(PET.os, "replace", side_effect=OSError("injected replace failure")):
+                with self.assertRaisesRegex(OSError, "injected replace failure"):
+                    PET.atomic_json(path, {"status": "fixture"})
+            self.assertFalse(list(Path(temporary).glob("*.tmp")))
+            self.assertFalse(path.exists())
+
+        first = PET.selected_package(self.project) if (self.project / ".local/pets" / PET.PET_ID / "selection.json").exists() else None
+        self.assertIsNone(first)
+        self.package()
+        state = PET.state_dir(self.project)
+        first_package = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        self.make_run(atlas_bytes((90, 180, 50, 255)))
+        self.package()
+        self.assertFalse(first_package.exists())
+        self.assertTrue(PET.selected_package(self.project).is_dir())
 
     def test_snapshot_staging_interruption_can_be_retried(self):
         state = PET.state_dir(self.project)
