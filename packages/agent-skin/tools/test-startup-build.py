@@ -19,8 +19,8 @@ import zlib
 
 PACKAGE = Path(__file__).resolve().parents[1]
 BUILDER_PATH = PACKAGE / "tools/build-startup.py"
-APP_VERSION = "0.8.0"
-APP_BUILD = "9"
+APP_VERSION = "0.9.0"
+APP_BUILD = "10"
 BUILD_FILES = (
     "Native/App.swift",
     "Native/InstallRegistry.swift",
@@ -28,6 +28,7 @@ BUILD_FILES = (
     "Native/StartupNativeTests.swift",
     "extension/renderer.mjs",
     "image-settings.js",
+    "localization.js",
     "index.html",
     "style.css",
     "animation.js",
@@ -141,6 +142,8 @@ def clone_source_tree(destination: Path, *, private: bool = True) -> None:
         private_dir.mkdir(parents=True, exist_ok=True)
         synthetic_png(private_dir / "working.png", 640, 480,
                       lambda x, y: (230, 40, 60, 255) if x < 100 else (25, 50, 220, 255))
+        synthetic_png(private_dir / "entry-avatar.png", 1254, 1254,
+                      lambda x, y: (35, 185, 95, 255) if x < 600 else (35, 45, 220, 255))
         synthetic_png(private_dir / "wallpaper-scene-q-v3.png", 2000, 1000,
                       lambda x, y: ((245, 245, 245, 255) if 520 <= x < 720 and 180 <= y < 360
                                     else (40, 45, 55, 255)))
@@ -175,6 +178,7 @@ class StartupBuildTests(unittest.TestCase):
         startup = self.bundle / "Contents/Resources/startup"
         web = self.bundle / "Contents/Resources/web"
         avatar = web / "assets/defaults/avatar.png"
+        entry_avatar = web / "assets/defaults/entry-avatar.png"
         artwork = web / "assets/defaults/artwork.png"
         contours_js = web / "assets/defaults/contours.js"
         manifest_path = startup / "manifest.json"
@@ -182,6 +186,7 @@ class StartupBuildTests(unittest.TestCase):
         self.assertTrue(install_js.is_file())
         self.assertTrue(manifest_path.is_file())
         self.assertTrue(avatar.is_file())
+        self.assertTrue(entry_avatar.is_file())
         self.assertTrue(artwork.is_file())
         self.assertTrue(contours_js.is_file())
 
@@ -191,11 +196,15 @@ class StartupBuildTests(unittest.TestCase):
         self.assertEqual((manifest["appVersion"], manifest["appBuild"]), (APP_VERSION, APP_BUILD))
         self.assertEqual(manifest["inputSHA256"], self.marker["inputSHA256"])
         self.assertEqual((manifest["assets"]["avatar"]["width"], manifest["assets"]["avatar"]["height"]), (512, 512))
+        self.assertEqual((manifest["assets"]["entryAvatar"]["width"], manifest["assets"]["entryAvatar"]["height"]), (1254, 1254))
         self.assertEqual((manifest["assets"]["artwork"]["width"], manifest["assets"]["artwork"]["height"]), (1536, 1024))
         avatar_width, avatar_height, avatar_sample = decode_png(avatar)
         self.assertEqual((avatar_width, avatar_height), (512, 512))
         self.assertGreater(avatar_sample(10, 250)[0], avatar_sample(10, 250)[2])
         self.assertGreater(avatar_sample(50, 250)[2], avatar_sample(50, 250)[0])
+        entry_width, entry_height, entry_sample = decode_png(entry_avatar)
+        self.assertEqual((entry_width, entry_height), (1254, 1254))
+        self.assertGreater(entry_sample(100, 200)[1], entry_sample(1000, 200)[1])
         art_width, art_height, art_sample = decode_png(artwork)
         self.assertEqual((art_width, art_height), (1536, 1024))
         self.assertGreater(min(art_sample(380, 280)[:3]), 220,
@@ -209,9 +218,15 @@ class StartupBuildTests(unittest.TestCase):
         self.assertTrue(defaults_source.endswith(");\n"))
         preview_assets = json.loads(defaults_source[len(prefix):-3])
         self.assertEqual(base64.b64decode(preview_assets["avatar"].split(",", 1)[1]), avatar.read_bytes())
+        self.assertEqual(base64.b64decode(preview_assets["entryAvatar"].split(",", 1)[1]), entry_avatar.read_bytes())
+        self.assertEqual(preview_assets["entryAvatar"],
+                         "data:image/png;base64," + base64.b64encode(entry_avatar.read_bytes()).decode("ascii"))
         self.assertEqual(base64.b64decode(preview_assets["artwork"].split(",", 1)[1]), artwork.read_bytes())
         self.assertEqual(preview_assets["artworkSHA256"], hashlib.sha256(artwork.read_bytes()).hexdigest())
         self.assertEqual(preview_assets["contours"], manifest["assets"]["contours"])
+        self.assertNotIn("introTitle", preview_assets)
+        self.assertNotIn("introCaption", preview_assets)
+        self.assertNotIn("artworkSubtitle", preview_assets)
         contour_boxes = []
         for path in preview_assets["contours"]:
             xs = [point[0] for point in path]
@@ -232,6 +247,8 @@ class StartupBuildTests(unittest.TestCase):
         self.assertIn(renderer.replace("export function installStartup", "function installStartup", 1).strip(), payload)
         self.assertIn("class PageController", payload)
         self.assertIn("function dataProperty", payload)
+        self.assertIn("function createLocalization(", payload)
+        self.assertIn("createLocalization: { value: createLocalization }", payload)
         self.assertNotIn("const settings = environment.AGENT_SKIN_ASSETS || null", payload)
         self.assertNotRegex(payload, r"\bfixture\s*:\s*true\b")
         self.assertLess(len(install_js.read_bytes()), 24 * 1024 * 1024)
@@ -287,7 +304,7 @@ class StartupBuildTests(unittest.TestCase):
         private = self.root / "assets/private"
         build_root = self.root / ".build"
         original_children = {path.name for path in build_root.iterdir()}
-        for name in ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png"):
+        for name in ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "entry-avatar.png", "app-icon/source.png"):
             path = private / name
             original = path.read_bytes()
             path.unlink()
@@ -298,13 +315,14 @@ class StartupBuildTests(unittest.TestCase):
                 self.assertIn("working.png", result.stderr)
                 self.assertIn("scene.js", result.stderr)
                 self.assertIn("wallpaper-scene-q-v3.png", result.stderr)
+                self.assertIn("entry-avatar.png", result.stderr)
                 self.assertIn("app-icon/source.png", result.stderr)
                 self.assertEqual({item.name for item in build_root.iterdir()}, original_children)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(original)
 
     def test_builder_sources_are_hashed_and_listed_as_build_inputs(self):
-        required = {"tools/build-startup.py", "tools/build-startup-assets.swift"}
+        required = {"tools/build-startup.py", "tools/build-startup-assets.swift", "localization.js"}
         verifier_inputs = set(self.verifier.INPUT_FILES)
         package = json.loads((self.root / "hub-package.json").read_text(encoding="utf-8"))
         self.assertTrue(required <= verifier_inputs)
@@ -312,6 +330,27 @@ class StartupBuildTests(unittest.TestCase):
         self.assertTrue(required <= set(package["runtime_paths"]))
         for source in required:
             self.assertIn(source, self.marker["inputs"])
+
+    def test_native_display_names_are_localized_without_changing_install_path(self):
+        build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
+        self.assertIn('"CFBundleDisplayName" = "Azhou AI Lab";', build_script)
+        self.assertIn('"CFBundleDisplayName" = "阿舟 AI 实验室";', build_script)
+        self.assertIn('install-macos.sh 安装到 ~/Applications/阿舟启动 Codex.app', build_script)
+        bundle = Path(self.temporary.name) / "localized-display.app"
+        resources = bundle / "Contents/Resources"
+        for language, label in (("en", "Azhou AI Lab"), ("zh-Hans", "阿舟 AI 实验室")):
+            strings = resources / f"{language}.lproj/InfoPlist.strings"
+            strings.parent.mkdir(parents=True, exist_ok=True)
+            strings.write_text(f'"CFBundleDisplayName" = "{label}";\n"CFBundleName" = "{label}";\n',
+                               encoding="utf-8")
+        self.verifier.verify_localized_names(bundle, {
+            "CFBundleName": "Azhou AI Lab", "CFBundleDisplayName": "Azhou AI Lab",
+        })
+        (resources / "zh-Hans.lproj/InfoPlist.strings").write_text("invalid\n", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "localized display-name"):
+            self.verifier.verify_localized_names(bundle, {
+                "CFBundleName": "Azhou AI Lab", "CFBundleDisplayName": "Azhou AI Lab",
+            })
 
     def test_verifier_rejects_a_builder_source_omitted_from_input_manifest(self):
         original = self.verifier.INPUT_FILES

@@ -8,6 +8,11 @@
  */
 function createImageSettings(environment) {
   const document = environment && environment.document;
+  const localization = environment && environment.localization;
+  const appearanceAvatar = environment && typeof environment.appearanceAvatar === 'string'
+    && environment.appearanceAvatar.length <= 2 * 1024 * 1024
+    && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(environment.appearanceAvatar)
+    ? environment.appearanceAvatar : '';
   const ImageConstructor = environment && environment.Image;
   const URLObject = environment && environment.URL;
   const indexedDB = environment && environment.indexedDB;
@@ -24,6 +29,39 @@ function createImageSettings(environment) {
   const SETTINGS_KEY = 'images';
   const MAX_RECORD_BYTES = 20 * 1024 * 1024;
   const TEXT_LIMITS = Object.freeze({ introTitle: 16, introCaption: 48, artworkSubtitle: 60 });
+  const FALLBACK_MESSAGES = Object.freeze({
+    'animation.title.default': '阿舟 AI 实验室',
+    'animation.caption.default': 'AZHOU / AI LAB',
+    'animation.subtitle.default': '和阿舟一起，把想法做出来。',
+    'settings.title': '阿舟 · 外观设置',
+    'settings.close': '取消并关闭设置',
+    'settings.avatar.label': '启动头像',
+    'settings.artwork.label': '背景图片',
+    'settings.introTitle.label': '启动标题（最多 {limit} 个字符）',
+    'settings.introCaption.label': '标题说明（最多 {limit} 个字符）',
+    'settings.artworkSubtitle.label': '背景字幕（最多 {limit} 个字符）',
+    'settings.wallpaperStrength.label': '背景效果强度（{min}–{max}）',
+    'settings.wallpaperStrength.aria': '背景效果强度，{min} 到 {max}',
+    'settings.button.restore': '恢复默认',
+    'settings.button.cancel': '取消',
+    'settings.button.save': '保存并重播',
+    'settings.button.choosePortrait': '选择启动头像',
+    'settings.button.chooseBackground': '选择背景图片',
+    'settings.status.importing': '正在处理图片…',
+    'settings.status.saving': '正在校验候选并保存…',
+    'settings.status.imageLarge': '图片已准备；原图超过 16 MP，处理可能较慢。',
+    'settings.status.imageReady': '图片已准备，可以保存。',
+    'settings.status.defaultsRestored': '草稿已恢复为默认设置；已保存值尚未更改。',
+    'settings.error.conflict': '其他页面已更新设置。请取消后重新打开，再保存草稿。',
+    'settings.error.quota': '存储空间不足。请更换图片后重试。',
+    'settings.error.blocked': '设置数据库被其他页面阻塞。稍后可以重试。',
+    'settings.error.timeout': '操作超时，面板已恢复，可以取消或重试。',
+    'settings.error.invalid': '候选设置无法验证，已保存内容保持不变。',
+    'settings.error.save': '保存失败，已保存内容保持不变。',
+    'settings.load.invalid': '保存记录无法识别；当前使用默认设置，原记录保留。',
+    'settings.load.timeout': '读取设置超时；当前使用默认值，已保存记录未改动。可以重试。',
+    'settings.load.unavailable': '暂时无法读取保存设置；当前使用默认设置，原记录未删除。',
+  });
   let generation = 0;
   let active = null;
   let database = null;
@@ -32,6 +70,7 @@ function createImageSettings(environment) {
   let currentSettings = null;
   let currentBaseline;
   let defaultRecord = null;
+  let defaultTextFallbacks = Object.create(null);
   let loadReason = '';
   let dialog = null;
   let panelControls = null;
@@ -39,6 +78,19 @@ function createImageSettings(environment) {
   let panelOpen = false;
   let panelGeneration = 0;
   let panelCallbacks = null;
+  let panelStatus = null;
+  let localizationUnsubscribe = null;
+
+  function translate(key, params = {}) {
+    try {
+      const translated = localization && typeof localization.t === 'function'
+        ? localization.t(key, params) : null;
+      if (typeof translated === 'string' && translated !== key) return translated;
+    } catch {}
+    const template = FALLBACK_MESSAGES[key] || String(key);
+    return template.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (placeholder, name) =>
+      Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder);
+  }
 
   function makeError(reason, causeCode) {
     const error = new Error(reason);
@@ -228,15 +280,20 @@ function createImageSettings(environment) {
     const source = defaults && typeof defaults === 'object' ? defaults : {};
     const dataURL = value => typeof value === 'string' ? value
       : value && typeof value.dataURL === 'string' ? value.dataURL : '';
+    defaultTextFallbacks = {
+      introTitle: typeof source.introTitle !== 'string',
+      introCaption: typeof source.introCaption !== 'string',
+      artworkSubtitle: typeof source.artworkSubtitle !== 'string',
+    };
     return {
       schemaVersion: 1,
       avatar: dataURL(source.avatar),
       artwork: dataURL(source.artwork),
       contours: Array.isArray(source.contours) ? source.contours.map(path =>
         Array.isArray(path) ? path.map(point => Array.isArray(point) ? [...point] : point) : path) : [],
-      introTitle: typeof source.introTitle === 'string' ? source.introTitle : '阿舟的 Agent 实验室',
-      introCaption: typeof source.introCaption === 'string' ? source.introCaption : 'AZHOU / AGENT LAB',
-      artworkSubtitle: typeof source.artworkSubtitle === 'string' ? source.artworkSubtitle : '和阿舟一起，把想法做出来。',
+      introTitle: typeof source.introTitle === 'string' ? source.introTitle : translate('animation.title.default'),
+      introCaption: typeof source.introCaption === 'string' ? source.introCaption : translate('animation.caption.default'),
+      artworkSubtitle: typeof source.artworkSubtitle === 'string' ? source.artworkSubtitle : translate('animation.subtitle.default'),
       wallpaperStrength: Number.isInteger(source.wallpaperStrength) && source.wallpaperStrength >= 0
         && source.wallpaperStrength <= 75 ? source.wallpaperStrength : 42,
     };
@@ -620,26 +677,103 @@ function createImageSettings(environment) {
   }
 
   function displayError(reason) {
-    if (reason === 'settings-conflict') return '其他页面已更新设置。请取消后重新打开，再保存草稿。';
-    if (reason === 'settings-quota') return '存储空间不足。请更换图片后重试。';
-    if (reason === 'settings-blocked') return '设置数据库被其他页面阻塞。稍后可以重试。';
-    if (reason === 'operation-timeout') return '操作超时，面板已恢复，可以取消或重试。';
-    if (reason === 'settings-invalid' || reason === 'asset-invalid') return '候选设置无法验证，已保存内容保持不变。';
-    return '保存失败，已保存内容保持不变。';
+    if (reason === 'settings-conflict') return 'settings.error.conflict';
+    if (reason === 'settings-quota') return 'settings.error.quota';
+    if (reason === 'settings-blocked') return 'settings.error.blocked';
+    if (reason === 'operation-timeout') return 'settings.error.timeout';
+    if (reason === 'settings-invalid' || reason === 'asset-invalid') return 'settings.error.invalid';
+    return 'settings.error.save';
   }
 
-  function setPanelStatus(value, role = 'status') {
+  function setPanelStatus(key, role = 'status') {
     if (!panelControls?.status) return;
-    panelControls.status.textContent = String(value || '');
-    panelControls.status.setAttribute('role', role);
+    panelStatus = key ? { key, role } : null;
+    panelControls.status.textContent = panelStatus ? translate(panelStatus.key) : '';
+    panelControls.status.setAttribute('role', panelStatus?.role || 'status');
+  }
+
+  function refreshLocalizedDefaults() {
+    if (!defaultRecord) return;
+    const fallbackKeys = {
+      introTitle: 'animation.title.default',
+      introCaption: 'animation.caption.default',
+      artworkSubtitle: 'animation.subtitle.default',
+    };
+    for (const [key, translationKey] of Object.entries(fallbackKeys)) {
+      if (!defaultTextFallbacks[key]) continue;
+      const value = translate(translationKey);
+      defaultRecord[key] = value;
+      if (!panelOpen && currentBaseline === undefined && currentSettings) currentSettings[key] = value;
+    }
+  }
+
+  function updatePanelText() {
+    if (!panelControls) return;
+    const { heading, close, labels, ariaLabels, buttons, strengthLabel, status } = panelControls;
+    heading.textContent = translate('settings.title');
+    close.setAttribute('aria-label', translate('settings.close'));
+    for (const [key, label] of Object.entries(labels)) {
+      label.element.textContent = translate(key, label.params);
+    }
+    for (const item of ariaLabels) item.control.setAttribute('aria-label', translate(item.key, item.params));
+    for (const [key, button] of Object.entries(buttons)) button.textContent = translate(key);
+    strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
+    panelControls.strength.setAttribute('aria-label',
+      translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
+    status.textContent = panelStatus ? translate(panelStatus.key) : '';
+    status.setAttribute('role', panelStatus?.role || 'status');
+  }
+
+  function handleLocaleChange() {
+    if (disposed) return;
+    refreshLocalizedDefaults();
+    updatePanelText();
   }
 
   function updatePanelBusy() {
     if (!panelControls) return;
     const busy = Boolean(active);
-    for (const control of panelControls.controls) control.disabled = busy;
-    if (busy && active.kind === 'import') setPanelStatus('正在处理图片…');
-    else if (busy && active.kind === 'save') setPanelStatus('正在校验候选并保存…');
+    for (const control of panelControls.controls) {
+      control.disabled = busy;
+      if (control.style && typeof control.style.setProperty === 'function') {
+        control.style.setProperty('opacity', busy ? '.58' : '1');
+        control.style.setProperty('cursor', busy ? 'wait' : control.tagName === 'BUTTON' ? 'pointer' : 'auto');
+      }
+    }
+    if (busy && active.kind === 'import') setPanelStatus('settings.status.importing');
+    else if (busy && active.kind === 'save') setPanelStatus('settings.status.saving');
+  }
+
+  function setStyle(element, properties) {
+    if (!element?.style || typeof element.style.setProperty !== 'function') return;
+    for (const [name, value] of Object.entries(properties)) element.style.setProperty(name, value);
+  }
+
+  function styleInput(control) {
+    setStyle(control, {
+      'box-sizing': 'border-box',
+      width: '100%',
+      border: '1px solid var(--agent-skin-border, CanvasText)',
+      'border-radius': '8px',
+      padding: control.type === 'range' ? '0' : control.type === 'file' ? '7px' : '9px',
+      'background-color': 'var(--agent-skin-surface, Canvas)',
+      color: 'var(--agent-skin-text, CanvasText)',
+      font: 'inherit',
+    });
+  }
+
+  function styleButton(button, primary = false) {
+    setStyle(button, {
+      border: '1px solid var(--agent-skin-border, CanvasText)',
+      'border-radius': '999px',
+      padding: '8px 14px',
+      'background-color': primary
+        ? 'var(--agent-skin-text, CanvasText)' : 'var(--agent-skin-surface, Canvas)',
+      color: primary
+        ? 'var(--agent-skin-surface, Canvas)' : 'var(--agent-skin-text, CanvasText)',
+      font: 'inherit',
+      cursor: 'pointer',
+    });
   }
 
   function truncateText(value, limit) {
@@ -662,42 +796,65 @@ function createImageSettings(environment) {
     dialog = document.createElement('dialog');
     dialog.setAttribute('aria-labelledby', 'agent-skin-settings-title');
     dialog.setAttribute('data-agent-skin-settings', '');
-    dialog.style.cssText = 'width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:0;border:1px solid #ffffff35;border-radius:18px;background:#171827;color:#fff8ef;box-shadow:0 24px 90px #000a;font:15px/1.45 system-ui,sans-serif';
-    const style = document.createElement('style');
-    style.textContent = '[data-agent-skin-settings]::backdrop{background:#080913b8;backdrop-filter:blur(5px)}[data-agent-skin-settings] input,[data-agent-skin-settings] textarea{box-sizing:border-box;width:100%;border:1px solid #ffffff35;border-radius:8px;padding:9px;background:#222437;color:#fff8ef;font:inherit}[data-agent-skin-settings] input[type=file]{padding:7px}[data-agent-skin-settings] input[type=range]{padding:0}[data-agent-skin-settings] button{border:1px solid #ffffff3b;border-radius:999px;padding:8px 14px;background:#26283d;color:#fff8ef;font:inherit;cursor:pointer}[data-agent-skin-settings] button:disabled,[data-agent-skin-settings] input:disabled,[data-agent-skin-settings] textarea:disabled{opacity:.58;cursor:wait}';
+    dialog.style.cssText = 'color-scheme:inherit;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #000a;font:15px/1.45 system-ui,sans-serif';
+    dialog.style.setProperty('color-scheme', 'inherit');
+    dialog.style.setProperty('border-color', 'var(--agent-skin-border, CanvasText)');
+    dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
+    dialog.style.setProperty('color', 'var(--agent-skin-text, CanvasText)');
     const content = document.createElement('section');
     content.style.cssText = 'padding:22px 24px 20px';
     const header = document.createElement('header');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px';
     const heading = document.createElement('h2');
     heading.id = 'agent-skin-settings-title';
-    heading.textContent = 'Agent Skin 设置';
+    heading.textContent = translate('settings.title');
     heading.style.cssText = 'margin:0;font-size:20px';
+    if (appearanceAvatar) {
+      const identityAvatar = document.createElement('img');
+      identityAvatar.setAttribute('data-agent-skin-appearance-avatar', '');
+      identityAvatar.setAttribute('alt', '');
+      identityAvatar.src = appearanceAvatar;
+      setStyle(identityAvatar, {
+        width: '36px', height: '36px', 'border-radius': '12px',
+        'object-fit': 'cover', flex: 'none',
+      });
+      header.appendChild(identityAvatar);
+    }
     const close = document.createElement('button');
     close.type = 'button';
     close.textContent = '×';
-    close.setAttribute('aria-label', '取消并关闭设置');
+    styleButton(close);
+    close.setAttribute('aria-label', translate('settings.close'));
     close.addEventListener('click', cancelSettings);
     header.append(heading, close);
     content.appendChild(header);
 
     const fields = Object.create(null);
+    const labels = Object.create(null);
+    const ariaLabels = [];
     const controls = [close];
-    const addRow = (labelText, control) => {
+    const addRow = (key, control, params = {}, ariaKey = key) => {
       const wrapper = document.createElement('label');
       wrapper.style.cssText = 'display:grid;gap:5px;margin-top:14px';
       const label = document.createElement('span');
-      label.textContent = labelText;
+      label.textContent = translate(key, params);
+      labels[key] = { element: label, params };
+      control.setAttribute('aria-label', translate(ariaKey, params));
+      ariaLabels.push({ control, key: ariaKey, params });
       wrapper.append(label, control);
       content.appendChild(wrapper);
       controls.push(control);
       return control;
     };
-    const addFile = (role, label) => {
+    const addFile = (role, key, actionKey) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/png,image/jpeg,image/webp';
-      input.setAttribute('aria-label', label);
+      input.hidden = true;
+      input.tabIndex = -1;
+      input.setAttribute('aria-hidden', 'true');
+      input.setAttribute('data-agent-skin-image-input', role);
+      styleInput(input);
       input.addEventListener('change', async () => {
         const file = input.files?.[0];
         if (!file || !panelOpen || active) return;
@@ -710,7 +867,7 @@ function createImageSettings(environment) {
           if (role === 'avatar') draft.avatar = result.dataURL;
           else { draft.artwork = result.dataURL; draft.contours = result.contours; }
           setPanelStatus(result.warning === 'large-image'
-            ? '图片已准备；原图超过 16 MP，处理可能较慢。' : '图片已准备，可以保存。');
+            ? 'settings.status.imageLarge' : 'settings.status.imageReady');
         } catch (error) {
           if (panelOpen && panelAtStart === panelGeneration) setPanelStatus(displayError(error?.reason), 'alert');
         } finally {
@@ -718,27 +875,40 @@ function createImageSettings(environment) {
           updatePanelBusy();
         }
       });
-      return addRow(label, input);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('data-agent-skin-image-action', role);
+      button.textContent = translate(actionKey);
+      styleButton(button);
+      button.addEventListener('click', () => {
+        if (panelOpen && !active) input.click?.();
+      });
+      const rowAction = addRow(key, button, {}, actionKey);
+      controls.push(input);
+      content.appendChild(input);
+      buttons[actionKey] = button;
+      return rowAction;
     };
-    addFile('avatar', '选择头像图片');
-    addFile('artwork', '选择背景图片');
+    const buttons = Object.create(null);
+    addFile('avatar', 'settings.avatar.label', 'settings.button.choosePortrait');
+    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
 
-    for (const [key, limit, label] of [
-      ['introTitle', 16, '启动标题（最多 16 个 UTF-16 字符单位）'],
-      ['introCaption', 48, '辅助文字（最多 48 个 UTF-16 字符单位）'],
-      ['artworkSubtitle', 60, '背景字幕（最多 60 个 UTF-16 字符单位）'],
+    for (const [key, limit, labelKey] of [
+      ['introTitle', 16, 'settings.introTitle.label'],
+      ['introCaption', 48, 'settings.introCaption.label'],
+      ['artworkSubtitle', 60, 'settings.artworkSubtitle.label'],
     ]) {
       const control = key === 'artworkSubtitle' ? document.createElement('textarea') : document.createElement('input');
       if (control.tagName === 'INPUT') control.type = 'text';
+      styleInput(control);
       control.maxLength = limit;
-      control.setAttribute('aria-label', label);
       control.addEventListener('input', () => {
         const value = truncateText(control.value, limit);
         if (control.value !== value) control.value = value;
         if (draft) draft[key] = value;
       });
       fields[key] = control;
-      addRow(label, control);
+      addRow(labelKey, control, { limit });
     }
 
     const strength = document.createElement('input');
@@ -746,7 +916,7 @@ function createImageSettings(environment) {
     strength.min = '0';
     strength.max = '75';
     strength.step = '1';
-    strength.setAttribute('aria-label', '壁纸强度，0 到 75');
+    styleInput(strength);
     const strengthValue = document.createElement('output');
     strengthValue.style.cssText = 'min-width:3ch;text-align:right';
     strength.addEventListener('input', () => {
@@ -757,33 +927,37 @@ function createImageSettings(environment) {
     const strengthRow = document.createElement('label');
     strengthRow.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:14px';
     const strengthLabel = document.createElement('span');
-    strengthLabel.textContent = '壁纸强度（0–75）';
+    strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
     strengthRow.append(strengthLabel, strengthValue, strength);
     content.appendChild(strengthRow);
     controls.push(strength);
 
     const status = document.createElement('p');
-    status.style.cssText = 'min-height:1.5em;margin:14px 0 0;color:#d8d7e7';
+    status.style.cssText = 'min-height:1.5em;margin:14px 0 0';
+    status.style.setProperty('color', 'var(--agent-skin-muted, CanvasText)');
     status.setAttribute('aria-live', 'polite');
     content.appendChild(status);
     const actions = document.createElement('footer');
     actions.style.cssText = 'display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px';
     const restore = document.createElement('button');
     restore.type = 'button';
-    restore.textContent = '恢复默认';
+    styleButton(restore);
+    restore.textContent = translate('settings.button.restore');
     restore.addEventListener('click', () => {
       if (active || !panelOpen) return;
       draft = cloneSettings(defaultRecord || currentSettings);
       updatePanelFields();
-      setPanelStatus('草稿已恢复为默认设置；已保存值尚未更改。');
+      setPanelStatus('settings.status.defaultsRestored');
     });
     const cancel = document.createElement('button');
     cancel.type = 'button';
-    cancel.textContent = '取消';
+    styleButton(cancel);
+    cancel.textContent = translate('settings.button.cancel');
     cancel.addEventListener('click', cancelSettings);
     const saveButton = document.createElement('button');
     saveButton.type = 'button';
-    saveButton.textContent = '保存并重播';
+    styleButton(saveButton, true);
+    saveButton.textContent = translate('settings.button.save');
     saveButton.addEventListener('click', async () => {
       if (!panelOpen || active || !draft) return;
       for (const key of Object.keys(TEXT_LIMITS)) draft[key] = truncateText(draft[key], TEXT_LIMITS[key]);
@@ -805,13 +979,23 @@ function createImageSettings(environment) {
     controls.push(restore, cancel, saveButton);
     actions.append(restore, cancel, saveButton);
     content.appendChild(actions);
-    dialog.append(style, content);
+    dialog.append(content);
     document.body.appendChild(dialog);
     dialog.addEventListener('cancel', event => {
       event.preventDefault();
       cancelSettings();
     });
-    panelControls = { controls, status, fields, strength, strengthValue };
+    panelControls = {
+      controls, status, fields, strength, strengthValue, heading, close, labels, ariaLabels,
+      buttons: {
+        ...buttons,
+        'settings.button.restore': restore,
+        'settings.button.cancel': cancel,
+        'settings.button.save': saveButton,
+      },
+      strengthLabel,
+    };
+    updatePanelText();
     return true;
   }
 
@@ -822,10 +1006,10 @@ function createImageSettings(environment) {
     panelGeneration++;
     panelOpen = true;
     updatePanelFields();
-    if (loadReason === 'settings-invalid') setPanelStatus('保存记录无法识别；当前使用默认设置，原记录保留。', 'alert');
-    else if (loadReason === 'operation-timeout') setPanelStatus('读取设置超时；当前使用默认值，已保存记录未改动。可以重试。', 'alert');
+    if (loadReason === 'settings-invalid') setPanelStatus('settings.load.invalid', 'alert');
+    else if (loadReason === 'operation-timeout') setPanelStatus('settings.load.timeout', 'alert');
     else if (loadReason === 'settings-unavailable' || loadReason === 'settings-blocked') {
-      setPanelStatus('暂时无法读取保存设置；当前使用默认设置，原记录未删除。', 'alert');
+      setPanelStatus('settings.load.unavailable', 'alert');
     } else setPanelStatus('');
     try { dialog.showModal(); }
     catch {
@@ -845,6 +1029,7 @@ function createImageSettings(environment) {
     draft = null;
     panelCallbacks = null;
     try { dialog?.close(returnValue); } catch {}
+    refreshLocalizedDefaults();
     return true;
   }
 
@@ -870,6 +1055,8 @@ function createImageSettings(environment) {
     draft = null;
     try { dialog?.close('dispose'); } catch {}
     try { dialog?.remove(); } catch {}
+    try { localizationUnsubscribe?.(); } catch {}
+    localizationUnsubscribe = null;
     dialog = null;
     panelControls = null;
     try { database?.close(); } catch {}
@@ -1276,6 +1463,12 @@ function createImageSettings(environment) {
 
     return promise;
   }
+
+  try {
+    const unsubscribe = localization && typeof localization.subscribe === 'function'
+      ? localization.subscribe(handleLocaleChange) : null;
+    if (typeof unsubscribe === 'function') localizationUnsubscribe = unsubscribe;
+  } catch {}
 
   function cancelImport() {
     if (!active || active.kind !== 'import') return false;

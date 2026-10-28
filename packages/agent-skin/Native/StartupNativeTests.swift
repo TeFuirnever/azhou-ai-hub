@@ -144,6 +144,30 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+
+        expect(NativeDisplayLocale.systemFallback(preferredLanguages: ["zh-Hans-CN"]) == .chinese,
+               "native preview follows the macOS Chinese locale before an official host locale is ready")
+        expect(NativeDisplayLocale.systemFallback(preferredLanguages: ["en-US"]) == .english,
+               "native preview follows the macOS English locale before an official host locale is ready")
+        expect(NativeDisplayLocale.verifiedReadyLocale("zh-CN") == .chinese
+               && NativeDisplayLocale.verifiedReadyLocale("en") == .english
+               && NativeDisplayLocale.verifiedReadyLocale("fr-FR") == nil,
+               "native labels accept only a supported locale from the trusted ready message")
+        expect(NativeDisplayLocale.chinese.closeTitle == "关闭"
+               && NativeDisplayLocale.english.closeTitle == "Close",
+               "native error dialogs use the active locale for their close button")
+        let localizedErrorReasons = [
+            "resources-missing", "page-missing", "target-launch-timeout", "renderer-ready-timeout",
+            "renderer-complete-timeout", "javascript-error", "asset-error", "target-exited",
+            "activation-rejected", "renderer-terminated", "target-missing", "target-identity",
+            "listener-mismatch", "page-pending", "page-unsupported", "ambiguous-main-page",
+            "owner-conflict", "startup-active", "startup-interrupted", "attach-timeout", "asset-invalid",
+        ]
+        let containsHan: (String) -> Bool = { text in
+            text.unicodeScalars.contains { (0x4e00...0x9fff).contains($0.value) }
+        }
+        expect(localizedErrorReasons.allSatisfy { !containsHan(NativeDisplayLocale.english.message(for: $0)) },
+               "native startup and preview failure messages have English labels for every supported failure reason")
         func refuses(_ label: String, _ operation: () throws -> Void) {
             do { try operation(); fatalError("FAILED: \(label)") }
             catch { checks += 1 }
@@ -206,15 +230,18 @@ struct StartupNativeTests {
 
         expect(WallpaperCLI.statusSource.contains("let startup={installed:false}")
                && WallpaperCLI.statusSource.contains("azhou-codex-startup")
-               && WallpaperCLI.statusSource.contains("azhou.codex-startup-animation"),
+               && WallpaperCLI.statusSource.contains("azhou.codex-startup-animation")
+               && WallpaperCLI.statusSource.contains("0.9.0"),
                "wallpaper status reads only supported owner tuples and includes startup status")
         expect(WallpaperCLI.applyGuardSource.contains("startup-active")
-               && WallpaperCLI.applyGuardSource.contains("owner-conflict"),
+               && WallpaperCLI.applyGuardSource.contains("owner-conflict")
+               && WallpaperCLI.applyGuardSource.contains("0.9.0"),
                "explicit helper apply refuses an active or unknown page owner before injection")
         expect(WallpaperCLI.restoreSource.contains("azhou-codex-startup")
                && WallpaperCLI.restoreSource.contains("azhou.codex-startup-animation")
-               && WallpaperCLI.restoreSource.contains("0.7.1"),
-               "explicit restore supports the controller and exact known legacy wallpaper version")
+               && WallpaperCLI.restoreSource.contains("0.7.1")
+               && WallpaperCLI.restoreSource.contains("0.9.0"),
+               "explicit restore supports the controller and current/known legacy wallpaper versions")
         expect(WallpaperCLI.exitCode(for: "applied") == 0
                && WallpaperCLI.exitCode(for: "restored") == 0
                && WallpaperCLI.exitCode(for: "ready") == 0

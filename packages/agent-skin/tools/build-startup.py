@@ -17,15 +17,18 @@ import zlib
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ENTRY_AVATAR_INPUT = 'assets/private/entry-avatar.png'
 PRIVATE_STARTUP_INPUTS = (
     'assets/private/working.png',
     'assets/private/wallpaper-scene-q-v3.png',
+    ENTRY_AVATAR_INPUT,
 )
-PREVIEW_SOURCES = ('index.html', 'style.css', 'animation.js', 'image-settings.js')
+PREVIEW_SOURCES = ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js')
 ASSET_JS_PREFIX = 'window.AGENT_SKIN_ASSETS = Object.freeze('
 ASSET_JS_SUFFIX = ');\n'
 MAX_STARTUP_BYTES = 24 * 1024 * 1024
 MAX_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
+MAX_ENTRY_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
 MAX_ARTWORK_DATA_URL_BYTES = 12 * 1024 * 1024
 
 
@@ -182,6 +185,14 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         ).strip()
     except OSError as exc:
         raise RuntimeError(f'Missing startup source module: {exc.filename}') from exc
+    try:
+        localization = (root / 'localization.js').read_text(encoding='utf-8').strip()
+    except OSError as exc:
+        raise RuntimeError(f'Missing startup localization source: {exc.filename}') from exc
+    if (localization.count('function createLocalization(') != 1
+            or '\nimport ' in localization or localization.startswith('import ')
+            or '\nexport ' in localization or localization.startswith('export ')):
+        raise RuntimeError('Localization source must contain its complete self-contained factory.')
     if (settings.count('function createImageSettings(') != 1
             or '\nimport ' in settings or settings.startswith('import ')
             or '\nexport ' in settings or settings.startswith('export ')):
@@ -198,6 +209,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         '  const DEFAULT_ASSETS = Object.freeze(' + _json_literal(assets) + ');',
         '  const WALLPAPER_CSS = ' + css_literal + ';',
         controller,
+        localization,
         settings,
         wallpaper,
         animation,
@@ -265,6 +277,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
   }
   Object.defineProperties(installAnimation, {
     assets: { value: DEFAULT_ASSETS },
+    createLocalization: { value: createLocalization },
     createImageSettings: { value: createImageSettings },
     applyWallpaper: { value: applyWallpaper },
   });
@@ -306,6 +319,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
         executable = work / 'build-startup-assets'
         contours_path = work / 'contours.json'
         avatar_path = defaults_dir / 'avatar.png'
+        entry_avatar_path = defaults_dir / 'entry-avatar.png'
         artwork_path = defaults_dir / 'artwork.png'
         architecture = subprocess.check_output(['uname', '-m'], text=True).strip()
         swift = root / 'tools/build-startup-assets.swift'
@@ -331,38 +345,44 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
             raise RuntimeError('Vision helper did not return valid startup contour data.') from exc
 
     avatar = avatar_path.read_bytes()
+    entry_avatar = (root / ENTRY_AVATAR_INPUT).read_bytes()
     artwork = artwork_path.read_bytes()
     avatar_dimensions = _png_data(avatar, 'avatar.png')
+    entry_avatar_dimensions = _png_data(entry_avatar, 'entry-avatar.png')
     artwork_dimensions = _png_data(artwork, 'artwork.png')
     if avatar_dimensions != (512, 512) or artwork_dimensions != (1536, 1024):
         raise RuntimeError('Startup default image dimensions do not match the 512×512 / 1536×1024 contract.')
+    if entry_avatar_dimensions != (1254, 1254):
+        raise RuntimeError('The native entry avatar must be the provided 1254×1254 PNG.')
     avatar_data_url = 'data:image/png;base64,' + base64.b64encode(avatar).decode('ascii')
+    entry_avatar_data_url = 'data:image/png;base64,' + base64.b64encode(entry_avatar).decode('ascii')
     artwork_data_url = 'data:image/png;base64,' + base64.b64encode(artwork).decode('ascii')
     if (len(avatar_data_url.encode('ascii')) > MAX_AVATAR_DATA_URL_BYTES
+            or len(entry_avatar_data_url.encode('ascii')) > MAX_ENTRY_AVATAR_DATA_URL_BYTES
             or len(artwork_data_url.encode('ascii')) > MAX_ARTWORK_DATA_URL_BYTES):
-        raise RuntimeError('Generated startup default image exceeds the Avatar/Artwork data URL limit.')
+        raise RuntimeError('Generated startup default image exceeds the Avatar/Entry Avatar/Artwork data URL limit.')
     contour_paths, contour_points = _validate_contours(contours)
     artwork_sha = hashlib.sha256(artwork).hexdigest()
     assets = {
         'avatar': avatar_data_url,
+        'entryAvatar': entry_avatar_data_url,
         'artwork': artwork_data_url,
         'artworkSHA256': artwork_sha,
         'contours': contours,
-        'introTitle': '阿舟的 Agent 实验室',
-        'introCaption': 'AZHOU / AGENT LAB',
-        'artworkSubtitle': '和阿舟一起，把想法做出来。',
         'wallpaperStrength': 42,
     }
     (defaults_dir / 'contours.js').write_text(
         ASSET_JS_PREFIX + _json_literal(assets) + ASSET_JS_SUFFIX, encoding='utf-8',
     )
+    shutil.copyfile(root / ENTRY_AVATAR_INPUT, entry_avatar_path)
     wallpaper_css = (root / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
     install_script = _build_script(root, assets, wallpaper_css, artifacts)
     install_path = startup_dir / 'install.js'
     install_path.write_text(install_script, encoding='utf-8')
 
     output_paths = ('startup/install.js', *(f'web/{name}' for name in PREVIEW_SOURCES),
-                    'web/assets/defaults/avatar.png', 'web/assets/defaults/artwork.png',
+                    'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png',
+                    'web/assets/defaults/artwork.png',
                     'web/assets/defaults/contours.js')
     outputs = {}
     for relative in output_paths:
@@ -378,6 +398,8 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
         'outputs': outputs,
         'assets': {
             'avatar': {'width': 512, 'height': 512, 'sha256': hashlib.sha256(avatar).hexdigest()},
+            'entryAvatar': {'width': entry_avatar_dimensions[0], 'height': entry_avatar_dimensions[1],
+                            'sha256': hashlib.sha256(entry_avatar).hexdigest()},
             'artwork': {'width': 1536, 'height': 1024, 'sha256': artwork_sha},
             'contours': contours,
             'contourPathCount': contour_paths,

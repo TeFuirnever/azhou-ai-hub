@@ -87,7 +87,7 @@ Three complete projects live under `packages/`; they keep their own native layou
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | Optional native Codex plugin installation into an explicit target; review hook trust separately. |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | Optional native Codex profile installation; keep one workflow owner per task. |
-| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | Codex-only package identity. The local candidate adds a clickable appearance entry after playback and leaves the official browser shortcut untouched; settings and wallpaper await real-host acceptance. The Hub adapter separates startup assessment from playback smoke and keeps status read-only. Installed App and Pet ownership still names the retained `codex-startup-animation` source. No program redistribution grant is recorded. |
+| `agent-skin` | [Azhou AI Lab](packages/agent-skin/README.md) | Codex-only package identity. The candidate uses an Azhou bot appearance entry and Chinese/English UI that follows the official application's language and theme, with no separate preferences. The 12-second animation and existing settings transactions remain. The Hub adapter keeps status read-only; installation ownership and real-host acceptance require their own verification. No program redistribution grant is recorded. |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json

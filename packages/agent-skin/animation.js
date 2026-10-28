@@ -12,7 +12,7 @@
 function installAnimation(
   window, document, location, performance, indexedDB, Image, Path2D, URL,
   requestAnimationFrame, cancelAnimationFrame, setTimeout, clearTimeout,
-  module, SEND, frameSpec, createImageSettingsFactory,
+  module, SEND, frameSpec, createImageSettingsFactory, createLocalizationFactory,
 ) {
   'use strict';
 
@@ -29,8 +29,56 @@ function installAnimation(
     [0, 0], [0.12, 0.06], [0.35, 0.41], [0.56, 0.76],
     [0.66, 0.924], [0.72, 0.97], [0.77, 1], [1, 1],
   ];
+  const FINAL_PROGRESS_PLATEAU_MS = DURATION * PROGRESS[PROGRESS.length - 2][0];
   let assets = frameSpec && frameSpec.assets;
   const defaultAssets = assets;
+  const rootAppearance = frameSpec?.appearance || {};
+  const nativeAppearance = window.__agentSkinAppearance || {};
+  const initialLocale = normalizeLocale(rootAppearance.locale
+    || nativeAppearance.locale || window.navigator?.language || document.documentElement?.lang);
+  let localization = null;
+  try {
+    if (typeof createLocalizationFactory === 'function') {
+      localization = createLocalizationFactory({ locale: initialLocale });
+    }
+  } catch {}
+  let locale = initialLocale;
+  const initialTheme = ['light', 'dark'].includes(rootAppearance.theme) ? rootAppearance.theme
+    : ['light', 'dark'].includes(nativeAppearance.theme) ? nativeAppearance.theme
+      : document.documentElement?.dataset?.theme === 'light' ? 'light' : 'dark';
+  const defaultColors = initialTheme === 'light' ? {
+    surface: '#ffffff', text: '#202123', muted: '#65666c', border: '#dedee3',
+  } : {
+    surface: '#10121c', text: '#fff8ef',
+    muted: 'rgba(255, 248, 239, .72)', border: 'rgba(255, 248, 239, .18)',
+  };
+  const appearance = {
+    locale,
+    theme: initialTheme,
+    colors: { ...defaultColors, ...sanitizeColors(rootAppearance.colors) },
+  };
+  function t(key, params = {}) {
+    try {
+      const translated = localization?.t?.(key, params);
+      if (typeof translated === 'string' && translated !== key) return translated;
+    } catch {}
+    return String(key);
+  }
+  function normalizeLocale(value) {
+    return typeof value === 'string' && /^zh(?:-|$)/i.test(value) ? 'zh-CN' : 'en';
+  }
+  function sanitizeColors(colors) {
+    const result = {};
+    for (const key of ['surface', 'text', 'muted', 'border']) {
+      const value = colors?.[key];
+      if (typeof value !== 'string' || value.length > 100 || /[;{}]/.test(value)) continue;
+      const color = value.trim();
+      if (!color) continue;
+      if (window.CSS?.supports && !window.CSS.supports('color', color)) continue;
+      result[key] = color;
+    }
+    return result;
+  }
   const nativeHandler = Boolean(window.webkit?.messageHandlers?.launcher);
   const nativePreviewMode = nativeHandler && window.__agentSkinNativeMode === 'preview';
   const browserPreviewMode = location?.protocol === 'file:' && !nativeHandler;
@@ -38,9 +86,12 @@ function installAnimation(
     && Boolean(document.getElementById('timeline') && document.getElementById('preview-controls'))
     && (nativePreviewMode || browserPreviewMode);
   const nativePreview = isLocalPreview && nativeHandler;
-  let title = typeof assets?.introTitle === 'string' ? assets.introTitle : '阿舟的 Agent 实验室';
-  let caption = typeof assets?.introCaption === 'string' ? assets.introCaption : 'AZHOU / AGENT LAB';
-  let subtitle = typeof assets?.artworkSubtitle === 'string' ? assets.artworkSubtitle : '和阿舟一起，把想法做出来。';
+  let titleUsesDefault = typeof assets?.introTitle !== 'string';
+  let captionUsesDefault = typeof assets?.introCaption !== 'string';
+  let subtitleUsesDefault = typeof assets?.artworkSubtitle !== 'string';
+  let title = titleUsesDefault ? t('animation.title.default') : assets.introTitle;
+  let caption = captionUsesDefault ? t('animation.caption.default') : assets.introCaption;
+  let subtitle = subtitleUsesDefault ? t('animation.subtitle.default') : assets.artworkSubtitle;
   let subtitleLines = [];
   let subtitleFontSize = 39;
   let subtitleLineHeight = 36;
@@ -51,11 +102,16 @@ function installAnimation(
   let identityLayoutKey = '';
   let identityRenderedLayoutKey = '';
   let identityLayoutGeneration = 0;
-  const STAGE_LABELS = {
-    pulse: '实验室正在亮起来', identity: '阿舟正在准备工作台', dispersing: '头像与文字散成线稿',
-    scattered: '线稿正在汇聚', drawing: '阿舟和背景正在显现', colorize: '同一幅画面正在上色',
-    portrait: subtitle, shutter: '动画即将结束', complete: '已结束',
-  };
+  function createStageLabels() {
+    return {
+      pulse: t('animation.stage.pulse'), identity: t('animation.stage.identity'),
+      dispersing: t('animation.stage.dispersing'), scattered: t('animation.stage.scattered'),
+      drawing: t('animation.stage.drawing'), colorize: t('animation.stage.colorize'),
+      portrait: t('animation.stage.portrait'), shutter: t('animation.stage.shutter'),
+      complete: t('animation.stage.complete'),
+    };
+  }
+  let STAGE_LABELS = createStageLabels();
   let rawAvatar = typeof assets?.avatar === 'string' ? assets.avatar : assets?.avatar?.dataURL;
   let rawArtwork = typeof assets?.artwork === 'string' ? assets.artwork : assets?.artwork?.dataURL;
   let contours = assets?.contours || assets?.artwork?.contours;
@@ -66,6 +122,7 @@ function installAnimation(
     if (typeof createImageSettingsFactory === 'function') {
       imageSettings = createImageSettingsFactory({
         document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
+        localization, appearanceAvatar: frameSpec?.assets?.entryAvatar,
       });
     }
   } catch {}
@@ -118,14 +175,20 @@ function installAnimation(
   let startAfterPrepare = false;
   let reduced = false;
   let settingsLoadReason = '';
+  let errorDetail = '';
   let scale = 1;
   let offsetX = 0;
   let offsetY = 0;
+  let visibleLogicalWidth = WIDTH;
+  let layoutKey = '';
+  let lastStaticRenderKey = '';
+  let appearanceRevision = 0;
   let pixelRatio = 1;
   let lastDuration = 0;
   let lastRAFTime = 0;
   let gapCount = 0;
   let drawCount = 0;
+  let sceneRenderCount = 0;
   const gapSamples = new window.Float32Array(2048);
   const drawSamples = new window.Float32Array(2048);
   const releasedImages = new WeakSet();
@@ -231,12 +294,76 @@ function installAnimation(
     return node;
   }
 
+  function setButtonLabel(button, key, prefix = '') {
+    if (!button) return;
+    const label = t(key);
+    if (button === skipButton) {
+      const textNode = Array.from(button.childNodes).find(node => node.nodeType === 3);
+      const space = button.querySelector('kbd') ? ' ' : '';
+      if (textNode) textNode.nodeValue = prefix + label + space;
+      else button.insertBefore(document.createTextNode(prefix + label + space), button.firstChild);
+    } else {
+      button.textContent = prefix + label;
+    }
+    button.setAttribute('aria-label', label);
+  }
+
+  function refreshLocalizedUI() {
+    STAGE_LABELS = createStageLabels();
+    if (root) root.setAttribute('aria-label', t('animation.accessibility.root'));
+    if (canvas) canvas.setAttribute('aria-label', t('animation.accessibility.canvas'));
+    if (stageText) stageText.textContent = STAGE_LABELS[phaseAt(elapsed)];
+    if (progressText) {
+      progressText.setAttribute('aria-label', t('animation.accessibility.progress'));
+      progressText.textContent = t('animation.progress', { percent: Math.round(progressAt(elapsed) * 100) });
+    }
+    if (skipButton) {
+      skipButton.setAttribute('aria-label', t('animation.accessibility.skip'));
+      setButtonLabel(skipButton, 'animation.control.skip');
+    }
+    if (timeline) timeline.setAttribute('aria-label', t('animation.accessibility.timeline'));
+    if (elapsedText) elapsedText.textContent = t('animation.elapsed', {
+      elapsed: (elapsed / 1000).toFixed(1), duration: (DURATION / 1000).toFixed(1),
+    });
+    if (pauseButton) setButtonLabel(pauseButton, rafId ? 'animation.control.pause' : 'animation.control.resume');
+    if (replayButton) setButtonLabel(replayButton, 'animation.control.replay', '↻ ');
+    const previewBrand = document.querySelector('[data-agent-skin-preview-brand]');
+    const previewCaption = document.querySelector('[data-agent-skin-preview-caption]');
+    if (previewBrand) previewBrand.textContent = t('animation.title.default');
+    if (previewCaption) {
+      previewCaption.textContent = `${t('animation.preview.title')} · ${t('animation.preview.canvas')}`;
+    }
+    if (document.title) document.title = `${t('animation.title.default')} · ${t('animation.preview.title')}`;
+    if (root) {
+      const currentStage = phaseAt(elapsed);
+      root.dataset.stage = currentStage;
+      lastStage = currentStage;
+    }
+  }
+
+  function applyAppearanceStyles() {
+    const docRoot = document.documentElement;
+    if (!docRoot) return;
+    docRoot.lang = appearance.locale;
+    docRoot.dataset.theme = appearance.theme;
+    docRoot.style.colorScheme = appearance.theme;
+    for (const key of ['surface', 'text', 'muted', 'border']) {
+      docRoot.style.setProperty(`--agent-skin-${key}`, appearance.colors[key]);
+    }
+    if (root) {
+      root.dataset.theme = appearance.theme;
+      for (const key of ['surface', 'text', 'muted', 'border']) {
+        root.style.setProperty(`--agent-skin-${key}`, appearance.colors[key]);
+      }
+    }
+  }
+
   function mountDOM() {
     if (!root) {
       root = document.createElement('section');
       root.setAttribute('data-agent-skin-stage', '');
-      root.setAttribute('aria-label', 'Agent Skin 启动动画');
-      root.style.cssText = 'position:fixed;inset:0;overflow:hidden;background:#10121c;color:#fff8ef;z-index:2147483647;font:16px/1.4 system-ui,sans-serif';
+      root.setAttribute('aria-label', t('animation.accessibility.root'));
+      root.style.cssText = 'position:fixed;inset:0;overflow:hidden;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);z-index:2147483647;font:16px/1.4 system-ui,sans-serif';
       document.body.appendChild(root);
     }
     root.dataset.duration = '12';
@@ -247,7 +374,7 @@ function installAnimation(
     canvas = root.querySelector('canvas[data-agent-skin-canvas]');
     if (!canvas) canvas = createElement('canvas', root, {
       'data-agent-skin-canvas': '', 'data-coordinate-size': '1536x1024',
-      'role': 'img', 'aria-label': '阿舟头像与同一背景线稿构成的启动动画',
+      'role': 'img', 'aria-label': t('animation.accessibility.canvas'),
     });
     canvas.dataset.coordinateSize = '1536x1024';
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
@@ -256,21 +383,21 @@ function installAnimation(
 
     stageText = root.querySelector('[data-agent-skin-stage-text]');
     if (!stageText) stageText = createElement('span', root, {
-      'data-agent-skin-stage-text': '', 'aria-live': 'polite', 'text': '实验室正在亮起来',
+      'data-agent-skin-stage-text': '', 'aria-live': 'polite', 'text': t('animation.stage.pulse'),
     });
-    stageText.style.cssText = 'position:absolute;left:50%;bottom:8%;transform:translateX(-50%);max-width:82vw;color:#fff8ef;text-align:center;letter-spacing:.04em;text-shadow:0 2px 20px #17152d';
+    stageText.style.cssText = 'position:absolute;left:50%;bottom:8%;transform:translateX(-50%);max-width:82vw;color:var(--agent-skin-text,#fff8ef);text-align:center;letter-spacing:.04em;text-shadow:0 2px 20px #17152d';
 
     progressText = root.querySelector('[data-agent-skin-progress]');
     if (!progressText) progressText = createElement('span', root, {
-      'data-agent-skin-progress': '', 'aria-label': '动画进度', 'text': '动画进度 0%',
+      'data-agent-skin-progress': '', 'aria-label': t('animation.accessibility.progress'), 'text': t('animation.progress', { percent: 0 }),
     });
-    progressText.style.cssText = 'position:absolute;left:50%;bottom:4%;transform:translateX(-50%);color:#fff8ef;font:12px/1.2 system-ui,sans-serif;opacity:.82';
+    progressText.style.cssText = 'position:absolute;left:50%;bottom:4%;transform:translateX(-50%);color:var(--agent-skin-muted,#fff8ef);font:12px/1.2 system-ui,sans-serif;opacity:.92';
 
     skipButton = root.querySelector('[data-agent-skin-skip]');
     if (!skipButton) skipButton = createElement('button', root, {
-      'data-agent-skin-skip': '', 'type': 'button', 'aria-label': '跳过动画', 'text': '跳过',
+      'data-agent-skin-skip': '', 'type': 'button', 'aria-label': t('animation.accessibility.skip'), 'text': t('animation.control.skip'),
     });
-    skipButton.style.cssText = 'position:absolute;z-index:2;right:24px;top:20px;border:1px solid #ffffff66;border-radius:999px;padding:8px 16px;background:#18192b99;color:#fff8ef;font:14px system-ui,sans-serif;cursor:pointer';
+    skipButton.style.cssText = 'position:absolute;z-index:2;right:24px;top:20px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.4));border-radius:999px;padding:8px 16px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);font:14px system-ui,sans-serif;cursor:pointer';
 
     timeline = isLocalPreview ? document.getElementById('timeline') : null;
     elapsedText = isLocalPreview ? document.getElementById('elapsed') : null;
@@ -278,6 +405,8 @@ function installAnimation(
     replayButton = isLocalPreview ? document.getElementById('replay') : null;
     const controls = document.getElementById('preview-controls');
     if (controls) controls.hidden = !isLocalPreview;
+    applyAppearanceStyles();
+    refreshLocalizedUI();
   }
 
   function updateLayout() {
@@ -298,9 +427,16 @@ function installAnimation(
     scale = Math.max(width / WIDTH, height / HEIGHT);
     offsetX = (width - WIDTH * scale) / 2;
     offsetY = (height - HEIGHT * scale) / 2;
-    const visibleLogicalWidth = Math.min(WIDTH, width / scale);
-    fitSubtitle(visibleLogicalWidth);
-    const identityLayoutChanged = fitIdentity(visibleLogicalWidth);
+    const nextVisibleLogicalWidth = Math.min(WIDTH, width / scale);
+    visibleLogicalWidth = nextVisibleLogicalWidth;
+    fitSubtitle(nextVisibleLogicalWidth);
+    const identityLayoutChanged = fitIdentity(nextVisibleLogicalWidth);
+    const nextLayoutKey = [width, height, pixelRatio, scale, offsetX, offsetY, nextVisibleLogicalWidth]
+      .map(value => Number(value).toFixed(3)).join(':');
+    if (nextLayoutKey !== layoutKey) {
+      layoutKey = nextLayoutKey;
+      lastStaticRenderKey = '';
+    }
     if (loaded && identityLayoutChanged) {
       seekRequestGeneration++;
       renderIdentityBitmap(generation).catch(() => {});
@@ -367,6 +503,7 @@ function installAnimation(
       coordinateSize: { width: WIDTH, height: HEIGHT },
       resources: { ...resources, framesPending: rafId ? 1 : 0 },
       jsFrame: {
+        sceneRenderCount,
         rafIntervalMs: sortedStats(gapSamples, gapCount),
         renderSubmissionMs: sortedStats(drawSamples, drawCount),
         scope: 'JavaScript rAF interval and 2D canvas submission; excludes GPU/compositor/presentation timing',
@@ -383,8 +520,10 @@ function installAnimation(
     }
     if (milliseconds - lastUI >= 60 || milliseconds === 0 || milliseconds === DURATION) {
       const progress = Math.round(progressAt(milliseconds) * 100);
-      if (progressText) progressText.textContent = `动画进度 ${progress}%`;
-      if (elapsedText) elapsedText.textContent = `${(milliseconds / 1000).toFixed(1)} / 12.0 秒`;
+      if (progressText) progressText.textContent = t('animation.progress', { percent: progress });
+      if (elapsedText) elapsedText.textContent = t('animation.elapsed', {
+        elapsed: (milliseconds / 1000).toFixed(1), duration: '12.0',
+      });
       if (timeline) timeline.value = String(milliseconds / 1000);
       lastUI = milliseconds;
     }
@@ -393,7 +532,7 @@ function installAnimation(
   function setWorldTransform() {
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = '#10121c';
+    context.fillStyle = appearance.colors.surface;
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.setTransform(pixelRatio * scale, 0, 0, pixelRatio * scale,
       pixelRatio * offsetX, pixelRatio * offsetY);
@@ -401,23 +540,24 @@ function installAnimation(
 
   function drawPulse(milliseconds) {
     const pulse = reduced ? 0.5 : 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(milliseconds / 180));
-    context.strokeStyle = 'rgb(251 216 178)';
+    context.strokeStyle = appearance.colors.text;
     context.globalAlpha = 0.18 + pulse * 0.3;
     context.lineWidth = 3;
     context.beginPath();
     context.arc(768, 442, 166 + pulse * 18, 0, Math.PI * 2);
     context.stroke();
     context.globalAlpha = 1;
-    context.fillStyle = 'rgba(255, 248, 239, .85)';
+    context.fillStyle = appearance.colors.text;
     context.font = '600 22px system-ui, sans-serif';
     context.textAlign = 'center';
-    context.fillText('AGENT SKIN', 768, 720);
+    context.fillText(t('animation.title.default'), 768, 720);
   }
 
   function drawIdentity(alpha = 1) {
-    if (!identityBitmap) return;
+    const source = identityBitmap || identityCanvas;
+    if (!source) return;
     context.globalAlpha = alpha;
-    context.drawImage(identityBitmap, 0, 0, WIDTH, HEIGHT);
+    context.drawImage(source, 0, 0, WIDTH, HEIGHT);
     context.globalAlpha = 1;
   }
 
@@ -453,7 +593,7 @@ function installAnimation(
     const progress = clamp(amount);
     const front = 1.5 * progress - 0.25;
     const arrivalBand = clamp(pathFragmentSpan / WIDTH, 0.01, 0.12);
-    context.strokeStyle = 'rgba(255, 248, 239, .92)';
+    context.strokeStyle = appearance.colors.text;
     context.lineWidth = 2.4;
     context.lineJoin = 'round';
     context.lineCap = 'round';
@@ -485,9 +625,11 @@ function installAnimation(
     context.fillStyle = 'rgba(18, 18, 32, .16)';
     context.fillRect(0, 0, WIDTH, HEIGHT);
     const progress = reduced ? progressAt(7430) : progressAt(milliseconds);
-    context.fillStyle = 'rgba(16, 18, 28, .76)';
+    context.fillStyle = appearance.colors.surface;
+    context.globalAlpha = 0.88;
     context.fillRect(subtitlePanelX, 794, subtitlePanelWidth, 174);
-    context.fillStyle = '#fff8ef';
+    context.globalAlpha = 1;
+    context.fillStyle = appearance.colors.text;
     context.textAlign = 'center';
     context.font = `600 ${subtitleFontSize}px system-ui, sans-serif`;
     const blockHeight = subtitleLines.length * subtitleLineHeight;
@@ -497,9 +639,9 @@ function installAnimation(
     }
     const progressWidth = Math.min(756, subtitlePanelWidth * 0.65);
     const progressX = (WIDTH - progressWidth) / 2;
-    context.fillStyle = 'rgba(255, 248, 239, .28)';
+    context.fillStyle = appearance.colors.border;
     context.fillRect(progressX, 807, progressWidth, 4);
-    context.fillStyle = '#fff0d5';
+    context.fillStyle = appearance.colors.text;
     context.fillRect(progressX, 807, progressWidth * progress, 4);
   }
 
@@ -532,7 +674,7 @@ function installAnimation(
     } else {
       drawPortrait(milliseconds);
       const shutter = smooth((milliseconds - 11000) / 1000);
-      context.fillStyle = '#10121c';
+      context.fillStyle = appearance.colors.surface;
       if (reduced) {
         context.globalAlpha = shutter;
         context.fillRect(0, 0, WIDTH, HEIGHT);
@@ -542,16 +684,32 @@ function installAnimation(
         context.fillRect(WIDTH * (1 - shutter * 0.5), 0, WIDTH * shutter * 0.5, HEIGHT);
       }
     }
-    updateUI(milliseconds);
+  }
+
+  function staticFrameKey(milliseconds) {
+    const stage = phaseAt(milliseconds);
+    const isStatic = (stage === 'pulse' && reduced)
+      || (stage === 'identity' && milliseconds >= 1650)
+      || stage === 'scattered'
+      || (stage === 'portrait' && (reduced || milliseconds >= FINAL_PROGRESS_PLATEAU_MS));
+    return isStatic
+      ? `${stage}:${reduced ? 'reduced' : 'full'}:${appearanceRevision}:${layoutKey}`
+      : '';
   }
 
   function drawAt(milliseconds, playbackFrame) {
     if (!context || disposed) return;
-    const started = performance.now();
     elapsed = clamp(milliseconds, 0, DURATION);
-    renderScene(elapsed);
-    const spent = Math.max(0, performance.now() - started);
-    if (drawCount < drawSamples.length) drawSamples[drawCount++] = spent;
+    const stableKey = staticFrameKey(elapsed);
+    if (!stableKey || stableKey !== lastStaticRenderKey) {
+      const started = performance.now();
+      renderScene(elapsed);
+      sceneRenderCount++;
+      const spent = Math.max(0, performance.now() - started);
+      if (drawCount < drawSamples.length) drawSamples[drawCount++] = spent;
+      lastStaticRenderKey = stableKey;
+    }
+    updateUI(elapsed);
     if (elapsed >= IDENTITY_RELEASE_MS) {
       seekRequestGeneration++;
       releaseIdentityBitmap();
@@ -618,7 +776,7 @@ function installAnimation(
     resources.createdRAF++;
     resources.liveRAF = 1;
     root.dataset.playing = 'true';
-    if (pauseButton) pauseButton.textContent = '暂停';
+    if (pauseButton) setButtonLabel(pauseButton, 'animation.control.pause');
     return true;
   }
 
@@ -626,7 +784,7 @@ function installAnimation(
     if (disposed || !rafId) return false;
     stopClock();
     root.dataset.playing = 'false';
-    if (pauseButton) pauseButton.textContent = '继续';
+    if (pauseButton) setButtonLabel(pauseButton, 'animation.control.resume');
     return true;
   }
 
@@ -798,6 +956,18 @@ function installAnimation(
   }
 
   function preparePaths(stats) {
+    lineCanvas = document.createElement('canvas');
+    lineCanvas.width = WIDTH;
+    lineCanvas.height = HEIGHT;
+    resources.createdCanvases++;
+    resources.liveCanvases++;
+    lineContext = lineCanvas.getContext('2d', { alpha: true });
+    if (!lineContext) throw new Error('asset-invalid');
+    redrawLineCanvas();
+  }
+
+  function redrawLineCanvas() {
+    if (!lineContext) return;
     for (let pathIndex = 0; pathIndex < contours.length; pathIndex++) {
       const points = contours[pathIndex];
       const path = new Path2D();
@@ -811,18 +981,11 @@ function installAnimation(
       resources.createdPaths++;
       resources.livePaths++;
     }
-    lineCanvas = document.createElement('canvas');
-    lineCanvas.width = WIDTH;
-    lineCanvas.height = HEIGHT;
-    resources.createdCanvases++;
-    resources.liveCanvases++;
-    lineContext = lineCanvas.getContext('2d', { alpha: true });
-    if (!lineContext) throw new Error('asset-invalid');
     lineContext.clearRect(0, 0, WIDTH, HEIGHT);
     lineContext.lineWidth = 2.4;
     lineContext.lineJoin = 'round';
     lineContext.lineCap = 'round';
-    lineContext.strokeStyle = 'rgba(255, 248, 239, .92)';
+    lineContext.strokeStyle = appearance.colors.text;
     for (let index = 0; index < cachedPaths.length; index++) lineContext.stroke(cachedPaths[index]);
     resources.releasedPaths += cachedPaths.length;
     resources.livePaths -= cachedPaths.length;
@@ -941,7 +1104,7 @@ function installAnimation(
     identityContext.clip();
     identityContext.drawImage(avatarBitmap, centerX - avatarSize / 2, centerY - avatarSize / 2, avatarSize, avatarSize);
     identityContext.restore();
-    identityContext.strokeStyle = 'rgba(255, 246, 226, .9)';
+    identityContext.strokeStyle = appearance.colors.text;
     identityContext.lineWidth = 4;
     identityContext.beginPath();
     identityContext.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
@@ -957,7 +1120,7 @@ function installAnimation(
         titleFontSize = Math.max(20, titleFontSize * textWidth / measuredTitleWidth);
       }
       identityContext.textAlign = 'center';
-      identityContext.fillStyle = '#fff8ef';
+      identityContext.fillStyle = appearance.colors.text;
       identityContext.font = `700 ${titleFontSize}px system-ui, sans-serif`;
       identityContext.fillText(title, centerX, titleBaseline, textWidth);
     }
@@ -981,7 +1144,7 @@ function installAnimation(
         }
       }
       if (line) captionLines.push(line);
-      identityContext.fillStyle = 'rgba(255, 248, 239, .76)';
+      identityContext.fillStyle = appearance.colors.muted;
       identityContext.textAlign = 'center';
       const firstCaptionBaseline = title
         ? titleBaseline + Math.max(40, Math.min(64, titleFontSize * 0.78))
@@ -1064,31 +1227,45 @@ function installAnimation(
     timeoutIds.clear();
   }
 
-  function applySettingsRecord(record) {
+  function applySettingsRecord(record, storedRecord) {
     if (!record || typeof record !== 'object') return;
     assets = record;
     rawAvatar = typeof record.avatar === 'string' ? record.avatar : record.avatar?.dataURL;
     rawArtwork = typeof record.artwork === 'string' ? record.artwork : record.artwork?.dataURL;
     contours = record.contours || record.artwork?.contours;
-    title = typeof record.introTitle === 'string' ? record.introTitle : '阿舟的 Agent 实验室';
-    caption = typeof record.introCaption === 'string' ? record.introCaption : 'AZHOU / AGENT LAB';
-    subtitle = typeof record.artworkSubtitle === 'string' ? record.artworkSubtitle : '和阿舟一起，把想法做出来。';
-    STAGE_LABELS.portrait = subtitle;
+    const hasExplicitText = key => (settingsLoadReason === '' && typeof storedRecord?.[key] === 'string')
+      || typeof defaultAssets?.[key] === 'string';
+    titleUsesDefault = !hasExplicitText('introTitle');
+    captionUsesDefault = !hasExplicitText('introCaption');
+    subtitleUsesDefault = !hasExplicitText('artworkSubtitle');
+    title = titleUsesDefault ? t('animation.title.default') : record.introTitle;
+    caption = captionUsesDefault ? t('animation.caption.default') : record.introCaption;
+    subtitle = subtitleUsesDefault ? t('animation.subtitle.default') : record.artworkSubtitle;
+    fitSubtitle(visibleLogicalWidth);
+    STAGE_LABELS = createStageLabels();
   }
 
   function showWallpaperFailure() {
     const notice = root.querySelector('[data-agent-skin-wallpaper-result]')
       || createElement('div', root, { 'data-agent-skin-wallpaper-result': '', role: 'status' });
-    notice.textContent = '设置已保存，但壁纸未能应用。';
-    notice.style.cssText = 'position:absolute;z-index:4;left:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid #f2ca7977;border-radius:10px;background:#211f2beF;color:#fff4d2;box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
+    notice.replaceChildren();
+    const heading = createElement('strong', notice, {
+      'data-agent-skin-wallpaper-title': '', 'text': t('animation.wallpaper.failed.title'),
+    });
+    const body = createElement('div', notice, {
+      'data-agent-skin-wallpaper-body': '', 'text': t('animation.wallpaper.failed.body'),
+    });
+    heading.style.display = 'block';
+    body.style.marginTop = '4px';
+    notice.style.cssText = 'position:absolute;z-index:4;left:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.18));border-radius:10px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
   }
 
   function showSettingsFallbackNotice() {
     if (!settingsLoadReason || !root) return;
     const notice = root.querySelector('[data-agent-skin-settings-result]')
       || createElement('div', root, { 'data-agent-skin-settings-result': '', role: 'status' });
-    notice.textContent = '暂时无法载入已保存设置，动画正在使用默认设置。已保存记录未更改。';
-    notice.style.cssText = 'position:absolute;z-index:4;right:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid #ffffff38;border-radius:10px;background:#211f2beF;color:#fff8ef;box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
+    notice.textContent = t('settings.load.unavailable');
+    notice.style.cssText = 'position:absolute;z-index:4;right:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.18));border-radius:10px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
   }
 
   async function prepare(currentGeneration) {
@@ -1099,7 +1276,7 @@ function installAnimation(
         const loadedSettings = await imageSettings.load(defaultAssets);
         if (disposed || currentGeneration !== generation) return;
         settingsLoadReason = typeof loadedSettings?.reason === 'string' ? loadedSettings.reason : '';
-        applySettingsRecord(loadedSettings.settings);
+        applySettingsRecord(loadedSettings.settings, loadedSettings.baseline);
       } catch {
         if (disposed || currentGeneration !== generation) return;
         settingsLoadReason = 'settings-unavailable';
@@ -1149,12 +1326,17 @@ function installAnimation(
     artworkBitmap = images[1];
     if (avatarBitmap !== avatarImage) { releaseImage(avatarImage); avatarImage = null; }
     if (artworkBitmap !== artworkImage) { releaseImage(artworkImage); artworkImage = null; }
+    const lineAppearanceRevision = appearanceRevision;
     preparePaths(stats);
+    let preparedAppearanceRevision;
     do {
+      preparedAppearanceRevision = appearanceRevision;
       await prepareIdentityBitmap(currentGeneration);
       if (disposed || currentGeneration !== generation) return;
-    } while (identityRenderedLayoutKey !== identityLayoutKey);
+    } while (identityRenderedLayoutKey !== identityLayoutKey
+      || preparedAppearanceRevision !== appearanceRevision);
     if (disposed || currentGeneration !== generation) return;
+    if (lineAppearanceRevision !== appearanceRevision) redrawLineCanvas();
     preparePathFragments(stats);
     loaded = true;
     preparing = false;
@@ -1165,7 +1347,7 @@ function installAnimation(
     showSettingsFallbackNotice();
     if (!readySent) {
       readySent = true;
-      message('ready', { duration: DURATION });
+      message('ready', { duration: DURATION, locale: localization?.locale || locale });
     }
     if (frameSpec?.intent === 'play') {
       let wallpaperResult;
@@ -1218,6 +1400,7 @@ function installAnimation(
         if (identityBitmap && identityBitmap !== identityCanvas) releaseIdentityBitmap();
         identityBitmap = bitmap;
         identityBitmapOwned = bitmap !== identityCanvas;
+        lastStaticRenderKey = '';
         drawAt(elapsed, false);
       }).catch(() => {});
     }
@@ -1247,6 +1430,7 @@ function installAnimation(
     lastStage = '';
     gapCount = 0;
     drawCount = 0;
+    sceneRenderCount = 0;
     lastRAFTime = 0;
     startAfterPrepare = true;
     root.dataset.completed = 'false';
@@ -1274,10 +1458,19 @@ function installAnimation(
   }
 
   function showError(text) {
+    errorDetail = text === undefined || text === null ? '' : String(text);
     const panel = root.querySelector('[data-agent-skin-error]')
       || createElement('div', root, { 'data-agent-skin-error': '', role: 'alert' });
-    panel.textContent = String(text || '动画准备失败。');
-    panel.style.cssText = 'position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(700px,90vw);padding:18px 22px;border:1px solid #ffffff38;border-radius:12px;background:#18192bee;color:#fff8ef;text-align:center;box-shadow:0 12px 40px #0008';
+    panel.replaceChildren();
+    const heading = createElement('strong', panel, {
+      'data-agent-skin-error-title': '', 'text': t('animation.error.title'),
+    });
+    const body = createElement('div', panel, {
+      'data-agent-skin-error-body': '', 'text': errorDetail || t('animation.error.body'),
+    });
+    heading.style.display = 'block';
+    body.style.marginTop = '6px';
+    panel.style.cssText = 'position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(700px,90vw);padding:18px 22px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.18));border-radius:12px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);text-align:center;box-shadow:0 12px 40px #0008';
   }
 
   function openSettingsPanel() {
@@ -1342,6 +1535,67 @@ function installAnimation(
     if (loaded) drawAt(elapsed, false);
   }
 
+  function redrawIdentityForAppearance() {
+    if (!loaded || !identityCanvas || !avatarBitmap) return;
+    seekRequestGeneration++;
+    identityLayoutGeneration++;
+    drawIdentityLayout();
+    buildIdentityFragments();
+    identityRenderedLayoutKey = identityLayoutKey;
+    releaseIdentityBitmap();
+    identityBitmap = identityCanvas;
+    identityBitmapOwned = false;
+  }
+
+  function updateAppearance(nextAppearance) {
+    if (disposed || !nextAppearance || typeof nextAppearance !== 'object') return false;
+    let changed = false;
+    let localeChanged = false;
+    if (typeof nextAppearance.locale === 'string') {
+      const nextLocale = normalizeLocale(nextAppearance.locale);
+      if (nextLocale !== locale) {
+        locale = nextLocale;
+        appearance.locale = nextLocale;
+        try { localization?.setLocale?.(nextLocale); } catch {}
+        if (titleUsesDefault) title = t('animation.title.default');
+        if (captionUsesDefault) caption = t('animation.caption.default');
+        if (subtitleUsesDefault) subtitle = t('animation.subtitle.default');
+        fitSubtitle(visibleLogicalWidth);
+        STAGE_LABELS = createStageLabels();
+        localeChanged = true;
+        changed = true;
+      }
+    }
+    if (nextAppearance.theme === 'light' || nextAppearance.theme === 'dark') {
+      if (appearance.theme !== nextAppearance.theme) {
+        appearance.theme = nextAppearance.theme;
+        changed = true;
+      }
+    }
+    const nextColors = sanitizeColors(nextAppearance.colors);
+    for (const key of ['surface', 'text', 'muted', 'border']) {
+      if (nextColors[key] && nextColors[key] !== appearance.colors[key]) {
+        appearance.colors[key] = nextColors[key];
+        changed = true;
+      }
+    }
+    applyAppearanceStyles();
+    refreshLocalizedUI();
+    if (changed) {
+      appearanceRevision++;
+      lastStaticRenderKey = '';
+      if (loaded) {
+        if (localeChanged || nextColors.text || nextColors.muted) redrawIdentityForAppearance();
+        if (nextColors.text) redrawLineCanvas();
+        drawAt(elapsed, false);
+      }
+      if (root?.querySelector('[data-agent-skin-wallpaper-result]')) showWallpaperFailure();
+      if (root?.querySelector('[data-agent-skin-settings-result]')) showSettingsFallbackNotice();
+      if (errorDetail || root?.querySelector('[data-agent-skin-error]')) showError(errorDetail);
+    }
+    return true;
+  }
+
   function onMotionChange(event) {
     setReduced(event.matches);
   }
@@ -1383,14 +1637,22 @@ function installAnimation(
     const preview = {
       replay, seek, pause, resume: startClock, skip: onSkip, setReduced, report,
       beginLaunch, promoteLaunch,
-      waiting() { if (stageText) stageText.textContent = '仍在等待 Codex 启动…'; },
+      waiting() { if (stageText) stageText.textContent = t('animation.waiting'); },
+      updateAppearance,
       error: showError,
     };
     return {
       dispose,
       openSettings: openSettingsPanel,
+      updateAppearance,
       preview,
     };
+  }
+
+  if (!localization || typeof localization.t !== 'function') {
+    message('assetError', { reason: 'localization-unavailable' });
+    try { imageSettings?.dispose(); } catch {}
+    return { dispose: () => false };
   }
 
   try {
@@ -1437,6 +1699,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined'
     environment.setTimeout.bind(environment), environment.clearTimeout.bind(environment),
     undefined, sendPreview,
     Object.freeze({ runId: 'local-preview', intent: 'preview', protocolVersion: 1, assets: settings }),
+    environment.createImageSettings, environment.createLocalization,
   );
   if (!environment.webkit?.messageHandlers?.launcher) {
     environment.launcherUI = Object.assign(localHandle.preview, { dispose: localHandle.dispose });

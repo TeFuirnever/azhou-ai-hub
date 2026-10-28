@@ -28,29 +28,30 @@ PAYLOAD = ROOT / '.build/azhou-payload'
 REGISTRY_TOOL = ROOT / '.build/azhou-install-registry'
 MARKER = Path('Contents/Resources/azhou-build.json')
 PROJECT_ID = 'azhou.codex-startup-animation'
-VERSION = '0.8.0'
-BUILD = '9'
+VERSION = '0.9.0'
+BUILD = '10'
 ICON_NAME = 'AzhouAppIcon.icns'
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift',
     'tools/build-macos.sh', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json',
-    'extension/renderer.mjs', 'image-settings.js', 'wallpaper/renderer.js',
+    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
-    'extension/renderer.mjs', 'image-settings.js', 'wallpaper/renderer.js',
+    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json',
 )
 STARTUP_OUTPUTS = (
     'startup/install.js',
-    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js',
-    'web/assets/defaults/avatar.png', 'web/assets/defaults/artwork.png',
+    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
+    'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
 )
 MAX_STARTUP_BYTES = 24 * 1024 * 1024
 MAX_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
+MAX_ENTRY_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
 MAX_ARTWORK_DATA_URL_BYTES = 12 * 1024 * 1024
 
 
@@ -410,7 +411,7 @@ def verify_startup(path, info, marker):
             raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
         output_bytes[relative] = data
 
-    for source_name in ('index.html', 'style.css', 'animation.js', 'image-settings.js'):
+    for source_name in ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js'):
         copied = output_bytes['web/' + source_name]
         source_digest = marker['inputs'].get(source_name)
         if source_digest != hashlib.sha256(copied).hexdigest():
@@ -425,14 +426,13 @@ def verify_startup(path, info, marker):
         preview_assets = json.loads(defaults[len(prefix):-len(suffix)].decode('utf-8'))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError('默认素材 JavaScript 不是受控 JSON 数据。') from exc
-    required_asset_keys = {
-        'avatar', 'artwork', 'artworkSHA256', 'contours', 'introTitle',
-        'introCaption', 'artworkSubtitle', 'wallpaperStrength',
-    }
+    required_asset_keys = {'avatar', 'entryAvatar', 'artwork', 'artworkSHA256', 'contours', 'wallpaperStrength'}
     if not isinstance(preview_assets, dict) or set(preview_assets) != required_asset_keys:
         raise RuntimeError('默认素材对象字段与 Agent Skin 资源契约不符。')
+    image_details = {}
     for key, relative, size_limit in (
         ('avatar', 'web/assets/defaults/avatar.png', MAX_AVATAR_DATA_URL_BYTES),
+        ('entryAvatar', 'web/assets/defaults/entry-avatar.png', MAX_ENTRY_AVATAR_DATA_URL_BYTES),
         ('artwork', 'web/assets/defaults/artwork.png', MAX_ARTWORK_DATA_URL_BYTES),
     ):
         encoded = preview_assets.get(key)
@@ -447,9 +447,15 @@ def verify_startup(path, info, marker):
         if image_bytes != output_bytes[relative]:
             raise RuntimeError(f'预览默认 {key} 与打包 PNG 字节不一致。')
         details = png_details(image_bytes, relative)
-        expected = (512, 512) if key == 'avatar' else (1536, 1024)
-        if (details['width'], details['height']) != expected:
-            raise RuntimeError(f'默认 {key} 必须为 {expected[0]}×{expected[1]} PNG。')
+        image_details[key] = details
+        if key == 'avatar':
+            expected = (512, 512)
+            if (details['width'], details['height']) != expected:
+                raise RuntimeError(f'默认 {key} 必须为 {expected[0]}×{expected[1]} PNG。')
+        elif key == 'entryAvatar' and (details['width'], details['height']) != (1254, 1254):
+            raise RuntimeError('默认 entryAvatar 必须为 1254×1254 PNG。')
+        elif key == 'artwork' and (details['width'], details['height']) != (1536, 1024):
+            raise RuntimeError('默认 artwork 必须为 1536×1024 PNG。')
 
     artwork_sha = hashlib.sha256(output_bytes['web/assets/defaults/artwork.png']).hexdigest()
     if preview_assets.get('artworkSHA256') != artwork_sha:
@@ -458,15 +464,15 @@ def verify_startup(path, info, marker):
     if (manifest.get('assets') != {
             'avatar': {'width': 512, 'height': 512,
                        'sha256': hashlib.sha256(output_bytes['web/assets/defaults/avatar.png']).hexdigest()},
+            'entryAvatar': {'width': image_details['entryAvatar']['width'],
+                            'height': image_details['entryAvatar']['height'],
+                            'sha256': hashlib.sha256(output_bytes['web/assets/defaults/entry-avatar.png']).hexdigest()},
             'artwork': {'width': 1536, 'height': 1024, 'sha256': artwork_sha},
             'contours': preview_assets['contours'],
             'contourPathCount': len(preview_assets['contours']),
             'contourPointCount': point_count,
             'contourArtworkSHA256': artwork_sha,
         }
-            or preview_assets.get('introTitle') != '阿舟的 Agent 实验室'
-            or preview_assets.get('introCaption') != 'AZHOU / AGENT LAB'
-            or preview_assets.get('artworkSubtitle') != '和阿舟一起，把想法做出来。'
             or preview_assets.get('wallpaperStrength') != 42):
         raise RuntimeError('startup manifest 默认图像、线稿配准或文字默认值无效。')
 
@@ -485,11 +491,39 @@ def verify_startup(path, info, marker):
     return manifest
 
 
+def verify_localized_names(path, info):
+    if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != ('Azhou AI Lab', 'Azhou AI Lab'):
+        raise RuntimeError('Native bundle fallback display name must be Azhou AI Lab.')
+    resources = Path(path) / 'Contents/Resources'
+    expected = {
+        'en.lproj/InfoPlist.strings': (
+            '"CFBundleDisplayName" = "Azhou AI Lab";\n'
+            '"CFBundleName" = "Azhou AI Lab";\n'
+        ),
+        'zh-Hans.lproj/InfoPlist.strings': (
+            '"CFBundleDisplayName" = "阿舟 AI 实验室";\n'
+            '"CFBundleName" = "阿舟 AI 实验室";\n'
+        ),
+    }
+    for relative, text in expected.items():
+        candidate = resources / relative
+        if candidate.is_symlink() or not candidate.is_file():
+            raise RuntimeError(f'Native localized display-name resource is missing: {relative}')
+        try:
+            actual = candidate.read_text(encoding='utf-8')
+        except (OSError, UnicodeError) as exc:
+            raise RuntimeError(f'Native localized display-name resource is unreadable: {relative}') from exc
+        if actual != text:
+            raise RuntimeError(f'Native localized display-name resource is incorrect: {relative}')
+
+
 def verify_product(path):
     info = require(path, IDENTITY)
     marker = read_marker(path, required=True)
     if marker['projectID'] != PROJECT_ID or marker['projectRoot'] != str(ROOT):
         raise RuntimeError(f'来源不属于当前项目，保留未处理：{path}')
+    if (info.get('CFBundleShortVersionString'), str(info.get('CFBundleVersion'))) == (VERSION, BUILD):
+        verify_localized_names(path, info)
     verify_icon(path, info)
     verify_wallpaper(path, info, marker)
     if info.get('CFBundleShortVersionString') == VERSION:

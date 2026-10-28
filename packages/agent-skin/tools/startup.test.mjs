@@ -141,6 +141,53 @@ test('a visible appearance button opens settings after playback without a keyboa
   assert.equal(runs.length, 2, 'a disposed entry cannot reopen settings');
 });
 
+test('official language and theme flow into the overlay and update without restarting its run', () => {
+  const controlled = controlledHost();
+  const root = controlled.host.document.documentElement;
+  root.lang = 'en-US';
+  root.dataset = { theme: 'light' };
+  root.getAttribute = name => name === 'lang' ? root.lang : root.dataset.theme;
+  controlled.host.getComputedStyle = () => ({ getPropertyValue: name => ({
+    '--color-surface': '#fafafa', '--color-text-primary': '#202020',
+    '--color-text-secondary': '#606060', '--color-border': '#dddddd',
+  })[name] || '', colorScheme: root.dataset.theme });
+  const appearances = [];
+  let spec;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    spec = frameSpec;
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+    return { updateAppearance: value => appearances.push(value), dispose() {} };
+  };
+  payload.createLocalization = ({ locale }) => ({ t: key => ({
+    characterName: locale === 'en' ? 'Azhou' : '阿舟',
+    openAppearance: locale === 'en' ? 'Open appearance settings' : '打开外观设置',
+    appearanceLabel: locale === 'en' ? 'Azhou appearance settings' : '阿舟外观设置',
+    overlayLabel: locale === 'en' ? 'Azhou startup animation' : '阿舟启动动画',
+  })[key] });
+  payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
+  installStartup(payload, controlled.host);
+  assert.equal(spec.appearance.locale, 'en');
+  assert.equal(spec.appearance.theme, 'light');
+  assert.equal(spec.appearance.colors.surface, '#fafafa');
+  const api = controlled.host.__azhouStartup;
+  const runId = api.status().runId;
+  root.lang = 'zh-CN'; root.dataset.theme = 'dark';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appearances.at(-1).locale, 'zh-CN');
+  assert.equal(appearances.at(-1).theme, 'dark');
+  assert.equal(api.status().runId, runId);
+  assert.equal(controlled.frames.length, 1);
+  assert.equal(api.status().phase, 'playing');
+  const button = controlled.controls.find(node => node.tagName === 'button');
+  assert.equal(button.attributes.get('aria-label'), '阿舟外观设置');
+  assert.ok(controlled.controls.some(node => node.tagName === 'img' && node.src === payload.assets.entryAvatar));
+  api.dispose();
+  assert.ok(controlled.observers.every(observer => observer.disconnected));
+  root.lang = 'en'; controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appearances.at(-1).locale, 'zh-CN');
+});
+
 test('the real controller and default iframe mount execute an explicit parent-realm payload bridge', () => {
   const controlled = controlledHost();
   const observed = {};
@@ -161,8 +208,8 @@ test('the real controller and default iframe mount execute an explicit parent-re
   assert.equal(controlled.frames.length, 1);
   const frame = controlled.frames[0];
   assert.equal(frame.src, 'about:blank');
-  assert.equal(frame.attributes.get('title'), 'Agent Skin startup');
-  assert.equal(frame.attributes.get('aria-label'), 'Agent Skin startup overlay');
+  assert.equal(frame.attributes.get('title'), 'Azhou startup animation');
+  assert.equal(frame.attributes.get('aria-label'), 'Azhou startup animation');
   assert.equal(frame.contentWindow.evalCalls, 0);
   assert.equal(controlled.listenerCount(), 1);
 

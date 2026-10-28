@@ -125,7 +125,7 @@ try {
   ]);
   const imageSHA256 = createHash('sha256').update(imageBytes).digest('hex');
   const mime = options.image.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
-  const payload = { version: '0.8.0', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
+  const payload = { version: '0.9.0', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
   const installer = renderer.replace(/^export\s+(?=async function installRenderer)/m, '');
   assert.ok(!/^export\s/m.test(installer), 'Renderer must expose one self-contained function');
   const installExpression = '(async()=>{' + installer + '\nreturn await installRenderer(' + JSON.stringify(payload) + ');})()';
@@ -539,6 +539,33 @@ try {
     assert.equal(result.rejected, true); assert.ok(result.error.includes('namespace-conflict'));
     assert.deepEqual({ sameOwner: result.sameOwner, disposeCount: result.disposeCount, styleCount: result.styleCount },
       { sameOwner: true, disposeCount: 0, styleCount: 0 });
+    return result;
+  });
+  await check('known 0.8.0 and 0.7.1 wallpaper owners remain replaceable', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      __azhouWallpaper?.dispose();
+      const seen=[];
+      for(const version of ['0.8.0','0.7.1']){
+        let disposeCount=0;
+        const previous={owner:'azhou.codex-startup-animation',version,status(){return {version,applied:true};},
+          dispose(){disposeCount++;if(globalThis.__azhouWallpaper===previous)delete globalThis.__azhouWallpaper;}};
+        globalThis.__azhouWallpaper=previous;
+        try{
+          await __wallpaperFixture.installRenderer(__wallpaperFixture.payload);
+          const current=globalThis.__azhouWallpaper;
+          seen.push({previousVersion:version,disposeCount,currentVersion:current?.version,
+            applied:current?.status?.().applied===true});
+          current?.dispose();
+        }catch(error){seen.push({previousVersion:version,error:String(error?.message||error)});}
+      }
+      await __wallpaperFixture.apply();
+      return seen;
+    })()`);
+    assert.deepEqual(result.map(({ previousVersion, currentVersion, applied, error, disposeCount }) =>
+      ({ previousVersion, currentVersion, applied, error, disposeCount })), [
+      { previousVersion: '0.8.0', currentVersion: '0.9.0', applied: true, error: undefined, disposeCount: 1 },
+      { previousVersion: '0.7.1', currentVersion: '0.9.0', applied: true, error: undefined, disposeCount: 1 },
+    ]);
     return result;
   });
   await check('repeat apply / bad updates / dispose: bounded Blob and no resize listeners', async () => {

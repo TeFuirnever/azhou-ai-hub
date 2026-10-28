@@ -525,12 +525,113 @@ private final class StartupApplicationWaiter: @unchecked Sendable {
 }
 
 // The native window is retained only for explicit preview and smoke runs.
+enum NativeDisplayLocale: Equatable {
+    case chinese
+    case english
+
+    static func systemFallback(preferredLanguages: [String] = Locale.preferredLanguages) -> NativeDisplayLocale {
+        let language = (preferredLanguages.first ?? Locale.current.identifier).lowercased()
+        return language.hasPrefix("zh") ? .chinese : .english
+    }
+
+    static func verifiedReadyLocale(_ value: Any?) -> NativeDisplayLocale? {
+        switch value as? String {
+        case "zh-CN": return .chinese
+        case "en": return .english
+        default: return nil
+        }
+    }
+
+    var identifier: String {
+        switch self {
+        case .chinese: return "zh-CN"
+        case .english: return "en"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .chinese: return "阿舟 AI 实验室"
+        case .english: return "Azhou AI Lab"
+        }
+    }
+
+    var quitTitle: String {
+        switch self {
+        case .chinese: return "退出阿舟 AI 实验室"
+        case .english: return "Quit Azhou AI Lab"
+        }
+    }
+
+    var closeTitle: String {
+        switch self {
+        case .chinese: return "关闭"
+        case .english: return "Close"
+        }
+    }
+
+    func message(for reason: String) -> String {
+        switch reason {
+        case "resources-missing":
+            return self == .chinese ? "资源目录不可用。" : "The resource directory is unavailable."
+        case "page-missing":
+            return self == .chinese ? "动画页面缺失，请重新构建应用。" : "The animation page is missing. Rebuild the app."
+        case "target-launch-timeout":
+            return self == .chinese ? "等待 Codex 启动超时，请检查原应用入口。" : "Timed out waiting for Codex to launch. Check its original app entry."
+        case "renderer-ready-timeout":
+            return self == .chinese ? "动画播放器未能及时准备好，请关闭后重试。" : "The animation did not become ready in time. Close this window and try again."
+        case "renderer-complete-timeout":
+            return self == .chinese ? "动画未能按时完成，请关闭后重试。" : "The animation did not finish in time. Close this window and try again."
+        case "playback-start-error":
+            return self == .chinese ? "动画预览无法启动。" : "The animation preview could not be started."
+        case "javascript-error":
+            return self == .chinese ? "动画脚本运行失败。" : "The animation script failed."
+        case "asset-error":
+            return self == .chinese ? "阿舟素材加载失败，请检查本地素材并重新构建。" : "Azhou assets could not be loaded. Check the local assets and rebuild."
+        case "target-exited":
+            return self == .chinese ? "Codex 在交接前已经退出。" : "Codex exited before control was handed off."
+        case "activation-rejected":
+            return self == .chinese ? "系统没有接受 Codex 激活请求。请关闭此窗口，再从原应用入口打开。" : "macOS did not activate Codex. Close this window, then open it from the original app entry."
+        case "renderer-terminated":
+            return self == .chinese ? "WebKit 渲染进程已结束。" : "The WebKit rendering process ended."
+        case "target-missing":
+            return self == .chinese ? "没有找到有效的 Codex 主程序。" : "A valid Codex app was not found."
+        case "target-identity":
+            return self == .chinese ? "Codex 进程身份或签名核验未通过。" : "Codex process identity or signature verification failed."
+        case "listener-mismatch":
+            return self == .chinese ? "Codex 调试端口不属于已核验的主进程。" : "The Codex debug port does not belong to the verified process."
+        case "page-pending":
+            return self == .chinese ? "Codex 主页面尚未准备好。" : "The Codex main page is not ready."
+        case "page-unsupported":
+            return self == .chinese ? "当前 Codex 页面不符合启动接入要求。" : "This Codex page does not meet the startup requirements."
+        case "ambiguous-main-page":
+            return self == .chinese ? "找到多个 Codex 主页面，本次启动接入已拒绝。" : "Multiple Codex main pages were found. Startup integration was rejected."
+        case "owner-conflict", "startup-active":
+            return self == .chinese ? "Codex 页面已有启动控制器，本次没有覆盖或重播。" : "This Codex page already has a startup controller. It was not replaced or replayed."
+        case "startup-interrupted":
+            return self == .chinese ? "Codex 页面在启动接入期间发生变化。" : "The Codex page changed during startup integration."
+        case "attach-timeout":
+            return self == .chinese ? "Codex 启动接入超过阶段或总时间限制。" : "Codex startup integration exceeded its stage or total time limit."
+        case "asset-invalid":
+            return self == .chinese ? "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。" : "The production startup/install.js payload is missing or invalid. Codex was not opened or injected."
+        case "preview-promotion-error":
+            return self == .chinese ? "无法从预览切换到启动。" : "Could not switch from preview to launch."
+        case "navigation-error":
+            return self == .chinese ? "无法打开动画页面。" : "The animation page could not be opened."
+        default:
+            return self == .chinese ? "Codex 启动接入未完成；Codex 进程保持运行。" : "Codex startup integration did not finish. The Codex process remains running."
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
     private let args = CommandLine.arguments
     private let epoch = ProcessInfo.processInfo.systemUptime
     private let logLock = NSLock()
     private var window: NSWindow!, webView: WKWebView!
+    private var appMenuItem: NSMenuItem?, quitMenuItem: NSMenuItem?
+    private var displayLocale = NativeDisplayLocale.systemFallback()
     private var webRoot: URL?, targetURL: URL?, target: NSRunningApplication?
     private var logFile: FileHandle?, watchdog: Timer?
     private var lockFD: Int32 = -1
@@ -555,6 +656,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return args[i + 1]
     }
     private func real(_ url: URL) -> URL { url.resolvingSymlinksInPath().standardizedFileURL }
+    private func updateNativeDisplayLabels() {
+        appMenuItem?.title = displayLocale.displayName
+        quitMenuItem?.title = displayLocale.quitTitle
+        window?.title = displayLocale.displayName
+    }
     private func rectInfo(_ rect: NSRect) -> [String: Double] {
         ["x": Double(rect.origin.x), "y": Double(rect.origin.y),
          "width": Double(rect.width), "height": Double(rect.height)]
@@ -676,14 +782,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if smokeTest { logSmokeEvent("player-start", ["mode": "smoke"]) }
         else { log("player-start", ["mode": "preview", "targetPath": targetURL?.path ?? ""]) }
         let menu = NSMenu(), item = NSMenuItem(), submenu = NSMenu()
-        menu.addItem(item); item.submenu = submenu
-        submenu.addItem(withTitle: "退出阿舟启动 Codex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(item); item.submenu = submenu; appMenuItem = item
+        quitMenuItem = submenu.addItem(withTitle: displayLocale.quitTitle,
+                                       action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = menu
         let screen = NSScreen.main ?? NSScreen.screens.first
         let available = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         window = NSWindow(contentRect: available,
                           styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "阿舟启动 Codex"; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
+        window.title = displayLocale.displayName; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false; window.delegate = self
         window.backgroundColor = NSColor(srgbRed: 241/255, green: 234/255, blue: 223/255, alpha: 1)
         window.minSize = NSSize(width: min(640, available.width), height: min(420, available.height))
@@ -694,8 +801,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(self, name: "launcher")
         let nativeMode = preview ? "preview" : "launch"
+        let nativeTheme = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light"
+        let nativeAppearance: [String: String] = ["locale": displayLocale.identifier, "theme": nativeTheme]
+        let nativeAppearanceJSON = (try? JSONSerialization.data(withJSONObject: nativeAppearance, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"locale\":\"en\",\"theme\":\"light\"}"
         configuration.userContentController.addUserScript(WKUserScript(
-            source: "window.__agentSkinNativeMode = '\(nativeMode)';",
+            source: "window.__agentSkinNativeMode = '\(nativeMode)'; window.__agentSkinAppearance = Object.freeze(\(nativeAppearanceJSON));",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
@@ -704,11 +815,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         webView.underPageBackgroundColor = window.backgroundColor
         if #available(macOS 13.3, *), args.contains("--inspect") { webView.isInspectable = true }
         window.contentView!.addSubview(webView)
-        guard let resources = Bundle.main.resourceURL else { fail("资源目录不存在。", "resources-missing"); return }
+        guard let resources = Bundle.main.resourceURL else { fail(displayLocale.message(for: "resources-missing"), "resources-missing"); return }
         let root = resources.appendingPathComponent("web", isDirectory: true)
         webRoot = real(root)
         let page = root.appendingPathComponent("index.html")
-        guard FileManager.default.fileExists(atPath: page.path) else { fail("动画文件不存在，请重新构建。", "page-missing"); return }
+        guard FileManager.default.fileExists(atPath: page.path) else { fail(displayLocale.message(for: "page-missing"), "page-missing"); return }
         // Keep the window invisible until the renderer reports decoded assets.
         webView.loadFileURL(page, allowingReadAccessTo: root)
         armWatchdog(20, "renderer-ready-timeout")
@@ -718,8 +829,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         watchdog?.invalidate()
         watchdog = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
             guard let self, !self.terminating else { return }
-            self.fail(self.done ? "Codex 启动等待超时，请从原应用入口检查。" : "动画播放器没有按时完成，请关闭后重试。",
-                      self.done ? "target-launch-timeout" : reason)
+            let failureReason = self.done ? "target-launch-timeout" : reason
+            self.fail(self.displayLocale.message(for: failureReason), failureReason)
         }
     }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -729,6 +840,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         switch action {
         case "ready":
             guard !ready else { log("duplicate-ready-ignored"); return }
+            if let locale = NativeDisplayLocale.verifiedReadyLocale(body["locale"]) {
+                displayLocale = locale
+                updateNativeDisplayLabels()
+            }
             ready = true
             let milliseconds = (body["duration"] as? NSNumber)?.doubleValue ?? 0
             let duration = milliseconds.isFinite && milliseconds > 0 ? milliseconds / 1000 : 0
@@ -779,8 +894,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
             terminating = true; NSApp.terminate(nil)
-        case "jsError": fail(body["message"] as? String ?? "动画脚本运行失败。", "javascript-error")
-        case "assetError": fail(body["message"] as? String ?? "阿舟素材加载失败，请检查本地私有素材并重新构建。", "asset-error")
+        case "jsError": fail(displayLocale.message(for: "javascript-error"), "javascript-error")
+        case "assetError": fail(displayLocale.message(for: "asset-error"), "asset-error")
         default: log("unhandled-message", ["action": action])
         }
     }
@@ -1018,19 +1133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     private func startupMessage(_ reason: String) -> String {
-        switch reason {
-        case "target-missing": return "没有找到有效的 Codex 主程序。"
-        case "target-identity": return "Codex 进程身份或签名核验未通过。"
-        case "listener-mismatch": return "Codex 调试端口不属于已核验的主进程。"
-        case "page-pending": return "Codex 主页面尚未准备好。"
-        case "page-unsupported": return "当前 Codex 页面不符合启动接入要求。"
-        case "ambiguous-main-page": return "找到多个 Codex 主页面，本次启动接入已拒绝。"
-        case "owner-conflict", "startup-active": return "Codex 页面已有启动控制器，本次没有覆盖或重播。"
-        case "startup-interrupted": return "Codex 页面在启动接入期间发生变化。"
-        case "attach-timeout": return "Codex 启动接入超过阶段或总预算。"
-        case "asset-invalid": return "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。"
-        default: return "Codex 启动接入未完成；Codex 进程保持运行。"
-        }
+        displayLocale.message(for: reason)
     }
     @discardableResult
     private func activateOnce(_ reason: String) -> Bool {
@@ -1043,12 +1146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func finishIfReady(_ reason: String) {
         guard done, !preview, !terminating, !failed else { return }
-        if let target, target.isTerminated { fail("Codex 在交接前已经退出。", "target-exited"); return }
+        if let target, target.isTerminated { fail(displayLocale.message(for: "target-exited"), "target-exited"); return }
         guard !opening, let target, !target.isTerminated else {
             webView.evaluateJavaScript("window.launcherUI.waiting()"); log("waiting-for-target"); return
         }
         guard activateOnce(reason) else {
-            fail("系统没有接受 Codex 激活请求。请关闭此窗口后，从原应用入口打开。", "activation-rejected"); return
+            fail(displayLocale.message(for: "activation-rejected"), "activation-rejected"); return
         }
         terminating = true; watchdog?.invalidate(); snapshots.forEach { $0.cancel() }
         log("handoff-fade-start", ["frontmost": appInfo(NSWorkspace.shared.frontmostApplication)])
@@ -1076,8 +1179,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         } else { nativeError(message) }
     }
     private func nativeError(_ message: String) {
-        let alert = NSAlert(); alert.messageText = "阿舟启动 Codex"; alert.informativeText = message
-        alert.addButton(withTitle: "关闭"); NSApp.activate(ignoringOtherApps: true); alert.runModal()
+        let alert = NSAlert(); alert.messageText = displayLocale.displayName; alert.informativeText = message
+        alert.addButton(withTitle: displayLocale.closeTitle); NSApp.activate(ignoringOtherApps: true); alert.runModal()
         terminating = true; NSApp.terminate(nil)
     }
     private func scheduleSnapshots(_ duration: Double) {
@@ -1160,7 +1263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail("WebKit 渲染进程已结束。", "renderer-terminated") }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail(displayLocale.message(for: "renderer-terminated"), "renderer-terminated") }
 }
 #if !AGENT_SKIN_NATIVE_EVENT_TESTS
 @main

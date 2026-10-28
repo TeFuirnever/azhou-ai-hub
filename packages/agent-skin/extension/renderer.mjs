@@ -3,7 +3,7 @@ const WALLPAPER_GLOBAL = '__azhouWallpaper';
 const OWNER = 'azhou-codex-startup';
 const VERSION = 1;
 const LEGACY_WALLPAPER_OWNER = 'azhou.codex-startup-animation';
-const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0']);
+const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0', '0.9.0']);
 const PAGE_REASON = 'page-unsupported';
 const ASSET_REASON = 'asset-invalid';
 const FIXED_PAGE_REASONS = new Set(['asset-invalid', 'storage-unavailable']);
@@ -65,7 +65,36 @@ function wallpaperRecord(host) {
   return { present: true, supported, api: supported ? api : null };
 }
 
-function mountAppearanceEntry(document, openSettings) {
+// Official settings are reflected on the host root. Read only these attributes
+// and color tokens; never read or maintain a competing preference store.
+function hostAppearance(host) {
+  const root = host.document.documentElement;
+  const locale = /^zh(?:-|$)/i.test(root.lang || host.navigator?.language || 'zh-CN') ? 'zh-CN' : 'en';
+  let style;
+  try { style = host.getComputedStyle?.(root); } catch {}
+  const theme = root.dataset?.theme === 'dark' || (!root.dataset?.theme && style?.colorScheme === 'dark')
+    ? 'dark' : 'light';
+  const colors = {};
+  for (const [key, tokens] of Object.entries({
+    surface: ['--app-color-background-surface', '--color-surface'],
+    text: ['--app-color-text-foreground', '--color-text', '--color-text-primary'],
+    muted: ['--app-color-text-foreground-secondary', '--color-text-secondary'],
+    border: ['--app-color-border', '--color-border'],
+  })) {
+    const value = tokens.map(token => style?.getPropertyValue?.(token)?.trim()).find(Boolean);
+    if (value) colors[key] = value;
+  }
+  return Object.freeze({ locale, theme, colors: Object.freeze(colors) });
+}
+
+function appearanceText(factory, appearance) {
+  if (typeof factory === 'function') return factory({ locale: appearance.locale });
+  // Minimal payloads remain supported without a localization factory.
+  return { t: key => ({ characterName: 'Azhou', openAppearance: 'Open appearance settings',
+    appearanceLabel: 'Azhou appearance settings', overlayLabel: 'Azhou startup animation' })[key] };
+}
+
+function mountAppearanceEntry(document, openSettings, assets, factory, appearance) {
   const element = document.createElement('div');
   element.setAttribute('data-agent-skin-entry', 'appearance');
   element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;z-index:2147483646;display:none';
@@ -73,12 +102,29 @@ function mountAppearanceEntry(document, openSettings) {
   const button = document.createElement('button');
   // Match the animation's CSSOM path: a host may reject inline <style> blocks.
   // System colors keep this owned control readable in either color scheme.
-  button.style.cssText = 'all:initial;box-sizing:border-box;display:block;cursor:pointer;width:44px;padding:6px 4px;border:1px solid #9685ac;border-radius:18px;color-scheme:light dark;background:Canvas;color:CanvasText;box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;text-align:center;white-space:normal;outline:2px solid transparent;outline-offset:3px';
+  button.style.cssText = 'all:initial;box-sizing:border-box;display:flex;align-items:center;gap:7px;cursor:pointer;min-height:44px;padding:5px 9px 5px 5px;border:1px solid var(--app-color-border,var(--color-border,transparent));border-radius:14px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;outline:2px solid transparent;outline-offset:3px';
   button.type = 'button';
-  button.textContent = '阿舟外观';
-  button.setAttribute('aria-label', '阿舟外观设置');
+  const avatar = assets?.entryAvatar;
+  if (typeof avatar === 'string' && avatar.length <= 2 * 1024 * 1024
+    && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
+    const image = document.createElement('img');
+    image.src = avatar;
+    image.setAttribute('alt', '');
+    image.style.cssText = 'display:block;width:32px;height:32px;border-radius:10px;object-fit:cover;flex:none';
+    button.appendChild(image);
+  }
+  const label = document.createElement('span');
+  button.appendChild(label);
+  const setAppearance = value => {
+    const text = appearanceText(factory, value);
+    label.textContent = text.t('characterName');
+    button.title = text.t('openAppearance');
+    button.setAttribute('aria-label', text.t('appearanceLabel'));
+    button.style.colorScheme = value.theme;
+    element.setAttribute('lang', value.locale);
+  };
+  setAppearance(appearance);
   button.setAttribute('aria-haspopup', 'dialog');
-  button.title = '打开阿舟外观设置';
   const onFocus = () => { button.style.outlineColor = '#9670bb'; };
   const onBlur = () => { button.style.outlineColor = 'transparent'; };
   button.addEventListener('click', openSettings);
@@ -88,7 +134,7 @@ function mountAppearanceEntry(document, openSettings) {
   element.style.display = 'none';
   document.documentElement.appendChild(element);
   return {
-    element, button,
+    element, button, setAppearance,
     update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; },
     remove() {
       button.removeEventListener('click', openSettings);
@@ -99,14 +145,15 @@ function mountAppearanceEntry(document, openSettings) {
   };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, settingsCommitted) {
+function mountOverlay(host, payload, runId, intent, assets, receive, settingsCommitted, appearance) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
   }
   const frame = document.createElement('iframe');
-  frame.setAttribute('title', 'Agent Skin startup');
-  frame.setAttribute('aria-label', 'Agent Skin startup overlay');
+  const text = appearanceText(dataProperty(payload, 'createLocalization'), appearance);
+  frame.setAttribute('title', text.t('overlayLabel'));
+  frame.setAttribute('aria-label', text.t('overlayLabel'));
   frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
   frame.src = 'about:blank';
   const parent = typeof document.body.appendChild === 'function' ? document.body : document.documentElement;
@@ -133,7 +180,8 @@ function mountOverlay(host, payload, runId, intent, assets, receive, settingsCom
     setTimeout: bind('setTimeout'),
     clearTimeout: bind('clearTimeout'),
   });
-  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, settingsCommitted: settingsCommitted === true });
+  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance,
+    settingsCommitted: settingsCommitted === true });
   // Preserve the parent handler result for committed settings saves: the child
   // uses it to report wallpaper-only failure after the IndexedDB commit. The
   // shared handler still enforces the current frame source and runId.
@@ -147,7 +195,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, settingsCom
         environment.performance, environment.indexedDB, environment.Image,
         environment.Path2D, environment.URL, environment.requestAnimationFrame,
         environment.cancelAnimationFrame, environment.setTimeout, environment.clearTimeout,
-        undefined, SEND, frameSpec, dataProperty(payload, 'createImageSettings'),
+        undefined, SEND, frameSpec, dataProperty(payload, 'createImageSettings'), dataProperty(payload, 'createLocalization'),
       );
     },
     remove: () => frame.remove(),
@@ -170,6 +218,8 @@ class PageController {
     this.watchdog = null;
     this.bodyObserver = null;
     this.appearanceEntry = null;
+    this.appearanceObserver = null;
+    this.appearance = hostAppearance(host);
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
     this.settingsCommitPending = false;
@@ -207,6 +257,7 @@ class PageController {
     }
     this.wallpaperAPI = wallpaper.api;
     this.installed = true;
+    this.#observeAppearance();
     if (!this.#beginRun('play')) {
       this.installed = false;
       return { installed: false, alreadyActive: false, reason: PAGE_REASON };
@@ -273,9 +324,10 @@ class PageController {
   #mountRun(runId) {
     if (!this.#isLoading(runId) || !this.document.body) return;
     try {
-      if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings());
+      if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings(),
+        this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance);
       this.frame = mountOverlay(
-        this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted,
+        this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted, this.appearance,
       );
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
@@ -296,7 +348,32 @@ class PageController {
       try { handle?.dispose?.(); } catch {}
       return;
     }
-    if (handle && typeof handle === 'object') this.frameHandle = handle;
+    if (handle && typeof handle === 'object') {
+      this.frameHandle = handle;
+      this.#updateAppearance();
+    }
+  }
+
+  #updateAppearance() {
+    if (this.disposed) return;
+    this.appearance = hostAppearance(this.host);
+    this.appearanceEntry?.setAppearance(this.appearance);
+    const text = appearanceText(dataProperty(this.payload, 'createLocalization'), this.appearance);
+    this.frame?.element.setAttribute('title', text.t('overlayLabel'));
+    this.frame?.element.setAttribute('aria-label', text.t('overlayLabel'));
+    const update = dataProperty(this.frameHandle, 'updateAppearance');
+    if (typeof update === 'function') {
+      try { update.call(this.frameHandle, this.appearance); } catch {}
+    }
+  }
+
+  #observeAppearance() {
+    const root = this.document.documentElement;
+    if (typeof root.getAttribute !== 'function' || typeof this.host.MutationObserver !== 'function') return;
+    this.appearanceObserver = new this.host.MutationObserver(() => this.#updateAppearance());
+    this.appearanceObserver.observe(root, {
+      attributes: true, attributeFilter: ['lang', 'data-theme', 'class', 'style'],
+    });
   }
 
   #isLoading(runId) {
@@ -548,6 +625,8 @@ class PageController {
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
     this.state.phase = 'disposed';
+    this.appearanceObserver?.disconnect();
+    this.appearanceObserver = null;
     this.state.overlay = false;
     this.host.removeEventListener('message', this.onMessage);
     this.#stopFrame();

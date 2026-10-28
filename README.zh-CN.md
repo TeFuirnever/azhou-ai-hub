@@ -87,7 +87,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
-| `agent-skin` | [Agent Skin](packages/agent-skin/README.md) | 仅适配 Codex。本地候选在播放后提供可点击的外观入口，不拦截官方浏览器快捷键；设置和壁纸仍待真实宿主验收。Hub adapter 区分启动评估与独立播放 smoke，保持状态检查只读。已安装 App 和 Pet 的属主仍指向保留的 `codex-startup-animation` 源目录；程序再分发尚未获授权。 |
+| `agent-skin` | [阿舟 AI 实验室](packages/agent-skin/README.md) | 仅适配 Codex。候选使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属和真实宿主验收分别核验；程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json

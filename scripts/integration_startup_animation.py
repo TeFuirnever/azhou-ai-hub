@@ -88,10 +88,15 @@ def _event_schema_for_version(version: str) -> str:
     return "legacy" if parts < STARTUP_EVENT_VERSION else STARTUP_EVENT_SCHEMA
 
 
-def _private_manifest(directory: Path) -> dict[str, str]:
+def _private_files(version: str) -> tuple[str, ...]:
+    _event_schema_for_version(version)  # Validate the same version syntax as inspection.
+    return PRIVATE_FILES + (("entry-avatar.png",) if tuple(map(int, version.split("."))) >= (0, 9, 0) else ())
+
+
+def _private_manifest(directory: Path, files: tuple[str, ...] = PRIVATE_FILES) -> dict[str, str]:
     directory = _directory(directory)
     result = {}
-    for name in PRIVATE_FILES:
+    for name in files:
         path = directory / name
         if any(p.is_symlink() for p in (path, *path.parents)):
             raise common.IntegrationError(f"private asset path is a symlink: {name}")
@@ -102,12 +107,13 @@ def _private_manifest(directory: Path) -> dict[str, str]:
 def _verify_packaged_sources(bundle: Path, native_root: Path, info: dict[str, Any], marker: dict[str, Any]) -> str:
     resources = bundle / "Contents/Resources"
     inputs = marker.get("inputs", {})
-    if info.get("CFBundleShortVersionString") == STARTUP_PAYLOAD_VERSION:
+    version = info.get("CFBundleShortVersionString", "")
+    if _event_schema_for_version(version) != "legacy":
         for name in ("assets/private/working.png", "assets/private/scene.js"):
             packaged_source = resources / "web" / name
             if packaged_source.exists() or packaged_source.is_symlink():
                 raise common.IntegrationError(f"private startup source must not be copied into the web payload: {name}")
-        for name in PRIVATE_FILES:
+        for name in _private_files(version):
             relative = "assets/private/" + name
             if inputs.get(relative) != _hash(native_root / relative):
                 raise common.IntegrationError(f"built private input differs from its frozen source: {name}")
@@ -153,7 +159,7 @@ def build_plan(source: Path, workspace: Path, private_assets: Path, *, hub_root:
     workspace = _directory(workspace, exists=False)
     if workspace == Path(origin["source"]) or Path(origin["source"]) in workspace.parents:
         raise common.IntegrationError("build workspace must be outside the read-only source")
-    assets = _private_manifest(private_assets)
+    assets = _private_manifest(private_assets, _private_files(origin["version"]))
     lock = common.load_lock(COMPONENT, hub_root=hub_root)
     snapshot = state.state_path(workspace, "hub", "sources", COMPONENT, common.plan_digest(lock))
     return _plan("build", source=origin, workspace=str(workspace), private_assets=str(private_assets),
@@ -189,7 +195,7 @@ def build(source: Path, workspace: Path, private_assets: Path, plan_id: str, *, 
             with target.open("xb") as handle:
                 handle.write(data)
             target.chmod(0o600)
-    if _private_manifest(Path(private_assets)) != plan["private_inputs"]:
+    if _private_manifest(Path(private_assets), tuple(plan["private_inputs"])) != plan["private_inputs"]:
         raise common.IntegrationError("private inputs changed while preparing the isolated build")
     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
     if (snapshot / ".git").is_symlink():

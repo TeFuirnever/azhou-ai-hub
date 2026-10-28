@@ -94,7 +94,7 @@
     const bytes = await fetch('../assets/private/' + encodeURIComponent(requestedImage)).then(response => { if (!response.ok) throw new Error('缺少本地阿舟素材：' + requestedImage); return response.arrayBuffer(); });
     const imageSHA256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
     const image = await new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(new Blob([bytes], {type:requestedImage.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png'})); });
-    const payload = { version:'0.8.0', preview:true, image, imageSHA256, css:await fetch('./wallpaper.css').then(response => response.text()) };
+    const payload = { version:'0.9.0', preview:true, image, imageSHA256, css:await fetch('./wallpaper.css').then(response => response.text()) };
     const apply = async () => { const state = await installRenderer(payload); show({applied:state.applied, coverMatched:state.coverMatched, fixedViewport:state.fixedViewport, imageDecoded:state.imageDecoded, sourceSize:[state.image?.width,state.image?.height], footerBackgroundClear:state.footerBackgroundClear, footerFadeClear:state.footerFadeClear, topFadeClear:state.topFadeClear, decorationEffectsClear:state.decorationEffectsClear, scope:'模拟宿主；状态不代替 Q 版与裁切审读'}); return state; };
     const check = (condition, message) => { if (!condition) throw new Error(message); };
     async function runChecks() {

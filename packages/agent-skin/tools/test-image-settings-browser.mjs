@@ -104,6 +104,18 @@ function browserChecks(maxInputBytes) {
     await frameLoaded;
     const child = frame.contentWindow;
     const childDocument = frame.contentDocument;
+    childDocument.documentElement.lang = 'zh-CN';
+    childDocument.documentElement.style.colorScheme = 'dark';
+    childDocument.documentElement.style.setProperty('--agent-skin-surface', 'rgb(18, 24, 36)');
+    childDocument.documentElement.style.setProperty('--agent-skin-text', 'rgb(238, 240, 245)');
+    childDocument.documentElement.style.setProperty('--agent-skin-muted', 'rgb(176, 186, 204)');
+    childDocument.documentElement.style.setProperty('--agent-skin-border', 'rgb(92, 108, 132)');
+    const localization = createLocalization({ locale: childDocument.documentElement.lang });
+    const appearanceAvatarCanvas = childDocument.createElement('canvas');
+    appearanceAvatarCanvas.width = 8;
+    appearanceAvatarCanvas.height = 8;
+    appearanceAvatarCanvas.getContext('2d').fillRect(0, 0, 8, 8);
+    const appearanceAvatar = appearanceAvatarCanvas.toDataURL('image/png');
     const created = [];
     const revoked = [];
     const urlApi = {
@@ -122,6 +134,8 @@ function browserChecks(maxInputBytes) {
       Image: child.Image,
       URL: urlApi,
       indexedDB: child.indexedDB,
+      localization,
+      appearanceAvatar,
       setTimeout: child.setTimeout.bind(child),
       clearTimeout: child.clearTimeout.bind(child),
       performance: child.performance,
@@ -232,6 +246,38 @@ function browserChecks(maxInputBytes) {
       wallpaperStrength: 42,
     };
     const initiallyLoaded = await api.load(defaults);
+    api.openSettings();
+    const settingsDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
+    const titleInput = settingsDialog.querySelector('input[type="text"]');
+    titleInput.value = 'Local draft';
+    titleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    localization.setLocale('en');
+    const inputStyle = child.getComputedStyle(titleInput);
+    const restoreButton = settingsDialog.querySelector('footer button');
+    const buttonStyle = child.getComputedStyle(restoreButton);
+    const saveButton = settingsDialog.querySelector('footer button:last-child');
+    const saveStyle = child.getComputedStyle(saveButton);
+    const identityAvatar = settingsDialog.querySelector('[data-agent-skin-appearance-avatar]');
+    const appearance = {
+      locale: localization.locale,
+      dialogCount: childDocument.querySelectorAll('dialog[data-agent-skin-settings]').length,
+      title: settingsDialog.querySelector('#agent-skin-settings-title').textContent,
+      appearanceAvatar: Boolean(identityAvatar?.src.startsWith('data:image/png;base64,')),
+      appearanceAvatarAlt: identityAvatar?.getAttribute('alt'),
+      fieldLabel: titleInput.getAttribute('aria-label'),
+      draftValue: titleInput.value,
+      colorScheme: child.getComputedStyle(settingsDialog).colorScheme,
+      surface: child.getComputedStyle(settingsDialog).backgroundColor,
+      inputSurface: inputStyle.backgroundColor,
+      inputText: inputStyle.color,
+      inputBorder: inputStyle.borderTopColor,
+      buttonSurface: buttonStyle.backgroundColor,
+      buttonText: buttonStyle.color,
+      buttonBorder: buttonStyle.borderTopColor,
+      saveSurface: saveStyle.backgroundColor,
+      saveText: saveStyle.color,
+    };
+    api.cancelSettings();
     const initialCandidate = {
       schemaVersion: 1,
       avatar: crop.dataURL,
@@ -306,10 +352,12 @@ function browserChecks(maxInputBytes) {
       revokedCount: revoked.length,
       createdCount: created.length,
       idleCancelResult: api.cancelImport(),
+      appearance,
       storage: {
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
+        hasAppearanceAvatar: Object.hasOwn(initialCommit, 'appearanceAvatar'),
         secondPageLoadedTitle: secondPageBaseline.settings.introTitle,
         winningTitle: winningCommit.introTitle,
         conflictReason,
@@ -347,13 +395,20 @@ async function cleanup() {
 try {
   assert.equal(typeof WebSocket, 'function', 'Node 22 or newer is required for the built-in WebSocket');
   const imageSettings = await readFile(join(PACKAGE_ROOT, 'image-settings.js'));
+  const localizationSource = await readFile(join(PACKAGE_ROOT, 'localization.js'));
   const html = '<!doctype html><meta charset="utf-8"><title>image settings fixture</title>'
-    + '<script src="/image-settings.js"></script><script>window.imageSettingsReady = typeof createImageSettings === "function";</script>';
+    + '<script src="/localization.js"></script><script src="/image-settings.js"></script>'
+    + '<script>window.imageSettingsReady = typeof createImageSettings === "function" && typeof createLocalization === "function";</script>';
   server = createServer((request, response) => {
     if (request.url === '/image-settings.js') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       response.end(imageSettings);
+    } else if (request.url === '/localization.js') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+      response.end(localizationSource);
     } else if (request.url === '/' || request.url === '/index.html') {
+      response.setHeader('content-security-policy',
+        "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'");
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       response.end(html);
     } else {
@@ -412,9 +467,29 @@ try {
   assert.deepEqual(result.boundaryDimensions, [512, 512]);
   assert.equal(result.revokedCount, result.createdCount);
   assert.equal(result.idleCancelResult, false);
+  assert.deepEqual(result.appearance, {
+    locale: 'en',
+    dialogCount: 1,
+    title: 'Azhou · Appearance',
+    appearanceAvatar: true,
+    appearanceAvatarAlt: '',
+    fieldLabel: 'Startup title (up to 16 characters)',
+    draftValue: 'Local draft',
+    colorScheme: 'dark',
+    surface: 'rgb(18, 24, 36)',
+    inputSurface: 'rgb(18, 24, 36)',
+    inputText: 'rgb(238, 240, 245)',
+    inputBorder: 'rgb(92, 108, 132)',
+    buttonSurface: 'rgb(18, 24, 36)',
+    buttonText: 'rgb(238, 240, 245)',
+    buttonBorder: 'rgb(92, 108, 132)',
+    saveSurface: 'rgb(238, 240, 245)',
+    saveText: 'rgb(18, 24, 36)',
+  });
   assert.equal(result.storage.initialReason, '');
   assert.equal(result.storage.initialBaseline, undefined);
   assert.equal(result.storage.initialTitle, 'Saved fixture');
+  assert.equal(result.storage.hasAppearanceAvatar, false);
   assert.equal(result.storage.secondPageLoadedTitle, 'Saved fixture');
   assert.equal(result.storage.winningTitle, 'Page A wins');
   assert.equal(result.storage.conflictReason, 'settings-conflict');
@@ -426,7 +501,7 @@ try {
   assert.equal(result.storage.versionchange.version, 2);
   console.log(JSON.stringify({
     status: 'PASS',
-    scope: 'synthetic PNG/JPEG/WebP decode, crop, transparent composite, same-crop contours, flat artwork rejection, 30 MiB boundary, real IndexedDB save/reload, two-page conflict and versionchange close',
+    scope: 'synthetic image import, host-locale settings and theme tokens under strict style CSP, real IndexedDB save/reload, two-page conflict and versionchange close',
     formats: result.formats.map(item => item.type),
     boundaryBytes: result.boundarySize,
     objectURLsReleased: result.revokedCount + '/' + result.createdCount,

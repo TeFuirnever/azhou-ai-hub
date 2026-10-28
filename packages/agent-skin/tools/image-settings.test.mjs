@@ -6,9 +6,12 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'image-settings.js');
+const LOCALIZATION_SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'localization.js');
 const MAX_INPUT_BYTES = 31_457_280;
 const source = await readFile(SOURCE_PATH, 'utf8');
 const createImageSettings = vm.runInNewContext(`${source}\ncreateImageSettings`, {});
+const localizationSource = await readFile(LOCALIZATION_SOURCE_PATH, 'utf8');
+const createLocalization = vm.runInNewContext(`${localizationSource}\ncreateLocalization`, {});
 const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 
 function makeFile({ size = 64, type = 'image/png', signature = PNG_SIGNATURE } = {}) {
@@ -50,7 +53,12 @@ function makeFixture(options = {}) {
     const attributes = new Map();
     const element = {
       tagName: tagName.toUpperCase(),
-      style: { cssText: '' },
+      style: {
+        cssText: '',
+        properties: new Map(),
+        setProperty(name, value) { this.properties.set(name, String(value)); },
+        getPropertyValue(name) { return this.properties.get(name) || ''; },
+      },
       children: [],
       attributes,
       disabled: false,
@@ -69,6 +77,10 @@ function makeFixture(options = {}) {
         if (element.parentNode?.children) {
           element.parentNode.children = element.parentNode.children.filter(child => child !== element);
         }
+      },
+      click() {
+        element.clickCount = (element.clickCount || 0) + 1;
+        for (const listener of element.listeners.get('click') || []) listener({ target: element });
       },
       removeAttribute(name) { attributes.delete(name); },
       showModal() { element.open = true; },
@@ -146,6 +158,8 @@ function makeFixture(options = {}) {
       },
     },
     indexedDB: options.indexedDB,
+    localization: options.localization,
+    appearanceAvatar: options.appearanceAvatar,
     Image: ImageConstructor,
     URL: {
       createObjectURL() { const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },
@@ -602,6 +616,170 @@ test('loading settings without IndexedDB returns a copy of the supplied defaults
     schemaVersion: 1,
     ...defaults,
   });
+});
+
+test('the settings dialog follows host locale changes without replacing the dialog or draft', async () => {
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const fixture = makeFixture({ localization, appearanceAvatar: 'data:image/png;base64,AAAA' });
+  const defaults = {
+    avatar: '', artwork: '', contours: [], introTitle: 'Saved title', introCaption: 'Saved caption',
+    artworkSubtitle: 'Saved subtitle', wallpaperStrength: 42,
+  };
+
+  const loaded = await fixture.api.load(defaults);
+  assert.deepEqual(Object.keys(loaded.settings).sort(), [
+    'artwork', 'artworkSubtitle', 'avatar', 'contours', 'introCaption', 'introTitle',
+    'schemaVersion', 'wallpaperStrength',
+  ]);
+  assert.equal(fixture.api.openSettings(), true);
+
+  const dialog = fixture.elements.find(element => element.tagName === 'DIALOG');
+  const appearanceAvatar = fixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-appearance-avatar') === '');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const status = fixture.elements.find(element => element.getAttribute('aria-live') === 'polite');
+  assert.equal(dialog.getAttribute('data-agent-skin-settings'), '');
+  assert.equal(appearanceAvatar.src, 'data:image/png;base64,AAAA');
+  assert.equal(appearanceAvatar.getAttribute('alt'), '');
+  assert.equal(loaded.settings.appearanceAvatar, undefined, 'the host bot avatar is outside the settings record');
+  assert.equal(titleInput.value, 'Saved title');
+  assert.equal(titleInput.getAttribute('aria-label'), '启动标题（最多 16 个字符）');
+  assert.equal(titleInput.parentNode.children[0].textContent, '启动标题（最多 16 个字符）');
+  assert.equal(status.textContent, '暂时无法读取保存设置；当前使用默认设置，原记录未删除。');
+
+  titleInput.value = 'Local draft';
+  titleInput.listeners.get('input')[0]();
+  localization.setLocale('en');
+
+  assert.equal(fixture.elements.filter(element => element.tagName === 'DIALOG').length, 1);
+  assert.equal(fixture.elements.find(element => element.tagName === 'DIALOG'), dialog);
+  assert.equal(dialog.open, true);
+  assert.equal(titleInput.value, 'Local draft');
+  assert.equal(titleInput.getAttribute('aria-label'), 'Startup title (up to 16 characters)');
+  assert.equal(titleInput.parentNode.children[0].textContent, 'Startup title (up to 16 characters)');
+  assert.equal(status.textContent,
+    'Saved settings are temporarily unavailable. Defaults are in use; the record was kept.');
+  assert.equal(fixture.elements.find(element => element.id === 'agent-skin-settings-title').textContent,
+    'Azhou · Appearance');
+  assert.equal(dialog.style.getPropertyValue('color-scheme'), 'inherit');
+  assert.equal(dialog.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
+  assert.equal(dialog.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');
+  const restoreButton = fixture.elements.find(element => element.tagName === 'BUTTON'
+    && element.textContent === 'Restore defaults');
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON'
+    && element.textContent === 'Save and replay');
+  assert.equal(restoreButton.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
+  assert.equal(restoreButton.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');
+  assert.equal(saveButton.style.getPropertyValue('background-color'), 'var(--agent-skin-text, CanvasText)');
+  assert.equal(saveButton.style.getPropertyValue('color'), 'var(--agent-skin-surface, Canvas)');
+
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.equal(localization.locale, 'en', 'cancel discards the text draft and leaves host locale alone');
+  fixture.api.dispose();
+});
+
+test('localized image selection buttons use hidden file inputs and disable while importing', async () => {
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const fixture = makeFixture({ localization, decode: 'pending' });
+  await fixture.api.load({
+    avatar: '', artwork: '', contours: [], introTitle: 'Title', introCaption: '',
+    artworkSubtitle: 'Subtitle', wallpaperStrength: 42,
+  });
+  assert.equal(fixture.api.openSettings(), true);
+
+  const portraitInput = fixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-input') === 'avatar');
+  const backgroundInput = fixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-input') === 'artwork');
+  const portraitButton = fixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-action') === 'avatar');
+  const backgroundButton = fixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-action') === 'artwork');
+  assert.ok(portraitInput);
+  assert.ok(backgroundInput);
+  assert.ok(portraitButton);
+  assert.ok(backgroundButton);
+  assert.equal(portraitInput.hidden, true);
+  assert.equal(backgroundInput.hidden, true);
+  assert.equal(portraitInput.accept, 'image/png,image/jpeg,image/webp');
+  assert.equal(portraitButton.textContent, '选择启动头像');
+  assert.equal(portraitButton.getAttribute('aria-label'), '选择启动头像');
+  assert.equal(backgroundButton.textContent, '选择背景图片');
+  assert.equal(backgroundButton.getAttribute('aria-label'), '选择背景图片');
+
+  portraitButton.click();
+  assert.equal(portraitInput.clickCount, 1, 'the visible action forwards a user click to the hidden input');
+  localization.setLocale('en');
+  assert.equal(portraitButton.textContent, 'Choose startup portrait');
+  assert.equal(portraitButton.getAttribute('aria-label'), 'Choose startup portrait');
+  assert.equal(backgroundButton.textContent, 'Choose background image');
+  assert.equal(backgroundButton.getAttribute('aria-label'), 'Choose background image');
+
+  portraitInput.files = [makeFile()];
+  const change = portraitInput.listeners.get('change')[0]();
+  assert.equal(portraitButton.disabled, true);
+  assert.equal(backgroundButton.disabled, true);
+  assert.equal(portraitInput.disabled, true);
+  assert.equal(backgroundInput.disabled, true);
+  assert.equal(fixture.api.cancelImport(), true);
+  await change;
+  assert.equal(portraitButton.disabled, false);
+  assert.equal(backgroundButton.disabled, false);
+  fixture.api.dispose();
+});
+
+test('missing built-in text uses the host locale while the open draft stays unchanged', async () => {
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const fixture = makeFixture({ localization });
+  const loaded = await fixture.api.load({ avatar: '', artwork: '', contours: [], wallpaperStrength: 42 });
+
+  assert.equal(loaded.settings.introTitle, '阿舟 AI 实验室');
+  assert.equal(loaded.settings.introCaption, 'AZHOU / AI LAB');
+  assert.equal(loaded.settings.artworkSubtitle, '和阿舟一起，把想法做出来。');
+  assert.equal(fixture.api.openSettings(), true);
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  assert.equal(titleInput.value, '阿舟 AI 实验室');
+
+  localization.setLocale('en');
+  assert.equal(titleInput.value, '阿舟 AI 实验室', 'changing host language does not rewrite the active draft');
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.equal(fixture.api.openSettings(), true);
+  assert.equal(titleInput.value, 'Azhou AI Lab', 'a new draft uses the current host language default');
+  fixture.api.cancelSettings();
+  fixture.api.dispose();
+});
+
+test('locale changes leave committed custom text and the stored settings record untouched', async () => {
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const record = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'My saved title',
+    introCaption: 'My saved caption',
+    artworkSubtitle: 'My saved subtitle',
+    wallpaperStrength: 42,
+  };
+  const storage = makeIndexedDB(record);
+  const fixture = makeFixture({
+    indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]],
+    localization,
+  });
+  const loaded = await fixture.api.load(record);
+  assert.equal(loaded.reason, '');
+  assert.equal(fixture.api.openSettings(), true);
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+
+  localization.setLocale('en');
+
+  assert.equal(titleInput.value, 'My saved title');
+  assert.equal(loaded.settings.introTitle, 'My saved title');
+  assert.deepEqual(storage.state.record, record);
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.deepEqual(storage.state.record, record);
+  fixture.api.dispose();
 });
 
 test('load returns the complete saved baseline from the v1 images record', async () => {

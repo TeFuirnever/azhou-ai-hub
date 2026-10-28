@@ -1,6 +1,6 @@
-# Agent Skin · Codex
+# 阿舟 AI 实验室 / Azhou AI Lab
 
-本目录是 Hub 的 canonical package `agent-skin`，面向 AI 工具的外观定制；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.8.0/build 9，保留既有 0.7.1/build 8 壁纸能力，并包含同窗口 CDP 实现及设置流程。实现经过本地单元测试和隔离 Chrome/IndexedDB 验证，但尚未接管已安装 App 或 Pet，也不表示在官方 Codex 宿主中已启动或通过人工视觉验收。
+本目录是 Hub 的 canonical package `agent-skin`，显示名称为“阿舟 AI 实验室 / Azhou AI Lab”；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.9.0/build 10，包含同窗口 CDP 动画、壁纸及设置流程。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替实际安装交接或官方宿主的人工视觉验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
@@ -8,9 +8,13 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
-女性 Q 版阿舟在实验室陪伴 Codex 启动。当前固定版本 **0.8.0 / build 9**，沿用 Swift / AppKit / WKWebView 和 HTML / CSS / SVG / WebGL。Codex 主界面使用保留 Q 版造型的全景实验室静态壁纸，独立启动动画保持原有节奏，没有新增第三方运行依赖。
+当前固定版本 **0.9.0 / build 10**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
 **唯一日常入口：`~/Applications/阿舟启动 Codex.app`。** 构建生成隐藏的 `.build/azhou-payload` 安装载荷；安装验证成功后清理已核实的旧项目应用，项目 `dist` 不再保留第二份 `.app`。
+
+物理安装路径保留上述旧名称，以继续使用原有安装归属检查；显示名称通过本地化 bundle 元数据更新。内部 Bundle ID、可执行文件名、日志路径和存储键保持稳定。安装器不会仅因显示名相同而接管其他应用。
+
+改版范围、官方设置来源与本地验证边界见 [0.9.0 改版验证](docs/module-redesign-0.9.0.md)。
 
 ## 安装与启动
 
@@ -25,6 +29,10 @@ cd packages/agent-skin
 python3 tools/prepare-azhou-assets.py --source "$AZHOU_WORKING_IMAGE"
 mkdir -p assets/private/app-icon
 cp "$AZHOU_ICON_SOURCE" assets/private/app-icon/source.png
+
+# bot 入口头像独立提供，不能用启动人物图替代；不会进入 Git。
+: "${AZHOU_ENTRY_AVATAR:?Set an authorized local PNG path for the Azhou bot entry portrait}"
+cp "$AZHOU_ENTRY_AVATAR" assets/private/entry-avatar.png
 
 # 本地还需单独提供已授权的私有 Q 版全景壁纸图。
 test -f assets/private/wallpaper-scene-q-v3.png
@@ -87,30 +95,28 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 ## 角色、配色与动作
 
-固定文案：
+默认标题使用“阿舟 AI 实验室 / Azhou AI Lab”。默认辅助文字和字幕随官方界面语言显示；已经保存的个人文字与上传图片保持原样，不自动翻译。
 
-- 阿舟的 Agent 实验室
-- AZHOU / AGENT LAB
-- 和阿舟一起，把想法做出来。
-
-启动动画继续采用素材库中现有的女性Q版工作姿态 `azhou-chibi-pet/v1.0.0/images/04-working.png`，1254×1254 RGBA，对应私有文件 `working.png` 和 `scene.js`。准备脚本逐字节复制并生成本地加载文件；不改原素材库。原图没有独立角色图层，已校准的局部网格表现小幅敲键、前倾、点头、眨眼与发梢跟随，不能据此推断具备走动或转身资产。
+启动默认素材仍来自私有 `working.png` 和 `wallpaper-scene-q-v3.png`；构建时生成规范头像、背景和同图线稿。入口头像则单独读取 `assets/private/entry-avatar.png`，在入口与设置头部显示，不改变这些动画输入、应用图标或 Pet。
 
 Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生尺寸为1672×941、RGB PNG。以正式 `04-working.png` 为 Q 版比例和画风主参考，女性v2身份图仅辅助核对角色特征，经 ImageGen 生成完整实验室场景。大头、小身体、短四肢的 Q 版造型必须保留；扩展背景不代表改用普通动漫身材。生成提示词、参考来源与摘要见私有记录 `assets/private/provenance/wallpaper-scene-q-v3.json`。
 
-这是一份项目私有衍生图，不代表已进入正式 IP 素材库；原参考文件保持不变。0.6.x 的 `working-v2.png` 留存，启动动画继续使用已校准的 `working.png` 与网格。场景使用 `cover` 等比铺满窗口，窄窗会裁掉部分环境，Retina或较大窗口可能放大原始像素，不宣称原生4K清晰度。
+这是一份项目私有衍生图，不代表已进入正式 IP 素材库；原参考文件保持不变。场景使用 `cover` 等比铺满窗口，窄窗会裁掉部分环境，Retina或较大窗口可能放大原始像素，不宣称原生4K清晰度。
 
-动效重做使用本机 Emil 技能 `emil-design-eng`、`improve-animations`、`animation-performance`、`review-animations`，按“审计、计划、粗演、精修、复核”执行。旧项目的粒子预分配、SVG刻度与渐变光带得到复用；配色更新为暖橙、粉紫、珊瑚粉与青色点缀。
+界面与动效遵循本机 Emil `emil-design-eng`、`animation-performance` 的审视方向：反馈明确、常用入口不做持续动画、先测量渲染成本，再减少不必要绘制。旧版 7.8 秒记录只代表历史播放器，不构成当前 Canvas 动画的验收。
 
 | 时间 | 动作 |
 | --- | --- |
-| 0–0.6秒 | 人物与工作台显现，实验室线条依次亮起。 |
-| 0.6–2.65秒 | 前倾和五次交替敲键，标题与英文依次进入。 |
-| 2.28–3.22秒 | 最后一击送出8个彩色光点，一次光带扫过人物后方，Codex标识回应。 |
-| 3.22–3.64秒 | 字幕出现，显著辅助效果收束。 |
-| 3.64–7.05秒 | 完整构图保持阅读；人物轻微收束后静止。 |
-| 7.05–7.8秒 | 辅助线淡去，主体与文案保留到交接。 |
+| 0–1.15秒 | 准备提示。 |
+| 1.15–4.18秒 | 头像与标题显现。 |
+| 4.18–4.74秒 | 头像与文字散开。 |
+| 4.74–5.08秒 | 线稿碎片保持散开状态。 |
+| 5.08–7.18秒 | 线稿汇聚。 |
+| 7.18–7.43秒 | 同一幅背景上色。 |
+| 7.43–11秒 | 背景与字幕展示。 |
+| 11–12秒 | 收束并结束。 |
 
-固定装饰由预创建的 Web Animations API 动画驱动，暂停、拖动、重播与原有时钟同步。原有 rAF 继续处理局部角色网格；静态阶段跳过相同画布状态的重绘。减少动态模式保留透明度反馈，关闭位移、粒子、扫光与角色变形，并监听系统设置变化。
+动画按 rAF 时间戳推进，保持暂停、拖动与重播的时间轴语义；减少动态模式保留必要状态与透明度反馈。rAF 间隔与 JS 提交耗时分别报告，不等同于 GPU、合成器或屏幕呈现 FPS。
 
 正常启动按 Esc 或点击“跳过”可直接交接。原生窗口不响应空格暂停，浏览器预览支持。动画不是主程序加载百分比。
 
@@ -121,7 +127,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟启动 Codex.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.8.0 / build 9 |
+| 版本 | 0.9.0 / build 10 |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 

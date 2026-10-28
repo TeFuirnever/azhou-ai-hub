@@ -138,6 +138,20 @@ class AnimationIntegrationTests(unittest.TestCase):
             path.write_bytes(original)
         self.assertFalse(self.workspace.exists())
 
+    def test_bot_entry_is_required_and_bound_by_the_current_public_build_plan(self):
+        configure_package(self.hub, animation.COMPONENT,
+            [".gitignore", "Native/App.swift", "tools/verify-artifacts.py"],
+            build_inputs=["Native/App.swift"], runtime_version="0.9.0", runtime_build="10")
+        with self.assertRaisesRegex(common.IntegrationError, "entry-avatar.png"):
+            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        entry = self.assets / "entry-avatar.png"
+        entry.write_bytes(b"approved portrait")
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertEqual(hashlib.sha256(entry.read_bytes()).hexdigest(), plan["private_inputs"]["entry-avatar.png"])
+        entry.write_bytes(b"another portrait")
+        updated = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertNotEqual(plan["plan_id"], updated["plan_id"])
+
     def test_new_payload_inspection_binds_private_inputs_without_copying_sources_and_keeps_legacy_rule(self):
         new_bundle = self.base / "new-bundle"
         new_source = self.base / "new-snapshot"
@@ -154,6 +168,16 @@ class AnimationIntegrationTests(unittest.TestCase):
         verification = animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
         self.assertIn("startup defaults", verification)
         self.assertFalse((new_bundle / "Contents/Resources/web/assets/private").exists())
+
+        entry_source = new_source / "assets/private/entry-avatar.png"
+        entry_source.write_bytes(b"approved bot entry")
+        new_inputs["assets/private/entry-avatar.png"] = hashlib.sha256(entry_source.read_bytes()).hexdigest()
+        current_info = {"CFBundleShortVersionString": "0.9.0"}
+        self.assertIn("startup defaults", animation._verify_packaged_sources(
+            new_bundle, new_source, current_info, new_marker))
+        entry_source.write_bytes(b"changed bot entry")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(new_bundle, new_source, current_info, new_marker)
 
         copied_source = new_bundle / "Contents/Resources/web/assets/private/working.png"
         copied_source.parent.mkdir(parents=True)
