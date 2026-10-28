@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,6 +98,9 @@ class CDP {
 function browserChecks(maxInputBytes) {
   return (async () => {
     const frame = document.createElement('iframe');
+    frame.width = '800';
+    frame.height = '820';
+    frame.setAttribute('frameborder', '0');
     const frameLoaded = new Promise(resolve => { frame.addEventListener('load', resolve, { once: true }); });
     frame.src = 'about:blank';
     document.body.append(frame);
@@ -246,11 +249,83 @@ function browserChecks(maxInputBytes) {
       wallpaperStrength: 42,
     };
     const initiallyLoaded = await api.load(defaults);
-    api.openSettings();
+    const waitFor = async (predicate, label) => {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise(resolve => child.setTimeout(resolve, 25));
+      }
+      throw new Error('Timed out waiting for ' + label);
+    };
+    let previewedDraft = null;
+    let previewResult = null;
+    let committedByApply = null;
+    let savedCallbackCount = 0;
+    let applyCalls = 0;
+    api.openSettings({
+      onPreview(value) { previewedDraft = value; return { started: true }; },
+      async onApply(value) {
+        applyCalls++;
+        committedByApply = value;
+        return applyCalls === 1
+          ? { applied: false, reason: 'wallpaper-unsupported' }
+          : { applied: true, reason: '' };
+      },
+      onSaved() { savedCallbackCount++; },
+    });
     const settingsDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
+    const settingsTabs = [...settingsDialog.querySelectorAll('[role="tab"][data-agent-skin-settings-tab]')]
+      .map(tab => tab.getAttribute('data-agent-skin-settings-tab'));
+    const workspacePreview = settingsDialog.querySelector('[data-agent-skin-workspace-preview]');
+    const workspacePreviewImage = settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]');
+    const workspacePreviewCaption = workspacePreview?.querySelector('figcaption');
+    const rectOf = element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom,
+        width: rect.width, height: rect.height };
+    };
+    const measurePreviewAt = async (width, height) => {
+      frame.width = String(width);
+      frame.height = String(height);
+      await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
+      return {
+        viewport: { width: child.innerWidth, height: child.innerHeight },
+        preview: { ...rectOf(workspacePreview), clientWidth: workspacePreview.clientWidth,
+          clientHeight: workspacePreview.clientHeight, scrollWidth: workspacePreview.scrollWidth,
+          scrollHeight: workspacePreview.scrollHeight },
+        image: rectOf(workspacePreviewImage),
+        caption: rectOf(workspacePreviewCaption),
+        dialog: rectOf(settingsDialog),
+      };
+    };
+    const workspacePreviewGeometry = [];
+    for (const [width, height] of [[1512, 889], [800, 820], [640, 480], [390, 320]]) {
+      workspacePreviewGeometry.push(await measurePreviewAt(width, height));
+    }
+    frame.width = '800';
+    frame.height = '820';
+    await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
+    const animationPreviewButton = settingsDialog.querySelector('[data-agent-skin-preview-animation]');
     const titleInput = settingsDialog.querySelector('input[type="text"]');
     titleInput.value = 'Local draft';
     titleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    const strengthInput = settingsDialog.querySelector('input[type="range"]');
+    strengthInput.value = '18';
+    strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    settingsDialog.querySelector('[data-agent-skin-settings-tab="startup"]')?.click();
+    if (!animationPreviewButton) throw new Error('startup section does not expose the animation preview action');
+    animationPreviewButton.click();
+    await waitFor(() => previewedDraft,
+      'draft animation preview callback (' + settingsDialog.querySelector('[data-agent-skin-settings-status]')?.textContent + ')');
+    previewResult = {
+      title: previewedDraft.introTitle,
+      strength: previewedDraft.wallpaperStrength,
+      settingsOpen: api.isSettingsOpen(),
+      currentTitle: initiallyLoaded.settings.introTitle,
+      previewImage: workspacePreviewImage?.getAttribute('src'),
+      previewWash: settingsDialog.querySelector('[data-agent-skin-workspace-preview-wash]')?.style.backgroundImage,
+    };
     localization.setLocale('en');
     const inputStyle = child.getComputedStyle(titleInput);
     const restoreButton = settingsDialog.querySelector('footer button');
@@ -278,6 +353,38 @@ function browserChecks(maxInputBytes) {
       saveText: saveStyle.color,
     };
     api.cancelSettings();
+    const afterPreviewCancel = await api.load(defaults);
+    api.openSettings({
+      onApply: async value => {
+        applyCalls++;
+        committedByApply = value;
+        return applyCalls === 1
+          ? { applied: false, reason: 'wallpaper-unsupported' }
+          : { applied: true, reason: '' };
+      },
+      onSaved() { savedCallbackCount++; },
+    });
+    const applyDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
+    const applyTitle = applyDialog.querySelector('input[type="text"]');
+    applyTitle.value = 'Apply draft';
+    applyTitle.dispatchEvent(new child.Event('input', { bubbles: true }));
+    const applyStrength = applyDialog.querySelector('input[type="range"]');
+    applyStrength.value = '27';
+    applyStrength.dispatchEvent(new child.Event('input', { bubbles: true }));
+    applyDialog.querySelector('footer button:last-child').click();
+    await waitFor(() => applyDialog.querySelector('[role="alert"]')?.textContent,
+      'post-save background failure stays visible');
+    const afterApplyFailure = {
+      settingsOpen: api.isSettingsOpen(),
+      status: applyDialog.querySelector('[role="alert"]')?.textContent,
+      savedValue: committedByApply?.introTitle,
+      savedCallbackCount,
+      retryButton: [...applyDialog.querySelectorAll('button')]
+        .find(button => /retry|重试/i.test(button.textContent.trim())),
+    };
+    afterApplyFailure.retryButton?.click();
+    await waitFor(() => savedCallbackCount === 1 && !api.isSettingsOpen(),
+      'retry applies the committed settings and closes once');
     const initialCandidate = {
       schemaVersion: 1,
       avatar: crop.dataURL,
@@ -332,11 +439,37 @@ function browserChecks(maxInputBytes) {
         resolve(result);
       };
     });
-    api.dispose();
-
-    frame.remove();
+    frame.width = '1512';
+    frame.height = '889';
+    localization.setLocale('zh-CN');
+    if (!api.openSettings()) throw new Error('could not reopen settings for the layout screenshot');
+    settingsDialog.querySelector('[data-agent-skin-settings-tab="workspace"]')?.click();
+    await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
+    const screenshotGeometry = {
+      viewport: { width: child.innerWidth, height: child.innerHeight },
+      preview: { ...rectOf(workspacePreview), clientWidth: workspacePreview.clientWidth,
+        clientHeight: workspacePreview.clientHeight, scrollWidth: workspacePreview.scrollWidth,
+        scrollHeight: workspacePreview.scrollHeight },
+      image: rectOf(workspacePreviewImage),
+      caption: rectOf(workspacePreviewCaption),
+      dialog: rectOf(settingsDialog),
+    };
     return {
       formats,
+      previewWorkflow: {
+        settingsTabs,
+        hasWorkspacePreview: Boolean(workspacePreview),
+      workspacePreviewGeometry,
+        screenshotGeometry,
+        hasAnimationPreview: Boolean(animationPreviewButton),
+        previewResult,
+        titleAfterCancel: afterPreviewCancel.settings.introTitle,
+        applyCalls,
+        savedCallbackCount,
+        committedTitle: committedByApply?.introTitle,
+        failure: afterApplyFailure.status,
+        settingsOpenAfterFailure: afterApplyFailure.settingsOpen,
+      },
       cropLeft,
       cropRight,
       portraitTop,
@@ -424,7 +557,7 @@ try {
   profile = await mkdtemp(join(tmpdir(), 'agent-skin-image-settings-chrome-'));
   chrome = spawn(options.chrome, [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
-    '--disable-background-networking', '--disable-extensions', '--remote-debugging-port=0',
+    '--disable-background-networking', '--disable-extensions', '--window-size=1536,920', '--remote-debugging-port=0',
     '--remote-allow-origins=*', '--user-data-dir=' + profile, 'about:blank',
   ], { stdio: 'ignore' });
   chrome.once('error', error => { throw error; });
@@ -467,6 +600,50 @@ try {
   assert.deepEqual(result.boundaryDimensions, [512, 512]);
   assert.equal(result.revokedCount, result.createdCount);
   assert.equal(result.idleCancelResult, false);
+  assert.deepEqual(result.previewWorkflow.settingsTabs, ['workspace', 'startup', 'about']);
+  assert.equal(result.previewWorkflow.hasWorkspacePreview, true);
+  assert.equal(result.previewWorkflow.hasAnimationPreview, true);
+  for (const geometry of [...result.previewWorkflow.workspacePreviewGeometry, result.previewWorkflow.screenshotGeometry]) {
+    assert.ok(geometry.preview.height <= 240, 'workspace preview stays under the compact 240px cap');
+    assert.ok(geometry.caption.height <= 60, 'preview caption stays at text height');
+    assert.ok(geometry.image.height > 0, 'image area keeps the remaining preview height');
+    assert.ok(Math.abs(geometry.preview.height - geometry.image.height - geometry.caption.height - 2) <= 1,
+      'image area and caption account for the preview height without a stretched caption');
+    assert.ok(geometry.preview.scrollWidth <= geometry.preview.clientWidth
+      && geometry.preview.scrollHeight <= geometry.preview.clientHeight,
+    'workspace preview does not overflow at medium or small viewport sizes');
+    assert.ok(geometry.dialog.x >= 0 && geometry.dialog.y >= 0
+      && geometry.dialog.right <= geometry.viewport.width && geometry.dialog.bottom <= geometry.viewport.height,
+    'settings dialog remains within its viewport');
+  }
+  assert.deepEqual({ title: result.previewWorkflow.previewResult.title,
+    strength: result.previewWorkflow.previewResult.strength,
+    settingsOpen: result.previewWorkflow.previewResult.settingsOpen,
+    currentTitle: result.previewWorkflow.previewResult.currentTitle }, {
+    title: 'Local draft', strength: 18, settingsOpen: true, currentTitle: 'Generated base',
+  });
+  assert.ok(result.previewWorkflow.previewResult.previewImage?.startsWith('data:image/png;base64,'));
+  const expectedWashStops = [
+    '90%, transparent) 0%', '92%, transparent) 22%', '95%, transparent) 36%',
+    '93%, transparent) 62%', '87%, transparent) 73%', '72%, transparent) 87%',
+    '70%, transparent) 100%',
+  ];
+  assert.ok(result.previewWorkflow.previewResult.previewWash?.startsWith('linear-gradient(90deg,'),
+    'workspace preview uses the same layered wash treatment as the wallpaper');
+  for (const stop of expectedWashStops) {
+    assert.ok(result.previewWorkflow.previewResult.previewWash.includes(stop),
+      'wallpaper strength 18 produces the expected preview wash stop ' + stop);
+  }
+  assert.equal(result.previewWorkflow.titleAfterCancel, 'Generated base',
+    'previewing a modified draft never persists it');
+  assert.equal(result.previewWorkflow.settingsOpenAfterFailure, true,
+    'workspace application failure leaves the saved result visible in settings');
+  assert.ok(/saved|background/i.test(result.previewWorkflow.failure));
+  assert.equal(result.previewWorkflow.applyCalls, 2,
+    'retry reapplies the committed settings without a second settings save');
+  assert.equal(result.previewWorkflow.savedCallbackCount, 1,
+    'the final close callback runs once after the retry succeeds');
+  assert.equal(result.previewWorkflow.committedTitle, 'Apply draft');
   assert.deepEqual(result.appearance, {
     locale: 'en',
     dialogCount: 1,
@@ -499,12 +676,22 @@ try {
     'the settings connection closes on versionchange so the newer open can proceed');
   assert.equal(result.storage.versionchange.oldVersion, 1);
   assert.equal(result.storage.versionchange.version, 2);
+  const screenshotPath = join(PACKAGE_ROOT, '.build', 'startup-generated-browser-evidence',
+    'appearance-settings-preview-compact.png');
+  await mkdir(dirname(screenshotPath), { recursive: true });
+  const screenshot = await cdp.call('Page.captureScreenshot', {
+    format: 'png', fromSurface: true, captureBeyondViewport: true,
+  });
+  await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
   console.log(JSON.stringify({
     status: 'PASS',
     scope: 'synthetic image import, host-locale settings and theme tokens under strict style CSP, real IndexedDB save/reload, two-page conflict and versionchange close',
     formats: result.formats.map(item => item.type),
     boundaryBytes: result.boundarySize,
     objectURLsReleased: result.revokedCount + '/' + result.createdCount,
+    workspacePreviewGeometry: result.previewWorkflow.workspacePreviewGeometry,
+    screenshotGeometry: result.previewWorkflow.screenshotGeometry,
+    settingsScreenshot: screenshotPath,
     storage: result.storage,
   }, null, 2));
 } catch (error) {

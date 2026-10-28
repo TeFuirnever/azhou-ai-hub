@@ -118,6 +118,7 @@ function installAnimation(
   const existingStage = document.querySelector('[data-agent-skin-stage]');
 
   let imageSettings = null;
+  let settingsPreview = null;
   try {
     if (typeof createImageSettingsFactory === 'function') {
       imageSettings = createImageSettingsFactory({
@@ -1248,27 +1249,164 @@ function installAnimation(
     STAGE_LABELS = createStageLabels();
   }
 
-  function showWallpaperFailure() {
-    const notice = root.querySelector('[data-agent-skin-wallpaper-result]')
-      || createElement('div', root, { 'data-agent-skin-wallpaper-result': '', role: 'status' });
-    notice.replaceChildren();
-    const heading = createElement('strong', notice, {
-      'data-agent-skin-wallpaper-title': '', 'text': t('animation.wallpaper.failed.title'),
-    });
-    const body = createElement('div', notice, {
-      'data-agent-skin-wallpaper-body': '', 'text': t('animation.wallpaper.failed.body'),
-    });
-    heading.style.display = 'block';
-    body.style.marginTop = '4px';
-    notice.style.cssText = 'position:absolute;z-index:4;left:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.18));border-radius:10px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
-  }
-
   function showSettingsFallbackNotice() {
     if (!settingsLoadReason || !root) return;
     const notice = root.querySelector('[data-agent-skin-settings-result]')
       || createElement('div', root, { 'data-agent-skin-settings-result': '', role: 'status' });
     notice.textContent = t('settings.load.unavailable');
     notice.style.cssText = 'position:absolute;z-index:4;right:20px;top:18px;max-width:min(560px,calc(100vw - 40px));padding:10px 14px;border:1px solid var(--agent-skin-border,rgba(255,255,255,.18));border-radius:10px;background:var(--agent-skin-surface,#10121c);color:var(--agent-skin-text,#fff8ef);box-shadow:0 8px 28px #0006;font:14px/1.4 system-ui,sans-serif';
+  }
+
+  function clonePreviewAssets(record) {
+    if (!record || typeof record !== 'object') return null;
+    const cloneContours = values => Array.isArray(values)
+      ? values.map(path => Array.isArray(path)
+        ? path.map(point => Array.isArray(point) ? [point[0], point[1]] : point) : path)
+      : values;
+    const cloneAsset = value => value && typeof value === 'object' ? { ...value } : value;
+    const assets = {
+      ...record,
+      avatar: cloneAsset(record.avatar),
+      artwork: cloneAsset(record.artwork),
+    };
+    const contours = record.contours || record.artwork?.contours;
+    if (Array.isArray(contours)) assets.contours = cloneContours(contours);
+    if (assets.artwork && typeof assets.artwork === 'object' && Array.isArray(assets.artwork.contours)) {
+      assets.artwork.contours = cloneContours(assets.artwork.contours);
+    }
+    return assets;
+  }
+
+  function finishSettingsPreview(session, started = false, restoreFocus = true) {
+    if (!session || session.closed) return false;
+    session.closed = true;
+    if (settingsPreview === session) settingsPreview = null;
+    if (session.timeout !== null) {
+      try { clearTimeout(session.timeout); } catch {}
+      session.timeout = null;
+    }
+    for (const target of session.inertTargets || []) {
+      try { target.element.inert = target.inert; } catch {}
+    }
+    try { session.handle?.dispose(); } catch {}
+    try { session.overlay?.remove(); } catch {}
+    if (!session.startupSettled) {
+      session.startupSettled = true;
+      session.resolveStartup(started);
+    }
+    if (restoreFocus && !disposed && imageSettings?.isSettingsOpen()) {
+      try { session.focusTarget?.focus?.(); } catch {}
+    }
+    return true;
+  }
+
+  function startSettingsPreview(draft) {
+    if (disposed || !loaded || settingsPreview || !imageSettings?.isSettingsOpen()) return false;
+    const dialog = document.body?.querySelector('[data-agent-skin-settings]');
+    if (!dialog?.open || typeof document.createElement !== 'function') return false;
+    const assets = clonePreviewAssets(draft);
+    if (!assets) return false;
+
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-agent-skin-settings-preview', '');
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', t('settings.button.previewAnimation'));
+    overlay.style.cssText = 'position:fixed;z-index:2147483646;inset:0;overflow:hidden;background:#10121c';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('data-agent-skin-settings-preview-frame', '');
+    iframe.setAttribute('title', t('settings.button.previewAnimation'));
+    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#10121c';
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.setAttribute('data-agent-skin-settings-preview-close', '');
+    closeButton.setAttribute('aria-label', t('settings.button.closePreview'));
+    closeButton.textContent = t('settings.button.closePreview');
+    closeButton.style.cssText = 'position:fixed;z-index:2;top:20px;right:24px;border:1px solid rgba(255,255,255,.4);border-radius:999px;padding:8px 16px;background:#10121c;color:#fff8ef;font:14px system-ui,sans-serif;cursor:pointer';
+    overlay.append(iframe, closeButton);
+
+    let resolveStartup;
+    const startup = new Promise(resolve => { resolveStartup = resolve; });
+    const session = {
+      overlay, iframe, closeButton, focusTarget: dialog.querySelector('[data-agent-skin-preview-animation]')
+        || document.activeElement,
+      inertTargets: Array.from(dialog.children || []).map(element => ({ element, inert: element.inert })),
+      handle: null, timeout: null, closed: false, started: false,
+      startupSettled: false, resolveStartup,
+    };
+    settingsPreview = session;
+    for (const target of session.inertTargets) target.element.inert = true;
+    closeButton.addEventListener('click', () => finishSettingsPreview(session, session.started));
+    dialog.appendChild(overlay);
+    closeButton.focus?.();
+
+    const onFrameFailure = () => finishSettingsPreview(session, false);
+    const onFrameLoad = () => {
+      if (session.closed || disposed) { finishSettingsPreview(session, false, false); return; }
+      const previewWindow = iframe.contentWindow;
+      const previewDocument = iframe.contentDocument || previewWindow?.document;
+      if (!previewWindow || !previewDocument?.body) { onFrameFailure(); return; }
+      try {
+        const sendPreview = payload => {
+          if (payload?.action === 'background') return undefined;
+          if (payload?.action === 'ready') {
+            session.started = true;
+            if (session.timeout !== null) {
+              try { clearTimeout(session.timeout); } catch {}
+              session.timeout = null;
+            }
+            if (!session.startupSettled) {
+              session.startupSettled = true;
+              session.resolveStartup(true);
+            }
+          } else if (payload?.action === 'assetError') finishSettingsPreview(session, false);
+          else if (payload?.action === 'complete') finishSettingsPreview(session, session.started);
+          return undefined;
+        };
+        session.handle = installAnimation(
+          previewWindow, previewDocument, previewWindow.location, previewWindow.performance,
+          previewWindow.indexedDB, previewWindow.Image, previewWindow.Path2D, previewWindow.URL,
+          previewWindow.requestAnimationFrame?.bind(previewWindow),
+          previewWindow.cancelAnimationFrame?.bind(previewWindow),
+          previewWindow.setTimeout?.bind(previewWindow), previewWindow.clearTimeout?.bind(previewWindow),
+          undefined, sendPreview,
+          {
+            runId: `${frameSpec?.runId || 'settings'}-preview`, intent: 'preview',
+            protocolVersion: 1, assets,
+            appearance: { ...appearance, colors: { ...appearance.colors }, reducedMotion: reduced },
+          }, undefined, createLocalizationFactory,
+        );
+        if (session.closed) { session.handle.dispose(); return; }
+        if (!session.handle?.preview?.beginLaunch?.()) onFrameFailure();
+      } catch { onFrameFailure(); }
+    };
+    iframe.addEventListener('load', onFrameLoad, { once: true });
+    iframe.addEventListener('error', onFrameFailure, { once: true });
+    try {
+      iframe.srcdoc = '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;overflow:hidden"></body></html>';
+      session.timeout = setTimeout(() => finishSettingsPreview(session, false), 10_000);
+    } catch { onFrameFailure(); }
+    return startup;
+  }
+
+  function applySavedWallpaper(saved) {
+    if (disposed) return Promise.resolve({ applied: false, reason: 'apply-unavailable' });
+    const image = typeof saved?.artwork === 'string' ? saved.artwork : saved?.artwork?.dataURL;
+    if (!image) return Promise.resolve({ applied: false, reason: 'asset-invalid' });
+    let result;
+    try {
+      result = message('background', {
+        image,
+        strength: Number.isInteger(saved?.wallpaperStrength) ? saved.wallpaperStrength : 42,
+      });
+    } catch {
+      return Promise.resolve({ applied: false, reason: 'apply-failed' });
+    }
+    return Promise.resolve(result).then(value => {
+      if (value?.reason === 'disabled') return { ...value, applied: true };
+      if (typeof value?.applied === 'boolean') return value;
+      return { applied: false, reason: 'apply-unavailable' };
+    }, () => ({ applied: false, reason: 'apply-failed' }));
   }
 
   async function prepare(currentGeneration) {
@@ -1353,21 +1491,12 @@ function installAnimation(
       message('ready', { duration: DURATION, locale: localization?.locale || locale });
     }
     if (frameSpec?.intent === 'play') {
-      let wallpaperResult;
       try {
-        wallpaperResult = message('background', {
+        message('background', {
           image: rawArtwork,
           strength: Number.isInteger(assets?.wallpaperStrength) ? assets.wallpaperStrength : 42,
         });
       } catch {}
-      if (frameSpec?.settingsCommitted === true) {
-        Promise.resolve(wallpaperResult).then(result => {
-          if (!disposed && currentGeneration === generation && result
-            && result.applied === false && result.reason !== 'disabled') showWallpaperFailure();
-        }).catch(() => {
-          if (!disposed && currentGeneration === generation) showWallpaperFailure();
-        });
-      }
     }
     if (frameSpec?.intent === 'settings') openSettingsPanel();
     if (frameSpec?.intent === 'play' || startAfterPrepare || (isLocalPreview && !nativePreview)) startClock();
@@ -1481,20 +1610,42 @@ function installAnimation(
       || frameSpec?.intent === 'preview' || imageSettings.isSettingsOpen()) return false;
     const wasPlaying = rafId !== 0;
     if (wasPlaying) pause();
-    const opened = imageSettings.openSettings({
-      onOpen() {
-        if (frameSpec?.intent === 'play') message('settings-open');
-      },
-      onCancel() { finish(true); },
-      onSaved() {
-        if (disposed) return;
-        stopClock();
-        generation++;
-        preparing = false;
-        releaseSceneResources();
-        message('settings-close');
-      },
+    const chrome = [skipButton, stageText, progressText];
+    const priorHidden = chrome.map(element => element?.hidden);
+    const restoreChrome = () => chrome.forEach((element, index) => {
+      if (element) element.hidden = priorHidden[index];
     });
+    let opened;
+    try {
+      opened = imageSettings.openSettings({
+        onOpen() {
+          chrome.forEach(element => { if (element) element.hidden = true; });
+          if (frameSpec?.intent === 'play') message('settings-open');
+        },
+        onPreview(draft) { return startSettingsPreview(draft); },
+        onApply(saved) {
+          finishSettingsPreview(settingsPreview, settingsPreview?.started, false);
+          return applySavedWallpaper(saved);
+        },
+        onCancel() {
+          finishSettingsPreview(settingsPreview, false, false);
+          finish(true);
+        },
+        onSaved() {
+          if (disposed) return;
+          finishSettingsPreview(settingsPreview, settingsPreview?.started, false);
+          stopClock();
+          generation++;
+          preparing = false;
+          releaseSceneResources();
+          message('settings-close');
+        },
+      });
+    } catch (error) {
+      restoreChrome();
+      throw error;
+    }
+    if (!opened) restoreChrome();
     if (!opened && wasPlaying && !disposed) startClock();
     return opened;
   }
@@ -1507,6 +1658,11 @@ function installAnimation(
     if (event.key === 'Escape') {
       event.preventDefault();
       if (frameSpec?.intent === 'settings' && !readySent) return;
+      if (settingsPreview) {
+        event.stopImmediatePropagation?.();
+        finishSettingsPreview(settingsPreview, settingsPreview.started);
+        return;
+      }
       if (imageSettings?.isSettingsOpen()) {
         if (imageSettings.isBusy()) {
           event.stopImmediatePropagation?.();
@@ -1588,6 +1744,15 @@ function installAnimation(
     }
     applyAppearanceStyles();
     refreshLocalizedUI();
+    if (settingsPreview && !settingsPreview.closed) {
+      const previewLabel = t('settings.button.previewAnimation');
+      const closeLabel = t('settings.button.closePreview');
+      settingsPreview.overlay.setAttribute('aria-label', previewLabel);
+      settingsPreview.iframe.setAttribute('title', previewLabel);
+      settingsPreview.closeButton.setAttribute('aria-label', closeLabel);
+      settingsPreview.closeButton.textContent = closeLabel;
+      try { settingsPreview.handle?.updateAppearance(nextAppearance); } catch {}
+    }
     imageSettings?.refreshAppearance?.();
     if (changed) {
       appearanceRevision++;
@@ -1597,7 +1762,6 @@ function installAnimation(
         if (nextColors.text) redrawLineCanvas();
         drawAt(elapsed, false);
       }
-      if (root?.querySelector('[data-agent-skin-wallpaper-result]')) showWallpaperFailure();
       if (root?.querySelector('[data-agent-skin-settings-result]')) showSettingsFallbackNotice();
       if (errorDetail || root?.querySelector('[data-agent-skin-error]')) showError(errorDetail);
     }
@@ -1611,6 +1775,7 @@ function installAnimation(
   function dispose() {
     if (disposed) return false;
     disposed = true;
+    finishSettingsPreview(settingsPreview, false, false);
     generation++;
     seekRequestGeneration++;
     stopClock();

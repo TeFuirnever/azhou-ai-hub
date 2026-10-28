@@ -970,7 +970,7 @@ private struct StartupStatus {
         } else {
             guard let completion = completionRaw as? [String: Any],
                   let cause = completion["cause"] as? String,
-                  ["natural", "skip", "settings-cancel"].contains(cause),
+                  ["natural", "skip", "settings-cancel", "settings-save"].contains(cause),
                   let beforeReady = boolean(completion["beforeReady"]) else { return nil }
             completionCause = cause
             completionBeforeReady = beforeReady
@@ -1298,7 +1298,7 @@ enum WallpaperCLI {
           if(state&&state.owner==='azhou-codex-startup'&&state.version===1&&typeof state.phase==='string'&&Number.isSafeInteger(state.runId)
             &&typeof state.ready==='boolean'&&typeof state.completed==='boolean'&&typeof state.overlay==='boolean'){
             const completion=state.completion;
-            const validCompletion=completion===null||(completion&&['natural','skip','settings-cancel'].includes(completion.cause)&&typeof completion.beforeReady==='boolean');
+            const validCompletion=completion===null||(completion&&['natural','skip','settings-cancel','settings-save'].includes(completion.cause)&&typeof completion.beforeReady==='boolean');
             startup={installed:true,owner:state.owner,version:state.version,phase:state.phase,runId:state.runId,
               ready:state.ready,completed:state.completed,overlay:state.overlay,completion:validCompletion?completion:null};
             const failure=value(state,'wallpaper');

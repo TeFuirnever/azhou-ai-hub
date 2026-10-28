@@ -139,12 +139,12 @@ function appearanceText(factory, appearance, themeConfig) {
 function mountAppearanceEntry(document, openSettings, assets, factory, appearance, host) {
   const element = document.createElement('div');
   element.setAttribute('data-agent-skin-entry', 'appearance');
-  element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;z-index:2147483646;display:none';
+  element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;right:auto;top:auto;z-index:2147483646;display:none';
   const shadow = element.attachShadow({ mode: 'open' });
   const button = document.createElement('button');
   // Match the animation's CSSOM path: a host may reject inline <style> blocks.
   // System colors keep this owned control readable in either color scheme.
-  button.style.cssText = 'all:initial;visibility:inherit;box-sizing:border-box;display:flex;align-items:center;gap:7px;cursor:pointer;min-height:44px;padding:5px 9px 5px 5px;border:1px solid var(--app-color-border,var(--color-border,transparent));border-radius:14px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;outline:2px solid transparent;outline-offset:3px';
+  button.style.cssText = 'all:initial;visibility:inherit;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-start;gap:7px;cursor:pointer;width:100%;min-height:44px;padding:5px 9px 5px 5px;border:1px solid var(--app-color-border,var(--color-border,transparent));border-radius:14px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;outline:2px solid transparent;outline-offset:3px';
   button.type = 'button';
   button.style.minWidth = '44px';
   const avatar = assets?.entryAvatar;
@@ -161,11 +161,15 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const label = document.createElement('span');
   button.appendChild(label);
   let position = () => {};
+  let visible = false;
+  let currentTarget = null;
   const setAppearance = value => {
     const text = appearanceText(factory, value, assets?.themeConfig);
-    label.textContent = text.t('characterName');
+    const characterName = text.t('characterName');
+    const entryLabel = `${characterName}${value.locale === 'zh-CN' ? '外观' : ' Appearance'}`;
+    label.textContent = entryLabel;
     button.title = text.t('openAppearance');
-    button.setAttribute('aria-label', text.t('appearanceLabel'));
+    button.setAttribute('aria-label', entryLabel);
     button.style.colorScheme = value.theme;
     element.setAttribute('lang', value.locale);
     position();
@@ -181,72 +185,201 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   element.style.display = 'none';
   document.documentElement.appendChild(element);
   const page = document.documentElement.ownerDocument ?? document;
-  let observer, pending, relevantControls = [];
-  position = () => {
-    if (element.style.display === 'none' || typeof page.querySelectorAll !== 'function'
-      || typeof element.getBoundingClientRect !== 'function') return;
-    label.style.display = '';
-    let rect = element.getBoundingClientRect();
-    const height = document.documentElement.clientHeight;
-    const width = document.documentElement.clientWidth;
-    if (!rect.width || !rect.height || !height) return;
-    const controls = Array.from(page.querySelectorAll('button, a[href], [role="button"], input, textarea, select'))
-      .map(control => ({ control, bounds: control.getBoundingClientRect() }))
-      .filter(({ bounds }) => bounds.width > 0 && bounds.height > 0 && bounds.top < height && bounds.bottom > 0);
-    relevantControls = controls.filter(({ bounds }) => bounds.left < 10 + rect.width
-      || bounds.right > width - rect.width - 10).map(({ control }) => control);
-    const findPosition = left => {
-      const bounds = controls.map(item => item.bounds).filter(other => other.left < left + rect.width && other.right > left);
-      const desired = height - 72 - rect.height;
-      const candidates = [desired, ...bounds.flatMap(other => [other.top - rect.height - 8, other.bottom + 8])];
-      const available = candidates.filter(top => top >= 8 && top + rect.height <= height - 8
-        && bounds.every(other => top + rect.height + 8 <= other.top || top >= other.bottom + 8));
-      if (!available.length) return null;
-      return { left, top: available.reduce((best, candidate) =>
-        Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best) };
-    };
-    let placement = findPosition(10);
-    if (!placement) {
-      label.style.display = hasAvatar ? 'none' : '';
-      rect = element.getBoundingClientRect();
-      const left = Math.max(10, width - rect.width - 10);
-      const columns = [left, ...controls.flatMap(({ bounds }) => [bounds.right + 8, bounds.left - rect.width - 8])];
-      for (const column of columns) {
-        if (column < 10 || column + rect.width > width - 10) continue;
-        placement = findPosition(column);
-        if (placement) break;
+  let observer, pending;
+  const tagName = node => String(node?.tagName ?? '').toUpperCase();
+  const getNavAncestor = node => {
+    for (let current = node; current; current = current.parentElement ?? current.parentNode) {
+      if (tagName(current) === 'NAV') return current;
+    }
+    return null;
+  };
+  const isVisibleNavigation = node => {
+    for (let current = node; current; current = current.parentElement ?? current.parentNode) {
+      if (current.hidden || current.getAttribute?.('aria-hidden') === 'true') return false;
+      let style;
+      try { style = host.getComputedStyle?.(current); } catch {}
+      const display = style?.getPropertyValue?.('display') || style?.display;
+      const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
+      const contentVisibility = style?.getPropertyValue?.('content-visibility') || style?.contentVisibility;
+      if (display === 'none' || visibility === 'hidden' || visibility === 'collapse' || contentVisibility === 'hidden') return false;
+      if (typeof current.getBoundingClientRect === 'function') {
+        try {
+          const bounds = current.getBoundingClientRect();
+          if (bounds.width <= 0 || bounds.height <= 0) return false;
+        } catch { return false; }
+      }
+      if (current === document.documentElement) break;
+    }
+    return true;
+  };
+  const isAppearanceAnchorName = value => {
+    const name = String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    return name === 'your dot' || name === '你的 dot';
+  };
+  const findNavigationTarget = () => {
+    if (typeof page.querySelectorAll !== 'function') return null;
+    let anchors;
+    try { anchors = Array.from(page.querySelectorAll('nav a[href]')); } catch { return null; }
+    const matches = anchors.filter(anchor => {
+      const name = anchor.getAttribute?.('aria-label') ?? anchor.textContent ?? '';
+      return isAppearanceAnchorName(name) && getNavAncestor(anchor) && isVisibleNavigation(anchor);
+    });
+    if (matches.length !== 1) return null;
+    const anchor = matches[0];
+    const nav = getNavAncestor(anchor);
+    const anchorParent = anchor.parentElement ?? anchor.parentNode;
+    let row, container;
+    if (anchorParent === nav) {
+      row = anchor;
+      container = nav;
+    } else if ((anchorParent?.parentElement ?? anchorParent?.parentNode) === nav) {
+      row = anchorParent;
+      container = nav;
+    } else if (tagName(anchorParent) === 'LI') {
+      const list = anchorParent.parentElement ?? anchorParent.parentNode;
+      if (tagName(list) === 'UL' && (list.parentElement ?? list.parentNode) === nav) {
+        row = anchorParent;
+        container = list;
       }
     }
-    element.style.visibility = 'visible';
-    if (!placement) return;
-    element.style.left = `${placement.left}px`;
-    const bottom = `${height - placement.top - rect.height}px`;
-    if (element.style.bottom !== bottom) element.style.bottom = bottom;
+    if (!row || !container || typeof container.insertBefore !== 'function') return null;
+    return { anchor, nav, row, container };
+  };
+  const fallbackControls = () => {
+    try {
+      return Array.from(page.querySelectorAll('button, a[href], [role="button"], input, textarea, select'))
+        .map(control => ({ control, bounds: control.getBoundingClientRect?.() }))
+        .filter(({ bounds }) => bounds && bounds.width > 0 && bounds.height > 0
+          && bounds.top < document.documentElement.clientHeight && bounds.bottom > 0);
+    } catch {
+      return [];
+    }
+  };
+  const findFallbackTop = () => {
+    if (!visible || typeof element.getBoundingClientRect !== 'function') return null;
+    const viewportHeight = document.documentElement.clientHeight;
+    if (!viewportHeight) return null;
+    const rect = element.getBoundingClientRect();
+    const height = rect.height || 44;
+    const left = 10;
+    const width = Math.max(rect.width || 0, hasAvatar ? 48 : 120);
+    const controls = fallbackControls().filter(({ bounds }) => bounds.left < left + width && bounds.right > left);
+    const desired = Math.max(8, Math.min(viewportHeight - height - 8, viewportHeight - 72 - height));
+    const candidates = [desired, 8, viewportHeight - height - 8,
+      ...controls.flatMap(({ bounds }) => [bounds.top - height - 8, bounds.bottom + 8])];
+    const available = candidates.filter(top => top >= 8 && top + height <= viewportHeight - 8
+      && controls.every(({ bounds }) => top + height + 8 <= bounds.top || top >= bounds.bottom + 8));
+    if (!available.length) return null;
+    return available.reduce((best, candidate) =>
+      Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best);
+  };
+  const showFallback = () => {
+    currentTarget = null;
+    element.style.position = 'fixed';
+    element.style.left = '10px';
+    element.style.right = 'auto';
+    element.style.top = 'auto';
+    element.style.bottom = '72px';
+    element.style.zIndex = '2147483646';
+    element.style.width = 'max-content';
+    element.style.display = visible ? 'block' : 'none';
+    label.style.display = '';
+    if (element.parentNode !== document.documentElement) document.documentElement.appendChild(element);
+    let top = findFallbackTop();
+    if (top === null && hasAvatar) {
+      label.style.display = 'none';
+      top = findFallbackTop();
+    }
+    if (top !== null) {
+      element.style.top = `${top}px`;
+      element.style.bottom = 'auto';
+    }
+  };
+  const showNavigationRow = target => {
+    currentTarget = target;
+    element.style.position = 'static';
+    element.style.left = '';
+    element.style.right = '';
+    element.style.top = '';
+    element.style.bottom = '';
+    element.style.zIndex = '';
+    element.style.width = '100%';
+    element.style.display = visible ? 'block' : 'none';
+    const next = target.row.nextSibling ?? null;
+    if (element.parentNode !== target.container || next !== element) {
+      target.container.insertBefore(element, next);
+    }
+    let width = 0;
+    try { width = target.container.getBoundingClientRect?.().width ?? target.nav.getBoundingClientRect?.().width ?? 0; } catch {}
+    label.style.display = width > 0 && width < 116 ? 'none' : '';
+  };
+  position = () => {
+    const target = findNavigationTarget();
+    if (target) showNavigationRow(target);
+    else showFallback();
+  };
+  const isPotentialNavigationNode = node => {
+    if (!node) return false;
+    if (tagName(node) === 'NAV') return true;
+    if (tagName(node) === 'A' && isAppearanceAnchorName(node.getAttribute?.('aria-label') ?? node.textContent ?? '')) return true;
+    try { return Boolean(node.querySelector?.('nav a[href]') || node.querySelector?.('a[href]')); } catch { return false; }
+  };
+  const touchesFallbackColumn = node => {
+    if (typeof node?.getBoundingClientRect !== 'function') return false;
+    try {
+      const bounds = node.getBoundingClientRect();
+      const entry = element.getBoundingClientRect?.();
+      const width = Math.max(entry?.width ?? 0, hasAvatar ? 48 : 120);
+      return bounds.width > 0 && bounds.left < 10 + width && bounds.right > 10;
+    } catch { return false; }
+  };
+  const isNavigationRelatedNode = node => {
+    if (!node) return false;
+    if (tagName(node) === 'NAV') return true;
+    try {
+      return Array.from(page.querySelectorAll('nav a[href]')).some(anchor => {
+        for (let current = anchor; current; current = current.parentElement ?? current.parentNode) {
+          if (current === node) return true;
+        }
+        return false;
+      });
+    } catch { return false; }
+  };
+  const isNavigationMutation = record => {
+    const target = record.target;
+    if (target === element) return false;
+    if (target === currentTarget?.anchor || target === currentTarget?.row
+      || target === currentTarget?.container || target === currentTarget?.nav
+      || target === currentTarget?.nav.parentNode || target === document.documentElement) return true;
+    if (currentTarget && (currentTarget.nav.contains?.(target) || target?.contains?.(currentTarget.nav))) return true;
+    if (isNavigationRelatedNode(target)) return true;
+    if (!currentTarget && touchesFallbackColumn(target)) return true;
+    if (record.type === 'childList') {
+      return [...(record.addedNodes ?? []), ...(record.removedNodes ?? [])]
+        .some(node => isPotentialNavigationNode(node) || isNavigationRelatedNode(node)
+          || (!currentTarget && touchesFallbackColumn(node)));
+    }
+    if (record.type === 'attributes') return target === currentTarget?.anchor;
+    return false;
   };
   const schedule = () => {
-    if (pending !== undefined || element.style.display === 'none') return;
+    if (pending !== undefined || !visible) return;
     pending = host.setTimeout(() => { pending = undefined; position(); }, 80);
   };
-  const touchesEntryColumn = node => {
-    if (typeof node?.getBoundingClientRect !== 'function') return false;
-    const target = node.getBoundingClientRect(), entry = element.getBoundingClientRect();
-    return target.width > 0 && ((target.left < entry.right && target.right > entry.left)
-      || (target.left < 10 + entry.width && target.right > 10));
-  };
-  const onScroll = event => { if (event.target === page || touchesEntryColumn(event.target)) schedule(); };
-  if (typeof page.querySelectorAll === 'function' && typeof host.MutationObserver === 'function') {
+  const onScroll = () => schedule();
+  if (typeof host.MutationObserver === 'function') {
     observer = new host.MutationObserver(records => {
-      if (records.some(record => record.target !== element && (touchesEntryColumn(record.target)
-        || relevantControls.some(control => record.target === control || record.target.contains?.(control))))) schedule();
+      if (records.some(isNavigationMutation)) schedule();
     });
     observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true,
-      attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
-    host.addEventListener?.('resize', schedule);
-    host.addEventListener?.('scroll', onScroll, true);
+      attributeFilter: ['aria-label', 'href', 'class', 'style', 'hidden', 'aria-hidden'] });
   }
+  host.addEventListener?.('resize', schedule);
+  host.addEventListener?.('scroll', onScroll, true);
+  position();
   return {
     element, button, setAppearance,
-    update(visible) { element.style.display = visible ? 'block' : 'none'; button.disabled = !visible; if (visible) position(); },
+    update(value) { visible = value; element.style.display = value ? 'block' : 'none'; button.disabled = !value; if (value) position(); },
     remove() {
       observer?.disconnect();
       if (pending !== undefined) host.clearTimeout(pending);
@@ -260,7 +393,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, settingsCommitted, appearance) {
+function mountOverlay(host, payload, runId, intent, assets, receive, appearance) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -295,11 +428,8 @@ function mountOverlay(host, payload, runId, intent, assets, receive, settingsCom
     setTimeout: bind('setTimeout'),
     clearTimeout: bind('clearTimeout'),
   });
-  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance,
-    settingsCommitted: settingsCommitted === true });
-  // Preserve the parent handler result for committed settings saves: the child
-  // uses it to report wallpaper-only failure after the IndexedDB commit. The
-  // shared handler still enforces the current frame source and runId.
+  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance });
+  // Preserve the result so the settings panel can report wallpaper failures.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
   return {
     element: frame,
@@ -343,8 +473,6 @@ class PageController {
     this.appearance = hostAppearance(host);
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
-    this.settingsCommitPending = false;
-    this.frameSettingsCommitted = false;
     this.state = {
       phase: 'loading',
       runId: 0,
@@ -408,9 +536,6 @@ class PageController {
     this.state.reason = '';
     this.state.completion = null;
     this.appearanceEntry?.update(false);
-    const settingsCommitted = intent === 'play' && this.settingsCommitPending;
-    this.settingsCommitPending = false;
-    this.frameSettingsCommitted = settingsCommitted;
     const runId = this.state.runId;
     this.host.addEventListener('message', this.onMessage);
     this.watchdog = this.host.setTimeout(() => this.expire(runId), 25_000);
@@ -451,7 +576,7 @@ class PageController {
       if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings(),
         this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host);
       this.frame = mountOverlay(
-        this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.frameSettingsCommitted, this.appearance,
+        this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
       );
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
@@ -559,8 +684,14 @@ class PageController {
     }
     if (message.action === 'settings-close') {
       if (this.state.ready && this.state.phase === 'settings') {
-        this.settingsCommitPending = true;
-        this.#beginRun('play');
+        this.state.phase = 'complete';
+        this.state.completed = true;
+        this.state.overlay = false;
+        this.state.completion = { cause: 'settings-save', beforeReady: false };
+        this.appearanceEntry?.update(true);
+        this.#clearWatchdog();
+        this.host.removeEventListener('message', this.onMessage);
+        this.#stopFrame();
       }
       return;
     }
@@ -706,12 +837,12 @@ class PageController {
       this.wallpaperRequest = { image: message.image, strength: message.strength };
       this.wallpaperDisabled = false;
     }
-    // The workspace may mount after the animation finishes. Natural completion
-    // removes only the overlay; skip, replacement and disposal still cancel work.
+    // The workspace may mount after the overlay closes. Skip, replacement and
+    // disposal still cancel work, while completed playback or saving can finish.
     const isCurrent = () => generation === this.wallpaperGeneration
       && (retry ? this.#isCurrentRetry(runId, generation)
         : this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
-          && this.state.phase === 'complete' && this.state.completion?.cause === 'natural'
+          && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
           && this.#ownsStartupController()));
     if (typeof this.wallpaperApply !== 'function') {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');

@@ -2,6 +2,8 @@
 
 2026-10-27 验收修订：设置入口以[冷启动验收修订](host-acceptance-fixes.md)为准，替代下文历史的 Command-Option-B 约定；其余运行协议保持有效。
 
+2026-10-28 体验修订：保存设置后应用工作区背景并结束设置，不自动重播；动画预览独立使用草稿。以下保存状态和消息规则已相应更新。
+
 本文所有 MUST 均是 `DETAIL-2026-001` 的 **Planned（目标态）** 契约，不是 H 当前实现声明。S 参数快照和出处见[研读](source-analysis.md)；本文选择在 H 重实现的值以此处为准。入口、步骤和追溯见[详细设计](detailed-design.md)。
 
 产品已命名为 Agent Skin / `agent-skin`，首期只适配 Codex。该命名决定不改变本文的Codex页面全局、owner、消息、事件schema、数据库或App安装身份；包目录/Hub入口及旧来源衔接以详细设计§12和执行指南前置单N为准。
@@ -21,7 +23,7 @@
 
 `status()` 的必需字段：`owner`、`version`、`phase`、`runId`、`ready`、`completed`、`overlay`、`wallpaper`、`reason`。`phase` 为 `loading|playing|settings|complete|failed|timeout|disposed`；reason 成功时为空串，失败时为固定错误分类。wallpaper 是对象，含 `applied`、`reason`、`imageDecoded` 及 H 现有实际样式核查结果，不用单个 true 遮蔽部分失败。清理后可由 dispose 的返回值报告 disposed；全局已删除时，外部查询应识别“未安装”，不访问旧闭包。
 
-补齐字段类型：owner为上文固定string，version为整数1，runId为本页正整数，ready/completed/overlay为boolean，reason为RC6固定string；增加`completion:null|{cause:"natural"|"skip"|"settings-cancel",beforeReady:boolean}`，每轮开始置null。wallpaper至少含`{applied:boolean,reason:string,imageDecoded:boolean}`；图片、轮廓和用户文字不进入status。只允许unknown optional字段前向扩展，必需字段缺失/类型错误不能当作旧版本成功。
+补齐字段类型：owner为上文固定string，version为整数1，runId为本页正整数，ready/completed/overlay为boolean，reason为RC6固定string；增加`completion:null|{cause:"natural"|"skip"|"settings-cancel"|"settings-save",beforeReady:boolean}`，每轮开始置null。wallpaper至少含`{applied:boolean,reason:string,imageDecoded:boolean}`；图片、轮廓和用户文字不进入status。只允许unknown optional字段前向扩展，必需字段缺失/类型错误不能当作旧版本成功。
 
 每次创建iframe传入`{runId,intent:"play"|"settings",protocolVersion:1,assets}`。首次冷启动intent=play；完成后打开设置intent=settings。settings意图也要载入有效资源再开放交互，但不自动播放。ready只在loading接受一次：play进入playing，settings进入settings并取消watchdog；settings-open仅在resourcesReady且已ready的playing/settings接受。父与iframe都必须在resourcesReady=false时忽略⌘⌥B，避免子页绕过父端loading守卫。
 
@@ -38,10 +40,10 @@ CDP `Runtime.evaluate` 必须使用 `returnByValue=true`；安装可 `awaitPromi
 | `complete` | 播完、skip，或settings的×/Esc取消 | `skipped:boolean`；settings取消必须为true | loading/playing的skip与settings取消均可接受；记录completion，completed=true并删除iframe；取消不写库、不重播 |
 | `assetError` | 解码或默认路径不可用 | 固定 `reason` | 标失败并清理覆盖层；若该runId已终结则忽略迟到消息；不输出图像字节 |
 | `settings-open` | 设置框打开成功 | 无 | 暂停动画，取消本轮 watchdog |
-| `settings-close` | 保存提交成功，需要重播 | 无 | 结束旧设置 iframe，新建播放 iframe并传入新 runId；重置 ready/completed；重新进入 loading |
+| `settings-close` | 保存已提交，背景应用流程结束或用户关闭提示 | 无 | 结束当前设置 iframe，记录 `settings-save` 完成状态；不创建新播放轮次 |
 | `restore` | 用户点击恢复外观 | 无 | dispose；不等待 complete |
 
-保存成功的旧 iframe 发出 `settings-close` 后必须停止自己的工作，不在旧 iframe 上调用 replay。新 iframe 重新读取 committed、解码、预热并发 ready；消息不需要临时换 runId 的隐含双向握手。S 的 `reveal` 是旧原生预览交接动作；同窗口正式运行不隐藏应用，也不需要 reveal。未知 action 忽略并在测试断言无副作用；不把 action 字符串用作原生命令或 JS 源码。
+保存成功的 iframe 发出 `settings-close` 后必须停止自己的工作，不在旧 iframe 上调用 replay。预览使用隔离的草稿副本，不保存设置或修改工作区背景。S 的 `reveal` 是旧原生预览交接动作；同窗口正式运行不隐藏应用，也不需要 reveal。未知 action 忽略并在测试断言无副作用；不把 action 字符串用作原生命令或 JS 源码。
 
 `⌘⌥B` **同时在父页面和当前iframe的window注册**；键盘事件不会跨文档冒泡。父页面处理器调用Page Controller的openSettings；iframe处理器调用同一个面板的本地openSettings，再发settings-open；两处均preventDefault且不重复打开。完整结束后只保留父页面监听。动画开始后默认隐藏设置按钮，允许快捷键打开。设置面板通过dialog焦点约束；进入前记住activeElement。删除iframe时，只在原元素仍连接且用户焦点仍在owned iframe/文档失焦时归还，避免抢走用户后来选择的官方输入焦点。
 

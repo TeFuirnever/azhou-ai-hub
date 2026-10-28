@@ -17,6 +17,20 @@ const localizationContext = {};
 new vm.Script(localizationSource, { filename: LOCALIZATION_SOURCE_PATH }).runInNewContext(localizationContext);
 const { createLocalization } = localizationContext;
 const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+const PREVIEW_WASH_POSITIONS = ['0%', '22%', '36%', '62%', '73%', '87%', '100%'];
+const PREVIEW_WASH_BASE_MIXES = new Map([
+  [0, [100, 100, 100, 100, 100, 100, 100]],
+  [42, [76, 82, 88, 84, 70, 35, 30]],
+  [57, [67, 76, 84, 78, 59, 12, 5]],
+  [75, [57, 68, 79, 71, 46, 0, 0]],
+]);
+
+function expectedPreviewWash(strength) {
+  const base = 'var(--azhou-base, var(--color-surface, var(--app-color-background-surface, #202024)))';
+  return 'linear-gradient(90deg,' + PREVIEW_WASH_BASE_MIXES.get(strength).map((percent, index) =>
+    `color-mix(in srgb, ${base} ${percent}%, transparent) ${PREVIEW_WASH_POSITIONS[index]}`,
+  ).join(',') + ')';
+}
 
 function makeFile({ size = 64, type = 'image/png', signature = PNG_SIGNATURE } = {}) {
   return {
@@ -624,7 +638,208 @@ test('loading settings without IndexedDB returns a copy of the supplied defaults
   });
 });
 
-test('one appearance page shows build identity, editable groups and live inherited state without persisting them', async () => {
+test('settings editor leads with a draft workspace preview and passes a clone to animation preview', async () => {
+  const localization = createLocalization({ locale: 'zh-CN' });
+  const fixture = makeFixture({ localization });
+  const loaded = await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[1, 2]]],
+    introTitle: 'Saved title', introCaption: 'Saved caption', artworkSubtitle: 'Saved subtitle',
+    wallpaperStrength: 42,
+  });
+  let previewSettings = null;
+  let applyCalls = 0;
+  assert.equal(fixture.api.openSettings({
+    onPreview: settings => { previewSettings = settings; },
+    onApply: () => { applyCalls++; return { applied: true }; },
+  }), true);
+
+  const sections = fixture.elements.filter(element => element.getAttribute('data-agent-skin-settings-section'));
+  assert.deepEqual(sections.map(element => element.getAttribute('data-agent-skin-settings-section')),
+    ['workspace', 'startup', 'about']);
+  const workspaceTab = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-tab') === 'workspace');
+  const startupTab = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-tab') === 'startup');
+  const workspacePanel = sections[0];
+  const startupPanel = sections[1];
+  const backgroundPreview = fixture.elements.find(element => element.getAttribute('data-agent-skin-workspace-preview') === '');
+  const backgroundImage = fixture.elements.find(element => element.getAttribute('data-agent-skin-workspace-preview-image') === '');
+  const backgroundWash = fixture.elements.find(element => element.getAttribute('data-agent-skin-workspace-preview-wash') === '');
+  const strength = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'range');
+  assert.ok(workspaceTab);
+  assert.ok(startupTab);
+  assert.equal(workspaceTab.getAttribute('aria-selected'), 'true');
+  assert.equal(workspacePanel.hidden, false);
+  assert.equal(startupPanel.hidden, true);
+  assert.equal(backgroundPreview.getAttribute('aria-label'), '背景草稿预览');
+  assert.equal(backgroundImage.src, loaded.settings.artwork);
+  assert.ok(backgroundWash, 'workspace preview has a separate wash overlay');
+  assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(42));
+
+  strength.value = '0';
+  strength.listeners.get('input')[0]();
+  assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(0),
+    'zero strength makes the wash opaque and closes the wallpaper image');
+
+  strength.value = '75';
+  strength.listeners.get('input')[0]();
+  assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(75),
+    'maximum strength uses the renderer wash stops and saturation');
+
+  strength.value = '57';
+  strength.listeners.get('input')[0]();
+  assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(57));
+  assert.equal(loaded.settings.wallpaperStrength, 42, 'editing only updates the draft preview');
+  assert.equal(applyCalls, 0, 'adjusting the draft preview never writes the live wallpaper');
+
+  startupTab.click();
+  assert.equal(workspaceTab.getAttribute('aria-selected'), 'false');
+  assert.equal(startupTab.getAttribute('aria-selected'), 'true');
+  assert.equal(workspacePanel.hidden, true);
+  assert.equal(startupPanel.hidden, false);
+  const previewButton = fixture.elements.find(element => element.getAttribute('data-agent-skin-preview-animation') === '');
+  assert.equal(previewButton.parentNode, startupPanel);
+  previewButton.click();
+  assert.equal(previewSettings.wallpaperStrength, 57);
+  assert.notEqual(previewSettings, loaded.settings);
+  assert.notEqual(previewSettings.contours, loaded.settings.contours);
+  previewSettings.contours[0][0][0] = 99;
+  assert.equal(loaded.settings.contours[0][0][0], 1, 'callback mutations cannot alter saved settings');
+  assert.equal(fixture.api.isSettingsOpen(), true, 'preview leaves the editor open');
+  assert.equal(fixture.api.cancelSettings(), true);
+  fixture.api.dispose();
+});
+
+test('a failed animation preview reports an error and keeps the draft editable', async () => {
+  const fixture = makeFixture();
+  await fixture.api.load({
+    avatar: '', artwork: 'data:image/png;base64,BBBB', contours: [],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  assert.equal(fixture.api.openSettings({ onPreview: () => { throw new Error('preview unavailable'); } }), true);
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const previewButton = fixture.elements.find(element => element.getAttribute('data-agent-skin-preview-animation') === '');
+  const alert = fixture.elements.find(element => element.getAttribute('aria-live') === 'assertive');
+  title.value = 'Unsaved title';
+  title.listeners.get('input')[0]();
+  previewButton.click();
+  assert.equal(alert.textContent, '动画预览失败；草稿仍可编辑或保存。');
+  assert.equal(alert.getAttribute('role'), 'alert');
+  assert.equal(title.value, 'Unsaved title');
+  assert.equal(fixture.api.isSettingsOpen(), true);
+  fixture.api.cancelSettings();
+  fixture.api.dispose();
+});
+
+test('a failed background apply retries the saved result without repeating the settings transaction', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  const applied = [];
+  const saved = [];
+  let applyAttempt = 0;
+  let cancelled = 0;
+  assert.equal(fixture.api.openSettings({
+    onApply: async value => {
+      applied.push(value);
+      applyAttempt++;
+      return applyAttempt === 1
+        ? { applied: false, reason: 'wallpaper-unavailable' }
+        : { applied: false, reason: 'disabled' };
+    },
+    onSaved: value => saved.push(value),
+    onCancel: () => { cancelled++; },
+  }), true);
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  title.value = 'New title';
+  title.listeners.get('input')[0]();
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+
+  await saveButton.listeners.get('click')[0]();
+
+  assert.equal(storage.state.puts, 1, status.textContent);
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0].introTitle, 'New title');
+  assert.equal(fixture.api.isSettingsOpen(), true);
+  assert.equal(status.textContent, '设置已保存，但背景应用失败。可以重试，或关闭设置。');
+  assert.equal(status.getAttribute('role'), 'alert');
+  assert.equal(saveButton.textContent, '重试应用');
+  const closeButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '关闭');
+  assert.ok(closeButton);
+  assert.equal(saved.length, 0, 'the host is not told to finish settings until the panel closes');
+
+  await saveButton.listeners.get('click')[0]();
+
+  assert.equal(storage.state.puts, 1, 'retry does not write to IndexedDB again');
+  assert.equal(applied.length, 2);
+  assert.notEqual(applied[0], applied[1], 'each apply attempt receives a fresh snapshot');
+  assert.equal(fixture.api.isSettingsOpen(), false);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].introTitle, 'New title');
+  assert.equal(cancelled, 0);
+  fixture.api.dispose();
+});
+
+test('closing during a pending background apply finalizes committed settings once and ignores late completion', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  let finishApply;
+  const saved = [];
+  let cancelled = 0;
+  assert.equal(fixture.api.openSettings({
+    onApply: () => new Promise(resolve => { finishApply = resolve; }),
+    onSaved: value => saved.push(value),
+    onCancel: () => { cancelled++; },
+  }), true);
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const saving = saveButton.listeners.get('click')[0]();
+  for (let attempt = 0; attempt < 10 && !finishApply; attempt++) await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(typeof finishApply, 'function');
+  assert.equal(fixture.api.isSettingsOpen(), true);
+  assert.equal(fixture.api.cancelSettings(), true, 'the user can close while the host apply is pending');
+  assert.equal(saved.length, 1);
+  assert.equal(cancelled, 0, 'committed settings are not reported as a draft cancellation');
+  finishApply({ applied: true });
+  await saving;
+  assert.equal(saved.length, 1, 'late completion does not notify the host twice');
+  assert.equal(fixture.api.isSettingsOpen(), false);
+  fixture.api.dispose();
+});
+
+test('settings callbacks keep cancel semantics and legacy onSaved behavior when onApply is absent', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  let cancelled = 0;
+  assert.equal(fixture.api.openSettings({ onCancel: () => { cancelled++; } }), true);
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.equal(cancelled, 1);
+
+  const saved = [];
+  assert.equal(fixture.api.openSettings({ onSaved: value => saved.push(value) }), true);
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(fixture.api.isSettingsOpen(), false);
+  assert.equal(storage.state.puts, 1);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].introTitle, 'Saved title');
+  assert.equal(cancelled, 1);
+  fixture.api.dispose();
+});
+
+test('the settings page puts editing first and keeps read-only appearance state without exposing build instructions', async () => {
   const themeConfig = {
     identity: { appName: { 'zh-CN': '阿舟 AI 实验室', en: 'Azhou AI Lab' },
       botName: { 'zh-CN': '阿舟', en: 'Azhou' }, version: '0.9.0', build: '10',
@@ -639,15 +854,14 @@ test('one appearance page shows build identity, editable groups and live inherit
   assert.equal(fixture.api.openSettings(), true);
   const sections = fixture.elements.filter(element => element.getAttribute('data-agent-skin-settings-section'));
   assert.deepEqual(sections.map(element => element.getAttribute('data-agent-skin-settings-section')),
-    ['identity', 'startup', 'workspace', 'inherited']);
+    ['workspace', 'startup', 'about']);
   const value = key => fixture.elements.find(element => element.getAttribute('data-agent-skin-setting-value') === key);
   assert.equal(value('appName').textContent, '阿舟 AI 实验室');
   assert.equal(value('version').textContent, '0.9.0 · 10');
   assert.equal(value('theme').textContent, '深色');
   assert.equal(value('reducedMotion').textContent, '关闭');
-  assert.equal(value('surface').textContent, '#10121c');
-  assert.match(value('installation').textContent, /theme-config.json/);
-  assert.match(value('installation').textContent, /build-macos.sh/);
+  assert.equal(value('installation'), undefined);
+  assert.equal(fixture.elements.some(element => /theme-config\.json|build-macos\.sh/.test(element.textContent)), false);
   assert.equal(loaded.settings.themeConfig, undefined);
   assert.equal(loaded.settings.reducedMotion, undefined);
   appearance = { ...appearance, locale: 'en', theme: 'light', reducedMotion: true };
@@ -679,7 +893,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   const appearanceAvatar = fixture.elements.find(element =>
     element.getAttribute('data-agent-skin-appearance-avatar') === '');
   const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
-  const status = fixture.elements.find(element => element.getAttribute('aria-live') === 'polite');
+  const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
   assert.equal(dialog.getAttribute('data-agent-skin-settings'), '');
   assert.equal(appearanceAvatar.src, 'data:image/png;base64,AAAA');
   assert.equal(appearanceAvatar.getAttribute('alt'), '');
@@ -687,7 +901,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(titleInput.value, 'Saved title');
   assert.equal(titleInput.getAttribute('aria-label'), '启动标题（最多 16 个字符）');
   assert.equal(titleInput.parentNode.children[0].textContent, '启动标题（最多 16 个字符）');
-  assert.equal(status.textContent, '暂时无法读取保存设置；当前使用默认设置，原记录未删除。');
+  assert.equal(status.textContent, '暂时无法读取已保存设置；当前使用默认值，原设置保持不变。');
 
   titleInput.value = 'Local draft';
   titleInput.listeners.get('input')[0]();
@@ -700,7 +914,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(titleInput.getAttribute('aria-label'), 'Startup title (up to 16 characters)');
   assert.equal(titleInput.parentNode.children[0].textContent, 'Startup title (up to 16 characters)');
   assert.equal(status.textContent,
-    'Saved settings are temporarily unavailable. Defaults are in use; the record was kept.');
+    'Saved settings are temporarily unavailable. Defaults are in use; saved settings are unchanged.');
   assert.equal(fixture.elements.find(element => element.id === 'agent-skin-settings-title').textContent,
     'Azhou · Theme & Appearance');
   assert.equal(dialog.style.getPropertyValue('color-scheme'), 'inherit');
@@ -709,7 +923,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   const restoreButton = fixture.elements.find(element => element.tagName === 'BUTTON'
     && element.textContent === 'Restore defaults');
   const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON'
-    && element.textContent === 'Save and replay');
+    && element.textContent === 'Save');
   assert.equal(restoreButton.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
   assert.equal(restoreButton.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');
   assert.equal(saveButton.style.getPropertyValue('background-color'), 'var(--agent-skin-text, CanvasText)');
@@ -1132,7 +1346,7 @@ test('load total timeout returns safe defaults, preserves the baseline, and leav
   assert.equal(storage.state.clears, 0);
   assert.equal(fixture.api.openSettings(), true, 'the timeout fallback initializes a usable settings panel');
   assert.equal(fixture.api.isSettingsOpen(), true);
-  const status = fixture.elements.find(element => element.getAttribute('aria-live') === 'polite');
+  const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
   assert.equal(status.textContent, '读取设置超时；当前使用默认值，已保存记录未改动。可以重试。');
 
   lateCallbacks.forEach(callback => callback());

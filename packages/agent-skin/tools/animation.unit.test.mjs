@@ -27,6 +27,7 @@ class Element {
   constructor(tagName) {
     this.tagName = tagName.toUpperCase();
     this.nodeType = 1;
+    this.ownerDocument = null;
     this.attributes = new Map();
     this.dataset = {};
     this.style = {
@@ -37,6 +38,7 @@ class Element {
     this.children = [];
     this.listeners = new Map();
     this.hidden = false;
+    this.inert = false;
     this.disabled = false;
     this.value = '';
     this.className = '';
@@ -80,6 +82,7 @@ class Element {
     for (const listener of this.listeners.get(type) ?? []) listener({ target: this, ...event });
   }
   click() { if (!this.disabled) this.dispatch('click'); }
+  focus() { if (this.ownerDocument) this.ownerDocument.activeElement = this; }
   remove() {
     this.removed = true;
     this.parentNode?.children && (this.parentNode.children = this.parentNode.children.filter(child => child !== this));
@@ -119,7 +122,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   makeBitmap = true, bitmapMode = 'ok', imageOptions = {}, native = false, nativeMode,
   existingStage = true, rootWidth = 1280, rootHeight = 800, failShowModal = false,
   noResizeObserver = false, noMatchMedia = false, legacyMedia = false,
-  backgroundResult, throwBackground = false, settingsCommitted = false, skipInstall = false,
+  backgroundResult, skipInstall = false,
   settingsAdapter = null,
   theme = 'dark' } = {}) {
   const raf = new Map();
@@ -291,7 +294,6 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     messages.push(message);
     if (message.action === 'ready') resolveReady(message);
     if (message.action === 'background' && backgroundResult) return backgroundResult();
-    if (message.action === 'background' && throwBackground) throw new Error('wallpaper adapter failed');
     return undefined;
   };
   let settingsInstance = null;
@@ -308,7 +310,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     window, document, window.location, environment.performance, undefined, ImageMock, Path2DMock,
     fakeURL, requestAnimationFrame, cancelAnimationFrame,
     environment.setTimeout, environment.clearTimeout, undefined, send,
-    { runId: 'unit-run', intent, assets: payload, settingsCommitted }, settingsFactory, localizationFactory,
+    { runId: 'unit-run', intent, assets: payload }, settingsFactory, localizationFactory,
   );
   Object.assign(window, {
     document, Image: ImageMock, Path2D: Path2DMock, URL: fakeURL, indexedDB: undefined,
@@ -333,6 +335,73 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     window, timers, raf, messages, mediaListeners, resizeObservers, bitmapPromises, pendingDecodes, images, resolveReady,
     ImageMock, Path2DMock, environment, payload, settingsFactory, settingsInstance, localizationFactory,
     ready, flushFrame, dispatchWindow, drawnTexts, setNow(value) { now = value; } };
+}
+
+function attachPreviewIframeEnvironment(fixture) {
+  const parentCreateElement = fixture.document.createElement.bind(fixture.document);
+  fixture.document.createElement = tagName => {
+    const element = parentCreateElement(tagName);
+    element.ownerDocument = fixture.document;
+    if (tagName !== 'iframe') return element;
+
+    const documentElement = new Element('html');
+    documentElement.dataset.theme = fixture.document.documentElement.dataset.theme;
+    documentElement.lang = fixture.document.documentElement.lang || 'en';
+    const body = new Element('body');
+    const childDocument = {
+      documentElement, body, title: 'Settings preview', activeElement: null,
+      createTextNode: value => fixture.document.createTextNode(value),
+      createElement(childTagName) {
+        const element = parentCreateElement(childTagName);
+        element.ownerDocument = childDocument;
+        return element;
+      },
+      querySelector(selector) { return body.querySelector(selector); },
+      getElementById() { return null; },
+    };
+    documentElement.ownerDocument = childDocument;
+    body.ownerDocument = childDocument;
+
+    const listeners = new Map();
+    const childWindow = {
+      document: childDocument,
+      navigator: { language: fixture.window.navigator.language },
+      Float32Array: fixture.window.Float32Array,
+      innerWidth: fixture.window.innerWidth,
+      innerHeight: fixture.window.innerHeight,
+      devicePixelRatio: fixture.window.devicePixelRatio,
+      CSS: fixture.window.CSS,
+      visualViewport: fixture.window.visualViewport,
+      ResizeObserver: fixture.window.ResizeObserver,
+      matchMedia: fixture.window.matchMedia,
+      Image: fixture.ImageMock,
+      Path2D: fixture.Path2DMock,
+      createImageBitmap: fixture.window.createImageBitmap,
+      requestAnimationFrame: fixture.window.requestAnimationFrame,
+      cancelAnimationFrame: fixture.window.cancelAnimationFrame,
+      setTimeout: fixture.window.setTimeout,
+      clearTimeout: fixture.window.clearTimeout,
+      performance: fixture.window.performance,
+      indexedDB: undefined,
+      URL: fixture.window.URL,
+      location: new URL('about:srcdoc'),
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, new Set());
+        listeners.get(type).add(listener);
+      },
+      removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+      dispatchWindow(type, event = {}) {
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      },
+    };
+    element.contentWindow = childWindow;
+    element.contentDocument = childDocument;
+    Object.defineProperty(element, 'srcdoc', {
+      configurable: true,
+      set() { queueMicrotask(() => element.dispatch('load')); },
+    });
+    return element;
+  };
 }
 
 async function waitReady(fixture) {
@@ -490,6 +559,226 @@ test('settings intent opens through the real settings panel and Escape cancels p
   fixture.handle.dispose();
 });
 
+test('settings dialog hides animation chrome for settings and play intents and restores it after an open failure', async () => {
+  const controls = fixture => [
+    fixture.root.querySelector('[data-agent-skin-skip]'),
+    fixture.root.querySelector('[data-agent-skin-stage-text]'),
+    fixture.root.querySelector('[data-agent-skin-progress]'),
+  ];
+  const assertChromeHidden = fixture => {
+    for (const control of controls(fixture)) assert.equal(control?.hidden, true);
+  };
+  const assertChromeVisible = fixture => {
+    for (const control of controls(fixture)) assert.equal(control?.hidden, false);
+  };
+
+  const settingsIntent = createFixture({ intent: 'settings', settings: true });
+  await waitReady(settingsIntent);
+  assert.equal(settingsIntent.document.body.querySelector('dialog')?.open, true);
+  assertChromeHidden(settingsIntent);
+  settingsIntent.handle.dispose();
+
+  const previewIntent = createFixture({ intent: 'preview', settings: true });
+  await waitReady(previewIntent);
+  assertChromeVisible(previewIntent);
+  assert.equal(previewIntent.handle.openSettings(), false);
+  assertChromeVisible(previewIntent);
+  previewIntent.handle.dispose();
+
+  const playIntent = createFixture({ intent: 'play', settings: true });
+  await waitReady(playIntent);
+  assertChromeVisible(playIntent);
+  assert.equal(playIntent.handle.openSettings(), true);
+  assert.equal(playIntent.document.body.querySelector('dialog')?.open, true);
+  assertChromeHidden(playIntent);
+  playIntent.handle.dispose();
+
+  const failedDialog = createFixture({ intent: 'play', settings: true, failShowModal: true });
+  await waitReady(failedDialog);
+  assert.equal(failedDialog.handle.openSettings(), false);
+  assertChromeVisible(failedDialog);
+  failedDialog.handle.dispose();
+});
+
+test('settings animation preview uses the draft in an isolated frame and returns to the settings draft', async () => {
+  const fixture = createFixture({ intent: 'settings', settings: true, native: true, nativeMode: 'launch' });
+  attachPreviewIframeEnvironment(fixture);
+  await waitReady(fixture);
+  const dialog = fixture.document.body.querySelector('[data-agent-skin-settings]');
+  assert.ok(dialog?.open);
+  const titleInput = dialog.querySelectorAll('input').find(input => input.maxLength === 16);
+  assert.ok(titleInput);
+  titleInput.value = '草稿动画标题';
+  titleInput.dispatch('input');
+  const previewButton = dialog.querySelector('[data-agent-skin-preview-animation]');
+  assert.ok(previewButton);
+  const backgroundCount = fixture.messages.filter(message => message.action === 'background').length;
+
+  const waitForPreview = async () => {
+    for (let attempt = 0; attempt < 40 && !fixture.drawnTexts.identity.includes('草稿动画标题'); attempt++) {
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.ok(fixture.drawnTexts.identity.includes('草稿动画标题'), 'the preview rendered its draft title');
+  };
+  const assertReturnedToSettings = () => {
+    assert.equal(dialog.open, true, 'the settings dialog remains open');
+    assert.equal(titleInput.value, '草稿动画标题', 'the unsaved draft remains in the editor');
+    assert.equal(dialog.querySelector('[data-agent-skin-settings-preview]'), null);
+    assert.equal(fixture.document.activeElement, previewButton, 'focus returns to the preview button');
+    assert.equal(dialog.children[0]?.inert, false, 'settings controls are re-enabled after preview');
+    assert.equal(fixture.raf.size, 0, 'the isolated preview has no live animation frame');
+    assert.equal(fixture.messages.filter(message => message.action === 'background').length, backgroundCount,
+      'preview never applies a wallpaper to the host');
+  };
+
+  titleInput.focus();
+  previewButton.click();
+  await waitForPreview();
+  const preview = dialog.querySelector('[data-agent-skin-settings-preview]');
+  assert.ok(preview);
+  assert.equal(dialog.children.find(child => child !== preview)?.inert, true,
+    'covered settings controls are removed from the tab order');
+  const iframe = preview.querySelector('[data-agent-skin-settings-preview-frame]');
+  assert.ok(iframe);
+  const closeButton = preview.querySelector('[data-agent-skin-settings-preview-close]');
+  assert.ok(closeButton);
+  assert.equal(closeButton.getAttribute('aria-label'), closeButton.textContent);
+  assert.ok(closeButton.getAttribute('aria-label'));
+  closeButton.click();
+  assertReturnedToSettings();
+
+  previewButton.focus();
+  previewButton.click();
+  await waitForPreview();
+  assert.equal(dialog.children[0]?.inert, true);
+  const escapeFrame = dialog.querySelector('[data-agent-skin-settings-preview-frame]');
+  escapeFrame.contentWindow.dispatchWindow('keydown', {
+    key: 'Escape', preventDefault() { this.prevented = true; },
+  });
+  assertReturnedToSettings();
+  fixture.handle.dispose();
+});
+
+test('an open settings animation preview follows host appearance updates', async () => {
+  const fixture = createFixture({ intent: 'settings', settings: true, native: true, nativeMode: 'launch' });
+  attachPreviewIframeEnvironment(fixture);
+  await waitReady(fixture);
+
+  fixture.document.body.querySelector('[data-agent-skin-preview-animation]').click();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const preview = fixture.document.body.querySelector('[data-agent-skin-settings-preview]');
+  const iframe = preview?.querySelector('[data-agent-skin-settings-preview-frame]');
+  const closeButton = preview?.querySelector('[data-agent-skin-settings-preview-close]');
+  assert.ok(iframe);
+  assert.ok(closeButton);
+
+  fixture.handle.updateAppearance({ locale: 'zh-CN', theme: 'light', colors: { surface: '#ffffff' } });
+
+  assert.equal(iframe.contentDocument.documentElement.lang, 'zh-CN');
+  assert.equal(iframe.contentDocument.documentElement.dataset.theme, 'light');
+  assert.equal(iframe.contentDocument.documentElement.style.getPropertyValue('--agent-skin-surface'), '#ffffff');
+  assert.equal(closeButton.textContent, '关闭动画预览');
+  assert.equal(closeButton.getAttribute('aria-label'), '关闭动画预览');
+  fixture.handle.dispose();
+});
+
+test('settings animation preview returns to the preserved draft when it completes naturally', async () => {
+  const fixture = createFixture({ intent: 'settings', settings: true, native: true, nativeMode: 'launch' });
+  attachPreviewIframeEnvironment(fixture);
+  await waitReady(fixture);
+  const dialog = fixture.document.body.querySelector('[data-agent-skin-settings]');
+  const titleInput = dialog.querySelectorAll('input').find(input => input.maxLength === 16);
+  titleInput.value = '自然结束标题';
+  titleInput.dispatch('input');
+  const previewButton = dialog.querySelector('[data-agent-skin-preview-animation]');
+  previewButton.focus();
+  previewButton.click();
+  for (let attempt = 0; attempt < 40 && !fixture.drawnTexts.identity.includes('自然结束标题'); attempt++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.ok(fixture.drawnTexts.identity.includes('自然结束标题'));
+  const startupTimeout = [...fixture.timers.entries()].find(([_id, timer]) => timer.delay === 10_000);
+  startupTimeout?.[1].callback();
+  assert.ok(dialog.querySelector('[data-agent-skin-settings-preview]'),
+    'the iframe startup timeout no longer cancels a preview after ready');
+  assert.equal(fixture.handle.preview.report().resources.liveRAF, 0);
+  assert.equal(fixture.raf.size, 1, 'the nested preview remains live after ten seconds');
+  assert.equal(fixture.flushFrame(11_000), true);
+  assert.ok(dialog.querySelector('[data-agent-skin-settings-preview]'));
+  assert.equal(fixture.flushFrame(12000), true);
+  assert.ok(!dialog.querySelector('[data-agent-skin-settings-preview]'));
+  assert.equal(dialog.open, true);
+  assert.equal(titleInput.value, '自然结束标题');
+  assert.equal(fixture.document.activeElement, previewButton);
+  assert.equal(fixture.raf.size, 0);
+  assert.equal(fixture.timers.size, 0);
+  assert.equal(fixture.messages.some(message => message.action === 'background'), false);
+  fixture.handle.dispose();
+});
+
+test('settings apply reports host failures, treats disabled wallpaper as success, and closes without replay', async () => {
+  let callbacks;
+  let panelOpen = false;
+  const settingsAdapter = {
+    async load(defaults) { return { settings: defaults, baseline: defaults }; },
+    isSettingsOpen() { return panelOpen; },
+    isBusy() { return false; },
+    openSettings(options) { callbacks = options; panelOpen = true; options.onOpen(); return true; },
+    dispose() { panelOpen = false; },
+  };
+  const responses = [
+    Promise.resolve({ applied: false, reason: 'styles-not-effective' }),
+    Promise.resolve({ applied: false, reason: 'disabled' }),
+    () => Promise.reject(new Error('host bridge detail')),
+    undefined,
+  ];
+  const fixture = createFixture({ intent: 'settings', settingsAdapter,
+    backgroundResult: () => {
+      const result = responses.shift();
+      return typeof result === 'function' ? result() : result;
+    } });
+  await waitReady(fixture);
+  assert.equal(typeof callbacks.onApply, 'function');
+  const saved = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,BB==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+    introTitle: '已保存的标题', introCaption: '已保存的说明', artworkSubtitle: '已保存的字幕',
+    wallpaperStrength: 61,
+  };
+  const readyCount = fixture.messages.filter(message => message.action === 'ready').length;
+  const failure = await callbacks.onApply(saved);
+  assert.equal(failure.applied, false);
+  assert.equal(failure.reason, 'styles-not-effective');
+  assert.equal(panelOpen, true, 'the settings UI can keep the editor open after an apply failure');
+  const background = fixture.messages.filter(message => message.action === 'background').at(-1);
+  assert.equal(background.image, saved.artwork);
+  assert.equal(background.strength, saved.wallpaperStrength);
+  assert.equal(fixture.messages.some(message => message.action === 'settings-close'), false);
+
+  const disabled = await callbacks.onApply(saved);
+  assert.equal(disabled.applied, true, 'a disabled wallpaper result is a successful apply');
+  assert.equal(panelOpen, true);
+  const rejected = await callbacks.onApply(saved);
+  assert.equal(rejected.applied, false);
+  assert.equal(rejected.reason, 'apply-failed');
+  const unacknowledged = await callbacks.onApply(saved);
+  assert.equal(unacknowledged.applied, false);
+  assert.equal(unacknowledged.reason, 'apply-unavailable');
+  assert.equal(panelOpen, true);
+  assert.equal(fixture.messages.filter(message => message.action === 'background').length, 4);
+  callbacks.onSaved(saved);
+  assert.equal(fixture.messages.at(-1).action, 'settings-close');
+  assert.equal(fixture.messages.filter(message => message.action === 'background').length, 4,
+    'closing after save does not replay or apply the wallpaper again');
+  assert.equal(fixture.messages.filter(message => message.action === 'ready').length, readyCount);
+  assert.equal(fixture.handle.preview.report().resources.liveImages, 0);
+  assert.equal(fixture.handle.preview.report().resources.liveBitmaps, 0);
+  assert.equal(fixture.handle.preview.report().resources.liveRAF, 0);
+  fixture.handle.dispose();
+});
+
 test('busy image import keeps settings open when Escape is pressed', async () => {
   const fixture = createFixture({ intent: 'settings', settings: true,
     imageOptions: { pendingAfterInitial: true } });
@@ -510,25 +799,12 @@ test('busy image import keeps settings open when Escape is pressed', async () =>
   fixture.handle.dispose();
 });
 
-test('a failed dialog mount resumes playback and a committed wallpaper failure gets a localized notice', async () => {
+test('a failed dialog mount resumes playback', async () => {
   const failedDialog = createFixture({ intent: 'play', settings: true, failShowModal: true });
   await waitReady(failedDialog);
   assert.equal(failedDialog.handle.openSettings(), false);
   assert.equal(failedDialog.handle.preview.report().resources.liveRAF, 1);
   failedDialog.handle.dispose();
-
-  const failedWallpaper = createFixture({ intent: 'play', settings: false, settingsCommitted: true,
-    backgroundResult: () => Promise.resolve({ applied: false, reason: 'styles-not-effective' }) });
-  await waitReady(failedWallpaper);
-  for (let attempt = 0; attempt < 10 && !failedWallpaper.root.querySelector('[data-agent-skin-wallpaper-result]'); attempt++) {
-    await new Promise(resolve => setImmediate(resolve));
-  }
-  const notice = failedWallpaper.root.querySelector('[data-agent-skin-wallpaper-result]');
-  assert.ok(notice);
-  assert.ok(notice.querySelector('[data-agent-skin-wallpaper-title]'));
-  failedWallpaper.handle.updateAppearance({ theme: 'light' });
-  assert.ok(notice.querySelector('[data-agent-skin-wallpaper-body]'));
-  failedWallpaper.handle.dispose();
 });
 
 test('the local preview adapter uses its own browser bindings and preserves the configured preview API', async () => {
@@ -589,10 +865,10 @@ test('an unavailable saved-settings store falls back to defaults and shows only 
   const notice = fixture.root.querySelector('[data-agent-skin-settings-result]');
   assert.ok(notice);
   assert.equal(notice.textContent,
-    'Saved settings are temporarily unavailable. Defaults are in use; the record was kept.');
+    'Saved settings are temporarily unavailable. Defaults are in use; saved settings are unchanged.');
   assert.equal(notice.textContent.includes('private database details'), false);
   fixture.handle.updateAppearance({ locale: 'zh-CN' });
-  assert.equal(notice.textContent, '暂时无法读取保存设置；当前使用默认设置，原记录未删除。');
+  assert.equal(notice.textContent, '暂时无法读取已保存设置；当前使用默认值，原设置保持不变。');
   fixture.handle.dispose();
 });
 

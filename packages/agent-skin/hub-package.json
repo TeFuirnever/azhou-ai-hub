@@ -9,7 +9,7 @@
   "license_status": "no open-source license grant recorded; user is contacting the upstream maintainer",
   "external_distribution": "not authorized",
   "runtime_version": "0.9.0",
-  "runtime_build": "15",
+  "runtime_build": "16",
   "build_inputs": [
     "Native/App.swift",
     "Native/Wallpaper.swift",
@@ -74,6 +74,7 @@
     "tools/test-install-macos.py",
     "tools/test-wallpaper.mjs",
     "tools/startup.test.mjs",
+    "tools/settings-save.unit.test.mjs",
     "tools/localization.test.mjs",
     "tools/animation.unit.test.mjs",
     "tools/wallpaper-renderer.unit.test.mjs",

@@ -7,14 +7,37 @@ const mainURL = 'app://-/index.html?initialRoute=%2F';
 function controlledHost({ body = true } = {}) {
   const listeners = new Set();
   const keyListeners = new Set();
+  const scrollListeners = new Set();
   const observers = [];
   const frames = [];
   const controls = [];
   const timers = [];
-  const document = {
-    documentElement: {
-      appendChild(node) { if (node.contentWindow) frames.push(node); node.parentNode = this; },
+  const documentElement = {
+    children: [],
+    appendChild(node) {
+      if (node.parentNode?.removeChild) node.parentNode.removeChild(node);
+      if (node.contentWindow) frames.push(node);
+      node.parentNode = this;
+      this.children.push(node);
+      return node;
     },
+    insertBefore(node, reference) {
+      if (node.parentNode?.removeChild) node.parentNode.removeChild(node);
+      const index = reference == null ? this.children.length : this.children.indexOf(reference);
+      this.children.splice(index, 0, node);
+      node.parentNode = this;
+      return node;
+    },
+    removeChild(node) {
+      const index = this.children.indexOf(node);
+      if (index >= 0) this.children.splice(index, 1);
+      node.parentNode = null;
+      return node;
+    },
+  };
+  const document = {
+    documentElement,
+    querySelectorAll: () => [],
     activeElement: null,
     hasFocus: () => true,
     createElement(tag) {
@@ -29,7 +52,7 @@ function controlledHost({ body = true } = {}) {
           removeEventListener(type) { events.delete(type); },
           click() { if (!this.disabled) events.get('click')?.(); },
           focus() { document.activeElement = this; },
-          remove() { this.removed = true; },
+          remove() { this.parentNode?.removeChild?.(this); this.removed = true; },
         };
         controls.push(node);
         return node;
@@ -80,6 +103,7 @@ function controlledHost({ body = true } = {}) {
   const host = {
     location: new URL(mainURL),
     document,
+    getComputedStyle(node) { return node.computedStyle ?? node.style ?? {}; },
     MutationObserver: class MutationObserver {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
       observe(_target, options) { this.observing = true; this.options = options; }
@@ -89,15 +113,18 @@ function controlledHost({ body = true } = {}) {
     addEventListener(type, listener) {
       if (type === 'message') listeners.add(listener);
       if (type === 'keydown') keyListeners.add(listener);
+      if (type === 'scroll') scrollListeners.add(listener);
     },
     removeEventListener(type, listener) {
       if (type === 'message') listeners.delete(listener);
       if (type === 'keydown') keyListeners.delete(listener);
+      if (type === 'scroll') scrollListeners.delete(listener);
     },
     send(data, source) {
       for (const listener of listeners) listener({ data, source });
     },
     keydown(event) { for (const listener of keyListeners) listener(event); },
+    scroll() { for (const listener of scrollListeners) listener(); },
     setBody() {
       document.body = {};
       for (const observer of observers) observer.trigger();
@@ -110,27 +137,207 @@ function controlledHost({ body = true } = {}) {
     clearTimeout(timer) { timer.cleared = true; },
   };
   return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
-    keyListenerCount: () => keyListeners.size };
+    keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size };
 }
 
-test('appearance entry avoids dynamic sidebar controls and stops observing on dispose', () => {
+function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot' } = {}) {
+  const rows = [];
+  const createRow = (tagName, textContent, getWidth = () => width) => ({
+    tagName,
+    textContent,
+    style: {},
+    hidden: false,
+    href: tagName === 'a' ? '/' : undefined,
+    children: [],
+    parentNode: null,
+    get parentElement() { return this.parentNode; },
+    get nextSibling() {
+      const siblings = this.parentNode?.children ?? [];
+      return siblings[siblings.indexOf(this) + 1] ?? null;
+    },
+    setAttribute(name, value) { (this.attributes ??= new Map()).set(name, value); },
+    getAttribute(name) { return this.attributes?.get(name) ?? null; },
+    appendChild(child) { return this.insertBefore(child, null); },
+    insertBefore(child, reference) {
+      child.parentNode?.removeChild?.(child);
+      const index = reference == null ? this.children.length : this.children.indexOf(reference);
+      this.children.splice(index, 0, child);
+      child.parentNode = this;
+      return child;
+    },
+    removeChild(child) {
+      const index = this.children.indexOf(child);
+      if (index >= 0) this.children.splice(index, 1);
+      child.parentNode = null;
+      return child;
+    },
+    contains(node) { return this === node || this.children.some(child => child.contains?.(node)); },
+    getBoundingClientRect() { const currentWidth = getWidth(); return { left: 0, right: currentWidth,
+      width: currentWidth, height: 600, top: 0, bottom: 600 }; },
+  });
+  for (let index = 0; index < count; index += 1) {
+    let navWidth = width;
+    const nav = createRow('nav', undefined, () => navWidth);
+    const yourDot = createRow('a', label);
+    const pinned = createRow('a', 'Pinned');
+    nav.appendChild(yourDot);
+    nav.appendChild(pinned);
+    rows.push({ nav, yourDot, pinned, setWidth(value) { navWidth = value; } });
+  }
+  fixture.host.document.querySelectorAll = selector => selector === 'nav a[href]'
+    ? rows.flatMap(({ yourDot, pinned }) => [yourDot, pinned])
+    : fixture.host.document.appearanceControls ?? [];
+  fixture.host.document.appearanceNavigation = rows;
+  return rows;
+}
+
+function appearanceButton(fixture) {
+  return fixture.controls.find(node => node.tagName === 'button');
+}
+
+test('hidden navigation falls back to a visible left entry and scroll repositions it', () => {
   const fixture = controlledHost();
+  const [{ nav }] = addAppearanceNavigation(fixture);
+  nav.hidden = true;
   const doc = fixture.host.document;
-  const originalCreate = doc.createElement;
-  let blockers = [];
-  let resize, scroll;
   doc.documentElement.clientHeight = 800;
-  doc.documentElement.clientWidth = 800;
-  doc.documentElement.ownerDocument = { querySelectorAll: () => blockers };
+  doc.documentElement.clientWidth = 1024;
+  doc.appearanceControls = [];
+  let entry;
+  const createElement = doc.createElement;
   doc.createElement = tag => {
-    const node = originalCreate(tag);
-    if (tag === 'div') node.getBoundingClientRect = () => ({ left: 10, right: 170, width: 160, height: 44 });
+    const node = createElement(tag);
+    if (tag === 'div') {
+      entry = node;
+      node.getBoundingClientRect = () => {
+        const left = Number.parseFloat(node.style.left || '10px');
+        const width = node.children[0].children.at(-1).style.display === 'none' ? 48 : 150;
+        const top = node.style.top && node.style.top !== 'auto'
+          ? Number.parseFloat(node.style.top)
+          : doc.documentElement.clientHeight - Number.parseFloat(node.style.bottom || '72px') - 44;
+        return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+      };
+    }
     return node;
   };
-  const add = fixture.host.addEventListener;
-  const remove = fixture.host.removeEventListener;
-  fixture.host.addEventListener = (type, fn) => { if (type === 'resize') resize = fn; else if (type === 'scroll') scroll = fn; else add(type, fn); };
-  fixture.host.removeEventListener = (type, fn) => { if (type === 'resize' && resize === fn) resize = undefined; else if (type === 'scroll' && scroll === fn) scroll = undefined; else remove(type, fn); };
+  let runId;
+  installStartup((...args) => { runId = args[14].runId; }, fixture.host);
+  fixture.host.send({ type: 'azhou-startup', action: 'ready', runId }, fixture.frames[0].contentWindow);
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(entry.parentNode, fixture.host.document.documentElement);
+  assert.equal(entry.style.left, '10px');
+  assert.equal(entry.style.top, '684px');
+  doc.appearanceControls = [{ getBoundingClientRect: () => ({ left: 0, right: 72, width: 72, top: 672, bottom: 720, height: 48 }) }];
+  const timersBefore = fixture.timers.length;
+  fixture.host.scroll();
+  fixture.host.scroll();
+  assert.equal(fixture.timers.length, timersBefore + 1, 'scroll events share one pending collision re-evaluation');
+  const scrollTimer = fixture.timers.at(-1);
+  assert.equal(scrollTimer.delay, 80, 'scroll collision checks are throttled');
+  scrollTimer.callback();
+  assert.equal(entry.style.top, '728px', 'scrolling controls moves the fallback to a clear left slot');
+  fixture.host.scroll();
+  const pending = fixture.timers.at(-1);
+  fixture.host.__azhouStartup.dispose();
+  assert.equal(pending.cleared, true, 'dispose clears a pending scroll positioning task');
+  assert.equal(fixture.scrollListenerCount(), 0, 'scroll listener is released');
+});
+
+test('display-none navigation and zero-size ancestors use fallback, then reclaim the entry when shown', () => {
+  const fixture = controlledHost();
+  const [{ nav, yourDot, pinned }] = addAppearanceNavigation(fixture);
+  nav.style.display = 'none';
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  assert.equal(entry.parentNode, fixture.host.document.documentElement, 'display:none cannot take over the entry');
+
+  nav.style.display = 'block';
+  const zeroAncestor = {
+    tagName: 'div', style: {}, hidden: false, children: [nav], parentNode: null,
+    get parentElement() { return this.parentNode; },
+    getBoundingClientRect() { return { left: 0, right: 0, width: 0, top: 0, bottom: 0, height: 0 }; },
+    contains(node) { return node === nav || nav.contains?.(node) === true; },
+  };
+  nav.parentNode = zeroAncestor;
+  observer.trigger([{ target: nav, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.parentNode, fixture.host.document.documentElement, 'a zero-size ancestor keeps the entry on the left');
+
+  zeroAncestor.getBoundingClientRect = () => ({ left: 0, right: 220, width: 220, top: 0, bottom: 600, height: 600 });
+  observer.trigger([{ target: zeroAncestor, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(nav.children[0], yourDot);
+  assert.equal(nav.children[1], entry, 'the same entry returns to normal flow after its ancestor is visible');
+  assert.equal(nav.children[2], pinned);
+  api.dispose();
+});
+
+test('appearance entry joins the unique Your dot navigation row before Pinned', () => {
+  const fixture = controlledHost();
+  const [{ nav, yourDot, pinned, setWidth }] = addAppearanceNavigation(fixture);
+  let runId;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runId = frameSpec.runId;
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.createLocalization = ({ locale }) => ({ t: key => ({
+    characterName: locale === 'en' ? 'Azhou' : '阿舟',
+    openAppearance: locale === 'en' ? 'Open appearance settings' : '打开外观设置',
+    appearanceLabel: locale === 'en' ? 'Azhou appearance settings' : '阿舟外观设置',
+    overlayLabel: locale === 'en' ? 'Azhou startup animation' : '阿舟启动动画',
+  })[key] });
+  payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
+  installStartup(payload, fixture.host);
+  const entry = fixture.controls.find(node => node.tagName === 'div');
+  const button = appearanceButton(fixture);
+  assert.equal(nav.children[0], yourDot);
+  assert.equal(nav.children[1], entry);
+  assert.equal(nav.children[2], pinned);
+  assert.equal(entry.style.position, 'static', 'the host navigation owns the entry position');
+  assert.equal(entry.style.left, '');
+  assert.equal(entry.style.bottom, '');
+  assert.equal(button.children.at(-1).textContent, '阿舟外观');
+  assert.equal(button.attributes.get('aria-label'), '阿舟外观');
+  assert.ok(button.children.some(node => node.tagName === 'img' && node.src === payload.assets.entryAvatar));
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  setWidth(52);
+  observer.trigger([{ target: nav, type: 'attributes' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(button.children.at(-1).style.display, 'none', 'the collapsed row keeps the avatar without overflowing its label');
+  assert.equal(button.attributes.get('aria-label'), '阿舟外观', 'the collapsed icon remains recognizable to assistive technology');
+  setWidth(220);
+  observer.trigger([{ target: nav, type: 'attributes' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(button.children.at(-1).style.display, '', 'the label returns when the navigation expands');
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance entry recognizes the exact Simplified Chinese Your dot navigation name', () => {
+  const fixture = controlledHost();
+  const [{ nav, yourDot, pinned }] = addAppearanceNavigation(fixture, { label: '你的 Dot' });
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+  }, fixture.host);
+  const entry = fixture.controls.find(node => node.tagName === 'div');
+  assert.equal(nav.children[0], yourDot);
+  assert.equal(nav.children[1], entry, 'the translated semantic anchor gets the same normal-flow row');
+  assert.equal(nav.children[2], pinned);
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance entry uses a stable left fallback and stops observing on dispose', () => {
+  const fixture = controlledHost();
+  const doc = fixture.host.document;
   let run;
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     run = spec.runId;
@@ -139,43 +346,113 @@ test('appearance entry avoids dynamic sidebar controls and stops observing on di
   const api = fixture.host.__azhouStartup;
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: run, skipped: false }, fixture.frames[0].contentWindow);
   const entry = fixture.controls.find(node => node.tagName === 'div');
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
   assert.equal(entry.style.bottom, '72px');
-  const obstacle = (top, bottom) => ({ getBoundingClientRect: () => ({ left: 28, right: 76, width: 48,
-    height: bottom - top, top, bottom }) });
-  blockers = [obstacle(672, 720), obstacle(744, 792)];
+  assert.equal(entry.style.display, 'block');
   const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
   assert.ok(observer);
-  const sidebar = { getBoundingClientRect: () => ({ left: 0, right: 200, width: 200 }) };
+  const beforeOwnStyleMutation = fixture.timers.length;
+  observer.trigger([{ target: entry, type: 'attributes', attributeName: 'style' }]);
+  assert.equal(fixture.timers.length, beforeOwnStyleMutation, 'owned element style changes do not schedule another positioning pass');
   const unrelated = { getBoundingClientRect: () => ({ left: 300, right: 700, width: 400 }) };
   const before = fixture.timers.length;
-  observer.trigger([{ target: unrelated }]);
-  assert.equal(fixture.timers.length, before, 'unrelated chat mutations do not scan the page');
-  observer.trigger([{ target: sidebar }]);
-  const pending = fixture.timers.at(-1);
-  pending.callback();
-  assert.equal(entry.style.bottom, '136px');
-  const covering = obstacle(0, 800);
-  blockers = [covering];
-  scroll({ target: sidebar });
-  fixture.timers.at(-1).callback();
-  assert.equal(entry.style.visibility, 'visible', 'a crowded sidebar keeps the entry accessible');
-  assert.equal(entry.style.left, '630px');
-  blockers = [];
-  covering.getBoundingClientRect = () => ({ left: 0, right: 0, width: 0, height: 0 });
-  observer.trigger([{ target: covering }]);
-  fixture.timers.at(-1).callback();
-  assert.equal(entry.style.bottom, '72px');
-  assert.equal(entry.style.visibility, 'visible', 'the entry returns once space is available');
-  assert.equal(entry.style.left, '10px');
-  resize();
-  fixture.timers.at(-1).callback();
-  observer.trigger([{ target: sidebar }]);
+  observer.trigger([{ target: unrelated, type: 'attributes' }]);
+  assert.equal(fixture.timers.length, before, 'unrelated chat mutations do not schedule navigation scans');
   const last = fixture.timers.at(-1);
   api.dispose();
   assert.equal(observer.disconnected, true);
-  assert.equal(last.cleared, true);
-  assert.equal(resize, undefined);
-  assert.equal(scroll, undefined);
+  if (last) assert.equal(last.cleared, true);
+});
+
+test('left fallback avoids update and account controls and remains clickable', () => {
+  const fixture = controlledHost();
+  const doc = fixture.host.document;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 1024;
+  let entry;
+  const createElement = doc.createElement;
+  doc.createElement = tag => {
+    const node = createElement(tag);
+    if (tag === 'div') {
+      entry = node;
+      node.getBoundingClientRect = () => {
+        const left = Number.parseFloat(node.style.left || '10px');
+        const bottom = Number.parseFloat(node.style.bottom || '72px');
+        const label = node.children[0].children.at(-1);
+        const width = label.style.display === 'none' ? 48 : 150;
+        const top = node.style.top && node.style.top !== 'auto'
+          ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - bottom - 44;
+        return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+      };
+    }
+    return node;
+  };
+  const blockers = [
+    { getBoundingClientRect: () => ({ left: 0, right: 72, width: 72, top: 672, bottom: 720, height: 48 }) },
+    { getBoundingClientRect: () => ({ left: 0, right: 72, width: 72, top: 736, bottom: 784, height: 48 }) },
+  ];
+  doc.querySelectorAll = () => blockers;
+  const runs = [];
+  const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+    runs.push(spec);
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+  };
+  installStartup(payload, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false }, fixture.frames[0].contentWindow);
+  const button = appearanceButton(fixture);
+  const bounds = entry.getBoundingClientRect();
+  assert.equal(entry.style.left, '10px', 'the fallback stays in the left column');
+  assert.ok(blockers.every(control => {
+    const other = control.getBoundingClientRect();
+    return bounds.right <= other.left || bounds.left >= other.right || bounds.bottom + 8 <= other.top || bounds.top >= other.bottom + 8;
+  }), 'the fallback leaves vertical clearance around update and account controls');
+  button.click();
+  assert.equal(api.status().phase, 'settings');
+  assert.ok(runs.length >= 2, 'the avoided fallback stays clickable');
+  api.dispose();
+});
+
+test('appearance entry follows a late unique navigation and falls back across ambiguity and replacement', () => {
+  const fixture = controlledHost();
+  addAppearanceNavigation(fixture, { count: 0 });
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.tagName === 'div');
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  assert.equal(entry.style.position, 'fixed', 'without a recognized host row the entry stays on the left');
+
+  const [first] = addAppearanceNavigation(fixture);
+  fixture.host.document.documentElement.appendChild(first.nav);
+  observer.trigger([{ target: fixture.host.document.documentElement, type: 'childList', addedNodes: [first.nav] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(first.nav.children[1], entry, 'a late unique nav relocates the entry into normal flow');
+  assert.equal(entry.style.position, 'static');
+
+  const ambiguous = addAppearanceNavigation(fixture, { count: 2 });
+  ambiguous.forEach(({ nav }) => fixture.host.document.documentElement.appendChild(nav));
+  observer.trigger([{ target: fixture.host.document.documentElement, type: 'childList', addedNodes: ambiguous.map(({ nav }) => nav) }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.parentNode, fixture.host.document.documentElement, 'ambiguous anchors return to the stable fallback');
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
+
+  fixture.host.document.documentElement.removeChild(first.nav);
+  ambiguous.forEach(({ nav }) => fixture.host.document.documentElement.removeChild(nav));
+  const [replacement] = addAppearanceNavigation(fixture);
+  fixture.host.document.documentElement.appendChild(replacement.nav);
+  observer.trigger([{ target: fixture.host.document.documentElement, type: 'childList',
+    removedNodes: [first.nav, ...ambiguous.map(({ nav }) => nav)], addedNodes: [replacement.nav] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(replacement.nav.children[1], entry, 'a replacement host row receives the same owned entry');
+  assert.equal(replacement.nav.children[2], replacement.pinned);
+  api.dispose();
 });
 
 test('a visible appearance button opens settings after playback without a keyboard shortcut', () => {
@@ -235,6 +512,8 @@ test('official language and theme flow into the overlay and update without resta
   assert.equal(spec.appearance.locale, 'en');
   assert.equal(spec.appearance.theme, 'light');
   assert.equal(spec.appearance.colors.surface, '#fafafa');
+  const button = appearanceButton(controlled);
+  assert.equal(button.attributes.get('aria-label'), 'Azhou Appearance');
   const api = controlled.host.__azhouStartup;
   const runId = api.status().runId;
   root.lang = 'zh-CN'; root.dataset.theme = 'dark';
@@ -244,8 +523,8 @@ test('official language and theme flow into the overlay and update without resta
   assert.equal(api.status().runId, runId);
   assert.equal(controlled.frames.length, 1);
   assert.equal(api.status().phase, 'playing');
-  const button = controlled.controls.find(node => node.tagName === 'button');
-  assert.equal(button.attributes.get('aria-label'), '阿舟外观设置');
+  assert.equal(button.attributes.get('aria-label'), '阿舟外观');
+  assert.equal(button.children.at(-1).textContent, '阿舟外观');
   assert.ok(controlled.controls.some(node => node.tagName === 'img' && node.src === payload.assets.entryAvatar));
   api.dispose();
   assert.ok(controlled.observers.every(observer => observer.disconnected));
@@ -410,21 +689,18 @@ test('play and settings frames share one controller and each new run gets fresh 
   controlled.host.document.activeElement = firstFrame;
   const save = { type: 'azhou-startup', action: 'settings-close', runId: runs[0].runId };
   controlled.host.send(save, firstFrame.contentWindow);
-  assert.equal(controlled.frames.length, 2, 'save creates one fresh play frame');
-  assert.equal(api.status().phase, 'loading');
-  assert.ok(api.status().runId > runs[0].runId);
-  assert.equal(runs[1].intent, 'play');
-  assert.equal(runs[1].assets, payload.assets);
-  controlled.frames[1].contentWindow.flushAnimationFrame();
-  assert.equal(api.status().phase, 'playing');
+  assert.equal(controlled.frames.length, 1, 'save closes without replaying');
+  assert.equal(api.status().phase, 'complete');
+  assert.equal(api.status().runId, runs[0].runId);
+  assert.deepEqual(api.status().completion, { cause: 'settings-save', beforeReady: false });
+  assert.equal(controlled.host.document.activeElement, hostFocus, 'saving restores host focus');
 
   controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: true }, firstFrame.contentWindow);
-  assert.equal(api.status().phase, 'playing', 'a late old frame cannot finish the current run');
-  controlled.host.document.activeElement = controlled.frames[1];
-  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[1].runId, skipped: false },
-    controlled.frames[1].contentWindow);
-  assert.equal(controlled.host.document.activeElement, hostFocus,
-    'replay does not replace the saved host focus with the old owned iframe');
+  assert.deepEqual(api.status().completion, { cause: 'settings-save', beforeReady: false },
+    'a late old frame cannot replace the save result');
+  assert.equal(api.openSettings(), true);
+  assert.equal(runs[1].intent, 'settings');
+  assert.ok(api.status().runId > runs[0].runId);
 });
 
 test('complete opens a settings-intent frame and cancellation preserves the saved state', () => {

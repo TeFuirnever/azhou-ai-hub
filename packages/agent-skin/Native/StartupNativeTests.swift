@@ -708,6 +708,33 @@ struct StartupNativeTests {
         expect(skippedTransport.payloadCount == 1 && skippedTransport.closeCount == 1,
                "skip does not replay and closes its page socket")
 
+        var savedNow: TimeInterval = 0
+        let savedTransport = FakeStartupTransport(
+            pages: [["type": "page", "id": "selected-page", "url": startupURL,
+                     "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
+            evaluations: [
+                ["href": startupURL, "controllerPresent": false],
+                ["installed": true, "alreadyActive": false],
+                ["href": startupURL, "missing": false, "status": [
+                    "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 9,
+                    "ready": true, "completed": true, "overlay": false, "reason": "",
+                    "wallpaper": ["applied": true, "reason": "", "imageDecoded": true],
+                    "completion": ["cause": "settings-save", "beforeReady": false]
+                ]]
+            ]
+        )
+        let saved = await StartupConnector(
+            target: existing,
+            expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
+            transport: savedTransport,
+            now: { savedNow },
+            sleep: { savedNow += $0 }
+        ).run(payload: "test-only-probe", deadline: 1)
+        expect(saved == .ready(runID: 9), "a completed settings save remains a valid ready attachment")
+        expect(savedTransport.payloadCount == 1 && savedTransport.disposeCount == 0,
+               "settings save does not cause the connector to dispose the installed controller")
+
         var navigationNow: TimeInterval = 0
         let navigationTransport = FakeStartupTransport(
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
@@ -1039,6 +1066,11 @@ private func nativeEventContractChecks() async throws -> Int {
         24, phase: "complete", ready: false, completed: true, overlay: false,
         completion: ["cause": "skip", "beforeReady": true]
     ))
+    let savedStatus = NativeStartupStatus.parse(validStatus(
+        24, phase: "complete", ready: true, completed: true, overlay: false,
+        completion: ["cause": "settings-save", "beforeReady": false]
+    ))
+    expect(savedStatus?.completionCause == "settings-save", "native status accepts a completed settings save without animation replay")
     let skippedObservation = NativeStartupObservation(targetPID: 4124, installedAt: 202,
                                                        status: skippedStatus, statusAt: 203)
     let skipResolution = skipStream.resolve(.skipped(runID: 24, beforeReady: true),

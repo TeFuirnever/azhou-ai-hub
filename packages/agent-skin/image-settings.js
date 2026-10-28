@@ -36,16 +36,35 @@ function createImageSettings(environment) {
     'animation.subtitle.default': '和阿舟一起，把想法做出来。',
     'settings.title': '阿舟 · 主题与外观',
     'settings.close': '取消并关闭设置',
+    'settings.categories.label': '设置分类',
+    'settings.section.workspace': '工作区背景',
+    'settings.section.startup': '启动动画',
+    'settings.section.about': '关于与状态',
+    'settings.about.note': '显示语言、深浅色和减少动态由应用或系统控制。这里显示当前状态。',
+    'settings.about.buildDetails': '应用与版本信息',
+    'settings.startup.note': '编辑启动头像和文字。可先预览动画，再保存更改。',
+    'settings.workspace.note': '预览只反映当前草稿，不会更改工作区。保存后背景会应用到工作区。',
+    'settings.preview.background.label': '背景草稿预览',
+    'settings.preview.background.caption': '当前草稿 · 保存后应用',
+    'settings.preview.background.empty': '选择图片后可在此预览',
     'settings.avatar.label': '启动头像',
     'settings.artwork.label': '背景图片',
     'settings.introTitle.label': '启动标题（最多 {limit} 个字符）',
     'settings.introCaption.label': '标题说明（最多 {limit} 个字符）',
     'settings.artworkSubtitle.label': '背景字幕（最多 {limit} 个字符）',
-    'settings.wallpaperStrength.label': '背景效果强度（{min}–{max}）',
-    'settings.wallpaperStrength.aria': '背景效果强度，{min} 到 {max}',
+    'settings.wallpaperStrength.label': '背景强度（{min}–{max}）',
+    'settings.wallpaperStrength.aria': '背景强度，{min} 到 {max}',
     'settings.button.restore': '恢复默认',
     'settings.button.cancel': '取消',
-    'settings.button.save': '保存并重播',
+    'settings.button.save': '保存',
+    'settings.button.previewAnimation': '预览动画',
+    'settings.button.closePreview': '关闭动画预览',
+    'settings.button.close': '关闭',
+    'settings.button.retryApply': '重试应用',
+    'settings.button.applyingBackground': '正在应用…',
+    'settings.draft.note': '修改还未生效。取消会丢弃草稿，保存后应用。',
+    'settings.status.applyingBackground': '设置已保存，正在应用背景…',
+    'settings.error.backgroundApply': '设置已保存，但背景应用失败。可以重试，或关闭设置。',
     'settings.button.choosePortrait': '选择启动头像',
     'settings.button.chooseBackground': '选择背景图片',
     'settings.status.importing': '正在处理图片…',
@@ -53,6 +72,9 @@ function createImageSettings(environment) {
     'settings.status.imageLarge': '图片已准备；原图超过 16 MP，处理可能较慢。',
     'settings.status.imageReady': '图片已准备，可以保存。',
     'settings.status.defaultsRestored': '草稿已恢复为默认设置；已保存值尚未更改。',
+    'settings.status.previewStarted': '动画预览已启动；草稿仍未保存。',
+    'settings.status.previewUnavailable': '当前无法预览动画；草稿仍可保存。',
+    'settings.error.preview': '动画预览失败；草稿仍可编辑或保存。',
     'settings.error.conflict': '其他页面已更新设置。请取消后重新打开，再保存草稿。',
     'settings.error.quota': '存储空间不足。请更换图片后重试。',
     'settings.error.blocked': '设置数据库被其他页面阻塞。稍后可以重试。',
@@ -79,6 +101,9 @@ function createImageSettings(environment) {
   let panelOpen = false;
   let panelGeneration = 0;
   let panelCallbacks = null;
+  let panelCommit = null;
+  let panelApplying = false;
+  let panelSavedNotified = false;
   let panelStatus = null;
   let localizationUnsubscribe = null;
 
@@ -692,6 +717,7 @@ function createImageSettings(environment) {
     panelStatus = key ? { key, role } : null;
     panelControls.status.textContent = panelStatus ? translate(panelStatus.key) : '';
     panelControls.status.setAttribute('role', panelStatus?.role || 'status');
+    panelControls.status.setAttribute('aria-live', panelStatus?.role === 'alert' ? 'assertive' : 'polite');
   }
 
   function refreshLocalizedDefaults() {
@@ -711,19 +737,32 @@ function createImageSettings(environment) {
 
   function updatePanelText() {
     if (!panelControls) return;
-    const { heading, close, labels, ariaLabels, buttons, strengthLabel, status } = panelControls;
+    const { heading, close, categoryNav, labels, ariaLabels, buttons, strengthLabel, status } = panelControls;
     heading.textContent = translate('settings.title');
-    close.setAttribute('aria-label', translate('settings.close'));
+    close?.setAttribute('aria-label', translate('settings.close'));
+    categoryNav.setAttribute('aria-label', translate('settings.categories.label'));
     for (const [key, label] of Object.entries(labels)) {
       label.element.textContent = translate(key, label.params);
     }
     for (const item of ariaLabels) item.control.setAttribute('aria-label', translate(item.key, item.params));
     for (const [key, button] of Object.entries(buttons)) button.textContent = translate(key);
+    if (panelControls.saveButton) {
+      panelControls.saveButton.textContent = translate(panelCommit
+        ? panelApplying ? 'settings.button.applyingBackground' : 'settings.button.retryApply'
+        : 'settings.button.save');
+    }
+    if (panelControls.cancelButton) {
+      panelControls.cancelButton.textContent = translate(panelCommit ? 'settings.button.close' : 'settings.button.cancel');
+    }
     strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
     panelControls.strength.setAttribute('aria-label',
       translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
     status.textContent = panelStatus ? translate(panelStatus.key) : '';
     status.setAttribute('role', panelStatus?.role || 'status');
+    status.setAttribute('aria-live', panelStatus?.role === 'alert' ? 'assertive' : 'polite');
+    panelControls.workspacePreview.setAttribute('aria-label', translate('settings.preview.background.label'));
+    panelControls.workspacePreviewCaption.textContent = panelControls.workspacePreviewHasImage
+      ? translate('settings.preview.background.caption') : translate('settings.preview.background.empty');
     refreshAppearance();
   }
 
@@ -744,16 +783,23 @@ function createImageSettings(environment) {
 
   function updatePanelBusy() {
     if (!panelControls) return;
-    const busy = Boolean(active);
+    const busy = Boolean(active || panelApplying);
     for (const control of panelControls.controls) {
-      control.disabled = busy;
+      const isSave = control === panelControls.saveButton;
+      const isCancel = control === panelControls.cancelButton;
+      control.disabled = Boolean(active)
+        || (panelApplying && !isCancel)
+        || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel);
       if (control.style && typeof control.style.setProperty === 'function') {
-        control.style.setProperty('opacity', busy ? '.58' : '1');
-        control.style.setProperty('cursor', busy ? 'wait' : control.tagName === 'BUTTON' ? 'pointer' : 'auto');
+        control.style.setProperty('opacity', control.disabled ? '.58' : '1');
+        control.style.setProperty('cursor', busy && control.disabled ? 'wait'
+          : control.tagName === 'BUTTON' ? 'pointer' : 'auto');
       }
     }
-    if (busy && active.kind === 'import') setPanelStatus('settings.status.importing');
-    else if (busy && active.kind === 'save') setPanelStatus('settings.status.saving');
+    if (active?.kind === 'import') setPanelStatus('settings.status.importing');
+    else if (active?.kind === 'save') setPanelStatus('settings.status.saving');
+    else if (panelApplying) setPanelStatus('settings.status.applyingBackground');
+    updatePanelText();
   }
 
   function setStyle(element, properties) {
@@ -795,11 +841,29 @@ function createImageSettings(environment) {
     return result;
   }
 
+  function workspaceWashGradient(strength) {
+    const washStops = [24, 18, 12, 16, 30, 65, 70];
+    const washPositions = ['0%', '22%', '36%', '62%', '73%', '87%', '100%'];
+    const washScale = Math.max(0, Math.min(75, Number(strength) || 0)) / 42;
+    const base = 'var(--azhou-base, var(--color-surface, var(--app-color-background-surface, #202024)))';
+    return 'linear-gradient(90deg,' + washStops.map((opacity, index) => {
+      const visible = Math.min(100, Math.round(opacity * washScale));
+      return 'color-mix(in srgb, ' + base + ' ' + (100 - visible) + '%, transparent) '
+        + washPositions[index];
+    }).join(',') + ')';
+  }
+
   function updatePanelFields() {
     if (!panelControls || !draft) return;
     for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
     panelControls.strength.value = String(draft.wallpaperStrength);
     panelControls.strengthValue.textContent = String(draft.wallpaperStrength);
+    panelControls.workspacePreviewHasImage = Boolean(draft.artwork);
+    panelControls.workspacePreviewCaption.textContent = draft.artwork
+      ? translate('settings.preview.background.caption') : translate('settings.preview.background.empty');
+    panelControls.workspacePreviewWash.style.setProperty('background-image',
+      workspaceWashGradient(draft.wallpaperStrength));
+    panelControls.workspacePreviewWash.style.setProperty('display', draft.artwork ? 'block' : 'none');
     for (const [role, preview] of Object.entries(panelControls.previews)) {
       const value = draft[role];
       preview.hidden = !value;
@@ -810,21 +874,50 @@ function createImageSettings(environment) {
     refreshAppearance();
   }
 
+  async function applyCommittedSettings(commit) {
+    if (!panelOpen || panelCommit !== commit || panelApplying) return false;
+    const panelAtStart = panelGeneration;
+    panelApplying = true;
+    commit.failed = false;
+    updatePanelBusy();
+    try {
+      const result = await commit.onApply(cloneSettings(commit.saved));
+      if (!panelOpen || panelAtStart !== panelGeneration || panelCommit !== commit) return false;
+      if (result?.applied !== true && result?.reason !== 'disabled') throw new Error('background-apply-failed');
+      panelApplying = false;
+      closePanel('saved');
+      return true;
+    } catch {
+      if (!panelOpen || panelAtStart !== panelGeneration || panelCommit !== commit) return false;
+      panelApplying = false;
+      commit.failed = true;
+      setPanelStatus('settings.error.backgroundApply', 'alert');
+      updatePanelBusy();
+      return false;
+    } finally {
+      if (panelOpen && panelCommit === commit && panelApplying) {
+        panelApplying = false;
+        updatePanelBusy();
+      }
+    }
+  }
+
   function buildSettingsPanel() {
     if (dialog) return true;
     if (!document || typeof document.createElement !== 'function' || !document.body) return false;
     dialog = document.createElement('dialog');
     dialog.setAttribute('aria-labelledby', 'agent-skin-settings-title');
     dialog.setAttribute('data-agent-skin-settings', '');
-    dialog.style.cssText = 'box-sizing:border-box;color-scheme:inherit;width:min(740px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #0006;font:14px/1.5 system-ui,sans-serif';
+    dialog.style.cssText = 'box-sizing:border-box;color-scheme:inherit;width:min(780px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #0006;font:14px/1.5 system-ui,sans-serif';
     dialog.style.setProperty('color-scheme', 'inherit');
     dialog.style.setProperty('border-color', 'var(--agent-skin-border, CanvasText)');
     dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
     dialog.style.setProperty('color', 'var(--agent-skin-text, CanvasText)');
+
     const content = document.createElement('section');
-    content.style.cssText = 'padding:22px 24px 20px';
+    content.style.cssText = 'padding:20px clamp(16px,3vw,26px) 0';
     const header = document.createElement('header');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px';
+    header.style.cssText = 'display:flex;align-items:center;gap:12px;min-width:0';
     const heading = document.createElement('h2');
     heading.id = 'agent-skin-settings-title';
     heading.textContent = translate('settings.title');
@@ -840,46 +933,104 @@ function createImageSettings(environment) {
       });
       header.appendChild(identityAvatar);
     }
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.textContent = '×';
-    styleButton(close);
-    close.setAttribute('aria-label', translate('settings.close'));
-    close.addEventListener('click', cancelSettings);
-    header.append(heading, close);
+    header.appendChild(heading);
     content.appendChild(header);
+
+    const categoryNav = document.createElement('nav');
+    categoryNav.setAttribute('role', 'tablist');
+    categoryNav.setAttribute('aria-label', translate('settings.categories.label'));
+    categoryNav.setAttribute('aria-orientation', 'horizontal');
+    categoryNav.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:20px;padding-bottom:14px;border-bottom:1px solid var(--agent-skin-border,CanvasText)';
+    content.appendChild(categoryNav);
 
     const fields = Object.create(null);
     const labels = Object.create(null);
     const ariaLabels = [];
-    const controls = [close];
+    const controls = [];
     const readouts = [];
     const previews = {};
+    const buttons = Object.create(null);
+    const tabs = [];
+    const categoryPanels = Object.create(null);
     let section = content;
+    let workspacePreviewHasImage = false;
+    const draftNote = document.createElement('p');
+    draftNote.style.cssText = 'margin:10px 0 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    draftNote.textContent = translate('settings.draft.note');
+    labels['settings.draft.note'] = { element: draftNote, params: {} };
+    content.appendChild(draftNote);
+
     const addText = (key, parent = section, tag = 'p') => {
       const element = document.createElement(tag);
-      element.style.cssText = tag === 'h3' ? 'margin:0;font-size:16px' : 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+      element.style.cssText = tag === 'h3'
+        ? 'margin:0;font-size:17px'
+        : 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
       labels[key] = { element, params: {} };
       element.textContent = translate(key);
       parent.appendChild(element);
       return element;
     };
+    const selectCategory = name => {
+      for (const tab of tabs) {
+        const selected = tab.getAttribute('data-agent-skin-settings-tab') === name;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        styleButton(tab, selected);
+      }
+      for (const [key, panel] of Object.entries(categoryPanels)) panel.hidden = key !== name;
+    };
     const addSection = (name, note) => {
-      section = document.createElement('section');
-      section.setAttribute('data-agent-skin-settings-section', name);
-      section.setAttribute('aria-labelledby', `agent-skin-section-${name}`);
-      section.style.cssText = 'min-width:0;margin-top:22px;padding-top:20px;border-top:1px solid var(--agent-skin-border,CanvasText)';
-      content.appendChild(section);
-      addText(`settings.section.${name}`, section, 'h3').id = `agent-skin-section-${name}`;
-      addText(note);
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.id = 'agent-skin-settings-tab-' + name;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('data-agent-skin-settings-tab', name);
+      tab.setAttribute('aria-controls', 'agent-skin-settings-panel-' + name);
+      tab.setAttribute('aria-selected', 'false');
+      tab.tabIndex = -1;
+      tab.textContent = translate('settings.section.' + name);
+      styleButton(tab);
+      tab.style.setProperty('flex', '1 1 130px');
+      tab.addEventListener('click', () => selectCategory(name));
+      tab.addEventListener('keydown', event => {
+        const index = tabs.indexOf(tab);
+        let nextIndex = -1;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index + tabs.length - 1) % tabs.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        if (nextIndex < 0) return;
+        event.preventDefault?.();
+        tabs[nextIndex].focus?.();
+        selectCategory(tabs[nextIndex].getAttribute('data-agent-skin-settings-tab'));
+      });
+      categoryNav.appendChild(tab);
+      tabs.push(tab);
+      controls.push(tab);
+      buttons['settings.section.' + name] = tab;
+
+      const panel = document.createElement('section');
+      panel.id = 'agent-skin-settings-panel-' + name;
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('data-agent-skin-settings-section', name);
+      panel.setAttribute('aria-labelledby', 'agent-skin-settings-tab-' + name);
+      panel.tabIndex = 0;
+      panel.hidden = true;
+      panel.style.cssText = 'min-width:0;padding:20px 0 4px';
+      content.appendChild(panel);
+      categoryPanels[name] = panel;
+      section = panel;
+      addText('settings.section.' + name, panel, 'h3');
+      addText(note, panel);
+      return panel;
     };
     const addInfo = (key, labelKey, value) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px 20px;margin-top:10px;min-width:0';
+      row.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px 20px;margin-top:12px;min-width:0';
       const label = addText(labelKey, row, 'span');
-      label.style.cssText += ';flex:1 1 180px;margin:0';
+      label.style.cssText += ';flex:1 1 160px;margin:0';
       const element = document.createElement('span');
-      element.style.cssText = 'min-width:0;flex:1 1 220px;overflow-wrap:anywhere';
+      element.style.cssText = 'min-width:0;flex:1 1 200px;overflow-wrap:anywhere';
       element.setAttribute('data-agent-skin-setting-value', key);
       readouts.push({ element, value });
       row.appendChild(element);
@@ -889,30 +1040,12 @@ function createImageSettings(environment) {
     const inherited = key => {
       try { return environment.getAppearance?.()?.[key]; } catch { return undefined; }
     };
-    addText('settings.draft.note', content);
-    addSection('identity', 'settings.identity.note');
-    addInfo('appName', 'settings.appName', () => localized(themeConfig?.identity?.appName));
-    addInfo('botName', 'settings.botName', () => localized(themeConfig?.identity?.botName));
-    addInfo('version', 'settings.version', () => themeConfig?.identity?.version && themeConfig?.identity?.build
-      ? `${themeConfig.identity.version} · ${themeConfig.identity.build}` : translate('settings.unknown'));
-    const identitySection = section;
-    const buildDetails = document.createElement('details');
-    buildDetails.style.cssText = 'margin-top:14px';
-    addText('settings.buildDetails', buildDetails, 'summary').style.cssText = 'cursor:pointer';
-    identitySection.appendChild(buildDetails);
-    section = buildDetails;
-    addInfo('icon', 'settings.icon', () => themeConfig?.identity?.iconInput || translate('settings.unknown'));
-    addInfo('botAvatar', 'settings.botAvatar', () => themeConfig?.identity?.entryAvatarInput || translate('settings.unknown'));
-    addInfo('installationName', 'settings.installationName', () => themeConfig?.identity?.installationName || translate('settings.unknown'));
-    const installation = addText('settings.installation');
-    installation.setAttribute('data-agent-skin-setting-value', 'installation');
-    section = identitySection;
-    addSection('startup', 'settings.startup.note');
     const addRow = (key, control, params = {}, ariaKey = key) => {
       const wrapper = document.createElement('label');
       wrapper.style.cssText = 'display:grid;gap:5px;margin-top:14px';
       const label = document.createElement('span');
       label.textContent = translate(key, params);
+      label.style.cssText = 'overflow-wrap:anywhere';
       labels[key] = { element: label, params };
       control.setAttribute('aria-label', translate(ariaKey, params));
       ariaLabels.push({ control, key: ariaKey, params });
@@ -921,6 +1054,7 @@ function createImageSettings(environment) {
       controls.push(control);
       return control;
     };
+
     const addFile = (role, key, actionKey) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -960,23 +1094,81 @@ function createImageSettings(environment) {
       button.addEventListener('click', () => {
         if (panelOpen && !active) input.click?.();
       });
-      const rowAction = addRow(key, button, {}, actionKey);
+      addRow(key, button, {}, actionKey);
       controls.push(input);
       section.appendChild(input);
-      const preview = document.createElement('img');
-      preview.setAttribute('alt', '');
-      preview.setAttribute('data-agent-skin-image-preview', role);
-      preview.style.cssText = role === 'avatar'
-        ? 'display:block;width:72px;height:72px;object-fit:cover;border-radius:16px;margin-top:10px'
-        : 'display:block;width:100%;max-height:190px;object-fit:cover;border-radius:10px;margin-top:10px';
-      previews[role] = preview;
-      section.appendChild(preview);
-      buttons[actionKey] = button;
-      return rowAction;
-    };
-    const buttons = Object.create(null);
-    addFile('avatar', 'settings.avatar.label', 'settings.button.choosePortrait');
 
+      let preview = previews[role];
+      if (!preview) {
+        preview = document.createElement('img');
+        preview.setAttribute('alt', '');
+        preview.setAttribute('data-agent-skin-image-preview', role);
+        previews[role] = preview;
+        if (role === 'avatar') {
+          preview.style.cssText = 'display:block;width:72px;height:72px;object-fit:cover;border-radius:16px;margin-top:10px';
+          section.appendChild(preview);
+        }
+      }
+      buttons[actionKey] = button;
+      return button;
+    };
+
+    const workspacePanel = addSection('workspace', 'settings.workspace.note');
+    const workspacePreview = document.createElement('figure');
+    workspacePreview.setAttribute('role', 'img');
+    workspacePreview.setAttribute('data-agent-skin-workspace-preview', '');
+    workspacePreview.setAttribute('aria-label', translate('settings.preview.background.label'));
+    workspacePreview.style.cssText = 'box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:112px;height:clamp(112px,28vh,240px);max-height:240px;overflow:hidden;margin:18px 0 14px;border:1px solid var(--agent-skin-border,CanvasText);border-radius:12px;background:linear-gradient(135deg,var(--agent-skin-surface,Canvas),var(--agent-skin-muted,CanvasText))';
+    ariaLabels.push({ control: workspacePreview, key: 'settings.preview.background.label', params: {} });
+    const backgroundImage = document.createElement('img');
+    backgroundImage.setAttribute('alt', '');
+    backgroundImage.setAttribute('aria-hidden', 'true');
+    backgroundImage.setAttribute('data-agent-skin-image-preview', 'artwork');
+    backgroundImage.setAttribute('data-agent-skin-workspace-preview-image', '');
+    backgroundImage.hidden = true;
+    backgroundImage.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+    previews.artwork = backgroundImage;
+    const workspacePreviewSurface = document.createElement('div');
+    workspacePreviewSurface.style.cssText = 'position:relative;min-height:0;overflow:hidden';
+    const backgroundWash = document.createElement('div');
+    backgroundWash.setAttribute('aria-hidden', 'true');
+    backgroundWash.setAttribute('data-agent-skin-workspace-preview-wash', '');
+    backgroundWash.style.cssText = 'position:absolute;inset:0;pointer-events:none';
+    workspacePreviewSurface.append(backgroundImage, backgroundWash);
+    const workspacePreviewCaption = document.createElement('figcaption');
+    workspacePreviewCaption.textContent = translate('settings.preview.background.empty');
+    workspacePreviewCaption.style.cssText = 'padding:7px 10px;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    workspacePreview.append(workspacePreviewSurface, workspacePreviewCaption);
+    workspacePanel.appendChild(workspacePreview);
+    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
+
+    const strength = document.createElement('input');
+    strength.type = 'range';
+    strength.min = '0';
+    strength.max = '75';
+    strength.step = '1';
+    styleInput(strength);
+    strength.setAttribute('aria-label', translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
+    const strengthValue = document.createElement('output');
+    strengthValue.setAttribute('data-agent-skin-wallpaper-strength-value', '');
+    strengthValue.style.cssText = 'min-width:3ch;text-align:right';
+    const strengthLabel = document.createElement('span');
+    strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
+    strengthLabel.style.cssText = 'overflow-wrap:anywhere';
+    const strengthRow = document.createElement('label');
+    strengthRow.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:14px';
+    strengthRow.append(strengthLabel, strengthValue, strength);
+    strength.addEventListener('input', () => {
+      if (!draft) return;
+      draft.wallpaperStrength = Number(strength.value);
+      strengthValue.textContent = String(draft.wallpaperStrength);
+      backgroundWash.style.setProperty('background-image', workspaceWashGradient(draft.wallpaperStrength));
+    });
+    workspacePanel.appendChild(strengthRow);
+    controls.push(strength);
+
+    addSection('startup', 'settings.startup.note');
+    addFile('avatar', 'settings.avatar.label', 'settings.button.choosePortrait');
     for (const [key, limit, labelKey] of [
       ['introTitle', 16, 'settings.introTitle.label'],
       ['introCaption', 48, 'settings.introCaption.label'],
@@ -994,50 +1186,73 @@ function createImageSettings(environment) {
       fields[key] = control;
       addRow(labelKey, control, { limit });
     }
-
-    addSection('workspace', 'settings.workspace.note');
-    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
-    addInfo('layout', 'settings.layout', () => translate('settings.layout.value'));
-    const strength = document.createElement('input');
-    strength.type = 'range';
-    strength.min = '0';
-    strength.max = '75';
-    strength.step = '1';
-    styleInput(strength);
-    const strengthValue = document.createElement('output');
-    strengthValue.style.cssText = 'min-width:3ch;text-align:right';
-    strength.addEventListener('input', () => {
-      if (!draft) return;
-      draft.wallpaperStrength = Number(strength.value);
-      strengthValue.textContent = String(draft.wallpaperStrength);
+    const previewButton = document.createElement('button');
+    previewButton.type = 'button';
+    previewButton.setAttribute('data-agent-skin-preview-animation', '');
+    previewButton.textContent = translate('settings.button.previewAnimation');
+    styleButton(previewButton);
+    previewButton.style.setProperty('margin-top', '18px');
+    previewButton.addEventListener('click', () => {
+      if (!panelOpen || active || !draft) return;
+      const callback = panelCallbacks?.onPreview;
+      if (typeof callback !== 'function') {
+        setPanelStatus('settings.status.previewUnavailable');
+        return;
+      }
+      const panelAtStart = panelGeneration;
+      const showError = () => {
+        if (panelOpen && panelAtStart === panelGeneration) setPanelStatus('settings.error.preview', 'alert');
+      };
+      try {
+        const result = callback(cloneSettings(draft));
+        if (result === false) {
+          setPanelStatus('settings.status.previewUnavailable');
+          return;
+        }
+        setPanelStatus('settings.status.previewStarted');
+        if (result && typeof result.then === 'function') {
+          Promise.resolve(result).then(value => {
+            if (value === false && panelOpen && panelAtStart === panelGeneration) {
+              setPanelStatus('settings.status.previewUnavailable');
+            }
+          }, showError);
+        }
+      } catch {
+        showError();
+      }
     });
-    const strengthRow = document.createElement('label');
-    strengthRow.style.cssText = 'display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:14px';
-    const strengthLabel = document.createElement('span');
-    strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
-    strengthRow.append(strengthLabel, strengthValue, strength);
-    section.appendChild(strengthRow);
-    controls.push(strength);
+    controls.push(previewButton);
+    buttons['settings.button.previewAnimation'] = previewButton;
+    section.appendChild(previewButton);
+    workspacePanel.hidden = false;
+    selectCategory('workspace');
 
-    addSection('inherited', 'settings.inherited.note');
-    addInfo('preferenceSource', 'settings.preferenceSource', () => ['official', 'preview'].includes(inherited('source'))
-      ? translate(`settings.preferenceSource.${inherited('source')}`) : translate('settings.unknown'));
+    const aboutPanel = addSection('about', 'settings.about.note');
     addInfo('locale', 'settings.locale', () => inherited('locale') || localization?.locale || translate('settings.unknown'));
     addInfo('theme', 'settings.theme', () => ['light', 'dark'].includes(inherited('theme'))
-      ? translate(`settings.theme.${inherited('theme')}`) : translate('settings.unknown'));
+      ? translate('settings.theme.' + inherited('theme')) : translate('settings.unknown'));
     addInfo('reducedMotion', 'settings.reducedMotion', () => typeof inherited('reducedMotion') === 'boolean'
       ? translate(inherited('reducedMotion') ? 'settings.on' : 'settings.off') : translate('settings.unknown'));
-    addInfo('surface', 'settings.surface', () => inherited('colors')?.surface || translate('settings.unknown'));
     addInfo('source', 'settings.source', () => translate(loadReason
       ? 'settings.source.unavailable' : currentBaseline === undefined ? 'settings.source.defaults' : 'settings.source.user'));
+    const buildDetails = document.createElement('details');
+    buildDetails.style.cssText = 'margin-top:18px';
+    addText('settings.about.buildDetails', buildDetails, 'summary').style.cssText = 'cursor:pointer';
+    aboutPanel.appendChild(buildDetails);
+    section = buildDetails;
+    addInfo('appName', 'settings.appName', () => localized(themeConfig?.identity?.appName));
+    addInfo('botName', 'settings.botName', () => localized(themeConfig?.identity?.botName));
+    addInfo('version', 'settings.version', () => themeConfig?.identity?.version && themeConfig?.identity?.build
+      ? themeConfig.identity.version + ' · ' + themeConfig.identity.build : translate('settings.unknown'));
 
     const status = document.createElement('p');
-    status.style.cssText = 'min-height:1.5em;margin:14px 0 0';
-    status.style.setProperty('color', 'var(--agent-skin-muted, CanvasText)');
+    status.style.cssText = 'flex:1 1 180px;min-width:0;min-height:1.5em;margin:0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    status.setAttribute('data-agent-skin-settings-status', '');
     status.setAttribute('aria-live', 'polite');
-    content.appendChild(status);
     const actions = document.createElement('footer');
-    actions.style.cssText = 'position:sticky;bottom:0;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:16px;padding:12px 0;background:var(--agent-skin-surface,Canvas);border-top:1px solid var(--agent-skin-border,CanvasText)';
+    actions.style.cssText = 'position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:10px;padding:12px clamp(16px,3vw,26px);background:var(--agent-skin-surface,Canvas);border-top:1px solid var(--agent-skin-border,CanvasText)';
+    const actionButtons = document.createElement('div');
+    actionButtons.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-left:auto';
     const restore = document.createElement('button');
     restore.type = 'button';
     styleButton(restore);
@@ -1058,41 +1273,53 @@ function createImageSettings(environment) {
     styleButton(saveButton, true);
     saveButton.textContent = translate('settings.button.save');
     saveButton.addEventListener('click', async () => {
-      if (!panelOpen || active || !draft) return;
+      if (!panelOpen || active || panelApplying) return;
+      if (panelCommit) {
+        await applyCommittedSettings(panelCommit);
+        return;
+      }
+      if (!draft) return;
       for (const key of Object.keys(TEXT_LIMITS)) draft[key] = truncateText(draft[key], TEXT_LIMITS[key]);
       const panelAtStart = panelGeneration;
       const saving = save(cloneSettings(draft));
       updatePanelBusy();
+      let saved;
       try {
-        const saved = await saving;
-        if (!panelOpen || panelAtStart !== panelGeneration) return;
-        const callback = panelCallbacks?.onSaved;
-        closePanel('saved');
-        try { callback?.(saved); } catch {}
+        saved = await saving;
       } catch (error) {
         if (panelOpen && panelAtStart === panelGeneration) setPanelStatus(displayError(error?.reason), 'alert');
-      } finally {
         updatePanelBusy();
+        return;
       }
+      if (!panelOpen || panelAtStart !== panelGeneration) return;
+      panelCommit = {
+        saved: cloneSettings(saved),
+        onApply: typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
+        failed: false,
+      };
+      panelSavedNotified = false;
+      updatePanelBusy();
+      if (panelCommit.onApply) await applyCommittedSettings(panelCommit);
+      else closePanel('saved');
     });
     controls.push(restore, cancel, saveButton);
-    actions.append(restore, cancel, saveButton);
+    buttons['settings.button.restore'] = restore;
+    buttons['settings.button.cancel'] = cancel;
+    buttons['settings.button.save'] = saveButton;
+    actionButtons.append(restore, cancel, saveButton);
+    actions.append(status, actionButtons);
     content.appendChild(actions);
-    dialog.append(content);
+    dialog.appendChild(content);
     document.body.appendChild(dialog);
     dialog.addEventListener('cancel', event => {
       event.preventDefault();
       cancelSettings();
     });
     panelControls = {
-      controls, status, fields, strength, strengthValue, heading, close, labels, ariaLabels, readouts, previews,
-      buttons: {
-        ...buttons,
-        'settings.button.restore': restore,
-        'settings.button.cancel': cancel,
-        'settings.button.save': saveButton,
-      },
-      strengthLabel,
+      controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
+      ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
+      workspacePreviewWash: backgroundWash,
+      workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel,
     };
     updatePanelText();
     return true;
@@ -1102,6 +1329,9 @@ function createImageSettings(environment) {
     if (disposed || panelOpen || !currentSettings || active || !buildSettingsPanel()) return false;
     draft = cloneSettings(currentSettings);
     panelCallbacks = callbacks && typeof callbacks === 'object' ? callbacks : {};
+    panelCommit = null;
+    panelApplying = false;
+    panelSavedNotified = false;
     panelGeneration++;
     panelOpen = true;
     updatePanelFields();
@@ -1123,17 +1353,24 @@ function createImageSettings(environment) {
 
   function closePanel(returnValue = '') {
     if (!panelOpen) return false;
+    const commit = panelCommit;
+    const callback = commit && !panelSavedNotified ? panelCallbacks?.onSaved : null;
+    if (commit) panelSavedNotified = true;
     panelOpen = false;
     panelGeneration++;
     draft = null;
+    panelCommit = null;
+    panelApplying = false;
     panelCallbacks = null;
     try { dialog?.close(returnValue); } catch {}
     refreshLocalizedDefaults();
+    try { callback?.(commit.saved); } catch {}
     return true;
   }
 
   function cancelSettings() {
     if (!panelOpen || active) return false;
+    if (panelCommit) return closePanel('saved');
     const callback = panelCallbacks?.onCancel;
     closePanel('cancel');
     try { callback?.(); } catch {}
@@ -1149,10 +1386,13 @@ function createImageSettings(environment) {
     generation++;
     panelGeneration++;
     if (active) finish(active, false, makeError('operation-cancelled'));
-    panelOpen = false;
-    panelCallbacks = null;
-    draft = null;
-    try { dialog?.close('dispose'); } catch {}
+    if (panelOpen) closePanel(panelCommit ? 'saved' : 'dispose');
+    else {
+      panelCommit = null;
+      panelApplying = false;
+      panelCallbacks = null;
+      draft = null;
+    }
     try { dialog?.remove(); } catch {}
     try { localizationUnsubscribe?.(); } catch {}
     localizationUnsubscribe = null;

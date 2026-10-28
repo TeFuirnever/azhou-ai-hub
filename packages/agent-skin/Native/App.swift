@@ -83,7 +83,7 @@ struct NativeStartupStatus {
         } else {
             guard let completion = completionRaw as? [String: Any],
                   let cause = completion["cause"] as? String,
-                  ["natural", "skip", "settings-cancel"].contains(cause),
+                  ["natural", "skip", "settings-cancel", "settings-save"].contains(cause),
                   let beforeReady = boolean(completion["beforeReady"]) else { return nil }
             completionCause = cause
             completionBeforeReady = beforeReady

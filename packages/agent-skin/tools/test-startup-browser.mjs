@@ -148,6 +148,15 @@ class CDP {
   close() { this.socket.close(); }
 }
 
+async function dispatchTab(shiftKey = false) {
+  const key = {
+    key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 48,
+    modifiers: shiftKey ? 8 : 0,
+  };
+  await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
+  await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
+}
+
 async function cleanup() {
   if (stopping) return;
   stopping = true;
@@ -874,7 +883,7 @@ try {
   async function appearanceEntryMetrics() {
     return cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const shadow=entry?.shadowRoot,button=shadow?.querySelector('button[aria-label="阿舟主题与外观"]');
+      const shadow=entry?.shadowRoot,button=shadow?.querySelector('button');
       if(!entry||!button)return null;
       const rect=button.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2;
       const target=document.elementFromPoint(x,y),shadowTarget=shadow.elementFromPoint?.(x,y);
@@ -922,7 +931,7 @@ try {
   async function clickAppearanceEntry() {
     const point = await cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
+      const button=entry?.shadowRoot?.querySelector('button');
       if(!button)return false;
       const rect=button.getBoundingClientRect();
       return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
@@ -933,7 +942,7 @@ try {
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
     return cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
+      const button=entry?.shadowRoot?.querySelector('button');
       return {focused:!!button&&document.activeElement===entry&&entry.shadowRoot.activeElement===button,
         state:window.__startupAPI.status()};
     })()`);
@@ -1133,7 +1142,7 @@ try {
     }
     return shots;
   });
-  await check('PageController openSettings API opens settings during playback and saved settings start a fresh run', async () => {
+  await check('PageController settings save closes the draft without replay and keeps API focus behavior', async () => {
     const before = await cdp.evaluate('window.__startupAPI.status()');
     const opened = await cdp.evaluate(`(()=>{
       const accepted=window.__startupAPI.openSettings();
@@ -1145,16 +1154,15 @@ try {
     assert.equal(opened.state.phase, 'settings');
     assert.equal(opened.state.runId, before.runId);
     await cdp.evaluate(`window.__startupFixtureSend(${before.runId},{type:'azhou-startup',action:'settings-close',runId:${before.runId}})`);
-    const replay = await until(() => cdp.evaluate(`(()=>{
+    const saved = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
-      return state.phase==='playing'&&state.ready&&state.runId>${before.runId}?state:false;
-    })()`), 10000, 'fresh play run after settings save');
-    const spec = await cdp.evaluate('window.__startupFrameSpecs.at(-1)');
-    assert.equal(spec.intent, 'play');
-    assert.ok(spec.runId > before.runId);
-    await cdp.evaluate(`window.__startupFixtureSend(${replay.runId},{type:'azhou-startup',action:'complete',runId:${replay.runId},skipped:false})`);
-    await until(() => cdp.evaluate('window.__startupAPI.status().phase === "complete"'), 3000,
-      'complete the replay before checking API focus restoration');
+      return state.phase==='complete'&&state.completion?.cause==='settings-save'?state:false;
+    })()`), 5000, 'settings save completes the existing run');
+    assert.equal(saved.runId, before.runId, 'saving does not allocate another animation run');
+    assert.equal(await cdp.evaluate('window.__startupFrameSpecs.length'), 1,
+      'saving does not mount a playback frame');
+    assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[aria-label]").length'), 0,
+      'saving closes and releases the settings frame');
     const inputOpen = await cdp.evaluate(`(()=>{
       const input=document.querySelector('textarea');input.focus();
       const accepted=window.__startupAPI.openSettings();
@@ -1164,7 +1172,7 @@ try {
     assert.equal(inputOpen.accepted, true);
     const apiSettings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
-      return state.phase==='settings'&&state.ready&&state.runId>${replay.runId}?state:false;
+      return state.phase==='settings'&&state.ready&&state.runId>${saved.runId}?state:false;
     })()`), 10000, 'host input opens a settings-intent run through the PageController API');
     await cdp.evaluate(`window.__startupFixtureSend(${apiSettings.runId},{type:'azhou-startup',action:'complete',runId:${apiSettings.runId},skipped:true})`);
     await until(() => cdp.evaluate('window.__startupAPI.status().phase === "complete"'), 3000,
@@ -1173,36 +1181,37 @@ try {
       const input=document.querySelector('textarea');return document.activeElement===input;
     })()`);
     assert.equal(apiFocusRestored, true, 'API-opened settings returns focus to the previously focused host input');
-    return { before: { runId: before.runId, phase: before.phase }, replay: { runId: replay.runId, phase: replay.phase },
-      spec, apiSettings: { runId: apiSettings.runId, phase: apiSettings.phase }, apiFocusRestored };
+    return { before: { runId: before.runId, phase: before.phase }, saved: { runId: saved.runId, phase: saved.phase },
+      apiSettings: { runId: apiSettings.runId, phase: apiSettings.phase }, apiFocusRestored };
   });
   await check('complete exposes the appearance button, opens settings, and cancellation restores focus without replay', async () => {
     const play = await cdp.evaluate('window.__startupAPI.status()');
     await cdp.evaluate(`window.__startupFixtureSend(${play.runId},{type:'azhou-startup',action:'complete',runId:${play.runId},skipped:false})`);
     assert.equal((await cdp.evaluate('window.__startupAPI.status()')).phase, 'complete');
     assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[aria-label]").length'), 0);
-    assert.equal(await cdp.evaluate(`(()=>{const input=document.querySelector('textarea');input.focus();return document.activeElement===input;})()`), true);
+    assert.equal(await cdp.evaluate(`(()=>{const input=document.querySelector('textarea');input.focus();return document.activeElement===input;})()`), true,
+      'the host composer remains focusable before opening settings');
     const entry = await appearanceEntryMetrics();
     assert.equal(entry.display, 'block');
     assert.equal(entry.position, 'fixed');
     assert.equal(entry.buttonPosition, 'static');
     assert.equal(entry.left, '10px');
     assert.equal(entry.bottom, '72px');
-    assert.ok(entry.rect.width >= 39 && entry.rect.width <= 44,
+    assert.ok(entry.rect.width >= 44 && entry.rect.width <= 80,
       'the synthetic appearance button stays compact without an avatar: ' + JSON.stringify(entry.rect));
     assert.equal(entry.padding, '5px 9px 5px 5px');
-    assert.equal(entry.buttonText, '阿舟');
-    assert.equal(entry.buttonAriaLabel, '阿舟主题与外观');
-    assert.equal(entry.entryHit, true);
-    assert.equal(entry.buttonHit, true);
-    assert.equal(entry.inputHit, true);
-    assert.equal(entry.menuHit, true);
+    assert.equal(entry.buttonText, '阿舟外观');
+    assert.equal(entry.buttonAriaLabel, '阿舟外观');
+    assert.equal(entry.entryHit, true, 'the appearance entry receives its own hit target');
+    assert.equal(entry.buttonHit, true, 'the appearance button receives its shadow hit target');
+    assert.equal(entry.inputHit, true, 'the host composer remains independently hit-testable');
+    assert.equal(entry.menuHit, true, 'the host menu remains independently hit-testable');
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
     await screenshot('appearance-entry-dark.png');
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
     await screenshot('appearance-entry-light.png');
     const opened = await clickAppearanceEntry();
-    assert.equal(opened.focused, true);
+    assert.equal(opened.focused, true, 'a real appearance click focuses the entry button');
     assert.equal(opened.state.phase, 'loading');
     const settings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
@@ -1218,14 +1227,14 @@ try {
       const frame=document.querySelector('iframe[aria-label]');
       frame.contentDocument.querySelector('#startup-fixture-settings-input').focus();
       return document.activeElement===frame;
-    })()`), true);
+    })()`), true, 'the visible settings input can receive focus inside its iframe');
     await cdp.evaluate(`window.__startupFixtureSend(${settings.runId},{type:'azhou-startup',action:'complete',runId:${settings.runId},skipped:true})`);
     const cancelled = await cdp.evaluate('window.__startupAPI.status()');
     assert.equal(cancelled.phase, 'complete');
     assert.deepEqual(cancelled.completion, { cause: 'settings-cancel', beforeReady: false });
     const focusAfterButtonCancel = await cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-      const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
+      const button=entry?.shadowRoot?.querySelector('button');
       return {visible:entry?.style.display==='block',documentFocus:document.activeElement===entry,
         shadowFocus:entry?.shadowRoot?.activeElement===button};
     })()`);
@@ -1292,6 +1301,15 @@ try {
   await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
   await check('appearance entry remains clickable when the sidebar has no safe gap', async () => {
     try {
+      let pageState = await cdp.evaluate('window.__startupAPI.status()');
+      if (pageState.phase === 'playing') {
+        await cdp.evaluate(`window.__startupFixtureSend(${pageState.runId},{type:'azhou-startup',action:'complete',runId:${pageState.runId},skipped:false})`);
+      } else if (pageState.phase === 'settings') {
+        await cdp.evaluate(`window.__startupFixtureSend(${pageState.runId},{type:'azhou-startup',action:'complete',runId:${pageState.runId},skipped:true})`);
+      }
+      pageState = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();return state.phase==='complete'?state:false;
+      })()`), 5000, 'complete page exposes the entry before crowding the sidebar');
       await cdp.evaluate(`(()=>{
         const side=document.querySelector('.sidebar');
         for(let top=0;top<innerHeight;top+=48){
@@ -1300,38 +1318,87 @@ try {
           side.appendChild(item);
         }
       })()`);
-      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').getBoundingClientRect().left>innerWidth/2`),
-        1500, 'entry moves to a free position outside the crowded sidebar');
-      assert.equal(await cdp.evaluate(`(()=>{
+      const crowdedEntry = await until(() => cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-        return getComputedStyle(entry.shadowRoot.querySelector('button')).visibility;
-      })()`), 'visible', 'the shadow button remains visible');
-      assert.equal(await cdp.evaluate(`(()=>{
-        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),r=entry.getBoundingClientRect();
-        return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===entry;
-      })()`), true, 'the appearance entry remains hit-testable');
+        const button=entry.shadowRoot.querySelector('button'),rect=entry.getBoundingClientRect();
+        const shadowTarget=entry.shadowRoot.elementFromPoint?.(rect.left+rect.width/2,rect.top+rect.height/2);
+        return entry.style.display==='block'&&rect.left===10&&getComputedStyle(button).visibility==='visible'
+          &&document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)===entry
+          ?{left:rect.left,top:rect.top,width:rect.width,height:rect.height,buttonText:button.textContent,
+            buttonDisabled:button.disabled,buttonHit:shadowTarget===button||button.contains(shadowTarget),
+            state:window.__startupAPI.status()}:false;
+      })()`), 1500, 'entry remains visible and clickable in its left-side fallback when no gap exists');
+      assert.equal(crowdedEntry.left, 10, 'when no safe slot exists, the entry stays in the left fallback column');
+      assert.equal(crowdedEntry.state.phase, 'complete', 'the entry is tested from a stable completed page');
+      assert.equal(crowdedEntry.buttonDisabled, false, 'the left-side fallback button remains enabled when no gap exists');
+      assert.equal(crowdedEntry.buttonHit, true, 'the actual shadow button receives the fallback hit target');
       await screenshot('appearance-entry-crowded-sidebar-visible.png');
-      await cdp.evaluate(`(()=>{
-        for(const source of [...document.querySelectorAll('[data-fixture-crowded]')]){
-          const item=source.cloneNode();item.style.left='auto';item.style.right='10px';
-          document.querySelector('.sidebar').appendChild(item);
-        }
-      })()`);
-      await until(() => cdp.evaluate(`(()=>{
-        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),r=entry.getBoundingClientRect();
-        return [...document.querySelectorAll('[data-fixture-crowded]')].every(item=>{
-          const b=item.getBoundingClientRect();return r.right<=b.left||r.left>=b.right||r.bottom<=b.top||r.top>=b.bottom;
-        }) && document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===entry;
-      })()`), 1500, 'entry remains visible without covering either crowded edge');
       const opened = await clickAppearanceEntry();
-      assert.ok(['loading', 'settings'].includes(opened.state.phase));
-      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='settings'`), 3000, 'entry still opens settings');
+      assert.ok(['loading', 'settings'].includes(opened?.state?.phase),
+        'real pointer click starts the settings action: ' + JSON.stringify(opened));
+      const openingOutcome = await cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const button=entry?.shadowRoot?.querySelector('button');
+        return {state:{phase:state.phase,runId:state.runId,ready:state.ready,reason:state.reason},
+          buttonDisabled:button?.disabled,entryDisplay:entry?.style.display,
+          frameCount:document.querySelectorAll('iframe[aria-label]').length};
+      })()`);
+      assert.ok(['loading', 'settings'].includes(openingOutcome.state.phase),
+        'appearance click starts a settings run with crowded controls present: ' + JSON.stringify(openingOutcome));
+      const settings = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const frame=document.querySelector('iframe[aria-label]');
+        const input=frame?.contentDocument.querySelector('input[aria-label="Synthetic settings input"]');
+        const style=input&&frame.contentWindow.getComputedStyle(input);
+        const rect=input?.getBoundingClientRect();
+        const visible=!!input&&!!rect?.width&&!!rect?.height&&style.display!=='none'
+          &&style.visibility==='visible'&&style.opacity!=='0';
+        return state.phase==='settings'&&state.ready&&visible&&!input.disabled
+          ?{state:{phase:state.phase,runId:state.runId,ready:state.ready},inputVisible:visible,
+            inputDisabled:input.disabled,inputLabel:input.getAttribute('aria-label')}:false;
+      })()`), 15000, 'left-side fallback entry opens a ready settings run with its visible input').catch(async error => {
+        const diagnostic = await cdp.evaluate(`(()=>{
+          const state=window.__startupAPI.status(),frames=[...document.querySelectorAll('iframe[aria-label]')];
+          const frame=frames.at(-1),doc=frame?.contentDocument,entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+          const button=entry?.shadowRoot?.querySelector('button');
+          const input=doc?.querySelector('input[aria-label="Synthetic settings input"]');
+          return {state:{phase:state.phase,runId:state.runId,ready:state.ready,reason:state.reason},
+            frameCount:frames.length,frameTitle:frame?.title,frameReadyState:doc?.readyState,
+            settingsInputExists:!!input,settingsInputVisible:!!input&&!!input.getBoundingClientRect().width
+              &&!!input.getBoundingClientRect().height,runCount:window.__startupAnimationRuns.length,
+            lastSpec:window.__startupFrameSpecs.at(-1)?.intent,
+            entryDisplay:entry?.style.display,buttonDisabled:button?.disabled,
+            crowdedCount:document.querySelectorAll('[data-fixture-crowded]').length};
+        })()`);
+        throw new Error(error.message + ': ' + JSON.stringify({
+          opened:{focused:opened.focused,state:{phase:opened.state?.phase,runId:opened.state?.runId,
+            ready:opened.state?.ready,reason:opened.state?.reason}},openingOutcome,diagnostic}));
+      });
+      assert.ok(settings.state.runId>0);
+      assert.equal(settings.inputLabel,'Synthetic settings input');
+      const focusedInput = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        const input=frame?.contentDocument.querySelector('input[aria-label="Synthetic settings input"]');
+        if(!input||input.disabled)return false;
+        input.focus();
+        return {focused:frame.contentDocument.activeElement===input,
+          visible:!!input.getBoundingClientRect().width&&!!input.getBoundingClientRect().height};
+      })()`);
+      assert.deepEqual(focusedInput,{focused:true,visible:true},
+        'the left-side fallback opens a ready settings input that can receive focus');
       const state=await cdp.evaluate('window.__startupAPI.status()');
       await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'complete',runId:${state.runId},skipped:true})`);
-      await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.hidden=true)`);
-      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.left==='10px'`),
-        1500, 'entry returns to the sidebar when host controls free space');
-      return { crowded: 'visible', restored: 'left', opensSettings: true };
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 3000,
+        'settings cancellation returns to the completed page with its entry');
+      const afterCancel = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),rect=entry.getBoundingClientRect();
+        return {left:rect.left,visible:entry.style.display==='block',
+          hit:document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)===entry};
+      })()`);
+      assert.deepEqual(afterCancel, { left: 10, visible: true, hit: true },
+        'the left fallback remains usable after settings closes while the sidebar stays crowded');
+      return { crowded: 'left-clickable', settingsRunId: settings.state.runId, focusedInput, afterCancel };
     } finally {
       await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.remove())`);
     }
@@ -1658,8 +1725,8 @@ try {
     return { readyRun: { runId: state.runId, phase: state.phase, ready: state.ready }, beforeSkip, completed: completed.completion };
   });
 
-  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&wallpaper-fail=1&wallpaper-hold=11');
-  await check('real settings UI uses its public API and appearance button across cancel, save, conflict, replay and disposal', async () => {
+  await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&wallpaper-fail=1&wallpaper-hold=12');
+  await check('real settings UI saves without replay and keeps conflict, preview, apply and disposal behavior', async () => {
     const initial = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI?.status();
       return state?.phase==='playing'&&state.ready?state:false;
@@ -1714,6 +1781,14 @@ try {
     })()`), 15000, 'appearance button launches the actual settings-intent frame and opens its dialog');
     assert.ok(settingsRun.runId > initial.runId);
     assert.equal(await cdp.evaluate('window.__startupAnimationRuns.at(-1).intent'), 'settings');
+    const settingsChrome = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      return {skipHidden:doc.querySelector('[data-agent-skin-skip]')?.hidden,
+        stageHidden:doc.querySelector('[data-agent-skin-stage-text]')?.hidden,
+        progressHidden:doc.querySelector('[data-agent-skin-progress]')?.hidden};
+    })()`);
+    assert.deepEqual(settingsChrome, { skipHidden: true, stageHidden: true, progressHidden: true },
+      'settings intent hides playback-only skip and progress chrome');
     assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
       'the settings-intent frame does not apply a fallback or draft wallpaper');
     const defaultPanel = await cdp.evaluate(`(()=>{
@@ -1725,13 +1800,168 @@ try {
     assert.equal(defaultPanel.title, 'Synthetic agent', 'the canceled draft was not persisted');
     assert.equal(defaultPanel.strength, '0');
     assert.deepEqual(defaultPanel.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
-    await cdp.evaluate(`(()=>{
+    const previewLaunch = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
       const title=doc.querySelector('input[aria-label^="启动标题"]');
       title.value='Local draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
+      const tab=doc.querySelector('[data-agent-skin-settings-tab="startup"]');
+      const launch=doc.querySelector('[data-agent-skin-preview-animation]');
+      if(!tab||!launch)return {tabFound:!!tab,launchFound:!!launch};
+      tab.click();launch.click();
+      return {tabFound:true,launchFound:true};
     })()`);
+    assert.deepEqual(previewLaunch, { tabFound: true, launchFound: true },
+      'the actual settings page exposes the startup preview action');
+    const previewOpen = await until(() => cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      const preview=overlay?.querySelector('iframe[data-agent-skin-settings-preview-frame]');
+      if(!overlay||!preview?.contentDocument?.querySelector('[data-agent-skin-stage]'))return false;
+      const close=overlay.querySelector('button[data-agent-skin-settings-preview-close]');
+      return {
+        open:overlay.hidden!==true,settingsOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open===true,
+        title:doc.querySelector('input[aria-label^="启动标题"]')?.value,
+        previewStage:!!preview.contentDocument.querySelector('[data-agent-skin-stage]'),
+        hasCloseButton:!!close,modal:overlay.getAttribute('role')==='dialog'&&overlay.getAttribute('aria-modal')==='true',
+        runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
+    })()`), 15000, 'draft preview opens an isolated animation over settings');
+    assert.equal(previewOpen.open, true);
+    assert.equal(previewOpen.settingsOpen, true, 'animation preview leaves the settings draft open');
+    assert.equal(previewOpen.title, 'Local draft');
+    assert.equal(previewOpen.previewStage, true);
+    assert.equal(previewOpen.hasCloseButton, true, 'the independent preview exposes a dismiss action');
+    assert.equal(previewOpen.modal, true, 'the full-screen animation preview is exposed as a modal dialog');
+    assert.equal(previewOpen.runCount, 2, 'draft preview does not create a host startup run');
+    assert.equal(previewOpen.state.runId, settingsRun.runId);
+    const manualPreviewOpenedAt = Date.now();
+
+    await cdp.call('Page.bringToFront');
+    const focusBoundaryBefore = await cdp.evaluate(`(()=>{
+      const parentFrame=document.querySelector('iframe[aria-label]');
+      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      const overlay=doc.querySelector('[data-agent-skin-settings-preview]');
+      const close=overlay.querySelector('button[data-agent-skin-settings-preview-close]');
+      parentFrame.focus();doc.defaultView.focus();
+      close.focus();
+      return {focusedClose:doc.activeElement===close,hasFocus:doc.hasFocus(),parentActive:document.activeElement===parentFrame};
+    })()`);
+    assert.equal(focusBoundaryBefore.focusedClose, true,
+      'preview close control receives focus when the overlay opens: ' + JSON.stringify(focusBoundaryBefore));
+    const tabDispatchStartedAt = Date.now();
+    await dispatchTab();
+    const forwardTabElapsedMs = Date.now() - tabDispatchStartedAt;
+    const afterForwardTab = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      const overlay=doc.querySelector('[data-agent-skin-settings-preview]');
+      const active=doc.activeElement;
+      const buttons=[...doc.querySelector('[data-agent-skin-settings] footer').querySelectorAll('button')];
+      return {insideOverlay:!!overlay?.contains(active),isSave:active===buttons.at(-1),
+        isCancel:active===buttons.at(-2),insideInert:!!active?.closest?.('[inert]'),tag:active?.tagName,hasFocus:doc.hasFocus(),
+        topActiveIsSettingsFrame:document.activeElement===document.querySelector('iframe[aria-label]')};
+    })()`);
+    assert.equal(afterForwardTab.isSave, false, 'Tab cannot focus the obscured Save control');
+    assert.equal(afterForwardTab.isCancel, false, 'Tab cannot focus the obscured Cancel control');
+    assert.equal(afterForwardTab.insideInert, false, 'Tab cannot focus any inert setting behind the preview');
+    const backwardTabStartedAt = Date.now();
+    await dispatchTab(true);
+    const backwardTabElapsedMs = Date.now() - backwardTabStartedAt;
+    const afterBackwardTab = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      const overlay=doc.querySelector('[data-agent-skin-settings-preview]');
+      const active=doc.activeElement;
+      const buttons=[...doc.querySelector('[data-agent-skin-settings] footer').querySelectorAll('button')];
+      return {insideOverlay:!!overlay?.contains(active),isSave:active===buttons.at(-1),
+        isCancel:active===buttons.at(-2),insideInert:!!active?.closest?.('[inert]'),tag:active?.tagName,hasFocus:doc.hasFocus(),
+        topActiveIsSettingsFrame:document.activeElement===document.querySelector('iframe[aria-label]')};
+    })()`);
+    assert.equal(afterBackwardTab.isSave, false, 'Shift+Tab cannot focus the obscured Save control');
+    assert.equal(afterBackwardTab.isCancel, false, 'Shift+Tab cannot focus the obscured Cancel control');
+    assert.equal(afterBackwardTab.insideInert, false, 'Shift+Tab cannot focus any inert setting behind the preview');
+
+    const beforeManualClose = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      return {overlay:!!overlay?.isConnected,close:!!overlay?.querySelector('button[data-agent-skin-settings-preview-close]')};
+    })()`);
+    assert.equal(beforeManualClose.overlay && beforeManualClose.close, true,
+      'preview remains open through the Tab and Shift+Tab checks ('
+        + (Date.now() - manualPreviewOpenedAt) + ' ms): ' + JSON.stringify(beforeManualClose));
+    const manualClose = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      const close=overlay?.querySelector('button[data-agent-skin-settings-preview-close]');
+      if(!close)return {clicked:false,overlayOpen:!!overlay?.isConnected};
+      close.click();return {clicked:true,overlayOpen:overlay.isConnected};
+    })()`);
+    assert.equal(manualClose.clicked, true,
+      'manual focus test closes its still-open preview after ' + (Date.now() - manualPreviewOpenedAt)
+        + ' ms (Tab ' + forwardTabElapsedMs + ' ms, Shift+Tab ' + backwardTabElapsedMs + ' ms): '
+        + JSON.stringify(manualClose));
+    const previewClosed = await until(() => cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      const title=doc?.querySelector('input[aria-label^="启动标题"]');
+      const active=doc?.activeElement;
+      return (!overlay||!overlay.isConnected||overlay.hidden===true)
+        &&doc.querySelector('dialog[data-agent-skin-settings]')?.open===true
+        ?{title:title?.value,focused:active===doc.querySelector('[data-agent-skin-preview-animation]'),
+          activeTag:active?.tagName,activeMarker:active?.getAttribute?.('data-agent-skin-preview-animation'),
+          activeLabel:active?.getAttribute?.('aria-label'),activeText:active?.textContent?.trim(),
+          activeInSettings:!!active?.closest?.('[data-agent-skin-settings]'),activeConnected:active?.isConnected}:false;
+    })()`), 5000, 'closing the draft preview returns to settings');
+    assert.equal(previewClosed.title, 'Local draft', 'closing preview preserves the unsaved draft');
+    assert.equal(previewClosed.focused, true,
+      'closing preview returns focus to its launch button: ' + JSON.stringify(previewClosed));
+
+    const naturalPreviewLaunch = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      const tab=doc.querySelector('[data-agent-skin-settings-tab="startup"]');
+      const launch=doc.querySelector('[data-agent-skin-preview-animation]');
+      if(!tab||!launch)return {tabFound:!!tab,launchFound:!!launch};
+      tab.click();launch.click();return {tabFound:true,launchFound:true};
+    })()`);
+    assert.deepEqual(naturalPreviewLaunch, { tabFound: true, launchFound: true });
+    const naturalPreviewOpen = await until(() => cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      const preview=overlay?.querySelector('iframe[data-agent-skin-settings-preview-frame]');
+      if(!overlay||!preview?.contentDocument?.querySelector('[data-agent-skin-stage]'))return false;
+      return {settingsOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open===true,
+        runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
+    })()`), 15000, 'second draft preview becomes ready for a natural end');
+    const naturalPreviewStartedAt = Date.now();
+    const naturalPreviewClosed = await until(() => cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+      if(overlay?.isConnected&&overlay.hidden!==true)return false;
+      const launch=doc?.querySelector('[data-agent-skin-preview-animation]');
+      return {settingsOpen:doc?.querySelector('dialog[data-agent-skin-settings]')?.open===true,
+        title:doc?.querySelector('input[aria-label^="启动标题"]')?.value,
+        focused:doc?.activeElement===launch,runCount:window.__startupAnimationRuns.length,
+        state:window.__startupAPI.status()};
+    })()`), 18000, 'the full-duration animation preview ends naturally');
+    const naturalPreviewElapsedMs = Date.now() - naturalPreviewStartedAt;
+    assert.ok(naturalPreviewElapsedMs >= 11_000,
+      'the second preview must play through its 12-second duration, elapsed ' + naturalPreviewElapsedMs + ' ms');
+    assert.ok(naturalPreviewElapsedMs < 18_000,
+      'the preview closes after natural completion rather than hanging, elapsed ' + naturalPreviewElapsedMs + ' ms');
+    assert.equal(naturalPreviewOpen.settingsOpen, true, 'the natural preview begins over the open settings page');
+    assert.equal(naturalPreviewClosed.settingsOpen, true,
+      'natural preview completion leaves the parent settings dialog open');
+    assert.equal(naturalPreviewClosed.title, 'Local draft',
+      'natural preview completion preserves the settings draft');
+    assert.equal(naturalPreviewClosed.focused, true,
+      'natural preview completion returns focus to the preview action');
+    assert.equal(naturalPreviewClosed.runCount, 2,
+      'natural preview completion does not create a host startup run');
+    assert.equal(naturalPreviewClosed.state.runId, settingsRun.runId,
+      'natural preview completion leaves the settings run unchanged');
+    assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
+      'naturally completing a preview never applies its draft wallpaper');
+    assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
+      'previewing the draft never applies it to the workspace');
     assert.equal(await cdp.evaluate('window.__fixtureWallpaperApplications || 0'), 0,
       'editing an unopened run still has no host wallpaper side effect');
 
@@ -1745,40 +1975,52 @@ try {
         return {reason:loaded.reason,baseline:loaded.baseline,title:saved.introTitle,strength:saved.wallpaperStrength};
       }finally{api.dispose();}
     })()`);
-    assert.equal(externalCommit.reason, '');
-    assert.equal(externalCommit.baseline, undefined);
-    assert.equal(externalCommit.title, 'External');
-    assert.equal(externalCommit.strength, 42);
-    await cdp.evaluate(`(()=>{
-      const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+    assert.equal(externalCommit.reason, '', 'an independent settings save succeeds');
+    assert.equal(externalCommit.baseline, undefined, 'the independent save starts from defaults');
+    assert.equal(externalCommit.title, 'External', 'the independent save commits its title');
+    assert.equal(externalCommit.strength, 42, 'the independent save commits numeric wallpaper strength');
+    const conflictSave = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const panel=doc?.querySelector('[data-agent-skin-settings]');
+      const footer=panel?.querySelector('footer');
+      const buttons=[...footer?.querySelectorAll('button')||[]];
+      const save=buttons.find(button=>/保存|Save/i.test(button.textContent.trim()));
+      if(!save)return {clicked:false,panel:!!panel,footer:!!footer,labels:buttons.map(button=>button.textContent.trim())};
+      save.click();return {clicked:true,label:save.textContent.trim()};
     })()`);
+    assert.equal(conflictSave.clicked, true,
+      'settings save control is available for the concurrent-update check: ' + JSON.stringify(conflictSave));
     const conflictStatus = await until(() => cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]');
-      const status=frame?.contentDocument.querySelector('[data-agent-skin-settings] [aria-live="polite"]');
+      const status=frame?.contentDocument.querySelector('[data-agent-skin-settings-status]');
       return status?.textContent.includes('其他页面已更新设置')?status.textContent:false;
     })()`), 10000, 'settings transaction detects a real concurrent page update');
     const conflictState = await cdp.evaluate(`({state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
       frameCount:document.querySelectorAll('iframe[aria-label]').length,
       dialogOpen:document.querySelector('iframe[aria-label]').contentDocument.querySelector('dialog')?.open})`);
-    assert.equal(conflictState.state.phase, 'settings');
-    assert.equal(conflictState.state.runId, settingsRun.runId);
+    assert.equal(conflictState.state.phase, 'settings', 'conflicted settings remain in their settings run');
+    assert.equal(conflictState.state.runId, settingsRun.runId, 'conflicted settings do not start a new run');
     assert.equal(conflictState.runCount, 2, 'failed save did not send settings-close or replay');
-    assert.equal(conflictState.frameCount, 1);
-    assert.equal(conflictState.dialogOpen, true);
-    assert.ok(conflictStatus.includes('其他页面已更新设置'));
+    assert.equal(conflictState.frameCount, 1, 'conflict keeps one settings frame mounted');
+    assert.equal(conflictState.dialogOpen, true, 'conflict keeps the dialog open for correction');
+    assert.ok(conflictStatus.includes('其他页面已更新设置'), 'conflict status explains the concurrent update');
 
-    await cdp.evaluate(`(()=>{
-      const frame=document.querySelector('iframe[aria-label]');
-      frame.contentDocument.querySelector('button[aria-label="取消并关闭设置"]').click();
+    const conflictCancel = await cdp.evaluate(`(()=>{
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      const buttons=[...doc?.querySelector('[data-agent-skin-settings] footer')?.querySelectorAll('button')||[]];
+      const cancel=buttons.find(button=>/取消|Cancel/i.test(button.textContent.trim()));
+      if(!cancel)return {clicked:false,labels:buttons.map(button=>button.textContent.trim())};
+      cancel.click();return {clicked:true,label:cancel.textContent.trim()};
     })()`);
+    assert.equal(conflictCancel.clicked, true,
+      'settings Cancel control is available after a conflict: ' + JSON.stringify(conflictCancel));
     const conflictCancelled = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();return state.phase==='complete'&&state.completion?.cause==='settings-cancel'?state:false;
     })()`), 5000, 'cancel after conflict keeps the external record and avoids replay');
-    assert.equal(conflictCancelled.runId, settingsRun.runId);
+    assert.equal(conflictCancelled.runId, settingsRun.runId, 'cancel after conflict closes without replay');
 
     const retryClick = await clickAppearanceEntry();
-    assert.equal(retryClick.focused, true);
+    assert.equal(retryClick.focused, true, 'the appearance entry remains focusable after conflict cancellation');
     const retrySettings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status(),frame=document.querySelector('iframe[aria-label]');
       return state.phase==='settings'&&state.ready&&frame?.contentDocument.querySelector('dialog')?.open?state:false;
@@ -1796,52 +2038,75 @@ try {
       title.value='Saved title';title.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
     })()`);
-    const savedPlay = await until(() => cdp.evaluate(`(()=>{
-      const state=window.__startupAPI.status();return state.phase==='playing'&&state.ready&&state.runId> ${retrySettings.runId}?state:false;
-    })()`), 15000, 'transaction complete starts the new play run');
-    const replay = await cdp.evaluate(`({run:window.__startupAnimationRuns.at(-1),applications:window.__fixtureWallpaperApplications || 0,
-      notice:document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-wallpaper-result]')?.textContent,
-      state:window.__startupAPI.status()})`);
-    assert.equal(replay.run.intent, 'play');
-    assert.equal(replay.run.settingsCommitted, true);
-    assert.equal(replay.applications, 1);
-    assert.equal(replay.state.wallpaper.reason, 'wallpaper-unsupported');
-    const expectedWallpaperNotice = await cdp.evaluate(`window.createLocalization({locale:document.documentElement.lang})
-      .t('animation.wallpaper.failed.body')`);
-    assert.ok(replay.notice.includes(expectedWallpaperNotice),
-      'post-commit wallpaper failure keeps its localized child result');
+    const applyFailure = await until(() => cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+      const status=doc?.querySelector('[data-agent-skin-settings-status]');
+      return status?.textContent.includes('设置已保存，但背景应用失败')?{
+        state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
+        frameCount:document.querySelectorAll('iframe[aria-label]').length,
+        dialogOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open,
+        title:doc.querySelector('input[aria-label^="启动标题"]')?.value,
+        retry:doc.querySelector('footer button:last-child')?.textContent,
+        applications:window.__fixtureWallpaperApplications||0,status:status.textContent}:false;
+    })()`), 15000, 'saved settings report a separate wallpaper application failure');
+    assert.equal(applyFailure.state.phase, 'settings');
+    assert.equal(applyFailure.state.runId, retrySettings.runId);
+    assert.equal(applyFailure.runCount, 3, 'failed application does not replay startup animation');
+    assert.equal(applyFailure.frameCount, 1);
+    assert.equal(applyFailure.dialogOpen, true);
+    assert.equal(applyFailure.title, 'Saved title', 'the committed fields remain visible after apply failure');
+    assert.equal(applyFailure.retry, '重试应用');
+    assert.equal(applyFailure.applications, 1);
+
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument
+      .querySelector('[data-agent-skin-settings] footer button:last-child').click()`);
+    const savedRun = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&state.completion?.cause==='settings-save'
+        &&state.runId===${retrySettings.runId}&&window.__fixtureWallpaperApplications===2
+        ?{state,run:window.__startupAnimationRuns.at(-1),frameCount:document.querySelectorAll('iframe[aria-label]').length}:false;
+    })()`), 15000, 'retry applies the already-saved workspace background and closes without replay');
+    assert.equal(savedRun.frameCount, 0);
+    assert.equal(savedRun.run.intent, 'settings');
+    assert.equal(savedRun.run.runId, retrySettings.runId);
+    assert.equal(savedRun.state.wallpaper.applied, true);
     const settingsResources = await cdp.evaluate(`(()=>{
       const run=window.__startupAnimationRuns.find(item=>item.runId===${retrySettings.runId});
       return run.handle.preview.report().resources;
     })()`);
     for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
-      assert.equal(settingsResources[resource], 0, 'old settings frame releases ' + resource + ' after replay');
+      assert.equal(settingsResources[resource], 0, 'saved settings release ' + resource + ' on close');
     }
 
-    assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
-    await until(() => cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog')?.open`),
-      5000, 'public API opens settings after persistence');
-    const persistedValues = await cdp.evaluate(`(()=>{
-      const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
-        strength:doc.querySelector('input[type="range"]').value};
+    const persistedValues = await cdp.evaluate(`(async()=>{
+      const assets=window.__startupAnimationRuns[0].assets;
+      const api=window.createImageSettings({document,Image,URL,indexedDB,performance,
+        setTimeout:setTimeout.bind(window),clearTimeout:clearTimeout.bind(window)});
+      try { const loaded=await api.load(assets); return {title:loaded.settings.introTitle,strength:loaded.settings.wallpaperStrength}; }
+      finally { api.dispose(); }
     })()`);
-    assert.deepEqual(persistedValues, { title: 'Saved title', strength: '42' },
-      'the replay child loaded committed fields before preparing the frame');
+    assert.deepEqual(persistedValues, { title: 'Saved title', strength: 42 },
+      'settings are persisted before wallpaper application succeeds');
 
-    const settingsReplayRuns = [{ runId: savedPlay.runId, intent: replay.run.intent,
-      committed: replay.run.settingsCommitted, subtitle: 'Generated fixture only' }];
-    let currentReplayRunId = savedPlay.runId;
+    const savedSettingsRuns = [{ runId: savedRun.state.runId, intent: savedRun.run.intent,
+      subtitle: 'Generated fixture only', applications: 2 }];
+    let currentSettingsRunId = savedRun.state.runId;
     let expectedSubtitle = 'Generated fixture only';
     for (let cycle = 2; cycle <= 10; cycle++) {
-      if (cycle > 2) {
-        assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
-        await until(() => cdp.evaluate(`(()=>{
-          const state=window.__startupAPI.status();
-          const dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
-          return state.phase==='settings'&&state.runId===${currentReplayRunId}&&dialog?.open?state:false;
-        })()`), 5000, 'public settings API before saved replay ' + cycle);
-      }
+      const entryBeforeOpen = await appearanceEntryMetrics();
+      assert.equal(entryBeforeOpen?.display, 'block', 'appearance entry remains visible after save ' + cycle);
+      assert.equal(entryBeforeOpen?.entryHit, true, 'appearance entry remains hit-testable after save ' + cycle);
+      assert.equal(entryBeforeOpen?.buttonHit, true, 'appearance button remains hit-testable after save ' + cycle);
+      const openedSettings = await clickAppearanceEntry();
+      assert.equal(openedSettings?.state?.phase, 'loading',
+        'clicking the visible appearance entry starts the next settings run: ' + JSON.stringify(openedSettings));
+      assert.ok(openedSettings.state.runId > currentSettingsRunId,
+        'each appearance click creates a newer settings run');
+      const nextSettings = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        const dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
+        return state.phase==='settings'&&state.runId>${currentSettingsRunId}&&dialog?.open?state:false;
+      })()`), 10000, 'appearance entry opens settings before save ' + cycle);
       const openedValues = await cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
@@ -1850,9 +2115,9 @@ try {
           subtitle:doc.querySelector('textarea[aria-label^="背景字幕"]').value,
           strength:doc.querySelector('input[type="range"]').value};
       })()`);
-      assert.deepEqual(openedValues, { state: { phase: 'settings', runId: currentReplayRunId },
+      assert.deepEqual(openedValues, { state: { phase: 'settings', runId: nextSettings.runId },
         title: 'Saved title', subtitle: expectedSubtitle, strength: '42' },
-      'each replay reloads the committed record before settings opens again');
+      'each settings open reloads the committed record');
       const nextSubtitle = 'Generated replay ' + cycle;
       await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
@@ -1860,32 +2125,46 @@ try {
         subtitle.value=${JSON.stringify(nextSubtitle)};subtitle.dispatchEvent(new Event('input',{bubbles:true}));
         doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
       })()`);
-      const nextReplay = await until(() => cdp.evaluate(`(()=>{
+      const nextSave = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
-        return state.phase==='playing'&&state.ready&&state.runId>${currentReplayRunId}
-          &&window.__fixtureWallpaperApplications===${cycle}?{state,run:window.__startupAnimationRuns.at(-1)}:false;
-      })()`), 15000, 'settings save ' + cycle + ' creates a fresh play run');
-      assert.equal(nextReplay.run.intent, 'play');
-      assert.equal(nextReplay.run.settingsCommitted, true);
+        return state.phase==='complete'&&state.completion?.cause==='settings-save'
+          &&state.runId===${nextSettings.runId}&&window.__fixtureWallpaperApplications===${cycle + 1}
+          &&document.querySelectorAll('iframe[aria-label]').length===0
+          ?{state,run:window.__startupAnimationRuns.at(-1)}:false;
+      })()`), 15000, 'settings save ' + cycle + ' applies background without a playback run');
+      assert.equal(nextSave.run.intent, 'settings');
+      assert.equal(nextSave.state.runId, nextSettings.runId);
+      assert.equal(await cdp.evaluate('window.__startupAnimationRuns.length'), cycle + 2,
+        'each settings open creates one settings frame but save creates no playback frame');
       const released = await cdp.evaluate(`(()=>{
-        const run=window.__startupAnimationRuns.find(item=>item.runId===${currentReplayRunId});
+        const run=window.__startupAnimationRuns.find(item=>item.runId===${nextSettings.runId});
         return run.handle.preview.report().resources;
       })()`);
       for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
-        assert.equal(released[resource], 0, 'settings replay ' + cycle + ' releases old ' + resource);
+        assert.equal(released[resource], 0, 'settings save ' + cycle + ' releases ' + resource);
       }
-      settingsReplayRuns.push({ runId: nextReplay.state.runId, intent: nextReplay.run.intent,
-        committed: nextReplay.run.settingsCommitted, subtitle: nextSubtitle, released });
-      currentReplayRunId = nextReplay.state.runId;
+      savedSettingsRuns.push({ runId: nextSave.state.runId, intent: nextSave.run.intent,
+        subtitle: nextSubtitle, applications: cycle + 1, released });
+      currentSettingsRunId = nextSave.state.runId;
       expectedSubtitle = nextSubtitle;
     }
-    assert.equal(settingsReplayRuns.length, 10, 'ten saved settings runs were prepared');
-    const lateRun = currentReplayRunId;
-    assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
-    await until(() => cdp.evaluate(`(()=>{
+    assert.equal(savedSettingsRuns.length, 10, 'ten settings changes applied without animation replay');
+    const lateRun = currentSettingsRunId;
+    const lateEntryMetrics = await appearanceEntryMetrics();
+    assert.equal(lateEntryMetrics?.display, 'block', 'appearance entry remains visible before the pending-save check');
+    assert.equal(lateEntryMetrics?.entryHit, true, 'appearance entry can be clicked before the pending-save check');
+    assert.equal(lateEntryMetrics?.buttonHit, true, 'appearance button is the hit target before the pending-save check');
+    const lateEntry = await clickAppearanceEntry();
+    assert.equal(lateEntry?.state?.phase, 'loading',
+      'clicking appearance starts a fresh settings run before the pending-save check');
+    assert.ok(lateEntry.state.runId > lateRun,
+      'the pending-save settings run has a newer ID than the prior saved run');
+    const lateSettingsReady = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status(),dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
-      return state.phase==='settings'&&state.runId===${lateRun}&&dialog?.open?true:false;
-    })()`), 5000, 'public settings API opens the final replay before the held late result');
+      return state.phase==='settings'&&state.runId>${lateRun}&&dialog?.open?state:false;
+    })()`), 10000, 'appearance entry opens settings before the held late background result');
+    const lateSettings = await cdp.evaluate('window.__startupAPI.status()');
+    assert.equal(lateSettings.runId, lateSettingsReady.runId);
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
       const subtitle=doc.querySelector('textarea[aria-label^="背景字幕"]');
@@ -1894,23 +2173,26 @@ try {
     })()`);
     const lateApply = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
-      return state.phase==='playing'&&state.ready&&state.runId>${lateRun}
-        &&window.__fixtureWallpaperApplications===11?{state,run:window.__startupAnimationRuns.at(-1)}:false;
-    })()`), 15000, 'late committed wallpaper result is held across disposal after ten saved replays');
-    assert.equal(lateApply.run.settingsCommitted, true);
-    assert.equal(lateApply.run.intent, 'play');
+      return state.phase==='settings'&&state.runId===${lateSettings.runId}
+        &&window.__fixtureWallpaperApplications===12&&typeof window.__releaseFixtureWallpaper==='function'
+        ?{state,run:window.__startupAnimationRuns.at(-1),frameCount:document.querySelectorAll('iframe[aria-label]').length}:false;
+    })()`), 15000, 'settings stays open while the saved background application is pending');
+    assert.equal(lateApply.run.intent, 'settings');
+    assert.equal(lateApply.run.runId, lateSettings.runId);
+    assert.equal(lateApply.frameCount, 1);
+    assert.equal(lateApply.state.runId, lateSettings.runId);
+    assert.equal(await cdp.evaluate('window.__startupAnimationRuns.length'), 13,
+      'the pending save does not create a playback animation');
     const secondSettingsResources = await cdp.evaluate(`(()=>{
-      const run=window.__startupAnimationRuns.find(item=>item.runId===${lateRun});
+      const run=window.__startupAnimationRuns.find(item=>item.runId===${lateSettings.runId});
       return run.handle.preview.report().resources;
     })()`);
-    for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
-      assert.equal(secondSettingsResources[resource], 0, 'second settings replay releases ' + resource);
-    }
-    assert.equal(await cdp.evaluate('typeof window.__releaseFixtureWallpaper'), 'function');
+    assert.equal(secondSettingsResources.liveRAF, 0,
+      'the open settings frame does not keep a playback animation running while wallpaper application waits');
     await cdp.evaluate('window.__startupAPI.dispose()');
     await cdp.evaluate('window.__releaseFixtureWallpaper()');
     const afterLate = await cdp.evaluate(`(()=>{
-      const held=window.__startupAnimationRuns.find(item=>item.runId===${lateApply.state.runId});
+      const held=window.__startupAnimationRuns.find(item=>item.runId===${lateSettings.runId});
       const resources=held.handle.preview.report().resources;
       const frame=document.querySelector('iframe[aria-label]');
       return {installed:Object.hasOwn(window,'__azhouStartup'),frameCount:frame?1:0,
@@ -1920,7 +2202,7 @@ try {
     assert.equal(afterLate.frameCount, 0);
     assert.equal(afterLate.wallpaper, false);
     for (const resource of ['liveImages','liveBitmaps','liveCanvases','livePaths','liveRAF','liveObjectURLs']) {
-      assert.equal(afterLate.resources[resource], 0, 'disposed replay releases ' + resource);
+      assert.equal(afterLate.resources[resource], 0, 'disposed pending settings release ' + resource);
     }
 
     await navigate('/fixture.html?animation=1&no-initial-wallpaper=1');
@@ -2000,12 +2282,16 @@ try {
     return { initialRun: initial.runId, childAPI: { phase: childAPI.state.phase, runId: childAPI.state.runId },
       childCancelled: childCancelled.completion, settingsRun: settingsRun.runId,
       externalCommit, conflict: { status: conflictStatus, runId: conflictState.state.runId,
-        runCount: conflictState.runCount }, replay: { runId: savedPlay.runId, committed: replay.run.settingsCommitted,
-        wallpaper: replay.state.wallpaper, notice: replay.notice, released: settingsResources },
-      persistedValues, settingsReplayRuns, lateRun: lateApply.state.runId, afterLate,
+        runCount: conflictState.runCount }, applyFailure: { status: applyFailure.status,
+        retry: applyFailure.retry, saved: true }, savedSettings: { runId: savedRun.state.runId,
+        wallpaper: savedRun.state.wallpaper, released: settingsResources },
+      persistedValues, savedSettingsRuns, lateRun: lateSettings.runId, afterLate,
       busyEscape: { runId: busyRun.runId, busyStart, stillOpen: busyStillOpen,
         lateSettingsImage, released: busyResources, afterDispose: lateImportAfterDispose },
-      secondReplayResources: secondSettingsResources };
+      preview: { manualClosed: manualClose.clicked, forwardTab: afterForwardTab,
+        backwardTab: afterBackwardTab, naturalElapsedMs: naturalPreviewElapsedMs,
+        naturalClosed: naturalPreviewClosed.focused },
+      pendingSettingsResources: secondSettingsResources };
   });
 
   await cdp.evaluate('window.__startupAPI?.dispose()');
@@ -2038,8 +2324,8 @@ try {
     assert.equal(before.frameTitle, '阿舟启动动画');
     assert.equal(before.frameAria, '阿舟启动动画');
     assert.equal(before.stageLabel, '阿舟启动动画');
-    assert.equal(before.entryText, '阿舟');
-    assert.equal(before.entryAria, '阿舟主题与外观');
+    assert.equal(before.entryText, '阿舟外观');
+    assert.equal(before.entryAria, '阿舟外观');
     assert.equal(before.entryTitle, '打开主题与外观');
     assert.ok(before.drawnText.includes('Synthetic agent'), 'explicit asset title remains in the identity canvas');
     assert.ok(before.drawnText.includes('SYNTHETIC / TEST'), 'explicit asset caption remains in the identity canvas');
@@ -2105,8 +2391,8 @@ try {
     assert.deepEqual(updated.colors, {
       surface: '#f8fafc', text: '#172033', muted: '#536176', border: '#cbd5e1',
     });
-    assert.equal(updated.entryText, 'Azhou');
-    assert.equal(updated.entryAria, 'Azhou theme and appearance');
+    assert.equal(updated.entryText, 'Azhou Appearance');
+    assert.equal(updated.entryAria, 'Azhou Appearance');
     assert.equal(updated.entryTitle, 'Open theme and appearance');
     assert.equal(updated.rootAria, 'Azhou startup animation');
     const englishStages = {
@@ -2125,12 +2411,12 @@ try {
     const inheritedSettings = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[title="Azhou startup animation"]').contentDocument;
       const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
-      return {theme:value('theme'),locale:value('locale'),surface:value('surface'),
+      return {theme:value('theme'),locale:value('locale'),
         sections:[...doc.querySelectorAll('[data-agent-skin-settings-section]')].map(el=>el.dataset.agentSkinSettingsSection),
         preferenceControls:doc.querySelectorAll('select,input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length};
     })()`);
-    assert.deepEqual(inheritedSettings, { theme: 'Light', locale: 'en', surface: '#f8fafc',
-      sections: ['identity', 'startup', 'workspace', 'inherited'], preferenceControls: 0 });
+    assert.deepEqual(inheritedSettings, { theme: 'Light', locale: 'en',
+      sections: ['workspace', 'startup', 'about'], preferenceControls: 0 });
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await until(() => cdp.evaluate(`document.querySelector('iframe[title="Azhou startup animation"]').contentDocument
       .querySelector('[data-agent-skin-setting-value="reducedMotion"]').textContent==='On'`), 5000, 'system motion readout')
@@ -2275,9 +2561,13 @@ try {
     })()`);
     const saved = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status(),run=window.__startupAnimationRuns.at(-1);
-      return state.phase==='playing'&&state.ready&&state.runId>${initial.runId}?{state,run}:false;
-    })()`), 15000, 'the settings transaction commits before top-level refresh');
-    assert.equal(saved.run.settingsCommitted, true);
+      return state.phase==='complete'&&state.completion?.cause==='settings-save'
+        &&state.runId===${initial.runId}&&document.querySelectorAll('iframe[aria-label]').length===0
+        ?{state,run,runCount:window.__startupAnimationRuns.length}:false;
+    })()`), 15000, 'the settings transaction commits and closes without a playback replay');
+    assert.equal(saved.state.runId, initial.runId, 'saving closes the current settings draft in the same run');
+    assert.equal(saved.runCount, 1, 'saving does not create a second startup run');
+    assert.equal(saved.run.runId, initial.runId);
     const timeOriginBeforeReload = await cdp.evaluate('performance.timeOrigin');
     await cdp.call('Page.reload', { ignoreCache: true });
     await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'top-level refresh completes');
@@ -2304,24 +2594,14 @@ try {
     })()`);
     assert.deepEqual(reloadedFields, fields,
       'the new top-level document reads all committed fields from IndexedDB');
-    return { committedBeforeReload: saved.run.settingsCommitted, afterReload: {
+    return { savedWithoutReplay: { runId: saved.state.runId, completion: saved.state.completion,
+      runCount: saved.runCount }, afterReload: {
       runId: after.run.runId, intent: after.run.intent, settingsCommitted: after.run.settingsCommitted,
     }, reloadedFields, timeOriginChanged: timeOriginAfterReload !== timeOriginBeforeReload };
   });
 
   await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&natural-settings-replay=1');
-  await check('ten saved settings runs naturally complete and release resources through a five-second settle', async () => {
-    await cdp.call('Performance.enable');
-    const heapMetrics = async () => {
-      const { metrics = [] } = await cdp.call('Performance.getMetrics');
-      const values = Object.fromEntries(metrics.map(metric => [metric.name, metric.value]));
-      return {
-        available: Number.isFinite(values.JSHeapUsedSize),
-        usedJSHeapBytes: Number.isFinite(values.JSHeapUsedSize) ? values.JSHeapUsedSize : null,
-        totalJSHeapBytes: Number.isFinite(values.JSHeapTotalSize) ? values.JSHeapTotalSize : null,
-        timestamp: Number.isFinite(values.Timestamp) ? values.Timestamp : null,
-      };
-    };
+  await check('ten saved settings runs close without replay and release resources', async () => {
     const zeroResourceKeys = ['liveImages', 'liveBitmaps', 'liveCanvases', 'livePaths', 'liveRAF', 'liveObjectURLs'];
     const initial = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI?.status();
@@ -2332,108 +2612,72 @@ try {
     const cycles = [];
 
     for (let round = 1; round <= 10; round++) {
-      assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true,
-        'the public API opens settings for replay ' + round);
+      let expectedRunId = priorRunId;
+      if (round === 1) {
+        assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true,
+          'the public API opens the first settings draft during playback');
+      } else {
+        const entry = await appearanceEntryMetrics();
+        assert.equal(entry?.display, 'block', 'appearance entry is visible before settings save ' + round);
+        assert.equal(entry?.entryHit, true, 'appearance entry is clickable before settings save ' + round);
+        assert.equal(entry?.buttonHit, true, 'appearance button is clickable before settings save ' + round);
+        const opened = await clickAppearanceEntry();
+        assert.equal(opened?.state?.phase, 'loading', 'appearance click starts settings run ' + round);
+        assert.ok(opened.state.runId > priorRunId, 'settings run ' + round + ' has a new run ID');
+        expectedRunId = opened.state.runId;
+      }
       const panel = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const frame=document.querySelector('iframe[aria-label]');
         const dialog=frame?.contentDocument.querySelector('dialog');
         const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]')?.value;
-        return state.phase==='settings'&&dialog?.open?{state,title}:false;
-      })()`), 10000, 'settings panel opens before natural replay ' + round);
+        return state.phase==='settings'&&state.runId===${expectedRunId}&&dialog?.open?{state,title}:false;
+      })()`), 10000, 'settings panel opens before save ' + round);
       if (expectedTitle === null) expectedTitle = panel.title;
-      else assert.equal(panel.title, expectedTitle, 'replay ' + round + ' reads the previous committed title');
-      const nextTitle = 'Natural run ' + String(round).padStart(2, '0');
-      await cdp.evaluate(`(()=>{
+      else assert.equal(panel.title, expectedTitle, 'settings run ' + round + ' reads the previous committed title');
+      const nextTitle = 'Saved run ' + String(round).padStart(2, '0');
+      const draft = await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         const title=doc.querySelector('input[aria-label^="启动标题"]');
         title.value=${JSON.stringify(nextTitle)};title.dispatchEvent(new Event('input',{bubbles:true}));
-        doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+        return {value:title.value,buttonLabel:doc.querySelector('[data-agent-skin-settings] footer button:last-child')?.textContent.trim()};
       })()`);
-      const started = await until(() => cdp.evaluate(`(()=>{
-        const state=window.__startupAPI.status(),run=window.__startupAnimationRuns.at(-1);
-        return state.phase==='playing'&&state.ready&&state.runId>${priorRunId}
-          ?{state,run}:false;
-      })()`), 15000, 'save ' + round + ' creates a fresh ready play run');
-      assert.equal(started.run.intent, 'play');
-      assert.equal(started.run.settingsCommitted, true);
-      const playbackStartedAt = Date.now();
-      const completed = await until(() => cdp.evaluate(`(()=>{
-        const state=window.__startupAPI.status();
-        return state.runId===${started.state.runId}&&state.phase==='complete'
-          &&state.completion?.cause==='natural'&&!state.overlay?state:false;
-      })()`), 30000, 'settings-save replay ' + round + ' completes naturally');
-      const completedAt = Date.now();
-      assert.deepEqual(completed.completion, { cause: 'natural', beforeReady: false });
-      assert.equal(completed.completed, true);
-      assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[aria-label]").length'), 0,
-        'natural completion removes the child before the settle window');
-      const finalReport = await cdp.evaluate(`(()=>{
-        const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
-        return run.sampleDisposedResources();
+      assert.equal(draft.value, nextTitle);
+      assert.ok(/保存|save/i.test(draft.buttonLabel), 'settings exposes a save action without replay wording');
+      await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument
+        .querySelector('[data-agent-skin-settings] footer button:last-child').click()`);
+      const closed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status(),run=window.__startupAnimationRuns.find(item=>item.runId===${expectedRunId});
+        return state.phase==='complete'&&state.completion?.cause==='settings-save'&&state.runId===${expectedRunId}
+          &&document.querySelectorAll('iframe[aria-label]').length===0
+          ?{state,run,runCount:window.__startupAnimationRuns.length}:false;
+      })()`), 15000, 'settings save ' + round + ' closes its draft without a playback replay');
+      assert.equal(closed.runCount, round,
+        'settings save ' + round + ' does not create another animation run');
+      assert.equal(closed.run.runId, expectedRunId);
+      assert.equal(closed.run.intent, round === 1 ? 'play' : 'settings');
+      const released = await cdp.evaluate(`(()=>{
+        const run=window.__startupAnimationRuns.find(item=>item.runId===${expectedRunId});
+        return run.sampleDisposedResources().report.resources;
       })()`);
-      assert.equal(finalReport.report.completed, true);
-      assert.equal(finalReport.report.skipped, false);
-      assert.equal(finalReport.report.elapsed, finalReport.report.duration);
-      assert.ok(finalReport.report.jsFrame.rafIntervalMs?.count > 100, 'natural playback records actual rAF samples');
-      assert.ok(finalReport.report.jsFrame.renderSubmissionMs?.count > 100,
-        'natural playback records actual canvas submission samples');
-      for (const key of zeroResourceKeys) assert.equal(finalReport.report.resources[key], 0,
-        'natural completion releases ' + key);
-      assert.equal(finalReport.report.resources.framesPending, 0);
-      const heapAtComplete = await heapMetrics();
-
-      const settleStartedAt = process.hrtime.bigint();
-      while (process.hrtime.bigint() - settleStartedAt < 5_000_000_000n) await delay(25);
-      const settleElapsedMs = Number(process.hrtime.bigint() - settleStartedAt) / 1_000_000;
-      assert.ok(settleElapsedMs >= 5000, 'each natural run gets a full five-second settle observation');
-      const afterSettle = await cdp.evaluate(`(()=>{
-        const state=window.__startupAPI.status();
-        const run=window.__startupAnimationRuns.find(item=>item.runId===${started.state.runId});
-        const observation=run.sampleDisposedResources();
-        run.sampleDisposedResources=null;
-        return {state,observation,frameCount:document.querySelectorAll(
-          'iframe[aria-label]').length};
-      })()`);
-      const heapAfterSettle = await heapMetrics();
-      assert.equal(afterSettle.state.runId, started.state.runId);
-      assert.equal(afterSettle.state.phase, 'complete');
-      assert.deepEqual(afterSettle.state.completion, { cause: 'natural', beforeReady: false });
-      assert.equal(afterSettle.frameCount, 0);
-      assert.ok(afterSettle.observation.sampledAt >= finalReport.sampledAt + 5000,
-        'the post-settle resource sample is freshly taken after the full five-second window');
-      assert.deepEqual(afterSettle.observation.report.resources, finalReport.report.resources,
-        'fresh live resource counters remain at their released values after the settle window');
-      for (const key of zeroResourceKeys) assert.equal(afterSettle.observation.report.resources[key], 0);
-      cycles.push({
-        round,
-        runId: started.state.runId,
-        introTitle: nextTitle,
-        completion: completed.completion,
-        wallTimeFromReadyToCompleteMs: completedAt - playbackStartedAt,
-        settleElapsedMs,
-        resourceSampleGapMs: afterSettle.observation.sampledAt - finalReport.sampledAt,
-        rafIntervalMs: finalReport.report.jsFrame.rafIntervalMs,
-        renderSubmissionMs: finalReport.report.jsFrame.renderSubmissionMs,
-        releasedResources: afterSettle.observation.report.resources,
-        heapAtComplete,
-        heapAfterSettle,
-      });
+      for (const key of zeroResourceKeys) assert.equal(released[key], 0,
+        'settings save ' + round + ' releases ' + key);
+      assert.equal(released.framesPending, 0);
+      cycles.push({round,runId:expectedRunId,introTitle:nextTitle,
+        completion:closed.state.completion,runCount:closed.runCount,released});
       expectedTitle = nextTitle;
-      priorRunId = started.state.runId;
+      priorRunId = expectedRunId;
     }
     assert.equal(cycles.length, 10);
-    return {
-      firstRunId: cycles[0].runId,
-      lastRunId: cycles.at(-1).runId,
-      cycles,
-      memory: {
-        javascriptHeapMetric: 'Chrome DevTools Performance.getMetrics JSHeapUsedSize/JSHeapTotalSize',
-        sampledAtNaturalCompleteAndAfterEachFiveSecondSettle: true,
-        systemMemoryIndependentlyMeasured: false,
-        limitation: 'No OS process RSS or whole-system memory sampler was run; JS heap metrics are not system-memory measurements.',
-      },
-    };
+    const persisted = await cdp.evaluate(`(async()=>{
+      const assets=window.__startupAnimationRuns[0].assets;
+      const api=window.createImageSettings({document,Image,URL,indexedDB,performance,
+        setTimeout:setTimeout.bind(window),clearTimeout:clearTimeout.bind(window)});
+      try{const loaded=await api.load(assets);return loaded.settings.introTitle;}
+      finally{api.dispose();}
+    })()`);
+    assert.equal(persisted, expectedTitle, 'the final settings title remains committed in IndexedDB');
+    return { firstRunId: cycles[0].runId, lastRunId: cycles.at(-1).runId, cycles, persisted };
   });
 
   await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&settings-blocked=1');
@@ -2455,13 +2699,14 @@ try {
     })()`);
     const panelStatus = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
-      const status=doc?.querySelector('[data-agent-skin-settings] [aria-live="polite"]');
+      const status=doc?.querySelector('[data-agent-skin-settings-status][role="alert"]');
       return status?.textContent?status.textContent:false;
     })()`), 5000, 'settings panel explains the unavailable database');
     assert.equal(opened.accepted, true);
     assert.equal(opened.state.phase, 'settings');
     assert.equal(opened.state.runId, state.runId);
-    assert.equal(panelStatus, '暂时无法读取保存设置；当前使用默认设置，原记录未删除。');
+    assert.equal(panelStatus, expectedPlaybackNotice,
+      'the settings alert uses the same localized fallback message as the playback notice');
     assert.equal(panelStatus.includes('Synthetic'), false, 'status text does not expose stored profile values');
     return { phase: state.phase, runId: state.runId, playbackNotice, panelStatus };
   });
@@ -3648,7 +3893,7 @@ try {
       const canceledSettings = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
-        const button=entry?.shadowRoot?.querySelector('button[aria-label="阿舟主题与外观"]');
+        const button=entry?.shadowRoot?.querySelector('button');
         return state.phase==='complete'&&state.completion?.cause==='settings-cancel'
           &&document.activeElement===entry&&entry.shadowRoot.activeElement===button?state:false;
       })()`), 5000, 'generated payload settings cancellation restores the appearance button focus');
@@ -3828,7 +4073,7 @@ try {
         recovered, repeated, recoveredState, disposed };
     });
     await navigate('/fixture.html?generated-payload=1');
-    await check('builder-generated startup payload activates the complete controller and saves settings before replay', async () => {
+    await check('builder-generated startup payload saves settings and applies wallpaper without replay', async () => {
       const initial = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI?.status();
         return window.__startupInstallResult?.installed===true&&state?.phase==='playing'&&state.ready?state:false;
@@ -3867,48 +4112,53 @@ try {
       assert.equal(themePage.appName, '阿舟 AI 实验室');
       assert.equal(themePage.botName, '阿舟');
       assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);
-      assert.equal(themePage.sections, 4);
-      assert.equal(themePage.source, '构建默认值');
+      assert.equal(themePage.sections, 3);
+      assert.equal(themePage.source, '默认设置');
       const draft = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
         const title=doc.querySelector('input[aria-label^="启动标题"]');
         title.value='生成载荷保存验证';title.dispatchEvent(new Event('input',{bubbles:true}));
-        const button=[...doc.querySelectorAll('button')].find(item=>item.textContent.trim()==='保存并重播');
+        const button=doc.querySelector('[data-agent-skin-settings] footer button:last-child');
         if(!button)throw new Error('generated payload settings save control is missing');
         button.click();
         return {title:title.value,button:button.textContent.trim()};
       })()`);
       assert.equal(draft.title, '生成载荷保存验证');
-      const replay = await until(() => cdp.evaluate(`(()=>{
+      assert.equal(draft.button, '保存', 'the current settings action saves and closes without replay wording');
+      const saved = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
-        return state.runId>${firstRun}&&state.phase==='playing'&&state.ready?state:false;
-      })()`), 15000, 'settings commit and generated payload replay');
-      assert.ok(replay.runId > firstRun);
-      const replayWallpaper = await until(() => cdp.evaluate(`(()=>{
+        return state.phase==='complete'&&state.completion?.cause==='settings-save'&&state.runId===${firstRun}
+          &&document.querySelectorAll('iframe[aria-label]').length===0
+          ?{state,frameCount:document.querySelectorAll('iframe[aria-label]').length}:false;
+      })()`), 15000, 'generated payload settings save closes the existing run without replay');
+      assert.equal(saved.frameCount, 0, 'generated payload save closes its animation frame without replay');
+      const appliedWallpaper = await until(() => cdp.evaluate(`(()=>{
         const startup=window.__startupAPI.status(),api=window.__azhouWallpaper;
         const apiState=api?.status?.(),style=document.querySelector('#azhou-wallpaper-style');
-        return startup.runId===${replay.runId}&&api!==window.__ticket05InitialWallpaperAPI
+        return startup.runId===${firstRun}&&startup.phase==='complete'
           &&startup.wallpaper.applied&&startup.wallpaper.imageDecoded&&apiState?.applied&&apiState.imageDecoded&&style
           ?{controller:startup.wallpaper,api:apiState,owner:api.owner,version:api.version,
             styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,styleOwner:style.getAttribute('data-azhou-owner')}
           :false;
-      })()`), 10000, 'saved settings replay keeps the newly applied generated wallpaper');
-      assert.equal(replayWallpaper.controller.applied, true);
-      assert.equal(replayWallpaper.controller.imageDecoded, true);
-      assert.equal(replayWallpaper.api.applied, true);
-      assert.equal(replayWallpaper.api.imageDecoded, true);
-      assert.equal(replayWallpaper.owner, 'azhou.codex-startup-animation');
-      assert.equal(replayWallpaper.version, '0.9.0');
-      assert.equal(replayWallpaper.styleCount, 1);
-      assert.equal(replayWallpaper.styleOwner, 'azhou.codex-startup-animation');
+      })()`), 10000, 'saved settings apply the generated wallpaper in the existing app route');
+      assert.equal(appliedWallpaper.controller.applied, true);
+      assert.equal(appliedWallpaper.controller.imageDecoded, true);
+      assert.equal(appliedWallpaper.api.applied, true);
+      assert.equal(appliedWallpaper.api.imageDecoded, true);
+      assert.equal(appliedWallpaper.owner, 'azhou.codex-startup-animation');
+      assert.equal(appliedWallpaper.version, '0.9.0');
+      assert.equal(appliedWallpaper.styleCount, 1);
+      assert.equal(appliedWallpaper.styleOwner, 'azhou.codex-startup-animation');
       assert.equal(await cdp.evaluate('delete window.__ticket05InitialWallpaperAPI'), true);
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       const persisted = await until(() => cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
         const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]');
-        return window.__startupAPI.status().phase==='settings'&&title?title.value:false;
-      })()`), 10000, 'settings value persisted through generated payload replay');
-      assert.equal(persisted, '生成载荷保存验证');
+        const state=window.__startupAPI.status();
+        return state.phase==='settings'&&title?{title:title.value,runId:state.runId}:false;
+      })()`), 10000, 'saved generated payload settings are loaded into a newly opened settings run');
+      assert.equal(persisted.title, '生成载荷保存验证');
+      assert.ok(persisted.runId > firstRun, 'only the explicit settings reopen creates a newer run after save');
       const disposed = await cdp.evaluate(`(()=>{
         window.__fixtureHost.__azhouStartup.dispose();
         return {owned:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
@@ -3916,7 +4166,8 @@ try {
           wallpaper:!!window.__azhouWallpaper,styles:document.querySelectorAll('#azhou-wallpaper-style').length};
       })()`);
       assert.deepEqual(disposed, { owned: false, frames: 0, wallpaper: false, styles: 0 });
-      return { firstRun, replayRun: replay.runId, wallpaper, replayWallpaper, savedTitle: persisted, disposed };
+      return { firstRun, saved: { runId: saved.state.runId, completion: saved.state.completion,
+        frameCount: saved.frameCount }, wallpaper, appliedWallpaper, savedTitle: persisted, disposed };
     });
 
     await navigate('/csp-style.html?generated-payload=1');
@@ -3948,7 +4199,7 @@ try {
         'appearance entry stays within compact avatar-and-name geometry under strict CSP: ' + diagnostic);
       assert.deepEqual(entry.avatar, { width: 32, height: 32, display: 'block', borderRadius: '10px', objectFit: 'cover' },
         'generated avatar keeps its bounded styled dimensions under strict CSP: ' + diagnostic);
-      assert.deepEqual(entry.nameLabel, { text: '阿舟', fontSize: '12px', lineHeight: '18px' },
+      assert.deepEqual(entry.nameLabel, { text: '阿舟外观', fontSize: '12px', lineHeight: '18px' },
         'generated avatar name remains visible with the button typography under strict CSP: ' + diagnostic);
       assert.equal(entry.entryHit, true, 'appearance entry host is hit-testable under strict CSP: ' + diagnostic);
       assert.equal(entry.buttonHit, true, 'shadow button is hit-testable under strict CSP: ' + diagnostic);

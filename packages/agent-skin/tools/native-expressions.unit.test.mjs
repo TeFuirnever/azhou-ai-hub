@@ -175,6 +175,19 @@ unitTest('the wallpaper status source validates page identity and reports owned 
     });
   });
 
+  await t.test('settings-save completion survives the native wallpaper status expression', () => {
+    const context = pageContext();
+    const completion = { cause: 'settings-save', beforeReady: false };
+    defineDataGlobal(context, '__azhouWallpaper', wallpaperAPI());
+    defineDataGlobal(context, '__azhouStartup', startupAPI({
+      status: () => validStartupState({ completion }),
+    }));
+
+    const result = plain(evaluate('statusSource', context));
+
+    assert.deepEqual(result.startup.completion, completion);
+  });
+
   await t.test('invalid completion is removed and status method exceptions become fixed receipts', () => {
     const context = pageContext();
     defineDataGlobal(context, '__azhouWallpaper', wallpaperAPI({ status() { throw new Error('private'); } }));
