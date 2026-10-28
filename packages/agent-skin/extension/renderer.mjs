@@ -14,12 +14,52 @@ const WALLPAPER_STATUS_FIELDS = [
   'footerFadeSurfaces', 'footerFadeClear', 'topFadeSurfaces', 'topFadeClear',
   'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope',
 ];
+const WALLPAPER_FAILURE_STAGES = Object.freeze({
+  'shell-timeout': 'shell',
+  'shell-unsupported': 'shell',
+  'invalid-local-payload': 'input',
+  'invalid-local-image': 'input',
+  'image-decode-failed': 'decode',
+  'image-decode-timeout': 'decode',
+  'unsupported-shell-no-surfaces': 'surfaces',
+  'page-changed-during-decode': 'page',
+  'styles-not-effective': 'styles',
+  'styles-not-effective-after-replacement': 'styles',
+  'namespace-conflict': 'namespace',
+  'namespace-changed-during-decode': 'namespace',
+  'style-id-conflict': 'style',
+  'style-id-conflict-after-decode': 'style',
+  'apply-unavailable': 'apply',
+  'apply-failed': 'apply',
+  'retry-timeout': 'apply',
+});
+const WALLPAPER_RETRY_TIMEOUT_MS = 10_000;
 let nextRunId = 1;
 
 function dataProperty(object, name) {
   if (!object || (typeof object !== 'object' && typeof object !== 'function')) return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(object, name);
   return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+}
+
+function wallpaperFailure(value) {
+  try {
+    const raw = dataProperty(value, 'failureCode') ?? dataProperty(value, 'code');
+    if (typeof raw !== 'string' || !Object.hasOwn(WALLPAPER_FAILURE_STAGES, raw)) return null;
+    return { failureStage: WALLPAPER_FAILURE_STAGES[raw], failureCode: raw };
+  } catch {
+    return null;
+  }
+}
+
+function wallpaperReason(value, fallback = 'wallpaper-unsupported') {
+  try {
+    const reason = dataProperty(value, 'reason');
+    return ['wallpaper-unsupported', 'disabled', 'operation-cancelled', 'owner-conflict', 'not-installed'].includes(reason)
+      ? reason : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function isMainPage(host) {
@@ -215,6 +255,10 @@ class PageController {
     this.frameHandle = null;
     this.wallpaperAPI = null;
     this.wallpaperGeneration = 0;
+    this.wallpaperRequest = null;
+    this.wallpaperDisabled = false;
+    this.wallpaperRetryPromise = null;
+    this.wallpaperRetryCancel = null;
     this.installed = false;
     this.disposed = false;
     this.watchdog = null;
@@ -245,6 +289,7 @@ class PageController {
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
       openSettings: () => this.#openSettings(),
+      retryWallpaper: () => this.#retryWallpaper(),
       dispose: () => this.#dispose(),
     });
   }
@@ -271,6 +316,8 @@ class PageController {
 
   #beginRun(intent) {
     if (this.disposed) return false;
+    this.wallpaperRetryCancel?.();
+    this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
     const focused = this.document?.activeElement === this.appearanceEntry?.element
@@ -453,39 +500,178 @@ class PageController {
     if (message.action === 'restore') this.#dispose();
   }
 
-  async #applyWallpaper(message, runId, frame) {
+  #ownsStartupController() {
+    const descriptor = Object.getOwnPropertyDescriptor(this.host, GLOBAL_NAME);
+    return !!descriptor && Object.hasOwn(descriptor, 'value') && descriptor.value === this.api;
+  }
+
+  #isCurrentRetry(runId, generation) {
+    return !this.disposed && generation === this.wallpaperGeneration && runId === this.state.runId
+      && this.state.phase === 'complete' && this.state.completed && this.#ownsStartupController();
+  }
+
+  #setWallpaperFailure(code, reason = 'wallpaper-unsupported', imageDecoded = false) {
+    const result = { applied: false, reason, imageDecoded };
+    const failure = wallpaperFailure({ failureCode: code });
+    if (failure) Object.assign(result, failure);
+    this.state.wallpaper = result;
+    return { ...result };
+  }
+
+  #retryResult(retried, previousFailure, reason) {
+    const result = {
+      retried,
+      wallpaper: { ...this.state.wallpaper },
+      previousFailure: previousFailure ? { ...previousFailure } : null,
+    };
+    if (reason) result.reason = reason;
+    return result;
+  }
+
+  #previousWallpaperFailure() {
+    const current = this.state.wallpaper;
+    if (!current.failureCode && current.reason !== 'wallpaper-unsupported') return null;
+    const result = { reason: wallpaperReason(current) };
+    const failure = wallpaperFailure(current);
+    if (failure) Object.assign(result, failure);
+    return result;
+  }
+
+  #retryWallpaper() {
+    const previousFailure = this.#previousWallpaperFailure();
+    if (this.disposed) return Promise.resolve(this.#retryResult(false, previousFailure, 'disposed'));
+    if (this.wallpaperRetryPromise) return this.wallpaperRetryPromise;
+    if (!this.#ownsStartupController()) return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
+    if (this.state.phase !== 'complete' || !this.state.completed) {
+      return Promise.resolve(this.#retryResult(false, previousFailure, 'busy'));
+    }
+    if (this.wallpaperDisabled || this.state.wallpaper.reason === 'disabled') {
+      return Promise.resolve(this.#retryResult(false, previousFailure, 'disabled'));
+    }
+    if (!this.wallpaperRequest) return Promise.resolve(this.#retryResult(false, previousFailure, 'no-request'));
+
+    const current = wallpaperRecord(this.host);
+    if ((current.present && (!current.supported || current.api !== this.wallpaperAPI))
+      || (!current.present && this.wallpaperAPI)) {
+      return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
+    }
+    this.#refreshWallpaper();
+    if (this.state.wallpaper.applied) {
+      return Promise.resolve(this.#retryResult(false, null, 'already-applied'));
+    }
+
+    const runId = this.state.runId;
+    const request = { ...this.wallpaperRequest };
+    let operation;
+    try {
+      operation = this.#applyWallpaper(request, runId, null, true);
+    } catch {
+      operation = Promise.resolve(this.#setWallpaperFailure('apply-failed'));
+    }
+    const generation = this.wallpaperGeneration;
+    let timer = null;
+    const timeout = new Promise(resolve => {
+      timer = this.host.setTimeout(() => resolve({ timedOut: true }), WALLPAPER_RETRY_TIMEOUT_MS);
+    });
+    let cancelRetry;
+    const cancellation = new Promise(resolve => {
+      cancelRetry = () => resolve({ cancelled: true });
+    });
+    const work = Promise.resolve(operation).then(
+      wallpaper => ({ wallpaper }),
+      () => ({ wallpaper: this.#isCurrentRetry(runId, generation)
+        ? this.#setWallpaperFailure('apply-failed') : { ...this.state.wallpaper } }),
+    );
+    const bounded = Promise.race([work, timeout, cancellation]).then(result => {
+      if (result.cancelled) return this.#retryResult(false, previousFailure, 'operation-cancelled');
+      if (result.timedOut) {
+        if (!this.#isCurrentRetry(runId, generation)) {
+          return this.#retryResult(false, previousFailure, 'operation-cancelled');
+        }
+        this.wallpaperGeneration += 1;
+        this.#setWallpaperFailure('retry-timeout');
+        return this.#retryResult(true, previousFailure, 'timeout');
+      }
+      if (!this.#isCurrentRetry(runId, generation)) {
+        return this.#retryResult(false, previousFailure, 'operation-cancelled');
+      }
+      return this.#retryResult(true, previousFailure);
+    }).finally(() => {
+      if (timer !== null) this.host.clearTimeout(timer);
+      if (this.wallpaperRetryCancel === cancelRetry) this.wallpaperRetryCancel = null;
+    });
+    this.wallpaperRetryPromise = bounded;
+    this.wallpaperRetryCancel = cancelRetry;
+    const release = () => {
+      if (this.wallpaperRetryPromise === bounded) this.wallpaperRetryPromise = null;
+    };
+    work.then(release, release);
+    return bounded;
+  }
+
+  async #applyWallpaper(message, runId, frame, retry = false) {
     const generation = ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
       || message.strength < 0 || message.strength > 75) {
-      this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-      return { ...this.state.wallpaper };
+      if (!retry) {
+        this.wallpaperRequest = null;
+        this.wallpaperDisabled = false;
+      }
+      return this.#setWallpaperFailure('invalid-local-payload');
     }
     if (message.strength === 0) {
+      if (!retry) {
+        this.wallpaperRequest = null;
+        this.wallpaperDisabled = true;
+      }
       this.#disposeWallpaper();
       this.state.wallpaper = { applied: false, reason: 'disabled', imageDecoded: false };
       return { ...this.state.wallpaper };
     }
-    if (typeof this.wallpaperApply !== 'function') {
-      this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-      return { ...this.state.wallpaper };
+    if (!retry) {
+      this.wallpaperRequest = { image: message.image, strength: message.strength };
+      this.wallpaperDisabled = false;
     }
-    const isCurrent = () => generation === this.wallpaperGeneration && this.#isCurrentFrame(runId, frame);
+    const isCurrent = () => generation === this.wallpaperGeneration
+      && (retry ? this.#isCurrentRetry(runId, generation) : this.#isCurrentFrame(runId, frame));
+    if (typeof this.wallpaperApply !== 'function') {
+      if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
+      return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
+    }
     try {
-      await this.wallpaperApply(Object.freeze({ image: message.image, strength: message.strength }), isCurrent);
+      const result = await this.wallpaperApply(Object.freeze({ image: message.image, strength: message.strength }), isCurrent);
       if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
+      if (dataProperty(result, 'applied') === false) {
+        const reason = wallpaperReason(result);
+        const failure = wallpaperFailure(result) ?? wallpaperFailure({ failureCode: 'apply-failed' });
+        const current = wallpaperRecord(this.host);
+        if (current.present && !current.supported) {
+          this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
+          return { ...this.state.wallpaper };
+        }
+        if (current.supported) this.wallpaperAPI = current.api;
+        const imageDecoded = dataProperty(result, 'imageDecoded') === true;
+        return this.#setWallpaperFailure(failure.failureCode, reason, imageDecoded);
+      }
       const current = wallpaperRecord(this.host);
       if (!current.supported) {
-        this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
-        return { ...this.state.wallpaper };
+        if (current.present) {
+          this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
+          return { ...this.state.wallpaper };
+        }
+        return this.#setWallpaperFailure('apply-unavailable');
       }
       this.wallpaperAPI = current.api;
       this.state.wallpaper = this.#wallpaperStatus(current.api);
       if (!this.state.wallpaper.applied && !this.state.wallpaper.reason) {
         this.state.wallpaper.reason = 'wallpaper-unsupported';
       }
-    } catch {
-      if (isCurrent()) this.state.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
+    } catch (error) {
+      if (isCurrent()) {
+        const failure = wallpaperFailure(error) ?? wallpaperFailure({ failureCode: 'apply-failed' });
+        return this.#setWallpaperFailure(failure.failureCode);
+      }
     }
     return { ...this.state.wallpaper };
   }
@@ -499,9 +685,11 @@ class PageController {
       }
       const result = {
         applied: value.applied,
-        reason: typeof value.reason === 'string' ? value.reason : (value.applied ? '' : 'wallpaper-unsupported'),
+        reason: value.applied ? '' : wallpaperReason(value),
         imageDecoded: value.imageDecoded === true,
       };
+      const failure = !value.applied ? wallpaperFailure(value) : null;
+      if (failure) Object.assign(result, failure);
       for (const field of WALLPAPER_STATUS_FIELDS) {
         const fieldValue = value[field];
         if (typeof fieldValue === 'boolean' || (Number.isSafeInteger(fieldValue) && fieldValue >= 0)
@@ -528,7 +716,17 @@ class PageController {
       this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
       return;
     }
-    this.state.wallpaper = this.#wallpaperStatus(current.api);
+    const status = this.#wallpaperStatus(current.api);
+    if (!status.failureCode && this.state.wallpaper.failureCode) {
+      const previousFailure = wallpaperFailure(this.state.wallpaper);
+      if (previousFailure) {
+        status.applied = false;
+        status.reason = wallpaperReason(this.state.wallpaper);
+        status.imageDecoded = this.state.wallpaper.imageDecoded === true;
+        Object.assign(status, previousFailure);
+      }
+    }
+    this.state.wallpaper = status;
   }
 
   #fail(reason, runId = this.state.runId) {
@@ -630,6 +828,8 @@ class PageController {
   #dispose() {
     if (this.disposed) return { disposed: true };
     this.disposed = true;
+    this.wallpaperRetryCancel?.();
+    this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
     this.state.phase = 'disposed';

@@ -43,7 +43,7 @@ def main() -> int:
         import json
 
         expressions = json.loads(emitted.stdout)
-        expected = {"statusSource", "applyGuardSource", "restoreSource"}
+        expected = {"statusSource", "applyGuardSource", "retrySource", "restoreSource"}
         if set(expressions) != expected or not all(isinstance(expressions[key], str) and expressions[key] for key in expected):
             raise ValueError("native helper expression output has an unexpected shape")
     except (ValueError, TypeError) as error:

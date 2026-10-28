@@ -35,7 +35,7 @@ private struct WallpaperMessageLocale {
     func localized(chinese: String, english: String) -> String { isChinese ? chinese : english }
 }
 
-enum WallpaperAction: String, Sendable { case apply, doctor, status, restore }
+enum WallpaperAction: String, Sendable { case apply, retry, doctor, status, restore }
 
 struct WallpaperFailure: LocalizedError {
     let state: String
@@ -129,6 +129,28 @@ enum WallpaperValidation {
               states.allSatisfy({ verifiedState($0, version: version) }) else { return false }
         return Set(states.compactMap { versionString($0["version"]) }).count == 1
     }
+    static func failureDiagnostic(_ state: [String: Any]) -> [String: String] {
+        let stages = [
+            "shell-timeout": "shell", "shell-unsupported": "shell",
+            "invalid-local-payload": "input", "invalid-local-image": "input",
+            "image-decode-failed": "decode", "image-decode-timeout": "decode",
+            "unsupported-shell-no-surfaces": "surfaces", "page-changed-during-decode": "page",
+            "styles-not-effective": "styles", "styles-not-effective-after-replacement": "styles",
+            "namespace-conflict": "namespace", "namespace-changed-during-decode": "namespace",
+            "style-id-conflict": "style", "style-id-conflict-after-decode": "style",
+            "apply-unavailable": "apply", "apply-failed": "apply", "retry-timeout": "apply",
+        ]
+        guard let code = state["failureCode"] as? String, let stage = stages[code] else { return [:] }
+        return ["failureCode": code, "failureStage": stage]
+    }
+    static func retryFailure(_ recovery: [String: Any]) -> String? {
+        let succeeded = (recovery["wallpaper"] as? [String: Any]).map { trueBoolean($0["applied"]) } ?? false
+        if trueBoolean(recovery["retried"]) { return succeeded ? nil : "retry-failed" }
+        let reason = recovery["reason"] as? String ?? "retry-failed"
+        if reason == "already-applied" && succeeded { return nil }
+        let refusals = ["busy", "disabled", "no-request", "disposed", "unknown-owner", "owner-conflict", "timeout", "operation-cancelled"]
+        return refusals.contains(reason) ? reason : "retry-failed"
+    }
     static func diagnostic(_ state: [String: Any], index: Int, version: String?) -> [String: Any] {
         var result: [String: Any] = [
             "pageIndex": index, "version": versionString(state["version"]) ?? "",
@@ -142,6 +164,7 @@ enum WallpaperValidation {
         for key in ["matchedSurfaces", "transparentSurfaces", "footerSurfaces", "footerFadeSurfaces", "topFadeSurfaces"] {
             result[key] = surfaceCount(state[key]) ?? -1
         }
+        result.merge(failureDiagnostic(state)) { _, value in value }
         return result
     }
 
@@ -709,14 +732,14 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         }
     }
 
-    func evaluate(_ source: String, on socket: URLSessionWebSocketTask) async throws -> [String: Any] {
+    func evaluate(_ source: String, on socket: URLSessionWebSocketTask, timeout: TimeInterval = 5) async throws -> [String: Any] {
         serial += 1; let id = serial
         let request: [String: Any] = ["id": id, "method": "Runtime.evaluate", "params": [
-            "expression": source, "returnByValue": true, "awaitPromise": true, "userGesture": false, "timeout": 5000]]
+            "expression": source, "returnByValue": true, "awaitPromise": true, "userGesture": false, "timeout": Int(timeout * 1000)]]
         let data = try JSONSerialization.data(withJSONObject: request)
-        let timeout = DispatchWorkItem { socket.cancel(with: .goingAway, reason: nil) }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 6, execute: timeout)
-        defer { timeout.cancel() }
+        let cancellation = DispatchWorkItem { socket.cancel(with: .goingAway, reason: nil) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout + 1, execute: cancellation)
+        defer { cancellation.cancel() }
         try await socket.send(.string(String(decoding: data, as: UTF8.self)))
         while true {
             let message = try await socket.receive()
@@ -1058,7 +1081,7 @@ private struct WallpaperRequest: Sendable {
         }
         let shortcut = arguments.contains("--wallpaper-status")
         guard let action = WallpaperAction(rawValue: shortcut ? "status" : option("--action") ?? "apply") else {
-            throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作必须为 apply、doctor、status 或 restore。", english: "The wallpaper action must be apply, doctor, status, or restore.")
+            throw WallpaperFailure(state: "invalid-request", chinese: "壁纸操作必须为 apply、retry、doctor、status 或 restore。", english: "The wallpaper action must be apply, retry, doctor, status, or restore.")
         }
         var suppliedPID = option("--target-pid"), suppliedBundle = option("--target-bundle")
         var launchTime = option("--target-start-time").flatMap(Double.init)
@@ -1085,6 +1108,8 @@ private struct WallpaperRequest: Sendable {
 }
 
 enum WallpaperCLI {
+    // The page's retry settles within 10s; transport gets 1s to return its receipt.
+    static let retryEvaluationTimeout: TimeInterval = 11
     static func handles(_ arguments: [String]) -> Bool { arguments.contains("--wallpaper-helper") || arguments.contains("--wallpaper-status") }
     static func exitCode(for state: String) -> Int32 {
         ["applied", "restored", "ready"].contains(state) ? 0 : 2
@@ -1119,6 +1144,11 @@ enum WallpaperCLI {
             const validCompletion=completion===null||(completion&&['natural','skip','settings-cancel'].includes(completion.cause)&&typeof completion.beforeReady==='boolean');
             startup={installed:true,owner:state.owner,version:state.version,phase:state.phase,runId:state.runId,
               ready:state.ready,completed:state.completed,overlay:state.overlay,completion:validCompletion?completion:null};
+            const failure=value(state,'wallpaper');
+            if(failure&&value(failure,'applied')===false){
+              const code=value(failure,'failureCode');
+              if(typeof code==='string'){result.applied=false;result.failureCode=code;}
+            }
           }
         } catch {}
       }
@@ -1142,6 +1172,22 @@ enum WallpaperCLI {
           ||typeof value(api,'status')!=='function'||typeof value(api,'dispose')!=='function')return {state:'owner-conflict',applied:false};
       }
       return {state:'ready',applied:false};
+    })()
+    """
+    static let retrySource = """
+    (async () => {
+      const u=new URL(location.href);
+      if(window.top!==window||u.protocol!=='app:'||u.hostname!=='-'||u.pathname!=='/index.html'
+        ||/avatar|quick.?chat|detached|mini|popover|notification/i.test(u.searchParams.get('initialRoute')||'/'))return {state:'owner-conflict',applied:false};
+      const value=(object,key)=>{const d=object&&Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+      const descriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+      if(!descriptor)return {state:'retry-unavailable',applied:false};
+      const api=Object.hasOwn(descriptor,'value')?descriptor.value:null;
+      if(!api||value(api,'owner')!=='azhou-codex-startup'||value(api,'version')!==1
+        ||typeof value(api,'status')!=='function')return {state:'owner-conflict',applied:false};
+      const retry=value(api,'retryWallpaper');
+      if(typeof retry!=='function')return {state:'retry-unavailable',applied:false};
+      try{return await retry.call(api);}catch{return {state:'retry-failed',applied:false};}
     })()
     """
     static let restoreSource = """
@@ -1211,7 +1257,7 @@ enum WallpaperCLI {
         if base["requestID"] == nil, let index = arguments.firstIndex(of: "--request-id"), index + 1 < arguments.count { base["requestID"] = arguments[index + 1] }
         base["seconds"] = ((ProcessInfo.processInfo.systemUptime - began) * 1000).rounded() / 1000
         base["timestamp"] = ISO8601DateFormatter().string(from: Date())
-        if action == "apply" || action == "restore" { WallpaperJournal.record(base) }
+        if action == "apply" || action == "retry" || action == "restore" { WallpaperJournal.record(base) }
         if let data = try? JSONSerialization.data(withJSONObject: base, options: [.sortedKeys, .withoutEscapingSlashes]) {
             try? FileHandle.standardOutput.write(contentsOf: data + Data([10]))
         }
@@ -1222,7 +1268,7 @@ enum WallpaperCLI {
         let target = request.target, transport = WallpaperTransport()
         defer { transport.close() }
         var operationLock: WallpaperOperationLock?
-        if request.action == .apply || request.action == .restore {
+        if request.action == .apply || request.action == .retry || request.action == .restore {
             operationLock = try WallpaperOperationLock.acquire(pid: target.pid)
         }
         defer { operationLock?.release() }
@@ -1264,6 +1310,7 @@ enum WallpaperCLI {
                                 "message": WallpaperMessages.localized(chinese: "已找到已核实 Codex 的本机主页面；此诊断没有注入壁纸。", english: "Found the verified Codex main page on this device; this diagnostic did not inject wallpaper.")]
                     }
                     var states: [[String: Any]] = []
+                    var retries: [[String: Any]] = []
                     for page in pages {
                         try Task.checkCancellation(); try target.validate()
                         guard try target.ports().contains(port), let raw = page["webSocketDebuggerUrl"] as? String else {
@@ -1297,6 +1344,45 @@ enum WallpaperCLI {
                                     version: expectedVersion, failureState: "renderer-not-applied")
                                 result["port"] = port
                                 return result
+                            }
+                        } else if request.action == .retry {
+                            // Do not start page work that could outlive this helper's total deadline.
+                            guard 28 - (ProcessInfo.processInfo.systemUptime - began) >= retryEvaluationTimeout + 1 else {
+                                return ["state": "timeout", "applied": false, "reason": "retry-budget-exhausted",
+                                        "pageCount": pages.count, "completedPageCount": states.count, "retries": retries]
+                            }
+                            let recovery = try await transport.evaluate(retrySource, on: socket, timeout: retryEvaluationTimeout)
+                            if let state = recovery["state"] as? String {
+                                let category = ["owner-conflict", "retry-unavailable", "retry-failed"].contains(state)
+                                    ? state : "retry-failed"
+                                return ["state": category, "applied": false, "port": port,
+                                        "pageCount": pages.count, "completedPageCount": states.count, "retries": retries,
+                                        "message": WallpaperMessages.localized(
+                                            chinese: "当前控制器无法安全重试壁纸；未重建控制器或重播动画。",
+                                            english: "The current controller cannot safely retry wallpaper; it was not recreated and the animation was not replayed.")]
+                            }
+                            guard let wallpaper = recovery["wallpaper"] as? [String: Any],
+                                  let retried = recovery["retried"] as? Bool else {
+                                throw WallpaperFailure(state: "retry-failed", chinese: "控制器未返回可核验的重试结果。", english: "The controller did not return a verifiable retry result.")
+                            }
+                            var receipt: [String: Any] = ["pageIndex": states.count, "retried": retried]
+                            if let previous = recovery["previousFailure"] as? [String: Any] {
+                                var failure: [String: Any] = WallpaperValidation.failureDiagnostic(previous)
+                                if let reason = previous["reason"] as? String,
+                                   ["wallpaper-unsupported", "not-installed", "owner-conflict", "disabled"].contains(reason) {
+                                    failure["reason"] = reason
+                                }
+                                receipt["previousFailure"] = failure
+                            }
+                            retries.append(receipt)
+                            if let reason = WallpaperValidation.retryFailure(recovery) {
+                                let inspected = try await transport.evaluate(statusSource, on: socket)
+                                var failedPage = WallpaperValidation.diagnostic(inspected, index: states.count, version: nil)
+                                failedPage.merge(WallpaperValidation.failureDiagnostic(wallpaper)) { _, value in value }
+                                return ["state": retried ? "retry-failed" : "retry-refused", "applied": false,
+                                        "reason": reason, "port": port,
+                                        "pageCount": pages.count, "retries": retries,
+                                        "pages": [failedPage]]
                             }
                         } else if request.action == .restore {
                             let restored = try await transport.evaluate(restoreSource, on: socket)
@@ -1340,7 +1426,7 @@ enum WallpaperCLI {
                     let versions = Set(states.compactMap { WallpaperValidation.versionString($0["version"]) })
                     if versions.count != 1 { issues.insert("mixed-renderer-versions") }
                     var result: [String: Any] = [
-                        "state": verified ? "applied" : (request.action == .apply ? "verification-failed" : "not-applied"),
+                        "state": verified ? "applied" : ((request.action == .apply || request.action == .retry) ? "verification-failed" : "not-applied"),
                         "applied": verified, "port": port, "pageCount": states.count,
                         "version": versions.count == 1 ? versions.first! : "",
                         "pages": pageDiagnostics, "verificationIssues": issues.sorted(),
@@ -1358,11 +1444,12 @@ enum WallpaperCLI {
                     for key in ["matchedSurfaces", "transparentSurfaces", "footerSurfaces", "footerFadeSurfaces", "topFadeSurfaces"] {
                         result[key] = states.reduce(0) { $0 + (WallpaperValidation.surfaceCount($1[key]) ?? 0) }
                     }
+                    if request.action == .retry { result["retries"] = retries }
                     return result
                 } catch let error as WallpaperFailure {
                     if ["target-mismatch", "target-changed", "endpoint-refused", "endpoint-changed", "page-count-refused",
                         "renderer-rejected", "renderer-not-applied", "verification-failed", "restore-unconfirmed",
-                        "owner-conflict", "startup-active"].contains(error.state) { throw error }
+                        "owner-conflict", "startup-active", "retry-failed"].contains(error.state) { throw error }
                     lastState = error.state
                 } catch { lastState = "connection-failed" }
             }

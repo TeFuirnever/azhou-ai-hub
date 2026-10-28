@@ -2,7 +2,8 @@
 // Isolated synthetic-host browser checks. This runner owns only its temporary Chrome profile.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createServer } from 'node:http';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -204,7 +205,7 @@ try {
       'the app-route realm adapter embeds the unmodified generated payload source');
   }
   const helperExpressions = JSON.parse(helperExpressionJSON);
-  assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'statusSource']);
+  assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'retrySource', 'statusSource']);
   assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
   const scriptStart = preview.lastIndexOf('<script type="module">');
   const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
@@ -835,6 +836,10 @@ try {
     const binding = (kind, name) => {
       if (kind === 'none') return 'undefined';
       if (kind === 'unknown') return "({ owner: 'fixture-unknown-owner' })";
+      if (kind === 'failed' && name === 'startup') return `({owner:'azhou-codex-startup',version:1,
+        status:()=>({owner:'azhou-codex-startup',version:1,phase:'complete',runId:1,ready:true,
+          completed:true,overlay:false,completion:null,
+          wallpaper:{applied:false,failureCode:'image-decode-failed'}})})`;
       if (kind !== 'actual') throw new Error('Unknown native helper binding: ' + kind);
       return name === 'startup'
         ? 'actualWindow.__fixtureHost?.__azhouStartup'
@@ -1098,6 +1103,9 @@ try {
       frameCount:document.querySelectorAll('iframe[aria-label]').length,
       styleCount:document.querySelectorAll('#azhou-wallpaper-style').length})`);
     const status = await evaluateNativeHelper('statusSource');
+    const failedRequest = await evaluateNativeHelper('statusSource', { startup: 'failed' });
+    assert.equal(failedRequest.applied, false, 'a retained old wallpaper cannot certify the failed latest request');
+    assert.equal(failedRequest.failureCode, 'image-decode-failed');
     assert.equal(status.applied, true);
     assert.equal(status.startup.installed, true);
     assert.equal(status.startup.owner, 'azhou-codex-startup');
@@ -2348,82 +2356,86 @@ try {
   });
 
   await check('portrait identity and dispersing layouts keep legal titles and captions inside the registered canvas', async () => {
-    const cases = [];
-    for (const variant of identityVariants) {
-      await cdp.call('Emulation.setDeviceMetricsOverride', {
-        width: 1440, height: 900, screenWidth: 1440, screenHeight: 900,
-        deviceScaleFactor: 1, mobile: false,
-      });
-      await cdp.call('Page.navigate', { url: pathToFileURL(join(variant.dir, 'index.html')).href });
-      await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, variant.name + ' identity page load');
-      await until(() => cdp.evaluate(`(()=>{
-        const root=document.querySelector('[data-agent-skin-stage]');
-        return root?.dataset.prewarmed==='true'&&window.launcherUI?.report()?true:false;
-      })()`), 15000, variant.name + ' identity assets prewarm');
-      await cdp.evaluate('window.launcherUI.pause()');
-      await cdp.call('Emulation.setDeviceMetricsOverride', {
-        width: 390, height: 844, screenWidth: 390, screenHeight: 844,
-        deviceScaleFactor: 1, mobile: false,
-      });
-      await cdp.evaluate(`window.launcherUI.updateAppearance({locale:'en',theme:'light',colors:{
-        surface:'#fafafa',text:'#202020',muted:'#606060',border:'#dddddd'}})`);
-      const portrait = await until(() => cdp.evaluate(`(()=>{
-        const viewport=window.launcherUI.report().viewport;
-        return viewport.width===390&&viewport.height===844?viewport:false;
-      })()`), 3000, variant.name + ' responsive portrait relayout');
-      await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-      const controls = await cdp.evaluate(`(()=>{
-        const bar=document.querySelector('#preview-controls'),rect=bar.getBoundingClientRect();
-        const children=['#replay','#pause','#timeline','#elapsed'].map(selector=>{
-          const node=document.querySelector(selector),bounds=node.getBoundingClientRect();
-          return {selector,left:bounds.left,right:bounds.right,width:bounds.width,
-            contained:bounds.left>=rect.left-1&&bounds.right<=rect.right+1};
+    try {
+      const cases = [];
+      for (const variant of identityVariants) {
+        await cdp.call('Emulation.setDeviceMetricsOverride', {
+          width: 1440, height: 900, screenWidth: 1440, screenHeight: 900,
+          deviceScaleFactor: 1, mobile: false,
         });
-        return {visible:!bar.hidden,rect:{left:rect.left,right:rect.right,width:rect.width},
-          clientWidth:bar.clientWidth,scrollWidth:bar.scrollWidth,children};
-      })()`);
-      assert.equal(controls.visible,true,'preview controls stay visible in the narrow viewport');
-      assert.ok(controls.scrollWidth<=controls.clientWidth,
-        'narrow English controls do not overflow their container: '+JSON.stringify(controls));
-      assert.ok(controls.children.every(child=>child.contained),
-        'every narrow English control stays inside the toolbar: '+JSON.stringify(controls));
-      const variantStages = [];
-      for (const [seconds, expectedStage] of [[1.65, 'identity'], [4.18, 'dispersing'], [4.74, 'scattered']]) {
-        await cdp.evaluate(`window.launcherUI.seek(${seconds})`);
-        const state = await cdp.evaluate(`(()=>{
-          const canvas=document.querySelector('[data-agent-skin-canvas]');
-          const report=window.launcherUI.report();
-          const scale=Math.max(innerWidth/1536,innerHeight/1024);
-          const offsetX=(innerWidth-1536*scale)/2,offsetY=(innerHeight-1024*scale)/2;
-          const inViewport=(x,y)=>x*scale+offsetX>=0&&x*scale+offsetX<innerWidth
-            &&y*scale+offsetY>=0&&y*scale+offsetY<innerHeight;
-          const samples=[];
-          for(let y=64;y<960;y+=8)for(let x=64;x<1472;x+=8){
-            const px=Math.round((x*scale+offsetX)*devicePixelRatio),py=Math.round((y*scale+offsetY)*devicePixelRatio);
-            if(px<0||py<0||px>=canvas.width||py>=canvas.height)continue;
-            const data=canvas.getContext('2d').getImageData(px,py,1,1).data;
-            if(data[0]>55||data[1]>55||data[2]>55)samples.push({x,y});
-          }
-          return {stage:report.stage,progress:report.animationProgress,viewport:report.viewport,
-            sampleCount:samples.length,offscreenSamples:samples.filter(point=>!inViewport(point.x,point.y)).length,
-            identityTextSamples:samples.filter(point=>point.y>=590&&point.y<850).length,
-            crop:{scale,offsetX,offsetY},resources:report.resources};
+        await cdp.call('Page.navigate', { url: pathToFileURL(join(variant.dir, 'index.html')).href });
+        await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, variant.name + ' identity page load');
+        await until(() => cdp.evaluate(`(()=>{
+          const root=document.querySelector('[data-agent-skin-stage]');
+          return root?.dataset.prewarmed==='true'&&window.launcherUI?.report()?true:false;
+        })()`), 15000, variant.name + ' identity assets prewarm');
+        await cdp.evaluate('window.launcherUI.pause()');
+        await cdp.call('Emulation.setDeviceMetricsOverride', {
+          width: 390, height: 844, screenWidth: 390, screenHeight: 844,
+          deviceScaleFactor: 1, mobile: false,
+        });
+        await cdp.evaluate(`window.launcherUI.updateAppearance({locale:'en',theme:'light',colors:{
+          surface:'#fafafa',text:'#202020',muted:'#606060',border:'#dddddd'}})`);
+        const portrait = await until(() => cdp.evaluate(`(()=>{
+          const viewport=window.launcherUI.report().viewport;
+          return viewport.width===390&&viewport.height===844?viewport:false;
+        })()`), 3000, variant.name + ' responsive portrait relayout');
+        await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const controls = await cdp.evaluate(`(()=>{
+          const bar=document.querySelector('#preview-controls'),rect=bar.getBoundingClientRect();
+          const children=['#replay','#pause','#timeline','#elapsed'].map(selector=>{
+            const node=document.querySelector(selector),bounds=node.getBoundingClientRect();
+            return {selector,left:bounds.left,right:bounds.right,width:bounds.width,
+              contained:bounds.left>=rect.left-1&&bounds.right<=rect.right+1};
+          });
+          return {visible:!bar.hidden,rect:{left:rect.left,right:rect.right,width:rect.width},
+            clientWidth:bar.clientWidth,scrollWidth:bar.scrollWidth,children};
         })()`);
-        const screenshotFile = `identity-${variant.name}-${String(seconds).replace('.', 'p')}s.png`;
-        const shot = await screenshot(screenshotFile);
-        assert.equal(state.stage, expectedStage, variant.name + ' stage at ' + seconds);
-        assert.ok(state.sampleCount > 5, variant.name + ' identity art remains visible at ' + seconds + ': ' + JSON.stringify(state));
-        if (seconds === 1.65 && (variant.title || variant.caption)) {
-          assert.ok(state.identityTextSamples > 5, variant.name + ' identity text remains visible within the portrait canvas: ' + JSON.stringify(state));
+        assert.equal(controls.visible,true,'preview controls stay visible in the narrow viewport');
+        assert.ok(controls.scrollWidth<=controls.clientWidth,
+          'narrow English controls do not overflow their container: '+JSON.stringify(controls));
+        assert.ok(controls.children.every(child=>child.contained),
+          'every narrow English control stays inside the toolbar: '+JSON.stringify(controls));
+        const variantStages = [];
+        for (const [seconds, expectedStage] of [[1.65, 'identity'], [4.18, 'dispersing'], [4.74, 'scattered']]) {
+          await cdp.evaluate(`window.launcherUI.seek(${seconds})`);
+          const state = await cdp.evaluate(`(()=>{
+            const canvas=document.querySelector('[data-agent-skin-canvas]');
+            const report=window.launcherUI.report();
+            const scale=Math.max(innerWidth/1536,innerHeight/1024);
+            const offsetX=(innerWidth-1536*scale)/2,offsetY=(innerHeight-1024*scale)/2;
+            const inViewport=(x,y)=>x*scale+offsetX>=0&&x*scale+offsetX<innerWidth
+              &&y*scale+offsetY>=0&&y*scale+offsetY<innerHeight;
+            const samples=[];
+            for(let y=64;y<960;y+=8)for(let x=64;x<1472;x+=8){
+              const px=Math.round((x*scale+offsetX)*devicePixelRatio),py=Math.round((y*scale+offsetY)*devicePixelRatio);
+              if(px<0||py<0||px>=canvas.width||py>=canvas.height)continue;
+              const data=canvas.getContext('2d').getImageData(px,py,1,1).data;
+              if(data[0]>55||data[1]>55||data[2]>55)samples.push({x,y});
+            }
+            return {stage:report.stage,progress:report.animationProgress,viewport:report.viewport,
+              sampleCount:samples.length,offscreenSamples:samples.filter(point=>!inViewport(point.x,point.y)).length,
+              identityTextSamples:samples.filter(point=>point.y>=590&&point.y<850).length,
+              crop:{scale,offsetX,offsetY},resources:report.resources};
+          })()`);
+          const screenshotFile = `identity-${variant.name}-${String(seconds).replace('.', 'p')}s.png`;
+          const shot = await screenshot(screenshotFile);
+          assert.equal(state.stage, expectedStage, variant.name + ' stage at ' + seconds);
+          assert.ok(state.sampleCount > 5, variant.name + ' identity art remains visible at ' + seconds + ': ' + JSON.stringify(state));
+          if (seconds === 1.65 && (variant.title || variant.caption)) {
+            assert.ok(state.identityTextSamples > 5, variant.name + ' identity text remains visible within the portrait canvas: ' + JSON.stringify(state));
+          }
+          assert.equal(state.offscreenSamples, 0, variant.name + ' visible identity samples remain inside the portrait viewport: ' + JSON.stringify(state));
+          assert.equal(state.resources.liveRAF, 0, variant.name + ' preview remains paused while seeking');
+          variantStages.push({ seconds, ...state, screenshot: shot.file });
         }
-        assert.equal(state.offscreenSamples, 0, variant.name + ' visible identity samples remain inside the portrait viewport: ' + JSON.stringify(state));
-        assert.equal(state.resources.liveRAF, 0, variant.name + ' preview remains paused while seeking');
-        variantStages.push({ seconds, ...state, screenshot: shot.file });
+        cases.push({ name: variant.name, titleCodeUnits: variant.title.length,
+          captionCodeUnits: variant.caption.length, portrait, controls, stages: variantStages });
       }
-      cases.push({ name: variant.name, titleCodeUnits: variant.title.length,
-        captionCodeUnits: variant.caption.length, portrait, controls, stages: variantStages });
+      return { viewport: { width: 390, height: 844, dpr: 1 }, cases };
+    } finally {
+      await cdp.call('Emulation.clearDeviceMetricsOverride');
     }
-    return { viewport: { width: 390, height: 844, dpr: 1 }, cases };
   });
 
   await navigate('/fixture.html?animation=1&animation-hold=1&no-initial-wallpaper=1');
@@ -3613,6 +3625,8 @@ try {
       const elapsedMs = Date.now() - started;
       assert.ok(elapsedMs >= 3500 && elapsedMs <= 6500,
         'the wallpaper request remains pending for the bounded shell wait before returning unsupported');
+      assert.equal(timedOut.wallpaper.failureCode, 'shell-timeout');
+      assert.equal(timedOut.wallpaper.failureStage, 'shell');
       const after = await cdp.evaluate(`({state:window.__startupAPI.status(),
         observers:window.__fixtureMutationObserverStats(),shellCount:document.querySelectorAll('[data-app-shell-frame]').length,
         styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
@@ -3636,6 +3650,37 @@ try {
       assert.equal(late.observers.wallpaperShellWait.active, 0);
       assert.equal(late.styleCount, 0);
       assert.equal(late.wallpaperOwner, null);
+      const skipped = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        const button=frame?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;
+        button.click();return true;
+      })()`);
+      assert.equal(skipped, true);
+      const completed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'?state:false;
+      })()`), 5000, 'failed wallpaper run completes before explicit recovery');
+      assert.deepEqual(await evaluateNativeHelper('retrySource', { startup: 'unknown' }),
+        { state: 'owner-conflict', applied: false });
+      assert.deepEqual(await evaluateNativeHelper('retrySource', { startup: 'none' }),
+        { state: 'retry-unavailable', applied: false });
+      const nativeBefore = await evaluateNativeHelper('statusSource');
+      assert.equal(nativeBefore.failureCode, 'shell-timeout');
+      const recovered = await evaluateNativeHelper('retrySource');
+      assert.equal(recovered.retried, true);
+      assert.equal(recovered.wallpaper.applied, true);
+      assert.equal(recovered.previousFailure.failureCode, 'shell-timeout');
+      const repeated = await evaluateNativeHelper('retrySource');
+      assert.equal(repeated.retried, false, 'a healthy wallpaper is not applied twice');
+      assert.equal(repeated.wallpaper.applied, true);
+      const recoveredState = await cdp.evaluate(`({state:window.__startupAPI.status(),
+        styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+        frameCount:document.querySelectorAll('iframe[aria-label]').length,
+        image:window.__azhouWallpaper.status().imageSHA256})`);
+      assert.equal(recoveredState.state.runId, completed.runId, 'recovery keeps the original controller run');
+      assert.equal(recoveredState.frameCount, 0, 'recovery does not replay the startup animation');
+      assert.equal(recoveredState.styleCount, 1, 'repeated recovery owns exactly one wallpaper layer');
       const disposed = await cdp.evaluate(`(()=>{
         const api=window.__startupAPI;
         api.dispose();
@@ -3644,7 +3689,8 @@ try {
       assert.equal(disposed.state.phase, 'disposed');
       assert.equal(disposed.observers.active, 0,
         'final controller disposal disconnects the root-appearance observer');
-      return { ready: { runId: ready.runId, phase: ready.phase }, pending, elapsedMs, timedOut, after, late, disposed };
+      return { ready: { runId: ready.runId, phase: ready.phase }, pending, elapsedMs, timedOut, after, late,
+        recovered, repeated, recoveredState, disposed };
     });
     await navigate('/fixture.html?generated-payload=1');
     await check('builder-generated startup payload activates the complete controller and saves settings before replay', async () => {
@@ -3782,6 +3828,24 @@ try {
         entry, settings: { runId: settings.runId, phase: settings.phase }, pointerFocused: opened.focused };
     });
   }
+
+  await check('native retry transport permits slow success and bounded controller timeout receipts', async () => {
+    await navigate('/fixture.html');
+    const samples = [];
+    for (const [mode, expectedState, minimum] of [
+      ['success', 'fixture-complete', 6500], ['timeout', 'retry-timeout', 9500],
+    ]) {
+      const started = Date.now();
+      const { stdout } = await promisify(execFile)(join(ROOT, '.build/startup-native-tests'),
+        ['--wallpaper-transport-fixture', page.webSocketDebuggerUrl, mode], { timeout: 15000 });
+      const value = JSON.parse(stdout);
+      const elapsedMs = Date.now() - started;
+      assert.equal(value.state, expectedState);
+      assert.ok(elapsedMs >= minimum && elapsedMs < 13000, 'native transport preserves the bounded slow result');
+      samples.push({ mode, elapsedMs, value });
+    }
+    return samples;
+  });
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;

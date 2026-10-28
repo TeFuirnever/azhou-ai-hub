@@ -121,6 +121,22 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--wallpaper-transport-fixture"),
+           index + 2 < CommandLine.arguments.count,
+           let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
+            let socketURL = try WallpaperValidation.pageSocket(url.absoluteString, port: port)
+            let slowTimeout = CommandLine.arguments[index + 2] == "timeout"
+            let milliseconds = slowTimeout ? 10_000 : 7_000
+            let state = slowTimeout ? "retry-timeout" : "fixture-complete"
+            let transport = WallpaperTransport()
+            defer { transport.close() }
+            let socket = transport.socket(socketURL)
+            let result = try await transport.evaluate(
+                "new Promise(resolve => setTimeout(() => resolve({state:'\(state)'}),\(milliseconds)))", on: socket,
+                timeout: WallpaperCLI.retryEvaluationTimeout)
+            print(String(decoding: try JSONSerialization.data(withJSONObject: result), as: UTF8.self))
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--emit-event-jsonl") {
             let path = index + 1 < CommandLine.arguments.count
                 ? CommandLine.arguments[index + 1] : ".build/native-event-samples"
@@ -131,6 +147,7 @@ struct StartupNativeTests {
             let expressions = [
                 "statusSource": WallpaperCLI.statusSource,
                 "applyGuardSource": WallpaperCLI.applyGuardSource,
+                "retrySource": WallpaperCLI.retrySource,
                 "restoreSource": WallpaperCLI.restoreSource,
             ]
             let bytes = try JSONSerialization.data(withJSONObject: expressions, options: [.sortedKeys])
@@ -144,6 +161,29 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        let failureDiagnostic = WallpaperValidation.diagnostic([
+            "failureCode": "shell-timeout", "failureStage": "private renderer text",
+        ], index: 0, version: nil)
+        expect(failureDiagnostic["failureCode"] as? String == "shell-timeout"
+               && failureDiagnostic["failureStage"] as? String == "shell",
+               "wallpaper diagnostics derive a fixed failure stage from the failure code")
+        let unsafeDiagnostic = WallpaperValidation.diagnostic([
+            "failureCode": "private renderer text", "failureStage": "shell",
+        ], index: 0, version: nil)
+        expect(unsafeDiagnostic["failureCode"] == nil && unsafeDiagnostic["failureStage"] == nil,
+               "wallpaper diagnostics discard arbitrary renderer text")
+        for reason in ["busy", "unknown-owner", "disabled", "operation-cancelled"] {
+            let refusal = WallpaperValidation.retryFailure([
+                "retried": false, "reason": reason, "wallpaper": ["applied": true],
+            ])
+            expect(refusal == reason, "healthy prior wallpaper does not hide a refused retry: \(reason)")
+        }
+        expect(WallpaperValidation.retryFailure([
+            "retried": false, "reason": "already-applied", "wallpaper": ["applied": true],
+        ]) == nil, "an explicit healthy retry no-op can proceed to independent verification")
+        expect(WallpaperValidation.retryFailure([
+            "retried": true, "wallpaper": ["applied": false, "failureCode": "image-decode-failed"],
+        ]) == "retry-failed", "a failed request cannot be certified by retained healthy wallpaper")
 
         let themeBundleURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".bundle")
         defer { try? FileManager.default.removeItem(at: themeBundleURL) }

@@ -251,7 +251,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
   }
   async function applyWallpaper(value, isCurrent) {
     if (!value || typeof value.image !== 'string' || typeof globalThis.crypto?.subtle?.digest !== 'function') {
-      throw new TypeError('wallpaper-unsupported');
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'apply-unavailable', imageDecoded: false };
     }
     const encoded = value.image.slice(value.image.indexOf(',') + 1);
     const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
@@ -262,7 +262,8 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
     if (shellState === 'cancelled' || (typeof isCurrent === 'function' && !isCurrent())) {
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
-    if (shellState !== 'ready') return { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
+    if (shellState !== 'ready') return { applied: false, reason: 'wallpaper-unsupported',
+      failureCode: shellState === 'timeout' ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
     return installRenderer({
       version: APP_VERSION, image: value.image, imageSHA256, css: WALLPAPER_CSS,
       strength: value.strength, isCurrent,

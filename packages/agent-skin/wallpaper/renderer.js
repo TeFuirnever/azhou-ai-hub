@@ -18,7 +18,9 @@ export async function installRenderer(payload) {
   const topFadeSelector = '[data-app-shell-main-surface] ' + token('_MainContentTopFade_');
   const protectedSelector = '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
     + '[contenteditable="true"],textarea,input,button,select';
-  const problem = reason => new Error('AZHOU_WALLPAPER: ' + reason);
+  const problem = reason => Object.assign(new Error('AZHOU_WALLPAPER: ' + reason), {
+    code: reason.split(':', 1)[0],
+  });
   const ownValue = (object, name) => {
     if (!object || typeof object !== 'object') return undefined;
     const descriptor = Object.getOwnPropertyDescriptor(object, name);
@@ -87,7 +89,8 @@ export async function installRenderer(payload) {
   } catch (error) {
     URL.revokeObjectURL(imageURL);
     image.src = '';
-    throw problem('image-decode-failed: ' + (error?.message || String(error)));
+    if (error?.code === 'image-decode-timeout') throw problem('image-decode-timeout');
+    throw problem('image-decode-failed');
   } finally { clearTimeout(decodeTimer); }
 
   if ((typeof ownValue(payload, 'isCurrent') === 'function' && !ownValue(payload, 'isCurrent')())

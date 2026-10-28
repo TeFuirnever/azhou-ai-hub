@@ -549,3 +549,290 @@ test('only the exact supported wallpaper owner is composed and disposed', () => 
   supported.host.__azhouStartup.dispose();
   assert.equal(legacyDisposals, 1);
 });
+
+test('a failed wallpaper can be retried by the completed controller without replaying startup', async () => {
+  const controlled = controlledHost();
+  const image = 'data:image/png;base64,aGVsbG8=';
+  const strengths = [];
+  const runs = [];
+  let initialWallpaper;
+  let attempts = 0;
+  const wallpaperAPI = {
+    owner: 'azhou.codex-startup-animation', version: '0.7.1',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }), dispose() {},
+  };
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runs.push(frameSpec);
+    initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image, strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = async (background, isCurrent) => {
+    attempts += 1;
+    strengths.push(background.strength);
+    assert.equal(background.image, image);
+    assert.equal(isCurrent(), true);
+    if (attempts === 1) {
+      controlled.host.__azhouWallpaper = wallpaperAPI;
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'styles-not-effective' };
+    }
+    controlled.host.__azhouWallpaper = {
+      owner: 'azhou.codex-startup-animation', version: '0.7.1',
+      status: () => ({ applied: true, imageDecoded: true, reason: '' }), dispose() {},
+    };
+    return { applied: true };
+  };
+
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  const originalFrame = controlled.frames[0];
+  const originalRunId = api.status().runId;
+  await initialWallpaper;
+  assert.deepEqual(api.status().wallpaper, {
+    applied: false, reason: 'wallpaper-unsupported', imageDecoded: false,
+    failureStage: 'styles', failureCode: 'styles-not-effective',
+  });
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: originalRunId, skipped: false },
+    originalFrame.contentWindow);
+  assert.equal(api.status().phase, 'complete');
+
+  const retried = await api.retryWallpaper();
+  assert.equal(retried.retried, true);
+  assert.deepEqual(retried.previousFailure, {
+    reason: 'wallpaper-unsupported', failureStage: 'styles', failureCode: 'styles-not-effective',
+  });
+  assert.equal(retried.wallpaper.applied, true);
+  assert.equal(api.status().phase, 'complete');
+  assert.equal(api.status().runId, originalRunId);
+  assert.equal(controlled.host.__azhouStartup, api);
+  assert.equal(controlled.frames.length, 1);
+  assert.equal(originalFrame.removed, true);
+  assert.equal(runs.length, 1, 'retry must not recreate the startup animation');
+
+  const repeated = await api.retryWallpaper();
+  assert.equal(repeated.retried, false);
+  assert.equal(repeated.reason, 'already-applied');
+  assert.equal(attempts, 2);
+  assert.deepEqual(strengths, [42, 42], 'retry reuses the last validated strength');
+});
+
+test('status, retry, and dispose refuse an externally replaced same-owner wallpaper API', async () => {
+  const controlled = controlledHost();
+  let initialWallpaper;
+  let attempts = 0;
+  let foreignDisposals = 0;
+  const ownedWallpaperAPI = {
+    owner: 'azhou.codex-startup-animation', version: '0.7.1',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }), dispose() {},
+  };
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    attempts += 1;
+    controlled.host.__azhouWallpaper = ownedWallpaperAPI;
+    return { applied: true };
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const runId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false },
+    controlled.frames[0].contentWindow);
+  assert.equal(api.status().wallpaper.applied, true);
+
+  controlled.host.__azhouWallpaper = {
+    owner: 'azhou.codex-startup-animation', version: '0.7.1',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }),
+    dispose() { foreignDisposals += 1; },
+  };
+  assert.equal(api.status().wallpaper.reason, 'owner-conflict');
+  assert.equal((await api.retryWallpaper()).reason, 'unknown-owner');
+  api.dispose();
+  assert.equal(attempts, 1);
+  assert.equal(foreignDisposals, 0);
+});
+
+test('wallpaper retry refuses disabled, missing, and unknown-owner requests', async () => {
+  const noRequest = controlledHost();
+  const noRequestPayload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  installStartup(noRequestPayload, noRequest.host);
+  const noRequestAPI = noRequest.host.__azhouStartup;
+  const noRequestRun = noRequestAPI.status().runId;
+  noRequest.host.send({ type: 'azhou-startup', action: 'complete', runId: noRequestRun, skipped: false },
+    noRequest.frames[0].contentWindow);
+  assert.equal((await noRequestAPI.retryWallpaper()).reason, 'no-request');
+  assert.equal(noRequest.frames.length, 1);
+
+  const disabled = controlledHost();
+  let disabledWallpaper;
+  let disabledApplies = 0;
+  const disabledPayload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    disabledWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 0 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  disabledPayload.applyWallpaper = () => { disabledApplies += 1; };
+  installStartup(disabledPayload, disabled.host);
+  const disabledAPI = disabled.host.__azhouStartup;
+  await disabledWallpaper;
+  const disabledRun = disabledAPI.status().runId;
+  disabled.host.send({ type: 'azhou-startup', action: 'complete', runId: disabledRun, skipped: false },
+    disabled.frames[0].contentWindow);
+  assert.equal((await disabledAPI.retryWallpaper()).reason, 'disabled');
+  assert.equal(disabledApplies, 0);
+
+  const unknown = controlledHost();
+  let attempts = 0;
+  let unknownWallpaper;
+  const unknownPayload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    unknownWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  unknownPayload.applyWallpaper = () => {
+    attempts += 1;
+    return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported' };
+  };
+  installStartup(unknownPayload, unknown.host);
+  const unknownAPI = unknown.host.__azhouStartup;
+  await unknownWallpaper;
+  const unknownRun = unknownAPI.status().runId;
+  unknown.host.send({ type: 'azhou-startup', action: 'complete', runId: unknownRun, skipped: false },
+    unknown.frames[0].contentWindow);
+  let unknownDisposals = 0;
+  unknown.host.__azhouWallpaper = {
+    owner: 'someone-else', version: '9', status: () => ({ applied: true }),
+    dispose() { unknownDisposals += 1; },
+  };
+  assert.equal((await unknownAPI.retryWallpaper()).reason, 'unknown-owner');
+  assert.equal(attempts, 1);
+  assert.equal(unknownDisposals, 0);
+  assert.equal(unknown.frames.length, 1);
+});
+
+test('wallpaper exceptions retain only whitelisted failure codes and mapped stages', async () => {
+  const controlled = controlledHost();
+  let wallpaperRequest;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    wallpaperRequest = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    const error = new Error('private filesystem path /Users/private/image.png');
+    error.code = 'shell-timeout';
+    throw error;
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await wallpaperRequest;
+  assert.deepEqual(api.status().wallpaper, {
+    applied: false, reason: 'wallpaper-unsupported', imageDecoded: false,
+    failureStage: 'shell', failureCode: 'shell-timeout',
+  });
+});
+
+test('concurrent wallpaper retries share one attempt and a new settings run cancels it', async () => {
+  const controlled = controlledHost();
+  let initialWallpaper;
+  let finishRetry;
+  let retryIsCurrent;
+  let attempts = 0;
+  const runs = [];
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runs.push(frameSpec);
+    if (frameSpec.intent === 'play') {
+      initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    }
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = (_background, isCurrent) => {
+    attempts += 1;
+    if (attempts === 1) return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'apply-failed' };
+    retryIsCurrent = isCurrent;
+    return new Promise(resolve => { finishRetry = resolve; });
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const originalRun = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: originalRun, skipped: false },
+    controlled.frames[0].contentWindow);
+
+  const retry = api.retryWallpaper();
+  const concurrentRetry = api.retryWallpaper();
+  assert.equal(attempts, 2, 'concurrent calls only invoke applyWallpaper once');
+  assert.equal(api.openSettings(), true);
+  assert.ok(api.status().runId > originalRun);
+  assert.equal(retryIsCurrent(), false, 'opening settings invalidates the pending retry');
+  const result = await retry;
+  const concurrentResult = await concurrentRetry;
+  assert.equal(result.reason, 'operation-cancelled');
+  assert.deepEqual(concurrentResult, result);
+  finishRetry({ applied: true });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(api.status().wallpaper.failureCode, 'apply-failed');
+  assert.equal(attempts, 2);
+  assert.equal(runs.length, 2, 'only the explicit settings action creates a second frame');
+  api.dispose();
+});
+
+test('wallpaper retry times out and a late result cannot revive the canceled attempt', async () => {
+  const controlled = controlledHost();
+  let initialWallpaper;
+  let finishRetry;
+  let retryIsCurrent;
+  let attempts = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = (_background, isCurrent) => {
+    attempts += 1;
+    if (attempts === 1) return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'apply-failed' };
+    retryIsCurrent = isCurrent;
+    return new Promise(resolve => { finishRetry = resolve; });
+  };
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const runId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false },
+    controlled.frames[0].contentWindow);
+
+  const retry = api.retryWallpaper();
+  const retryTimer = controlled.timers.at(-1);
+  assert.equal(retryTimer.delay, 10_000);
+  retryTimer.callback();
+  const result = await retry;
+  assert.equal(result.retried, true);
+  assert.equal(result.reason, 'timeout');
+  assert.equal(result.wallpaper.failureCode, 'retry-timeout');
+  assert.equal(retryIsCurrent(), false);
+  assert.equal((await api.retryWallpaper()).reason, 'timeout', 'a still-running helper is not duplicated');
+  assert.equal(attempts, 2);
+
+  finishRetry({ applied: true });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(api.status().wallpaper.failureCode, 'retry-timeout');
+  assert.equal(api.status().wallpaper.applied, false);
+  api.dispose();
+});

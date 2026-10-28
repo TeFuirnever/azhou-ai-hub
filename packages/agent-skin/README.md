@@ -169,6 +169,21 @@ Hub 的 `run --mode launch` 使用已核验载荷版本评估启动器事件；�
 
 未应用或无法核实时会返回非零状态；这不表示 Codex 主程序启动失败。壁纸操作记录位于 `~/Library/Logs/AzhouCodexStartup/wallpaper.jsonl` 和 `latest.json`，记录状态与核实结果，不写入聊天内容、完整脚本或图片数据。
 
+<a id="wallpaper-recovery"></a>
+### 壁纸失败诊断与重试
+
+排障先读取已安装应用 `Contents/Resources/azhou-build.json` 的版本、构建号和 `projectRoot`，再检查对应源码；当前工作目录可能属于旧检出。重试前运行上面的只读状态检查，保留失败现场。`pages` 中的 `failureCode` 和派生的 `failureStage` 区分页面等待超时、图片解码失败、样式未生效等有限类别，不输出任意异常文本、图片或聊天内容。
+
+动画结束后，可显式让原控制器重试最近一次有效的图片与强度。PID 和应用路径须来自当前已核实的运行实例：
+
+```sh
+"$HOME/Applications/阿舟 AI 实验室.app/Contents/MacOS/AzhouCodexStartup" \
+  --wallpaper-helper --action retry --target-pid "$CODEX_PID" \
+  --target-bundle /Applications/ChatGPT.app
+```
+
+重试不重建控制器、不重播动画、不访问偏好存储；健康壁纸直接复查。控制器内的重试最多等待 10 秒，同一时刻只执行一次；结果的 `retries` 保留已过滤的重试前失败信息。新一轮设置或控制器移除会取消旧请求，迟到回调不能重新应用。禁用背景、忙碌状态、缺少有效请求或所有权冲突会拒绝重试。旧控制器没有该 API 时返回 `retry-unavailable`，不会强行替换；下次从更新后的入口冷启动才会加载新控制器。重试可恢复已知失败状态，但不证明某次历史失效的触发原因已查明。
+
 当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟 bot 入口打开“主题与外观”，统一查看应用身份、启动动画、工作区背景及继承状态（[配置覆盖与保存边界](docs/theme-appearance.md)）；取消不保存，保存后重播。设置和壁纸仍待真实宿主验收，不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
 
 ## 安装、升级与旧入口清理
