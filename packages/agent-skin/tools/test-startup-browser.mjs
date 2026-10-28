@@ -1290,7 +1290,7 @@ try {
     }
   }
   await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
-  await check('appearance entry hides when the sidebar has no safe gap and returns afterward', async () => {
+  await check('appearance entry remains clickable when the sidebar has no safe gap', async () => {
     try {
       await cdp.evaluate(`(()=>{
         const side=document.querySelector('.sidebar');
@@ -1300,20 +1300,38 @@ try {
           side.appendChild(item);
         }
       })()`);
-      await until(() => cdp.evaluate(`getComputedStyle(document.querySelector('[data-agent-skin-entry="appearance"]')).visibility==='hidden'`),
-        1500, 'entry yields to a full sidebar');
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').getBoundingClientRect().left>innerWidth/2`),
+        1500, 'entry moves to a free position outside the crowded sidebar');
       assert.equal(await cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
         return getComputedStyle(entry.shadowRoot.querySelector('button')).visibility;
-      })()`), 'hidden', 'the shadow button inherits the hidden state');
+      })()`), 'visible', 'the shadow button remains visible');
       assert.equal(await cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),r=entry.getBoundingClientRect();
-        return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.hasAttribute('data-fixture-crowded');
-      })()`), true, 'the host control remains clickable with no available gap');
+        return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===entry;
+      })()`), true, 'the appearance entry remains hit-testable');
+      await screenshot('appearance-entry-crowded-sidebar-visible.png');
+      await cdp.evaluate(`(()=>{
+        for(const source of [...document.querySelectorAll('[data-fixture-crowded]')]){
+          const item=source.cloneNode();item.style.left='auto';item.style.right='10px';
+          document.querySelector('.sidebar').appendChild(item);
+        }
+      })()`);
+      await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),r=entry.getBoundingClientRect();
+        return [...document.querySelectorAll('[data-fixture-crowded]')].every(item=>{
+          const b=item.getBoundingClientRect();return r.right<=b.left||r.left>=b.right||r.bottom<=b.top||r.top>=b.bottom;
+        }) && document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===entry;
+      })()`), 1500, 'entry remains visible without covering either crowded edge');
+      const opened = await clickAppearanceEntry();
+      assert.ok(['loading', 'settings'].includes(opened.state.phase));
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='settings'`), 3000, 'entry still opens settings');
+      const state=await cdp.evaluate('window.__startupAPI.status()');
+      await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'complete',runId:${state.runId},skipped:true})`);
       await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.hidden=true)`);
-      await until(() => cdp.evaluate(`getComputedStyle(document.querySelector('[data-agent-skin-entry="appearance"]')).visibility==='visible'`),
-        1500, 'entry returns when hidden host controls free space');
-      return { crowded: 'hidden', restored: 'visible' };
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.left==='10px'`),
+        1500, 'entry returns to the sidebar when host controls free space');
+      return { crowded: 'visible', restored: 'left', opensSettings: true };
     } finally {
       await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.remove())`);
     }

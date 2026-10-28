@@ -120,6 +120,7 @@ test('appearance entry avoids dynamic sidebar controls and stops observing on di
   let blockers = [];
   let resize, scroll;
   doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 800;
   doc.documentElement.ownerDocument = { querySelectorAll: () => blockers };
   doc.createElement = tag => {
     const node = originalCreate(tag);
@@ -157,13 +158,15 @@ test('appearance entry avoids dynamic sidebar controls and stops observing on di
   blockers = [covering];
   scroll({ target: sidebar });
   fixture.timers.at(-1).callback();
-  assert.equal(entry.style.visibility, 'hidden', 'no safe position leaves host controls unobstructed');
+  assert.equal(entry.style.visibility, 'visible', 'a crowded sidebar keeps the entry accessible');
+  assert.equal(entry.style.left, '630px');
   blockers = [];
   covering.getBoundingClientRect = () => ({ left: 0, right: 0, width: 0, height: 0 });
   observer.trigger([{ target: covering }]);
   fixture.timers.at(-1).callback();
   assert.equal(entry.style.bottom, '72px');
   assert.equal(entry.style.visibility, 'visible', 'the entry returns once space is available');
+  assert.equal(entry.style.left, '10px');
   resize();
   fixture.timers.at(-1).callback();
   observer.trigger([{ target: sidebar }]);
