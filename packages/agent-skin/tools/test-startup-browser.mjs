@@ -2896,36 +2896,37 @@ try {
       assert.equal(result.accepted, true, 'the public preview seek remains available');
       return result;
     };
-    const initial = await readReport();
+    // Sample the sequence in one browser task so unrelated async redraws cannot
+    // land between a seek and the next frame-count comparison.
+    const { initial, samples } = await cdp.evaluate(`(()=>{
+      const initial={sceneRenderCount:window.launcherUI.report().jsFrame.sceneRenderCount};
+      const samples=[1.8,2.4,3.7,4.8,4.95,5.2,6.2,9.0,9.3,10.8].map(seconds=>{
+        const accepted=window.launcherUI.seek(seconds), report=window.launcherUI.report();
+        return {accepted,elapsed:report.elapsed,stage:report.stage,sceneRenderCount:report.jsFrame.sceneRenderCount};
+      });
+      return {initial,samples};
+    })()`);
     assert.ok(Number.isInteger(initial.sceneRenderCount), 'public report exposes canvas scene submissions');
-
-    const identityFirst = await seekAndRead(1.8);
-    const identitySecond = await seekAndRead(2.4);
-    const identityThird = await seekAndRead(3.7);
+    assert.ok(samples.every(sample => sample.accepted), 'all preview seeks remain available');
+    const [identityFirst, identitySecond, identityThird, scatteredFirst, scatteredSecond,
+      drawingFirst, drawingSecond, portraitBeforePlateau, portraitFirst, portraitSecond] = samples;
     assert.equal(identityFirst.stage, 'identity');
     assert.equal(identitySecond.sceneRenderCount, identityFirst.sceneRenderCount,
       'a static identity frame is submitted once while its stage and layout remain stable');
     assert.equal(identityThird.sceneRenderCount, identityFirst.sceneRenderCount);
     assert.equal(identityFirst.sceneRenderCount - initial.sceneRenderCount, 1);
 
-    const scatteredFirst = await seekAndRead(4.8);
-    const scatteredSecond = await seekAndRead(4.95);
     assert.equal(scatteredFirst.stage, 'scattered');
     assert.equal(scatteredFirst.sceneRenderCount, identityThird.sceneRenderCount + 1,
       'crossing to another static stage submits its changed frame once');
     assert.equal(scatteredSecond.sceneRenderCount, scatteredFirst.sceneRenderCount);
 
-    const drawingFirst = await seekAndRead(5.2);
-    const drawingSecond = await seekAndRead(6.2);
     assert.equal(drawingFirst.stage, 'drawing');
     assert.equal(drawingSecond.stage, 'drawing');
     assert.equal(drawingFirst.sceneRenderCount, scatteredSecond.sceneRenderCount + 1);
     assert.equal(drawingSecond.sceneRenderCount, drawingFirst.sceneRenderCount + 1,
       'animated drawing continues to submit changed frames');
 
-    const portraitBeforePlateau = await seekAndRead(9.0);
-    const portraitFirst = await seekAndRead(9.3);
-    const portraitSecond = await seekAndRead(10.8);
     assert.equal(portraitBeforePlateau.stage, 'portrait');
     assert.equal(portraitFirst.stage, 'portrait');
     assert.equal(portraitSecond.stage, 'portrait');
