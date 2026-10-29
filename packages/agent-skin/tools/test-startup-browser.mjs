@@ -4250,6 +4250,6 @@ try {
   await mkdir(options.out, { recursive: true });
   await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
-    checks: report.checks.map(({ name, passed, skipped }) => ({ name, passed, skipped })), fatalError: report.fatalError }));
+    checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })), fatalError: report.fatalError }));
   if (!report.passed) process.exitCode = 1;
 }
