@@ -1703,7 +1703,9 @@ try {
   await navigate('/fixture.html');
   await check('appearance entry remains clickable when the sidebar has no safe gap', async () => {
     try {
-      let pageState = await cdp.evaluate('window.__startupAPI.status()');
+      let pageState = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();return state.ready?state:false;
+      })()`), 5000, 'fresh fallback fixture is ready before completing playback');
       if (pageState.phase === 'playing') {
         await cdp.evaluate(`window.__startupFixtureSend(${pageState.runId},{type:'azhou-startup',action:'complete',runId:${pageState.runId},skipped:false})`);
       } else if (pageState.phase === 'settings') {
