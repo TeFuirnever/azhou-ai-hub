@@ -2,7 +2,6 @@ import CoreServices
 import Foundation
 
 private let projectID = "azhou.codex-startup-animation"
-private let applicationName = "阿舟 AI 实验室.app"
 private let currentIdentity = ("local.azhou.codex-startup", "AzhouCodexStartup")
 private let knownBundleIDs = [
     "local.azhou.codex-startup",
@@ -78,10 +77,10 @@ enum InstallRegistryCLI {
     private static func register(_ path: String, platform: any InstallRegistryPlatform) throws -> OSStatus {
         guard path.hasPrefix("/") else { throw RegistryFailure("register requires an absolute application path") }
         let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
-        let expected = platform.homeDirectory
-            .appendingPathComponent("Applications", isDirectory: true)
-            .appendingPathComponent(applicationName, isDirectory: true).standardizedFileURL
-        guard url.path == expected.path,
+        let applications = platform.homeDirectory
+            .appendingPathComponent("Applications", isDirectory: true).standardizedFileURL
+        guard url.deletingLastPathComponent().path == applications.path,
+              url.pathExtension == "app",
               url.resolvingSymlinksInPath().path == url.path else {
             throw RegistryFailure("register accepts only the canonical user Applications entry without symlinks")
         }
@@ -89,6 +88,12 @@ enum InstallRegistryCLI {
               metadata["CFBundleIdentifier"] as? String == currentIdentity.0,
               metadata["CFBundleExecutable"] as? String == currentIdentity.1 else {
             throw RegistryFailure("application identity does not match the project launcher")
+        }
+        guard let bundleName = metadata["CFBundleName"] as? String,
+              !bundleName.isEmpty,
+              !bundleName.contains("/"),
+              url.lastPathComponent == bundleName + ".app" else {
+            throw RegistryFailure("application path does not match its built bundle name")
         }
         let executable = url.appendingPathComponent("Contents/MacOS/" + currentIdentity.1)
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {

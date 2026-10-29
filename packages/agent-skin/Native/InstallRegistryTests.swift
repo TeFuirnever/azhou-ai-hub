@@ -52,6 +52,7 @@ struct InstallRegistryTests {
         let infoValues: [String: Any] = [
             "CFBundleIdentifier": "local.azhou.codex-startup",
             "CFBundleExecutable": "AzhouCodexStartup",
+            "CFBundleName": "阿舟 AI 实验室",
             "CFBundleShortVersionString": "1.2.3",
             "CFBundleVersion": "123",
         ]
@@ -128,6 +129,21 @@ struct InstallRegistryTests {
         let registrationSuccess = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
         expect(registrationSuccess.exitCode == 0 && registrationSuccess.output["ok"] as? Bool == true,
                "a verified synthetic bundle returns the successful register receipt")
+
+        let custom = root.appendingPathComponent("Applications/自定义实验室.app", isDirectory: true)
+        try FileManager.default.copyItem(at: application, to: custom)
+        var customInfo = infoValues
+        customInfo["CFBundleName"] = "自定义实验室"
+        try writeInfo(at: custom, values: customInfo)
+        let customRegistration = InstallRegistryCLI.execute(arguments: ["register", custom.path], platform: platform)
+        expect(customRegistration.exitCode == 0 && platform.registeredPaths.last == custom.path,
+               "register accepts the verified custom installation name")
+        let registrationsBeforeMismatch = platform.registeredPaths.count
+        customInfo["CFBundleName"] = "另一个名称"
+        try writeInfo(at: custom, values: customInfo)
+        let mismatchedName = InstallRegistryCLI.execute(arguments: ["register", custom.path], platform: platform)
+        expect(mismatchedName.exitCode == 1 && platform.registeredPaths.count == registrationsBeforeMismatch,
+               "register rejects a path that does not match the built bundle name")
 
         let output = root.appendingPathComponent("receipt.json")
         FileManager.default.createFile(atPath: output.path, contents: nil)
