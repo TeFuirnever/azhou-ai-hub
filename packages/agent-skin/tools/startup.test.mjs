@@ -459,6 +459,14 @@ test('appearance entry recognizes the exact Simplified Chinese Your dot navigati
 test('appearance entry uses a stable left fallback and stops observing on dispose', () => {
   const fixture = controlledHost();
   const doc = fixture.host.document;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 1024;
+  const createElement = doc.createElement;
+  doc.createElement = tag => {
+    const node = createElement(tag);
+    if (tag === 'div') node.getBoundingClientRect = () => ({ width: 120, height: 44 });
+    return node;
+  };
   let run;
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     run = spec.runId;
@@ -469,7 +477,7 @@ test('appearance entry uses a stable left fallback and stops observing on dispos
   const entry = fixture.controls.find(node => node.tagName === 'div');
   assert.equal(entry.style.position, 'fixed');
   assert.equal(entry.style.left, '10px');
-  assert.equal(entry.style.bottom, '72px');
+  assert.equal(entry.style.top, '684px');
   assert.equal(entry.style.display, 'block');
   const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
   assert.ok(observer);

@@ -1730,7 +1730,8 @@ try {
         const side=document.querySelector('.sidebar');
         for(let top=0;top<innerHeight;top+=48){
           const item=document.createElement('button');item.dataset.fixtureCrowded='1';
-          item.style.cssText='position:fixed;left:10px;top:'+top+'px;width:48px;height:48px;z-index:100';
+          item.style.cssText='position:fixed;left:10px;top:'+top+'px;width:240px;height:48px;z-index:100';
+          item.addEventListener('click',()=>{window.__crowdedClicks=(window.__crowdedClicks||0)+1});
           side.appendChild(item);
         }
       })()`);
@@ -1738,16 +1739,57 @@ try {
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
         const button=entry.shadowRoot.querySelector('button'),rect=entry.getBoundingClientRect();
         const shadowTarget=entry.shadowRoot.elementFromPoint?.(rect.left+rect.width/2,rect.top+rect.height/2);
-        return entry.style.display==='block'&&rect.left===10&&getComputedStyle(button).visibility==='visible'
+        const blocked=[...document.querySelectorAll('[data-fixture-crowded]')].some(host=>{
+          const r=host.getBoundingClientRect();
+          return r.left<rect.right&&r.right>rect.left&&r.top<rect.bottom&&r.bottom>rect.top;
+        });
+        return entry.style.display==='block'&&!blocked&&getComputedStyle(button).visibility==='visible'
           &&document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)===entry
           ?{left:rect.left,top:rect.top,width:rect.width,height:rect.height,buttonText:button.textContent,
             buttonDisabled:button.disabled,buttonHit:shadowTarget===button||button.contains(shadowTarget),
             state:window.__startupAPI.status()}:false;
-      })()`), 1500, 'entry remains visible and clickable in its left-side fallback when no gap exists');
-      assert.equal(crowdedEntry.left, 10, 'when no safe slot exists, the entry stays in the left fallback column');
+      })()`), 3000, 'entry remains clickable without covering crowded host controls');
       assert.equal(crowdedEntry.state.phase, 'complete', 'the entry is tested from a stable completed page');
       assert.equal(crowdedEntry.buttonDisabled, false, 'the left-side fallback button remains enabled when no gap exists');
       assert.equal(crowdedEntry.buttonHit, true, 'the actual shadow button receives the fallback hit target');
+      const blockedHostButtons = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const er=entry.getBoundingClientRect();
+        return [...document.querySelectorAll('[data-fixture-crowded]')].filter(button=>{
+          const r=button.getBoundingClientRect();
+          const left=Math.max(r.left,er.left),right=Math.min(r.right,er.right);
+          const top=Math.max(r.top,er.top),bottom=Math.min(r.bottom,er.bottom);
+          return right>left&&bottom>top&&document.elementFromPoint((left+right)/2,(top+bottom)/2)===entry;
+        }).length;
+      })()`);
+      assert.equal(blockedHostButtons, 0, 'appearance fallback must not intercept host controls');
+      const hostPoint = await cdp.evaluate(`(()=>{
+        const button=document.querySelector('[data-fixture-crowded]');
+        const rect=button.getBoundingClientRect();
+        return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+      })()`);
+      await cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...hostPoint, button: 'left', clickCount: 1 });
+      await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...hostPoint, button: 'left', clickCount: 1 });
+      assert.equal(await cdp.evaluate('window.__crowdedClicks'), 1, 'a host button still receives a real pointer click');
+      await cdp.evaluate(`(()=>{
+        const r=document.querySelector('[data-agent-skin-entry="appearance"]').getBoundingClientRect();
+        const container=document.createElement('div');container.dataset.fixtureRightContainer='1';
+        container.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;pointer-events:none';
+        document.body.appendChild(container);
+      })()`);
+      await delay(200);
+      await cdp.evaluate(`(()=>{
+        const host=document.createElement('button');host.dataset.fixtureLateControl='1';
+        host.style.cssText='width:100%;height:100%;pointer-events:auto;position:relative;z-index:100';
+        document.querySelector('[data-fixture-right-container]').appendChild(host);
+      })()`);
+      await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const host=document.querySelector('[data-fixture-late-control]');
+        const e=entry.getBoundingClientRect(),r=host.getBoundingClientRect();
+        return entry.style.display==='block'&&(e.right<=r.left||e.left>=r.right||e.bottom<=r.top||e.top>=r.bottom)
+          &&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===host;
+      })()`), 3000, 'a later host control in the relocated column remains clickable');
       await screenshot('appearance-entry-crowded-sidebar-visible.png');
       const opened = await clickAppearanceEntry();
       assert.ok(['loading', 'settings'].includes(opened?.state?.phase),
@@ -1812,10 +1854,40 @@ try {
         return {left:rect.left,visible:entry.style.display==='block',
           hit:document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)===entry};
       })()`);
-      assert.deepEqual(afterCancel, { left: 10, visible: true, hit: true },
-        'the left fallback remains usable after settings closes while the sidebar stays crowded');
-      return { crowded: 'left-clickable', settingsRunId: settings.state.runId, focusedInput, afterCancel };
+      assert.equal(afterCancel.visible, true, 'the fallback remains visible after settings closes');
+      assert.equal(afterCancel.hit, true, 'the fallback remains clickable after settings closes');
+      await cdp.evaluate(`(()=>{
+        const cover=document.createElement('button');cover.dataset.fixtureFullCover='1';
+        cover.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:100';
+        document.body.appendChild(cover);
+      })()`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='none'`),
+        3000, 'entry yields to host controls when no position is available');
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.contentVisibility='hidden'`);
+      await delay(200);
+      assert.equal(await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display`), 'none',
+        'a host control with hidden content can still receive pointer events');
+      assert.equal(await cdp.evaluate(`document.elementFromPoint(100,100)===document.querySelector('[data-fixture-full-cover]')`), true);
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.contentVisibility=''`);
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.visibility='hidden'`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='block'`),
+        3000, 'entry returns when a retained host control becomes invisible');
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.visibility=''`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='none'`),
+        3000, 'entry yields when the host control becomes visible again');
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.display='none'`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='block'`),
+        3000, 'entry returns when a retained host control becomes hidden');
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').style.display=''`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='none'`),
+        3000, 'entry yields again when the host control returns');
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]').remove()`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]').style.display==='block'`),
+        3000, 'entry returns when the blocking host control is removed');
+      return { crowded: 'host-and-entry-clickable', settingsRunId: settings.state.runId, focusedInput, afterCancel };
     } finally {
+      await cdp.evaluate(`document.querySelector('[data-fixture-right-container]')?.remove()`);
+      await cdp.evaluate(`document.querySelector('[data-fixture-full-cover]')?.remove()`);
       await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.remove())`);
     }
   });
@@ -4735,6 +4807,48 @@ try {
       })()`), true);
       await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 5000, 'generated animation skipped');
       return verifySidebarUpdatePlacement();
+    });
+    await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+    await check('generated appearance fallback preserves crowded host controls', async () => {
+      await until(() => cdp.evaluate(`window.__startupAPI?.status().phase==='playing' && window.__startupAPI.status().ready`),
+        15000, 'generated animation ready before crowded fallback check');
+      assert.equal(await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;button.click();return true;
+      })()`), true);
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 5000, 'generated animation skipped');
+      try {
+        await cdp.evaluate(`(()=>{
+          const side=document.querySelector('.sidebar');
+          for(let top=0;top<innerHeight;top+=48){
+            const item=document.createElement('button');item.dataset.fixtureCrowded='1';
+            item.style.cssText='position:fixed;left:10px;top:'+top+'px;width:48px;height:48px;z-index:100';
+            item.addEventListener('click',()=>{window.__generatedHostClicks=(window.__generatedHostClicks||0)+1});
+            side.appendChild(item);
+          }
+        })()`);
+        const result = await until(() => cdp.evaluate(`(()=>{
+          const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),e=entry.getBoundingClientRect();
+          const controls=[...document.querySelectorAll('[data-fixture-crowded]')];
+          const overlap=controls.some(control=>{
+            const r=control.getBoundingClientRect();
+            return r.left<e.right&&r.right>e.left&&r.top<e.bottom&&r.bottom>e.top;
+          });
+          const host=controls[0],r=host.getBoundingClientRect();
+          return entry.style.display==='block'&&!overlap
+            &&document.elementFromPoint(e.left+e.width/2,e.top+e.height/2)===entry
+            &&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===host
+            ?{hostX:r.left+r.width/2,hostY:r.top+r.height/2}:false;
+        })()`), 3000, 'generated fallback and host controls are simultaneously reachable');
+        await cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: result.hostX, y: result.hostY, button: 'left', clickCount: 1 });
+        await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: result.hostX, y: result.hostY, button: 'left', clickCount: 1 });
+        assert.equal(await cdp.evaluate('window.__generatedHostClicks'), 1);
+        const opened = await clickAppearanceEntry();
+        assert.ok(['loading', 'settings'].includes(opened?.state?.phase));
+        return { hostClickable: true, appearanceOpened: true };
+      } finally {
+        await cdp.evaluate(`document.querySelectorAll('[data-fixture-crowded]').forEach(item=>item.remove())`);
+      }
     });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
     await check('generated wallpaper survives a shell mounted after natural animation completion', async () => {

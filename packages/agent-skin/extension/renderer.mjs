@@ -503,29 +503,50 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     try {
       return Array.from(page.querySelectorAll('button, a[href], [role="button"], input, textarea, select'))
         .map(control => ({ control, bounds: control.getBoundingClientRect?.() }))
-        .filter(({ bounds }) => bounds && bounds.width > 0 && bounds.height > 0
-          && bounds.top < document.documentElement.clientHeight && bounds.bottom > 0);
+        .filter(({ control, bounds }) => {
+          if (!bounds || bounds.width <= 0 || bounds.height <= 0
+            || bounds.top >= document.documentElement.clientHeight || bounds.bottom <= 0) return false;
+          const style = host.getComputedStyle?.(control);
+          const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
+          if (visibility === 'hidden' || visibility === 'collapse') return false;
+          // A control whose own content is hidden can still receive pointer events.
+          for (let current = control.parentElement; current; current = current.parentElement) {
+            const currentStyle = host.getComputedStyle?.(current);
+            const contentVisibility = currentStyle?.getPropertyValue?.('content-visibility') || currentStyle?.contentVisibility;
+            if (contentVisibility === 'hidden') return false;
+          }
+          return true;
+        });
     } catch {
       return [];
     }
   };
-  const findFallbackTop = () => {
+  const findFallbackPosition = () => {
     if (!visible || typeof element.getBoundingClientRect !== 'function') return null;
+    const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
-    if (!viewportHeight) return null;
+    if (!viewportWidth || !viewportHeight) return null;
     const rect = element.getBoundingClientRect();
     const height = rect.height || 44;
-    const left = 10;
     const width = Math.max(rect.width || 0, hasAvatar ? 48 : 120);
-    const controls = fallbackControls().filter(({ bounds }) => bounds.left < left + width && bounds.right > left);
+    const controls = fallbackControls();
     const desired = Math.max(8, Math.min(viewportHeight - height - 8, viewportHeight - 72 - height));
-    const candidates = [desired, 8, viewportHeight - height - 8,
-      ...controls.flatMap(({ bounds }) => [bounds.top - height - 8, bounds.bottom + 8])];
-    const available = candidates.filter(top => top >= 8 && top + height <= viewportHeight - 8
-      && controls.every(({ bounds }) => top + height + 8 <= bounds.top || top >= bounds.bottom + 8));
-    if (!available.length) return null;
-    return available.reduce((best, candidate) =>
-      Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best);
+    const columns = [10, ...controls.map(({ bounds }) => bounds.right + 8)]
+      .filter(left => left >= 8 && left + width <= viewportWidth - 8)
+      .sort((a, b) => a - b);
+    for (const left of columns) {
+      const columnControls = controls.filter(({ bounds }) => bounds.left < left + width + 8 && bounds.right + 8 > left);
+      const candidates = [desired, 8, viewportHeight - height - 8,
+        ...columnControls.flatMap(({ bounds }) => [bounds.top - height - 8, bounds.bottom + 8])];
+      const available = candidates.filter(top => top >= 8 && top + height <= viewportHeight - 8
+        && columnControls.every(({ bounds }) => top + height + 8 <= bounds.top || top >= bounds.bottom + 8));
+      if (available.length) {
+        const top = available.reduce((best, candidate) =>
+          Math.abs(candidate - desired) < Math.abs(best - desired) ? candidate : best);
+        return { left, top };
+      }
+    }
+    return null;
   };
   const showFallback = () => {
     currentTarget = null;
@@ -539,14 +560,18 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     applyEntryLayout();
     label.style.display = '';
     if (element.parentNode !== document.documentElement) document.documentElement.appendChild(element);
-    let top = findFallbackTop();
-    if (top === null && hasAvatar) {
+    let placement = findFallbackPosition();
+    if (placement === null && hasAvatar) {
       label.style.display = 'none';
-      top = findFallbackTop();
+      placement = findFallbackPosition();
     }
-    if (top !== null) {
-      element.style.top = `${top}px`;
+    if (placement !== null) {
+      element.style.left = `${placement.left}px`;
+      element.style.top = `${placement.top}px`;
       element.style.bottom = 'auto';
+    } else {
+      // No unobstructed position exists; retry when the layout changes.
+      element.style.display = 'none';
     }
   };
   const showNavigationRow = target => {
@@ -581,10 +606,17 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const touchesFallbackColumn = node => {
     if (typeof node?.getBoundingClientRect !== 'function') return false;
     try {
+      if (element.style.display === 'none'
+        && (node.matches?.('button, a[href], [role="button"], input, textarea, select')
+          || node.querySelector?.('button, a[href], [role="button"], input, textarea, select'))) return true;
       const bounds = node.getBoundingClientRect();
       const entry = element.getBoundingClientRect?.();
       const width = Math.max(entry?.width ?? 0, hasAvatar ? 48 : 120);
-      return bounds.width > 0 && bounds.left < 10 + width && bounds.right > 10;
+      const preferredColumn = bounds.left < 10 + width && bounds.right > 10;
+      const currentPosition = entry?.width > 0 && entry?.height > 0
+        && bounds.left < entry.right + 8 && bounds.right + 8 > entry.left
+        && bounds.top < entry.bottom + 8 && bounds.bottom + 8 > entry.top;
+      return bounds.width > 0 && (preferredColumn || currentPosition);
     } catch { return false; }
   };
   const isNavigationRelatedNode = node => {
