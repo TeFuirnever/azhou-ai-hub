@@ -78,6 +78,7 @@ class CoexistenceInstallTestCase(unittest.TestCase):
         FakeNative.discovery_cwds = []
         FakeInstaller.verified_roots = []
         FakeInstaller.mode_ledger = {}
+        FakeInstaller.mode_stat_baselines = {}
         FakeInstaller.use_virtual_modes = os.name == "nt"
         patch_fake_installer_mode_fingerprints(self)
         patcher = patch.object(adapter, "_module",

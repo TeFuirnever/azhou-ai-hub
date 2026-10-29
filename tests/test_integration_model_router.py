@@ -41,6 +41,7 @@ class FakeInstaller:
     SETTINGS = {"model": "test-root"}
     verified_roots = []
     mode_ledger: dict[Path, int] = {}
+    mode_stat_baselines: dict[Path, int] = {}
     use_virtual_modes = os.name == "nt"
 
     @staticmethod
@@ -58,7 +59,12 @@ class FakeInstaller:
     def file_mode(cls, path):
         path = Path(path)
         if cls.use_virtual_modes:
-            return cls.mode_ledger.get(path)
+            if path not in cls.mode_ledger:
+                return None
+            observed = stat.S_IMODE(path.stat().st_mode)
+            if observed != cls.mode_stat_baselines.get(path):
+                return None
+            return cls.mode_ledger[path]
         return stat.S_IMODE(path.stat().st_mode)
 
     @classmethod
@@ -66,6 +72,7 @@ class FakeInstaller:
         path = Path(path)
         path.chmod(mode)
         cls.mode_ledger[path] = stat.S_IMODE(mode)
+        cls.mode_stat_baselines[path] = stat.S_IMODE(path.stat().st_mode)
 
     @staticmethod
     def pstack_coexistence(codex_home, skills_dir=None):
@@ -116,6 +123,7 @@ class FakeInstaller:
                 if raw is None:
                     path.unlink(missing_ok=True)
                     cls.mode_ledger.pop(path, None)
+                    cls.mode_stat_baselines.pop(path, None)
                 else:
                     path.write_bytes(raw)
                     cls.set_mode(path, mode)
@@ -134,6 +142,7 @@ class FakeInstaller:
             if item["before"] is None:
                 path.unlink(missing_ok=True)
                 cls.mode_ledger.pop(path, None)
+                cls.mode_stat_baselines.pop(path, None)
             else:
                 path.write_bytes(base64.b64decode(item["before"]))
                 cls.set_mode(path, item["mode"])
@@ -148,7 +157,9 @@ def patch_fake_installer_mode_fingerprints(test_case):
         current = fingerprint(path, installer)
         if (installer is FakeInstaller and current["sha256"] is not None
                 and FakeInstaller.use_virtual_modes and Path(path) in FakeInstaller.mode_ledger):
-            current["mode"] = FakeInstaller.file_mode(path)
+            virtual_mode = FakeInstaller.file_mode(path)
+            if virtual_mode is not None:
+                current["mode"] = virtual_mode
         return current
 
     patcher = patch.object(adapter, "_fingerprint", side_effect=observe)
@@ -207,6 +218,7 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         FakeNative.discovery_cwds = []
         FakeInstaller.verified_roots = []
         FakeInstaller.mode_ledger = {}
+        FakeInstaller.mode_stat_baselines = {}
         FakeInstaller.use_virtual_modes = os.name == "nt"
         patch_fake_installer_mode_fingerprints(self)
         patcher = patch.object(adapter, "_module", side_effect=lambda _, f, **kw: FakeInstaller if f == "install_codex.py" else FakeNative)
@@ -346,7 +358,7 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         result = adapter.uninstall(*self.targets, plan["plan_id"], hub_root=self.hub)
         self.assertEqual(result["status"], "restored")
         self.assertEqual(config.read_bytes(), original)
-        self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o640)
+        self.assertEqual(FakeInstaller.file_mode(config), 0o640)
         self.assertEqual(custom.read_bytes(), b"custom = true\n")
         self.assertEqual(adopted.read_bytes(), b"test skill\n")
         self.assertFalse((self.home / "agents/worker.toml").exists())
@@ -374,6 +386,16 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         self.assertEqual(FakeInstaller.mode_ledger[worker], 0o600)
         with patch.object(FakeInstaller, "use_virtual_modes", True, create=True):
             FakeInstaller.set_mode(worker, 0o644)
+            with self.assertRaisesRegex(common.IntegrationError, "changed"):
+                adapter.uninstall_plan(*self.targets, hub_root=self.hub)
+
+    def test_direct_chmod_drift_blocks_uninstall_with_virtual_mode_ledger(self):
+        self.install()
+        worker = self.home / "agents/worker.toml"
+        with patch.object(FakeInstaller, "use_virtual_modes", True):
+            before_mode = stat.S_IMODE(worker.stat().st_mode)
+            worker.chmod(0o444)
+            self.assertNotEqual(stat.S_IMODE(worker.stat().st_mode), before_mode)
             with self.assertRaisesRegex(common.IntegrationError, "changed"):
                 adapter.uninstall_plan(*self.targets, hub_root=self.hub)
 
