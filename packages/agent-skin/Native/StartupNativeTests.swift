@@ -1008,6 +1008,15 @@ private func nativeEventContractChecks() async throws -> Int {
          "completion": completion]
     }
 
+    var disabledWallpaper = validStatus(1, phase: "playing", ready: true, completed: false,
+                                        overlay: true, completion: NSNull())
+    disabledWallpaper["wallpaper"] = ["applied": false, "reason": "disabled", "imageDecoded": false]
+    expect(NativeStartupStatus.parse(disabledWallpaper) != nil,
+           "a disabled wallpaper remains a valid ready startup status")
+    disabledWallpaper["reason"] = "disabled"
+    expect(NativeStartupStatus.parse(disabledWallpaper) == nil,
+           "disabled is not accepted as a startup failure reason")
+
     var now = 100.0
     var records: [[String: Any]] = []
     let writer = NativeEventWriter(startedAt: 100, launcherPID: 77,

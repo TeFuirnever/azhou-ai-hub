@@ -959,7 +959,7 @@ private struct StartupStatus {
               let wallpaper = raw["wallpaper"] as? [String: Any],
               boolean(wallpaper["applied"]) != nil,
               let wallpaperReason = wallpaper["reason"] as? String,
-              wallpaperReason.isEmpty || validReasons.contains(wallpaperReason),
+              wallpaperReason.isEmpty || wallpaperReason == "disabled" || validReasons.contains(wallpaperReason),
               boolean(wallpaper["imageDecoded"]) != nil,
               let completionRaw = raw["completion"] else { return nil }
         let completionCause: String?

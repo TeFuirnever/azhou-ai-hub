@@ -1349,6 +1349,21 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
                                now: now, sleep: sleep).run(payload: payload, deadline: deadline)
     }
 
+    let disabledWallpaperStatus: [String: Any] = [
+        "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 19,
+        "ready": true, "completed": false, "overlay": true, "reason": "",
+        "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+        "completion": NSNull(),
+    ]
+    let disabledWallpaperStartup = await run(
+        FakeWallpaperSystem(), FakeWallpaperStartupTransport(pages: [page], evaluations: [
+            ["href": startupURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": startupURL, "missing": false, "status": disabledWallpaperStatus],
+        ]), now: nowAtZero, sleep: noSleep)
+    expect(disabledWallpaperStartup == .ready(runID: 19),
+           "disabled wallpaper does not prevent the startup controller becoming ready")
+
     let defaultSleep = StartupConnector(
         target: target, expectedPort: 49221, system: FakeWallpaperSystem(),
         transport: FakeWallpaperStartupTransport()
