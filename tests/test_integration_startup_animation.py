@@ -157,6 +157,45 @@ class AnimationIntegrationTests(unittest.TestCase):
         updated = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
         self.assertNotEqual(plan["plan_id"], updated["plan_id"])
 
+    def test_build_plan_tracks_theme_selected_private_identity_images(self):
+        configure_package(self.hub, animation.COMPONENT,
+            [".gitignore", "Native/App.swift", "tools/verify-artifacts.py", "theme-config.json"],
+            build_inputs=["Native/App.swift"], runtime_version="0.9.0", runtime_build="16")
+        theme = json.loads((Path(__file__).resolve().parents[1] / "packages/agent-skin/theme-config.json").read_text())
+        theme["identity"]["iconInput"] = "assets/private/custom/icon.png"
+        theme["identity"]["entryAvatarInput"] = "assets/private/custom/avatar.png"
+        (self.source / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        for name in ("custom/icon.png", "custom/avatar.png"):
+            path = self.assets / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(name.encode())
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertIn("custom/icon.png", plan["private_inputs"])
+        self.assertIn("custom/avatar.png", plan["private_inputs"])
+        self.assertNotIn("app-icon/source.png", plan["private_inputs"])
+        self.assertNotIn("entry-avatar.png", plan["private_inputs"])
+        snapshot = self.base / "native-snapshot"
+        snapshot.mkdir()
+        (snapshot / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        for name in plan["private_inputs"]:
+            target = snapshot / "assets/private" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.assets / name, target)
+        marker = {"inputs": {"assets/private/" + name: digest
+                             for name, digest in plan["private_inputs"].items()}}
+        bundle = self.base / "current-bundle"
+        bundle.mkdir()
+        animation._verify_packaged_sources(bundle, snapshot,
+            {"CFBundleShortVersionString": "0.9.0"}, marker)
+        (snapshot / "assets/private/custom/avatar.png").write_bytes(b"changed")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(bundle, snapshot,
+                {"CFBundleShortVersionString": "0.9.0"}, marker)
+        theme["identity"]["entryAvatarInput"] = "assets/private/../outside.png"
+        (self.source / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        with self.assertRaisesRegex(common.IntegrationError, "invalid theme private identity inputs"):
+            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+
     def test_new_payload_inspection_binds_private_inputs_without_copying_sources_and_keeps_legacy_rule(self):
         new_bundle = self.base / "new-bundle"
         new_source = self.base / "new-snapshot"

@@ -10,7 +10,7 @@ import hashlib
 import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import runpy
 import shutil
@@ -89,9 +89,30 @@ def _event_schema_for_version(version: str) -> str:
     return "legacy" if parts < STARTUP_EVENT_VERSION else STARTUP_EVENT_SCHEMA
 
 
-def _private_files(version: str) -> tuple[str, ...]:
+def _private_files(version: str, source: Path | None = None) -> tuple[str, ...]:
     _event_schema_for_version(version)  # Validate the same version syntax as inspection.
-    return PRIVATE_FILES + (("entry-avatar.png",) if tuple(map(int, version.split("."))) >= (0, 9, 0) else ())
+    if tuple(map(int, version.split("."))) < (0, 9, 0):
+        return PRIVATE_FILES
+    config = source / "theme-config.json" if source is not None else None
+    if config is None or not config.exists():
+        return PRIVATE_FILES + ("entry-avatar.png",)
+    try:
+        identity = json.loads(config.read_text(encoding="utf-8"))["identity"]
+        selected = []
+        for key in ("iconInput", "entryAvatarInput"):
+            value = identity[key]
+            if not isinstance(value, str) or "\\" in value:
+                raise ValueError(key)
+            path = PurePosixPath(value)
+            if (path.is_absolute() or path.as_posix() != value or len(path.parts) < 3
+                    or path.parts[:2] != ("assets", "private") or any(p in ("", ".", "..") for p in path.parts)):
+                raise ValueError(key)
+            selected.append(PurePosixPath(*path.parts[2:]).as_posix())
+        if selected[0] == selected[1]:
+            raise ValueError("identity images must be distinct")
+        return tuple(dict.fromkeys((*PRIVATE_FILES[:3], *selected)))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise common.IntegrationError(f"invalid theme private identity inputs: {exc}") from exc
 
 
 def _private_manifest(directory: Path, files: tuple[str, ...] = PRIVATE_FILES) -> dict[str, str]:
@@ -114,7 +135,7 @@ def _verify_packaged_sources(bundle: Path, native_root: Path, info: dict[str, An
             packaged_source = resources / "web" / name
             if packaged_source.exists() or packaged_source.is_symlink():
                 raise common.IntegrationError(f"private startup source must not be copied into the web payload: {name}")
-        for name in _private_files(version):
+        for name in _private_files(version, native_root):
             relative = "assets/private/" + name
             if inputs.get(relative) != _hash(native_root / relative):
                 raise common.IntegrationError(f"built private input differs from its frozen source: {name}")
@@ -160,7 +181,7 @@ def build_plan(source: Path, workspace: Path, private_assets: Path, *, hub_root:
     workspace = _directory(workspace, exists=False)
     if workspace == Path(origin["source"]) or Path(origin["source"]) in workspace.parents:
         raise common.IntegrationError("build workspace must be outside the read-only source")
-    assets = _private_manifest(private_assets, _private_files(origin["version"]))
+    assets = _private_manifest(private_assets, _private_files(origin["version"], Path(origin["source"])))
     lock = common.load_lock(COMPONENT, hub_root=hub_root)
     snapshot = state.state_path(workspace, "hub", "sources", COMPONENT, common.plan_digest(lock))
     return _plan("build", source=origin, workspace=str(workspace), private_assets=str(private_assets),
