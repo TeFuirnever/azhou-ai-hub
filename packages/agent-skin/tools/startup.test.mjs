@@ -388,6 +388,25 @@ test('appearance entry follows the Home Your dot button, ignores a same-named ch
   }
 });
 
+test('appearance entry accepts a boxless display-contents ancestor but rejects hidden navigation', () => {
+  for (const hidden of [false, true]) {
+    const fixture = controlledHost();
+    const [{ nav, navList }] = addAppearanceNavigation(fixture, { layout: 'home' });
+    nav.parentNode = {
+      tagName: 'DIV', hidden,
+      computedStyle: { display: 'contents', visibility: 'visible' },
+      getBoundingClientRect: () => ({ width: 0, height: 0 }),
+    };
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode === navList, !hidden);
+    assert.equal(entry.style.position, hidden ? 'fixed' : 'static');
+    fixture.host.__azhouStartup.dispose();
+  }
+});
+
 test('duplicate Home Your dot buttons keep the appearance entry on its fallback', () => {
   const fixture = controlledHost();
   addAppearanceNavigation(fixture, { count: 2, layout: 'home' });

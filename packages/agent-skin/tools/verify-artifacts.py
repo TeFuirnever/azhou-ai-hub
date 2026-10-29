@@ -658,7 +658,9 @@ def verify_startup(path, info, marker, *, current_source=True):
         allowed_theme_inputs = {current_startup_inputs}
     else:
         allowed_theme_inputs = {frozenset(PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS)}
-        if (expected_version, expected_build) == (VERSION, BUILD):
+        # Frozen builds 17–19 already contain the image-metadata input/output set.
+        if ((expected_version, expected_build) == (VERSION, BUILD)
+                or expected_version == '0.9.0' and expected_build in {'17', '18', '19'}):
             allowed_theme_inputs.add(current_startup_inputs)
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))

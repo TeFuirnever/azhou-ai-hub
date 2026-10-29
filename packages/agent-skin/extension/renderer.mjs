@@ -445,7 +445,8 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
       const contentVisibility = style?.getPropertyValue?.('content-visibility') || style?.contentVisibility;
       if (display === 'none' || visibility === 'hidden' || visibility === 'collapse' || contentVisibility === 'hidden') return false;
-      if (typeof current.getBoundingClientRect === 'function') {
+      // display: contents ancestors have no box; their children can still be visible.
+      if (display !== 'contents' && typeof current.getBoundingClientRect === 'function') {
         try {
           const bounds = current.getBoundingClientRect();
           if (bounds.width <= 0 || bounds.height <= 0) return false;

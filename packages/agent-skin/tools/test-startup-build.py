@@ -281,6 +281,23 @@ def publish_with_test_native_tools(artifacts, staged: Path) -> None:
 
 
 class BuildOwnedThemeTests(unittest.TestCase):
+    def test_publish_upgrades_build19_image_metadata_payload(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-build19-upgrade-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            metadata_path = root / "hub-package.json"
+            current_metadata = metadata_path.read_bytes()
+            old_metadata = json.loads(current_metadata)
+            old_metadata["runtime_build"] = "19"
+            metadata_path.write_text(json.dumps(old_metadata), encoding="utf-8")
+            previous, artifacts = build_staged_product(root, "previous-build19")
+            artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(previous, artifacts.PAYLOAD)
+            metadata_path.write_bytes(current_metadata)
+            current, artifacts = build_staged_product(root, "current-build")
+            publish_with_test_native_tools(artifacts, current)
+            self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)["build"], APP_BUILD)
+
     def test_publish_rebuilds_existing_payload_after_theme_edit(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-theme-rebuild-test-") as temporary:
             root = (Path(temporary) / "source").resolve()

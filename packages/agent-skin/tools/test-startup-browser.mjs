@@ -258,6 +258,7 @@ try {
     + '<script src="/localization.js"></script><script src="/image-settings.js"></script><script src="/animation.js"></script><script type="module" src="/fixture.js"></script>'
     + preview.slice(scriptEnd);
   const homeNavFixtureMarkup = String.raw`
+    <div data-fixture-boxless-ancestor style="display:contents">
     <nav aria-label="Home" role="navigation" data-fixture-home-nav style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden">
       <div class="fixture-nav-header" style="flex:none;padding:12px 8px 8px">
         <div class="group/nav-list" data-fixture-nav-list style="display:flex;flex-direction:column;gap:4px;width:100%">
@@ -278,7 +279,7 @@ try {
         <button id="fixture-download-update" type="button" style="width:100%;text-align:left">Download update</button>
         <button id="fixture-profile" type="button" style="width:100%;text-align:left">Profile</button>
       </div>
-    </nav>`;
+    </nav></div>`;
   const pixelBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64');
   const pixelImage = 'data:image/png;base64,' + pixelBytes.toString('base64');
   const imageSHA256 = createHash('sha256').update(pixelBytes).digest('hex');
@@ -314,8 +315,8 @@ try {
         const next = template.content.firstElementChild;
         outerWindow.__fixturePriorHomeNav = current;
         outerWindow.__fixtureHomeNavRemountCount++;
-        next.setAttribute('data-fixture-nav-instance', String(outerWindow.__fixtureHomeNavRemountCount));
-        current.replaceWith(next);
+        next.querySelector('nav').setAttribute('data-fixture-nav-instance', String(outerWindow.__fixtureHomeNavRemountCount));
+        current.parentElement.replaceWith(next);
         return true;
       };
       outerWindow.__fixtureSetHomeNavWidth = width => {
