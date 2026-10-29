@@ -86,7 +86,7 @@ async function check(name, operation) {
     report.checks.push({ name, passed: true, elapsedMs: Date.now() - started, details });
     return details;
   } catch (error) {
-    report.checks.push({ name, passed: false, elapsedMs: Date.now() - started, error: safeError(error) });
+    report.checks.push({ name, passed: false, elapsedMs: Date.now() - started, error: safeError(error?.stack || error) });
     return null;
   }
 }
@@ -1285,10 +1285,16 @@ try {
           profileHit:document.elementFromPoint(p.left+p.width/2,p.top+p.height/2)===profile,
           update:{x:r.x,y:r.y,width:r.width,height:r.height},entry:{x:e.x,y:e.y,width:e.width,height:e.height}};
       })()`);
-      const result = await until(async () => {
-        const value = await readResult();
-        return value.area === 0 && value.profileArea === 0 && value.hit && value.profileHit ? value : false;
-      }, 1500, 'appearance entry moves away from the update button');
+      let lastResult;
+      let result;
+      try {
+        result = await until(async () => {
+          lastResult = await readResult();
+          return lastResult.area === 0 && lastResult.profileArea === 0 && lastResult.hit && lastResult.profileHit ? lastResult : false;
+        }, 1500, 'appearance entry moves away from the update button');
+      } catch (error) {
+        throw new Error(safeError(error) + ': ' + JSON.stringify(lastResult));
+      }
       assert.equal(result.area, 0, 'appearance must not cover the update control: '+JSON.stringify(result));
       assert.equal(result.hit, true, 'update control must remain clickable');
       assert.equal(result.profileHit, true, 'profile control must remain clickable');
@@ -1456,7 +1462,7 @@ try {
         + JSON.stringify({ rect: metrics.rect, viewport: metrics.viewport, entryHit: metrics.entryHit,
           buttonHit: metrics.buttonHit }));
       assert.equal(metrics.inputHit, true, 'the host textarea remains hit-testable in the collapsed-sidebar viewport');
-      assert.equal(metrics.menuHit, true, 'the host menu remains hit-testable in the collapsed-sidebar viewport');
+      assert.equal(metrics.menuHit, true, 'the host menu remains hit-testable in the collapsed-sidebar viewport: ' + JSON.stringify(metrics));
       assert.equal(metrics.inputOverlap.area, 0, 'the appearance entry does not overlap the host textarea');
       assert.equal(metrics.menuOverlap.area, 0, 'the appearance entry does not overlap the host menu');
       assert.equal(metrics.composerOverlap.area, 0,
