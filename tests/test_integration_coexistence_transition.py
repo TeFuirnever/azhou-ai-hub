@@ -27,11 +27,11 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from package_fixture import configure_package
+from native_codex_fixture import install_fake_codex
 from scripts import integration_common as common
 from scripts import integration_pstack as pstack
 from scripts import integration_model_router as adapter
 from test_integration_model_router import FakeInstaller, FakeNative
-from test_integration_pstack import FAKE_CODEX
 
 ROOT = Path(__file__).resolve().parents[1]
 OFF_SHEET = "# pstack model configuration\nsession hook: off\n"
@@ -61,9 +61,7 @@ class TransitionTestCase(unittest.TestCase):
         self.home = self.workspace / ".azhou/hub/targets/codex"
         self.skills = self.home / "skills"
         self.shared = self.base / "shared-skills"
-        self.binary = self.base / "codex"
-        self.binary.write_text(FAKE_CODEX, encoding="utf-8")
-        self.binary.chmod(0o700)
+        self.binary = install_fake_codex(self.base / "codex")
         self.pstack_source = configure_package(self.hub, "pstack", [
             ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
         ])
@@ -261,7 +259,7 @@ class ReachableStateTests(TransitionTestCase):
         report = self.transition()
         row = report["facets"]["shared_skills"]["skills"]["poteto-mode"]
         self.assertEqual(row["kind"], "symlink")
-        self.assertEqual(row["target"], str(clone))
+        self.assertEqual(Path(row["target"]).resolve(), clone.resolve())
         self.assertEqual(row["modified_count"], 0)
         self.assertEqual(report["recognized_states"], ["shared-pstack-skills-only"])
 
@@ -349,9 +347,7 @@ class StaleReceiptTests(TransitionTestCase):
     def test_unreadable_registry_blocks_rather_than_guesses_ownership(self):
         self.put("pstack-models.md", ARMED_SHEET)
         self.pstack_apply()                      # Hub-owned armed standalone install
-        broken = self.base / "broken-codex"
-        broken.write_text("#!/usr/bin/env python3\nimport sys; sys.exit('registry down')\n", encoding="utf-8")
-        broken.chmod(0o700)
+        broken = install_fake_codex(self.base / "broken-codex", failure="registry down")
         report = pstack.transition(workspace=self.workspace, codex_home=self.home, codex_bin=broken,
                                    skills_dir=self.shared, hub_root=self.hub)
         routing = report["transitions"][0]
@@ -481,9 +477,7 @@ class ApplicableConversionTests(TransitionTestCase):
 
 class RegistryAndCliTests(TransitionTestCase):
     def test_registry_failure_is_reported_without_hiding_file_evidence(self):
-        broken = self.base / "broken-codex"
-        broken.write_text("#!/usr/bin/env python3\nimport sys; sys.exit('registry down')\n", encoding="utf-8")
-        broken.chmod(0o700)
+        broken = install_fake_codex(self.base / "broken-codex", failure="registry down")
         self.install_foreign_plugin()
         report = pstack.transition(workspace=self.workspace, codex_home=self.home, codex_bin=broken,
                                    skills_dir=self.shared, hub_root=self.hub)

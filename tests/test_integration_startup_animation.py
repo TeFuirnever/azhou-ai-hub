@@ -375,7 +375,8 @@ class AnimationIntegrationTests(unittest.TestCase):
             self.install()
             target, record = animation._test_paths(self.workspace)
             plan = animation.test_uninstall_plan(self.source, self.workspace, hub_root=self.hub)
-            process = {"returncode": 0, "stdout": f"123 {target}/Contents/MacOS/AzhouCodexStartup\n", "stderr": ""}
+            executable = target / "Contents/MacOS" / "AzhouCodexStartup"
+            process = {"returncode": 0, "stdout": f"123 {executable.parent}/AzhouCodexStartup\n", "stderr": ""}
             with patch.object(animation, "_run", return_value=process):
                 with self.assertRaisesRegex(common.IntegrationError, "still running"):
                     animation.test_uninstall(self.source, self.workspace, plan["plan_id"], hub_root=self.hub)

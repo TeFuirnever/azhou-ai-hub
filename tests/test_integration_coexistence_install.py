@@ -24,11 +24,11 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from package_fixture import configure_package
+from native_codex_fixture import install_fake_codex
 from scripts import integration_common as common
 from scripts import integration_pstack as pstack
 from scripts import integration_model_router as adapter
 from test_integration_model_router import FakeInstaller, FakeNative, REAL_INSTALLER
-from test_integration_pstack import FAKE_CODEX
 
 ROOT = Path(__file__).resolve().parents[1]
 KIT_PACKAGE = ROOT / "packages" / "agent-orchestration-kit"
@@ -56,9 +56,7 @@ class CoexistenceInstallTestCase(unittest.TestCase):
         self.workspace = self.base / "workspace"
         self.home = self.workspace / ".azhou/hub/targets/codex"
         self.skills = self.home / "skills"
-        self.binary = self.base / "codex"
-        self.binary.write_text(FAKE_CODEX, encoding="utf-8")
-        self.binary.chmod(0o700)
+        self.binary = install_fake_codex(self.base / "codex")
         self.pstack_source = configure_package(self.hub, "pstack", [
             ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
         ])
