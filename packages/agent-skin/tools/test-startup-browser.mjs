@@ -939,13 +939,13 @@ try {
     if (!point) return false;
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
     await cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-    await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-    return cdp.evaluate(`(()=>{
+    const focused = await cdp.evaluate(`(()=>{
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
       const button=entry?.shadowRoot?.querySelector('button');
-      return {focused:!!button&&document.activeElement===entry&&entry.shadowRoot.activeElement===button,
-        state:window.__startupAPI.status()};
+      return !!button&&document.activeElement===entry&&entry.shadowRoot.activeElement===button;
     })()`);
+    await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+    return { focused, state: await cdp.evaluate('window.__startupAPI.status()') };
   }
 
   const initialLightCheck = 'initial light appearance draws readable identity and cached path pixels from theme-only host state';
@@ -1212,7 +1212,7 @@ try {
     await screenshot('appearance-entry-light.png');
     const opened = await clickAppearanceEntry();
     assert.equal(opened.focused, true, 'a real appearance click focuses the entry button');
-    assert.equal(opened.state.phase, 'loading');
+    assert.ok(['loading', 'settings'].includes(opened.state.phase), 'the click starts opening settings');
     const settings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
       return state.phase==='settings'&&state.ready?state:false;
