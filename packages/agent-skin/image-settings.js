@@ -21,6 +21,7 @@ function createImageSettings(environment) {
   const clearTimer = environment && environment.clearTimeout;
   const performance = environment && environment.performance;
   const MAX_INPUT_BYTES = 31_457_280;
+  const MAX_HEADER_READ_BYTES = 2 * 1024 * 1024;
   const MAX_SOURCE_PIXELS = 48_000_000;
   const LARGE_SOURCE_PIXELS = 16_000_000;
   const PNG_PREFIX = 'data:image/png;base64,';
@@ -40,12 +41,14 @@ function createImageSettings(environment) {
     'settings.section.workspace': '工作区背景',
     'settings.section.startup': '启动动画',
     'settings.section.about': '关于与状态',
-    'settings.about.note': '显示语言、深浅色和减少动态由应用或系统控制。这里显示当前状态。',
+    'settings.appName': '应用名称',
+    'settings.botName': '助手名称',
+    'settings.version': '版本 · 构建',
+    'settings.runningVersion': '当前运行：{version}',
     'settings.about.buildDetails': '应用与版本信息',
-    'settings.startup.note': '编辑启动头像和文字。可先预览动画，再保存更改。',
-    'settings.workspace.note': '预览只反映当前草稿，不会更改工作区。保存后背景会应用到工作区。',
+    'settings.startup.note': '保存后用于下次启动；预览不会保存草稿。',
     'settings.preview.background.label': '背景草稿预览',
-    'settings.preview.background.caption': '当前草稿 · 保存后应用',
+    'settings.preview.background.caption': '当前草稿 · 缩略图裁切可能与工作区不同 · 保存后应用',
     'settings.preview.background.empty': '选择图片后可在此预览',
     'settings.avatar.label': '启动头像',
     'settings.artwork.label': '背景图片',
@@ -53,8 +56,7 @@ function createImageSettings(environment) {
     'settings.introCaption.label': '标题说明（最多 {limit} 个字符）',
     'settings.artworkSubtitle.label': '背景字幕（最多 {limit} 个字符）',
     'settings.wallpaperStrength.label': '背景强度（{min}–{max}）',
-    'settings.wallpaperStrength.aria': '背景强度，{min} 到 {max}',
-    'settings.button.restore': '恢复默认',
+    'settings.button.restore': '恢复全部默认',
     'settings.button.cancel': '取消',
     'settings.button.save': '保存',
     'settings.button.previewAnimation': '预览动画',
@@ -62,12 +64,30 @@ function createImageSettings(environment) {
     'settings.button.close': '关闭',
     'settings.button.retryApply': '重试应用',
     'settings.button.applyingBackground': '正在应用…',
-    'settings.draft.note': '修改还未生效。取消会丢弃草稿，保存后应用。',
     'settings.status.applyingBackground': '设置已保存，正在应用背景…',
     'settings.error.backgroundApply': '设置已保存，但背景应用失败。可以重试，或关闭设置。',
     'settings.button.choosePortrait': '选择启动头像',
     'settings.button.chooseBackground': '选择背景图片',
     'settings.status.importing': '正在处理图片…',
+    'settings.importError.fileEmpty': '{field}文件为空。请选择一张图片。',
+    'settings.importError.fileTooLarge': '{field}超过 30 MiB。请选择较小的图片。',
+    'settings.importError.imageTooLarge': '{field}原始像素超过 48 MP。请选择尺寸较小的图片。',
+    'settings.importError.mimeMismatch': '{field}的文件类型声明与实际内容不符。请选择正确格式的 PNG、JPEG 或 WebP 图片。',
+    'settings.importError.unsupported': '{field}内容不是受支持的 PNG、JPEG 或 WebP。请选择其中一种格式的图片。',
+    'settings.importError.decode': '{field}无法解码。请换一张可正常打开的图片。',
+    'settings.importError.dimensions': '{field}的原始尺寸无效。请重新选择一张图片。',
+    'settings.importError.canvas': '当前环境无法准备{field}。请稍后重试。',
+    'settings.importError.pixelsUnavailable': '当前环境无法读取{field}的像素。请换一张图片重试。',
+    'settings.importError.pixelsInvalid': '{field}的像素数据不完整。请重新选择原图。',
+    'settings.importError.contoursEmpty': '无法从{field}提取有效轮廓。请选择边缘更清楚的图片。',
+    'settings.importError.contoursComplex': '{field}包含过多轮廓点，无法处理。请换一张细节较少的图片。',
+    'settings.importError.pngEncode': '{field}无法转换为 PNG。请重新选择图片。',
+    'settings.importError.outputTooLarge': '{field}处理后超过存储上限。请使用文件较小的图片。',
+    'settings.importError.decodeTimeout': '解码{field}超时。请换一张较小的图片。',
+    'settings.importError.timeout': '处理{field}超时。请尝试较小的图片。',
+    'settings.importError.busy': '另一张图片正在处理中。请等待后重新选择{field}。',
+    'settings.importError.environment': '当前无法处理{field}。请稍后重试或换一张图片。',
+    'settings.importError.processing': '无法处理{field}。请使用有效的 PNG、JPEG 或 WebP 图片后重试。',
     'settings.status.saving': '正在校验候选并保存…',
     'settings.status.imageLarge': '图片已准备；原图超过 16 MP，处理可能较慢。',
     'settings.status.imageReady': '图片已准备，可以保存。',
@@ -75,7 +95,7 @@ function createImageSettings(environment) {
     'settings.status.previewStarted': '动画预览已启动；草稿仍未保存。',
     'settings.status.previewUnavailable': '当前无法预览动画；草稿仍可保存。',
     'settings.error.preview': '动画预览失败；草稿仍可编辑或保存。',
-    'settings.error.conflict': '其他页面已更新设置。请取消后重新打开，再保存草稿。',
+    'settings.error.conflict': '本页更改尚未保存；关闭将丢弃。可以先复制需要保留的文字。重新打开将读取其他页面保存的新值。',
     'settings.error.quota': '存储空间不足。请更换图片后重试。',
     'settings.error.blocked': '设置数据库被其他页面阻塞。稍后可以重试。',
     'settings.error.timeout': '操作超时，面板已恢复，可以取消或重试。',
@@ -712,10 +732,47 @@ function createImageSettings(environment) {
     return 'settings.error.save';
   }
 
-  function setPanelStatus(key, role = 'status') {
+  function displayImportError(error) {
+    if (error?.reason === 'operation-cancelled') return null;
+    if (error?.reason === 'operation-busy') return 'settings.importError.busy';
+    if (error?.reason === 'operation-timeout') {
+      return error?.causeCode === 'decode-timeout'
+        ? 'settings.importError.decodeTimeout' : 'settings.importError.timeout';
+    }
+    const keys = {
+      'file-empty': 'settings.importError.fileEmpty',
+      'file-too-large': 'settings.importError.fileTooLarge',
+      'image-too-large': 'settings.importError.imageTooLarge',
+      'mime-mismatch': 'settings.importError.mimeMismatch',
+      'unsupported-type': 'settings.importError.unsupported',
+      'decode-failed': 'settings.importError.decode',
+      'invalid-dimensions': 'settings.importError.dimensions',
+      'canvas-unavailable': 'settings.importError.canvas',
+      'pixel-data-unavailable': 'settings.importError.pixelsUnavailable',
+      'pixel-data-invalid': 'settings.importError.pixelsInvalid',
+      'contours-empty': 'settings.importError.contoursEmpty',
+      'contours-too-many-points': 'settings.importError.contoursComplex',
+      'png-encode-failed': 'settings.importError.pngEncode',
+      'output-too-large': 'settings.importError.outputTooLarge',
+      'environment-unavailable': 'settings.importError.environment',
+      'image-processing-failed': 'settings.importError.processing',
+    };
+    return keys[error?.causeCode] || 'settings.importError.processing';
+  }
+
+  function panelStatusParams(value) {
+    const params = { ...(value?.params || {}) };
+    if (value?.fieldRole) {
+      params.field = translate(value.fieldRole === 'avatar' ? 'settings.avatar.label' : 'settings.artwork.label');
+    }
+    return params;
+  }
+
+  function setPanelStatus(key, role = 'status', params = {}) {
     if (!panelControls?.status) return;
-    panelStatus = key ? { key, role } : null;
-    panelControls.status.textContent = panelStatus ? translate(panelStatus.key) : '';
+    panelStatus = key ? { key, role, params: { ...params }, fieldRole: params.fieldRole || '' } : null;
+    panelControls.status.textContent = panelStatus
+      ? translate(panelStatus.key, panelStatusParams(panelStatus)) : '';
     panelControls.status.setAttribute('role', panelStatus?.role || 'status');
     panelControls.status.setAttribute('aria-live', panelStatus?.role === 'alert' ? 'assertive' : 'polite');
   }
@@ -755,9 +812,8 @@ function createImageSettings(environment) {
       panelControls.cancelButton.textContent = translate(panelCommit ? 'settings.button.close' : 'settings.button.cancel');
     }
     strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
-    panelControls.strength.setAttribute('aria-label',
-      translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
-    status.textContent = panelStatus ? translate(panelStatus.key) : '';
+    updateStrengthValue(panelControls.strength.value);
+    status.textContent = panelStatus ? translate(panelStatus.key, panelStatusParams(panelStatus)) : '';
     status.setAttribute('role', panelStatus?.role || 'status');
     status.setAttribute('aria-live', panelStatus?.role === 'alert' ? 'assertive' : 'polite');
     panelControls.workspacePreview.setAttribute('aria-label', translate('settings.preview.background.label'));
@@ -766,12 +822,49 @@ function createImageSettings(environment) {
     refreshAppearance();
   }
 
+  function currentAppearance() {
+    try {
+      const value = environment?.getAppearance?.();
+      return value && typeof value === 'object' ? value : {};
+    } catch { return {}; }
+  }
+
+  function currentSurface() {
+    const appearance = currentAppearance();
+    const surface = appearance.colors?.surface;
+    const color = typeof surface === 'string' ? surface.trim() : '';
+    const css = document.defaultView?.CSS;
+    if (color && color.length <= 100 && !/[;{}]/.test(color) && !/\bvar\s*\(/i.test(color)
+      && !/^(?:currentcolor|inherit|initial|unset|revert(?:-layer)?)$/i.test(color)) {
+      try {
+        if (typeof css?.supports === 'function' && css.supports('color', color)) return color;
+      } catch {}
+    }
+    return appearance.theme === 'light' ? '#ffffff' : '#10121c';
+  }
+
   function refreshAppearance() {
     if (!panelControls || disposed) return false;
     for (const item of panelControls.readouts) {
       try { item.element.textContent = item.value(); }
       catch { item.element.textContent = translate('settings.unknown'); }
     }
+    const surface = currentSurface();
+    const strength = Number(draft?.wallpaperStrength ?? panelControls.strength.value);
+    const hasVisibleImage = Boolean(draft?.artwork) && strength > 0;
+    const view = document.defaultView;
+    const width = Number(view?.innerWidth) || 0;
+    const height = Number(view?.innerHeight) || 0;
+    const cropPosition = width > 0 && height > 0 && width / height <= 6 / 5
+      ? '88% center' : '60% center';
+    panelControls.workspacePreview.style.setProperty('background-color', surface);
+    panelControls.workspacePreviewSurface.style.setProperty('background-color', surface);
+    panelControls.workspacePreviewImage.hidden = !draft?.artwork || strength === 0;
+    panelControls.workspacePreviewImage.style.setProperty('display', hasVisibleImage ? 'block' : 'none');
+    panelControls.workspacePreviewImage.style.setProperty('object-position', cropPosition);
+    panelControls.workspacePreviewWash.style.setProperty('background-image', hasVisibleImage
+      ? workspaceWashGradient(strength, surface) : 'none');
+    panelControls.workspacePreviewWash.style.setProperty('display', hasVisibleImage ? 'block' : 'none');
     return true;
   }
 
@@ -841,11 +934,11 @@ function createImageSettings(environment) {
     return result;
   }
 
-  function workspaceWashGradient(strength) {
+  function workspaceWashGradient(strength, surface) {
     const washStops = [24, 18, 12, 16, 30, 65, 70];
     const washPositions = ['0%', '22%', '36%', '62%', '73%', '87%', '100%'];
     const washScale = Math.max(0, Math.min(75, Number(strength) || 0)) / 42;
-    const base = 'var(--azhou-base, var(--color-surface, var(--app-color-background-surface, #202024)))';
+    const base = typeof surface === 'string' && surface.trim() ? surface.trim() : '#202024';
     return 'linear-gradient(90deg,' + washStops.map((opacity, index) => {
       const visible = Math.min(100, Math.round(opacity * washScale));
       return 'color-mix(in srgb, ' + base + ' ' + (100 - visible) + '%, transparent) '
@@ -853,17 +946,45 @@ function createImageSettings(environment) {
     }).join(',') + ')';
   }
 
+  function containPanelTab(event) {
+    if (!panelOpen || event.key !== 'Tab' || !dialog) return;
+    const preview = dialog.querySelector('[data-agent-skin-settings-preview]');
+    const scope = preview || dialog;
+    const controls = Array.from(scope.querySelectorAll(
+      'a[href],button,input,select,textarea,iframe,[tabindex],summary',
+    )).filter(element => {
+      if (element.tabIndex < 0 || element.disabled || element.hidden || element.type === 'hidden') return false;
+      try {
+        const style = document.defaultView?.getComputedStyle?.(element);
+        return style?.display !== 'none' && style?.visibility !== 'hidden'
+          && (!element.getClientRects || element.getClientRects().length > 0);
+      } catch { return false; }
+    });
+    if (!controls.length) {
+      event.preventDefault();
+      return;
+    }
+    const activeIndex = controls.indexOf(document.activeElement);
+    if (activeIndex < 0) {
+      event.preventDefault();
+      controls[event.shiftKey ? controls.length - 1 : 0].focus?.();
+    } else if (event.shiftKey && activeIndex === 0) {
+      event.preventDefault();
+      controls.at(-1).focus?.();
+    } else if (!event.shiftKey && activeIndex === controls.length - 1) {
+      event.preventDefault();
+      controls[0].focus?.();
+    }
+  }
+
   function updatePanelFields() {
     if (!panelControls || !draft) return;
     for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
     panelControls.strength.value = String(draft.wallpaperStrength);
-    panelControls.strengthValue.textContent = String(draft.wallpaperStrength);
+    updateStrengthValue(draft.wallpaperStrength);
     panelControls.workspacePreviewHasImage = Boolean(draft.artwork);
     panelControls.workspacePreviewCaption.textContent = draft.artwork
       ? translate('settings.preview.background.caption') : translate('settings.preview.background.empty');
-    panelControls.workspacePreviewWash.style.setProperty('background-image',
-      workspaceWashGradient(draft.wallpaperStrength));
-    panelControls.workspacePreviewWash.style.setProperty('display', draft.artwork ? 'block' : 'none');
     for (const [role, preview] of Object.entries(panelControls.previews)) {
       const value = draft[role];
       preview.hidden = !value;
@@ -872,6 +993,15 @@ function createImageSettings(environment) {
       else preview.removeAttribute('src');
     }
     refreshAppearance();
+  }
+
+  function updateStrengthValue(value) {
+    if (!panelControls) return;
+    const isClosed = Number(value) === 0;
+    const text = isClosed ? translate('settings.off') : String(value);
+    panelControls.strengthValue.textContent = text;
+    if (isClosed) panelControls.strength.setAttribute('aria-valuetext', text);
+    else panelControls.strength.removeAttribute('aria-valuetext');
   }
 
   async function applyCommittedSettings(commit) {
@@ -922,6 +1052,12 @@ function createImageSettings(environment) {
     heading.id = 'agent-skin-settings-title';
     heading.textContent = translate('settings.title');
     heading.style.cssText = 'min-width:0;flex:1;margin:0;font-size:20px';
+    const titleGroup = document.createElement('div');
+    titleGroup.style.cssText = 'min-width:0;flex:1';
+    const runningVersion = document.createElement('p');
+    runningVersion.setAttribute('data-agent-skin-running-version', '');
+    runningVersion.style.cssText = 'margin:4px 0 0;font-size:12px;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    titleGroup.append(heading, runningVersion);
     if (appearanceAvatar) {
       const identityAvatar = document.createElement('img');
       identityAvatar.setAttribute('data-agent-skin-appearance-avatar', '');
@@ -933,7 +1069,7 @@ function createImageSettings(environment) {
       });
       header.appendChild(identityAvatar);
     }
-    header.appendChild(heading);
+    header.appendChild(titleGroup);
     content.appendChild(header);
 
     const categoryNav = document.createElement('nav');
@@ -948,23 +1084,19 @@ function createImageSettings(environment) {
     const ariaLabels = [];
     const controls = [];
     const readouts = [];
+    readouts.push({ element: runningVersion, value: () => translate('settings.runningVersion', {
+      version: themeConfig?.identity?.version && themeConfig?.identity?.build
+        ? themeConfig.identity.version + ' · build ' + themeConfig.identity.build : translate('settings.unknown'),
+    }) });
     const previews = {};
     const buttons = Object.create(null);
     const tabs = [];
     const categoryPanels = Object.create(null);
     let section = content;
     let workspacePreviewHasImage = false;
-    const draftNote = document.createElement('p');
-    draftNote.style.cssText = 'margin:10px 0 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
-    draftNote.textContent = translate('settings.draft.note');
-    labels['settings.draft.note'] = { element: draftNote, params: {} };
-    content.appendChild(draftNote);
-
     const addText = (key, parent = section, tag = 'p') => {
       const element = document.createElement(tag);
-      element.style.cssText = tag === 'h3'
-        ? 'margin:0;font-size:17px'
-        : 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+      element.style.cssText = 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
       labels[key] = { element, params: {} };
       element.textContent = translate(key);
       parent.appendChild(element);
@@ -979,7 +1111,7 @@ function createImageSettings(environment) {
       }
       for (const [key, panel] of Object.entries(categoryPanels)) panel.hidden = key !== name;
     };
-    const addSection = (name, note) => {
+    const addSection = (name, note = '') => {
       const tab = document.createElement('button');
       tab.type = 'button';
       tab.id = 'agent-skin-settings-tab-' + name;
@@ -1020,8 +1152,7 @@ function createImageSettings(environment) {
       content.appendChild(panel);
       categoryPanels[name] = panel;
       section = panel;
-      addText('settings.section.' + name, panel, 'h3');
-      addText(note, panel);
+      if (note) addText(note, panel);
       return panel;
     };
     const addInfo = (key, labelKey, value) => {
@@ -1040,22 +1171,20 @@ function createImageSettings(environment) {
     const inherited = key => {
       try { return environment.getAppearance?.()?.[key]; } catch { return undefined; }
     };
-    const addRow = (key, control, params = {}, ariaKey = key) => {
+    const addRow = (key, control, params = {}) => {
       const wrapper = document.createElement('label');
       wrapper.style.cssText = 'display:grid;gap:5px;margin-top:14px';
       const label = document.createElement('span');
       label.textContent = translate(key, params);
       label.style.cssText = 'overflow-wrap:anywhere';
       labels[key] = { element: label, params };
-      control.setAttribute('aria-label', translate(ariaKey, params));
-      ariaLabels.push({ control, key: ariaKey, params });
       wrapper.append(label, control);
       section.appendChild(wrapper);
       controls.push(control);
       return control;
     };
 
-    const addFile = (role, key, actionKey) => {
+    const addFile = (role, actionKey) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/png,image/jpeg,image/webp';
@@ -1079,7 +1208,11 @@ function createImageSettings(environment) {
           setPanelStatus(result.warning === 'large-image'
             ? 'settings.status.imageLarge' : 'settings.status.imageReady');
         } catch (error) {
-          if (panelOpen && panelAtStart === panelGeneration) setPanelStatus(displayError(error?.reason), 'alert');
+          if (panelOpen && panelAtStart === panelGeneration) {
+            const key = displayImportError(error);
+            if (key) setPanelStatus(key, 'alert', { fieldRole: role });
+            else setPanelStatus('');
+          }
         } finally {
           input.value = '';
           updatePanelBusy();
@@ -1090,11 +1223,13 @@ function createImageSettings(environment) {
       button.setAttribute('data-agent-skin-image-action', role);
       button.textContent = translate(actionKey);
       styleButton(button);
-      button.style.setProperty('justify-self', 'start');
+      button.style.setProperty('display', 'block');
+      button.style.setProperty('margin-top', '14px');
       button.addEventListener('click', () => {
         if (panelOpen && !active) input.click?.();
       });
-      addRow(key, button, {}, actionKey);
+      section.appendChild(button);
+      controls.push(button);
       controls.push(input);
       section.appendChild(input);
 
@@ -1113,12 +1248,12 @@ function createImageSettings(environment) {
       return button;
     };
 
-    const workspacePanel = addSection('workspace', 'settings.workspace.note');
+    const workspacePanel = addSection('workspace');
     const workspacePreview = document.createElement('figure');
     workspacePreview.setAttribute('role', 'img');
     workspacePreview.setAttribute('data-agent-skin-workspace-preview', '');
     workspacePreview.setAttribute('aria-label', translate('settings.preview.background.label'));
-    workspacePreview.style.cssText = 'box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:112px;height:clamp(112px,28vh,240px);max-height:240px;overflow:hidden;margin:18px 0 14px;border:1px solid var(--agent-skin-border,CanvasText);border-radius:12px;background:linear-gradient(135deg,var(--agent-skin-surface,Canvas),var(--agent-skin-muted,CanvasText))';
+    workspacePreview.style.cssText = 'box-sizing:border-box;display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:112px;height:clamp(112px,28vh,240px);max-height:240px;overflow:hidden;margin:18px 0 14px;border:1px solid var(--agent-skin-border,CanvasText);border-radius:12px;background-color:var(--agent-skin-surface,Canvas)';
     ariaLabels.push({ control: workspacePreview, key: 'settings.preview.background.label', params: {} });
     const backgroundImage = document.createElement('img');
     backgroundImage.setAttribute('alt', '');
@@ -1129,7 +1264,7 @@ function createImageSettings(environment) {
     backgroundImage.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
     previews.artwork = backgroundImage;
     const workspacePreviewSurface = document.createElement('div');
-    workspacePreviewSurface.style.cssText = 'position:relative;min-height:0;overflow:hidden';
+    workspacePreviewSurface.style.cssText = 'position:relative;min-height:0;overflow:hidden;background-color:var(--agent-skin-surface,Canvas)';
     const backgroundWash = document.createElement('div');
     backgroundWash.setAttribute('aria-hidden', 'true');
     backgroundWash.setAttribute('data-agent-skin-workspace-preview-wash', '');
@@ -1140,35 +1275,37 @@ function createImageSettings(environment) {
     workspacePreviewCaption.style.cssText = 'padding:7px 10px;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
     workspacePreview.append(workspacePreviewSurface, workspacePreviewCaption);
     workspacePanel.appendChild(workspacePreview);
-    addFile('artwork', 'settings.artwork.label', 'settings.button.chooseBackground');
+    addFile('artwork', 'settings.button.chooseBackground');
 
     const strength = document.createElement('input');
     strength.type = 'range';
+    strength.id = 'agent-skin-settings-wallpaper-strength';
     strength.min = '0';
     strength.max = '75';
     strength.step = '1';
     styleInput(strength);
-    strength.setAttribute('aria-label', translate('settings.wallpaperStrength.aria', { min: 0, max: 75 }));
     const strengthValue = document.createElement('output');
     strengthValue.setAttribute('data-agent-skin-wallpaper-strength-value', '');
+    strengthValue.setAttribute('aria-hidden', 'true');
     strengthValue.style.cssText = 'min-width:3ch;text-align:right';
     const strengthLabel = document.createElement('span');
     strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
     strengthLabel.style.cssText = 'overflow-wrap:anywhere';
     const strengthRow = document.createElement('label');
+    strengthRow.htmlFor = strength.id;
     strengthRow.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:14px';
     strengthRow.append(strengthLabel, strengthValue, strength);
     strength.addEventListener('input', () => {
       if (!draft) return;
       draft.wallpaperStrength = Number(strength.value);
-      strengthValue.textContent = String(draft.wallpaperStrength);
-      backgroundWash.style.setProperty('background-image', workspaceWashGradient(draft.wallpaperStrength));
+      updateStrengthValue(draft.wallpaperStrength);
+      refreshAppearance();
     });
     workspacePanel.appendChild(strengthRow);
     controls.push(strength);
 
     addSection('startup', 'settings.startup.note');
-    addFile('avatar', 'settings.avatar.label', 'settings.button.choosePortrait');
+    addFile('avatar', 'settings.button.choosePortrait');
     for (const [key, limit, labelKey] of [
       ['introTitle', 16, 'settings.introTitle.label'],
       ['introCaption', 48, 'settings.introCaption.label'],
@@ -1227,7 +1364,7 @@ function createImageSettings(environment) {
     workspacePanel.hidden = false;
     selectCategory('workspace');
 
-    const aboutPanel = addSection('about', 'settings.about.note');
+    const aboutPanel = addSection('about');
     addInfo('locale', 'settings.locale', () => inherited('locale') || localization?.locale || translate('settings.unknown'));
     addInfo('theme', 'settings.theme', () => ['light', 'dark'].includes(inherited('theme'))
       ? translate('settings.theme.' + inherited('theme')) : translate('settings.unknown'));
@@ -1315,10 +1452,11 @@ function createImageSettings(environment) {
       event.preventDefault();
       cancelSettings();
     });
+    dialog.addEventListener('keydown', containPanelTab, true);
     panelControls = {
       controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
-      workspacePreviewWash: backgroundWash,
+      workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel,
     };
     updatePanelText();
@@ -1420,6 +1558,14 @@ function createImageSettings(environment) {
     return null;
   }
 
+  function rawDimensionsReader() {
+    if (typeof readRawDimensions === 'function') return readRawDimensions;
+    try {
+      const reader = typeof globalThis === 'object' && globalThis.AGENT_SKIN_READ_RAW_DIMENSIONS;
+      return typeof reader === 'function' ? reader : null;
+    } catch { return null; }
+  }
+
   async function readSignature(file, task) {
     let buffer;
     try {
@@ -1441,6 +1587,36 @@ function createImageSettings(environment) {
       throw invalidData('unsupported-type');
     }
     if (declaredType && declaredType !== actualType) throw invalidData('mime-mismatch');
+    return actualType;
+  }
+
+  async function readHeaderDimensions(file, actualType, task) {
+    const readRawDimensions = rawDimensionsReader();
+    if (!readRawDimensions) return null;
+    const limit = actualType === 'image/png' ? 24 : MAX_HEADER_READ_BYTES;
+    const end = Math.min(limit, file.size);
+    let buffer;
+    try {
+      const prefix = file.slice(0, end);
+      if (!prefix || typeof prefix.arrayBuffer !== 'function') return null;
+      buffer = await prefix.arrayBuffer();
+    } catch (error) {
+      assertCurrent(task);
+      return null;
+    }
+    assertCurrent(task);
+    if (!buffer || Object.prototype.toString.call(buffer) !== '[object ArrayBuffer]') return null;
+    const extension = actualType === 'image/png' ? '.png'
+      : actualType === 'image/jpeg' ? '.jpg' : '.webp';
+    try {
+      const dimensions = readRawDimensions(new Uint8Array(buffer), extension);
+      assertCurrent(task);
+      return dimensions;
+    } catch (error) {
+      if (error?.reason === 'operation-cancelled' || error?.reason === 'operation-timeout') throw error;
+      assertCurrent(task);
+      return null;
+    }
   }
 
   function decode(task, file) {
@@ -1775,7 +1951,17 @@ function createImageSettings(environment) {
 
     (async () => {
       try {
-        await readSignature(file, task);
+        const actualType = await readSignature(file, task);
+        const headerDimensions = await readHeaderDimensions(file, actualType, task);
+        const headerWidth = headerDimensions?.width;
+        const headerHeight = headerDimensions?.height;
+        if (Number.isSafeInteger(headerWidth) && headerWidth > 0
+          && Number.isSafeInteger(headerHeight) && headerHeight > 0) {
+          const headerPixels = headerWidth * headerHeight;
+          if (!Number.isSafeInteger(headerPixels) || headerPixels > MAX_SOURCE_PIXELS) {
+            throw invalidData('image-too-large');
+          }
+        }
         const image = await decode(task, file);
         assertCurrent(task);
         const sourceWidth = Number(image.naturalWidth);

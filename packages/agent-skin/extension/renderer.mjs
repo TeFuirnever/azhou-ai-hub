@@ -33,6 +33,25 @@ const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'apply-failed': 'apply',
   'retry-timeout': 'apply',
 });
+const WALLPAPER_FAILURE_MESSAGE_KEYS = Object.freeze({
+  'shell-timeout': 'appearance.wallpaper.failure.reason.shellTimeout',
+  'shell-unsupported': 'appearance.wallpaper.failure.reason.shellUnsupported',
+  'invalid-local-payload': 'appearance.wallpaper.failure.reason.input',
+  'invalid-local-image': 'appearance.wallpaper.failure.reason.input',
+  'image-decode-failed': 'appearance.wallpaper.failure.reason.decode',
+  'image-decode-timeout': 'appearance.wallpaper.failure.reason.decode',
+  'unsupported-shell-no-surfaces': 'appearance.wallpaper.failure.reason.surfaces',
+  'page-changed-during-decode': 'appearance.wallpaper.failure.reason.page',
+  'styles-not-effective': 'appearance.wallpaper.failure.reason.styles',
+  'styles-not-effective-after-replacement': 'appearance.wallpaper.failure.reason.styles',
+  'namespace-conflict': 'appearance.wallpaper.failure.reason.namespace',
+  'namespace-changed-during-decode': 'appearance.wallpaper.failure.reason.namespace',
+  'style-id-conflict': 'appearance.wallpaper.failure.reason.style',
+  'style-id-conflict-after-decode': 'appearance.wallpaper.failure.reason.style',
+  'apply-unavailable': 'appearance.wallpaper.failure.reason.apply',
+  'apply-failed': 'appearance.wallpaper.failure.reason.apply',
+  'retry-timeout': 'appearance.wallpaper.failure.reason.apply',
+});
 const WALLPAPER_RETRY_TIMEOUT_MS = 10_000;
 let nextRunId = 1;
 
@@ -107,6 +126,15 @@ function wallpaperRecord(host) {
 
 // Official settings are reflected on the host root. Read only these attributes
 // and color tokens; never read or maintain a competing preference store.
+function supportedHostColor(host, value) {
+  if (typeof value !== 'string') return false;
+  const color = value.trim();
+  if (!color || color.length > 100 || /[;{}]/.test(color) || /\bvar\s*\(/i.test(color)
+    || /^(?:currentcolor|inherit|initial|unset|revert(?:-layer)?)$/i.test(color)) return false;
+  try { return typeof host.CSS?.supports === 'function' && host.CSS.supports('color', color); }
+  catch { return false; }
+}
+
 function hostAppearance(host) {
   const root = host.document.documentElement;
   const locale = /^zh(?:-|$)/i.test(root.lang || host.navigator?.language || 'zh-CN') ? 'zh-CN' : 'en';
@@ -121,9 +149,12 @@ function hostAppearance(host) {
     muted: ['--app-color-text-foreground-secondary', '--color-text-secondary'],
     border: ['--app-color-border', '--color-border'],
   })) {
-    const value = tokens.map(token => style?.getPropertyValue?.(token)?.trim()).find(Boolean);
+    const values = tokens.map(token => style?.getPropertyValue?.(token)?.trim()).filter(Boolean);
+    const value = key === 'surface'
+      ? values.find(candidate => supportedHostColor(host, candidate)) : values[0];
     if (value) colors[key] = value;
   }
+  colors.surface ??= theme === 'light' ? '#ffffff' : '#10121c';
   const reducedMotion = typeof host.matchMedia === 'function'
     ? host.matchMedia('(prefers-reduced-motion: reduce)').matches : undefined;
   return Object.freeze({ locale, theme, colors: Object.freeze(colors), reducedMotion });
@@ -132,11 +163,64 @@ function hostAppearance(host) {
 function appearanceText(factory, appearance, themeConfig) {
   if (typeof factory === 'function') return factory({ locale: appearance.locale, themeConfig });
   // Minimal payloads remain supported without a localization factory.
-  return { t: key => ({ characterName: 'Azhou', openAppearance: 'Open appearance settings',
-    appearanceLabel: 'Azhou appearance settings', overlayLabel: 'Azhou startup animation' })[key] };
+  const messages = appearance.locale === 'zh-CN' ? {
+    characterName: '阿舟', openAppearance: '打开主题与外观', appearanceLabel: '阿舟主题与外观',
+    overlayLabel: '阿舟启动动画', 'appearance.wallpaper.failure.title': '启动背景未应用',
+    'appearance.wallpaper.failure.retry': '重试', 'appearance.wallpaper.failure.retrying': '正在重试…',
+    'appearance.wallpaper.failure.retryLabel': '重试启动背景',
+    'appearance.wallpaper.failure.retryingLabel': '正在重试启动背景',
+    'appearance.wallpaper.failure.close': '关闭提示',
+    'appearance.wallpaper.failure.closeLabel': '关闭启动背景失败提示',
+    'appearance.wallpaper.failure.reason.shellTimeout': '仍未检测到工作区外壳。',
+    'appearance.wallpaper.failure.reason.shellUnsupported': '当前页面暂时无法监测可用的工作区背景区域。',
+    'appearance.wallpaper.failure.reason.input': '启动背景设置无效。',
+    'appearance.wallpaper.failure.reason.decode': '启动背景图片读取失败。',
+    'appearance.wallpaper.failure.reason.surfaces': '当前工作区没有可应用背景的区域。',
+    'appearance.wallpaper.failure.reason.page': '页面在应用背景期间发生变化。',
+    'appearance.wallpaper.failure.reason.styles': '当前页面未能应用背景样式。',
+    'appearance.wallpaper.failure.reason.namespace': '页面中的背景组件发生冲突。',
+    'appearance.wallpaper.failure.reason.style': '页面中的背景样式资源发生冲突。',
+    'appearance.wallpaper.failure.reason.apply': '当前无法应用背景。',
+    'appearance.wallpaper.failure.announcement': '{title}。原因：{reason}你可以重试或关闭提示。',
+    'appearance.wallpaper.failure.retryingAnnouncement': '正在重试启动背景。',
+    'appearance.wallpaper.failure.appliedAnnouncement': '启动背景已应用。',
+    'appearance.wallpaper.failure.closedAnnouncement': '已关闭启动背景失败提示，应用仍可使用。',
+    'appearance.wallpaper.failure.retryUnavailableAnnouncement': '未能开始重试。你可以打开主题与外观检查背景设置。',
+  } : {
+    characterName: 'Azhou', openAppearance: 'Open appearance settings',
+    appearanceLabel: 'Azhou appearance settings', overlayLabel: 'Azhou startup animation',
+    'appearance.wallpaper.failure.title': 'Startup background not applied',
+    'appearance.wallpaper.failure.retry': 'Retry', 'appearance.wallpaper.failure.retrying': 'Retrying…',
+    'appearance.wallpaper.failure.retryLabel': 'Retry startup background',
+    'appearance.wallpaper.failure.retryingLabel': 'Retrying startup background',
+    'appearance.wallpaper.failure.close': 'Dismiss notice',
+    'appearance.wallpaper.failure.closeLabel': 'Close startup background notice',
+    'appearance.wallpaper.failure.reason.shellTimeout': 'The workspace shell has not appeared yet.',
+    'appearance.wallpaper.failure.reason.shellUnsupported': 'This page cannot currently monitor a supported workspace background area.',
+    'appearance.wallpaper.failure.reason.input': 'The startup background settings are invalid.',
+    'appearance.wallpaper.failure.reason.decode': 'The startup background image could not be read.',
+    'appearance.wallpaper.failure.reason.surfaces': 'This workspace has no supported background area.',
+    'appearance.wallpaper.failure.reason.page': 'The page changed while the background was being applied.',
+    'appearance.wallpaper.failure.reason.styles': 'The page did not apply the background styles.',
+    'appearance.wallpaper.failure.reason.namespace': 'The page has a conflicting background component.',
+    'appearance.wallpaper.failure.reason.style': 'A background style resource conflicts with another page resource.',
+    'appearance.wallpaper.failure.reason.apply': 'The background could not be applied right now.',
+    'appearance.wallpaper.failure.announcement': '{title}. Reason: {reason} You can retry or close this notice.',
+    'appearance.wallpaper.failure.retryingAnnouncement': 'Retrying the startup background.',
+    'appearance.wallpaper.failure.appliedAnnouncement': 'Startup background applied.',
+    'appearance.wallpaper.failure.closedAnnouncement': 'Startup background notice closed. The app is still available.',
+    'appearance.wallpaper.failure.retryUnavailableAnnouncement': 'The retry could not start. Open appearance settings to check the background.',
+  };
+  return { t: (key, params) => {
+    const template = messages[key] ?? String(key);
+    if (!params || typeof params !== 'object') return template;
+    return template.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (placeholder, name) =>
+      Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder);
+  } };
 }
 
-function mountAppearanceEntry(document, openSettings, assets, factory, appearance, host) {
+function mountAppearanceEntry(document, openSettings, assets, factory, appearance, host,
+  retryWallpaper, dismissWallpaperFailure) {
   const element = document.createElement('div');
   element.setAttribute('data-agent-skin-entry', 'appearance');
   element.style.cssText = 'all:initial;position:fixed;left:10px;bottom:72px;right:auto;top:auto;z-index:2147483646;display:none';
@@ -163,7 +247,13 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   let position = () => {};
   let visible = false;
   let currentTarget = null;
+  let activeAppearance = appearance;
+  let activeWallpaperFailure = null;
+  let retryingWallpaper = false;
+  let recoveryVisible = false;
+  let renderWallpaperRecovery = () => {};
   const setAppearance = value => {
+    activeAppearance = value;
     const text = appearanceText(factory, value, assets?.themeConfig);
     const characterName = text.t('characterName');
     const entryLabel = `${characterName}${value.locale === 'zh-CN' ? '外观' : ' Appearance'}`;
@@ -172,6 +262,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     button.setAttribute('aria-label', entryLabel);
     button.style.colorScheme = value.theme;
     element.setAttribute('lang', value.locale);
+    renderWallpaperRecovery();
     position();
   };
   setAppearance(appearance);
@@ -181,9 +272,146 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   button.addEventListener('click', openSettings);
   button.addEventListener('focus', onFocus);
   button.addEventListener('blur', onBlur);
+
+  const recovery = document.createElement('section');
+  recovery.setAttribute('data-agent-skin-wallpaper-recovery', '');
+  recovery.setAttribute('role', 'group');
+  recovery.setAttribute('aria-labelledby', 'agent-skin-wallpaper-recovery-title');
+  recovery.setAttribute('aria-describedby', 'agent-skin-wallpaper-recovery-reason');
+  recovery.style.cssText = 'display:none;box-sizing:border-box;width:min(280px,calc(100vw - 20px));max-width:calc(100vw - 20px);padding:11px 12px;border:1px solid var(--app-color-border,var(--color-border,#8888));border-radius:12px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:var(--app-color-text-foreground,var(--color-text,CanvasText));box-shadow:0 4px 14px #0003;font:12px/17px -apple-system,BlinkMacSystemFont,sans-serif;white-space:normal';
+  recovery.style.colorScheme = appearance.theme;
+  const recoveryTitle = document.createElement('strong');
+  recoveryTitle.id = 'agent-skin-wallpaper-recovery-title';
+  recoveryTitle.setAttribute('data-agent-skin-wallpaper-title', '');
+  recoveryTitle.style.cssText = 'display:block;margin:0 0 4px;font:600 13px/18px -apple-system,BlinkMacSystemFont,sans-serif';
+  const recoveryReason = document.createElement('p');
+  recoveryReason.id = 'agent-skin-wallpaper-recovery-reason';
+  recoveryReason.setAttribute('data-agent-skin-wallpaper-reason', '');
+  recoveryReason.style.cssText = 'margin:0 0 9px;font:inherit;white-space:normal';
+  const recoveryActions = document.createElement('div');
+  recoveryActions.style.cssText = 'display:flex;align-items:center;gap:8px';
+  const retryButton = document.createElement('button');
+  retryButton.type = 'button';
+  retryButton.setAttribute('data-agent-skin-wallpaper-retry', '');
+  retryButton.style.cssText = 'all:initial;box-sizing:border-box;min-height:32px;padding:5px 10px;border:1px solid var(--app-color-border,var(--color-border,#8888));border-radius:8px;background:var(--app-color-background-surface,var(--color-surface,Canvas));color:inherit;cursor:pointer;font:600 12px/18px -apple-system,BlinkMacSystemFont,sans-serif;outline:2px solid transparent;outline-offset:2px';
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.setAttribute('data-agent-skin-wallpaper-close', '');
+  closeButton.style.cssText = 'all:initial;box-sizing:border-box;min-height:32px;padding:5px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:inherit;cursor:pointer;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;outline:2px solid transparent;outline-offset:2px';
+  const onRecoveryFocus = event => { event.currentTarget.style.outlineColor = '#9670bb'; };
+  const onRecoveryBlur = event => { event.currentTarget.style.outlineColor = 'transparent'; };
+  for (const control of [retryButton, closeButton]) {
+    control.addEventListener('focus', onRecoveryFocus);
+    control.addEventListener('blur', onRecoveryBlur);
+  }
+  const announcement = document.createElement('span');
+  announcement.setAttribute('data-agent-skin-wallpaper-live', '');
+  announcement.setAttribute('role', 'status');
+  announcement.setAttribute('aria-live', 'polite');
+  announcement.setAttribute('aria-atomic', 'true');
+  announcement.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0';
+  recovery.appendChild(recoveryTitle);
+  recovery.appendChild(recoveryReason);
+  recoveryActions.appendChild(retryButton);
+  recoveryActions.appendChild(closeButton);
+  recovery.appendChild(recoveryActions);
   shadow.appendChild(button);
+  shadow.appendChild(recovery);
+  shadow.appendChild(announcement);
   element.style.display = 'none';
   document.documentElement.appendChild(element);
+
+  const currentText = () => appearanceText(factory, activeAppearance, assets?.themeConfig);
+  const setAnnouncement = (key, params) => {
+    announcement.textContent = key ? currentText().t(key, params) : '';
+  };
+  const renderRecoveryControls = () => {
+    const text = currentText();
+    const failure = activeWallpaperFailure;
+    const messageKey = failure && WALLPAPER_FAILURE_MESSAGE_KEYS[failure.failureCode];
+    recoveryVisible = !!messageKey;
+    recovery.style.display = recoveryVisible ? 'block' : 'none';
+    recovery.style.colorScheme = activeAppearance.theme;
+    retryButton.textContent = text.t(retryingWallpaper
+      ? 'appearance.wallpaper.failure.retrying' : 'appearance.wallpaper.failure.retry');
+    retryButton.setAttribute('aria-label', text.t(retryingWallpaper
+      ? 'appearance.wallpaper.failure.retryingLabel' : 'appearance.wallpaper.failure.retryLabel'));
+    retryButton.disabled = retryingWallpaper || !recoveryVisible;
+    closeButton.textContent = text.t('appearance.wallpaper.failure.close');
+    closeButton.setAttribute('aria-label', text.t('appearance.wallpaper.failure.closeLabel'));
+    closeButton.disabled = !recoveryVisible;
+    if (!recoveryVisible) return;
+    const title = text.t('appearance.wallpaper.failure.title');
+    const reason = text.t(messageKey);
+    recoveryTitle.textContent = title;
+    recoveryReason.textContent = reason;
+  };
+  renderWallpaperRecovery = (announcementKey, announceFailure = true) => {
+    renderRecoveryControls();
+    if (announcementKey === 'retrying') {
+      setAnnouncement('appearance.wallpaper.failure.retryingAnnouncement');
+    } else if (announcementKey === 'applied') {
+      setAnnouncement('appearance.wallpaper.failure.appliedAnnouncement');
+    } else if (announcementKey === 'closed') {
+      setAnnouncement('appearance.wallpaper.failure.closedAnnouncement');
+    } else if (announcementKey === 'retryUnavailable') {
+      setAnnouncement('appearance.wallpaper.failure.retryUnavailableAnnouncement');
+    } else if (recoveryVisible && announceFailure) {
+      const text = currentText();
+      setAnnouncement('appearance.wallpaper.failure.announcement', {
+        title: recoveryTitle.textContent, reason: recoveryReason.textContent,
+      });
+    } else if (!recoveryVisible && announcementKey !== 'preserve') {
+      setAnnouncement('');
+    }
+  };
+  const setWallpaperFailure = (failure, announcementKey) => {
+    activeWallpaperFailure = failure && WALLPAPER_FAILURE_MESSAGE_KEYS[failure.failureCode]
+      ? { failureCode: failure.failureCode } : null;
+    renderWallpaperRecovery(announcementKey);
+    position();
+  };
+  const setRetrying = value => {
+    retryingWallpaper = value;
+    renderWallpaperRecovery(value ? 'retrying' : 'preserve', false);
+  };
+  const focusAppearanceButton = () => {
+    try { button.focus({ preventScroll: true }); } catch { try { button.focus(); } catch {} }
+  };
+  const recoveryOwnsFocus = () => shadow.activeElement === retryButton || shadow.activeElement === closeButton;
+  const focusWasLostByDisablingRetry = () => [element, document.body, document.documentElement]
+    .includes(document.activeElement);
+  const onRetry = () => {
+    if (retryingWallpaper || !activeWallpaperFailure) return;
+    const retryHadFocus = recoveryOwnsFocus();
+    setRetrying(true);
+    let result;
+    try { result = retryWallpaper?.(); }
+    catch { result = Promise.reject(new Error('wallpaper retry failed')); }
+    Promise.resolve(result).then(value => {
+      setRetrying(false);
+      if (value?.wallpaper?.applied) {
+        const restoreFocus = recoveryOwnsFocus() || (retryHadFocus && focusWasLostByDisablingRetry());
+        setWallpaperFailure(null, 'applied');
+        if (restoreFocus) focusAppearanceButton();
+      } else if (!value?.retried && value?.reason
+        && !['operation-cancelled', 'disposed'].includes(value.reason)) {
+        renderWallpaperRecovery('retryUnavailable');
+      }
+    }, () => {
+      setRetrying(false);
+      renderWallpaperRecovery('retryUnavailable');
+    });
+  };
+  const onCloseRecovery = () => {
+    const restoreFocus = recoveryOwnsFocus();
+    dismissWallpaperFailure?.();
+    setWallpaperFailure(null, 'closed');
+    if (restoreFocus) focusAppearanceButton();
+  };
+  retryButton.addEventListener('click', onRetry);
+  closeButton.addEventListener('click', onCloseRecovery);
+  setAppearance(appearance);
   const page = document.documentElement.ownerDocument ?? document;
   let observer, pending;
   const tagName = node => String(node?.tagName ?? '').toUpperCase();
@@ -192,6 +420,21 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       if (tagName(current) === 'NAV') return current;
     }
     return null;
+  };
+  const navigationTargetSelector = 'nav a[href], nav > :first-child > [class~="group/nav-list"] > button';
+  const isHomeNavigationButton = node => {
+    if (tagName(node) !== 'BUTTON') return false;
+    const container = node.parentElement ?? node.parentNode;
+    const header = container?.parentElement ?? container?.parentNode;
+    const nav = getNavAncestor(node);
+    const classes = container?.getAttribute?.('class') ?? container?.className ?? '';
+    return !!nav && (nav.firstElementChild ?? nav.children?.[0]) === header
+      && String(classes).split(/\s+/).includes('group/nav-list');
+  };
+  const isAppearanceNavigationNode = node => {
+    const name = node.getAttribute?.('aria-label') ?? node.textContent ?? '';
+    if (!isAppearanceAnchorName(name)) return false;
+    return tagName(node) === 'A' ? Boolean(getNavAncestor(node)) : isHomeNavigationButton(node);
   };
   const isVisibleNavigation = node => {
     for (let current = node; current; current = current.parentElement ?? current.parentNode) {
@@ -202,7 +445,8 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
       const contentVisibility = style?.getPropertyValue?.('content-visibility') || style?.contentVisibility;
       if (display === 'none' || visibility === 'hidden' || visibility === 'collapse' || contentVisibility === 'hidden') return false;
-      if (typeof current.getBoundingClientRect === 'function') {
+      // display: contents ancestors have no box; their children can still be visible.
+      if (display !== 'contents' && typeof current.getBoundingClientRect === 'function') {
         try {
           const bounds = current.getBoundingClientRect();
           if (bounds.width <= 0 || bounds.height <= 0) return false;
@@ -212,6 +456,14 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     }
     return true;
   };
+  const applyEntryLayout = () => {
+    element.style.display = visible ? (recoveryVisible ? 'flex' : 'block') : 'none';
+    element.style.flexDirection = recoveryVisible ? 'column-reverse' : '';
+    element.style.alignItems = recoveryVisible ? 'flex-start' : '';
+    element.style.gap = recoveryVisible ? '8px' : '';
+    button.style.width = recoveryVisible ? 'max-content' : '100%';
+    button.style.alignSelf = recoveryVisible ? 'flex-start' : '';
+  };
   const isAppearanceAnchorName = value => {
     const name = String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
     return name === 'your dot' || name === '你的 dot';
@@ -219,17 +471,19 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const findNavigationTarget = () => {
     if (typeof page.querySelectorAll !== 'function') return null;
     let anchors;
-    try { anchors = Array.from(page.querySelectorAll('nav a[href]')); } catch { return null; }
+    try { anchors = Array.from(page.querySelectorAll(navigationTargetSelector)); } catch { return null; }
     const matches = anchors.filter(anchor => {
-      const name = anchor.getAttribute?.('aria-label') ?? anchor.textContent ?? '';
-      return isAppearanceAnchorName(name) && getNavAncestor(anchor) && isVisibleNavigation(anchor);
+      return isAppearanceNavigationNode(anchor) && isVisibleNavigation(anchor);
     });
     if (matches.length !== 1) return null;
     const anchor = matches[0];
     const nav = getNavAncestor(anchor);
     const anchorParent = anchor.parentElement ?? anchor.parentNode;
     let row, container;
-    if (anchorParent === nav) {
+    if (isHomeNavigationButton(anchor)) {
+      row = anchor;
+      container = anchorParent;
+    } else if (anchorParent === nav) {
       row = anchor;
       container = nav;
     } else if ((anchorParent?.parentElement ?? anchorParent?.parentNode) === nav) {
@@ -282,7 +536,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     element.style.bottom = '72px';
     element.style.zIndex = '2147483646';
     element.style.width = 'max-content';
-    element.style.display = visible ? 'block' : 'none';
+    applyEntryLayout();
     label.style.display = '';
     if (element.parentNode !== document.documentElement) document.documentElement.appendChild(element);
     let top = findFallbackTop();
@@ -304,7 +558,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     element.style.bottom = '';
     element.style.zIndex = '';
     element.style.width = '100%';
-    element.style.display = visible ? 'block' : 'none';
+    applyEntryLayout();
     const next = target.row.nextSibling ?? null;
     if (element.parentNode !== target.container || next !== element) {
       target.container.insertBefore(element, next);
@@ -321,8 +575,8 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const isPotentialNavigationNode = node => {
     if (!node) return false;
     if (tagName(node) === 'NAV') return true;
-    if (tagName(node) === 'A' && isAppearanceAnchorName(node.getAttribute?.('aria-label') ?? node.textContent ?? '')) return true;
-    try { return Boolean(node.querySelector?.('nav a[href]') || node.querySelector?.('a[href]')); } catch { return false; }
+    if (isAppearanceNavigationNode(node)) return true;
+    try { return Boolean(node.querySelector?.(navigationTargetSelector) || node.querySelector?.('a[href]')); } catch { return false; }
   };
   const touchesFallbackColumn = node => {
     if (typeof node?.getBoundingClientRect !== 'function') return false;
@@ -337,7 +591,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     if (!node) return false;
     if (tagName(node) === 'NAV') return true;
     try {
-      return Array.from(page.querySelectorAll('nav a[href]')).some(anchor => {
+      return Array.from(page.querySelectorAll(navigationTargetSelector)).some(anchor => {
         for (let current = anchor; current; current = current.parentElement ?? current.parentNode) {
           if (current === node) return true;
         }
@@ -378,8 +632,8 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   host.addEventListener?.('scroll', onScroll, true);
   position();
   return {
-    element, button, setAppearance,
-    update(value) { visible = value; element.style.display = value ? 'block' : 'none'; button.disabled = !value; if (value) position(); },
+    element, button, setAppearance, setWallpaperFailure,
+    update(value) { visible = value; applyEntryLayout(); button.disabled = !value; if (value) position(); },
     remove() {
       observer?.disconnect();
       if (pending !== undefined) host.clearTimeout(pending);
@@ -388,6 +642,12 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       button.removeEventListener('click', openSettings);
       button.removeEventListener('focus', onFocus);
       button.removeEventListener('blur', onBlur);
+      retryButton.removeEventListener('click', onRetry);
+      closeButton.removeEventListener('click', onCloseRecovery);
+      for (const control of [retryButton, closeButton]) {
+        control.removeEventListener('focus', onRecoveryFocus);
+        control.removeEventListener('blur', onRecoveryBlur);
+      }
       element.remove();
     },
   };
@@ -462,10 +722,13 @@ class PageController {
     this.wallpaperDisabled = false;
     this.wallpaperRetryPromise = null;
     this.wallpaperRetryCancel = null;
+    this.startupWallpaperFailure = null;
+    this.startupWallpaperNoticeDismissed = false;
     this.installed = false;
     this.disposed = false;
     this.watchdog = null;
     this.bodyObserver = null;
+    this.modalIsolation = null;
     this.appearanceEntry = null;
     this.appearanceObserver = null;
     this.motionQuery = null;
@@ -517,15 +780,17 @@ class PageController {
 
   #beginRun(intent) {
     if (this.disposed) return false;
+    if (intent === 'play') {
+      this.startupWallpaperFailure = null;
+      this.startupWallpaperNoticeDismissed = false;
+    }
     this.wallpaperRetryCancel?.();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
     const focused = this.document?.activeElement === this.appearanceEntry?.element
       ? this.appearanceEntry.button : this.document?.activeElement;
-    if (focused !== this.frame?.element && focused?.isConnected && typeof focused.focus === 'function') {
-      this.savedFocus = focused;
-    }
+    this.#rememberFocus(focused);
     this.#stopFrame();
     this.intent = intent;
     this.state.phase = 'loading';
@@ -536,6 +801,7 @@ class PageController {
     this.state.reason = '';
     this.state.completion = null;
     this.appearanceEntry?.update(false);
+    if (intent === 'settings') this.#isolateHostPage();
     const runId = this.state.runId;
     this.host.addEventListener('message', this.onMessage);
     this.watchdog = this.host.setTimeout(() => this.expire(runId), 25_000);
@@ -574,7 +840,8 @@ class PageController {
     if (!this.#isLoading(runId) || !this.document.body) return;
     try {
       if (!this.appearanceEntry) this.appearanceEntry = mountAppearanceEntry(this.document, () => this.#openSettings(),
-        this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host);
+        this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host,
+        () => this.#retryWallpaper(), () => { this.startupWallpaperNoticeDismissed = true; });
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
       );
@@ -605,7 +872,13 @@ class PageController {
 
   #updateAppearance() {
     if (this.disposed) return;
-    this.appearance = hostAppearance(this.host);
+    const appearance = hostAppearance(this.host);
+    const surfaceChanged = appearance.colors.surface !== this.appearance?.colors.surface;
+    this.appearance = appearance;
+    const updateWallpaperSurface = dataProperty(this.wallpaperAPI, 'updateSurface');
+    if (surfaceChanged && typeof updateWallpaperSurface === 'function') {
+      try { updateWallpaperSurface.call(this.wallpaperAPI, this.appearance.colors.surface); } catch {}
+    }
     this.appearanceEntry?.setAppearance(this.appearance);
     const text = appearanceText(dataProperty(this.payload, 'createLocalization'), this.appearance);
     this.frame?.element.setAttribute('title', text.t('overlayLabel'));
@@ -633,6 +906,122 @@ class PageController {
     return !this.disposed && runId === this.state.runId && this.state.phase === 'loading';
   }
 
+  #rememberFocus(focused = this.document?.activeElement) {
+    if (focused === this.appearanceEntry?.element) focused = this.appearanceEntry.button;
+    if (focused !== this.frame?.element && focused?.isConnected && typeof focused.focus === 'function') {
+      this.savedFocus = focused;
+    }
+  }
+
+  #focusOverlayFrame() {
+    const frame = this.frame?.element;
+    if (!frame || this.document?.activeElement === frame || typeof frame.focus !== 'function') return;
+    try { frame.focus({ preventScroll: true }); }
+    catch { try { frame.focus(); } catch {} }
+  }
+
+  #isolateHostPage() {
+    if (this.modalIsolation) return;
+    const body = this.document?.body;
+    if (!body) return;
+
+    const owner = { body, targets: new Map(), childObserver: null, inertObserver: null };
+    this.modalIsolation = owner;
+    const setOwnedInert = (element, value) => {
+      const state = owner.targets.get(element);
+      if (!state) return;
+      const before = Boolean(element.inert);
+      element.inert = value;
+      if (before !== Boolean(element.inert) && element.isConnected) state.pendingOwnedWrites++;
+    };
+    const lockNode = node => {
+      if (!node || node.nodeType !== 1) return;
+      const frame = this.frame?.element;
+      if (node === frame || (frame && typeof node.contains === 'function' && node.contains(frame))) return;
+      let state = owner.targets.get(node);
+      if (state) {
+        state.restoreInert = Boolean(node.inert);
+        state.ownsInert = false;
+      } else {
+        state = { restoreInert: Boolean(node.inert), pendingOwnedWrites: 0, ownsInert: false };
+        owner.targets.set(node, state);
+      }
+      if (!state.restoreInert) {
+        setOwnedInert(node, true);
+        state.ownsInert = true;
+      }
+    };
+    const processMutations = records => {
+      if (records.some(record => record.type === 'childList')) {
+        const pendingInert = owner.inertObserver?.takeRecords?.() || [];
+        if (pendingInert.length) processMutations(pendingInert);
+      }
+      const reassert = new Set();
+      for (const record of records) {
+        if (record.type === 'attributes') {
+          const state = owner.targets.get(record.target);
+          if (!state) continue;
+          if (state.pendingOwnedWrites > 0) {
+            state.pendingOwnedWrites--;
+            continue;
+          }
+          state.restoreInert = Boolean(record.target.inert);
+          state.ownsInert = false;
+          if (!state.restoreInert) reassert.add(record.target);
+        } else if (record.type === 'childList' && record.target === body) {
+          for (const node of record.removedNodes) {
+            if (!node || node.nodeType !== 1) continue;
+            const state = owner.targets.get(node);
+            if (!state) continue;
+            if (state.ownsInert && node.inert === true) setOwnedInert(node, state.restoreInert);
+            state.ownsInert = false;
+          }
+          for (const node of record.addedNodes) lockNode(node);
+        }
+      }
+      for (const element of reassert) {
+        if (this.modalIsolation === owner && element.parentNode === body && !element.inert) {
+          setOwnedInert(element, true);
+          const state = owner.targets.get(element);
+          if (state) state.ownsInert = true;
+        }
+      }
+    };
+
+    const MutationObserver = this.host.MutationObserver;
+    if (typeof MutationObserver === 'function') {
+      owner.childObserver = new MutationObserver(processMutations);
+      owner.childObserver.observe(body, { childList: true });
+      if (this.document.documentElement) {
+        owner.inertObserver = new MutationObserver(processMutations);
+        owner.inertObserver.observe(this.document.documentElement, {
+          attributes: true, attributeFilter: ['inert'], subtree: true,
+        });
+      }
+    }
+    for (const node of Array.from(body.children || [])) lockNode(node);
+  }
+
+  #releaseHostPage() {
+    const owner = this.modalIsolation;
+    if (!owner) return;
+    if (owner.inertObserver) {
+      for (const record of owner.inertObserver.takeRecords?.() || []) {
+        if (record.type !== 'attributes') continue;
+        const state = owner.targets.get(record.target);
+        if (!state) continue;
+        if (state.pendingOwnedWrites > 0) state.pendingOwnedWrites--;
+        else state.restoreInert = Boolean(record.target.inert);
+      }
+    }
+    owner.childObserver?.disconnect();
+    owner.inertObserver?.disconnect();
+    this.modalIsolation = null;
+    for (const [element, state] of owner.targets) {
+      if (state.ownsInert && element.inert === true) element.inert = state.restoreInert;
+    }
+  }
+
   #isCurrentFrame(runId, frame = this.frame) {
     return !this.disposed && runId === this.state.runId && frame !== null
       && frame === this.frame && !['complete', 'failed', 'timeout', 'disposed'].includes(this.state.phase);
@@ -649,6 +1038,7 @@ class PageController {
       if (this.state.phase !== 'loading' || this.state.ready) return;
       this.state.ready = true;
       this.state.phase = this.intent === 'play' ? 'playing' : 'settings';
+      if (this.intent === 'settings') this.#focusOverlayFrame();
       if (this.intent === 'settings') this.#clearWatchdog();
       return;
     }
@@ -665,6 +1055,7 @@ class PageController {
         ? { cause: 'settings-cancel', beforeReady: false }
         : { cause: message.skipped ? 'skip' : 'natural', beforeReady: !this.state.ready };
       this.appearanceEntry?.update(true);
+      this.#updateStartupWallpaperNotice();
       this.#clearWatchdog();
       this.host.removeEventListener('message', this.onMessage);
       this.#stopFrame();
@@ -677,6 +1068,8 @@ class PageController {
     }
     if (message.action === 'settings-open') {
       if (this.state.ready && this.state.phase === 'playing') {
+        this.#isolateHostPage();
+        this.#focusOverlayFrame();
         this.state.phase = 'settings';
         this.#clearWatchdog();
       }
@@ -689,6 +1082,7 @@ class PageController {
         this.state.overlay = false;
         this.state.completion = { cause: 'settings-save', beforeReady: false };
         this.appearanceEntry?.update(true);
+        this.#updateStartupWallpaperNotice();
         this.#clearWatchdog();
         this.host.removeEventListener('message', this.onMessage);
         this.#stopFrame();
@@ -719,7 +1113,23 @@ class PageController {
     const failure = wallpaperFailure({ failureCode: code });
     if (failure) Object.assign(result, failure);
     this.state.wallpaper = result;
+    if (this.intent === 'play') {
+      this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
+        ? { ...result } : null;
+      if (!this.wallpaperRetryPromise) this.startupWallpaperNoticeDismissed = false;
+    }
+    this.#updateStartupWallpaperNotice();
     return { ...result };
+  }
+
+  #updateStartupWallpaperNotice(announcementKey) {
+    const cause = this.state.completion?.cause;
+    const visible = !this.disposed && !this.startupWallpaperNoticeDismissed
+      && !!this.startupWallpaperFailure && !!this.wallpaperRequest && !this.wallpaperDisabled
+      && this.state.phase === 'complete' && this.state.completed
+      && ['natural', 'skip', 'settings-cancel'].includes(cause);
+    this.appearanceEntry?.setWallpaperFailure(visible ? this.startupWallpaperFailure : null,
+      announcementKey);
   }
 
   #retryResult(retried, previousFailure, reason) {
@@ -761,9 +1171,14 @@ class PageController {
     }
     this.#refreshWallpaper();
     if (this.state.wallpaper.applied) {
+      const hadFailure = !!this.startupWallpaperFailure;
+      this.startupWallpaperFailure = null;
+      this.#updateStartupWallpaperNotice(hadFailure ? 'applied' : undefined);
       return Promise.resolve(this.#retryResult(false, null, 'already-applied'));
     }
 
+    this.startupWallpaperNoticeDismissed = false;
+    this.#updateStartupWallpaperNotice('retrying');
     const runId = this.state.runId;
     const request = { ...this.wallpaperRequest };
     let operation;
@@ -831,6 +1246,8 @@ class PageController {
       }
       this.#disposeWallpaper();
       this.state.wallpaper = { applied: false, reason: 'disabled', imageDecoded: false };
+      this.startupWallpaperFailure = null;
+      this.#updateStartupWallpaperNotice();
       return { ...this.state.wallpaper };
     }
     if (!retry) {
@@ -849,7 +1266,10 @@ class PageController {
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
     try {
-      const result = await this.wallpaperApply(Object.freeze({ image: message.image, strength: message.strength }), isCurrent);
+      this.appearance = hostAppearance(this.host);
+      const result = await this.wallpaperApply(Object.freeze({
+        image: message.image, strength: message.strength, surface: this.appearance.colors.surface,
+      }), isCurrent);
       if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
       if (dataProperty(result, 'applied') === false) {
         const reason = wallpaperReason(result);
@@ -857,6 +1277,8 @@ class PageController {
         const current = wallpaperRecord(this.host);
         if (current.present && !current.supported) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
+          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
         if (current.supported) this.wallpaperAPI = current.api;
@@ -867,14 +1289,34 @@ class PageController {
       if (!current.supported) {
         if (current.present) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
+          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
         return this.#setWallpaperFailure('apply-unavailable');
       }
       this.wallpaperAPI = current.api;
+      this.appearance = hostAppearance(this.host);
+      const updateWallpaperSurface = dataProperty(current.api, 'updateSurface');
+      if (typeof updateWallpaperSurface === 'function') {
+        try { updateWallpaperSurface.call(current.api, this.appearance.colors.surface); } catch {}
+      }
       this.state.wallpaper = this.#wallpaperStatus(current.api);
       if (!this.state.wallpaper.applied && !this.state.wallpaper.reason) {
         this.state.wallpaper.reason = 'wallpaper-unsupported';
+      }
+      if (this.state.wallpaper.applied) {
+        const hadStartupFailure = !!this.startupWallpaperFailure;
+        this.startupWallpaperFailure = null;
+        this.#updateStartupWallpaperNotice(this.intent === 'play' && retry && hadStartupFailure
+          ? 'applied' : undefined);
+      } else {
+        if (this.intent === 'play') {
+          const failure = wallpaperFailure(this.state.wallpaper);
+          this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
+            ? { ...this.state.wallpaper } : null;
+        }
+        this.#updateStartupWallpaperNotice();
       }
     } catch (error) {
       if (isCurrent()) {
@@ -975,8 +1417,24 @@ class PageController {
 
   #restoreFocus(frame) {
     const ownedFocus = this.document?.activeElement === frame.element;
-    if (ownedFocus && this.savedFocus?.isConnected && typeof this.savedFocus.focus === 'function') {
-      try { this.savedFocus.focus(); } catch {}
+    if (!ownedFocus) return;
+    const candidates = [this.savedFocus, this.appearanceEntry?.button];
+    try {
+      const selectors = 'button:not([disabled]),a[href],input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+      candidates.push(...Array.from(this.document.querySelectorAll(selectors)));
+    } catch {}
+    for (const candidate of new Set(candidates)) {
+      if (!candidate?.isConnected || candidate.inert || candidate.disabled
+        || typeof candidate.focus !== 'function' || candidate.hidden) continue;
+      try {
+        const style = this.host.getComputedStyle?.(candidate);
+        if (style?.display === 'none' || style?.visibility === 'hidden'
+          || (typeof candidate.getClientRects === 'function' && candidate.getClientRects().length === 0)) continue;
+      } catch {}
+      try { candidate.focus(); } catch { continue; }
+      const root = candidate.getRootNode?.();
+      if (this.document.activeElement === candidate
+        || (root?.host === this.document.activeElement && root.activeElement === candidate)) return;
     }
   }
 
@@ -985,6 +1443,7 @@ class PageController {
     const handle = this.frameHandle;
     this.frame = null;
     this.frameHandle = null;
+    this.#releaseHostPage();
     if (!frame) return;
     this.#restoreFocus(frame);
     try { handle?.dispose?.(); } catch {}
@@ -1007,7 +1466,10 @@ class PageController {
     if (this.disposed || !this.installed) return false;
     if (this.state.phase === 'complete') return this.#beginRun('settings');
     if (this.state.phase === 'settings') return false;
-    if (this.state.phase === 'playing') return this.#invokeFrameSettings();
+    if (this.state.phase === 'playing') {
+      this.#rememberFocus();
+      return this.#invokeFrameSettings();
+    }
     return false;
   }
 

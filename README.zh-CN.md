@@ -98,11 +98,13 @@ python scripts/azhou_hub.py integrations agent-skin --help
 
 Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)：沿用已完成控制器最近请求的图片和强度，不重播动画。状态检查仍只读，并报告有限的失败原因码；不替换不受支持或其他所有者的控制器。
 
+当前本地候选增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
+
 `python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。两个编排包同时交付任务归属合同——普通任务沿用 Kit 命名角色，用户明确选定的 pstack 工作流负责该任务，并以显式模型与 effort 派发且不选命名角色——并在隔离 Codex 环境留有有界派发回据（[证据](evidence/pstack-orchestrator-dispatch-2026-10-26.md)）。两个包也可共享同一受控 Codex 环境：Hub 与 Kit 两个入口共用同一兼容判定（原生注册加上模型表 `session hook: off` 行共同决定），其安装生命周期既经确定性测试验证，也在已记录的 Codex 客户端上原生验证过——一次性环境中的两种安装顺序、重复安装、armed 目标转换与两种移除顺序（[原生验收](evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)）；五个任务边界行为——普通任务默认路径、同任务追问保持负责人、pstack 任务完成后恢复默认规则、中途切换先处理在途子代理、显式模型被拒时明确阻塞并报告原因——已在一次性受控环境中真机观测（[live 会话记录](evidence/pstack-orchestrator-live-sessions-2026-10-27.md)）。每个入口也都具备属主明确的退出方式——Hub `uninstall-plan`/`uninstall` 与 Kit `--uninstall`——只恢复各自记录的受管范围，保留另一模块与用户后续修改，并以差异报告代替强制覆盖。既有安装——Kit 加共享 pstack Skills、原生插件或本地改过的共享 Skills——先经只读 `transition-plan` 入口审阅：逐状态标明实际来源、内容差异、owner 与恢复依据；仅当原生注册表能把当前注册解析回 Hub 回据的快照时才给出可应用的转换；绝不凭同名或字节相同接管未知安装；该入口本身不授权对主环境应用任何变更。
 
 pstack 统一从当前 Hub 维护的项目包安装，维护目标为 Codex、Claude Code、MiMo Code（`mimo`）和 zcode。[安装说明](packages/pstack-agent-harness/README.md#install)使用本地包来源；上游链接保留作署名和源码更新依据。Codex 的 `--codex-home` 决定插件装入哪份配置；自定义目录需要通过对应的 `CODEX_HOME` 启动 Codex，不会自动在默认桌面配置中启用插件。
 
-Agent Skin 来源目前没有已记录的开源授权；Hub 根目录许可证不覆盖两个包源。再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告只记录当时检查的输入和宿主。2026-10-26 本地交接使用当时 canonical 的 `codex-startup-animation` 源目录构建；当前已安装 App 与 Pet 属主仍指向该保留目录。本票未转移任一安装。新适配器合同只有合成事件测试；此次没有重启 Codex，冷启动宿主、壁纸实际应用、Pet 选择与播放、正式视觉审阅仍未验证。详见[本地接管记录](evidence/optional-integrations-local-handoff-2026-10-26.md)。
+原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告只记录当时检查的输入和宿主。2026-10-26 本地交接使用当时 canonical 的 `codex-startup-animation` 源目录构建；当前已安装 App 与 Pet 属主仍指向该保留目录。本票未转移任一安装。新适配器合同只有合成事件测试；此次没有重启 Codex，冷启动宿主、壁纸实际应用、Pet 选择与播放、正式视觉审阅仍未验证。详见[本地接管记录](evidence/optional-integrations-local-handoff-2026-10-26.md)。
 
 保留的 `codex-startup-animation` 源目录仍拥有已安装 Codex Pet 及其维护状态。Agent Skin 包含复制来的源码，但不取得 Pet 属主；在 App 和 Pet 的接管都经过明确审阅前，应保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
 

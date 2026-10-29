@@ -106,6 +106,7 @@ jobs:
           node --test tools/image-settings.test.mjs
           node --test tools/localization.test.mjs
           python -B tools/test-startup-build.py
+          python -B tools/test-startup-browser-selection-cli.py
           node tools/test-image-settings-browser.mjs
           python -B tools/test-startup-payload-browser.py --out "$RUNNER_TEMP/agent-skin-browser-evidence"
           mkdir -p .build
@@ -146,6 +147,9 @@ jobs:
       - name: Prepare isolated Bash unit tooling
         working-directory: packages/agent-skin
         run: python -B tools/test-setup-unit-tools.py --github-env "$GITHUB_ENV" --github-path "$GITHUB_PATH"
+      - name: Run fast Agent Skin Node unit checks
+        working-directory: packages/agent-skin
+        run: node --test tools/startup-browser-selection.unit.test.mjs
       - name: Require 95 percent for every production language
         working-directory: packages/agent-skin
         env:

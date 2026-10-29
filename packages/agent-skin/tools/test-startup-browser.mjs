@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { validateCheckSelection } from './startup-browser-selection.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
@@ -35,6 +36,7 @@ options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
 const onlyChecks = options.only.length ? new Set(options.only) : null;
+const availableChecks = new Set();
 
 const report = {
   schema: 1,
@@ -76,6 +78,7 @@ async function until(operation, milliseconds = 10000, label = 'condition') {
 }
 
 async function check(name, operation) {
+  availableChecks.add(name);
   if (onlyChecks && !onlyChecks.has(name)) {
     report.checks.push({ name, skipped: true });
     return null;
@@ -96,9 +99,27 @@ class CDP {
     this.socket = socket;
     this.nextID = 1;
     this.pending = new Map();
+    this.eventWaiters = new Set();
     socket.addEventListener('message', event => {
       let value;
       try { value = JSON.parse(event.data); } catch { return; }
+      if (value.method) {
+        for (const waiter of this.eventWaiters) {
+          if (waiter.method !== value.method) continue;
+          let matches = false;
+          try { matches = waiter.predicate(value.params); } catch (error) {
+            clearTimeout(waiter.timer);
+            this.eventWaiters.delete(waiter);
+            waiter.reject(error);
+            continue;
+          }
+          if (!matches) continue;
+          clearTimeout(waiter.timer);
+          this.eventWaiters.delete(waiter);
+          waiter.resolve(value.params);
+        }
+        return;
+      }
       if (!value.id || !this.pending.has(value.id)) return;
       const pending = this.pending.get(value.id);
       this.pending.delete(value.id);
@@ -135,6 +156,16 @@ class CDP {
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
+  waitForEvent(method, predicate = () => true, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      const waiter = { method, predicate, resolve, reject, timer: null };
+      waiter.timer = setTimeout(() => {
+        this.eventWaiters.delete(waiter);
+        reject(new Error('Timed out waiting for CDP event ' + method));
+      }, timeoutMs);
+      this.eventWaiters.add(waiter);
+    });
+  }
   async evaluate(expression) {
     const result = await this.call('Runtime.evaluate', {
       expression,
@@ -154,6 +185,13 @@ async function dispatchTab(shiftKey = false) {
     modifiers: shiftKey ? 8 : 0,
   };
   await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
+  await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
+}
+
+async function dispatchEnter() {
+  const key = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 36 };
+  await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
+  await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'char', text: '\r', unmodifiedText: '\r' });
   await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
 }
 
@@ -222,6 +260,29 @@ try {
   const fixtureHTML = preview.slice(0, scriptStart)
     + '<script src="/localization.js"></script><script src="/image-settings.js"></script><script src="/animation.js"></script><script type="module" src="/fixture.js"></script>'
     + preview.slice(scriptEnd);
+  const homeNavFixtureMarkup = String.raw`
+    <div data-fixture-boxless-ancestor style="display:contents">
+    <nav aria-label="Home" role="navigation" data-fixture-home-nav style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden">
+      <div class="fixture-nav-header" style="flex:none;padding:12px 8px 8px">
+        <div class="group/nav-list" data-fixture-nav-list style="display:flex;flex-direction:column;gap:4px;width:100%">
+          <button type="button" class="sidebar-item" data-fixture-new-chat style="width:100%;min-height:32px;padding:5px 10px;text-align:left">New chat</button>
+          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left">Your dot</button>
+        </div>
+      </div>
+      <div class="fixture-nav-scroll" style="flex:1;min-height:0;overflow:auto;padding:4px 8px">
+        <section class="group/nav-section">
+          <div class="group/nav-section-title">
+            <button type="button" class="group/section-toggle" role="button" aria-expanded="true" style="width:100%;text-align:left">
+              <span>Pinned</span>
+            </button>
+          </div>
+        </section>
+      </div>
+      <div class="fixture-nav-footer" data-fixture-nav-footer style="flex:none;display:flex;flex-direction:column;gap:6px;padding:8px;border-top:1px solid var(--line)">
+        <button id="fixture-download-update" type="button" style="width:100%;text-align:left">Download update</button>
+        <button id="fixture-profile" type="button" style="width:100%;text-align:left">Profile</button>
+      </div>
+    </nav></div>`;
   const pixelBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64');
   const pixelImage = 'data:image/png;base64,' + pixelBytes.toString('base64');
   const imageSHA256 = createHash('sha256').update(pixelBytes).digest('hex');
@@ -239,7 +300,38 @@ try {
     const outerWindow = window;
     const url = new URL(location.href);
     if (url.searchParams.has('initial-light-theme')) document.documentElement.dataset.theme = 'light';
+    if (url.searchParams.has('home-nav-fixture')) {
+      const sidebar = document.querySelector('.sidebar');
+      const shell = document.querySelector('[data-app-shell-frame]');
+      const markup = ${JSON.stringify(homeNavFixtureMarkup)};
+      sidebar.style.cssText = 'padding:0;display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden';
+      shell.style.gridTemplateColumns = '232px minmax(0,1fr)';
+      sidebar.innerHTML = markup;
+      outerWindow.__fixtureHomeNavRemountCount = 0;
+      outerWindow.__fixturePriorHomeNav = null;
+      sidebar.querySelector('nav[aria-label="Home"]')?.setAttribute('data-fixture-nav-instance', '0');
+      outerWindow.__fixtureRemountHomeNav = () => {
+        const current = document.querySelector('nav[aria-label="Home"][role="navigation"]');
+        if (!current) return false;
+        const template = document.createElement('template');
+        template.innerHTML = markup;
+        const next = template.content.firstElementChild;
+        outerWindow.__fixturePriorHomeNav = current;
+        outerWindow.__fixtureHomeNavRemountCount++;
+        next.querySelector('nav').setAttribute('data-fixture-nav-instance', String(outerWindow.__fixtureHomeNavRemountCount));
+        current.parentElement.replaceWith(next);
+        return true;
+      };
+      outerWindow.__fixtureSetHomeNavWidth = width => {
+        const value = Number(width);
+        if (!Number.isInteger(value) || value < 140 || value > 280) return false;
+        shell.style.gridTemplateColumns = value + 'px minmax(0,1fr)';
+        window.dispatchEvent(new Event('resize'));
+        return true;
+      };
+    }
     const nativeMutationObserver = window.MutationObserver;
+    let failFirstWallpaperShellObserver = url.searchParams.has('fail-first-wallpaper-shell-observer');
     const trackedMutationObservers = [];
     const mutationObserverState = new WeakMap();
     window.MutationObserver = class extends nativeMutationObserver {
@@ -255,6 +347,11 @@ try {
           && options?.attributeFilter?.includes('data-app-shell-frame');
         state.kind = wallpaperShellWait ? 'wallpaper-shell-wait'
           : attributesOnly ? 'appearance-attributes-only' : 'other';
+        if (wallpaperShellWait && failFirstWallpaperShellObserver) {
+          failFirstWallpaperShellObserver = false;
+          state.active = false;
+          throw new Error('synthetic first wallpaper shell observer is unavailable');
+        }
         state.active = true;
         return super.observe(target, options);
       }
@@ -274,6 +371,9 @@ try {
     if (url.searchParams.get('legacy-wash') === 'host-important') {
       document.documentElement.style.setProperty('--azhou-wallpaper-wash', 'host-wash', 'important');
     }
+    if (url.searchParams.get('legacy-surface') === 'host-important') {
+      document.documentElement.style.setProperty('--azhou-wallpaper-surface', '#fafafa', 'important');
+    }
     const hostDocument = {
       get documentElement() { return document.documentElement; },
       get body() { return bodyAvailable ? document.body : undefined; },
@@ -289,7 +389,7 @@ try {
         if (name === 'location') return new URL('app://-/index.html?initialRoute=%2F');
         if (name === 'document') return hostDocument;
         const value = Reflect.get(target, name, target);
-        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle', 'matchMedia', 'atob'].includes(name)
+        return ['addEventListener', 'removeEventListener', 'setTimeout', 'clearTimeout', 'getComputedStyle', 'matchMedia', 'atob', 'createImageBitmap'].includes(name)
           && typeof value === 'function' ? value.bind(target) : value;
       } })
       : {
@@ -303,6 +403,81 @@ try {
     let generatedInstallResult;
     if (url.searchParams.has('generated-payload')) {
       globalThis.__agentSkinFixtureHost = host;
+      outerWindow.__fixtureAssetInvalidErrors = [];
+      outerWindow.__fixtureRejectedSettlements = [];
+      outerWindow.__fixtureImageOperations = [];
+      const nativeAppendChild = Node.prototype.appendChild;
+      Node.prototype.appendChild = function (node) {
+        const result = nativeAppendChild.call(this, node);
+        if (node?.tagName !== 'IFRAME' || !node.hasAttribute('aria-label')) return result;
+        const frameWindow = node.contentWindow;
+        if (!frameWindow?.HTMLImageElement) return result;
+        const originalDecode = frameWindow.HTMLImageElement.prototype.decode;
+        if (typeof originalDecode === 'function') {
+          frameWindow.HTMLImageElement.prototype.decode = function () {
+            const startedAt = performance.now();
+            const image = this;
+            const operation = { operation: 'image.decode', outcome: 'pending', length: image.src.length,
+              complete: image.complete, width: image.naturalWidth, height: image.naturalHeight };
+            outerWindow.__fixtureImageOperations.push(operation);
+            const pendingTimer = outerWindow.setTimeout(() => {
+              if (operation.outcome === 'pending') operation.pendingAtMs = performance.now() - startedAt;
+            }, 3500);
+            return originalDecode.call(image).then(value => {
+              outerWindow.clearTimeout(pendingTimer);
+              Object.assign(operation, { outcome: 'resolved', complete: image.complete,
+                width: image.naturalWidth, height: image.naturalHeight, elapsedMs: performance.now() - startedAt });
+              return value;
+            }, error => {
+              outerWindow.clearTimeout(pendingTimer);
+              Object.assign(operation, { outcome: 'rejected', complete: image.complete,
+                width: image.naturalWidth, height: image.naturalHeight,
+                error: String(error?.message || error), elapsedMs: performance.now() - startedAt });
+              throw error;
+            });
+          };
+        }
+        if (typeof frameWindow.createImageBitmap === 'function') {
+          const originalBitmap = frameWindow.createImageBitmap.bind(frameWindow);
+          frameWindow.createImageBitmap = (...args) => {
+            const startedAt = performance.now();
+            const operation = { operation: 'createImageBitmap', outcome: 'pending' };
+            outerWindow.__fixtureImageOperations.push(operation);
+            const pendingTimer = outerWindow.setTimeout(() => {
+              if (operation.outcome === 'pending') operation.pendingAtMs = performance.now() - startedAt;
+            }, 9500);
+            return originalBitmap(...args).then(bitmap => {
+              outerWindow.clearTimeout(pendingTimer);
+              Object.assign(operation, { outcome: 'resolved', width: bitmap.width, height: bitmap.height,
+                elapsedMs: performance.now() - startedAt });
+              return bitmap;
+            }, error => {
+              outerWindow.clearTimeout(pendingTimer);
+              Object.assign(operation, { outcome: 'rejected', error: String(error?.message || error),
+                elapsedMs: performance.now() - startedAt });
+              throw error;
+            });
+          };
+        }
+        return result;
+      };
+      const nativeError = window.Error;
+      window.Error = new Proxy(nativeError, { construct(target, args, newTarget) {
+        const error = Reflect.construct(target, args, newTarget);
+        if (outerWindow.__fixtureAssetInvalidErrors.length < 20) {
+          outerWindow.__fixtureAssetInvalidErrors.push({ message: String(args[0] ?? ''), stack: String(error.stack || error) });
+        }
+        return error;
+      } });
+      const nativeAllSettled = window.Promise.allSettled.bind(window.Promise);
+      window.Promise.allSettled = values => nativeAllSettled(values).then(results => {
+        const errors = results.filter(result => result.status === 'rejected').map(result => ({
+          name: String(result.reason?.name || ''), message: String(result.reason?.message || result.reason),
+          stack: String(result.reason?.stack || ''),
+        }));
+        if (errors.length) outerWindow.__fixtureRejectedSettlements.push(...errors.slice(0, 20));
+        return results;
+      });
       const script = document.createElement('script');
       script.src = '/generated-startup.js';
       await new Promise((resolve, reject) => {
@@ -785,10 +960,61 @@ try {
   };
 
   async function navigate(path) {
+    const loaded = cdp.waitForEvent('Page.loadEventFired');
     const result = await cdp.call('Page.navigate', { url: origin + path });
     assert.ok(!result.errorText, result.errorText);
-    await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'synthetic host page load');
+    await loaded;
+    const expectedURL = origin + path;
+    await until(() => cdp.evaluate(`document.readyState === 'complete' && location.href === ${JSON.stringify(expectedURL)}`),
+      10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
+  }
+  async function awaitGeneratedReady(label) {
+    try {
+      const outcome = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='playing'&&state.ready?state
+          :state?.phase==='failed'?{__startupFailed:true,state}:false;
+      })()`), 20000, label);
+      if (outcome?.__startupFailed) {
+        throw new Error('generated startup failed before ready: ' + JSON.stringify(outcome.state));
+      }
+      return outcome;
+    } catch (error) {
+      const state = await cdp.evaluate(`(async()=>{
+        const controller=window.__startupAPI?.status();
+        const frame=document.querySelector('iframe[aria-label]');
+        let settingsRecord=null;
+        try {
+          const databases=await indexedDB.databases();
+          if(databases.some(database=>database.name==='azhou-codex-startup')) {
+            const db=await new Promise((resolve,reject)=>{
+              const request=indexedDB.open('azhou-codex-startup');
+              request.onsuccess=()=>resolve(request.result);
+              request.onerror=()=>reject(request.error);
+            });
+            settingsRecord=await new Promise((resolve,reject)=>{
+              const request=db.transaction('settings','readonly').objectStore('settings').get('images');
+              request.onsuccess=()=>resolve(request.result?{
+                schemaVersion:request.result.schemaVersion,
+                avatarLength:typeof request.result.avatar==='string'?request.result.avatar.length:null,
+                artworkLength:typeof request.result.artwork==='string'?request.result.artwork.length:null,
+                contourPaths:Array.isArray(request.result.contours)?request.result.contours.length:null,
+                contourPoints:Array.isArray(request.result.contours)?request.result.contours.reduce((sum,path)=>sum+(Array.isArray(path)?path.length:0),0):null,
+              }:null);
+              request.onerror=()=>reject(request.error);
+            });
+            db.close();
+          }
+        } catch (error) { settingsRecord={readError:String(error?.message||error)}; }
+        return {url:location.href,phase:controller?.phase,reason:controller?.reason,settingsRecord,
+          assetErrors:window.__fixtureAssetInvalidErrors.map(error=>error.message),
+          rejectedSettlements:window.__fixtureRejectedSettlements.map(({name,message,stack})=>({name,message,
+            stack:stack.split(String.fromCharCode(10)).slice(0,2).join(' | ')})),
+          imageOperations:window.__fixtureImageOperations};
+      })()`);
+      throw new Error(error.message + '; generated fixture state=' + JSON.stringify(state));
+    }
   }
   async function animationPixelEvidence() {
     return cdp.evaluate(`(()=>{
@@ -869,6 +1095,7 @@ try {
     return cdp.evaluate(expression);
   }
   async function screenshot(name) {
+    await cdp.call('Page.bringToFront');
     await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const viewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme})');
     const result = await cdp.call('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false });
@@ -1022,6 +1249,49 @@ try {
     return { runId: ready.runId, updated, dark: { surface: darkIdentity.surface, identity: darkIdentity.identity },
       light: { identity: { surface: lightIdentity.surface, pixels: lightIdentity.identity },
         colorize: { surface: lightLine.surface, contourPixels: lightLine.line } } };
+  });
+
+  const darkToLightMissingTextCheck = 'dark-to-light appearance resets missing text token to the light fallback';
+  if (!onlyChecks || onlyChecks.has(darkToLightMissingTextCheck)) {
+    await navigate('/fixture.html?animation=1&no-initial-wallpaper=1');
+  }
+  await check(darkToLightMissingTextCheck, async () => {
+    const ready = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status(),frame=document.querySelector('iframe[aria-label]');
+      return state?.phase==='playing'&&state.ready&&frame?.contentDocument?.documentElement
+        ?{theme:frame.contentDocument.documentElement.dataset.theme,runId:state.runId}:false;
+    })()`), 15000, 'dark animation is ready before the missing-token theme change');
+    assert.equal(ready.theme, 'dark');
+    await cdp.evaluate(`(()=>{
+      const preview=window.__startupAnimationRuns.at(-1).handle.preview;
+      preview.pause();preview.seek(2.2);
+    })()`);
+    const darkIdentity = await animationPixelEvidence();
+    assert.ok(darkIdentity.identity.light > 40,
+      'the dark-theme identity starts with its readable light fallback: ' + JSON.stringify(darkIdentity.identity));
+
+    await cdp.evaluate(`(()=>{
+      const root=document.documentElement;
+      root.dataset.theme='light';
+      root.style.setProperty('--color-surface','#ffffff');
+      for(const token of ['--color-text','--color-text-primary','--app-color-text-foreground',
+        '--color-text-secondary','--app-color-text-foreground-secondary','--color-border','--app-color-border']) {
+        root.style.removeProperty(token);
+      }
+    })()`);
+    await until(() => cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[aria-label]');
+      return frame?.contentDocument?.documentElement?.dataset.theme==='light';
+    })()`), 3000, 'the active animation receives the light theme without text tokens');
+    await cdp.evaluate('window.__startupAnimationRuns.at(-1).handle.preview.seek(2.2)');
+    const lightIdentity = await animationPixelEvidence();
+    assert.ok(lightIdentity.surface[0] > 220 && lightIdentity.surface[1] > 220,
+      'the appearance surface follows the light theme: ' + JSON.stringify(lightIdentity.surface));
+    assert.ok(lightIdentity.identity.dark > 40,
+      'missing text tokens use the complete light fallback after a dark-to-light change: '
+        + JSON.stringify(lightIdentity.identity));
+    return { ready, dark: darkIdentity.identity, light: { surface: lightIdentity.surface,
+      identity: lightIdentity.identity } };
   });
 
   const delayedAppearanceCheck = 'appearance update during identity bitmap preparation redraws identity and cached contours';
@@ -1245,16 +1515,26 @@ try {
     const secondSettings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();return state.phase==='settings'&&state.ready?state:false;
     })()`), 10000, 'second settings-intent ready');
-    await cdp.evaluate(`(()=>{
+    const isolatedHostFocus = await cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]');
-      frame.contentDocument.querySelector('#startup-fixture-settings-input').focus();
-      document.querySelector('#theme').focus();
+      const input=frame.contentDocument.querySelector('#startup-fixture-settings-input');
+      const theme=document.querySelector('#theme');
+      input.focus();theme.focus();
+      return {frameFocused:document.activeElement===frame,inputFocused:frame.contentDocument.activeElement===input,
+        themeFocused:document.activeElement===theme};
     })()`);
+    assert.deepEqual(isolatedHostFocus, { frameFocused: true, inputFocused: true, themeFocused: false },
+      'the host remains outside the keyboard focus boundary while settings are open');
     await cdp.evaluate(`window.__startupFixtureSend(${secondSettings.runId},{type:'azhou-startup',action:'complete',runId:${secondSettings.runId},skipped:true})`);
-    assert.equal(await cdp.evaluate('document.activeElement===document.querySelector("#theme")'), true,
-      'cleanup leaves a later host focus change alone');
+    const finalFocus = await cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const button=entry?.shadowRoot?.querySelector('button');
+      return {documentFocus:document.activeElement===entry,shadowFocus:entry?.shadowRoot?.activeElement===button};
+    })()`);
+    assert.deepEqual(finalFocus, { documentFocus: true, shadowFocus: true },
+      'closing settings returns focus to the visible appearance entry');
     return { settings: { runId: settings.runId, phase: settings.phase }, completion: cancelled.completion,
-      restoredHostFocus: true, preservedLaterFocus: true };
+      restoredHostFocus: true, isolatedHostFocus, finalFocus };
   });
   async function verifySidebarUpdatePlacement() {
     const state = await cdp.evaluate('window.__startupAPI.status()');
@@ -1305,9 +1585,139 @@ try {
     }
   }
   await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
+  await navigate('/fixture.html?home-nav-fixture=1' + (options.generatedPayload ? '&generated-payload=1' : ''));
+  await check('appearance entry follows Your dot in the real Home nav and survives narrow layout and remount', async () => {
+    const initialRun = await awaitGeneratedReady('Home navigation fixture startup is ready');
+    if (options.generatedPayload) {
+      assert.equal(await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;button.click();return true;
+      })()`), true, 'the generated animation exposes its skip control');
+    } else {
+      await cdp.evaluate(`window.__startupFixtureSend(${initialRun.runId},
+        {type:'azhou-startup',action:'complete',runId:${initialRun.runId},skipped:false})`);
+    }
+    const completed = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&!document.querySelector('iframe[aria-label]')?state:false;
+    })()`), 10000, 'the appearance entry becomes available after startup completion');
+    const inspect = () => cdp.evaluate(`(()=>{
+      const nav=document.querySelector('nav[aria-label="Home"][role="navigation"]');
+      const list=nav?.querySelector(':scope > :first-child > [class~="group/nav-list"]');
+      const dot=list?.querySelector('button[data-fixture-your-dot]');
+      const newChat=list?.querySelector('button[data-fixture-new-chat]');
+      const scroll=nav?.children[1];
+      const section=scroll?.querySelector('section[class~="group/nav-section"]');
+      const title=section?.querySelector('div[class~="group/nav-section-title"]');
+      const toggle=title?.querySelector('button[class~="group/section-toggle"]');
+      const pinned=toggle?.querySelector(':scope > span');
+      const entries=[...document.querySelectorAll('[data-agent-skin-entry="appearance"]')],entry=entries[0];
+      const rect=node=>node?.getBoundingClientRect?.();
+      const data=r=>r?{x:r.x,y:r.y,width:r.width,height:r.height}:null;
+      const intersects=(a,b)=>!!a&&!!b&&Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))
+        *Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))>0;
+      const entryRect=rect(entry),dotRect=rect(dot),listRect=rect(list);
+      const boxlessAncestor=nav?.parentElement?.matches('[data-fixture-boxless-ancestor]')?nav.parentElement:null;
+      const boxlessRect=rect(boxlessAncestor);
+      const download=document.querySelector('#fixture-download-update'),profile=document.querySelector('#fixture-profile');
+      const hit=node=>{const r=rect(node);if(!r)return false;const target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return target===node||node.contains(target);};
+      const follows=(before,after)=>!!before&&!!after&&!!(before.compareDocumentPosition(after)&Node.DOCUMENT_POSITION_FOLLOWING);
+      return {navLabel:nav?.getAttribute('aria-label')||null,navRole:nav?.getAttribute('role')||null,
+        navWidth:nav?.getBoundingClientRect().width||0,listUnderHeader:!!list&&list.parentElement===nav.firstElementChild,
+        boxlessAncestor:boxlessAncestor?{display:getComputedStyle(boxlessAncestor).display,
+          width:boxlessRect?.width??null,height:boxlessRect?.height??null}:null,
+        yourDot:dot?{tag:dot.tagName,type:dot.type,sidebarItem:dot.classList.contains('sidebar-item'),
+          href:dot.hasAttribute('href'),ariaLabel:dot.hasAttribute('aria-label'),role:dot.hasAttribute('role'),text:dot.textContent.trim()}:null,
+        newChatPrecedesYourDot:!!newChat&&dot?.previousElementSibling===newChat,
+        pinnedInSeparateScroll:!!scroll&&scroll.tagName==='DIV'&&scroll!==nav.firstElementChild
+          &&section?.classList.contains('group/nav-section')===true
+          &&title?.classList.contains('group/nav-section-title')===true
+          &&toggle?.classList.contains('group/section-toggle')===true&&toggle?.getAttribute('role')==='button'
+          &&toggle?.getAttribute('aria-expanded')==='true'&&pinned?.textContent.trim()==='Pinned',
+        entryCount:entries.length,parentIsNavList:!!entry&&entry.parentElement===list,
+        position:entry?getComputedStyle(entry).position:null,
+        afterYourDot:dot?.nextElementSibling===entry,beforePinned:follows(entry,pinned),
+        rowOrder:Array.from(list?.children||[]).map(node=>node.hasAttribute('data-fixture-new-chat')?'New chat'
+          :node.hasAttribute('data-fixture-your-dot')?'Your dot':node.matches?.('[data-agent-skin-entry="appearance"]')?'appearance':'other'),
+        entryRect:data(entryRect),dotRect:data(dotRect),listRect:data(listRect),
+        followsDotGeometrically:!!entryRect&&!!dotRect&&entryRect.top>=dotRect.bottom-1,
+        fillsNavList:!!entryRect&&!!listRect&&Math.abs(entryRect.width-listRect.width)<1,
+        footer:{noOverlap:!!entryRect&&!intersects(entryRect,rect(download))&&!intersects(entryRect,rect(profile)),
+          downloadHit:hit(download),profileHit:hit(profile)},
+        remountCount:window.__fixtureHomeNavRemountCount||0,
+        priorNavDetached:!!window.__fixturePriorHomeNav&&!window.__fixturePriorHomeNav.isConnected,
+        navInstance:nav?.getAttribute('data-fixture-nav-instance')||null};
+    })()`);
+    const assertFlow = (value, phase) => {
+      assert.equal(value.navLabel, 'Home', phase + ': Home nav');
+      assert.equal(value.navRole, 'navigation', phase + ': navigation role');
+      assert.equal(value.listUnderHeader, true, phase + ': group/nav-list is directly under the nav header');
+      assert.deepEqual(value.boxlessAncestor, { display: 'contents', width: 0, height: 0 },
+        phase + ': fixture ancestor is boxless');
+      assert.deepEqual(value.yourDot, { tag: 'BUTTON', type: 'button', sidebarItem: true,
+        href: false, ariaLabel: false, role: false, text: 'Your dot' }, phase + ': exact Your dot control shape');
+      assert.ok(value.dotRect?.width > 0 && value.dotRect?.height > 0,
+        phase + ': Your dot has a non-zero layout box');
+      assert.equal(value.newChatPrecedesYourDot, true, phase + ': New chat precedes Your dot');
+      assert.equal(value.pinnedInSeparateScroll, true, phase + ': Pinned is in a separate scroll section');
+      assert.equal(value.entryCount, 1, phase + ': exactly one appearance entry');
+      assert.equal(value.parentIsNavList, true,
+        phase + ': entry is a normal-flow child of the Home nav-list; ' + JSON.stringify(value));
+      assert.equal(value.position, 'static', phase + ': entry is in normal flow');
+      assert.equal(value.afterYourDot, true, phase + ': entry follows Your dot in row order');
+      assert.equal(value.beforePinned, true, phase + ': entry precedes Pinned in document order');
+      assert.equal(value.rowOrder.join(','), 'New chat,Your dot,appearance', phase + ': visible nav row order');
+      assert.equal(value.followsDotGeometrically, true, phase + ': entry follows Your dot geometrically');
+      assert.equal(value.fillsNavList, true, phase + ': entry uses the sidebar nav-list width');
+      assert.deepEqual(value.footer, { noOverlap: true, downloadHit: true, profileHit: true },
+        phase + ': bottom Download update and Profile remain visible and clickable');
+    };
+    const initial = await inspect();
+    assertFlow(initial, 'initial Home nav');
+
+    assert.equal(await cdp.evaluate('window.__fixtureSetHomeNavWidth(168)'), true);
+    const narrow = await until(async () => {
+      const value=await inspect();
+      return value.navWidth<=168&&value.navWidth>150?value:false;
+    }, 3000, 'narrow Home nav layout');
+    assertFlow(narrow, 'narrow Home nav');
+
+    const opened = await clickAppearanceEntry();
+    assert.equal(opened?.focused, true, 'the appearance control receives a real pointer click');
+    const settings = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='settings'&&document.querySelectorAll('iframe[aria-label]').length===1?state:false;
+    })()`), 10000, 'the nav entry opens Appearance settings');
+    if (options.generatedPayload) {
+      await cdp.evaluate(`(()=>document.querySelector('iframe[aria-label]')?.contentWindow
+        .dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true})))()`);
+    } else {
+      await cdp.evaluate(`window.__startupFixtureSend(${settings.runId},
+        {type:'azhou-startup',action:'complete',runId:${settings.runId},skipped:true})`);
+    }
+    const canceled = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&!document.querySelector('iframe[aria-label]')?state:false;
+    })()`), 5000, 'Appearance settings close before the nav remount');
+
+    assert.equal(await cdp.evaluate('window.__fixtureRemountHomeNav()'), true,
+      'the fixture replaces Home navigation with a fresh matching tree');
+    const remounted = await until(async () => {
+      const value=await inspect();
+      return value.remountCount===1&&value.priorNavDetached&&value.parentIsNavList?value:false;
+    }, 5000, 'the existing entry moves into the remounted Home nav');
+    assertFlow(remounted, 'remounted Home nav');
+    assert.equal(remounted.navInstance, '1');
+    return { completed: { runId: completed.runId, cause: completed.completion?.cause||null },
+      initial, narrow, settings: { runId: settings.runId, phase: settings.phase },
+      canceled: { runId: canceled.runId, cause: canceled.completion?.cause||null }, remounted };
+  });
+  await navigate('/fixture.html');
   await check('appearance entry remains clickable when the sidebar has no safe gap', async () => {
     try {
-      let pageState = await cdp.evaluate('window.__startupAPI.status()');
+      let pageState = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();return state.ready?state:false;
+      })()`), 5000, 'fresh fallback fixture is ready before completing playback');
       if (pageState.phase === 'playing') {
         await cdp.evaluate(`window.__startupFixtureSend(${pageState.runId},{type:'azhou-startup',action:'complete',runId:${pageState.runId},skipped:false})`);
       } else if (pageState.phase === 'settings') {
@@ -1640,6 +2050,47 @@ try {
     });
   }
 
+  for (const scenario of [
+    { label: 'absent surface baseline', query: '', expectedSurface: '', expectedPriority: '' },
+    { label: 'host surface important baseline', query: '&legacy-surface=host-important', expectedSurface: '#fafafa', expectedPriority: 'important' },
+  ]) {
+    await navigate('/fixture.html?legacy=1' + scenario.query);
+    await check('frozen legacy wallpaper replacement restores ' + scenario.label, async () => {
+      const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
+        legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
+      assert.equal(setup.legacyError, '', JSON.stringify(setup));
+      assert.equal(setup.legacyApplied, true, JSON.stringify(setup));
+      assert.equal(setup.controller, true, JSON.stringify(setup));
+      const state = await until(() => cdp.evaluate(`(()=>{
+        const value=window.__startupAPI.status();return value.phase==='playing'&&value.ready?value:false;
+      })()`), 10000, 'controller ready before legacy surface takeover');
+      assert.equal(await cdp.evaluate('window.__azhouWallpaper===window.__legacyWallpaperAPI'), true,
+        'legacy wallpaper remains the active owner until this controlled takeover request');
+      await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'background',runId:${state.runId},image:${JSON.stringify(pixelImage)},strength:42})`);
+      const committed = await until(() => cdp.evaluate(`(()=>{
+        const value=window.__startupAPI.status(),api=window.__azhouWallpaper;
+        return value.wallpaper.applied&&api!==window.__legacyWallpaperAPI
+          ?{state:value,owner:api.owner,version:api.version,apiApplied:api.status().applied}:false;
+      })()`), 10000, 'candidate wallpaper after legacy dispose');
+      assert.equal(committed.state.wallpaper.applied, true);
+      assert.equal(committed.version, '0.9.0');
+      assert.equal(committed.apiApplied, true);
+      assert.equal(await cdp.evaluate("document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface')"), '#10121c',
+        'the candidate renderer replaces the staged surface with the current host appearance');
+      const beforeRestore = await cdp.evaluate(`({surface:document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface'),
+        priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-surface')})`);
+      await cdp.evaluate('window.__startupAPI.dispose()');
+      const restored = await cdp.evaluate(`({startup:Object.hasOwn(window.__fixtureHost,'__azhouStartup'),
+        wallpaper:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+        rootAttribute:document.documentElement.getAttribute('data-azhou-wallpaper'),
+        surface:document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface'),
+        priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-surface')})`);
+      assert.deepEqual(restored, { startup: false, wallpaper: false, styleCount: 0, rootAttribute: null,
+        surface: scenario.expectedSurface, priority: scenario.expectedPriority });
+      return { scenario: scenario.label, beforeRestore, restored };
+    });
+  }
+
   await navigate('/fixture.html?hold-body=1');
   await check('real DOM observer waits for a delayed body and disconnects after mount', async () => {
     const before = await cdp.evaluate(`({phase:window.__startupAPI.status().phase,frames:document.querySelectorAll('iframe[aria-label]').length})`);
@@ -1756,7 +2207,7 @@ try {
     assert.equal(childAPI.state.runId, initial.runId);
     const unsavedDraft = await cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      const title=doc.querySelector('input[type="text"]');
       title.value='Discard draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -1800,7 +2251,7 @@ try {
       'the settings-intent frame does not apply a fallback or draft wallpaper');
     const defaultPanel = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
+      return {title:doc.querySelector('input[type="text"]').value,
         strength:doc.querySelector('input[type="range"]').value,
         wallpaper:window.__startupAPI.status().wallpaper};
     })()`);
@@ -1809,7 +2260,7 @@ try {
     assert.deepEqual(defaultPanel.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
     const previewLaunch = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      const title=doc.querySelector('input[type="text"]');
       title.value='Local draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -1829,7 +2280,7 @@ try {
       const close=overlay.querySelector('button[data-agent-skin-settings-preview-close]');
       return {
         open:overlay.hidden!==true,settingsOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc.querySelector('input[aria-label^="启动标题"]')?.value,
+        title:doc.querySelector('input[type="text"]')?.value,
         previewStage:!!preview.contentDocument.querySelector('[data-agent-skin-stage]'),
         hasCloseButton:!!close,modal:overlay.getAttribute('role')==='dialog'&&overlay.getAttribute('aria-modal')==='true',
         runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
@@ -1909,7 +2360,7 @@ try {
     const previewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
       const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
-      const title=doc?.querySelector('input[aria-label^="启动标题"]');
+      const title=doc?.querySelector('input[type="text"]');
       const active=doc?.activeElement;
       return (!overlay||!overlay.isConnected||overlay.hidden===true)
         &&doc.querySelector('dialog[data-agent-skin-settings]')?.open===true
@@ -1945,7 +2396,7 @@ try {
       if(overlay?.isConnected&&overlay.hidden!==true)return false;
       const launch=doc?.querySelector('[data-agent-skin-preview-animation]');
       return {settingsOpen:doc?.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc?.querySelector('input[aria-label^="启动标题"]')?.value,
+        title:doc?.querySelector('input[type="text"]')?.value,
         focused:doc?.activeElement===launch,runCount:window.__startupAnimationRuns.length,
         state:window.__startupAPI.status()};
     })()`), 18000, 'the full-duration animation preview ends naturally');
@@ -2000,17 +2451,24 @@ try {
     const conflictStatus = await until(() => cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]');
       const status=frame?.contentDocument.querySelector('[data-agent-skin-settings-status]');
-      return status?.textContent.includes('其他页面已更新设置')?status.textContent:false;
-    })()`), 10000, 'settings transaction detects a real concurrent page update');
-    const conflictState = await cdp.evaluate(`({state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
-      frameCount:document.querySelectorAll('iframe[aria-label]').length,
-      dialogOpen:document.querySelector('iframe[aria-label]').contentDocument.querySelector('dialog')?.open})`);
+      return status?.getAttribute('role')==='alert'?status.textContent:false;
+    })()`), 10000, 'settings transaction reports a real concurrent update');
+    const conflictState = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+      return {state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
+        frameCount:document.querySelectorAll('iframe[aria-label]').length,
+        dialogOpen:doc?.querySelector('dialog')?.open,
+        draftTitle:doc?.querySelector('input[type="text"]')?.value||''};
+    })()`);
     assert.equal(conflictState.state.phase, 'settings', 'conflicted settings remain in their settings run');
     assert.equal(conflictState.state.runId, settingsRun.runId, 'conflicted settings do not start a new run');
     assert.equal(conflictState.runCount, 2, 'failed save did not send settings-close or replay');
     assert.equal(conflictState.frameCount, 1, 'conflict keeps one settings frame mounted');
     assert.equal(conflictState.dialogOpen, true, 'conflict keeps the dialog open for correction');
-    assert.ok(conflictStatus.includes('其他页面已更新设置'), 'conflict status explains the concurrent update');
+    assert.match(conflictStatus,
+      /(?:本页更改尚未保存.*关闭将丢弃.*复制.*重新打开.*新值|This page has unsaved changes.*Closing discards.*Copy.*Reopen settings.*new value)/i,
+      'conflict status explains that closing discards the draft, copying preserves text, and reopening reads the external value');
+    assert.equal(conflictState.draftTitle, 'Local draft', 'the conflicted draft remains available to copy');
 
     const conflictCancel = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
@@ -2035,26 +2493,30 @@ try {
     assert.ok(retrySettings.runId > settingsRun.runId);
     const retryValues = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[aria-label^="启动标题"]').value,
+      return {title:doc.querySelector('input[type="text"]').value,
         strength:doc.querySelector('input[type="range"]').value};
     })()`);
-    assert.deepEqual(retryValues, { title: 'External', strength: '42' });
+    assert.deepEqual(retryValues, { title: 'External', strength: '42' },
+      'reopening discards the stale draft and reads the value committed by the other page');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[aria-label^="启动标题"]');
+      const title=doc.querySelector('input[type="text"]');
       title.value='Saved title';title.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
     })()`);
     const applyFailure = await until(() => cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
       const status=doc?.querySelector('[data-agent-skin-settings-status]');
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const startupNotice=entry?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]');
       return status?.textContent.includes('设置已保存，但背景应用失败')?{
         state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
         frameCount:document.querySelectorAll('iframe[aria-label]').length,
         dialogOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open,
-        title:doc.querySelector('input[aria-label^="启动标题"]')?.value,
+        title:doc.querySelector('input[type="text"]')?.value,
         retry:doc.querySelector('footer button:last-child')?.textContent,
-        applications:window.__fixtureWallpaperApplications||0,status:status.textContent}:false;
+        applications:window.__fixtureWallpaperApplications||0,status:status.textContent,
+        startupNoticeDisplay:getComputedStyle(startupNotice).display,entryDisplay:getComputedStyle(entry).display}:false;
     })()`), 15000, 'saved settings report a separate wallpaper application failure');
     assert.equal(applyFailure.state.phase, 'settings');
     assert.equal(applyFailure.state.runId, retrySettings.runId);
@@ -2064,6 +2526,9 @@ try {
     assert.equal(applyFailure.title, 'Saved title', 'the committed fields remain visible after apply failure');
     assert.equal(applyFailure.retry, '重试应用');
     assert.equal(applyFailure.applications, 1);
+    assert.equal(applyFailure.startupNoticeDisplay, 'none',
+      'a settings-save failure stays in the settings panel and does not create a startup recovery notice');
+    assert.equal(applyFailure.entryDisplay, 'none', 'the existing entry remains hidden while settings owns the page');
 
     await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument
       .querySelector('[data-agent-skin-settings] footer button:last-child').click()`);
@@ -2077,6 +2542,13 @@ try {
     assert.equal(savedRun.run.intent, 'settings');
     assert.equal(savedRun.run.runId, retrySettings.runId);
     assert.equal(savedRun.state.wallpaper.applied, true);
+    const startupNoticeAfterSettingsRetry = await cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      return {entryDisplay:getComputedStyle(entry).display,
+        noticeDisplay:getComputedStyle(entry.shadowRoot.querySelector('[data-agent-skin-wallpaper-recovery]')).display};
+    })()`);
+    assert.deepEqual(startupNoticeAfterSettingsRetry, { entryDisplay: 'block', noticeDisplay: 'none' },
+      'a successful settings retry leaves the normal entry and removes any startup failure notice');
     const settingsResources = await cdp.evaluate(`(()=>{
       const run=window.__startupAnimationRuns.find(item=>item.runId===${retrySettings.runId});
       return run.handle.preview.report().resources;
@@ -2118,8 +2590,8 @@ try {
         const state=window.__startupAPI.status();
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         return {state:{phase:state.phase,runId:state.runId},
-          title:doc.querySelector('input[aria-label^="启动标题"]').value,
-          subtitle:doc.querySelector('textarea[aria-label^="背景字幕"]').value,
+          title:doc.querySelector('input[type="text"]').value,
+          subtitle:doc.querySelector('textarea').value,
           strength:doc.querySelector('input[type="range"]').value};
       })()`);
       assert.deepEqual(openedValues, { state: { phase: 'settings', runId: nextSettings.runId },
@@ -2128,7 +2600,7 @@ try {
       const nextSubtitle = 'Generated replay ' + cycle;
       await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
-        const subtitle=doc.querySelector('textarea[aria-label^="背景字幕"]');
+        const subtitle=doc.querySelector('textarea');
         subtitle.value=${JSON.stringify(nextSubtitle)};subtitle.dispatchEvent(new Event('input',{bubbles:true}));
         doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
       })()`);
@@ -2174,7 +2646,7 @@ try {
     assert.equal(lateSettings.runId, lateSettingsReady.runId);
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const subtitle=doc.querySelector('textarea[aria-label^="背景字幕"]');
+      const subtitle=doc.querySelector('textarea');
       subtitle.value='Late wallpaper test';subtitle.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
     })()`);
@@ -2350,15 +2822,17 @@ try {
       title.value='Draft survives';title.dispatchEvent(new Event('input',{bubbles:true}));
       strength.value='33';strength.dispatchEvent(new Event('input',{bubbles:true}));
       return {title:title.value,strength:strength.value,heading:doc.querySelector('[data-agent-skin-settings] h2').textContent,
-        titleLabel:title.getAttribute('aria-label')};
+        titleLabelText:title.labels?.[0]?.textContent.trim()||'',titleLabelCount:title.labels?.length||0};
     })()`);
     assert.equal(draftBefore.title, 'Draft survives');
     assert.equal(draftBefore.strength, '33');
     assert.equal(draftBefore.heading, '阿舟 · 主题与外观');
-    assert.equal(draftBefore.titleLabel, '启动标题（最多 16 个字符）');
+    assert.equal(draftBefore.titleLabelText, '启动标题（最多 16 个字符）');
+    assert.equal(draftBefore.titleLabelCount, 1, 'the visible title label remains associated with its text input');
 
     await cdp.evaluate(`(()=>{
       const root=document.documentElement;
+      window.__fixtureHost.CSS=window.CSS;
       root.lang='en-US';root.dataset.theme='light';
       root.style.setProperty('--color-surface','#f8fafc');
       root.style.setProperty('--color-text-primary','#172033');
@@ -2369,9 +2843,10 @@ try {
       const frame=document.querySelector('iframe[title="Azhou startup animation"]'),doc=frame?.contentDocument;
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),button=entry?.shadowRoot?.querySelector('button');
       const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[type="text"]');
+      const titleLabelText=title?.labels?.[0]?.textContent.trim()||'';
       if(!frame||frame.title!=='Azhou startup animation'||doc.documentElement.lang!=='en'
         ||doc.documentElement.dataset.theme!=='light'||dialog?.querySelector('h2')?.textContent!=='Azhou · Theme & Appearance'
-        ||title?.getAttribute('aria-label')!=='Startup title (up to 16 characters)')return false;
+        ||titleLabelText!=='Startup title (up to 16 characters)')return false;
       return {runId:window.__startupAPI.status().runId,phase:window.__startupAPI.status().phase,
         frameCount:document.querySelectorAll('iframe').length,runCount:window.__startupAnimationRuns.length,
         frameTitle:frame.title,frameAria:frame.getAttribute('aria-label'),locale:doc.documentElement.lang,
@@ -2383,7 +2858,7 @@ try {
         rootAria:doc.querySelector('[data-agent-skin-stage]').getAttribute('aria-label'),
         stageText:doc.querySelector('[data-agent-skin-stage-text]').textContent,
         heading:dialog.querySelector('h2').textContent,title:title.value,strength:dialog.querySelector('input[type="range"]').value,
-        titleLabel:title.getAttribute('aria-label'),settingsText:dialog.textContent,
+        titleLabelText,titleLabelCount:title.labels?.length||0,settingsText:dialog.textContent,
         drawnText:frame.contentWindow.__fixtureAnimationTextDraws||[],
         recordKeys:Object.keys(window.__startupAnimationRuns.at(-1).assets).sort()};
     })()`), 5000, 'official host locale/theme observer updates the current overlay and settings draft');
@@ -2413,7 +2888,8 @@ try {
     assert.equal(updated.heading, 'Azhou · Theme & Appearance');
     assert.equal(updated.title, 'Draft survives');
     assert.equal(updated.strength, '33');
-    assert.equal(updated.titleLabel, 'Startup title (up to 16 characters)');
+    assert.equal(updated.titleLabelText, 'Startup title (up to 16 characters)');
+    assert.equal(updated.titleLabelCount, 1, 'the localized visible label remains associated with its text input');
     assert.ok(updated.drawnText.includes('Synthetic agent'), 'appearance changes preserve and redraw explicit default text');
     const inheritedSettings = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[title="Azhou startup animation"]').contentDocument;
@@ -2557,10 +3033,11 @@ try {
     })()`), 5000, 'settings dialog opens before the committed reload setup');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      for(const [label,value] of [["input[aria-label^='启动标题']",${JSON.stringify(fields.introTitle)}],
-        ["input[aria-label^='标题说明']",${JSON.stringify(fields.introCaption)}],
-        ["textarea[aria-label^='背景字幕']",${JSON.stringify(fields.artworkSubtitle)}]]){
-        const control=doc.querySelector(label);control.value=value;control.dispatchEvent(new Event('input',{bubbles:true}));
+      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      for(const [control,value] of [[textFields[0],${JSON.stringify(fields.introTitle)}],
+        [textFields[1],${JSON.stringify(fields.introCaption)}],
+        [doc.querySelector('textarea'),${JSON.stringify(fields.artworkSubtitle)}]]){
+        control.value=value;control.dispatchEvent(new Event('input',{bubbles:true}));
       }
       const strength=doc.querySelector('input[type="range"]');strength.value='${fields.wallpaperStrength}';
       strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2594,9 +3071,10 @@ try {
     'the refreshed top-level page opens its actual settings dialog for a field readback');
     const reloadedFields = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {introTitle:doc.querySelector('input[aria-label^="启动标题"]').value,
-        introCaption:doc.querySelector('input[aria-label^="标题说明"]').value,
-        artworkSubtitle:doc.querySelector('textarea[aria-label^="背景字幕"]').value,
+      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      return {introTitle:textFields[0].value,
+        introCaption:textFields[1].value,
+        artworkSubtitle:doc.querySelector('textarea').value,
         wallpaperStrength:Number(doc.querySelector('input[type="range"]').value)};
     })()`);
     assert.deepEqual(reloadedFields, fields,
@@ -2637,7 +3115,7 @@ try {
         const state=window.__startupAPI.status();
         const frame=document.querySelector('iframe[aria-label]');
         const dialog=frame?.contentDocument.querySelector('dialog');
-        const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]')?.value;
+        const title=frame?.contentDocument.querySelector('input[type="text"]')?.value;
         return state.phase==='settings'&&state.runId===${expectedRunId}&&dialog?.open?{state,title}:false;
       })()`), 10000, 'settings panel opens before save ' + round);
       if (expectedTitle === null) expectedTitle = panel.title;
@@ -2645,7 +3123,7 @@ try {
       const nextTitle = 'Saved run ' + String(round).padStart(2, '0');
       const draft = await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
-        const title=doc.querySelector('input[aria-label^="启动标题"]');
+        const title=doc.querySelector('input[type="text"]');
         title.value=${JSON.stringify(nextTitle)};title.dispatchEvent(new Event('input',{bubbles:true}));
         return {value:title.value,buttonLabel:doc.querySelector('[data-agent-skin-settings] footer button:last-child')?.textContent.trim()};
       })()`);
@@ -3790,6 +4268,463 @@ try {
   });
 
   if (options.generatedPayload) {
+    const startupWallpaperFailureCheck = 'generated startup wallpaper failure is visible near the appearance entry';
+    if (!onlyChecks || onlyChecks.has(startupWallpaperFailureCheck)) {
+      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=notice');
+    }
+    await check(startupWallpaperFailureCheck, async () => {
+      const ready = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='playing'&&state.ready?state:false;
+      })()`), 20000, 'generated animation ready before recovering its startup wallpaper failure');
+      const skipped = await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument
+          .querySelector('[data-agent-skin-skip]');
+        if(!button)return false;
+        button.click();
+        return true;
+      })()`);
+      assert.equal(skipped, true, 'the generated startup animation exposes its normal skip control');
+      const failed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.wallpaper.failureCode==='shell-unsupported'?state:false;
+      })()`), 5000, 'the first generated wallpaper shell observer fails without waiting for the shell timeout');
+      const recovery = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const node=entry?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        if(!node)return null;
+        const style=getComputedStyle(node);
+        return {display:style.display,role:node.getAttribute('role'),
+          title:node.querySelector('[data-agent-skin-wallpaper-title]')?.textContent,
+          reason:node.querySelector('[data-agent-skin-wallpaper-reason]')?.textContent,
+          retry:node.querySelector('[data-agent-skin-wallpaper-retry]')?.getAttribute('aria-label'),
+          close:node.querySelector('[data-agent-skin-wallpaper-close]')?.getAttribute('aria-label')};
+      })()`);
+      assert.ok(recovery && recovery.display !== 'none' && recovery.retry && recovery.close,
+        'a completed startup wallpaper failure must expose its reason, retry and close beside the existing entry; '
+          + JSON.stringify({ ready: { phase: ready.phase, runId: ready.runId }, failed, recovery }));
+      assert.equal(recovery.role, 'group');
+      assert.equal(recovery.title, '启动背景未应用');
+      assert.equal(recovery.reason, '当前页面暂时无法监测可用的工作区背景区域。');
+      assert.equal(recovery.retry, '重试启动背景');
+      assert.equal(recovery.close, '关闭启动背景失败提示');
+
+      await cdp.evaluate(`document.documentElement.lang='en'`);
+      const english = await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const node=entry?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        return node?.querySelector('[data-agent-skin-wallpaper-title]')?.textContent
+          ==='Startup background not applied'?{
+            title:node.querySelector('[data-agent-skin-wallpaper-title]').textContent,
+            reason:node.querySelector('[data-agent-skin-wallpaper-reason]').textContent,
+            retry:node.querySelector('[data-agent-skin-wallpaper-retry]').getAttribute('aria-label'),
+            close:node.querySelector('[data-agent-skin-wallpaper-close]').getAttribute('aria-label')}:false;
+      })()`), 3000, 'the visible startup wallpaper recovery updates with the host language');
+      assert.equal(english.reason, 'This page cannot currently monitor a supported workspace background area.');
+      assert.equal(english.retry, 'Retry startup background');
+      assert.equal(english.close, 'Close startup background notice');
+      await cdp.evaluate(`document.documentElement.lang='zh-CN'`);
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+        ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-title]')?.textContent==='启动背景未应用'`),
+      3000, 'the recovery returns to the Chinese host language');
+
+      const keyboardFocus = [];
+      for (const theme of ['dark', 'light']) {
+        await cdp.evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+          ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]')?.style.colorScheme
+          ===${JSON.stringify(theme)}`), 3000, theme + ' recovery appearance update');
+        await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+          ?.shadowRoot?.querySelector('[aria-haspopup="dialog"]')?.focus()`);
+        await dispatchTab();
+        const retryFocus = await cdp.evaluate(`(()=>{
+          const shadow=document.querySelector('[data-agent-skin-entry="appearance"]')?.shadowRoot;
+          const retry=shadow?.querySelector('[data-agent-skin-wallpaper-retry]');
+          const style=retry&&getComputedStyle(retry);
+          return {active:shadow?.activeElement===retry,focusVisible:retry?.matches(':focus-visible'),
+            outlineColor:style?.outlineColor,outlineStyle:style?.outlineStyle,outlineWidth:style?.outlineWidth};
+        })()`);
+        assert.equal(retryFocus.active, true, theme + ' Tab focuses retry');
+        assert.equal(retryFocus.focusVisible, true, theme + ' keyboard focus matches :focus-visible');
+        assert.ok(retryFocus.outlineStyle !== 'none' && parseFloat(retryFocus.outlineWidth) >= 2
+          && retryFocus.outlineColor !== 'transparent' && !/rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(retryFocus.outlineColor),
+        theme + ' retry has a visible focus outline: ' + JSON.stringify(retryFocus));
+        await dispatchTab();
+        const closeFocus = await cdp.evaluate(`(()=>{
+          const shadow=document.querySelector('[data-agent-skin-entry="appearance"]')?.shadowRoot;
+          const close=shadow?.querySelector('[data-agent-skin-wallpaper-close]');
+          const style=close&&getComputedStyle(close);
+          return {active:shadow?.activeElement===close,focusVisible:close?.matches(':focus-visible'),
+            outlineColor:style?.outlineColor,outlineStyle:style?.outlineStyle,outlineWidth:style?.outlineWidth};
+        })()`);
+        assert.equal(closeFocus.active, true, theme + ' Tab focuses close');
+        assert.equal(closeFocus.focusVisible, true, theme + ' close keyboard focus matches :focus-visible');
+        assert.ok(closeFocus.outlineStyle !== 'none' && parseFloat(closeFocus.outlineWidth) >= 2
+          && closeFocus.outlineColor !== 'transparent' && !/rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(closeFocus.outlineColor),
+        theme + ' close has a visible focus outline: ' + JSON.stringify(closeFocus));
+        keyboardFocus.push({ theme, retryFocus, closeFocus });
+      }
+      await dispatchEnter();
+      const closed = await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const shadow=entry?.shadowRoot,notice=shadow?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        if(getComputedStyle(notice).display!=='none')return false;
+        const live=shadow?.querySelector('[data-agent-skin-wallpaper-live]');
+        const appearanceButton=shadow?.querySelector('[aria-haspopup="dialog"]');
+        return {noticeDisplay:getComputedStyle(notice).display,buttonDisplay:getComputedStyle(entry).display,
+          failureCode:window.__startupAPI.status().wallpaper.failureCode,phase:window.__startupAPI.status().phase,
+          focusReturnedToEntry:document.activeElement===entry&&shadow?.activeElement===appearanceButton,
+          announcement:live?.textContent};
+      })()`), 3000, 'Enter closes the recovery notice');
+      assert.deepEqual(closed, { noticeDisplay: 'none', buttonDisplay: 'block',
+        failureCode: 'shell-unsupported', phase: 'complete', focusReturnedToEntry: true,
+        announcement: '已关闭启动背景失败提示，应用仍可使用。' },
+      'Enter closes only the recovery card, keeps the controller available, and returns focus to the entry');
+      const disposed = await cdp.evaluate('window.__startupAPI.dispose()');
+      assert.deepEqual(disposed, { disposed: true }, 'the completed synthetic controller is disposed before page reuse');
+      return { ready: { phase: ready.phase, runId: ready.runId }, skipped, failed, recovery, english, keyboardFocus, closed, disposed };
+    });
+
+    const startupWallpaperRetryCheck = 'generated startup wallpaper retry succeeds without replaying the animation';
+    if (!onlyChecks || onlyChecks.has(startupWallpaperRetryCheck)) {
+      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=retry');
+    }
+    await check(startupWallpaperRetryCheck, async () => {
+      const ready = await awaitGeneratedReady('generated animation ready before its wallpaper retry');
+      const skipped = await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument
+          .querySelector('[data-agent-skin-skip]');
+        if(!button)return false;
+        button.click();
+        return true;
+      })()`);
+      assert.equal(skipped, true);
+      const failed = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.wallpaper.failureCode==='shell-unsupported'?state:false;
+      })()`), 5000, 'the generated startup wallpaper failure is recorded before retry');
+      const entryBeforeRetry = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const notice=entry?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        return {display:getComputedStyle(notice).display,
+          retry:notice?.querySelector('[data-agent-skin-wallpaper-retry]')?.getAttribute('aria-label')};
+      })()`);
+      assert.equal(entryBeforeRetry.display, 'block');
+      assert.equal(entryBeforeRetry.retry, '重试启动背景');
+      await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+        ?.shadowRoot?.querySelector('[aria-haspopup="dialog"]')?.focus()`);
+      await dispatchTab();
+      const retryBeforeEnter = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const shadow=entry?.shadowRoot,retry=shadow?.querySelector('[data-agent-skin-wallpaper-retry]');
+        return {focused:shadow?.activeElement===retry,focusVisible:retry?.matches(':focus-visible')};
+      })()`);
+      assert.deepEqual(retryBeforeEnter, { focused: true, focusVisible: true },
+        'Tab places keyboard focus on retry before Enter');
+      await dispatchEnter();
+      const retryClicked = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const retry=entry?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-retry]');
+        if(!retry)return false;
+        const disabledWhilePending=retry.disabled;
+        const pendingLabel=retry.getAttribute('aria-label');
+        retry.click();
+        return {started:true,disabledWhilePending,disabledAfterDuplicateClick:retry.disabled,pendingLabel};
+      })()`);
+      assert.deepEqual(retryClicked, { started: true, disabledWhilePending: true,
+        disabledAfterDuplicateClick: true, pendingLabel: '正在重试启动背景' },
+      'the visible retry becomes busy immediately and does not start a concurrent retry');
+      assert.equal(await cdp.evaluate('window.__releaseShell()'), true,
+        'the existing fixture releases the supported shell while the user retry is pending');
+      const applied = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.wallpaper.applied?state:false;
+      })()`), 15000, 'the user retry applies the wallpaper after the shell appears');
+      const after = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const shadow=entry?.shadowRoot,notice=shadow?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        const appearanceButton=shadow?.querySelector('[aria-haspopup="dialog"]');
+        return {state:window.__startupAPI.status(),noticeDisplay:getComputedStyle(notice).display,
+          entryDisplay:getComputedStyle(entry).display,iframeCount:document.querySelectorAll('iframe[aria-label]').length,
+          focusReturnedToEntry:document.activeElement===entry&&shadow?.activeElement===appearanceButton,
+          announcement:shadow?.querySelector('[data-agent-skin-wallpaper-live]')?.textContent,
+          wallpaperStyleCount:document.querySelectorAll('#azhou-wallpaper-style').length};
+      })()`);
+      assert.equal(after.state.runId, ready.runId, 'retry keeps the original controller run');
+      assert.equal(after.noticeDisplay, 'none', 'success removes the startup failure card');
+      assert.equal(after.entryDisplay, 'block', 'success leaves the existing appearance entry available');
+      assert.equal(after.iframeCount, 0, 'retry does not replay or reopen the startup animation');
+      assert.equal(after.focusReturnedToEntry, true,
+        'successful Enter retry returns focus to the entry when the retry control held keyboard focus');
+      assert.equal(after.announcement, '启动背景已应用。');
+      assert.equal(after.wallpaperStyleCount, 1, 'the supported shell receives one owned wallpaper layer');
+      return { ready: { phase: ready.phase, runId: ready.runId }, skipped, failed, entryBeforeRetry,
+        retryClicked, applied, after };
+    });
+
+    const startupWallpaperHostFocusCheck = 'generated startup wallpaper retry preserves host focus after it moves outside recovery';
+    if (!onlyChecks || onlyChecks.has(startupWallpaperHostFocusCheck)) {
+      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=host');
+    }
+    await check(startupWallpaperHostFocusCheck, async () => {
+      const ready = await awaitGeneratedReady('generated animation ready before preserving host focus');
+      const skipped = await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument
+          .querySelector('[data-agent-skin-skip]');
+        if(!button)return false;
+        button.click();
+        return true;
+      })()`);
+      assert.equal(skipped, true);
+      await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.wallpaper.failureCode==='shell-unsupported'?state:false;
+      })()`), 5000, 'startup wallpaper failure is ready for keyboard retry');
+      await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+        ?.shadowRoot?.querySelector('[aria-haspopup="dialog"]')?.focus()`);
+      await dispatchTab();
+      const retryFocused = await cdp.evaluate(`(()=>{
+        const shadow=document.querySelector('[data-agent-skin-entry="appearance"]')?.shadowRoot;
+        return shadow?.activeElement?.hasAttribute('data-agent-skin-wallpaper-retry')===true;
+      })()`);
+      assert.equal(retryFocused, true);
+      await dispatchEnter();
+      await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
+        ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-retry]')?.disabled===true`),
+      3000, 'retry enters its busy state before moving focus');
+      const hostFocus = await cdp.evaluate(`(()=>{
+        const button=document.querySelector('#theme');
+        button.focus();
+        return document.activeElement===button;
+      })()`);
+      assert.equal(hostFocus, true, 'focus moves to a host control while retry is pending');
+      assert.equal(await cdp.evaluate('window.__releaseShell()'), true);
+      const applied = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.wallpaper.applied?state:false;
+      })()`), 15000, 'retry succeeds after the shell becomes available');
+      const after = await cdp.evaluate(`(()=>({activeIsHostButton:document.activeElement===document.querySelector('#theme'),
+        activeId:document.activeElement?.id,
+        noticeDisplay:getComputedStyle(document.querySelector('[data-agent-skin-entry="appearance"]')
+          ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]')).display}))()`);
+      assert.deepEqual(after, { activeIsHostButton: true, activeId: 'theme', noticeDisplay: 'none' },
+        'retry success preserves focus after the user moves it to the host');
+      return { ready: { runId: ready.runId }, skipped, applied, after };
+    });
+
+    await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+    await check('generated settings editor Tab cannot modify the host composer', async () => {
+      await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='playing'&&state.ready?state:false;
+      })()`), 15000, 'generated animation is ready before opening settings');
+      const hostInput = await cdp.evaluate(`(()=>{
+        const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
+        if(!input)return false;
+        const alreadyInert=document.createElement('div');
+        alreadyInert.id='fixture-focus-preexisting-inert';alreadyInert.inert=true;
+        document.body.appendChild(alreadyInert);
+        input.value='host-composer-sentinel';input.focus();
+        return {focused:document.activeElement===input,accepted:window.__startupAPI.openSettings()};
+      })()`);
+      assert.deepEqual(hostInput, { focused: true, accepted: true },
+        'the fixture has a focused host textarea before the generated settings dialog opens');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        return window.__startupAPI.status().phase==='settings'
+          &&doc?.querySelector('[data-agent-skin-settings]')?.open;
+      })()`), 15000, 'generated settings dialog opens inside the overlay iframe');
+      const isolation = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        return {bodyInert:document.body.inert,rootInert:document.querySelector('#root')?.inert,
+          frameInert:frame?.inert,preexistingInert:document.querySelector('#fixture-focus-preexisting-inert')?.inert};
+      })()`);
+      assert.deepEqual(isolation, { bodyInert: false, rootInert: true, frameInert: false, preexistingInert: true },
+        'isolation covers host content without inerting the frame ancestor or changing existing inert state');
+      await cdp.evaluate(`(()=>{
+        const late=document.createElement('button');late.id='fixture-focus-late-host-button';
+        late.textContent='Late host action';window.__fixtureFocusDetachedButton=late;document.body.appendChild(late);
+      })()`);
+      await until(() => cdp.evaluate(`document.querySelector('#fixture-focus-late-host-button')?.inert===true`),
+        3000, 'a host button added during settings becomes inert');
+      await cdp.evaluate(`document.querySelector('#root').inert=false`);
+      await until(() => cdp.evaluate(`document.querySelector('#root')?.inert===true`),
+        3000, 'a host inert edit during settings does not open the keyboard boundary');
+      await cdp.evaluate(`document.querySelector('#fixture-focus-late-host-button')?.remove()`);
+      await until(() => cdp.evaluate(`!window.__fixtureFocusDetachedButton?.isConnected`),
+        3000, 'the late host button is detached');
+      await cdp.evaluate(`window.__fixtureFocusDetachedButton.inert=false`);
+      await delay(50);
+      await cdp.evaluate(`document.body.appendChild(window.__fixtureFocusDetachedButton)`);
+      await until(() => cdp.evaluate(`document.querySelector('#fixture-focus-late-host-button')?.inert===true`),
+        3000, 'a detached host button is re-isolated when it is reinserted');
+      const trace = [];
+      let textareaReached = null;
+      const boundaries = [];
+      for (const shiftKey of [false, true]) {
+        const boundary = await cdp.evaluate(`(()=>{
+          const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+          const dialog=doc?.querySelector('[data-agent-skin-settings]');
+          const controls=[...dialog.querySelectorAll('button,input,textarea,select,[tabindex]')]
+            .filter(item=>item.tabIndex>=0&&!item.disabled&&item.type!=='hidden'
+              &&getComputedStyle(item).display!=='none'&&getComputedStyle(item).visibility!=='hidden'
+              &&item.getClientRects().length>0);
+          const control=controls.at(${shiftKey ? 0 : -1});
+          control?.focus();
+          return control&&doc.activeElement===control?{count:controls.length,
+            edge:control.getAttribute('aria-label')||control.tagName}:false;
+        })()`);
+        assert.ok(boundary, 'generated settings dialog exposes a focusable control at each Tab boundary');
+        boundaries.push({ shiftKey, ...boundary });
+        for (let index = 0; index < boundary.count * 2 + 1; index++) {
+          await dispatchTab(shiftKey);
+          const focus = await cdp.evaluate(`(()=>{
+            const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
+            const frame=document.querySelector('iframe[aria-label]');
+            return {value:input?.value,hostTextareaFocused:document.activeElement===input,
+              hostFrameFocused:document.activeElement===frame,
+              parentFocus:document.activeElement?.tagName+'#'+(document.activeElement?.id||''),
+              dialogFocus:frame?.contentDocument?.activeElement?.tagName+'#'
+                +(frame?.contentDocument?.activeElement?.id||'')};
+          })()`);
+          if (!focus.hostFrameFocused && trace.length < 4) trace.push({ shiftKey, index, ...focus });
+          if (focus.hostTextareaFocused) {
+            textareaReached = { shiftKey, index, parentFocus: focus.parentFocus };
+            await cdp.call('Input.insertText', { text: 'focus-leak' });
+            break;
+          }
+        }
+        if (textareaReached) break;
+      }
+      const finalValue = await cdp.evaluate(`(document.querySelector('.composer textarea')||document.querySelector('textarea'))?.value`);
+      assert.equal(finalValue, 'host-composer-sentinel',
+        'Tab must not reach the host textarea and accept keyboard text; boundary=' + JSON.stringify({ boundaries, trace, textareaReached, finalValue }));
+      assert.equal(trace.length, 0,
+        'focus must remain in the generated settings iframe; boundary=' + JSON.stringify({ boundaries, trace, textareaReached }));
+      await cdp.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+      await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+      await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='settings-cancel'&&!document.querySelector('iframe[aria-label]')
+          ?state:false;
+      })()`), 5000, 'Escape closes the generated settings editor and restores ownership');
+      const restored = await cdp.evaluate(`(()=>{
+        const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
+        return {value:input?.value,inputFocused:document.activeElement===input,
+          rootInert:document.querySelector('#root')?.inert,
+          lateHostInert:document.querySelector('#fixture-focus-late-host-button')?.inert,
+          preexistingInert:document.querySelector('#fixture-focus-preexisting-inert')?.inert};
+      })()`);
+      assert.deepEqual(restored, { value: 'host-composer-sentinel', inputFocused: true,
+        rootInert: false, lateHostInert: false, preexistingInert: true },
+      'closing returns focus and each host node to its latest or original state');
+      await cdp.evaluate(`document.querySelector('#fixture-focus-late-host-button')?.remove();delete window.__fixtureFocusDetachedButton;document.querySelector('#fixture-focus-preexisting-inert')?.remove()`);
+      return { boundaries, trace, textareaReached, finalValue, isolation, restored };
+    });
+
+    await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+    await check('generated settings preview keeps keyboard focus out of the host composer', async () => {
+      await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='playing'&&state.ready?state:false;
+      })()`), 15000, 'generated animation is ready before opening settings');
+      const hostInput = await cdp.evaluate(`(()=>{
+        const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
+        if(!input)return false;
+        input.value='preview-host-sentinel';input.focus();
+        return {focused:document.activeElement===input,accepted:window.__startupAPI.openSettings()};
+      })()`);
+      assert.deepEqual(hostInput, { focused: true, accepted: true },
+        'the fixture has a focused host textarea before the generated settings dialog opens');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        const dialog=doc?.querySelector('[data-agent-skin-settings]');
+        return window.__startupAPI.status().phase==='settings'&&dialog?.open
+          ?{runId:window.__startupAPI.status().runId,dialogOpen:dialog.open}:false;
+      })()`), 15000, 'generated settings dialog opens inside the real overlay iframe');
+      await cdp.evaluate(`(()=>{
+        const dialog=document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-settings]');
+        dialog.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+        const title=dialog.querySelector('input[maxlength="16"]');
+        title.value='Draft survives';title.dispatchEvent(new dialog.ownerDocument.defaultView.Event('input',{bubbles:true}));
+      })()`);
+      await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        frame.contentDocument.querySelector('[data-agent-skin-preview-animation]').click();
+      })()`);
+      const preview = await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+        const close=overlay?.querySelector('[data-agent-skin-settings-preview-close]');
+        const previewFrame=overlay?.querySelector('[data-agent-skin-settings-preview-frame]');
+        return overlay&&close&&previewFrame?{runId:window.__startupAPI.status().runId}:false;
+      })()`), 10000, 'generated settings preview mounts');
+      const previewState = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
+        const close=doc.querySelector('[data-agent-skin-settings-preview-close]');
+        return {hostFrameFocused:document.activeElement===frame,rootInert:document.querySelector('#root')?.inert,
+          previewFrameTabIndex:doc.querySelector('[data-agent-skin-settings-preview-frame]')?.tabIndex,
+          closeFocused:doc.activeElement===close};
+      })()`);
+      assert.deepEqual(previewState, { hostFrameFocused: true, rootInert: true, previewFrameTabIndex: -1, closeFocused: true });
+      const focusLoss = [];
+      for (const shiftKey of [false, false, true, true]) {
+        for (let index = 0; index < 32; index++) {
+          await dispatchTab(shiftKey);
+          const focus = await cdp.evaluate(`(()=>{
+            const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+            const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
+            const active=doc?.activeElement;
+            return {hostFrameFocused:document.activeElement===frame,
+              insidePreview:!!overlay&&!!active&&(active===overlay||overlay.contains(active)),
+              hostTextareaFocused:document.activeElement===document.querySelector('.composer textarea')
+                ||document.activeElement===document.querySelector('textarea')};
+          })()`);
+          if (!focus.hostFrameFocused || !focus.insidePreview || focus.hostTextareaFocused) {
+            focusLoss.push({ shiftKey, index, ...focus });
+            await cdp.call('Input.insertText', { text: 'focus-leak' });
+            break;
+          }
+        }
+        if (focusLoss.length) break;
+      }
+      const after = await cdp.evaluate(`(()=>({
+        value:(document.querySelector('.composer textarea')||document.querySelector('textarea'))?.value,
+        frameCount:document.querySelectorAll('iframe[aria-label]').length,
+        phase:window.__startupAPI.status().phase
+      }))()`);
+      assert.deepEqual(focusLoss, [], 'forward and reverse Tab stay inside the active generated preview');
+      assert.equal(after.value, 'preview-host-sentinel', 'keyboard input cannot modify the host composer');
+      assert.equal(after.frameCount, 1);
+      assert.equal(after.phase, 'settings');
+      await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        doc.querySelector('[data-agent-skin-settings-preview-close]').click();
+      })()`);
+      const returned = await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        const dialog=doc?.querySelector('[data-agent-skin-settings]');
+        const title=dialog?.querySelector('input[maxlength="16"]');
+        const previewButton=dialog?.querySelector('[data-agent-skin-preview-animation]');
+        return dialog?.open&&!dialog.querySelector('[data-agent-skin-settings-preview]')
+          ?{draftTitle:title?.value,previewButtonFocused:doc.activeElement===previewButton,
+            hostFrameFocused:document.activeElement===frame,rootInert:document.querySelector('#root')?.inert}:false;
+      })()`), 5000, 'closing the generated preview returns to the settings draft');
+      assert.deepEqual(returned, { draftTitle: 'Draft survives', previewButtonFocused: true,
+        hostFrameFocused: true, rootInert: true });
+      await cdp.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+      await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'&&!document.querySelector('iframe[aria-label]')`),
+        5000, 'settings dialog closes after preview return');
+      const restored = await cdp.evaluate(`(()=>({
+        value:(document.querySelector('.composer textarea')||document.querySelector('textarea'))?.value,
+        inputFocused:document.activeElement===(document.querySelector('.composer textarea')||document.querySelector('textarea')),
+        rootInert:document.querySelector('#root')?.inert
+      }))()`);
+      assert.deepEqual(restored, { value: 'preview-host-sentinel', inputFocused: true, rootInert: false });
+      return { runId: preview.runId, focusCycles: 4, hostComposerValue: after.value, returned, restored };
+    });
+
     await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
     await check('generated appearance entry avoids sidebar update and profile controls', async () => {
       await until(() => cdp.evaluate(`window.__startupAPI?.status().phase==='playing' && window.__startupAPI.status().ready`),
@@ -3820,6 +4755,172 @@ try {
       assert.equal(applied.frames, 0);
       assert.equal(applied.observers.wallpaperShellWait.active, 0);
       return applied;
+    });
+    await navigate('/fixture.html?generated-payload=1');
+    await check('generated cold start restores saved wallpaper after natural completion without another save', async () => {
+      const fields = { introTitle: '冷启动恢复', wallpaperStrength: 19 };
+      const initial = await awaitGeneratedReady('generated animation is ready before saving cold-start fields');
+      const firstURL = await cdp.evaluate('location.href');
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+        'the generated controller opens its Appearance settings');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        return window.__startupAPI.status().phase==='settings'
+          &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+      })()`), 10000, 'generated Appearance settings open before the first save');
+      await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+        const title=doc.querySelector('input[maxlength="16"]');
+        title.value=${JSON.stringify(fields.introTitle)};
+        title.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+        const strength=doc.querySelector('input[type="range"]');
+        strength.value='${fields.wallpaperStrength}';
+        strength.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+      })()`);
+      const saved = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='settings-save'
+          &&state.runId===${initial.runId}&&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 15000, 'first generated settings save commits without replay');
+      const firstTimeOrigin = await cdp.evaluate('performance.timeOrigin');
+
+      await navigate('/fixture.html?generated-payload=1&hold-shell=1');
+      const nextURL = await cdp.evaluate('location.href');
+      const nextTimeOrigin = await cdp.evaluate('performance.timeOrigin');
+      assert.equal(new URL(nextURL).origin, new URL(firstURL).origin,
+        'the cold startup is a new document on the same origin as the committed IndexedDB record');
+      assert.notEqual(nextTimeOrigin, firstTimeOrigin, 'navigation created a new top-level document');
+      const coldRun = await awaitGeneratedReady('cold generated animation is ready while its shell is withheld');
+      const held = await cdp.evaluate(`(()=>({
+        state:window.__startupAPI.status(),
+        shellCount:document.querySelectorAll('[data-app-shell-frame]').length,
+        styleCount:document.querySelectorAll('#azhou-wallpaper-style').length
+      }))()`);
+      assert.equal(held.state.runId, coldRun.runId);
+      assert.equal(held.state.phase, 'playing');
+      assert.equal(held.state.wallpaper.applied, false);
+      assert.equal(held.shellCount, 0);
+      assert.equal(held.styleCount, 0);
+
+      const natural = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='natural'
+          &&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 20000, 'the cold generated startup finishes its full natural playback before shell mount');
+      assert.equal(natural.runId, coldRun.runId);
+      assert.equal(natural.wallpaper.applied, false,
+        'the wallpaper remains pending until the deliberately withheld shell mounts');
+      assert.equal(await cdp.evaluate('window.__releaseShell()'), true,
+        'the synthetic supported shell is released after natural completion');
+
+      const inspectWallpaper = () => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status(),api=window.__azhouWallpaper?.status?.();
+        const style=document.querySelector('#azhou-wallpaper-style');
+        const wash=document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash');
+        return {startup:state?.wallpaper||null,api:api||null,
+          owner:window.__azhouWallpaper?.owner||null,
+          apiKeys:Object.keys(window.__azhouWallpaper||{}).sort(),
+          styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+          styleOwner:style?.getAttribute('data-azhou-owner')||null,
+          washStops:Array.from(wash.matchAll(/var\\(--azhou-base\\)\\s+(\\d+)%/g),match=>Number(match[1])),
+          wash};
+      })()`);
+      let restored;
+      try {
+        restored = await until(async () => {
+          const state = await inspectWallpaper();
+          return state.startup?.applied&&state.startup.imageDecoded
+            &&state.api?.applied&&state.api.imageDecoded&&state.styleCount===1?state:false;
+        }, 5000, 'saved wallpaper is restored after the late shell mounts without reopening settings');
+      } catch (error) {
+        restored = { ...(await inspectWallpaper()), waitError: error.message };
+      }
+      const expectedWashStops = [89, 92, 95, 93, 86, 71, 68];
+      const appliedWithoutSave = restored.startup?.applied===true
+        &&restored.startup.imageDecoded===true&&restored.api?.applied===true
+        &&restored.api.imageDecoded===true&&restored.owner==='azhou.codex-startup-animation'
+        &&restored.styleCount===1&&restored.styleOwner==='azhou.codex-startup-animation';
+      const strengthMatches = JSON.stringify(restored.washStops)===JSON.stringify(expectedWashStops);
+      if (!appliedWithoutSave || !strengthMatches) {
+        const beforeRecoverySave = restored;
+        let recoverySave;
+        try {
+          assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+            'recovery can open Appearance after the cold run completes');
+          await until(() => cdp.evaluate(`(()=>{
+            const frame=document.querySelector('iframe[aria-label]');
+            return window.__startupAPI.status().phase==='settings'
+              &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+          })()`), 10000, 'Appearance opens for the failure recovery save');
+          const recoveryFields = await cdp.evaluate(`(()=>{
+            const doc=document.querySelector('iframe[aria-label]').contentDocument;
+            doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+            const introTitle=doc.querySelector('input[maxlength="16"]')?.value;
+            doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+            return {introTitle,wallpaperStrength:Number(doc.querySelector('input[type="range"]')?.value)};
+          })()`);
+          await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument
+            .querySelector('[data-agent-skin-settings] footer button:last-child').click()`);
+          let afterSave;
+          try {
+            afterSave = await until(async () => {
+              const state = await inspectWallpaper();
+              const controller = await cdp.evaluate('window.__startupAPI.status()');
+              return controller.phase==='complete'&&controller.completion?.cause==='settings-save'
+                &&state.startup?.applied&&state.api?.imageDecoded?{...state,controller}:false;
+            }, 10000, 'recovery Appearance Save applies the persisted wallpaper');
+          } catch (saveError) {
+            afterSave = { ...(await inspectWallpaper()), waitError: saveError.message,
+              controller: await cdp.evaluate('window.__startupAPI.status()') };
+          }
+          recoverySave = { recoveryFields, afterSave };
+        } catch (recoveryError) {
+          recoverySave = { error: recoveryError.message,
+            afterSave: await inspectWallpaper().catch(statusError => ({ error: statusError.message })) };
+        }
+        assert.ok(appliedWithoutSave && strengthMatches,
+          'saved wallpaper must restore at strength 19 after natural completion and late shell mount, before another Save; '
+          + JSON.stringify({ natural: { runId: natural.runId, completion: natural.completion },
+            beforeRecoverySave, recoverySave, expectedWashStops }));
+      }
+
+      assert.deepEqual(restored.washStops, expectedWashStops,
+        'the applied wallpaper wash is generated from the persisted wallpaperStrength=19');
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+        'Appearance can be opened after wallpaper restoration for a read-only persistence check');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        return window.__startupAPI.status().phase==='settings'
+          &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+      })()`), 10000, 'read-only Appearance persistence check opens');
+      const readback = await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+        const introTitle=doc.querySelector('input[maxlength="16"]')?.value;
+        doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+        return {introTitle,wallpaperStrength:Number(doc.querySelector('input[type="range"]')?.value)};
+      })()`);
+      assert.deepEqual(readback, fields,
+        'the newly opened Appearance panel reads the saved title and wallpaperStrength from IndexedDB without editing them');
+      await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+      })()`);
+      const canceled = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='settings-cancel'
+          &&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 5000, 'read-only Appearance check closes without saving');
+      return { firstSave: { runId: saved.runId, completion: saved.completion },
+        sameOrigin: new URL(firstURL).origin, timeOriginChanged: nextTimeOrigin!==firstTimeOrigin,
+        coldRun: { runId: coldRun.runId, phase: coldRun.phase },
+        natural: { runId: natural.runId, completion: natural.completion }, held,
+        wallpaperWithoutSave: { owner: restored.owner, styleCount: restored.styleCount,
+          apiKeys: restored.apiKeys, styleOwner: restored.styleOwner, washStops: restored.washStops },
+        readback, closedWith: canceled.completion };
     });
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
@@ -4118,16 +5219,19 @@ try {
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
         return {appName:value('appName'),botName:value('botName'),version:value('version'),
-          source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length};
+          source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length,
+          runningVersion:doc.querySelector('header [data-agent-skin-running-version]')?.textContent};
       })()`);
       assert.equal(themePage.appName, '阿舟 AI 实验室');
       assert.equal(themePage.botName, '阿舟');
       assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);
+      assert.equal(themePage.runningVersion,
+        `当前运行：${packageMetadata.runtime_version} · build ${packageMetadata.runtime_build}`);
       assert.equal(themePage.sections, 3);
       assert.equal(themePage.source, '默认设置');
       const draft = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-        const title=doc.querySelector('input[aria-label^="启动标题"]');
+        const title=doc.querySelector('input[type="text"]');
         title.value='生成载荷保存验证';title.dispatchEvent(new Event('input',{bubbles:true}));
         const button=doc.querySelector('[data-agent-skin-settings] footer button:last-child');
         if(!button)throw new Error('generated payload settings save control is missing');
@@ -4164,7 +5268,7 @@ try {
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       const persisted = await until(() => cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
-        const title=frame?.contentDocument.querySelector('input[aria-label^="启动标题"]');
+        const title=frame?.contentDocument.querySelector('input[type="text"]');
         const state=window.__startupAPI.status();
         return state.phase==='settings'&&title?{title:title.value,runId:state.runId}:false;
       })()`), 10000, 'saved generated payload settings are loaded into a newly opened settings run');
@@ -4199,21 +5303,83 @@ try {
         return state.phase==='complete'&&state.completion?.cause==='skip'?state:false;
       })()`), 5000, 'generated animation completes under strict style-src self');
       const entry = await appearanceEntryMetrics();
+      const recovery = await cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const shadow=entry?.shadowRoot;
+        const card=shadow?.querySelector('[data-agent-skin-wallpaper-recovery]');
+        const style=card&&getComputedStyle(card),rect=card?.getBoundingClientRect();
+        const button=shadow?.querySelector('button');
+        const close=shadow?.querySelector('[data-agent-skin-wallpaper-close]');
+        const closeRect=close?.getBoundingClientRect();
+        const center=value=>value&&({x:value.left+value.width/2,y:value.top+value.height/2});
+        const cardCenter=center(rect),closeCenter=center(closeRect);
+        const cardTarget=cardCenter&&shadow.elementFromPoint?.(cardCenter.x,cardCenter.y);
+        const closeTarget=closeCenter&&shadow.elementFromPoint?.(closeCenter.x,closeCenter.y);
+        const entryStyle=entry&&getComputedStyle(entry),entryRect=entry?.getBoundingClientRect();
+        const rectData=value=>value&&({x:value.x,y:value.y,width:value.width,height:value.height,
+          right:value.right,bottom:value.bottom});
+        const visible=!!card&&entryStyle?.display!=='none'&&style?.display!=='none'
+          &&style?.visibility==='visible'&&Number(style.opacity)>0&&rect?.width>0&&rect?.height>0;
+        return {visible,display:style?.display??null,visibility:style?.visibility??null,
+          title:card?.querySelector('[data-agent-skin-wallpaper-title]')?.textContent??null,
+          reason:card?.querySelector('[data-agent-skin-wallpaper-reason]')?.textContent??null,
+          retryText:shadow?.querySelector('[data-agent-skin-wallpaper-retry]')?.textContent??null,
+          retryDisabled:shadow?.querySelector('[data-agent-skin-wallpaper-retry]')?.disabled??null,
+          closeText:close?.textContent??null,closeDisabled:close?.disabled??null,
+          cardHit:!!card&&!!cardTarget&&(cardTarget===card||card.contains(cardTarget)),
+          closeHit:!!close&&!!closeTarget&&(closeTarget===close||close.contains(closeTarget)),
+          rect:rectData(rect),buttonRect:rectData(button?.getBoundingClientRect()),
+          entryLayout:entryStyle&&{display:entryStyle.display,position:entryStyle.position,
+            flexDirection:entryStyle.flexDirection,alignItems:entryStyle.alignItems,gap:entryStyle.gap,
+            rect:rectData(entryRect)}};
+      })()`);
       await screenshot('appearance-entry-csp-style-src-self.png');
       const diagnostic = JSON.stringify({ phase: completed.phase, viewport: entry?.viewport,
-        display: entry?.display, position: entry?.position, rect: entry?.rect,
+        wallpaper: completed.wallpaper, display: entry?.display, position: entry?.position, rect: entry?.rect,
         avatar: entry?.avatar, nameLabel: entry?.nameLabel,
-        entryHit: entry?.entryHit, buttonHit: entry?.buttonHit, buttonText: entry?.buttonText });
-      assert.equal(entry?.display, 'block', 'appearance entry is visible under strict CSP: ' + diagnostic);
+        entryHit: entry?.entryHit, buttonHit: entry?.buttonHit, buttonText: entry?.buttonText, recovery });
+      const cspStyleFailure = ['styles-not-effective', 'styles-not-effective-after-replacement']
+        .includes(completed.wallpaper?.failureCode);
+      assert.equal(entry?.display, recovery.visible ? 'flex' : 'block',
+        'appearance entry uses its normal or recovery layout under strict CSP: ' + diagnostic);
       assert.equal(entry.position, 'fixed', 'appearance entry positioning is available under strict CSP: ' + diagnostic);
       assert.ok(entry.rect.width >= 44 && entry.rect.width <= 120,
         'appearance entry stays within compact avatar-and-name geometry under strict CSP: ' + diagnostic);
+      assert.ok(entry.rect.x >= 0 && entry.rect.y >= 0
+        && entry.rect.x + entry.rect.width <= entry.viewport.width
+        && entry.rect.y + entry.rect.height <= entry.viewport.height,
+      'appearance button remains fully inside the viewport under strict CSP: ' + diagnostic);
       assert.deepEqual(entry.avatar, { width: 32, height: 32, display: 'block', borderRadius: '10px', objectFit: 'cover' },
         'generated avatar keeps its bounded styled dimensions under strict CSP: ' + diagnostic);
       assert.deepEqual(entry.nameLabel, { text: '阿舟外观', fontSize: '12px', lineHeight: '18px' },
         'generated avatar name remains visible with the button typography under strict CSP: ' + diagnostic);
       assert.equal(entry.entryHit, true, 'appearance entry host is hit-testable under strict CSP: ' + diagnostic);
       assert.equal(entry.buttonHit, true, 'shadow button is hit-testable under strict CSP: ' + diagnostic);
+      if (cspStyleFailure) {
+        assert.equal(completed.wallpaper.applied, false, 'strict CSP leaves the requested wallpaper unapplied: ' + diagnostic);
+        assert.equal(completed.wallpaper.failureStage, 'styles', 'strict CSP refusal is classified as a style failure: ' + diagnostic);
+        assert.equal(recovery.visible, true, 'strict CSP failure exposes its recovery card: ' + diagnostic);
+        assert.equal(recovery.title, '启动背景未应用', 'the recovery card names the failed startup background: ' + diagnostic);
+        assert.equal(recovery.reason, '当前页面未能应用背景样式。', 'the recovery card reports the actual CSP style refusal: ' + diagnostic);
+        assert.equal(recovery.display, 'block');
+        assert.equal(recovery.retryText, '重试');
+        assert.equal(recovery.retryDisabled, false);
+        assert.equal(recovery.closeText, '关闭提示');
+        assert.equal(recovery.closeDisabled, false);
+        assert.equal(recovery.cardHit, true, 'the visible recovery card remains hit-testable: ' + diagnostic);
+        assert.equal(recovery.closeHit, true, 'the recovery dismissal action remains hit-testable: ' + diagnostic);
+        assert.equal(recovery.entryLayout.display, 'flex');
+        assert.equal(recovery.entryLayout.flexDirection, 'column-reverse');
+        assert.equal(recovery.entryLayout.alignItems, 'flex-start');
+        assert.equal(recovery.entryLayout.gap, '8px');
+        assert.ok(recovery.rect.x >= 0 && recovery.rect.y >= 0
+          && recovery.rect.right <= entry.viewport.width && recovery.rect.bottom <= entry.viewport.height,
+        'the recovery card remains fully inside the viewport: ' + diagnostic);
+        assert.ok(recovery.rect.bottom <= recovery.buttonRect.y,
+          'the recovery card and appearance button keep separate hit areas: ' + diagnostic);
+      } else {
+        assert.equal(recovery.visible, false, 'no recovery card is shown without a wallpaper failure: ' + diagnostic);
+      }
       const opened = await clickAppearanceEntry();
       assert.equal(opened.focused, true, 'the generated appearance button receives a real pointer click');
       const settings = await until(() => cdp.evaluate(`(()=>{
@@ -4222,9 +5388,36 @@ try {
       })()`), 15000, 'generated appearance entry opens settings under strict style-src self');
       await screenshot('appearance-settings-csp-style-src-self.png');
       return { ready: { runId: ready.runId, phase: ready.phase }, completed: completed.completion,
-        entry, settings: { runId: settings.runId, phase: settings.phase }, pointerFocused: opened.focused };
+        wallpaper: completed.wallpaper, entry, recovery,
+        settings: { runId: settings.runId, phase: settings.phase }, pointerFocused: opened.focused };
     });
   }
+
+  await navigate('/fixture.html');
+  await check('real appearance observer preserves a host surface edit through wallpaper disposal', async () => {
+    const ready = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();
+      return state?.phase==='playing'&&state.ready&&state.wallpaper?.applied?state:false;
+    })()`), 15000, 'real controller wallpaper before host surface edit');
+    const writtenSurface = await cdp.evaluate(`({value:document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface'),
+      priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-surface')})`);
+    assert.deepEqual(writtenSurface, { value: '#10121c', priority: '' });
+
+    await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-surface','rgb(100, 110, 120)','important')");
+    await delay(50);
+    const afterObserver = await cdp.evaluate(`({value:document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface'),
+      priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-surface')})`);
+    assert.deepEqual(afterObserver, { value: 'rgb(100, 110, 120)', priority: 'important' },
+      'the observer must leave a host-owned value and priority in place');
+
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    const afterDispose = await cdp.evaluate(`({wallpaper:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+      value:document.documentElement.style.getPropertyValue('--azhou-wallpaper-surface'),
+      priority:document.documentElement.style.getPropertyPriority('--azhou-wallpaper-surface')})`);
+    assert.deepEqual(afterDispose, { wallpaper: false, styleCount: 0,
+      value: 'rgb(100, 110, 120)', priority: 'important' });
+    return { runId: ready.runId, writtenSurface, afterObserver, afterDispose };
+  });
 
   await check('native retry transport permits slow success and bounded controller timeout receipts', async () => {
     await navigate('/fixture.html');
@@ -4246,21 +5439,28 @@ try {
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;
+  const selection = validateCheckSelection(options.only, availableChecks);
+  report.missingChecks = selection.missingChecks;
   report.passed = report.checks.some(item => item.passed)
-    && report.checks.every(item => item.passed || item.skipped);
+    && report.checks.every(item => item.passed || item.skipped)
+    && selection.valid;
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);
 } finally {
   try { await cleanup(); } catch (error) { report.cleanupError = safeError(error); }
   report.finishedAt = new Date().toISOString();
+  const selection = validateCheckSelection(options.only, availableChecks);
+  report.missingChecks = selection.missingChecks;
   report.passed = !report.fatalError && !report.cleanupError && report.cleanup?.ownChromeStopped
     && report.cleanup.temporaryProfileRemoved && report.cleanup.serverClosed
     && report.checks.some(item => item.passed)
-    && report.checks.every(item => item.passed || item.skipped);
+    && report.checks.every(item => item.passed || item.skipped)
+    && selection.valid;
   await mkdir(options.out, { recursive: true });
   await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
-    checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })), fatalError: report.fatalError }));
+    checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })),
+    missingChecks: report.missingChecks, fatalError: report.fatalError }));
   if (!report.passed) process.exitCode = 1;
 }
