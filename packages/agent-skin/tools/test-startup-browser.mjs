@@ -5207,11 +5207,14 @@ try {
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
         return {appName:value('appName'),botName:value('botName'),version:value('version'),
-          source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length};
+          source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length,
+          runningVersion:doc.querySelector('header [data-agent-skin-running-version]')?.textContent};
       })()`);
       assert.equal(themePage.appName, '阿舟 AI 实验室');
       assert.equal(themePage.botName, '阿舟');
       assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);
+      assert.equal(themePage.runningVersion,
+        `当前运行：${packageMetadata.runtime_version} · build ${packageMetadata.runtime_build}`);
       assert.equal(themePage.sections, 3);
       assert.equal(themePage.source, '默认设置');
       const draft = await cdp.evaluate(`(()=>{

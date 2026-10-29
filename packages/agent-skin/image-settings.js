@@ -44,6 +44,7 @@ function createImageSettings(environment) {
     'settings.appName': '应用名称',
     'settings.botName': '助手名称',
     'settings.version': '版本 · 构建',
+    'settings.runningVersion': '当前运行：{version}',
     'settings.about.buildDetails': '应用与版本信息',
     'settings.startup.note': '保存后用于下次启动；预览不会保存草稿。',
     'settings.preview.background.label': '背景草稿预览',
@@ -1051,6 +1052,12 @@ function createImageSettings(environment) {
     heading.id = 'agent-skin-settings-title';
     heading.textContent = translate('settings.title');
     heading.style.cssText = 'min-width:0;flex:1;margin:0;font-size:20px';
+    const titleGroup = document.createElement('div');
+    titleGroup.style.cssText = 'min-width:0;flex:1';
+    const runningVersion = document.createElement('p');
+    runningVersion.setAttribute('data-agent-skin-running-version', '');
+    runningVersion.style.cssText = 'margin:4px 0 0;font-size:12px;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    titleGroup.append(heading, runningVersion);
     if (appearanceAvatar) {
       const identityAvatar = document.createElement('img');
       identityAvatar.setAttribute('data-agent-skin-appearance-avatar', '');
@@ -1062,7 +1069,7 @@ function createImageSettings(environment) {
       });
       header.appendChild(identityAvatar);
     }
-    header.appendChild(heading);
+    header.appendChild(titleGroup);
     content.appendChild(header);
 
     const categoryNav = document.createElement('nav');
@@ -1077,6 +1084,10 @@ function createImageSettings(environment) {
     const ariaLabels = [];
     const controls = [];
     const readouts = [];
+    readouts.push({ element: runningVersion, value: () => translate('settings.runningVersion', {
+      version: themeConfig?.identity?.version && themeConfig?.identity?.build
+        ? themeConfig.identity.version + ' · build ' + themeConfig.identity.build : translate('settings.unknown'),
+    }) });
     const previews = {};
     const buttons = Object.create(null);
     const tabs = [];

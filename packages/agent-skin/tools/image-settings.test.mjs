@@ -894,6 +894,9 @@ test('the settings page puts editing first and keeps read-only appearance state 
   const value = key => fixture.elements.find(element => element.getAttribute('data-agent-skin-setting-value') === key);
   assert.equal(value('appName').textContent, '阿舟 AI 实验室');
   assert.equal(value('version').textContent, '0.9.0 · 10');
+  const runningVersion = fixture.elements.find(element => element.getAttribute('data-agent-skin-running-version') === '');
+  assert.equal(runningVersion?.textContent, '当前运行：0.9.0 · build 10');
+  assert.equal(runningVersion.parentNode.parentNode.tagName, 'HEADER', 'version is visible above every settings tab');
   assert.equal(value('theme').textContent, '深色');
   assert.equal(value('reducedMotion').textContent, '关闭');
   assert.equal(value('installation'), undefined);
@@ -904,6 +907,7 @@ test('the settings page puts editing first and keeps read-only appearance state 
   localization.setLocale('en');
   fixture.api.refreshAppearance();
   assert.equal(value('appName').textContent, 'Azhou AI Lab');
+  assert.equal(runningVersion.textContent, 'Running: 0.9.0 · build 10');
   assert.equal(value('theme').textContent, 'Light');
   assert.equal(value('reducedMotion').textContent, 'On');
   assert.equal(fixture.api.cancelSettings(), true);
@@ -953,6 +957,8 @@ test('the settings dialog follows host locale changes without replacing the dial
     'Saved settings are temporarily unavailable. Defaults are in use; saved settings are unchanged.');
   assert.equal(fixture.elements.find(element => element.id === 'agent-skin-settings-title').textContent,
     'Azhou · Theme & Appearance');
+  assert.equal(fixture.elements.find(element => element.getAttribute('data-agent-skin-running-version') === '').textContent,
+    'Running: Unavailable in this environment', 'missing build metadata is never replaced by a claimed latest version');
   assert.equal(dialog.style.getPropertyValue('color-scheme'), 'inherit');
   assert.equal(dialog.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
   assert.equal(dialog.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');
