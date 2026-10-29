@@ -9,7 +9,7 @@
   "license_status": "no open-source license grant recorded; user is contacting the upstream maintainer",
   "external_distribution": "not authorized",
   "runtime_version": "0.9.0",
-  "runtime_build": "20",
+  "runtime_build": "21",
   "build_inputs": [
     "Native/App.swift",
     "Native/Wallpaper.swift",
@@ -100,6 +100,9 @@
     "tools/test-bootstrap-unit-tools.py",
     "tools/test-startup-native.py",
     "tools/test-startup-browser.mjs",
+    "tools/startup-browser-selection.mjs",
+    "tools/startup-browser-selection.unit.test.mjs",
+    "tools/test-startup-browser-selection-cli.py",
     "tools/image-settings.test.mjs",
     "tools/dream-image-metadata.test.mjs",
     "tools/image-import-preflight.test.mjs",

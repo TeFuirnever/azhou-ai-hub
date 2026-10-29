@@ -234,6 +234,7 @@ LEGACY_STARTUP_ASSET_KEYS = frozenset({
 })
 # Pre-theme-config 0.9.0/build 10 bundles embedded these native names.
 LEGACY_DEFAULT_APP_NAME = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
+IMAGE_METADATA_STARTUP_FIRST_BUILD = 17
 STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
@@ -658,9 +659,15 @@ def verify_startup(path, info, marker, *, current_source=True):
         allowed_theme_inputs = {current_startup_inputs}
     else:
         allowed_theme_inputs = {frozenset(PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS)}
-        # Frozen builds 17–19 already contain the image-metadata input/output set.
+        # 0.9.0 builds from 17 through this verifier's build share the image-metadata contract.
+        is_known_image_metadata_build = (
+            expected_version == '0.9.0'
+            and re.fullmatch(r'(?:0|[1-9][0-9]*)', expected_build) is not None
+            and len(expected_build) <= len(BUILD)
+            and IMAGE_METADATA_STARTUP_FIRST_BUILD <= int(expected_build) <= int(BUILD)
+        )
         if ((expected_version, expected_build) == (VERSION, BUILD)
-                or expected_version == '0.9.0' and expected_build in {'17', '18', '19'}):
+                or is_known_image_metadata_build):
             allowed_theme_inputs.add(current_startup_inputs)
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))

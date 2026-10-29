@@ -50,6 +50,7 @@ BUILD_FILES = (
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
+    "tools/startup-browser-selection.mjs",
     "tools/test-startup-native.py",
     "tools/build-startup.py",
     "tools/build-startup-assets.swift",
@@ -297,6 +298,48 @@ class BuildOwnedThemeTests(unittest.TestCase):
             current, artifacts = build_staged_product(root, "current-build")
             publish_with_test_native_tools(artifacts, current)
             self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)["build"], APP_BUILD)
+
+    def test_publish_upgrades_current_image_metadata_payload_to_next_build(self):
+        current_build = int(APP_BUILD)
+        next_build = str(current_build + 1)
+        with tempfile.TemporaryDirectory(prefix=f"agent-skin-build{current_build}-upgrade-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            metadata_path = root / "hub-package.json"
+            next_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            next_metadata["runtime_build"] = next_build
+            current_metadata = json.dumps(next_metadata, ensure_ascii=False)
+            previous_metadata = dict(next_metadata)
+            previous_metadata["runtime_build"] = str(current_build)
+            metadata_path.write_text(json.dumps(previous_metadata), encoding="utf-8")
+
+            previous, artifacts = build_staged_product(root, f"previous-build{current_build}")
+            artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(previous, artifacts.PAYLOAD)
+
+            metadata_path.write_text(current_metadata, encoding="utf-8")
+            current, artifacts = build_staged_product(root, f"current-build{next_build}")
+            publish_with_test_native_tools(artifacts, current)
+            self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)["build"], next_build)
+
+            _, info = artifacts.identity(artifacts.PAYLOAD)
+            marker = artifacts.read_marker(artifacts.PAYLOAD, required=True)
+            manifest_path = artifacts.PAYLOAD / "Contents/Resources/startup/manifest.json"
+            original_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for invalid_build in (str(current_build + 2), "not-a-build", f"0{current_build}", "16"):
+                with self.subTest(invalid_build=invalid_build):
+                    invalid_info = dict(info)
+                    invalid_info["CFBundleVersion"] = invalid_build
+                    invalid_marker = dict(marker)
+                    invalid_marker["build"] = invalid_build
+                    invalid_manifest = dict(original_manifest)
+                    invalid_manifest["appBuild"] = invalid_build
+                    manifest_path.write_text(json.dumps(invalid_manifest, ensure_ascii=False), encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError, "sourceInputs.*不完整"):
+                        artifacts.verify_startup(
+                            artifacts.PAYLOAD, invalid_info, invalid_marker, current_source=False,
+                        )
+            manifest_path.write_text(json.dumps(original_manifest, ensure_ascii=False), encoding="utf-8")
 
     def test_publish_rebuilds_existing_payload_after_theme_edit(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-theme-rebuild-test-") as temporary:

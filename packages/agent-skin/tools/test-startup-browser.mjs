@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { validateCheckSelection } from './startup-browser-selection.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
@@ -35,6 +36,7 @@ options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
 const onlyChecks = options.only.length ? new Set(options.only) : null;
+const availableChecks = new Set();
 
 const report = {
   schema: 1,
@@ -76,6 +78,7 @@ async function until(operation, milliseconds = 10000, label = 'condition') {
 }
 
 async function check(name, operation) {
+  availableChecks.add(name);
   if (onlyChecks && !onlyChecks.has(name)) {
     report.checks.push({ name, skipped: true });
     return null;
@@ -1614,11 +1617,15 @@ try {
       const intersects=(a,b)=>!!a&&!!b&&Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))
         *Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))>0;
       const entryRect=rect(entry),dotRect=rect(dot),listRect=rect(list);
+      const boxlessAncestor=nav?.parentElement?.matches('[data-fixture-boxless-ancestor]')?nav.parentElement:null;
+      const boxlessRect=rect(boxlessAncestor);
       const download=document.querySelector('#fixture-download-update'),profile=document.querySelector('#fixture-profile');
       const hit=node=>{const r=rect(node);if(!r)return false;const target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return target===node||node.contains(target);};
       const follows=(before,after)=>!!before&&!!after&&!!(before.compareDocumentPosition(after)&Node.DOCUMENT_POSITION_FOLLOWING);
       return {navLabel:nav?.getAttribute('aria-label')||null,navRole:nav?.getAttribute('role')||null,
         navWidth:nav?.getBoundingClientRect().width||0,listUnderHeader:!!list&&list.parentElement===nav.firstElementChild,
+        boxlessAncestor:boxlessAncestor?{display:getComputedStyle(boxlessAncestor).display,
+          width:boxlessRect?.width??null,height:boxlessRect?.height??null}:null,
         yourDot:dot?{tag:dot.tagName,type:dot.type,sidebarItem:dot.classList.contains('sidebar-item'),
           href:dot.hasAttribute('href'),ariaLabel:dot.hasAttribute('aria-label'),role:dot.hasAttribute('role'),text:dot.textContent.trim()}:null,
         newChatPrecedesYourDot:!!newChat&&dot?.previousElementSibling===newChat,
@@ -1645,8 +1652,12 @@ try {
       assert.equal(value.navLabel, 'Home', phase + ': Home nav');
       assert.equal(value.navRole, 'navigation', phase + ': navigation role');
       assert.equal(value.listUnderHeader, true, phase + ': group/nav-list is directly under the nav header');
+      assert.deepEqual(value.boxlessAncestor, { display: 'contents', width: 0, height: 0 },
+        phase + ': fixture ancestor is boxless');
       assert.deepEqual(value.yourDot, { tag: 'BUTTON', type: 'button', sidebarItem: true,
         href: false, ariaLabel: false, role: false, text: 'Your dot' }, phase + ': exact Your dot control shape');
+      assert.ok(value.dotRect?.width > 0 && value.dotRect?.height > 0,
+        phase + ': Your dot has a non-zero layout box');
       assert.equal(value.newChatPrecedesYourDot, true, phase + ': New chat precedes Your dot');
       assert.equal(value.pinnedInSeparateScroll, true, phase + ': Pinned is in a separate scroll section');
       assert.equal(value.entryCount, 1, phase + ': exactly one appearance entry');
@@ -5428,21 +5439,28 @@ try {
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;
+  const selection = validateCheckSelection(options.only, availableChecks);
+  report.missingChecks = selection.missingChecks;
   report.passed = report.checks.some(item => item.passed)
-    && report.checks.every(item => item.passed || item.skipped);
+    && report.checks.every(item => item.passed || item.skipped)
+    && selection.valid;
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);
 } finally {
   try { await cleanup(); } catch (error) { report.cleanupError = safeError(error); }
   report.finishedAt = new Date().toISOString();
+  const selection = validateCheckSelection(options.only, availableChecks);
+  report.missingChecks = selection.missingChecks;
   report.passed = !report.fatalError && !report.cleanupError && report.cleanup?.ownChromeStopped
     && report.cleanup.temporaryProfileRemoved && report.cleanup.serverClosed
     && report.checks.some(item => item.passed)
-    && report.checks.every(item => item.passed || item.skipped);
+    && report.checks.every(item => item.passed || item.skipped)
+    && selection.valid;
   await mkdir(options.out, { recursive: true });
   await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
-    checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })), fatalError: report.fatalError }));
+    checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })),
+    missingChecks: report.missingChecks, fatalError: report.fatalError }));
   if (!report.passed) process.exitCode = 1;
 }
