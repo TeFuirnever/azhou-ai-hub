@@ -2,7 +2,8 @@
    26.1021.31345 bundle; live DOM + screenshot validation is still required.
    No application color token, message, menu, dialog or composer is overwritten. */
 html[data-azhou-wallpaper="active"] {
-  --azhou-base: var(--color-surface, var(--app-color-background-surface, #202024));
+  --azhou-base: var(--azhou-wallpaper-surface,
+    var(--app-color-background-surface, var(--color-surface, #202024)));
 }
 
 html[data-azhou-wallpaper="active"] body {

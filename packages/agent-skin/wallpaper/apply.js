@@ -70,7 +70,7 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
       failureCode: shellState === 'timeout' ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
     return installRenderer({
       version, image: value.image, imageSHA256, css,
-      strength: value.strength, isCurrent,
+      strength: value.strength, surface: value.surface, isCurrent,
     });
   };
 }

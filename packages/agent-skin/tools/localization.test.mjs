@@ -69,9 +69,22 @@ test('animation, renderer and settings strings are present in both locales', () 
     'animation.control.pause', 'animation.control.resume', 'animation.progress',
     'animation.elapsed', 'animation.waiting', 'animation.error.title', 'animation.error.body',
     'animation.wallpaper.failed.title', 'animation.wallpaper.failed.body',
+    'appearance.wallpaper.failure.title',
+    'appearance.wallpaper.failure.reason.shellTimeout', 'appearance.wallpaper.failure.reason.shellUnsupported',
+    'appearance.wallpaper.failure.reason.input', 'appearance.wallpaper.failure.reason.decode',
+    'appearance.wallpaper.failure.reason.surfaces', 'appearance.wallpaper.failure.reason.page',
+    'appearance.wallpaper.failure.reason.styles', 'appearance.wallpaper.failure.reason.namespace',
+    'appearance.wallpaper.failure.reason.style', 'appearance.wallpaper.failure.reason.apply',
+    'appearance.wallpaper.failure.retry', 'appearance.wallpaper.failure.retrying',
+    'appearance.wallpaper.failure.retryLabel', 'appearance.wallpaper.failure.retryingLabel',
+    'appearance.wallpaper.failure.close', 'appearance.wallpaper.failure.closeLabel',
+    'appearance.wallpaper.failure.announcement', 'appearance.wallpaper.failure.retryingAnnouncement',
+    'appearance.wallpaper.failure.appliedAnnouncement', 'appearance.wallpaper.failure.closedAnnouncement',
+    'appearance.wallpaper.failure.retryUnavailableAnnouncement',
     'settings.title', 'settings.close', 'settings.avatar.label', 'settings.artwork.label',
+    'settings.botName', 'settings.startup.note',
     'settings.introTitle.label', 'settings.introCaption.label', 'settings.artworkSubtitle.label',
-    'settings.wallpaperStrength.label', 'settings.wallpaperStrength.aria',
+    'settings.wallpaperStrength.label',
     'settings.button.restore', 'settings.button.cancel', 'settings.button.choosePortrait',
     'settings.button.chooseBackground',
     'settings.button.save', 'settings.status.importing', 'settings.status.saving', 'settings.status.imageLarge',
@@ -98,10 +111,31 @@ test('animation, renderer and settings strings are present in both locales', () 
   assert.equal(localization.t('animation.progress', { percent: 42 }), '动画进度 42%');
   assert.equal(localization.t('animation.waiting'), '仍在等待 Codex 启动…');
   assert.equal(localization.t('animation.wallpaper.failed.title'), '设置已保存，但壁纸未能应用');
+  assert.equal(localization.t('appearance.wallpaper.failure.title'), '启动背景未应用');
+  assert.match(localization.t('appearance.wallpaper.failure.reason.shellUnsupported'), /工作区背景区域/);
+  assert.match(localization.t('appearance.wallpaper.failure.announcement', {
+    title: localization.t('appearance.wallpaper.failure.title'),
+    reason: localization.t('appearance.wallpaper.failure.reason.shellTimeout'),
+  }), /启动背景未应用.*工作区外壳.*重试/);
   localization.setLocale('en');
   assert.equal(localization.t('animation.title.default'), 'Azhou AI Lab');
   assert.equal(localization.t('animation.waiting'), 'Still waiting for Codex to start…');
   assert.equal(localization.t('animation.wallpaper.failed.title'),
     'Settings were saved, but the wallpaper could not be applied');
+  assert.equal(localization.t('appearance.wallpaper.failure.title'), 'Startup background not applied');
+  assert.match(localization.t('appearance.wallpaper.failure.reason.shellTimeout'), /workspace shell has not appeared/);
+  assert.match(localization.t('appearance.wallpaper.failure.announcement', {
+    title: localization.t('appearance.wallpaper.failure.title'),
+    reason: localization.t('appearance.wallpaper.failure.reason.shellUnsupported'),
+  }), /Startup background not applied.*supported workspace background area.*retry/);
   assert.equal(localization.t('settings.close'), 'Cancel and close settings');
+  assert.equal(localization.t('settings.botName'), 'Assistant name');
+  assert.equal(localization.t('settings.startup.note'), 'Saved settings apply on the next launch. Preview does not save the draft.');
+  assert.match(localization.t('settings.error.conflict'), /Closing discards.*Copy.*Reopen.*new value/i);
+  assert.equal(localization.t('settings.button.restore'), 'Restore all defaults');
+  localization.setLocale('zh-CN');
+  assert.match(localization.t('settings.error.conflict'), /关闭将丢弃.*复制.*重新打开.*新值/);
+  assert.equal(localization.t('settings.button.restore'), '恢复全部默认');
+  assert.equal(localization.t('settings.botName'), '助手名称');
+  assert.equal(localization.t('settings.startup.note'), '保存后用于下次启动；预览不会保存草稿。');
 });

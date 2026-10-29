@@ -103,6 +103,8 @@ function controlledHost({ body = true } = {}) {
   const host = {
     location: new URL(mainURL),
     document,
+    CSS: { supports: (kind, value) => kind === 'color'
+      && /^(?:#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|transparent|currentcolor)$/i.test(String(value).trim()) },
     getComputedStyle(node) { return node.computedStyle ?? node.style ?? {}; },
     MutationObserver: class MutationObserver {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
@@ -207,7 +209,7 @@ test('hidden navigation falls back to a visible left entry and scroll reposition
   const createElement = doc.createElement;
   doc.createElement = tag => {
     const node = createElement(tag);
-    if (tag === 'div') {
+    if (tag === 'div' && !entry) {
       entry = node;
       node.getBoundingClientRect = () => {
         const left = Number.parseFloat(node.style.left || '10px');
@@ -375,15 +377,21 @@ test('left fallback avoids update and account controls and remains clickable', (
   doc.createElement = tag => {
     const node = createElement(tag);
     if (tag === 'div') {
-      entry = node;
-      node.getBoundingClientRect = () => {
-        const left = Number.parseFloat(node.style.left || '10px');
-        const bottom = Number.parseFloat(node.style.bottom || '72px');
-        const label = node.children[0].children.at(-1);
-        const width = label.style.display === 'none' ? 48 : 150;
-        const top = node.style.top && node.style.top !== 'auto'
-          ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - bottom - 44;
-        return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+      const setAttribute = node.setAttribute.bind(node);
+      node.setAttribute = (name, value) => {
+        setAttribute(name, value);
+        if (name !== 'data-agent-skin-entry' || value !== 'appearance') return;
+        entry = node;
+        node.getBoundingClientRect = () => {
+          const left = Number.parseFloat(node.style.left || '10px');
+          const bottom = Number.parseFloat(node.style.bottom || '72px');
+          const button = node.children.find(child => child.attributes?.has('aria-haspopup'));
+          const label = button?.children.at(-1);
+          const width = label?.style.display === 'none' ? 48 : 150;
+          const top = node.style.top && node.style.top !== 'auto'
+            ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - bottom - 44;
+          return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+        };
       };
     }
     return node;
@@ -532,8 +540,70 @@ test('official language and theme flow into the overlay and update without resta
   assert.equal(appearances.at(-1).locale, 'zh-CN');
 });
 
+test('wallpaper receives the first valid official surface and follows theme fallbacks', async () => {
+  const controlled = controlledHost();
+  const root = controlled.host.document.documentElement;
+  root.lang = 'en-US';
+  root.dataset = { theme: 'dark' };
+  root.getAttribute = name => name === 'lang' ? root.lang : root.dataset.theme;
+  let tokens = {
+    '--app-color-background-surface': 'not-a-color',
+    '--color-surface': 'rgb(200, 210, 220)',
+  };
+  controlled.host.getComputedStyle = () => ({
+    getPropertyValue: name => tokens[name] || '',
+    colorScheme: root.dataset.theme,
+  });
+  const appliedSurfaces = [];
+  const wallpaperAPI = {
+    owner: 'azhou.codex-startup-animation', version: '0.9.0',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }),
+    updateSurface(value) { appliedSurfaces.push(value); return true; },
+    dispose() {},
+  };
+  let spec;
+  let backgroundRequest;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    spec = frameSpec;
+    backgroundRequest = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,AA==', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = async value => {
+    appliedSurfaces.push(value.surface);
+    controlled.host.__azhouWallpaper = wallpaperAPI;
+    return { applied: true };
+  };
+  installStartup(payload, controlled.host);
+  await backgroundRequest;
+  assert.equal(spec.appearance.colors.surface, 'rgb(200, 210, 220)',
+    'an invalid higher-priority token falls through to the next valid token');
+  assert.equal(appliedSurfaces[0], 'rgb(200, 210, 220)',
+    'the wallpaper applicator receives the resolved color rather than a raw token');
+
+  tokens = {
+    '--app-color-background-surface': 'rgb(10, 20, 30)',
+    '--color-surface': 'rgb(200, 210, 220)',
+  };
+  root.dataset.theme = 'light';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), 'rgb(10, 20, 30)', 'the app token has first priority');
+
+  tokens = { '--app-color-background-surface': 'not-a-color', '--color-surface': 'also-not-a-color' };
+  root.dataset.theme = 'dark';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), '#10121c', 'invalid dark tokens use the dark fallback');
+
+  root.dataset.theme = 'light';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), '#ffffff', 'invalid light tokens use the light fallback');
+  controlled.host.__azhouStartup.dispose();
+});
+
 test('the real controller and default iframe mount execute an explicit parent-realm payload bridge', () => {
   const controlled = controlledHost();
+  controlled.host.document.documentElement.lang = 'en-US';
   const observed = {};
   const result = installStartup(function (
     window, document, location, performance, indexedDB, Image, Path2D, URL,
@@ -1028,6 +1098,111 @@ test('status, retry, and dispose refuse an externally replaced same-owner wallpa
   api.dispose();
   assert.equal(attempts, 1);
   assert.equal(foreignDisposals, 0);
+});
+
+test('startup wallpaper failure is announced at the entry and the UI retry clears it without replay', async () => {
+  const controlled = controlledHost();
+  const senders = [];
+  let initialWallpaper;
+  let attempts = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    senders.push({ SEND, frameSpec });
+    if (frameSpec.intent === 'play') {
+      initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    }
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    attempts += 1;
+    if (attempts === 1) {
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported' };
+    }
+    controlled.host.__azhouWallpaper = {
+      owner: 'azhou.codex-startup-animation', version: '0.7.1',
+      status: () => ({ applied: true, imageDecoded: true, reason: '' }), dispose() {},
+    };
+    return { applied: true };
+  };
+
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const runId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false },
+    controlled.frames[0].contentWindow);
+
+  const recovery = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-recovery'));
+  const retryButton = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-retry'));
+  assert.equal(recovery.style.display, 'block');
+  assert.equal(recovery.children[0].textContent, '启动背景未应用');
+  assert.equal(recovery.children[1].textContent, '当前页面暂时无法监测可用的工作区背景区域。');
+  assert.equal(retryButton.attributes.get('aria-label'), '重试启动背景');
+  assert.equal(senders.length, 1, 'startup failure leaves the original run and appearance entry in place');
+
+  retryButton.click();
+  const retry = await api.retryWallpaper();
+  assert.equal(retry.retried, true);
+  assert.equal(retry.wallpaper.applied, true);
+  assert.equal(attempts, 2);
+  assert.equal(api.status().runId, runId);
+  assert.equal(controlled.frames.length, 1, 'the retry does not create another startup frame');
+  assert.equal(recovery.style.display, 'none', 'success removes the startup error from the existing entry');
+  assert.equal(controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-live'))
+    .textContent, '启动背景已应用。');
+  api.dispose();
+});
+
+test('settings wallpaper failure stays with the settings run and cannot replace startup recovery', async () => {
+  const controlled = controlledHost();
+  const senders = [];
+  let initialWallpaper;
+  let attempts = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    senders.push({ SEND, frameSpec });
+    if (frameSpec.intent === 'play') {
+      initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    }
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    attempts += 1;
+    return { applied: false, reason: 'wallpaper-unsupported',
+      failureCode: attempts === 1 ? 'shell-unsupported' : 'image-decode-failed' };
+  };
+
+  installStartup(payload, controlled.host);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const startupRunId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: startupRunId, skipped: false },
+    controlled.frames[0].contentWindow);
+  const recovery = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-recovery'));
+  const reason = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-reason'));
+  assert.equal(recovery.style.display, 'block');
+  assert.match(reason.textContent, /工作区背景区域/);
+
+  appearanceButton(controlled).click();
+  assert.equal(api.status().phase, 'settings');
+  const settingsRunId = api.status().runId;
+  assert.ok(settingsRunId > startupRunId);
+  const settingsWallpaper = await senders[1].SEND({ type: 'azhou-startup', action: 'background',
+    runId: settingsRunId, image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+  assert.equal(settingsWallpaper.failureCode, 'image-decode-failed');
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(recovery.style.display, 'none', 'the settings error is not copied into the startup entry');
+  assert.match(reason.textContent, /工作区背景区域/,
+    'the settings failure does not replace the prior startup reason stored for its own notice');
+
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: settingsRunId, skipped: true },
+    controlled.frames[1].contentWindow);
+  assert.equal(api.status().completion.cause, 'settings-cancel');
+  assert.equal(recovery.style.display, 'block', 'canceling settings restores only the original startup notice');
+  assert.match(reason.textContent, /工作区背景区域/);
+  api.dispose();
 });
 
 test('wallpaper retry refuses disabled, missing, and unknown-owner requests', async () => {

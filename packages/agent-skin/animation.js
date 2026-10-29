@@ -46,16 +46,18 @@ function installAnimation(
   const initialTheme = ['light', 'dark'].includes(rootAppearance.theme) ? rootAppearance.theme
     : ['light', 'dark'].includes(nativeAppearance.theme) ? nativeAppearance.theme
       : document.documentElement?.dataset?.theme === 'light' ? 'light' : 'dark';
-  const defaultColors = initialTheme === 'light' ? {
-    surface: '#ffffff', text: '#202123', muted: '#65666c', border: '#dedee3',
-  } : {
-    surface: '#10121c', text: '#fff8ef',
-    muted: 'rgba(255, 248, 239, .72)', border: 'rgba(255, 248, 239, .18)',
-  };
+  function defaultColorsFor(theme) {
+    return theme === 'light' ? {
+      surface: '#ffffff', text: '#202123', muted: '#65666c', border: '#dedee3',
+    } : {
+      surface: '#10121c', text: '#fff8ef',
+      muted: 'rgba(255, 248, 239, .72)', border: 'rgba(255, 248, 239, .18)',
+    };
+  }
   const appearance = {
     locale,
     theme: initialTheme,
-    colors: { ...defaultColors, ...sanitizeColors(rootAppearance.colors) },
+    colors: { ...defaultColorsFor(initialTheme), ...sanitizeColors(rootAppearance.colors) },
   };
   function t(key, params = {}) {
     try {
@@ -446,6 +448,7 @@ function installAnimation(
       renderIdentityBitmap(generation).catch(() => {});
     }
     if (loaded) drawAt(elapsed, false);
+    imageSettings?.refreshAppearance?.();
   }
 
   function installLayoutObserver() {
@@ -893,12 +896,93 @@ function installAnimation(
     resources.createdImages++;
     resources.liveImages++;
     image.src = source;
-    const decoded = typeof image.decode === 'function'
-      ? image.decode()
-      : new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = () => reject(new Error('asset-invalid'));
+    let decoded;
+    if (typeof image.decode === 'function' && typeof window.createImageBitmap === 'function') {
+      const nativeDecode = { state: 'pending' };
+      let fallbackTimer = null;
+      let rejectFallback;
+      const bitmapFallback = new Promise((resolve, reject) => {
+        rejectFallback = reject;
+        const timeout = setTimeout(() => {
+          timeoutIds.delete(timeout);
+          if (fallbackTimer === timeout) fallbackTimer = null;
+          if (nativeDecode.state !== 'pending' || !image.complete
+            || image.naturalWidth !== expectedWidth || image.naturalHeight !== expectedHeight) {
+            reject(new Error('asset-invalid'));
+            return;
+          }
+          let operation;
+          try { operation = window.createImageBitmap(image); }
+          catch (error) { reject(error); return; }
+          Promise.resolve(operation).then(bitmap => {
+            if (!bitmap || typeof bitmap.close !== 'function') {
+              reject(new Error('asset-invalid'));
+              return;
+            }
+            resources.createdBitmaps++;
+            resources.liveBitmaps++;
+            let probe;
+            try {
+              if (bitmap.width !== expectedWidth || bitmap.height !== expectedHeight) {
+                throw new Error('asset-invalid');
+              }
+              probe = document.createElement('canvas');
+              resources.createdCanvases++;
+              resources.liveCanvases++;
+              probe.width = 1;
+              probe.height = 1;
+              const context = probe.getContext('2d', { willReadFrequently: true });
+              if (!context) throw new Error('asset-invalid');
+              context.drawImage(bitmap, 0, 0, 1, 1);
+              const pixel = context.getImageData(0, 0, 1, 1)?.data;
+              if (!pixel || pixel.length < 4
+                || ![pixel[0], pixel[1], pixel[2], pixel[3]].every(Number.isFinite)) {
+                throw new Error('asset-invalid');
+              }
+              resolve(true);
+            } catch (error) {
+              reject(error);
+            } finally {
+              if (probe) clearCanvas(probe);
+              closeBitmap(bitmap);
+            }
+          }, reject);
+        }, 250);
+        fallbackTimer = timeout;
+        timeoutIds.add(timeout);
       });
+      const cancelFallback = reason => {
+        if (fallbackTimer !== null) {
+          clearTimeout(fallbackTimer);
+          timeoutIds.delete(fallbackTimer);
+          fallbackTimer = null;
+        }
+        rejectFallback(reason);
+      };
+      let operation;
+      try { operation = image.decode(); }
+      catch (error) { operation = Promise.reject(error); }
+      const native = Promise.resolve(operation).then(() => {
+        nativeDecode.state = 'resolved';
+        cancelFallback(new Error('native-decode-complete'));
+        return true;
+      }, error => {
+        nativeDecode.state = 'rejected';
+        cancelFallback(error);
+        throw error;
+      });
+      decoded = Promise.any([native, bitmapFallback]).catch(error => {
+        if (error instanceof AggregateError && error.errors?.length) throw error.errors[0];
+        throw error;
+      });
+    } else {
+      decoded = typeof image.decode === 'function'
+        ? image.decode()
+        : new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(new Error('asset-invalid'));
+        });
+    }
     return timeoutPromise(decoded, 4000, generationAtStart).then(() => {
       if (image.naturalWidth !== expectedWidth || image.naturalHeight !== expectedHeight) {
         releaseImage(image);
@@ -1316,6 +1400,7 @@ function installAnimation(
     const iframe = document.createElement('iframe');
     iframe.setAttribute('data-agent-skin-settings-preview-frame', '');
     iframe.setAttribute('title', t('settings.button.previewAnimation'));
+    iframe.tabIndex = -1;
     iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#10121c';
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
@@ -1735,9 +1820,11 @@ function installAnimation(
         changed = true;
       }
     }
-    const nextColors = sanitizeColors(nextAppearance.colors);
+    const nextColors = { ...defaultColorsFor(appearance.theme), ...sanitizeColors(nextAppearance.colors) };
+    const textColorChanged = nextColors.text !== appearance.colors.text;
+    const identityColorsChanged = textColorChanged || nextColors.muted !== appearance.colors.muted;
     for (const key of ['surface', 'text', 'muted', 'border']) {
-      if (nextColors[key] && nextColors[key] !== appearance.colors[key]) {
+      if (nextColors[key] !== appearance.colors[key]) {
         appearance.colors[key] = nextColors[key];
         changed = true;
       }
@@ -1758,8 +1845,8 @@ function installAnimation(
       appearanceRevision++;
       lastStaticRenderKey = '';
       if (loaded) {
-        if (localeChanged || nextColors.text || nextColors.muted) redrawIdentityForAppearance();
-        if (nextColors.text) redrawLineCanvas();
+        if (localeChanged || identityColorsChanged) redrawIdentityForAppearance();
+        if (textColorChanged) redrawLineCanvas();
         drawAt(elapsed, false);
       }
       if (root?.querySelector('[data-agent-skin-settings-result]')) showSettingsFallbackNotice();

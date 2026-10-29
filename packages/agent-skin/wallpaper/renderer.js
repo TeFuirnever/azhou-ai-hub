@@ -5,6 +5,7 @@ export async function installRenderer(payload) {
   const VERSION = '0.9.0', LEGACY_VERSIONS = new Set(['0.8.0', '0.7.1']), OWNER = 'azhou.codex-startup-animation';
   const STYLE_ID = 'azhou-wallpaper-style', ATTRIBUTE = 'data-azhou-wallpaper';
   const IMAGE_PROPERTY = '--azhou-wallpaper-image', WASH_PROPERTY = '--azhou-wallpaper-wash';
+  const SURFACE_PROPERTY = '--azhou-wallpaper-surface';
   const BASELINE_KEY = '__azhouWallpaperBaseline_071', RELEASE_KEY = '__azhouWallpaperRelease_071';
   const root = document.documentElement;
   const surfaceSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
@@ -21,6 +22,92 @@ export async function installRenderer(payload) {
   const problem = reason => Object.assign(new Error('AZHOU_WALLPAPER: ' + reason), {
     code: reason.split(':', 1)[0],
   });
+  function decodeBitmapPixels(image, bitmap) {
+    let canvas;
+    try {
+      if (!bitmap || typeof bitmap.close !== 'function'
+          || bitmap.width !== image.naturalWidth || bitmap.height !== image.naturalHeight) return false;
+      canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return false;
+      context.drawImage(bitmap, 0, 0, 1, 1);
+      const pixel = context.getImageData(0, 0, 1, 1)?.data;
+      return !!pixel && pixel.length >= 4
+        && [pixel[0], pixel[1], pixel[2], pixel[3]].every(Number.isFinite);
+    } catch { return false; }
+    finally {
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      try { bitmap?.close?.(); } catch {}
+    }
+  }
+  function decodeImage(image) {
+    let decodeTimer;
+    let fallbackTimer;
+    let rejectFallback;
+    const nativeDecodeState = { value: 'pending' };
+    const clearFallback = reason => {
+      if (fallbackTimer !== undefined) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = undefined;
+      }
+      rejectFallback?.(reason);
+    };
+    const nativeOperation = (() => {
+      try { return image.decode(); }
+      catch (error) { return Promise.reject(error); }
+    })();
+    const nativeDecode = Promise.resolve(nativeOperation).then(() => {
+      nativeDecodeState.value = 'resolved';
+      clearFallback(problem('native-decode-complete'));
+      return true;
+    }, error => {
+      nativeDecodeState.value = 'rejected';
+      clearFallback(error);
+      throw error;
+    });
+    let decoded = nativeDecode;
+    if (typeof globalThis.createImageBitmap === 'function') {
+      const bitmapFallback = new Promise((resolve, reject) => {
+        rejectFallback = reject;
+        fallbackTimer = setTimeout(() => {
+          fallbackTimer = undefined;
+          if (nativeDecodeState.value !== 'pending' || !image.complete
+              || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+            reject(problem('image-decode-fallback-unavailable'));
+            return;
+          }
+          let operation;
+          try { operation = globalThis.createImageBitmap(image); }
+          catch (error) { reject(error); return; }
+          Promise.resolve(operation).then(bitmap => {
+            if (decodeBitmapPixels(image, bitmap)) resolve(true);
+            else reject(problem('image-decode-fallback-invalid'));
+          }, reject);
+        }, 250);
+      });
+      decoded = Promise.any([nativeDecode, bitmapFallback]).catch(error => {
+        if (error instanceof AggregateError && error.errors?.length) throw error.errors[0];
+        throw error;
+      });
+    }
+    return Promise.race([decoded, new Promise((_, reject) => {
+      decodeTimer = setTimeout(() => reject(problem('image-decode-timeout')), 4000);
+    })]).finally(() => {
+      clearTimeout(decodeTimer);
+      if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+      rejectFallback?.(problem('image-decode-finished'));
+    });
+  }
+  function validSurface(value) {
+    if (typeof value !== 'string') return false;
+    const color = value.trim();
+    if (!color || color.length > 100 || /[;{}]/.test(color) || /\bvar\s*\(/i.test(color)
+      || /^(?:currentcolor|inherit|initial|unset|revert(?:-layer)?)$/i.test(color)) return false;
+    try { return typeof globalThis.CSS?.supports === 'function' && globalThis.CSS.supports('color', color); }
+    catch { return false; }
+  }
   const ownValue = (object, name) => {
     if (!object || typeof object !== 'object') return undefined;
     const descriptor = Object.getOwnPropertyDescriptor(object, name);
@@ -45,9 +132,12 @@ export async function installRenderer(payload) {
       || !payload.css.includes('--azhou-style-ready')
       || /@import\b|url\(\s*['"]?(?:https?:|\/\/)/i.test(payload.css)
       || typeof payload.imageSHA256 !== 'string' || !/^[0-9a-f]{64}$/.test(payload.imageSHA256)
+      || (payload.surface !== undefined && !validSurface(payload.surface))
       || (payload.strength !== undefined && (!Number.isInteger(payload.strength) || payload.strength < 0 || payload.strength > 75))) {
     throw problem('invalid-local-payload');
   }
+  let surface = typeof payload.surface === 'string' ? payload.surface.trim() : null;
+  let surfaceOwned = false;
   const imageMatch = typeof payload.image === 'string'
     && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(payload.image);
   if (!imageMatch || payload.image.length > 16 * 1024 * 1024) throw problem('invalid-local-image');
@@ -78,20 +168,16 @@ export async function installRenderer(payload) {
   catch { throw problem('invalid-local-image'); }
   const imageURL = URL.createObjectURL(new Blob([bytes], { type: 'image/' + imageMatch[1] }));
   const image = new Image();
-  let decodeTimer;
   try {
     image.src = imageURL;
-    await Promise.race([
-      image.decode(),
-      new Promise((_, reject) => { decodeTimer = setTimeout(() => reject(problem('image-decode-timeout')), 4000); }),
-    ]);
+    await decodeImage(image);
     if (!image.naturalWidth || !image.naturalHeight) throw problem('empty-image');
   } catch (error) {
     URL.revokeObjectURL(imageURL);
     image.src = '';
     if (error?.code === 'image-decode-timeout') throw problem('image-decode-timeout');
     throw problem('image-decode-failed');
-  } finally { clearTimeout(decodeTimer); }
+  }
 
   if ((typeof ownValue(payload, 'isCurrent') === 'function' && !ownValue(payload, 'isCurrent')())
       || !validPage() || !applicationRoot.isConnected
@@ -128,12 +214,20 @@ export async function installRenderer(payload) {
   }).join(',') + ')';
   const captureOriginal = () => ({
     attribute: root.getAttribute(ATTRIBUTE),
-    properties: new Map([IMAGE_PROPERTY, WASH_PROPERTY].map(name => [
+    properties: new Map([IMAGE_PROPERTY, WASH_PROPERTY, SURFACE_PROPERTY].map(name => [
       name, [root.style.getPropertyValue(name), root.style.getPropertyPriority(name)],
     ])),
   });
   const rollbackOriginal = captureOriginal();
-  const transferredOriginal = previous ? ownValue(previous, BASELINE_KEY) ?? rollbackOriginal : rollbackOriginal;
+  const previousOriginal = previous ? ownValue(previous, BASELINE_KEY) ?? rollbackOriginal : rollbackOriginal;
+  const transferredOriginal = {
+    attribute: previousOriginal.attribute,
+    properties: new Map(previousOriginal.properties),
+  };
+  if (!transferredOriginal.properties.has(SURFACE_PROPERTY)) {
+    transferredOriginal.properties.set(SURFACE_PROPERTY,
+      [...rollbackOriginal.properties.get(SURFACE_PROPERTY)]);
+  }
   const priorStyleID = latestStyle?.id;
   const priorStyleDisabled = latestStyle?.disabled;
   const style = document.createElement('style');
@@ -147,6 +241,11 @@ export async function installRenderer(payload) {
     || /^rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color)
     || /^color\([^)]*\/\s*0(?:\.0+)?\)$/.test(color);
   const noEffect = value => !value || value === 'none';
+  const writeSurface = value => {
+    root.style.setProperty(SURFACE_PROPERTY, value);
+    surfaceOwned = root.style.getPropertyValue(SURFACE_PROPERTY) === value
+      && root.style.getPropertyPriority(SURFACE_PROPERTY) === '';
+  };
   const protectedNode = node => !!node.closest(protectedSelector);
   const decorativeNodes = selector => [...applicationRoot.querySelectorAll(selector)]
     .filter(node => node.isConnected && !protectedNode(node));
@@ -270,7 +369,9 @@ export async function installRenderer(payload) {
       else root.setAttribute(ATTRIBUTE, original.attribute);
     }
     for (const [name, [value, priority]] of original.properties) {
-      const writtenValue = name === IMAGE_PROPERTY ? 'url(' + JSON.stringify(imageURL) + ')' : wash;
+      const writtenValue = name === IMAGE_PROPERTY ? 'url(' + JSON.stringify(imageURL) + ')'
+        : name === WASH_PROPERTY ? wash : surface;
+      if (typeof writtenValue !== 'string') continue;
       if (root.style.getPropertyValue(name) !== writtenValue || root.style.getPropertyPriority(name) !== '') continue;
       if (value) root.style.setProperty(name, value, priority);
       else root.style.removeProperty(name);
@@ -289,7 +390,23 @@ export async function installRenderer(payload) {
     image.src = '';
     if (globalThis.__azhouWallpaper === api) delete globalThis.__azhouWallpaper;
   };
-  api = { owner: OWNER, version: VERSION, status, dispose, restore: dispose };
+  function updateSurface(value) {
+    if (disposed || !validSurface(value)) return false;
+    const currentValue = root.style.getPropertyValue(SURFACE_PROPERTY);
+    const currentPriority = root.style.getPropertyPriority(SURFACE_PROPERTY);
+    const originalSurface = rollbackOriginal.properties.get(SURFACE_PROPERTY);
+    const stillOwned = surfaceOwned
+      ? currentValue === surface && currentPriority === ''
+      : currentValue === originalSurface[0] && currentPriority === originalSurface[1];
+    if (!stillOwned) return false;
+    const nextSurface = value.trim();
+    if (nextSurface !== surface || !surfaceOwned) {
+      writeSurface(nextSurface);
+      surface = nextSurface;
+    }
+    return surfaceOwned;
+  }
+  api = { owner: OWNER, version: VERSION, status, dispose, restore: dispose, updateSurface };
   Object.defineProperty(api, RELEASE_KEY, { value: releaseForReplacement });
   try {
     // This synchronous transaction cannot paint between disabling and validation.
@@ -298,6 +415,7 @@ export async function installRenderer(payload) {
     if (latestStyle) { latestStyle.disabled = true; latestStyle.removeAttribute('id'); }
     root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
     root.style.setProperty(WASH_PROPERTY, wash);
+    if (surface !== null) writeSurface(surface);
     root.setAttribute(ATTRIBUTE, 'active');
     document.head.appendChild(style);
     let result = status();
@@ -315,8 +433,10 @@ export async function installRenderer(payload) {
         // known legacy owner. Let its own dispose restore the host baseline.
         original = captureOriginal();
         original.properties.set(WASH_PROPERTY, [...rollbackOriginal.properties.get(WASH_PROPERTY)]);
+        original.properties.set(SURFACE_PROPERTY, [...rollbackOriginal.properties.get(SURFACE_PROPERTY)]);
         root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
         root.style.setProperty(WASH_PROPERTY, wash);
+        if (surface !== null) writeSurface(surface);
         root.setAttribute(ATTRIBUTE, 'active');
         result = status();
         if (!result.applied) throw problem('styles-not-effective-after-replacement');

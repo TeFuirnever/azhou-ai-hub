@@ -198,17 +198,31 @@ INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
-    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+# Exact 0.9.0 startup source set used before image metadata was added to the payload.
+PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'wallpaper/renderer.js', 'wallpaper/apply.js', 'wallpaper/wallpaper.css',
+    'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
 # Builds 11/12 are installed locally and used this exact pre-extraction input set.
-PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS = tuple(name for name in STARTUP_REQUIRED_INPUTS
-                                            if name not in {'wallpaper/apply.js', 'extension/bootstrap.mjs'})
+PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
 # Exact 0.9.0/build 10 source contract from before theme-config.json was added.
 LEGACY_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
@@ -223,8 +237,20 @@ LEGACY_DEFAULT_APP_NAME = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
 STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
+    'web/image-metadata-reader.js', 'web/vendor/dream-image-metadata.mjs',
+    'web/vendor/dream-image-metadata.LICENSE',
     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
+)
+# Exact output set from the pre-image-metadata 0.9.0 payloads, including builds 10/11/12.
+PRE_IMAGE_METADATA_STARTUP_OUTPUTS = (
+    'startup/install.js',
+    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
+    'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
+    'web/assets/defaults/contours.js',
+)
+PRE_IMAGE_METADATA_PREVIEW_SOURCES = (
+    'index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
 )
 MAX_STARTUP_BYTES = 24 * 1024 * 1024
 MAX_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
@@ -627,11 +653,17 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
 
     source_inputs = manifest.get('sourceInputs')
-    allowed_theme_inputs = {frozenset(STARTUP_REQUIRED_INPUTS)}
-    if not current_source and expected_version == '0.9.0' and expected_build in {'11', '12'}:
-        allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
+    current_startup_inputs = frozenset(STARTUP_REQUIRED_INPUTS)
+    if current_source:
+        allowed_theme_inputs = {current_startup_inputs}
+    else:
+        allowed_theme_inputs = {frozenset(PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS)}
+        if (expected_version, expected_build) == (VERSION, BUILD):
+            allowed_theme_inputs.add(current_startup_inputs)
+        if expected_version == '0.9.0' and expected_build in {'11', '12'}:
+            allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
     allowed_source_inputs = set(allowed_theme_inputs)
-    if not current_source:
+    if not current_source and (expected_version, expected_build) == ('0.9.0', '10'):
         allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
     if (not isinstance(source_inputs, dict)
             or frozenset(source_inputs) not in allowed_source_inputs):
@@ -650,11 +682,13 @@ def verify_startup(path, info, marker, *, current_source=True):
                 or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
             raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
 
+    uses_current_startup_inputs = frozenset(source_inputs) == current_startup_inputs
+    expected_outputs = STARTUP_OUTPUTS if uses_current_startup_inputs else PRE_IMAGE_METADATA_STARTUP_OUTPUTS
     outputs = manifest.get('outputs')
-    if not isinstance(outputs, dict) or set(outputs) != set(STARTUP_OUTPUTS):
+    if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs):
         raise RuntimeError('startup manifest 的 output 路径清单不完整。')
     output_bytes = {}
-    for relative in STARTUP_OUTPUTS:
+    for relative in expected_outputs:
         candidate = resources / relative
         if candidate.is_symlink() or not candidate.is_file():
             raise RuntimeError(f'启动产物缺失或不是实体文件：{candidate}')
@@ -664,7 +698,12 @@ def verify_startup(path, info, marker, *, current_source=True):
             raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
         output_bytes[relative] = data
 
-    for source_name in ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js'):
+    preview_sources = (
+        ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
+         'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE')
+        if uses_current_startup_inputs else PRE_IMAGE_METADATA_PREVIEW_SOURCES
+    )
+    for source_name in preview_sources:
         copied = output_bytes['web/' + source_name]
         source_digest = marker['inputs'].get(source_name)
         if source_digest != hashlib.sha256(copied).hexdigest():

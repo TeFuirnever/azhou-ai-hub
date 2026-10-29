@@ -10,6 +10,7 @@ const HASH = 'a'.repeat(64);
 const GOOD_IMAGE = 'data:image/png;base64,AA==';
 const PROPERTY_IMAGE = '--azhou-wallpaper-image';
 const PROPERTY_WASH = '--azhou-wallpaper-wash';
+const PROPERTY_SURFACE = '--azhou-wallpaper-surface';
 const ATTRIBUTE = 'data-azhou-wallpaper';
 const STYLE_ID = 'azhou-wallpaper-style';
 
@@ -63,10 +64,15 @@ function sceneNode(name, style = {}, extra = {}) {
 }
 
 function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', preview = false,
-  decode = 'ok', width = 2048, height = 1024, effective = true, connected = true,
+  decode = 'ok', bitmap = 'absent', width = 2048, height = 1024, effective = true, connected = true,
   current = true, namespaceDuringDecode, styleDuringDecode, decorations = {}, shell = true,
-  originalAttribute = null, originalImage = '', originalWash = '', timeout = false } = {}) {
+  originalAttribute = null, originalImage = '', originalWash = '', originalSurface = '',
+  pixelReadable = true, timeout = false } = {}) {
   const revoked = [];
+  const bitmapOperations = [];
+  let drawCount = 0, pixelReadCount = 0;
+  const timers = new Map();
+  let nextTimer = 1;
   const prior = Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper');
   if (prior) delete globalThis.__azhouWallpaper;
   let objectURL = '';
@@ -78,6 +84,7 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
   root.setAttribute(ATTRIBUTE, originalAttribute ?? 'baseline');
   root.style.setProperty(PROPERTY_IMAGE, originalImage, originalImage ? 'important' : '');
   root.style.setProperty(PROPERTY_WASH, originalWash, originalWash ? 'important' : '');
+  root.style.setProperty(PROPERTY_SURFACE, originalSurface, originalSurface ? 'important' : '');
   const body = sceneNode('body');
   const frame = sceneNode('frame');
   const main = sceneNode('main');
@@ -145,6 +152,17 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
       element.id = '';
       element.disabled = false;
       element.textContent = '';
+      if (name === 'canvas') {
+        element.width = 0;
+        element.height = 0;
+        element.getContext = () => ({
+          drawImage() { drawCount++; },
+          getImageData() {
+            pixelReadCount++;
+            return { data: pixelReadable ? Uint8ClampedArray.of(12, 34, 56, 255) : Uint8ClampedArray.of(12, 34, 56) };
+          },
+        });
+      }
       if (name === 'style') {
         element.setAttribute('data-azhou-owner', '');
         Object.defineProperty(element, 'id', {
@@ -175,8 +193,12 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
         configurable: true, writable: true, value: namespaceDuringDecode,
       });
       if (styleDuringDecode) document.head.appendChild(styleDuringDecode);
-      if (decode === 'reject') throw new Error('decoder detail');
+      if (decode === 'reject') { image.complete = true; throw new Error('decoder detail'); }
       if (decode === 'timeout') return new Promise(() => {});
+      if (decode === 'pending') {
+        image.complete = true;
+        return new Promise(() => {});
+      }
       if (decode === 'empty') { image.naturalWidth = 0; return; }
       image.complete = true;
     },
@@ -187,7 +209,24 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
   });
   const window = {};
   window.top = window;
+  if (bitmap !== 'absent') {
+    window.createImageBitmap = source => {
+      const operation = { source, bitmap: null };
+      bitmapOperations.push(operation);
+      if (bitmap === 'reject') return Promise.reject(new Error('bitmap decoder detail'));
+      if (bitmap === 'pending') return new Promise(resolve => {
+        operation.resolve = value => { operation.bitmap = value; resolve(value); };
+      });
+      const value = { width: bitmap === 'wrong-dimensions' ? source.naturalWidth - 1 : source.naturalWidth,
+        height: source.naturalHeight, closed: false, close() { this.closed = true; } };
+      operation.bitmap = value;
+      return Promise.resolve(value);
+    };
+  }
   const globals = { window, document, location: { href: url }, URL: TestURL, Image: function Image() { return image; },
+    createImageBitmap: window.createImageBitmap,
+    CSS: { supports: (kind, value) => kind === 'color'
+      && /^(?:#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|transparent|currentcolor)$/i.test(String(value).trim()) },
     getComputedStyle(node, pseudo) {
       const activeStyle = styleElements.find(element => element.isConnected && element.id === STYLE_ID && !element.disabled);
       if (node === body) return {
@@ -209,7 +248,14 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
   }
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;
-  if (timeout) {
+  if (timeout === 'controlled') {
+    globalThis.setTimeout = (callback, delay = 0) => {
+      const id = nextTimer++;
+      timers.set(id, { callback, delay });
+      return id;
+    };
+    globalThis.clearTimeout = id => timers.delete(id);
+  } else if (timeout) {
     globalThis.setTimeout = callback => { queueMicrotask(callback); return 1; };
     globalThis.clearTimeout = () => {};
   }
@@ -224,7 +270,23 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
     else delete globalThis.__azhouWallpaper;
   }
   return { document, root, applicationRoot, head, styleElements, image, revoked, restore,
-    payload: { version: '0.9.0', preview, css: CSS, image: GOOD_IMAGE, imageSHA256: HASH },
+    bitmapOperations, timers,
+    get drawCount() { return drawCount; }, get pixelReadCount() { return pixelReadCount; },
+    fireTimer(delay) {
+      const entry = [...timers.entries()].find(([_id, timer]) => timer.delay === delay);
+      if (!entry) return false;
+      timers.delete(entry[0]);
+      entry[1].callback();
+      return true;
+    },
+    async waitForTimer(delay) {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        if ([...timers.values()].some(timer => timer.delay === delay)) return true;
+        await Promise.resolve();
+      }
+      return false;
+    },
+    payload: { version: '0.9.0', preview, css: CSS, image: GOOD_IMAGE, imageSHA256: HASH, surface: '#10121c' },
     setPageConnected(value) { applicationRoot.isConnected = value; } };
 }
 
@@ -234,7 +296,8 @@ async function onPage(options, operation) {
 }
 
 test('the renderer applies one decoded local scene, reports a stable receipt, and restores the host baseline', async () => {
-  await onPage({ originalAttribute: 'host', originalImage: 'url(host-image)', originalWash: 'host-wash' }, async page => {
+  await onPage({ originalAttribute: 'host', originalImage: 'url(host-image)', originalWash: 'host-wash',
+    originalSurface: '#fafafa' }, async page => {
     const result = await installRenderer({ ...page.payload, strength: 0 });
     assert.equal(result.applied, true);
     assert.equal(result.imageDecoded, true);
@@ -243,15 +306,40 @@ test('the renderer applies one decoded local scene, reports a stable receipt, an
     assert.equal(result.washMatched, true);
     assert.equal(result.persistentAnimation, false);
     assert.equal(globalThis.__azhouWallpaper.status().applied, true);
-    const disposed = globalThis.__azhouWallpaper.dispose();
+    const api = globalThis.__azhouWallpaper;
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '#10121c');
+    assert.equal(api.updateSurface('rgb(10, 20, 30)'), true);
+    assert.equal(api.updateSurface('not-a-color'), false, 'invalid updates never reach the host CSS variable');
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), 'rgb(10, 20, 30)');
+    const disposed = api.dispose();
     assert.equal(disposed.reason, 'disposed');
     assert.equal(page.root.getAttribute(ATTRIBUTE), 'host');
     assert.equal(page.root.style.getPropertyValue(PROPERTY_IMAGE), 'url(host-image)');
     assert.equal(page.root.style.getPropertyPriority(PROPERTY_IMAGE), 'important');
     assert.equal(page.root.style.getPropertyValue(PROPERTY_WASH), 'host-wash');
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '#fafafa');
+    assert.equal(page.root.style.getPropertyPriority(PROPERTY_SURFACE), 'important');
     assert.equal(page.revoked.length, 1);
     assert.equal(globalThis.__azhouWallpaper, undefined);
   });
+});
+
+test('surface updates preserve host-owned values or priorities through disposal', async t => {
+  for (const scenario of [
+    { name: 'host changes the value', value: 'rgb(100, 110, 120)', priority: 'important' },
+    { name: 'host changes only the priority', value: '#10121c', priority: 'important' },
+  ]) {
+    await t.test(scenario.name, async () => onPage({}, async page => {
+      await installRenderer(page.payload);
+      const api = globalThis.__azhouWallpaper;
+      page.root.style.setProperty(PROPERTY_SURFACE, scenario.value, scenario.priority);
+
+      assert.equal(api.updateSurface('rgb(40, 50, 60)'), false);
+      assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), [scenario.value, scenario.priority]);
+      api.dispose();
+      assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), [scenario.value, scenario.priority]);
+    }));
+  }
 });
 
 test('the renderer rejects unsupported pages, payloads, image bytes, and shells before installation', async t => {
@@ -262,8 +350,9 @@ test('the renderer rejects unsupported pages, payloads, image bytes, and shells 
   await t.test('untrusted route', async () => onPage({ url: 'app://-/index.html?initialRoute=%2Fquick-chat' }, async page => {
     await assert.rejects(installRenderer(page.payload), { code: 'unexpected-page' });
   }));
-  await t.test('malformed CSS and strength', async () => onPage({}, async page => {
+  await t.test('malformed CSS, surface and strength', async () => onPage({}, async page => {
     await assert.rejects(installRenderer({ ...page.payload, css: '@import url(https://example.test/x);' }), { code: 'invalid-local-payload' });
+    await assert.rejects(installRenderer({ ...page.payload, surface: 'not-a-color' }), { code: 'invalid-local-payload' });
     await assert.rejects(installRenderer({ ...page.payload, strength: 76 }), { code: 'invalid-local-payload' });
   }));
   await t.test('non-base64 image', async () => onPage({}, async page => {
@@ -281,6 +370,116 @@ test('the renderer rejects unsupported pages, payloads, image bytes, and shells 
     style.setAttribute('data-azhou-owner', 'other'); page.head.appendChild(style);
     await assert.rejects(installRenderer(page.payload), { code: 'style-id-conflict' });
   }));
+});
+
+test('a complete image with a pending decode can be confirmed from a pixel-checked bitmap', async () => {
+  await onPage({ decode: 'pending', bitmap: 'ok', timeout: 'controlled' }, async page => {
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true, 'the bounded bitmap verification is scheduled');
+    assert.equal(page.fireTimer(250), true);
+    const result = await installation;
+    assert.equal(result.applied, true);
+    assert.equal(page.bitmapOperations.length, 1);
+    assert.equal(page.bitmapOperations[0].bitmap.closed, true, 'the validation bitmap is closed before install');
+    assert.equal(page.drawCount, 1, 'the bitmap is drawn to a scratch canvas');
+    assert.equal(page.pixelReadCount, 1, 'the scratch pixel is read back before install');
+    assert.equal(page.timers.size, 0, 'the four-second timer is cleared after bitmap verification');
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(page.revoked.length, 1, 'the installed image URL remains owned until dispose');
+  });
+});
+
+test('invalid or unavailable bitmap evidence cannot replace native image decoding', async t => {
+  const scenarios = [
+    { name: 'a rejected native image is not accepted from a synthetic bitmap', decode: 'reject', bitmap: 'ok',
+      expected: 'image-decode-failed', fallback: false },
+    { name: 'a rejected bitmap remains bounded by the existing decode timeout', decode: 'pending', bitmap: 'reject',
+      expected: 'image-decode-timeout', fallback: true },
+    { name: 'a dimension mismatch remains bounded by the existing decode timeout', decode: 'pending', bitmap: 'wrong-dimensions',
+      expected: 'image-decode-timeout', fallback: true },
+    { name: 'pixels that cannot be read back are not accepted', decode: 'pending', bitmap: 'ok', pixelReadable: false,
+      expected: 'image-decode-timeout', fallback: true },
+    { name: 'an incomplete image is not accepted from a bitmap', decode: 'timeout', bitmap: 'ok',
+      expected: 'image-decode-timeout', fallback: true, bitmapCalls: 0 },
+    { name: 'no createImageBitmap keeps the existing decode timeout', decode: 'pending', bitmap: 'absent',
+      expected: 'image-decode-timeout', fallback: false },
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => onPage({ decode: scenario.decode, bitmap: scenario.bitmap,
+      pixelReadable: scenario.pixelReadable, timeout: 'controlled' }, async page => {
+      const installation = installRenderer(page.payload);
+      if (scenario.fallback) {
+        assert.equal(await page.waitForTimer(250), true);
+        assert.equal(page.fireTimer(250), true);
+        await Promise.resolve();
+      } else if (scenario.decode === 'reject') {
+        await assert.rejects(installation, { code: scenario.expected });
+      }
+      if (scenario.decode !== 'reject') {
+        assert.equal(await page.waitForTimer(4000), true);
+        assert.equal(page.fireTimer(4000), true);
+        await assert.rejects(installation, { code: scenario.expected });
+      }
+      assert.equal(page.bitmapOperations.length, scenario.bitmapCalls ?? (scenario.fallback ? 1 : 0));
+      assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+      assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline', 'validation does not take style ownership');
+      assert.equal(page.revoked.length, 1, 'failed validation revokes its Blob URL');
+      assert.equal(page.image.src, '', 'failed validation clears the image source');
+      if (scenario.bitmap === 'wrong-dimensions') assert.equal(page.bitmapOperations[0].bitmap.closed, true);
+      if (scenario.pixelReadable === false) {
+        assert.equal(page.bitmapOperations[0].bitmap.closed, true);
+        assert.equal(page.drawCount, 1);
+        assert.equal(page.pixelReadCount, 1);
+      }
+      assert.equal(page.timers.size, 0, 'decode and fallback timers are released');
+    }));
+  }
+});
+
+test('a bitmap that completes after decode timeout is closed without taking ownership', async () => {
+  await onPage({ decode: 'pending', bitmap: 'pending', timeout: 'controlled' }, async page => {
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true);
+    assert.equal(page.fireTimer(250), true);
+    assert.equal(page.bitmapOperations.length, 1);
+    assert.equal(await page.waitForTimer(4000), true);
+    assert.equal(page.fireTimer(4000), true);
+    await assert.rejects(installation, { code: 'image-decode-timeout' });
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+
+    const bitmap = { width: page.image.naturalWidth, height: page.image.naturalHeight,
+      closed: false, close() { this.closed = true; } };
+    page.bitmapOperations[0].resolve(bitmap);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(bitmap.closed, true, 'a late bitmap is closed after the timeout already failed');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.revoked.length, 1, 'late completion does not change URL ownership');
+  });
+});
+
+test('a canceled page closes a pending validation bitmap before any style commit', async () => {
+  await onPage({ decode: 'pending', bitmap: 'pending', timeout: 'controlled' }, async page => {
+    let current = true;
+    const installation = installRenderer({ ...page.payload, isCurrent: () => current });
+    assert.equal(await page.waitForTimer(250), true);
+    assert.equal(page.fireTimer(250), true);
+    assert.equal(page.bitmapOperations.length, 1);
+    current = false;
+
+    const bitmap = { width: page.image.naturalWidth, height: page.image.naturalHeight,
+      closed: false, close() { this.closed = true; } };
+    page.bitmapOperations[0].resolve(bitmap);
+    await assert.rejects(installation, { code: 'page-changed-during-decode' });
+    assert.equal(bitmap.closed, true, 'the validation bitmap is closed before cancellation returns');
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.image.src, '');
+  });
 });
 
 test('decode and page identity are checked again after the image resolves', async t => {
@@ -371,6 +570,44 @@ test('the renderer rolls back ineffective styles and disposes only values it sti
     assert.equal(result.applied, true);
     assert.equal(disposed, true);
     globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('legacy replacement preserves an absent surface baseline through replacement and dispose', async () => onPage({}, async page => {
+    const legacyStyle = page.document.createElement('style'); legacyStyle.id = STYLE_ID;
+    legacyStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(legacyStyle);
+    const legacy = { owner: 'azhou.codex-startup-animation', version: '0.7.1', dispose() {}, status() { return {}; } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: legacy });
+
+    await installRenderer(page.payload);
+    await installRenderer({ ...page.payload, strength: 12 });
+    globalThis.__azhouWallpaper.dispose();
+
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '');
+    assert.equal(page.root.style.getPropertyPriority(PROPERTY_SURFACE), '');
+    assert.equal(page.root.style.properties.has(PROPERTY_SURFACE), false);
+  }));
+  await t.test('legacy replacement preserves an important surface baseline through replacement and dispose', async () => onPage({ originalSurface: '#fafafa' }, async page => {
+    const legacyStyle = page.document.createElement('style'); legacyStyle.id = STYLE_ID;
+    legacyStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(legacyStyle);
+    const legacy = { owner: 'azhou.codex-startup-animation', version: '0.7.1', dispose() {}, status() { return {}; } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: legacy });
+
+    await installRenderer(page.payload);
+    await installRenderer({ ...page.payload, strength: 12 });
+    globalThis.__azhouWallpaper.dispose();
+
+    assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), ['#fafafa', 'important']);
+  }));
+  await t.test('legacy replacement preserves a later host surface edit on dispose', async () => onPage({ originalSurface: '#fafafa' }, async page => {
+    const legacyStyle = page.document.createElement('style'); legacyStyle.id = STYLE_ID;
+    legacyStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(legacyStyle);
+    const legacy = { owner: 'azhou.codex-startup-animation', version: '0.7.1', dispose() {}, status() { return {}; } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: legacy });
+
+    await installRenderer(page.payload);
+    page.root.style.setProperty(PROPERTY_SURFACE, '#host-surface', 'important');
+    globalThis.__azhouWallpaper.dispose();
+
+    assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), ['#host-surface', 'important']);
   }));
   await t.test('failed replacement restores the suspended legacy stylesheet', async () => onPage({ effective: false }, async page => {
     const legacyStyle = page.document.createElement('style'); legacyStyle.id = STYLE_ID;

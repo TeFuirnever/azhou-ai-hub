@@ -36,6 +36,9 @@ BUILD_FILES = (
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
+    "image-metadata-reader.js",
+    "vendor/dream-image-metadata.mjs",
+    "vendor/dream-image-metadata.LICENSE",
     "index.html",
     "style.css",
     "animation.js",
@@ -54,6 +57,34 @@ BUILD_FILES = (
     "hub-package.json",
     "theme-config.json",
 )
+IMAGE_METADATA_SOURCE_INPUTS = (
+    "image-metadata-reader.js",
+    "vendor/dream-image-metadata.mjs",
+    "vendor/dream-image-metadata.LICENSE",
+)
+IMAGE_METADATA_OUTPUTS = tuple("web/" + name for name in IMAGE_METADATA_SOURCE_INPUTS)
+PRE_IMAGE_METADATA_STARTUP_OUTPUTS = frozenset({
+    "startup/install.js",
+    "web/index.html", "web/style.css", "web/animation.js", "web/image-settings.js", "web/localization.js",
+    "web/assets/defaults/avatar.png", "web/assets/defaults/entry-avatar.png", "web/assets/defaults/artwork.png",
+    "web/assets/defaults/contours.js",
+})
+BUILD10_LEGACY_SOURCE_INPUTS = frozenset({
+    "tools/build-startup.py", "tools/build-startup-assets.swift", "tools/verify-artifacts.py",
+    "extension/renderer.mjs", "image-settings.js", "localization.js", "wallpaper/renderer.js",
+    "wallpaper/wallpaper.css", "index.html", "style.css", "animation.js", "hub-package.json",
+})
+PRE_IMAGE_METADATA_THEME_SOURCE_INPUTS = frozenset({
+    "tools/build-startup.py", "tools/build-startup-assets.swift", "tools/verify-artifacts.py",
+    "extension/renderer.mjs", "extension/bootstrap.mjs", "image-settings.js", "localization.js",
+    "wallpaper/renderer.js", "wallpaper/apply.js", "wallpaper/wallpaper.css",
+    "index.html", "style.css", "animation.js", "hub-package.json", "theme-config.json",
+})
+PREVIOUS_THEME_SOURCE_INPUTS = frozenset({
+    "tools/build-startup.py", "tools/build-startup-assets.swift", "tools/verify-artifacts.py",
+    "extension/renderer.mjs", "image-settings.js", "localization.js", "wallpaper/renderer.js",
+    "wallpaper/wallpaper.css", "index.html", "style.css", "animation.js", "hub-package.json", "theme-config.json",
+})
 
 
 def load_module(path: Path, name: str):
@@ -198,6 +229,42 @@ def build_staged_product(root: Path, label: str):
     return bundle, artifacts
 
 
+def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source_inputs=(),
+                                         omit_marker_inputs=()) -> dict:
+    """Make a current synthetic bundle match the exact pre-image-metadata manifest/output contract."""
+    resources = Path(bundle) / "Contents/Resources"
+    marker_path = Path(bundle) / artifacts.MARKER
+    manifest_path = resources / "startup/manifest.json"
+    marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    for name in IMAGE_METADATA_SOURCE_INPUTS:
+        marker["inputs"].pop(name)
+        manifest["sourceInputs"].pop(name)
+    for name in omit_marker_inputs:
+        marker["inputs"].pop(name)
+    for name in omit_source_inputs:
+        manifest["sourceInputs"].pop(name)
+
+    marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
+    manifest["inputSHA256"] = marker["inputSHA256"]
+    for relative in IMAGE_METADATA_OUTPUTS:
+        manifest["outputs"].pop(relative)
+        (resources / relative).unlink()
+    for relative in manifest["outputs"]:
+        manifest["outputs"][relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
+
+    try:
+        (resources / "web/vendor").rmdir()
+    except OSError:
+        pass
+    marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                           encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                             encoding="utf-8")
+    return manifest
+
+
 def simulated_swap(left: Path, right: Path) -> None:
     backup = Path(left).parent / ".publish-test-backup"
     os.replace(right, backup)
@@ -287,24 +354,14 @@ class BuildOwnedThemeTests(unittest.TestCase):
                       + script[assets_end:])
             install_path.write_text(script, encoding="utf-8")
 
-            marker_path = legacy / artifacts.MARKER
-            marker = json.loads(marker_path.read_text(encoding="utf-8"))
-            marker["inputs"].pop("theme-config.json")
-            marker["inputs"].pop("wallpaper/apply.js")
-            marker["inputs"].pop("extension/bootstrap.mjs")
-            marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
-            marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-                                   encoding="utf-8")
-            manifest_path = resources / "startup/manifest.json"
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["sourceInputs"].pop("theme-config.json")
-            manifest["sourceInputs"].pop("wallpaper/apply.js")
-            manifest["sourceInputs"].pop("extension/bootstrap.mjs")
-            manifest["inputSHA256"] = marker["inputSHA256"]
-            for relative in manifest["outputs"]:
-                manifest["outputs"][relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
-            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-                                      encoding="utf-8")
+            manifest = convert_bundle_to_pre_image_metadata(
+                legacy,
+                artifacts,
+                omit_source_inputs=("theme-config.json", "wallpaper/apply.js", "extension/bootstrap.mjs"),
+                omit_marker_inputs=("theme-config.json", "wallpaper/apply.js", "extension/bootstrap.mjs"),
+            )
+            self.assertEqual(set(manifest["sourceInputs"]), BUILD10_LEGACY_SOURCE_INPUTS)
+            self.assertEqual(set(manifest["outputs"]), PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
 
             artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
             os.replace(legacy, artifacts.PAYLOAD)
@@ -333,12 +390,95 @@ class BuildOwnedThemeTests(unittest.TestCase):
             info = plistlib.loads(info_path.read_bytes())
             info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab'
             info_path.write_bytes(plistlib.dumps(info))
+            manifest = convert_bundle_to_pre_image_metadata(previous, artifacts)
+            self.assertEqual(set(manifest["sourceInputs"]), PRE_IMAGE_METADATA_THEME_SOURCE_INPUTS)
+            self.assertEqual(set(manifest["outputs"]), PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
             artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
             os.replace(previous, artifacts.PAYLOAD)
             metadata_path.write_bytes(current_metadata)
             current, artifacts = build_staged_product(root, 'current-theme')
             publish_with_test_native_tools(artifacts, current)
             self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)['build'], APP_BUILD)
+
+    def test_publish_upgrades_build11_and_build12_previous_theme_payloads(self):
+        for build in ("11", "12"):
+            with self.subTest(build=build), tempfile.TemporaryDirectory(
+                    prefix=f"agent-skin-build{build}-upgrade-") as temporary:
+                root = (Path(temporary) / "source").resolve()
+                clone_source_tree(root)
+                metadata_path = root / "hub-package.json"
+                current_metadata = metadata_path.read_bytes()
+                previous_metadata = json.loads(current_metadata)
+                previous_metadata["runtime_build"] = build
+                metadata_path.write_text(json.dumps(previous_metadata), encoding="utf-8")
+
+                previous, artifacts = build_staged_product(root, f"previous-build-{build}")
+                manifest = convert_bundle_to_pre_image_metadata(
+                    previous,
+                    artifacts,
+                    omit_source_inputs=("wallpaper/apply.js", "extension/bootstrap.mjs"),
+                )
+                self.assertEqual(set(manifest["sourceInputs"]), PREVIOUS_THEME_SOURCE_INPUTS)
+                self.assertEqual(set(manifest["outputs"]), PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
+
+                artifacts.PAYLOAD.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(previous, artifacts.PAYLOAD)
+                metadata_path.write_bytes(current_metadata)
+                current, artifacts = build_staged_product(root, f"current-build-{build}")
+                publish_with_test_native_tools(artifacts, current)
+                self.assertEqual(artifacts.read_marker(artifacts.PAYLOAD)["build"], APP_BUILD)
+
+    def test_previous_theme_payload_rejects_added_sources_outputs_and_tampering(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-historical-contract-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            metadata_path = root / "hub-package.json"
+            previous_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            previous_metadata["runtime_build"] = "12"
+            metadata_path.write_text(json.dumps(previous_metadata), encoding="utf-8")
+            bundle, artifacts = build_staged_product(root, "previous-build-12-contract")
+            manifest = convert_bundle_to_pre_image_metadata(
+                bundle,
+                artifacts,
+                omit_source_inputs=("wallpaper/apply.js", "extension/bootstrap.mjs"),
+            )
+            self.assertEqual(set(manifest["sourceInputs"]), PREVIOUS_THEME_SOURCE_INPUTS)
+            self.assertEqual(set(manifest["outputs"]), PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
+
+            info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+            marker_path = bundle / artifacts.MARKER
+            manifest_path = bundle / "Contents/Resources/startup/manifest.json"
+            marker_bytes = marker_path.read_bytes()
+            manifest_bytes = manifest_path.read_bytes()
+            marker = json.loads(marker_bytes)
+            artifacts.verify_startup(bundle, info, marker, current_source=False)
+
+            added_name = IMAGE_METADATA_SOURCE_INPUTS[0]
+            added_digest = hashlib.sha256((root / added_name).read_bytes()).hexdigest()
+            forged_marker = dict(marker)
+            forged_marker["inputs"] = dict(marker["inputs"])
+            forged_marker["inputs"][added_name] = added_digest
+            forged_marker["inputSHA256"] = artifacts.aggregate_inputs(forged_marker["inputs"])
+            forged_manifest = json.loads(manifest_bytes)
+            forged_manifest["sourceInputs"][added_name] = added_digest
+            forged_manifest["inputSHA256"] = forged_marker["inputSHA256"]
+            marker_path.write_text(json.dumps(forged_marker, ensure_ascii=False), encoding="utf-8")
+            manifest_path.write_text(json.dumps(forged_manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "sourceInputs.*不完整"):
+                artifacts.verify_startup(bundle, info, forged_marker, current_source=False)
+
+            marker_path.write_bytes(marker_bytes)
+            forged_manifest = json.loads(manifest_bytes)
+            forged_manifest["outputs"][IMAGE_METADATA_OUTPUTS[0]] = "0" * 64
+            manifest_path.write_text(json.dumps(forged_manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "output 路径清单不完整"):
+                artifacts.verify_startup(bundle, info, marker, current_source=False)
+
+            manifest_path.write_bytes(manifest_bytes)
+            tampered_output = bundle / "Contents/Resources/web/index.html"
+            tampered_output.write_bytes(tampered_output.read_bytes() + b"tampered")
+            with self.assertRaisesRegex(RuntimeError, "启动产物摘要不匹配"):
+                artifacts.verify_startup(bundle, info, marker, current_source=False)
 
     def test_same_version_old_build_is_not_skipped_by_strict_product_verification(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-old-build-check-test-") as temporary:
@@ -541,6 +681,131 @@ class WallpaperThemeBuildTests(unittest.TestCase):
                                      "the helper must use the same configured default as startup, including zero")
 
 
+class ImageMetadataAssemblyTests(unittest.TestCase):
+    def test_metadata_sources_are_bound_to_runtime_build_and_preview_outputs(self):
+        builder = load_module(BUILDER_PATH, "agent_skin_image_metadata_manifest_builder")
+        artifacts = load_module(PACKAGE / "tools/verify-artifacts.py", "agent_skin_image_metadata_manifest_artifacts")
+        package = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
+        required = {
+            "image-metadata-reader.js",
+            "vendor/dream-image-metadata.mjs",
+            "vendor/dream-image-metadata.LICENSE",
+        }
+        self.assertTrue(required <= set(package["build_inputs"]))
+        self.assertTrue(required <= set(package["runtime_paths"]))
+        self.assertTrue(required <= set(artifacts.INPUT_FILES))
+        self.assertTrue(required <= set(artifacts.STARTUP_REQUIRED_INPUTS))
+        self.assertTrue(required <= set(builder.PREVIEW_SOURCES))
+        self.assertTrue({
+            "tools/dream-image-metadata.test.mjs",
+            "tools/image-import-preflight.test.mjs",
+        } <= set(package["runtime_paths"]))
+
+    def test_original_esm_is_adapted_into_and_executed_from_the_generated_payload(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("generated image-metadata assembly probe requires Node.js")
+        builder = load_module(BUILDER_PATH, "agent_skin_image_metadata_builder")
+        artifacts = load_module(PACKAGE / "tools/verify-artifacts.py", "agent_skin_image_metadata_artifacts")
+        original = (PACKAGE / "vendor/dream-image-metadata.mjs").read_text(encoding="utf-8")
+        adapted = builder._classic_image_metadata(original)
+        generated_reader = builder.image_metadata_reader_source(PACKAGE)
+        self.assertIn("function readRawDimensions(", adapted)
+        self.assertNotIn("export ", adapted)
+        self.assertNotIn("MAX_IMAGE_PIXELS", adapted)
+        expected_reader = (builder.IMAGE_METADATA_READER_HEADER + adapted + "\n\n"
+                           "globalThis.AGENT_SKIN_READ_RAW_DIMENSIONS = readRawDimensions;\n")
+        self.assertEqual(generated_reader, expected_reader)
+
+        css = (PACKAGE / "wallpaper/wallpaper.css").read_text(encoding="utf-8")
+        payload = builder._build_script(PACKAGE, {}, css, artifacts)
+        self.assertIn(adapted, payload)
+        self.assertEqual(payload.count("function readRawDimensions("), 1)
+        self.assertNotIn("MAX_IMAGE_PIXELS", payload)
+
+        start = "  return bootstrapStartup({"
+        end = "    host: globalThis,\n  });\n\n})()"
+        self.assertEqual(payload.count(start), 1)
+        self.assertEqual(payload.count(end), 1)
+        probe_payload = payload.replace(start, "  const startupResult = bootstrapStartup({", 1).replace(
+            end,
+            "    host: globalThis,\n  });\n"
+            "  return { startupResult, dimensions: readRawDimensions(globalThis.__agentSkinProbeHeader, '.png') };\n})()",
+            1,
+        )
+        with tempfile.TemporaryDirectory(prefix="agent-skin-image-metadata-build-") as temporary:
+            payload_path = Path(temporary) / "install.js"
+            probe_path = Path(temporary) / "probe.cjs"
+            payload_path.write_text(probe_payload, encoding="utf-8")
+            probe_path.write_text(
+                "const fs = require('node:fs');\n"
+                "const vm = require('node:vm');\n"
+                "const source = fs.readFileSync(process.argv[2], 'utf8');\n"
+                "const sandbox = { URL, location: { href: 'https://example.invalid/' } };\n"
+                "sandbox.__agentSkinProbeHeader = new Uint8Array(24);\n"
+                "sandbox.__agentSkinProbeHeader.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);\n"
+                "new DataView(sandbox.__agentSkinProbeHeader.buffer).setUint32(16, 24000, false);\n"
+                "new DataView(sandbox.__agentSkinProbeHeader.buffer).setUint32(20, 2001, false);\n"
+                "const result = vm.runInNewContext(source, sandbox);\n"
+                "if (JSON.stringify(result.dimensions) !== JSON.stringify({ width: 24000, height: 2001 })) {\n"
+                "  throw new Error('generated payload did not execute the bundled raw-dimensions parser');\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            syntax = subprocess.run([node, "--check", str(payload_path)], check=False, capture_output=True, text=True)
+            self.assertEqual(syntax.returncode, 0, syntax.stderr)
+            result = subprocess.run([node, str(probe_path), str(payload_path)], check=True,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.stderr, "")
+
+    def test_classic_reader_rejects_changed_source_and_generated_reader_drift(self):
+        builder = load_module(BUILDER_PATH, "agent_skin_image_metadata_contract_builder")
+        source = (PACKAGE / "vendor/dream-image-metadata.mjs").read_text(encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "unexpected ESM boundary"):
+            builder._classic_image_metadata(source + "\nimport './unexpected.js';\n")
+        missing_boundary = source.replace(
+            "// Raw pixel dimensions straight from the container header",
+            "// Raw dimension boundary changed",
+            1,
+        )
+        with self.assertRaisesRegex(RuntimeError, "missing a required raw-parser boundary"):
+            builder._classic_image_metadata(missing_boundary)
+        unsafe_policy = source.replace(
+            "const SOF_MARKERS = new Set([",
+            "const SOF_MARKERS = new Set([\n// MAX_IMAGE_PIXELS is not part of the adapter",
+            1,
+        )
+        with self.assertRaisesRegex(RuntimeError, "retained an ESM export or safety policy"):
+            builder._classic_image_metadata(unsafe_policy)
+
+        with tempfile.TemporaryDirectory(prefix="agent-skin-image-metadata-reader-") as temporary:
+            root = Path(temporary)
+            vendor_source = root / "vendor/dream-image-metadata.mjs"
+            vendor_source.parent.mkdir(parents=True)
+            vendor_source.write_text(source, encoding="utf-8")
+            destination = root / "image-metadata-reader.js"
+            with self.assertRaisesRegex(RuntimeError, "Missing generated image-metadata-reader.js"):
+                builder.verify_image_metadata_reader(root)
+
+            self.assertEqual(builder.update_image_metadata_reader(root), destination)
+            self.assertEqual(destination.read_text(encoding="utf-8"),
+                             builder.image_metadata_reader_source(root))
+            builder.verify_image_metadata_reader(root)
+
+            destination.write_text("stale adapter\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "image-metadata-reader.js is stale"):
+                builder.verify_image_metadata_reader(root)
+
+            target = root / "reader-target.js"
+            target.write_text("target\n", encoding="utf-8")
+            destination.unlink()
+            destination.symlink_to(target)
+            with self.assertRaisesRegex(RuntimeError, "Missing generated image-metadata-reader.js"):
+                builder.verify_image_metadata_reader(root)
+            with self.assertRaisesRegex(RuntimeError, "must not be a symlink"):
+                builder.update_image_metadata_reader(root)
+
+
 class StartupBuildTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -707,7 +972,9 @@ class StartupBuildTests(unittest.TestCase):
             path.write_bytes(original)
 
     def test_builder_sources_are_hashed_and_listed_as_build_inputs(self):
-        required = {"tools/build-startup.py", "tools/build-startup-assets.swift", "localization.js", "theme-config.json"}
+        required = {"tools/build-startup.py", "tools/build-startup-assets.swift", "localization.js", "theme-config.json",
+                    "image-metadata-reader.js", "vendor/dream-image-metadata.mjs",
+                    "vendor/dream-image-metadata.LICENSE"}
         verifier_inputs = set(self.verifier.INPUT_FILES)
         package = json.loads((self.root / "hub-package.json").read_text(encoding="utf-8"))
         self.assertTrue(required <= verifier_inputs)

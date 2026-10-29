@@ -15,7 +15,7 @@
 
 ## 历史实现参考
 
-以下项目曾用于研究实现方式，未复制其源代码，也不需要安装或运行它们。
+以下项目用于研究实现方式；除下一节明确列出的尺寸解析器外，未复制其源代码，也不需要安装或运行它们。
 
 | 参考项目 | 当时研究的范围 |
 | --- | --- |
@@ -24,6 +24,13 @@
 | [NativeDog1/dsh-boot-animation](https://github.com/NativeDog1/dsh-boot-animation) | 可跳过的覆盖式片头、完成后移除、素材就绪后播放和超时兜底 |
 
 DSH 使用自己的覆盖层接口，不能直接安装到 Codex。旧扩展实现已从本包排除，范围与理由见 [迁移清单](../MIGRATION-INVENTORY.md)。
+
+## 当前运行时源码复用
+
+- `vendor/dream-image-metadata.mjs` 原样引入 Codex Dream Skin 的 `runtime/image-metadata.mjs`，固定于提交 [`6fc42df48a6a5365011f55cc349e20c038e56d1d`](https://github.com/Fei-Away/Codex-Dream-Skin/blob/6fc42df48a6a5365011f55cc349e20c038e56d1d/runtime/image-metadata.mjs)。其 MIT 条款保存在旁边的 `vendor/dream-image-metadata.LICENSE`；来源仓库的 [NOTICE](https://github.com/Fei-Away/Codex-Dream-Skin/blob/6fc42df48a6a5365011f55cc349e20c038e56d1d/macos/NOTICE.md) 将软件许可与图片素材权利区分开。
+- `tools/build-startup.py` 只从原件装配 `readRawDimensions()` 及其私有格式解析辅助函数；移除该导出声明后解析算法未修改，也不装入分类器、50 MP 上限或 16384px 限制。直页面加载从原件确定性生成的 classic `image-metadata-reader.js`，生成载荷也从同一解析函数装配。
+- 头部读取最多 2 MiB。本机尺寸样本包括 688,079 字节的 JPEG（SOF 位于偏移 156）和 1,999,598 字节的无损 WebP；超过预算或格式边界不完整时回到既有解码与最终尺寸校验。
+- 更新时先固定新的上游提交并核对源文件和 MIT 许可，再保留完整原件、修订 classic 装配边界并运行原件及双入口回归。不要把未许可素材、生成输出或上游 50 MP 分类策略引入本包。
 
 旧版 `assets/avatar.jpg`、`assets/artwork.jpg` 来自所有者提供的图片，并做缩放和居中裁切；`assets/contours.js` 由 macOS Vision 提取轮廓。旧自定义背景由本机 Canvas 生成轮廓，旧粉色启动图标由花形标志改色。这些素材和“头像碎片→线稿→彩色背景”的序列已不属于当前动画构建。
 

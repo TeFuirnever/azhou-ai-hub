@@ -26,7 +26,7 @@ const PREVIEW_WASH_BASE_MIXES = new Map([
 ]);
 
 function expectedPreviewWash(strength) {
-  const base = 'var(--azhou-base, var(--color-surface, var(--app-color-background-surface, #202024)))';
+  const base = '#10121c';
   return 'linear-gradient(90deg,' + PREVIEW_WASH_BASE_MIXES.get(strength).map((percent, index) =>
     `color-mix(in srgb, ${base} ${percent}%, transparent) ${PREVIEW_WASH_POSITIONS[index]}`,
   ).join(',') + ')';
@@ -656,6 +656,23 @@ test('settings editor leads with a draft workspace preview and passes a clone to
   const sections = fixture.elements.filter(element => element.getAttribute('data-agent-skin-settings-section'));
   assert.deepEqual(sections.map(element => element.getAttribute('data-agent-skin-settings-section')),
     ['workspace', 'startup', 'about']);
+  const tabs = fixture.elements.filter(element => element.getAttribute('role') === 'tab');
+  assert.equal(tabs.length, 3);
+  assert.equal(fixture.elements.filter(element => element.tagName === 'H2').length, 1,
+    'the page keeps one visible settings title');
+  assert.equal(fixture.elements.filter(element => element.tagName === 'H3').length, 0,
+    'the tab labels name panels without repeated section headings');
+  for (const panel of sections) {
+    assert.equal(panel.getAttribute('role'), 'tabpanel');
+    assert.equal(panel.getAttribute('aria-labelledby'), 'agent-skin-settings-tab-'
+      + panel.getAttribute('data-agent-skin-settings-section'));
+  }
+  assert.equal(fixture.elements.filter(element => element.tagName === 'P'
+    && /保存后用于下次启动/.test(element.textContent)).length, 1,
+  'only the startup section keeps its unique next-launch and preview note');
+  assert.equal(fixture.elements.some(element => element.tagName === 'P'
+    && /预览只反映当前草稿|显示语言、深浅色/.test(element.textContent)), false,
+  'current values and the workspace preview replace explanatory paragraphs');
   const workspaceTab = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-tab') === 'workspace');
   const startupTab = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-tab') === 'startup');
   const workspacePanel = sections[0];
@@ -664,6 +681,7 @@ test('settings editor leads with a draft workspace preview and passes a clone to
   const backgroundImage = fixture.elements.find(element => element.getAttribute('data-agent-skin-workspace-preview-image') === '');
   const backgroundWash = fixture.elements.find(element => element.getAttribute('data-agent-skin-workspace-preview-wash') === '');
   const strength = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'range');
+  const strengthValue = fixture.elements.find(element => element.getAttribute('data-agent-skin-wallpaper-strength-value') === '');
   assert.ok(workspaceTab);
   assert.ok(startupTab);
   assert.equal(workspaceTab.getAttribute('aria-selected'), 'true');
@@ -671,16 +689,34 @@ test('settings editor leads with a draft workspace preview and passes a clone to
   assert.equal(startupPanel.hidden, true);
   assert.equal(backgroundPreview.getAttribute('aria-label'), '背景草稿预览');
   assert.equal(backgroundImage.src, loaded.settings.artwork);
+  const backgroundAction = fixture.elements.find(element => element.getAttribute('data-agent-skin-image-action') === 'artwork');
+  assert.equal(backgroundAction.textContent, '选择背景图片');
+  assert.equal(backgroundAction.getAttribute('aria-label'), null,
+    'the visible button text is its accessible name without a duplicate aria-label');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  assert.equal(titleInput.parentNode.tagName, 'LABEL');
+  assert.equal(titleInput.parentNode.children[0].textContent, '启动标题（最多 16 个字符）');
+  assert.equal(titleInput.getAttribute('aria-label'), null,
+    'the visible field label supplies the accessible name');
+  assert.equal(titleInput.maxLength, 16);
+  const restoreButton = fixture.elements.find(element => element.tagName === 'BUTTON'
+    && element.textContent === '恢复全部默认');
+  assert.ok(restoreButton);
   assert.ok(backgroundWash, 'workspace preview has a separate wash overlay');
   assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(42));
 
   strength.value = '0';
   strength.listeners.get('input')[0]();
-  assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(0),
-    'zero strength makes the wash opaque and closes the wallpaper image');
+  assert.equal(strengthValue.textContent, '关闭', 'zero strength is shown as closed next to the slider');
+  assert.equal(strength.getAttribute('aria-valuetext'), '关闭', 'assistive technology hears that zero means closed');
+  assert.equal(backgroundWash.style.getPropertyValue('background-image'), 'none',
+    'zero strength removes the wash so the current surface shows through');
+  assert.equal(backgroundImage.hidden, true, 'zero strength closes the wallpaper image layer');
 
   strength.value = '75';
   strength.listeners.get('input')[0]();
+  assert.equal(strengthValue.textContent, '75');
+  assert.equal(strength.getAttribute('aria-valuetext'), null, 'nonzero strengths retain the native numeric range value');
   assert.equal(backgroundWash.style.getPropertyValue('background-image'), expectedPreviewWash(75),
     'maximum strength uses the renderer wash stops and saturation');
 
@@ -899,7 +935,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(appearanceAvatar.getAttribute('alt'), '');
   assert.equal(loaded.settings.appearanceAvatar, undefined, 'the host bot avatar is outside the settings record');
   assert.equal(titleInput.value, 'Saved title');
-  assert.equal(titleInput.getAttribute('aria-label'), '启动标题（最多 16 个字符）');
+  assert.equal(titleInput.getAttribute('aria-label'), null, 'the wrapping label supplies the accessible name');
   assert.equal(titleInput.parentNode.children[0].textContent, '启动标题（最多 16 个字符）');
   assert.equal(status.textContent, '暂时无法读取已保存设置；当前使用默认值，原设置保持不变。');
 
@@ -911,7 +947,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(fixture.elements.find(element => element.tagName === 'DIALOG'), dialog);
   assert.equal(dialog.open, true);
   assert.equal(titleInput.value, 'Local draft');
-  assert.equal(titleInput.getAttribute('aria-label'), 'Startup title (up to 16 characters)');
+  assert.equal(titleInput.getAttribute('aria-label'), null, 'localization does not add a duplicate aria-label');
   assert.equal(titleInput.parentNode.children[0].textContent, 'Startup title (up to 16 characters)');
   assert.equal(status.textContent,
     'Saved settings are temporarily unavailable. Defaults are in use; saved settings are unchanged.');
@@ -921,7 +957,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   assert.equal(dialog.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
   assert.equal(dialog.style.getPropertyValue('color'), 'var(--agent-skin-text, CanvasText)');
   const restoreButton = fixture.elements.find(element => element.tagName === 'BUTTON'
-    && element.textContent === 'Restore defaults');
+    && element.textContent === 'Restore all defaults');
   const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON'
     && element.textContent === 'Save');
   assert.equal(restoreButton.style.getPropertyValue('background-color'), 'var(--agent-skin-surface, Canvas)');
@@ -959,17 +995,17 @@ test('localized image selection buttons use hidden file inputs and disable while
   assert.equal(backgroundInput.hidden, true);
   assert.equal(portraitInput.accept, 'image/png,image/jpeg,image/webp');
   assert.equal(portraitButton.textContent, '选择启动头像');
-  assert.equal(portraitButton.getAttribute('aria-label'), '选择启动头像');
+  assert.equal(portraitButton.getAttribute('aria-label'), null, 'visible button text is its accessible name');
   assert.equal(backgroundButton.textContent, '选择背景图片');
-  assert.equal(backgroundButton.getAttribute('aria-label'), '选择背景图片');
+  assert.equal(backgroundButton.getAttribute('aria-label'), null, 'visible button text is its accessible name');
 
   portraitButton.click();
   assert.equal(portraitInput.clickCount, 1, 'the visible action forwards a user click to the hidden input');
   localization.setLocale('en');
   assert.equal(portraitButton.textContent, 'Choose startup portrait');
-  assert.equal(portraitButton.getAttribute('aria-label'), 'Choose startup portrait');
+  assert.equal(portraitButton.getAttribute('aria-label'), null);
   assert.equal(backgroundButton.textContent, 'Choose background image');
-  assert.equal(backgroundButton.getAttribute('aria-label'), 'Choose background image');
+  assert.equal(backgroundButton.getAttribute('aria-label'), null);
 
   portraitInput.files = [makeFile()];
   const change = portraitInput.listeners.get('change')[0]();
@@ -981,7 +1017,82 @@ test('localized image selection buttons use hidden file inputs and disable while
   await change;
   assert.equal(portraitButton.disabled, false);
   assert.equal(backgroundButton.disabled, false);
+  const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+  assert.equal(status.textContent, '', 'canceling an import clears the damaged-image alert');
+  assert.equal(status.getAttribute('role'), 'status');
   fixture.api.dispose();
+});
+
+test('image selection errors name the field, state the cause, and offer a recovery action', async () => {
+  const cases = [
+    { name: 'empty file', file: makeFile({ size: 0 }), expected: '文件为空' },
+    { name: 'byte limit', file: makeFile({ size: MAX_INPUT_BYTES + 1 }), expected: '超过 30 MiB' },
+    { name: 'pixel limit', file: makeFile(), dimensions: [24_000, 2_001], expected: '原始像素超过 48 MP' },
+    { name: 'MIME mismatch', file: makeFile({ type: 'image/jpeg' }), expected: '与实际内容不符' },
+    { name: 'unsupported signature', file: makeFile({ signature: Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8) }),
+      expected: '不是受支持的' },
+    { name: 'decode failure', file: makeFile(), decode: 'error', expected: '无法解码' },
+  ];
+  for (const item of cases) {
+    const fixture = makeFixture({ decode: item.decode, width: item.dimensions?.[0], height: item.dimensions?.[1] });
+    await fixture.api.load({
+      avatar: '', artwork: '', contours: [], introTitle: 'Title', introCaption: '',
+      artworkSubtitle: 'Subtitle', wallpaperStrength: 42,
+    });
+    assert.equal(fixture.api.openSettings(), true, item.name);
+    const input = fixture.elements.find(element => element.getAttribute('data-agent-skin-image-input') === 'avatar');
+    const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+    input.files = [item.file];
+    await input.listeners.get('change')[0]();
+    assert.equal(status.getAttribute('role'), 'alert', item.name);
+    assert.ok(status.textContent.includes('启动头像'), item.name + ': ' + status.textContent);
+    assert.ok(status.textContent.includes(item.expected), item.name + ': ' + status.textContent);
+    assert.match(status.textContent, /请选择|换一张/, item.name + ': ' + status.textContent);
+    assert.doesNotMatch(status.textContent, /decoder detail|blob:fixture|image-settings\.js/);
+    assert.equal(input.value, '');
+    assert.deepEqual(fixture.revoked, fixture.created);
+    fixture.api.cancelSettings();
+    fixture.api.dispose();
+  }
+});
+
+test('image selection timeout feedback distinguishes a slow header read and a slow decode', async () => {
+  const defaults = {
+    avatar: '', artwork: '', contours: [], introTitle: 'Title', introCaption: '',
+    artworkSubtitle: 'Subtitle', wallpaperStrength: 42,
+  };
+  const headerFixture = makeFixture();
+  await headerFixture.api.load(defaults);
+  headerFixture.api.openSettings();
+  const headerInput = headerFixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-input') === 'avatar');
+  const headerStatus = headerFixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-settings-status') === '');
+  headerInput.files = [{ size: 64, type: 'image/png', slice: () => ({ arrayBuffer: () => new Promise(() => {}) }) }];
+  const headerChange = headerInput.listeners.get('change')[0]();
+  headerFixture.advance(10_000);
+  await headerChange;
+  assert.equal(headerStatus.getAttribute('role'), 'alert');
+  assert.match(headerStatus.textContent, /处理启动头像超时/);
+  headerFixture.api.cancelSettings();
+  headerFixture.api.dispose();
+
+  const decodeFixture = makeFixture({ decode: 'pending' });
+  await decodeFixture.api.load(defaults);
+  decodeFixture.api.openSettings();
+  const decodeInput = decodeFixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-image-input') === 'avatar');
+  const decodeStatus = decodeFixture.elements.find(element =>
+    element.getAttribute('data-agent-skin-settings-status') === '');
+  decodeInput.files = [makeFile()];
+  const decodeChange = decodeInput.listeners.get('change')[0]();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  decodeFixture.advance(4_000);
+  await decodeChange;
+  assert.equal(decodeStatus.getAttribute('role'), 'alert');
+  assert.match(decodeStatus.textContent, /解码启动头像超时/);
+  decodeFixture.api.cancelSettings();
+  decodeFixture.api.dispose();
 });
 
 test('missing built-in text uses the host locale while the open draft stays unchanged', async () => {
@@ -1418,4 +1529,95 @@ test('database open and read each time out after their five-second budget', asyn
     assert.equal(storage.state.record, undefined);
     fixture.api.dispose();
   });
+});
+
+test('restore all defaults changes only the draft and cancel keeps the saved record', async () => {
+  const saved = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Saved title', introCaption: 'Saved caption',
+    artworkSubtitle: 'Saved subtitle', wallpaperStrength: 42,
+  };
+  const defaults = {
+    avatar: 'data:image/png;base64,CCCC', artwork: 'data:image/png;base64,DDDD',
+    contours: [[[1, 1], [2, 2]]], introTitle: 'Default title', introCaption: '',
+    artworkSubtitle: '', wallpaperStrength: 0,
+  };
+  const storage = makeIndexedDB(saved);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  await fixture.api.load(defaults);
+  assert.equal(fixture.api.openSettings(), true);
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const restore = fixture.elements.find(element => element.tagName === 'BUTTON'
+    && element.textContent === '恢复全部默认');
+  titleInput.value = 'Unsaved draft';
+  titleInput.listeners.get('input')[0]({});
+  restore.listeners.get('click')[0]({});
+
+  assert.equal(titleInput.value, 'Default title');
+  assert.equal(storage.state.record.introTitle, 'Saved title');
+  assert.equal(storage.state.puts, 0);
+  assert.match(fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '').textContent,
+    /草稿已恢复为默认设置/);
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.equal(storage.state.record.introTitle, 'Saved title');
+  assert.equal(storage.state.puts, 0, 'cancel does not persist the restored draft');
+  fixture.api.dispose();
+});
+
+test('a settings conflict keeps the local text copyable and reopening reads the winner', async () => {
+  const baseline = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1536, 1024]]], introTitle: 'Old title', introCaption: '',
+    artworkSubtitle: 'Fixture', wallpaperStrength: 42,
+  };
+  const storage = makeIndexedDB(baseline);
+  const imageDimensions = [[512, 512], [1536, 1024], [512, 512], [1536, 1024]];
+  const pageA = makeFixture({ indexedDB: storage.indexedDB, imageDimensions });
+  const english = createLocalization({ locale: 'en' });
+  const pageB = makeFixture({ indexedDB: storage.indexedDB, imageDimensions, localization: english });
+  const loadedA = await pageA.api.load(baseline);
+  const loadedB = await pageB.api.load(baseline);
+  assert.equal(loadedA.reason, '', JSON.stringify(loadedA));
+  assert.equal(loadedB.reason, '', JSON.stringify(loadedB));
+  assert.equal(pageA.api.openSettings(), true);
+  assert.equal(pageB.api.openSettings(), true);
+
+  const pageATitle = pageA.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const pageBTitle = pageB.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const pageASave = pageA.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const pageBSave = pageB.elements.find(element => element.tagName === 'BUTTON' && element.textContent === 'Save');
+  const pageAStatus = pageA.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+  const pageBStatus = pageB.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+  pageATitle.value = 'Page A saved';
+  pageATitle.listeners.get('input')[0]({});
+  pageBTitle.value = 'Page B draft';
+  pageBTitle.listeners.get('input')[0]({});
+
+  await pageASave.listeners.get('click')[0]();
+  await pageBSave.listeners.get('click')[0]();
+
+  assert.equal(storage.state.record.introTitle, 'Page A saved', pageAStatus.textContent);
+  assert.equal(pageB.api.isSettingsOpen(), true, 'the conflicting panel remains open');
+  assert.equal(pageBTitle.value, 'Page B draft', 'the local text stays available to copy');
+  assert.equal(pageBStatus.getAttribute('role'), 'alert');
+  assert.match(pageBStatus.textContent, /clos.*discard/i);
+  assert.match(pageBStatus.textContent, /copy/i);
+  assert.match(pageBStatus.textContent, /reopen.*new/i);
+  assert.doesNotMatch(pageBStatus.textContent, /save your draft again|keep.*draft/i);
+
+  assert.equal(pageB.api.cancelSettings(), true, 'closing is the discard action and needs no confirmation');
+  assert.equal(storage.state.record.introTitle, 'Page A saved', 'closing cannot replace the other page value');
+  const reopenedPage = makeFixture({ indexedDB: storage.indexedDB, imageDimensions, localization: english });
+  const reopened = await reopenedPage.api.load(baseline);
+  assert.equal(reopened.settings.introTitle, 'Page A saved');
+  assert.equal(reopenedPage.api.openSettings(), true);
+  const reopenedTitle = reopenedPage.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  assert.equal(reopenedTitle.value, 'Page A saved', 'a newly opened page reads the external winner');
+  assert.equal(storage.state.puts, 1, 'the conflict and close add no writes');
+
+  pageA.api.dispose();
+  pageB.api.dispose();
+  reopenedPage.api.dispose();
 });

@@ -3,7 +3,7 @@ import { createHash, webcrypto } from 'node:crypto';
 import test from 'node:test';
 import { createWallpaperApplicator } from '../wallpaper/apply.js';
 
-const VALUE = { image: 'data:image/png;base64,AA==', strength: 37 };
+const VALUE = { image: 'data:image/png;base64,AA==', strength: 37, surface: 'rgb(10, 20, 30)' };
 const FRAME_SELECTOR = '[data-app-shell-frame]';
 const SURFACE_SELECTOR = '[data-app-shell-main-surface],[data-app-shell-page-surface]';
 const ATTRIBUTE_FILTER = ['data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'];
@@ -87,7 +87,7 @@ test('an existing supported shell receives a verified image and the renderer res
   assert.equal(renderer.calls.length, 1);
   assert.deepEqual(renderer.calls[0], {
     version: '0.9.0', image: VALUE.image, imageSHA256: expectedDigest(), css: 'body{color:red}',
-    strength: VALUE.strength, isCurrent,
+    strength: VALUE.strength, surface: VALUE.surface, isCurrent,
   });
   assert.equal(fixture.observers.length, 0);
   assert.equal(fixture.timers.length, 0);

@@ -392,8 +392,40 @@ class VerifierApiTests(unittest.TestCase):
             self.update_output_digest(path, "startup/install.js")
         self.assert_startup_rejected(missing_bootstrap_result, "未从完整 Page Controller")
 
+    def test_startup_verifier_binds_metadata_source_and_requires_regular_outputs(self):
+        path = self.copy_bundle("invalid-metadata-source-digest")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        source_name = "vendor/dream-image-metadata.mjs"
+        marker["inputs"][source_name] = hashlib.sha256(b"different metadata source").hexdigest()
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(marker["inputs"])
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "启动构建源码未被来源标记覆盖：vendor/dream-image-metadata.mjs"):
+            self.verifier.verify_startup(path, self.info, marker)
+
+        output_relative = "web/image-metadata-reader.js"
+        for label, use_symlink in (("missing-metadata-reader", False), ("symlink-metadata-reader", True)):
+            with self.subTest(output=label):
+                bundle = self.copy_bundle(label)
+                output = bundle / "Contents/Resources" / output_relative
+                output.unlink()
+                if use_symlink:
+                    output.symlink_to(bundle / "Contents/Resources/web/index.html")
+                with self.assertRaisesRegex(RuntimeError, "启动产物缺失或不是实体文件"):
+                    self.verifier.verify_startup(bundle, self.info, self.marker)
+
     def test_previous_theme_build_11_12_source_set_is_read_only_and_exact(self):
         path = self.copy_bundle("previous-theme-build-11")
+        historical_manifest = self.helpers.convert_bundle_to_pre_image_metadata(
+            path,
+            self.build_artifacts,
+            omit_source_inputs=("wallpaper/apply.js", "extension/bootstrap.mjs"),
+        )
+        self.assertEqual(set(historical_manifest["outputs"]), self.helpers.PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
         info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="11")
         marker_path = path / self.verifier.MARKER
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -431,13 +463,24 @@ class VerifierApiTests(unittest.TestCase):
             self.verifier.verify_startup(path, info, marker, current_source=True)
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["outputs"]["web/image-metadata-reader.js"] = "0" * 64
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "output 路径清单不完整"):
+            self.verifier.verify_startup(path, info, marker, current_source=False)
+
+        forged_marker = dict(self.marker)
+        forged_marker["version"], forged_marker["build"] = "0.9.0", "11"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["outputs"].pop("web/image-metadata-reader.js")
+        manifest["inputSHA256"] = forged_marker["inputSHA256"]
         manifest["sourceInputs"] = {
-            name: marker["inputs"][name] for name in self.verifier.STARTUP_REQUIRED_INPUTS
+            name: forged_marker["inputs"][name] for name in self.verifier.STARTUP_REQUIRED_INPUTS
         }
-        manifest["sourceInputs"]["Native/App.swift"] = marker["inputs"]["Native/App.swift"]
+        manifest["sourceInputs"]["Native/App.swift"] = forged_marker["inputs"]["Native/App.swift"]
+        marker_path.write_text(json.dumps(forged_marker, ensure_ascii=False), encoding="utf-8")
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "sourceInputs 清单不完整"):
-            self.verifier.verify_startup(path, info, marker, current_source=False)
+            self.verifier.verify_startup(path, info, forged_marker, current_source=False)
 
     def test_startup_verifier_rejects_default_assets_and_theme_mismatches(self):
         defaults_path = "Contents/Resources/web/assets/defaults/contours.js"
