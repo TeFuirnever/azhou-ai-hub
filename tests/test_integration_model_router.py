@@ -11,6 +11,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import stat
@@ -39,6 +40,8 @@ class FakeInstaller:
     ROLE_MODELS = {"worker": ("test-model", "high")}
     SETTINGS = {"model": "test-root"}
     verified_roots = []
+    mode_ledger: dict[Path, int] = {}
+    use_virtual_modes = os.name == "nt"
 
     @staticmethod
     def check_parents(path):
@@ -50,6 +53,19 @@ class FakeInstaller:
         if path.is_symlink() or (path.exists() and not path.is_file()):
             raise RuntimeError("unsafe file")
         return path.read_bytes() if path.exists() else None
+
+    @classmethod
+    def file_mode(cls, path):
+        path = Path(path)
+        if cls.use_virtual_modes:
+            return cls.mode_ledger.get(path)
+        return stat.S_IMODE(path.stat().st_mode)
+
+    @classmethod
+    def set_mode(cls, path, mode):
+        path = Path(path)
+        path.chmod(mode)
+        cls.mode_ledger[path] = stat.S_IMODE(mode)
 
     @staticmethod
     def pstack_coexistence(codex_home, skills_dir=None):
@@ -80,21 +96,29 @@ class FakeInstaller:
 
     @classmethod
     def apply_plan(cls, plan, verify):
-        originals = {p: (cls.regular_bytes(p), stat.S_IMODE(p.stat().st_mode) if p.exists() else 0o600)
-                     for p in plan["changes"]}
+        originals = {}
+        for path in plan["changes"]:
+            before = cls.regular_bytes(path)
+            mode = cls.file_mode(path) if before is not None else 0o600
+            if before is not None and mode is None:
+                # An unregistered virtual mode carries no test evidence; keep
+                # the actual stat value instead of inventing a private mode.
+                mode = stat.S_IMODE(path.stat().st_mode)
+            originals[path] = (before, mode)
         try:
             for path, data in plan["changes"].items():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
-                path.chmod(originals[path][1])
+                cls.set_mode(path, originals[path][1])
             verify()
         except BaseException:
             for path, (raw, mode) in originals.items():
                 if raw is None:
                     path.unlink(missing_ok=True)
+                    cls.mode_ledger.pop(path, None)
                 else:
                     path.write_bytes(raw)
-                    path.chmod(mode)
+                    cls.set_mode(path, mode)
             raise
         return len(plan["changes"])
 
@@ -109,10 +133,27 @@ class FakeInstaller:
             path = Path(item["path"])
             if item["before"] is None:
                 path.unlink(missing_ok=True)
+                cls.mode_ledger.pop(path, None)
             else:
                 path.write_bytes(base64.b64decode(item["before"]))
-                path.chmod(item["mode"])
+                cls.set_mode(path, item["mode"])
         shutil.rmtree(transaction)
+
+
+def patch_fake_installer_mode_fingerprints(test_case):
+    """Use test-owned modes only on Windows; always keep real target checks."""
+    fingerprint = adapter._fingerprint
+
+    def observe(path, installer):
+        current = fingerprint(path, installer)
+        if (installer is FakeInstaller and current["sha256"] is not None
+                and FakeInstaller.use_virtual_modes and Path(path) in FakeInstaller.mode_ledger):
+            current["mode"] = FakeInstaller.file_mode(path)
+        return current
+
+    patcher = patch.object(adapter, "_fingerprint", side_effect=observe)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
 
 
 class FakeNative:
@@ -165,6 +206,9 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         FakeNative.fail = False
         FakeNative.discovery_cwds = []
         FakeInstaller.verified_roots = []
+        FakeInstaller.mode_ledger = {}
+        FakeInstaller.use_virtual_modes = os.name == "nt"
+        patch_fake_installer_mode_fingerprints(self)
         patcher = patch.object(adapter, "_module", side_effect=lambda _, f, **kw: FakeInstaller if f == "install_codex.py" else FakeNative)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -179,7 +223,7 @@ class ModelRouterBoundaryTests(unittest.TestCase):
         path = self.home / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(raw)
-        path.chmod(0o640)
+        FakeInstaller.set_mode(path, 0o640)
         return path
 
     def disk(self):
@@ -317,9 +361,32 @@ class ModelRouterBoundaryTests(unittest.TestCase):
 
     def test_changed_mode_blocks_uninstall(self):
         self.install()
-        (self.home / "agents/worker.toml").chmod(0o644)
+        FakeInstaller.set_mode(self.home / "agents/worker.toml", 0o644)
         with self.assertRaisesRegex(common.IntegrationError, "changed"):
             adapter.uninstall_plan(*self.targets, hub_root=self.hub)
+
+    def test_virtual_mode_ledger_drift_blocks_uninstall(self):
+        self.install()
+        worker = self.home / "agents/worker.toml"
+        # Simulate Windows, where stat's POSIX mode bits do not report the
+        # intended private mode. The fake installer still owns explicit mode
+        # evidence, so a recorded-mode change must remain a hard refusal.
+        self.assertEqual(FakeInstaller.mode_ledger[worker], 0o600)
+        with patch.object(FakeInstaller, "use_virtual_modes", True, create=True):
+            FakeInstaller.set_mode(worker, 0o644)
+            with self.assertRaisesRegex(common.IntegrationError, "changed"):
+                adapter.uninstall_plan(*self.targets, hub_root=self.hub)
+
+    def test_unregistered_virtual_mode_keeps_the_observed_stat_mode(self):
+        path = self.home / "config.toml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"unregistered mode fixture\n")
+        path.chmod(0o644)
+        FakeInstaller.mode_ledger.clear()
+        with patch.object(FakeInstaller, "use_virtual_modes", True):
+            observed_mode = stat.S_IMODE(path.stat().st_mode)
+            self.assertNotIn(path, FakeInstaller.mode_ledger)
+            self.assertEqual(adapter._fingerprint(path, FakeInstaller)["mode"], observed_mode)
 
     def test_deleted_target_blocks_uninstall_with_readable_difference(self):
         self.install()

@@ -12,6 +12,7 @@ installer round-trip proves the rules land in an installed home.
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -148,21 +149,31 @@ class CoexistenceContractTests(unittest.TestCase):
         self.assertEqual(block.strip(), text.strip(),
                          "the managed block must remain the whole source file the installer validates")
 
-    def test_installer_ships_the_coexistence_rules_without_this_checkout(self):
+    def test_installer_plan_carries_the_rules_and_posix_install_ships_them(self):
         installer = load_installer()
         with tempfile.TemporaryDirectory(prefix="coexistence-install-") as name:
             base = Path(name).resolve()
             home = base / "codex-home"
             skills = base / "skills"
             plan = installer.build_plan(KIT_PACKAGE, home, skills)
-            installer.apply_plan(plan)
-            installed = (home / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertEqual(installed.count(BEGIN), 1)
+            planned_instructions = plan["changes"][home / "AGENTS.md"].decode("utf-8")
+            planned_skill = plan["changes"][skills / "astra-orchestrator" / "SKILL.md"].decode("utf-8")
+            self.assertEqual(planned_instructions.count(BEGIN), 1)
             self.assertIn("that workflow owns the task's decomposition, stages, child dispatch, and verification",
-                          installed)
-            installed_skill = (skills / "astra-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("do not attach a named role to them", installed_skill)
-            self.assertIn("a selected custom-role file overrides the explicit fields it sets", installed_skill)
+                          planned_instructions)
+            self.assertIn("do not attach a named role to them", planned_skill)
+            self.assertIn("a selected custom-role file overrides the explicit fields it sets", planned_skill)
+
+            if os.name == "posix":
+                installer.apply_plan(plan)
+                installed = (home / "AGENTS.md").read_text(encoding="utf-8")
+                installed_skill = (skills / "astra-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
+                self.assertEqual(installed, planned_instructions)
+                self.assertEqual(installed_skill, planned_skill)
+            else:
+                # Windows ACL behavior and installation are not validated here.
+                self.assertFalse(home.exists())
+                self.assertFalse(skills.exists())
 
 
 if __name__ == "__main__":

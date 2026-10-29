@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -31,7 +32,8 @@ from native_codex_fixture import install_fake_codex
 from scripts import integration_common as common
 from scripts import integration_pstack as pstack
 from scripts import integration_model_router as adapter
-from test_integration_model_router import FakeInstaller, FakeNative
+from test_integration_model_router import (FakeInstaller, FakeNative,
+                                           patch_fake_installer_mode_fingerprints)
 
 ROOT = Path(__file__).resolve().parents[1]
 OFF_SHEET = "# pstack model configuration\nsession hook: off\n"
@@ -81,6 +83,9 @@ class TransitionTestCase(unittest.TestCase):
         FakeNative.fail = False
         FakeNative.discovery_cwds = []
         FakeInstaller.verified_roots = []
+        FakeInstaller.mode_ledger = {}
+        FakeInstaller.use_virtual_modes = os.name == "nt"
+        patch_fake_installer_mode_fingerprints(self)
         patcher = patch.object(adapter, "_module",
                                side_effect=lambda _, f, **kw: FakeInstaller if f == "install_codex.py" else FakeNative)
         patcher.start()
@@ -259,7 +264,7 @@ class ReachableStateTests(TransitionTestCase):
         report = self.transition()
         row = report["facets"]["shared_skills"]["skills"]["poteto-mode"]
         self.assertEqual(row["kind"], "symlink")
-        self.assertEqual(Path(row["target"]).resolve(), clone.resolve())
+        self.assertTrue(os.path.samefile(row["target"], clone))
         self.assertEqual(row["modified_count"], 0)
         self.assertEqual(report["recognized_states"], ["shared-pstack-skills-only"])
 
