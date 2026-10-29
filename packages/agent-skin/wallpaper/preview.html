@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark" data-codex-window-type="electron">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:; base-uri 'none'; object-src 'none'">
+  <title>阿舟 Q 版全景壁纸 · 模拟宿主预览</title>
+  <style>
+    :root { color-scheme: dark; --color-surface:#202024; --color-surface-secondary:#2b2b30; --color-surface-elevated-secondary:#303037; --color-background-composer-surface:#303037; --ink:#f2f0f4; --muted:#aaa7b1; --line:#ffffff18; }
+    :root[data-theme=light] { color-scheme:light; --color-surface:#fbfafc; --color-surface-secondary:#f0eef3; --color-surface-elevated-secondary:#fff; --color-background-composer-surface:#fff; --ink:#27232e; --muted:#77717d; --line:#2820321c; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--color-surface); font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,textarea { font:inherit; }
+    button { color:var(--ink); border:1px solid var(--line); background:var(--color-surface-secondary); padding:7px 12px; border-radius:8px; cursor:pointer; }
+    button:hover { border-color:#c18a62; }
+    .fixture-bar { height:54px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 22px; background:var(--color-surface-secondary); border-bottom:1px solid var(--line); position:relative; z-index:10; }
+    .fixture-bar strong { font-size:13px; letter-spacing:.02em; }
+    .fixture-bar small { display:block; color:var(--muted); font-size:10px; line-height:1.1; }
+    .fixture-actions { display:flex; gap:8px; }
+    #root { min-height:calc(100vh - 54px); background:var(--color-surface); }
+    [data-app-shell-frame] { min-height:calc(100vh - 54px); display:grid; grid-template-columns:232px 1fr; background:var(--color-surface-secondary); }
+    .sidebar { background:var(--color-surface-secondary); border-right:1px solid var(--line); padding:25px 18px; }
+    .brand { font-size:19px; font-weight:650; margin:0 10px 27px; }
+    .sidebar p { margin:18px 10px 10px; color:var(--muted); font-size:11px; }
+    .nav { padding:10px 12px; border-radius:7px; }
+    .nav.selected { background:var(--line); }
+    [data-app-shell-main-surface] { background:var(--color-surface); min-width:0; }
+    ._WorkspaceContent_fixture { position:relative; min-height:calc(100vh - 54px); isolation:isolate; }
+    ._WorkspaceContent_fixture::before { content:""; position:absolute; inset:52px 0 0; z-index:-10; background:var(--color-surface); pointer-events:none; }
+    [data-app-shell-page-surface] { background:var(--color-surface); min-height:calc(100vh - 54px); }
+    .toolbar { height:58px; padding:16px 30px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; }
+    .toolbar span { color:var(--muted); }
+    .reading-area { margin:36px 0 30px clamp(28px,7vw,120px); width:min(610px,calc(100% - 72px)); padding:10px 26px 28px; background:color-mix(in srgb,var(--color-surface) 96%,transparent); border:1px solid var(--line); border-radius:14px; }
+    .reading-area h1 { font-size:23px; font-weight:620; margin:13px 0 24px; letter-spacing:-.025em; }
+    .reading-area p { margin:14px 0; }
+    .answer { padding-top:12px; border-top:1px solid var(--line); }
+    .answer strong { color:#d6a474; font-size:12px; }
+    pre { margin:18px 0; padding:17px; border:1px solid var(--line); border-radius:8px; background:var(--color-surface-secondary); color:var(--ink); font:12px/1.8 ui-monospace,monospace; overflow:auto; }
+    /* The inspected host has TWO decorative branches: a sticky fade in the
+       scroll content, and a separate absolute footer plate around the composer. */
+    .fixture-thread-layout { position:relative; height:calc(100vh - 112px); min-height:360px; --fixture-composer-height:132px; }
+    ._MainContentTopFade_fixture { position:absolute; inset-inline:0; top:0; height:40px; z-index:5; pointer-events:none; background-image:linear-gradient(to bottom in oklab,var(--color-surface),transparent); }
+    .thread-scroll-container { height:100%; overflow-x:hidden; overflow-y:auto; }
+    .fixture-thread-content { display:flex; flex-direction:column; min-height:100%; }
+    .fixture-scroll-bottom { position:sticky; bottom:0; margin-top:auto; width:100%; height:var(--fixture-composer-height); flex-shrink:0; z-index:10; pointer-events:none; }
+    ._background_fixture { position:absolute; inset-inline:0; z-index:0; pointer-events:none; }
+    ._fade_fixture { top:-32px; height:32px; background-image:linear-gradient(to top in oklab,var(--color-surface),transparent); }
+    ._surface_fixture { inset-block:0; background:var(--color-surface); }
+    [data-thread-scroll-footer] { position:absolute; inset-inline:0; bottom:0; height:var(--fixture-composer-height); padding-bottom:16px; z-index:20; pointer-events:none; }
+    .fixture-composer-content { position:relative; height:100%; z-index:10; pointer-events:none; }
+    .composer { pointer-events:auto; --composer-layout-surface-background:var(--color-background-composer-surface); position:relative; margin-left:clamp(28px,7vw,120px); width:min(680px,calc(100% - 72px)); height:100%; padding:12px 17px; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:17px; background:var(--composer-layout-surface-background); box-shadow:0 8px 30px #00000012; }
+    .fixture-editor { flex:1; min-height:0; overflow:auto; mask-image:linear-gradient(to bottom,transparent,#000 3px,#000 calc(100% - 3px),transparent); }
+    textarea { width:100%; height:100%; min-height:50px; resize:none; border:0; outline:none; color:var(--ink); background:transparent; }
+    .fixture-menu { display:inline-block; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--color-surface-elevated-secondary); box-shadow:0 4px 14px #0003; }
+    .composer footer { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:11px; }
+    .composer button { border-radius:50%; width:30px; height:30px; padding:0; }
+    #result { position:fixed; right:15px; top:68px; z-index:12; max-width:390px; border:1px solid var(--line); border-radius:8px; background:var(--color-surface-elevated-secondary); padding:8px 12px; font-size:11px; color:var(--muted); white-space:pre-wrap; }
+    @media(max-width:900px) { [data-app-shell-frame]{grid-template-columns:170px 1fr}.fixture-bar small{display:none}.fixture-actions{gap:4px}.fixture-actions button{font-size:11px;padding:5px 8px}.reading-area{padding:12px 18px} }
+  </style>
+</head>
+<body>
+  <header class="fixture-bar"><div><strong>阿舟 · Q 版全景壁纸预览</strong><small>模拟宿主；全景按 cover 裁切，角色比例与可读性仍需视觉验收</small></div><div class="fixture-actions"><button id="theme">浅色</button><button id="apply">重新应用</button><button id="restore">恢复底色</button><button id="checks">运行检查</button></div></header>
+  <div id="root"><div data-app-shell-frame data-app-shell-unified-tab-strip="true">
+    <aside class="sidebar"><div class="brand">›_ Codex</div><div class="nav">＋ 新任务</div><div class="nav">搜索</div><p>项目</p><div class="nav selected">阿舟的实验室</div><div class="nav">想法记录</div><p>最近的任务 · 示例文字</p><div class="nav">完善一个小工具</div><div class="nav">准备下一次实验</div></aside>
+    <main data-app-shell-main-surface="default"><div class="_WorkspaceContent_fixture"><section data-app-shell-page-surface="true">
+      <div class="toolbar"><b>实验室 / 启动体验</b><span>· 示例阅读区域</span></div>
+      <div class="fixture-thread-layout"><div class="_MainContentTopFade_fixture _background_top_fixture" aria-hidden="true"></div><div class="thread-scroll-container">
+      <div class="fixture-thread-content">
+      <article class="reading-area"><h1>把想法变成可以使用的作品</h1><p>为这个小工具补齐说明，并检查启动后的阅读体验。</p><div class="answer"><strong>CODEX · 模拟回复</strong><p>Q 版阿舟置身完整实验室场景。检查全屏背景与正文、代码、输入区的关系；窄窗口会裁切部分场景。</p><pre>const experiment = {
+  idea: "一个值得尝试的想法",
+  next: "做出第一版，再慢慢完善"
+};</pre><p>这里是用于查看对比度和背景遮挡的示例，不包含任何真实会话内容。</p><div class="fixture-menu" role="menu" aria-label="示例菜单">菜单保留独立底色</div></div></article>
+      <div class="fixture-scroll-bottom pointer-events-none sticky bottom-0">
+        <div id="fixture-fade" class="_background_fixture _fade_fixture pointer-events-none absolute inset-x-0 z-0"></div>
+      </div>
+      </div>
+      <div data-thread-scroll-footer="true">
+        <div class="_background_fixture _surface_fixture pointer-events-none absolute inset-x-0 z-0 bottom-0 bg-surface"></div>
+        <div class="fixture-composer-content" data-pip-obstacle>
+          <div class="composer" data-composer-layout="root" data-composer-surface-variant="default"><div class="fixture-editor vertical-scroll-fade-mask" data-composer-input-layout="true"><textarea aria-label="示例输入区" placeholder="继续描述你的想法…"></textarea></div><footer><span>本地模拟 · 输入框保留不透明表面</span><button aria-label="示例发送按钮">↑</button></footer></div>
+        </div>
+      </div>
+      </div></div>
+    </section></div></main>
+  </div></div>
+  <output id="result">正在读取本地阿舟素材…</output>
+  <script type="module">
+    import { installRenderer } from './renderer.js';
+    const result = document.getElementById('result');
+    const show = value => { result.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); };
+    try {
+    const requestedImage = new URL(location.href).searchParams.get('image') || 'wallpaper-scene-q-v3.png';
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:png|webp)$/i.test(requestedImage)) throw new Error('无效的本地素材文件名');
+    const bytes = await fetch('../assets/private/' + encodeURIComponent(requestedImage)).then(response => { if (!response.ok) throw new Error('缺少本地阿舟素材：' + requestedImage); return response.arrayBuffer(); });
+    const imageSHA256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
+    const image = await new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(new Blob([bytes], {type:requestedImage.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png'})); });
+    const payload = { version:'0.9.0', preview:true, image, imageSHA256, css:await fetch('./wallpaper.css').then(response => response.text()) };
+    const apply = async () => { const state = await installRenderer(payload); show({applied:state.applied, coverMatched:state.coverMatched, fixedViewport:state.fixedViewport, imageDecoded:state.imageDecoded, sourceSize:[state.image?.width,state.image?.height], footerBackgroundClear:state.footerBackgroundClear, footerFadeClear:state.footerFadeClear, topFadeClear:state.topFadeClear, decorationEffectsClear:state.decorationEffectsClear, scope:'模拟宿主；状态不代替 Q 版与裁切审读'}); return state; };
+    const check = (condition, message) => { if (!condition) throw new Error(message); };
+    async function runChecks() {
+      const checks = [];
+      globalThis.__azhouWallpaper?.dispose();
+      const html = document.documentElement;
+      const original = html.style.cssText;
+      const imageProperty = '--azhou-wallpaper-image';
+      html.style.setProperty(imageProperty,'none','important');
+      const priorImage = html.style.getPropertyValue(imageProperty);
+      const priorPriority = html.style.getPropertyPriority(imageProperty);
+      let state = await apply();
+      check(state.applied && state.workspaceBackgroundClear && state.footerBackgroundClear && state.footerSurfaces === 2 && state.footerFadeSurfaces === 1 && state.footerFadeClear && state.topFadeSurfaces === 1 && state.topFadeClear && state.decorationEffectsClear, '背景、宿主伪元素、底板或独立渐变层未生效');
+      check(state.coverMatched && state.fixedViewport && state.image?.displayMode === 'cover', '全景未按固定视口 cover 显示');
+      checks.push('图片解码、真实样式与宿主表面匹配');
+      checks.push('横屏场景按固定视口 cover 显示；裁切与角色保真仍需看图');
+      const composer = document.querySelector('.composer');
+      const composerBackground = getComputedStyle(composer).backgroundColor;
+      check(!/rgba\([^)]*,\s*0\)$/.test(composerBackground), '输入区意外透明');
+      state = await apply();
+      check(state.styleCount === 1, '重复应用累积样式');
+      checks.push('重复应用仅保留一个样式');
+      const workingAPI = globalThis.__azhouWallpaper;
+      let failedUpdate = false;
+      try { await installRenderer({...payload,css:payload.css.replace('--azhou-style-ready: ready','--azhou-style-ready: blocked')}); } catch { failedUpdate = true; }
+      check(failedUpdate && globalThis.__azhouWallpaper === workingAPI && workingAPI.status().applied, '失败更新没有保留原来的有效壁纸');
+      checks.push('候选样式失败时保留原来的有效壁纸');
+      const api = globalThis.__azhouWallpaper;
+      api.dispose(); api.dispose();
+      check(!document.getElementById('azhou-wallpaper-style') && !globalThis.__azhouWallpaper, '恢复后仍残留安装');
+      check(html.style.getPropertyValue(imageProperty) === priorImage && html.style.getPropertyPriority(imageProperty) === priorPriority, '未完整恢复图片属性值/优先级');
+      html.style.cssText = original;
+      checks.push('重复恢复无残留且保留原值与优先级');
+      const frame = document.querySelector('[data-app-shell-frame]');
+      frame.removeAttribute('data-app-shell-frame');
+      let rejected = false;
+      try { await installRenderer(payload); } catch { rejected = true; }
+      frame.setAttribute('data-app-shell-frame','');
+      check(rejected && !document.getElementById('azhou-wallpaper-style'), '没有宿主表面却报告成功');
+      checks.push('缺少宿主锚点时拒绝，未改变页面');
+      rejected = false;
+      try { await installRenderer({...payload,image:'data:image/png;base64,aW52YWxpZA=='}); } catch { rejected = true; }
+      check(rejected && !document.getElementById('azhou-wallpaper-style'), '坏图未拒绝或留下样式');
+      checks.push('坏图解码失败，不留下样式');
+      rejected = false;
+      try { await installRenderer({...payload,css:payload.css.replace('--azhou-style-ready: ready','--azhou-style-ready: blocked')}); } catch { rejected = true; }
+      check(rejected && !document.getElementById('azhou-wallpaper-style') && !globalThis.__azhouWallpaper, '样式未生效没有回滚');
+      checks.push('计算样式验证失败可回滚');
+      await apply();
+      const summary = {passed:true, checks, limitations:['模拟宿主，非真实 Codex 页面','cover 会随窗口比例裁切，不保证整张画面始终可见','Q 版比例、主体裁切与正文可读性需人工或图像审读','不验证冷启动或调试端口','CSP 拒绝路径需由单独严格策略页面验证']};
+      show(summary); return summary;
+    }
+    globalThis.__wallpaperFixture = {payload, apply, runChecks, installRenderer};
+    document.getElementById('apply').onclick = () => apply().catch(error => show(error.message));
+    document.getElementById('restore').onclick = () => { globalThis.__azhouWallpaper?.dispose(); show('已恢复模拟宿主底色'); };
+    document.getElementById('checks').onclick = () => runChecks().catch(error => show({passed:false,error:error.message}));
+    document.getElementById('theme').onclick = event => { const light = document.documentElement.dataset.theme !== 'light'; document.documentElement.dataset.theme = light ? 'light' : 'dark'; event.target.textContent = light ? '深色' : '浅色'; };
+    await apply().catch(error => show(error.message));
+    } catch (error) { globalThis.__wallpaperFixtureError = error.message; show(error.message); }
+  </script>
+</body>
+</html>

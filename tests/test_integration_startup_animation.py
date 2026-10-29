@@ -53,6 +53,7 @@ class AnimationIntegrationTests(unittest.TestCase):
 
     def fake_inspect(self, source, bundle, *, hub_root, _cleanup_snapshot_only=False):
         origin = common.inspect_source(animation.COMPONENT, source, hub_root=hub_root)
+        lock = common.load_lock(animation.COMPONENT, hub_root=hub_root)
         if bundle.is_symlink() or not bundle.is_dir():
             raise common.IntegrationError("invalid fixture bundle")
         digest = hashlib.sha256()
@@ -62,11 +63,18 @@ class AnimationIntegrationTests(unittest.TestCase):
             if path.is_file():
                 digest.update(path.relative_to(bundle).as_posix().encode("utf-8"))
                 digest.update(path.read_bytes())
-        return {"path": str(bundle), "sha256_tree": digest.hexdigest(), "native_source_root": str(self.snapshot), "source": origin}
+        return {"path": str(bundle), "version": lock["runtime_version"], "build": lock["runtime_build"],
+                "event_schema": animation._event_schema_for_version(lock["runtime_version"]),
+                "sha256_tree": digest.hexdigest(), "native_source_root": str(self.snapshot), "source": origin}
 
     def install(self):
         plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
         return animation.test_install(self.source, self.payload, self.workspace, plan["plan_id"], hub_root=self.hub)
+
+    def test_new_test_install_uses_the_product_application_name(self):
+        with patch.object(animation, "inspect_bundle", side_effect=self.fake_inspect):
+            plan = animation.test_install_plan(self.source, self.payload, self.workspace, hub_root=self.hub)
+        self.assertEqual("阿舟 AI 实验室.app", Path(plan["target"]).name)
 
     def test_build_cli_defaults_to_canonical_package_without_source_flag(self):
         from contextlib import redirect_stdout
@@ -125,10 +133,118 @@ class AnimationIntegrationTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_missing_private_asset_fails_without_workspace_write(self):
-        (self.assets / "scene.js").unlink()
-        with self.assertRaisesRegex(common.IntegrationError, "ordinary file missing"):
-            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        for name in animation.PRIVATE_FILES:
+            path = self.assets / name
+            original = path.read_bytes()
+            path.unlink()
+            with self.subTest(missing=name), self.assertRaisesRegex(common.IntegrationError, "ordinary file missing"):
+                animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(original)
         self.assertFalse(self.workspace.exists())
+
+    def test_bot_entry_is_required_and_bound_by_the_current_public_build_plan(self):
+        configure_package(self.hub, animation.COMPONENT,
+            [".gitignore", "Native/App.swift", "tools/verify-artifacts.py"],
+            build_inputs=["Native/App.swift"], runtime_version="0.9.0", runtime_build="10")
+        with self.assertRaisesRegex(common.IntegrationError, "entry-avatar.png"):
+            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        entry = self.assets / "entry-avatar.png"
+        entry.write_bytes(b"approved portrait")
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertEqual(hashlib.sha256(entry.read_bytes()).hexdigest(), plan["private_inputs"]["entry-avatar.png"])
+        entry.write_bytes(b"another portrait")
+        updated = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertNotEqual(plan["plan_id"], updated["plan_id"])
+
+    def test_build_plan_tracks_theme_selected_private_identity_images(self):
+        configure_package(self.hub, animation.COMPONENT,
+            [".gitignore", "Native/App.swift", "tools/verify-artifacts.py", "theme-config.json"],
+            build_inputs=["Native/App.swift"], runtime_version="0.9.0", runtime_build="16")
+        theme = json.loads((Path(__file__).resolve().parents[1] / "packages/agent-skin/theme-config.json").read_text())
+        theme["identity"]["iconInput"] = "assets/private/custom/icon.png"
+        theme["identity"]["entryAvatarInput"] = "assets/private/custom/avatar.png"
+        (self.source / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        for name in ("custom/icon.png", "custom/avatar.png"):
+            path = self.assets / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(name.encode())
+        plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+        self.assertIn("custom/icon.png", plan["private_inputs"])
+        self.assertIn("custom/avatar.png", plan["private_inputs"])
+        self.assertNotIn("app-icon/source.png", plan["private_inputs"])
+        self.assertNotIn("entry-avatar.png", plan["private_inputs"])
+        snapshot = self.base / "native-snapshot"
+        snapshot.mkdir()
+        (snapshot / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        for name in plan["private_inputs"]:
+            target = snapshot / "assets/private" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.assets / name, target)
+        marker = {"inputs": {"assets/private/" + name: digest
+                             for name, digest in plan["private_inputs"].items()}}
+        bundle = self.base / "current-bundle"
+        bundle.mkdir()
+        animation._verify_packaged_sources(bundle, snapshot,
+            {"CFBundleShortVersionString": "0.9.0"}, marker)
+        (snapshot / "assets/private/custom/avatar.png").write_bytes(b"changed")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(bundle, snapshot,
+                {"CFBundleShortVersionString": "0.9.0"}, marker)
+        theme["identity"]["entryAvatarInput"] = "assets/private/../outside.png"
+        (self.source / "theme-config.json").write_text(json.dumps(theme), encoding="utf-8")
+        with self.assertRaisesRegex(common.IntegrationError, "invalid theme private identity inputs"):
+            animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
+
+    def test_new_payload_inspection_binds_private_inputs_without_copying_sources_and_keeps_legacy_rule(self):
+        new_bundle = self.base / "new-bundle"
+        new_source = self.base / "new-snapshot"
+        new_inputs = {}
+        for name in animation.PRIVATE_FILES:
+            source = new_source / "assets/private" / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(("private " + name).encode("utf-8"))
+            new_inputs["assets/private/" + name] = hashlib.sha256(source.read_bytes()).hexdigest()
+        new_bundle.mkdir()
+        new_info = {"CFBundleShortVersionString": animation.STARTUP_PAYLOAD_VERSION}
+        new_marker = {"inputs": new_inputs}
+
+        verification = animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+        self.assertIn("startup defaults", verification)
+        self.assertFalse((new_bundle / "Contents/Resources/web/assets/private").exists())
+
+        entry_source = new_source / "assets/private/entry-avatar.png"
+        entry_source.write_bytes(b"approved bot entry")
+        new_inputs["assets/private/entry-avatar.png"] = hashlib.sha256(entry_source.read_bytes()).hexdigest()
+        current_info = {"CFBundleShortVersionString": "0.9.0"}
+        self.assertIn("startup defaults", animation._verify_packaged_sources(
+            new_bundle, new_source, current_info, new_marker))
+        entry_source.write_bytes(b"changed bot entry")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(new_bundle, new_source, current_info, new_marker)
+
+        copied_source = new_bundle / "Contents/Resources/web/assets/private/working.png"
+        copied_source.parent.mkdir(parents=True)
+        copied_source.write_bytes(b"must not ship in the startup web resources")
+        with self.assertRaisesRegex(common.IntegrationError, "must not be copied"):
+            animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+        copied_source.unlink()
+        (new_source / "assets/private/working.png").write_bytes(b"changed after snapshot")
+        with self.assertRaisesRegex(common.IntegrationError, "differs from its frozen source"):
+            animation._verify_packaged_sources(new_bundle, new_source, new_info, new_marker)
+
+        legacy_bundle = self.base / "legacy-bundle"
+        legacy_root = legacy_bundle / "Contents/Resources/web"
+        legacy_inputs = {}
+        for name in ("index.html", "style.css", "animation.js", "assets/private/working.png", "assets/private/scene.js"):
+            path = legacy_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(("legacy " + name).encode("utf-8"))
+            legacy_inputs[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        legacy = animation._verify_packaged_sources(
+            legacy_bundle, new_source, {"CFBundleShortVersionString": "0.7.1"}, {"inputs": legacy_inputs},
+        )
+        self.assertIn("installed web hashes", legacy)
 
     def test_package_edit_is_valid_but_stales_reviewed_build_before_native_execution(self):
         plan = animation.build_plan(self.source, self.workspace, self.assets, hub_root=self.hub)
@@ -259,7 +375,8 @@ class AnimationIntegrationTests(unittest.TestCase):
             self.install()
             target, record = animation._test_paths(self.workspace)
             plan = animation.test_uninstall_plan(self.source, self.workspace, hub_root=self.hub)
-            process = {"returncode": 0, "stdout": f"123 {target}/Contents/MacOS/AzhouCodexStartup\n", "stderr": ""}
+            executable = target / "Contents/MacOS" / "AzhouCodexStartup"
+            process = {"returncode": 0, "stdout": f"123 {executable.parent}/AzhouCodexStartup\n", "stderr": ""}
             with patch.object(animation, "_run", return_value=process):
                 with self.assertRaisesRegex(common.IntegrationError, "still running"):
                     animation.test_uninstall(self.source, self.workspace, plan["plan_id"], hub_root=self.hub)
@@ -322,6 +439,20 @@ class AnimationIntegrationTests(unittest.TestCase):
                     animation.test_uninstall(self.source, self.workspace, plan["plan_id"], hub_root=self.hub)
             self.assertTrue(target.exists())
             self.assertTrue(record.exists())
+
+    def test_owned_cleanup_keeps_support_for_the_previous_application_name(self):
+        _, target, record, native = self.owned_snapshot_fixture()
+        previous = target.with_name("阿舟启动 Codex.app")
+        target.rename(previous)
+        receipt = common.read_receipt(record)
+        receipt["path"] = str(previous)
+        common.write_receipt(record, receipt)
+        before = record.read_bytes()
+        with patch.object(animation.runpy, "run_path", return_value=native):
+            plan = animation.test_uninstall_plan(self.source, self.workspace, hub_root=self.hub)
+        self.assertEqual(str(previous), plan["target"]["path"])
+        self.assertEqual(before, record.read_bytes())
+        self.assertTrue(previous.is_dir())
 
     def test_owned_cleanup_uses_frozen_snapshot_after_live_package_edit_and_removal(self):
         snapshot, target, record, native = self.owned_snapshot_fixture()
@@ -441,7 +572,8 @@ class AnimationIntegrationTests(unittest.TestCase):
         self.assertEqual(registry_before, self.registry)
 
     def test_successful_exit_without_player_events_is_not_behavior_success(self):
-        result = animation.assess_execution("smoke", {"returncode": 0, "stdout": "", "stderr": ""}, self.payload)
+        result = animation.assess_execution("smoke", {"returncode": 0, "stdout": "", "stderr": ""},
+                                            self.payload, verified_bundle={"version": "0.7.1", "build": "8"})
         self.assertEqual("behavior-not-proven", result["status"])
 
     def test_complete_player_evidence_rejects_wrong_path_or_host_launch(self):
@@ -449,7 +581,9 @@ class AnimationIntegrationTests(unittest.TestCase):
                   ("player-start", "playback-start", "animation-complete", "preview-result", "player-terminated")]
         events[-1].update(completed=True, failed=False)
         def assess(items):
-            return animation.assess_execution("smoke", {"returncode": 0, "stdout": "\n".join(json.dumps(x) for x in items), "stderr": ""}, self.payload)
+            return animation.assess_execution(
+                "smoke", {"returncode": 0, "stdout": "\n".join(json.dumps(x) for x in items), "stderr": ""},
+                self.payload, verified_bundle={"version": "0.7.1", "build": "8"})
         self.assertEqual("behavior-passed", assess(events)["status"])
         self.assertEqual("behavior-not-proven", assess(events + [{"event": "target-reused", "launcherPath": str(self.payload)}])["status"])
         events[1]["launcherPath"] = "/another/app"
@@ -470,7 +604,8 @@ class AnimationIntegrationTests(unittest.TestCase):
         events[4]["allowed"] = True
         def assess(extra):
             return animation.assess_execution("launch", {"returncode": 0,
-                "stdout": "\n".join(json.dumps(x) for x in events + extra), "stderr": ""}, self.payload)
+                "stdout": "\n".join(json.dumps(x) for x in events + extra), "stderr": ""}, self.payload,
+                verified_bundle={"version": "0.7.1", "build": "8"})
         missing = assess([])
         self.assertEqual("behavior-passed", missing["launcher_status"])
         self.assertEqual("not-attempted", missing["wallpaper_status"])

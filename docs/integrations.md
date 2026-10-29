@@ -2,13 +2,15 @@
 
 The fourteen canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. The three optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
 
-The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [codex-startup-animation](../packages/codex-startup-animation/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
+The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
+
+The existing local Codex App and Pet receipts still bind `packages/codex-startup-animation/`. That source directory remains intact until an explicitly reviewed handoff verifies each owner; the Agent Skin rename does not transfer either installation.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
 python scripts/azhou_hub.py integrations model-router --help
-python scripts/azhou_hub.py integrations startup-animation --help
+python scripts/azhou_hub.py integrations agent-skin --help
 ```
 
 Use Python 3.11+ and a verified Codex executable for operations that need the native runtime. Commands default to the canonical package under `packages/`; optional `--source` accepts only that exact absolute package path as an assertion and cannot select an external checkout. The native acceptance evidence is dated and applies only to the recorded macOS Codex runtime in the [historical report](../evidence/optional-integrations-2026-10-25.md); other operating systems and arbitrary Codex versions are not covered. Resolve and inspect the executable, not only the command found first on `PATH`.
@@ -19,11 +21,11 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 |---|---|---|
 | `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot, native install/doctor/remove adapter and read-only transition review | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
 | `model-router` | `packages/agent-orchestration-kit/`; current `runtime_paths` fingerprint, private snapshot and native install/verify/recovery adapter | Agent Orchestration Kit's installer owns its Codex settings, six roles, instructions and Skill. Codex owns actual dispatch. |
-| `startup-animation` | `packages/codex-startup-animation/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Native macOS Swift/AppKit/WKWebView player and Codex wallpaper helper. Four private assets are supplied separately. No program redistribution grant is recorded. |
+| `agent-skin` | `packages/agent-skin/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Azhou AI Lab, a Codex-only adapter with the inherited native player and wallpaper helper. Owned UI supports Chinese/English and follows official host language/theme without separate preferences. The bot entry portrait is a separate private input; startup artwork and Pet remain independent. Version-aware events, independent playback smoke, read-only status and scoped restore retain their existing boundaries. Local tests do not establish official-host acceptance or installation handoff. No program redistribution grant is recorded. |
 
 Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
-The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
+The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. For Agent Skin, a legacy `startup-animation` test installation blocks a new test installation in that workspace until the `agent-skin test-uninstall` path removes its original receipt-owned app and exact registration. See [package provenance and updates](integration-provenance.md).
 
 ## pstack: local source to native plugin
 
@@ -151,34 +153,36 @@ One Codex home can now hold both packages through either public entry: compatibi
 
 The native configuration and child-setting rules are distinct. For the tested client, root configuration resolves CLI overrides before trusted project configuration, selected profile, user configuration and lower-priority defaults. For a child, explicit spawn values resolve before agent defaults and parent values, **then the selected custom role file overrides the fields it sets**. A role's read-only prose does not create a separate sandbox. Source: [official config precedence](https://learn.chatgpt.com/docs/config-file/config-basic), [official custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [local Skill discovery](https://learn.chatgpt.com/docs/build-skills). Recheck with native `config/read`, rendered tool schema and runtime metadata when the client changes; model self-report is not evidence.
 
-## Animation: build, test entry and production boundary
+## Agent Skin: build, test entry and production boundary
 
-The package is at `packages/codex-startup-animation/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
+The canonical package is `packages/agent-skin/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
 
 ```sh
 ANIMATION_WORKSPACE=/absolute/animation-test-project
 PRIVATE_INPUTS=/absolute/explicit-private-inputs
-python scripts/azhou_hub.py integrations startup-animation check-source
-python scripts/azhou_hub.py integrations startup-animation build \
+python scripts/azhou_hub.py integrations agent-skin check-source
+python scripts/azhou_hub.py integrations agent-skin build \
   --workspace "$ANIMATION_WORKSPACE" --private-assets "$PRIVATE_INPUTS"
 ```
 
-The last command is a plan. Repeat it with `--apply --plan-id PLAN_ID` after reviewing the targets and four private-input hashes. Supply `working.png`, `scene.js`, `wallpaper-scene-q-v3.png` and `app-icon/source.png`; missing inputs fail. The adapter copies them only into ignored local state, runs the fixed native build and compares the final marker against **all** approved private inputs. The temporary empty Git database in that snapshot serves only the native ignore checks, not source-history attribution.
+The last command is a plan. Repeat it with `--apply --plan-id PLAN_ID` after reviewing the targets and private-input hashes. Supply `working.png`, `scene.js`, `wallpaper-scene-q-v3.png` and `app-icon/source.png`; 0.9.0 and later also require the separate bot portrait `entry-avatar.png`. Missing inputs fail. The adapter copies them only into ignored local state, runs the fixed native build and compares the final marker against **all** approved private inputs. The temporary empty Git database in that snapshot serves only the native ignore checks, not source-history attribution.
 
 Use the returned `.build/azhou-payload` path as `PAYLOAD`. Test installation accepts only that frozen-snapshot payload: a bundle built directly in the live package directory is rejected at planning, because test-uninstall restores from the frozen snapshot. Test installation likewise requires its own current plan:
 
 ```sh
-python scripts/azhou_hub.py integrations startup-animation test-install \
+python scripts/azhou_hub.py integrations agent-skin test-install \
   --workspace "$ANIMATION_WORKSPACE" --payload "$PAYLOAD"
 # Repeat with --apply --plan-id PLAN_ID; set TEST_APP to the returned path.
-python scripts/azhou_hub.py integrations startup-animation inspect --bundle "$TEST_APP"
-python scripts/azhou_hub.py integrations startup-animation run --bundle "$TEST_APP" --mode smoke
-python scripts/azhou_hub.py integrations startup-animation run --bundle "$TEST_APP" --mode probe
+python scripts/azhou_hub.py integrations agent-skin inspect --bundle "$TEST_APP"
+python scripts/azhou_hub.py integrations agent-skin run --bundle "$TEST_APP" --mode smoke
+python scripts/azhou_hub.py integrations agent-skin run --bundle "$TEST_APP" --mode probe
 ```
 
 `run` is a plan until repeated with `--apply --plan-id PLAN_ID`. `smoke` runs a one-shot player without launching or enhancing Codex. `probe` resolves the actual `com.openai.codex` target without launching it. The returned log must name the installed application; a source preview or successful exit alone is insufficient. The optional `--evidence` path must be inside this Hub checkout's `.azhou/hub/` and is bound into the plan.
 
-`launch` preserves the current source behavior: player, target start/reuse, **and a coupled wallpaper attempt**. This source has no pure launch-without-wallpaper mode. Plans disclose temporary locks, helper logs and the possible lifetime of a cold-start loopback debugging port. `wallpaper-status` is a separate read-only check. `disable-wallpaper` requires a specific target PID and bundle and restores only the helper-owned page state; it does not terminate the host or close its debugging port. Playback, handoff, helper report, live page state and visual review are separate results. Never restart an active host merely to make an acceptance test pass.
+The Hub assesses output according to the inspected bundle version: verified 0.7.1 payloads retain legacy event rules; 0.8.0 and later payloads use `azhou-startup.event.v1` for consumed events. Known diagnostics may omit the schema and are not counted as startup evidence. For the current contract, `launch` reports hot activation, startup readiness, skip, interruption and unproven behavior separately from wallpaper status; it does not require playback or wallpaper completion to report startup readiness. `smoke` is a one-shot player check that requires its own playback-completion evidence and never launches or enhances Codex. `probe` only resolves the actual `com.openai.codex` target. These event assessments are validated with synthetic fixtures; no live producer or official host run is claimed.
+
+Plans disclose temporary locks, helper logs and the possible lifetime of a cold-start loopback debugging port. `wallpaper-status` is a separate read-only check that can report an optional startup state without launching, injecting, registering or writing logs. `disable-wallpaper` requires a specific target PID and bundle; its restore scope removes the Agent Skin controller and wallpaper while preserving saved settings, the host process and its debugging port. Playback completion, launcher result, wallpaper report, live page state and visual review remain separate evidence. Never restart an active host merely to make an acceptance test pass.
 
 For the test entry, use `test-uninstall --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified private package snapshot and receipt, so later package changes do not remove the recovery source. New build, install, run and inspect plans fingerprint the current in-repository inputs. This is separate from the native production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
 
@@ -186,7 +190,7 @@ For the test entry, use `test-uninstall --workspace ...`, then repeat with `--ap
 
 ### Pet maintenance after the import
 
-The animation package also carries `pet/theme.json`, `tools/manage-codex-pet.py` and its isolated tests. The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand. See the [package runbook](../packages/codex-startup-animation/docs/codex-pet.md).
+The retained `packages/codex-startup-animation/` source carries `pet/theme.json`, `tools/manage-codex-pet.py` and its isolated tests for the existing Pet owner. The Agent Skin package contains a source copy but does not assume that installation or its private state. The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand. See the [legacy-source runbook](../packages/codex-startup-animation/docs/codex-pet.md).
 
 From the Hub root, these commands inspect state or run isolated tests:
 

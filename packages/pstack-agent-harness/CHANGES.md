@@ -2,13 +2,11 @@
 
 This file is the release changelog, with one `## <version> - <title>` entry per release, newest first. The Cursor-to-Claude rewrite rules live in [`tools/substitutions.json`](tools/substitutions.json), and the [sync boundary](CONTRIBUTING.md#the-sync-boundary) in `CONTRIBUTING.md` defines how a change to upstream's skill content is declared.
 
-## 0.9.103 - The Codex mapping owns a task beside a named-role orchestrator
+## 0.9.103 - Hub-maintained package and Codex task ownership
 
 `skills/poteto-mode/references/codex-tools.md` gains a task-ownership section for homes that also carry a named-role orchestrator such as the Agent Orchestration Kit. pstack takes over a task only when the user explicitly selects a pstack workflow for it; a Skill being visible, a model sheet existing, or reference material loading is not selection. While pstack owns the task it owns the decomposition, stages, child dispatch, and verification, and the orchestrator's instruction block adds no second flow on top. A status question or an added constraint within the same task keeps pstack as the owner; the next task returns to the host defaults, and ownership does not persist and pstack starts no background service to keep it. A mid-task switch of workflow first brings pstack's running children to a recoverable boundary, per poteto-mode's Subagents section. The Subagent policy also now says a pstack dispatch passes the explicit model and `reasoning_effort` from the sheet and selects no named role, because on Codex a selected custom-role file overrides the explicit fields it sets; selecting a pstack workflow does not switch the active root session model. A rejected explicit model falls back only to a sheet-declared, host-supported model and is reported as a fallback, never as the requested model succeeding. `tests/skill-rules.test.mjs` pins each rule.
 
 **Verified.** `bun test tests/skill-rules.test.mjs` passes with the seven new pins, `bun tools/generate.mjs --check` reports 85 generated files current, and the two dispatch paths were observed in one isolated Codex home with these bytes: named-role children ran the role files' model and effort, and a pstack-selected task's child ran the explicit `gpt-6-luna`/`max` dispatch with no role, while the root session model stayed on the host default.
-
-## 0.9.103 - Hub-maintained package source
 
 This Hub-maintained release makes the package under `packages/pstack-agent-harness/` the local source for future installs. Package install and shared-skill instructions use the current Hub checkout; Hub-managed Codex continues through the existing plan, apply, and doctor integration. The shared skills route links the canonical package tree and preserves existing user entries. `setup-pstack` adds the ZCode model-sheet location, static runtime pointer, and `account:<plan>/<model>` ID shape. Its evidence is limited to local configuration inspection; no native plugin or hook acceptance was performed.
 

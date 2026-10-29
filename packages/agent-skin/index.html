@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title data-agent-skin-preview-title>阿舟 AI 实验室 · 动画预览</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="assets/defaults/contours.js" defer></script>
+  <script src="localization.js" defer></script>
+  <script src="image-settings.js" defer></script>
+  <script src="animation.js" defer></script>
+</head>
+<body>
+  <main class="preview">
+    <header class="preview-heading"><span data-agent-skin-preview-brand>阿舟 AI 实验室</span><span data-agent-skin-preview-caption>动画预览 · 固定 1536 × 1024 画布</span></header>
+    <section class="scene" data-agent-skin-stage aria-label="阿舟头像与同一背景线稿构成的启动动画">
+      <canvas data-agent-skin-canvas data-coordinate-size="1536x1024" role="img" aria-label="阿舟头像与同一背景线稿构成的启动动画"></canvas>
+      <span data-agent-skin-stage-text aria-live="polite">脉冲</span>
+      <span data-agent-skin-progress aria-label="动画进度">启动进度 0%</span>
+      <button data-agent-skin-skip type="button" aria-label="跳过启动动画">跳过动画 <kbd>Esc</kbd></button>
+    </section>
+    <footer id="preview-controls" class="controls" hidden>
+    <button id="replay" type="button" aria-label="重播动画">↻ 重播动画</button>
+    <button id="pause" type="button" aria-label="暂停动画">暂停动画</button>
+    <input id="timeline" aria-label="动画时间轴" type="range" min="0" max="12" step="0.01" value="0">
+    <output id="elapsed">已用时 0.0 秒，共 12.0 秒</output>
+    </footer>
+  </main>
+</body>
+</html>

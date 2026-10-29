@@ -1,0 +1,37 @@
+{
+  "identity": {
+    "appName": {
+      "zh-CN": "阿舟 AI 实验室",
+      "en": "Azhou AI Lab"
+    },
+    "botName": {
+      "zh-CN": "阿舟",
+      "en": "Azhou"
+    },
+    "installationName": "阿舟 AI 实验室.app",
+    "iconInput": "assets/private/app-icon/source.png",
+    "entryAvatarInput": "assets/private/entry-avatar.png"
+  },
+  "startup": {
+    "durationMs": 12000,
+    "text": {
+      "introTitle": {
+        "zh-CN": "阿舟 AI 实验室",
+        "en": "Azhou AI Lab"
+      },
+      "introCaption": {
+        "zh-CN": "AZHOU / AI LAB",
+        "en": "AZHOU / AI LAB"
+      },
+      "artworkSubtitle": {
+        "zh-CN": "和阿舟一起，把想法做出来。",
+        "en": "Let’s make ideas real with Azhou."
+      }
+    }
+  },
+  "wallpaper": {
+    "strength": 42,
+    "min": 0,
+    "max": 75
+  }
+}

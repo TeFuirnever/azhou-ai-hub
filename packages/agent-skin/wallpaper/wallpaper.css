@@ -1,0 +1,94 @@
+/* Static Codex-interior wallpaper. Shell anchors were found in the installed
+   26.1021.31345 bundle; live DOM + screenshot validation is still required.
+   No application color token, message, menu, dialog or composer is overwritten. */
+html[data-azhou-wallpaper="active"] {
+  --azhou-base: var(--color-surface, var(--app-color-background-surface, #202024));
+}
+
+html[data-azhou-wallpaper="active"] body {
+  --azhou-style-ready: ready;
+  background-color: var(--azhou-base) !important;
+  background-image:
+    var(--azhou-wallpaper-wash, linear-gradient(90deg,
+      color-mix(in srgb, var(--azhou-base) 76%, transparent) 0%,
+      color-mix(in srgb, var(--azhou-base) 82%, transparent) 22%,
+      color-mix(in srgb, var(--azhou-base) 88%, transparent) 36%,
+      color-mix(in srgb, var(--azhou-base) 84%, transparent) 62%,
+      color-mix(in srgb, var(--azhou-base) 70%, transparent) 73%,
+      color-mix(in srgb, var(--azhou-base) 35%, transparent) 87%,
+      color-mix(in srgb, var(--azhou-base) 30%, transparent) 100%)),
+    var(--azhou-wallpaper-image) !important;
+  background-size: 100% 100%, cover !important;
+  background-position: center, 60% center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* Cover intentionally crops the room on narrow windows. Focus on the Q-style
+   character and desk; do not stretch the illustration or shrink it to a sticker. */
+@media (max-aspect-ratio: 6/5) {
+  html[data-azhou-wallpaper="active"] body {
+    background-position: center, 88% center !important;
+  }
+}
+
+html[data-azhou-wallpaper="active"] #root:has([data-app-shell-frame]),
+html[data-azhou-wallpaper="active"] #root :is(
+  [data-app-shell-frame],
+  [data-app-shell-main-surface],
+  [data-app-shell-page-surface]
+) {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* This otherwise opaque shell pseudo-element is present in the unified-tab
+   layout. Match a CSS-module class token prefix, never arbitrary ::before. */
+html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface]
+  :is([class^="_WorkspaceContent_"], [class*=" _WorkspaceContent_"])::before {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+
+/* The footer plate, separate sticky scroll fade and main-content top fade are
+   verified non-interactive decoration. The scroll fade is NOT inside the footer.
+   Keep layout, pointer events and composer/menu/code surfaces unchanged. Unknown
+   layers are reported by the renderer instead of being made transparent.
+   Branches and exclusions have zero specificity; only the common scope counts. */
+html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
+  [data-thread-scroll-footer],
+  [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
+    :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
+  :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
+):where(:not(
+  [data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select,
+  :is([data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select) *
+)),
+html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
+  [data-thread-scroll-footer],
+  [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
+    :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
+  :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
+):where(:not(
+  [data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select,
+  :is([data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select) *
+))::before,
+html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
+  [data-thread-scroll-footer],
+  [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
+    :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
+  :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
+):where(:not(
+  [data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select,
+  :is([data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select) *
+))::after {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

@@ -1,6 +1,6 @@
 # Package provenance and updates
 
-This document records provenance and update rules for the Hub's three complete project packages under `packages/`. Operational instructions belong in [integrations.md](integrations.md); public support claims belong in the [support matrix](support-matrix.md). The canonical Skills under `skills/` keep their independent installation and maintenance contract in [skill-standard.md](skill-standard.md).
+This document records provenance and update rules for the Hub's complete project packages under `packages/`, including the canonical Agent Skin copy and the retained legacy startup-animation path used by existing receipts. Operational instructions belong in [integrations.md](integrations.md); public support claims belong in the [support matrix](support-matrix.md). The canonical Skills under `skills/` keep their independent installation and maintenance contract in [skill-standard.md](skill-standard.md).
 
 来源、安装和运行是三层不同证据：包内来源记录不能证明宿主已经调用；原生安装成功不能证明模型身份或视觉效果。本页不把历史目录名、旧 source lock 或验收报告当作当前实现。
 
@@ -12,7 +12,8 @@ Each project's `hub-package.json` declares its repository/import provenance, nat
 | --- | --- | --- |
 | pstack | [packages/pstack-agent-harness](../packages/pstack-agent-harness/README.md), a local fork of Michael Denyer's Codex port; original selected port commit `356c6e0f978df729eb16f227d795f34d221c5aad` | Hub-maintained `0.9.103`, imported from `0.9.102`; MIT package plus retained Cursor Team Kit and thermos notices |
 | Model router | [packages/agent-orchestration-kit](../packages/agent-orchestration-kit/README.md), a local continuation of [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator); see its [UPSTREAM.md](../packages/agent-orchestration-kit/UPSTREAM.md) for source commit ancestry | Unreleased package; Apache-2.0 |
-| Startup animation | [packages/codex-startup-animation](../packages/codex-startup-animation/README.md); public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation), local fork origin `TeFuirnever/codex-startup-animation`, imported from base `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` with maintained local changes | Runtime `0.7.1`, build `8`; no open-source license grant recorded and no external distribution authorization |
+| Agent Skin (Codex) | [packages/agent-skin](../packages/agent-skin/README.md); canonical copy of the Hub-tracked TeFuirnever source, with original public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation) and local origin `TeFuirnever/codex-startup-animation` | Runtime `0.7.1`, build `8`; no open-source license grant recorded and no external distribution authorization |
+| Legacy startup-animation | [packages/codex-startup-animation](../packages/codex-startup-animation/README.md); retained for existing installation and Pet receipt ownership | Runtime `0.7.1`, build `8`; same unlicensed source and distribution boundary as Agent Skin |
 
 The package descriptors' commit fields record original import provenance. Their current local package trees are the installation inputs; an original commit alone does not reconstruct later Hub changes. The adapter never resets or commits another source tree, and it never silently substitutes an upstream HEAD for the maintained package.
 
@@ -102,7 +103,7 @@ The adapter can plan an isolated build from current package inputs and explicitl
 | pstack code, Skills and adapted components | MIT. Retain `LICENSE`, `LICENSE-cursor-team-kit`, `LICENSE-thermos`, `NOTICE.md`, `NOTICE-skills.md` and the generated portable notices. |
 | pstack's existing tracked icon | Its exact source bytes remain in the package snapshot and are accompanied by the source repository's license/notice material. It is an existing source asset, not newly generated Azhou artwork. |
 | Agent Orchestration Kit selected code/profile | Apache-2.0. Retain the selected `LICENSE` with the local runtime subset; do not replace the license with the Hub's own. |
-| Startup-animation program | No open-source license grant is recorded. The Hub root license does not apply to `packages/codex-startup-animation/`. Do not publish source or binaries until redistribution permission is clarified with the maintainer. |
+| Startup-animation program / Agent Skin copy | No open-source license grant is recorded. The Hub root license does not apply to `packages/agent-skin/` or `packages/codex-startup-animation/`. Do not publish source or binaries until redistribution permission is clarified with the maintainer. |
 | Startup-animation private art and derived bundles | The four required existing private inputs are supplied explicitly at runtime. On the maintainer Mac they reside in the package's Git-ignored local state; their bytes, private hashes and generated packages are outside tracked source and public distribution. |
 
 The four private input roles are the working character image, scene data, wallpaper image and application-icon source. A build must bind the actual packaged inputs to the reviewed build plan. Keeping files out of Git and validating their hashes addresses packaging provenance; it does not constitute visual review or a new redistribution permission.
