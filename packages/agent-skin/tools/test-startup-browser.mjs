@@ -4570,6 +4570,172 @@ try {
       assert.equal(applied.observers.wallpaperShellWait.active, 0);
       return applied;
     });
+    await navigate('/fixture.html?generated-payload=1');
+    await check('generated cold start restores saved wallpaper after natural completion without another save', async () => {
+      const fields = { introTitle: '冷启动恢复', wallpaperStrength: 19 };
+      const initial = await awaitGeneratedReady('generated animation is ready before saving cold-start fields');
+      const firstURL = await cdp.evaluate('location.href');
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+        'the generated controller opens its Appearance settings');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        return window.__startupAPI.status().phase==='settings'
+          &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+      })()`), 10000, 'generated Appearance settings open before the first save');
+      await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+        const title=doc.querySelector('input[maxlength="16"]');
+        title.value=${JSON.stringify(fields.introTitle)};
+        title.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+        const strength=doc.querySelector('input[type="range"]');
+        strength.value='${fields.wallpaperStrength}';
+        strength.dispatchEvent(new Event('input',{bubbles:true}));
+        doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
+      })()`);
+      const saved = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='settings-save'
+          &&state.runId===${initial.runId}&&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 15000, 'first generated settings save commits without replay');
+      const firstTimeOrigin = await cdp.evaluate('performance.timeOrigin');
+
+      await navigate('/fixture.html?generated-payload=1&hold-shell=1');
+      const nextURL = await cdp.evaluate('location.href');
+      const nextTimeOrigin = await cdp.evaluate('performance.timeOrigin');
+      assert.equal(new URL(nextURL).origin, new URL(firstURL).origin,
+        'the cold startup is a new document on the same origin as the committed IndexedDB record');
+      assert.notEqual(nextTimeOrigin, firstTimeOrigin, 'navigation created a new top-level document');
+      const coldRun = await awaitGeneratedReady('cold generated animation is ready while its shell is withheld');
+      const held = await cdp.evaluate(`(()=>({
+        state:window.__startupAPI.status(),
+        shellCount:document.querySelectorAll('[data-app-shell-frame]').length,
+        styleCount:document.querySelectorAll('#azhou-wallpaper-style').length
+      }))()`);
+      assert.equal(held.state.runId, coldRun.runId);
+      assert.equal(held.state.phase, 'playing');
+      assert.equal(held.state.wallpaper.applied, false);
+      assert.equal(held.shellCount, 0);
+      assert.equal(held.styleCount, 0);
+
+      const natural = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='natural'
+          &&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 20000, 'the cold generated startup finishes its full natural playback before shell mount');
+      assert.equal(natural.runId, coldRun.runId);
+      assert.equal(natural.wallpaper.applied, false,
+        'the wallpaper remains pending until the deliberately withheld shell mounts');
+      assert.equal(await cdp.evaluate('window.__releaseShell()'), true,
+        'the synthetic supported shell is released after natural completion');
+
+      const inspectWallpaper = () => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status(),api=window.__azhouWallpaper?.status?.();
+        const style=document.querySelector('#azhou-wallpaper-style');
+        const wash=document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash');
+        return {startup:state?.wallpaper||null,api:api||null,
+          owner:window.__azhouWallpaper?.owner||null,
+          apiKeys:Object.keys(window.__azhouWallpaper||{}).sort(),
+          styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,
+          styleOwner:style?.getAttribute('data-azhou-owner')||null,
+          washStops:Array.from(wash.matchAll(/var\\(--azhou-base\\)\\s+(\\d+)%/g),match=>Number(match[1])),
+          wash};
+      })()`);
+      let restored;
+      try {
+        restored = await until(async () => {
+          const state = await inspectWallpaper();
+          return state.startup?.applied&&state.startup.imageDecoded
+            &&state.api?.applied&&state.api.imageDecoded&&state.styleCount===1?state:false;
+        }, 5000, 'saved wallpaper is restored after the late shell mounts without reopening settings');
+      } catch (error) {
+        restored = { ...(await inspectWallpaper()), waitError: error.message };
+      }
+      const expectedWashStops = [89, 92, 95, 93, 86, 71, 68];
+      const appliedWithoutSave = restored.startup?.applied===true
+        &&restored.startup.imageDecoded===true&&restored.api?.applied===true
+        &&restored.api.imageDecoded===true&&restored.owner==='azhou.codex-startup-animation'
+        &&restored.styleCount===1&&restored.styleOwner==='azhou.codex-startup-animation';
+      const strengthMatches = JSON.stringify(restored.washStops)===JSON.stringify(expectedWashStops);
+      if (!appliedWithoutSave || !strengthMatches) {
+        const beforeRecoverySave = restored;
+        let recoverySave;
+        try {
+          assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+            'recovery can open Appearance after the cold run completes');
+          await until(() => cdp.evaluate(`(()=>{
+            const frame=document.querySelector('iframe[aria-label]');
+            return window.__startupAPI.status().phase==='settings'
+              &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+          })()`), 10000, 'Appearance opens for the failure recovery save');
+          const recoveryFields = await cdp.evaluate(`(()=>{
+            const doc=document.querySelector('iframe[aria-label]').contentDocument;
+            doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+            const introTitle=doc.querySelector('input[maxlength="16"]')?.value;
+            doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+            return {introTitle,wallpaperStrength:Number(doc.querySelector('input[type="range"]')?.value)};
+          })()`);
+          await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument
+            .querySelector('[data-agent-skin-settings] footer button:last-child').click()`);
+          let afterSave;
+          try {
+            afterSave = await until(async () => {
+              const state = await inspectWallpaper();
+              const controller = await cdp.evaluate('window.__startupAPI.status()');
+              return controller.phase==='complete'&&controller.completion?.cause==='settings-save'
+                &&state.startup?.applied&&state.api?.imageDecoded?{...state,controller}:false;
+            }, 10000, 'recovery Appearance Save applies the persisted wallpaper');
+          } catch (saveError) {
+            afterSave = { ...(await inspectWallpaper()), waitError: saveError.message,
+              controller: await cdp.evaluate('window.__startupAPI.status()') };
+          }
+          recoverySave = { recoveryFields, afterSave };
+        } catch (recoveryError) {
+          recoverySave = { error: recoveryError.message,
+            afterSave: await inspectWallpaper().catch(statusError => ({ error: statusError.message })) };
+        }
+        assert.ok(appliedWithoutSave && strengthMatches,
+          'saved wallpaper must restore at strength 19 after natural completion and late shell mount, before another Save; '
+          + JSON.stringify({ natural: { runId: natural.runId, completion: natural.completion },
+            beforeRecoverySave, recoverySave, expectedWashStops }));
+      }
+
+      assert.deepEqual(restored.washStops, expectedWashStops,
+        'the applied wallpaper wash is generated from the persisted wallpaperStrength=19');
+      assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true,
+        'Appearance can be opened after wallpaper restoration for a read-only persistence check');
+      await until(() => cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        return window.__startupAPI.status().phase==='settings'
+          &&frame?.contentDocument.querySelector('[data-agent-skin-settings]')?.open?true:false;
+      })()`), 10000, 'read-only Appearance persistence check opens');
+      const readback = await cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]').contentDocument;
+        doc.querySelector('[data-agent-skin-settings-tab="startup"]').click();
+        const introTitle=doc.querySelector('input[maxlength="16"]')?.value;
+        doc.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+        return {introTitle,wallpaperStrength:Number(doc.querySelector('input[type="range"]')?.value)};
+      })()`);
+      assert.deepEqual(readback, fields,
+        'the newly opened Appearance panel reads the saved title and wallpaperStrength from IndexedDB without editing them');
+      await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]');
+        frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+      })()`);
+      const canceled = await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI.status();
+        return state.phase==='complete'&&state.completion?.cause==='settings-cancel'
+          &&!document.querySelector('iframe[aria-label]')?state:false;
+      })()`), 5000, 'read-only Appearance check closes without saving');
+      return { firstSave: { runId: saved.runId, completion: saved.completion },
+        sameOrigin: new URL(firstURL).origin, timeOriginChanged: nextTimeOrigin!==firstTimeOrigin,
+        coldRun: { runId: coldRun.runId, phase: coldRun.phase },
+        natural: { runId: natural.runId, completion: natural.completion }, held,
+        wallpaperWithoutSave: { owner: restored.owner, styleCount: restored.styleCount,
+          apiKeys: restored.apiKeys, styleOwner: restored.styleOwner, washStops: restored.washStops },
+        readback, closedWith: canceled.completion };
+    });
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
     await check('builder-generated wallpaper waits for a late supported shell and remains after animation completion', async () => {
