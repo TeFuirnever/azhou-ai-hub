@@ -1450,6 +1450,7 @@ try {
         const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
         shell.style.gridTemplateColumns='64px minmax(0,1fr)';
         sidebar.style.width='64px';sidebar.style.overflow='hidden';
+        document.querySelector('[role="menu"]').scrollIntoView({block:'center',inline:'nearest'});
       })()`);
       await cdp.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       metrics = await appearanceEntryMetrics();
@@ -1462,7 +1463,7 @@ try {
         + JSON.stringify({ rect: metrics.rect, viewport: metrics.viewport, entryHit: metrics.entryHit,
           buttonHit: metrics.buttonHit }));
       assert.equal(metrics.inputHit, true, 'the host textarea remains hit-testable in the collapsed-sidebar viewport');
-      assert.equal(metrics.menuHit, true, 'the host menu remains hit-testable in the collapsed-sidebar viewport: ' + JSON.stringify(metrics));
+      assert.equal(metrics.menuHit, true, 'the host menu remains hit-testable in the collapsed-sidebar viewport: ' + JSON.stringify({menu:metrics.menuRect, viewport:metrics.viewport, overlap:metrics.menuOverlap}));
       assert.equal(metrics.inputOverlap.area, 0, 'the appearance entry does not overlap the host textarea');
       assert.equal(metrics.menuOverlap.area, 0, 'the appearance entry does not overlap the host menu');
       assert.equal(metrics.composerOverlap.area, 0,
@@ -2864,6 +2865,7 @@ try {
       return remove.call(this,type,listener,options);
     };
   })()` });
+  await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await cdp.call('Page.navigate', { url: pathToFileURL(join(animationPreviewDir, 'index.html')).href });
   await until(() => cdp.evaluate('document.readyState === "complete"'), 10000, 'synthetic Agent Skin preview load');
   const animationReady = await until(() => cdp.evaluate(`(()=>{
@@ -2877,6 +2879,8 @@ try {
 
   await check('public preview report confirms static frame reuse and dynamic replay behavior', async () => {
     await cdp.evaluate('window.launcherUI.pause()');
+    assert.equal(await cdp.evaluate('window.launcherUI.report().reduced'), false,
+      'frame reuse assertions run with full motion explicitly enabled');
     const readReport = () => cdp.evaluate(`(()=>{
       const report=window.launcherUI.report();
       return {elapsed:report.elapsed,stage:report.stage,completed:report.completed,skipped:report.skipped,
