@@ -142,7 +142,7 @@ function controlledHost({ body = true } = {}) {
     keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size };
 }
 
-function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot' } = {}) {
+function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot', layout = 'links' } = {}) {
   const rows = [];
   const createRow = (tagName, textContent, getWidth = () => width) => ({
     tagName,
@@ -180,15 +180,41 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
   for (let index = 0; index < count; index += 1) {
     let navWidth = width;
     const nav = createRow('nav', undefined, () => navWidth);
-    const yourDot = createRow('a', label);
-    const pinned = createRow('a', 'Pinned');
-    nav.appendChild(yourDot);
-    nav.appendChild(pinned);
-    rows.push({ nav, yourDot, pinned, setWidth(value) { navWidth = value; } });
+    if (layout === 'home') {
+      nav.setAttribute('aria-label', 'Home');
+      const header = createRow('div', undefined, () => navWidth);
+      const navList = createRow('div', undefined, () => navWidth);
+      navList.setAttribute('class', 'group/nav-list flex flex-col');
+      const yourDot = createRow('button', label);
+      navList.appendChild(yourDot);
+      header.appendChild(navList);
+      nav.appendChild(header);
+      const scrollContent = createRow('div', undefined, () => navWidth);
+      const pinned = createRow('section', 'Pinned');
+      const chatTitle = createRow('button', 'Your dot');
+      scrollContent.appendChild(pinned);
+      scrollContent.appendChild(chatTitle);
+      nav.appendChild(scrollContent);
+      rows.push({ nav, header, navList, yourDot, scrollContent, pinned, chatTitle,
+        setWidth(value) { navWidth = value; } });
+    } else {
+      const yourDot = createRow('a', label);
+      const pinned = createRow('a', 'Pinned');
+      nav.appendChild(yourDot);
+      nav.appendChild(pinned);
+      rows.push({ nav, yourDot, pinned, setWidth(value) { navWidth = value; } });
+    }
   }
-  fixture.host.document.querySelectorAll = selector => selector === 'nav a[href]'
-    ? rows.flatMap(({ yourDot, pinned }) => [yourDot, pinned])
-    : fixture.host.document.appearanceControls ?? [];
+  fixture.host.document.querySelectorAll = selector => {
+    const matches = [];
+    if (layout === 'home') {
+      if (selector.includes('[class~="group/nav-list"]')) matches.push(...rows.map(({ yourDot }) => yourDot));
+      else if (selector.includes('nav button')) matches.push(...rows.flatMap(({ yourDot, chatTitle }) => [yourDot, chatTitle]));
+    } else if (selector.includes('nav a[href]')) {
+      matches.push(...rows.flatMap(({ yourDot, pinned }) => [yourDot, pinned]));
+    }
+    return matches.length ? matches : fixture.host.document.appearanceControls ?? [];
+  };
   fixture.host.document.appearanceNavigation = rows;
   return rows;
 }
@@ -322,6 +348,80 @@ test('appearance entry joins the unique Your dot navigation row before Pinned', 
   fixture.timers.at(-1).callback();
   assert.equal(button.children.at(-1).style.display, '', 'the label returns when the navigation expands');
   fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance entry follows the Home Your dot button, ignores a same-named chat, and fits a narrow sidebar', () => {
+  for (const label of ['Your dot', '你的 Dot']) {
+    const fixture = controlledHost();
+    const [{ nav, navList, yourDot, scrollContent, pinned, chatTitle, setWidth }] =
+      addAppearanceNavigation(fixture, { label, layout: 'home' });
+    let runId;
+    const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+      runId = spec.runId;
+      send({ type: 'azhou-startup', action: 'ready', runId });
+    };
+    payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
+    installStartup(payload, fixture.host);
+    const api = fixture.host.__azhouStartup;
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    const button = appearanceButton(fixture);
+
+    assert.equal(nav.children[0].children[0], navList);
+    assert.equal(navList.children[0], yourDot);
+    assert.equal(navList.children[1], entry, 'the owned row follows the system button in normal flow');
+    assert.equal(entry.style.position, 'static');
+    assert.equal(entry.style.left, '');
+    assert.equal(entry.style.bottom, '');
+    assert.equal(scrollContent.children[0], pinned, 'Pinned remains after the system navigation row');
+    assert.equal(scrollContent.children[1], chatTitle, 'a same-named user chat stays in the scroll content');
+
+    fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+    setWidth(52);
+    const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+    observer.trigger([{ target: nav, type: 'attributes', attributeName: 'style' }]);
+    fixture.timers.at(-1).callback();
+    assert.equal(navList.children[1], entry, 'a collapsed sidebar keeps the row in its normal-flow slot');
+    assert.equal(button.children.at(-1).style.display, 'none', 'the collapsed row hides its text to avoid overflow');
+    assert.equal(button.children[0].tagName, 'img', 'the avatar remains visible in the narrow row');
+    assert.equal(button.attributes.get('aria-label'), '阿舟外观');
+    api.dispose();
+  }
+});
+
+test('duplicate Home Your dot buttons keep the appearance entry on its fallback', () => {
+  const fixture = controlledHost();
+  addAppearanceNavigation(fixture, { count: 2, layout: 'home' });
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+  }, fixture.host);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(entry.parentNode, fixture.host.document.documentElement);
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance entry reanchors into a late Home Your dot button navigation', () => {
+  const fixture = controlledHost();
+  addAppearanceNavigation(fixture, { count: 0, layout: 'home' });
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  assert.equal(entry.parentNode, fixture.host.document.documentElement);
+
+  const [row] = addAppearanceNavigation(fixture, { layout: 'home' });
+  fixture.host.document.documentElement.appendChild(row.nav);
+  observer.trigger([{ target: fixture.host.document.documentElement, type: 'childList', addedNodes: [row.nav] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(row.navList.children[1], entry, 'a late system button reclaims the entry into normal flow');
+  assert.equal(entry.style.position, 'static');
+  api.dispose();
 });
 
 test('appearance entry recognizes the exact Simplified Chinese Your dot navigation name', () => {

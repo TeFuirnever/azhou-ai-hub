@@ -421,6 +421,21 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     }
     return null;
   };
+  const navigationTargetSelector = 'nav a[href], nav > :first-child > [class~="group/nav-list"] > button';
+  const isHomeNavigationButton = node => {
+    if (tagName(node) !== 'BUTTON') return false;
+    const container = node.parentElement ?? node.parentNode;
+    const header = container?.parentElement ?? container?.parentNode;
+    const nav = getNavAncestor(node);
+    const classes = container?.getAttribute?.('class') ?? container?.className ?? '';
+    return !!nav && (nav.firstElementChild ?? nav.children?.[0]) === header
+      && String(classes).split(/\s+/).includes('group/nav-list');
+  };
+  const isAppearanceNavigationNode = node => {
+    const name = node.getAttribute?.('aria-label') ?? node.textContent ?? '';
+    if (!isAppearanceAnchorName(name)) return false;
+    return tagName(node) === 'A' ? Boolean(getNavAncestor(node)) : isHomeNavigationButton(node);
+  };
   const isVisibleNavigation = node => {
     for (let current = node; current; current = current.parentElement ?? current.parentNode) {
       if (current.hidden || current.getAttribute?.('aria-hidden') === 'true') return false;
@@ -455,17 +470,19 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const findNavigationTarget = () => {
     if (typeof page.querySelectorAll !== 'function') return null;
     let anchors;
-    try { anchors = Array.from(page.querySelectorAll('nav a[href]')); } catch { return null; }
+    try { anchors = Array.from(page.querySelectorAll(navigationTargetSelector)); } catch { return null; }
     const matches = anchors.filter(anchor => {
-      const name = anchor.getAttribute?.('aria-label') ?? anchor.textContent ?? '';
-      return isAppearanceAnchorName(name) && getNavAncestor(anchor) && isVisibleNavigation(anchor);
+      return isAppearanceNavigationNode(anchor) && isVisibleNavigation(anchor);
     });
     if (matches.length !== 1) return null;
     const anchor = matches[0];
     const nav = getNavAncestor(anchor);
     const anchorParent = anchor.parentElement ?? anchor.parentNode;
     let row, container;
-    if (anchorParent === nav) {
+    if (isHomeNavigationButton(anchor)) {
+      row = anchor;
+      container = anchorParent;
+    } else if (anchorParent === nav) {
       row = anchor;
       container = nav;
     } else if ((anchorParent?.parentElement ?? anchorParent?.parentNode) === nav) {
@@ -557,8 +574,8 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   const isPotentialNavigationNode = node => {
     if (!node) return false;
     if (tagName(node) === 'NAV') return true;
-    if (tagName(node) === 'A' && isAppearanceAnchorName(node.getAttribute?.('aria-label') ?? node.textContent ?? '')) return true;
-    try { return Boolean(node.querySelector?.('nav a[href]') || node.querySelector?.('a[href]')); } catch { return false; }
+    if (isAppearanceNavigationNode(node)) return true;
+    try { return Boolean(node.querySelector?.(navigationTargetSelector) || node.querySelector?.('a[href]')); } catch { return false; }
   };
   const touchesFallbackColumn = node => {
     if (typeof node?.getBoundingClientRect !== 'function') return false;
@@ -573,7 +590,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     if (!node) return false;
     if (tagName(node) === 'NAV') return true;
     try {
-      return Array.from(page.querySelectorAll('nav a[href]')).some(anchor => {
+      return Array.from(page.querySelectorAll(navigationTargetSelector)).some(anchor => {
         for (let current = anchor; current; current = current.parentElement ?? current.parentNode) {
           if (current === node) return true;
         }

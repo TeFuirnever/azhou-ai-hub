@@ -257,6 +257,28 @@ try {
   const fixtureHTML = preview.slice(0, scriptStart)
     + '<script src="/localization.js"></script><script src="/image-settings.js"></script><script src="/animation.js"></script><script type="module" src="/fixture.js"></script>'
     + preview.slice(scriptEnd);
+  const homeNavFixtureMarkup = String.raw`
+    <nav aria-label="Home" role="navigation" data-fixture-home-nav style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden">
+      <div class="fixture-nav-header" style="flex:none;padding:12px 8px 8px">
+        <div class="group/nav-list" data-fixture-nav-list style="display:flex;flex-direction:column;gap:4px;width:100%">
+          <button type="button" class="sidebar-item" data-fixture-new-chat style="width:100%;min-height:32px;padding:5px 10px;text-align:left">New chat</button>
+          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left">Your dot</button>
+        </div>
+      </div>
+      <div class="fixture-nav-scroll" style="flex:1;min-height:0;overflow:auto;padding:4px 8px">
+        <section class="group/nav-section">
+          <div class="group/nav-section-title">
+            <button type="button" class="group/section-toggle" role="button" aria-expanded="true" style="width:100%;text-align:left">
+              <span>Pinned</span>
+            </button>
+          </div>
+        </section>
+      </div>
+      <div class="fixture-nav-footer" data-fixture-nav-footer style="flex:none;display:flex;flex-direction:column;gap:6px;padding:8px;border-top:1px solid var(--line)">
+        <button id="fixture-download-update" type="button" style="width:100%;text-align:left">Download update</button>
+        <button id="fixture-profile" type="button" style="width:100%;text-align:left">Profile</button>
+      </div>
+    </nav>`;
   const pixelBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64');
   const pixelImage = 'data:image/png;base64,' + pixelBytes.toString('base64');
   const imageSHA256 = createHash('sha256').update(pixelBytes).digest('hex');
@@ -274,6 +296,36 @@ try {
     const outerWindow = window;
     const url = new URL(location.href);
     if (url.searchParams.has('initial-light-theme')) document.documentElement.dataset.theme = 'light';
+    if (url.searchParams.has('home-nav-fixture')) {
+      const sidebar = document.querySelector('.sidebar');
+      const shell = document.querySelector('[data-app-shell-frame]');
+      const markup = ${JSON.stringify(homeNavFixtureMarkup)};
+      sidebar.style.cssText = 'padding:0;display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden';
+      shell.style.gridTemplateColumns = '232px minmax(0,1fr)';
+      sidebar.innerHTML = markup;
+      outerWindow.__fixtureHomeNavRemountCount = 0;
+      outerWindow.__fixturePriorHomeNav = null;
+      sidebar.querySelector('nav[aria-label="Home"]')?.setAttribute('data-fixture-nav-instance', '0');
+      outerWindow.__fixtureRemountHomeNav = () => {
+        const current = document.querySelector('nav[aria-label="Home"][role="navigation"]');
+        if (!current) return false;
+        const template = document.createElement('template');
+        template.innerHTML = markup;
+        const next = template.content.firstElementChild;
+        outerWindow.__fixturePriorHomeNav = current;
+        outerWindow.__fixtureHomeNavRemountCount++;
+        next.setAttribute('data-fixture-nav-instance', String(outerWindow.__fixtureHomeNavRemountCount));
+        current.replaceWith(next);
+        return true;
+      };
+      outerWindow.__fixtureSetHomeNavWidth = width => {
+        const value = Number(width);
+        if (!Number.isInteger(value) || value < 140 || value > 280) return false;
+        shell.style.gridTemplateColumns = value + 'px minmax(0,1fr)';
+        window.dispatchEvent(new Event('resize'));
+        return true;
+      };
+    }
     const nativeMutationObserver = window.MutationObserver;
     let failFirstWallpaperShellObserver = url.searchParams.has('fail-first-wallpaper-shell-observer');
     const trackedMutationObservers = [];
@@ -1529,6 +1581,126 @@ try {
     }
   }
   await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
+  await navigate('/fixture.html?home-nav-fixture=1' + (options.generatedPayload ? '&generated-payload=1' : ''));
+  await check('appearance entry follows Your dot in the real Home nav and survives narrow layout and remount', async () => {
+    const initialRun = await awaitGeneratedReady('Home navigation fixture startup is ready');
+    if (options.generatedPayload) {
+      assert.equal(await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;button.click();return true;
+      })()`), true, 'the generated animation exposes its skip control');
+    } else {
+      await cdp.evaluate(`window.__startupFixtureSend(${initialRun.runId},
+        {type:'azhou-startup',action:'complete',runId:${initialRun.runId},skipped:false})`);
+    }
+    const completed = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&!document.querySelector('iframe[aria-label]')?state:false;
+    })()`), 10000, 'the appearance entry becomes available after startup completion');
+    const inspect = () => cdp.evaluate(`(()=>{
+      const nav=document.querySelector('nav[aria-label="Home"][role="navigation"]');
+      const list=nav?.querySelector(':scope > :first-child > [class~="group/nav-list"]');
+      const dot=list?.querySelector('button[data-fixture-your-dot]');
+      const newChat=list?.querySelector('button[data-fixture-new-chat]');
+      const scroll=nav?.children[1];
+      const section=scroll?.querySelector('section[class~="group/nav-section"]');
+      const title=section?.querySelector('div[class~="group/nav-section-title"]');
+      const toggle=title?.querySelector('button[class~="group/section-toggle"]');
+      const pinned=toggle?.querySelector(':scope > span');
+      const entries=[...document.querySelectorAll('[data-agent-skin-entry="appearance"]')],entry=entries[0];
+      const rect=node=>node?.getBoundingClientRect?.();
+      const data=r=>r?{x:r.x,y:r.y,width:r.width,height:r.height}:null;
+      const intersects=(a,b)=>!!a&&!!b&&Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))
+        *Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top))>0;
+      const entryRect=rect(entry),dotRect=rect(dot),listRect=rect(list);
+      const download=document.querySelector('#fixture-download-update'),profile=document.querySelector('#fixture-profile');
+      const hit=node=>{const r=rect(node);if(!r)return false;const target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return target===node||node.contains(target);};
+      const follows=(before,after)=>!!before&&!!after&&!!(before.compareDocumentPosition(after)&Node.DOCUMENT_POSITION_FOLLOWING);
+      return {navLabel:nav?.getAttribute('aria-label')||null,navRole:nav?.getAttribute('role')||null,
+        navWidth:nav?.getBoundingClientRect().width||0,listUnderHeader:!!list&&list.parentElement===nav.firstElementChild,
+        yourDot:dot?{tag:dot.tagName,type:dot.type,sidebarItem:dot.classList.contains('sidebar-item'),
+          href:dot.hasAttribute('href'),ariaLabel:dot.hasAttribute('aria-label'),role:dot.hasAttribute('role'),text:dot.textContent.trim()}:null,
+        newChatPrecedesYourDot:!!newChat&&dot?.previousElementSibling===newChat,
+        pinnedInSeparateScroll:!!scroll&&scroll.tagName==='DIV'&&scroll!==nav.firstElementChild
+          &&section?.classList.contains('group/nav-section')===true
+          &&title?.classList.contains('group/nav-section-title')===true
+          &&toggle?.classList.contains('group/section-toggle')===true&&toggle?.getAttribute('role')==='button'
+          &&toggle?.getAttribute('aria-expanded')==='true'&&pinned?.textContent.trim()==='Pinned',
+        entryCount:entries.length,parentIsNavList:!!entry&&entry.parentElement===list,
+        position:entry?getComputedStyle(entry).position:null,
+        afterYourDot:dot?.nextElementSibling===entry,beforePinned:follows(entry,pinned),
+        rowOrder:Array.from(list?.children||[]).map(node=>node.hasAttribute('data-fixture-new-chat')?'New chat'
+          :node.hasAttribute('data-fixture-your-dot')?'Your dot':node.matches?.('[data-agent-skin-entry="appearance"]')?'appearance':'other'),
+        entryRect:data(entryRect),dotRect:data(dotRect),listRect:data(listRect),
+        followsDotGeometrically:!!entryRect&&!!dotRect&&entryRect.top>=dotRect.bottom-1,
+        fillsNavList:!!entryRect&&!!listRect&&Math.abs(entryRect.width-listRect.width)<1,
+        footer:{noOverlap:!!entryRect&&!intersects(entryRect,rect(download))&&!intersects(entryRect,rect(profile)),
+          downloadHit:hit(download),profileHit:hit(profile)},
+        remountCount:window.__fixtureHomeNavRemountCount||0,
+        priorNavDetached:!!window.__fixturePriorHomeNav&&!window.__fixturePriorHomeNav.isConnected,
+        navInstance:nav?.getAttribute('data-fixture-nav-instance')||null};
+    })()`);
+    const assertFlow = (value, phase) => {
+      assert.equal(value.navLabel, 'Home', phase + ': Home nav');
+      assert.equal(value.navRole, 'navigation', phase + ': navigation role');
+      assert.equal(value.listUnderHeader, true, phase + ': group/nav-list is directly under the nav header');
+      assert.deepEqual(value.yourDot, { tag: 'BUTTON', type: 'button', sidebarItem: true,
+        href: false, ariaLabel: false, role: false, text: 'Your dot' }, phase + ': exact Your dot control shape');
+      assert.equal(value.newChatPrecedesYourDot, true, phase + ': New chat precedes Your dot');
+      assert.equal(value.pinnedInSeparateScroll, true, phase + ': Pinned is in a separate scroll section');
+      assert.equal(value.entryCount, 1, phase + ': exactly one appearance entry');
+      assert.equal(value.parentIsNavList, true,
+        phase + ': entry is a normal-flow child of the Home nav-list; ' + JSON.stringify(value));
+      assert.equal(value.position, 'static', phase + ': entry is in normal flow');
+      assert.equal(value.afterYourDot, true, phase + ': entry follows Your dot in row order');
+      assert.equal(value.beforePinned, true, phase + ': entry precedes Pinned in document order');
+      assert.equal(value.rowOrder.join(','), 'New chat,Your dot,appearance', phase + ': visible nav row order');
+      assert.equal(value.followsDotGeometrically, true, phase + ': entry follows Your dot geometrically');
+      assert.equal(value.fillsNavList, true, phase + ': entry uses the sidebar nav-list width');
+      assert.deepEqual(value.footer, { noOverlap: true, downloadHit: true, profileHit: true },
+        phase + ': bottom Download update and Profile remain visible and clickable');
+    };
+    const initial = await inspect();
+    assertFlow(initial, 'initial Home nav');
+
+    assert.equal(await cdp.evaluate('window.__fixtureSetHomeNavWidth(168)'), true);
+    const narrow = await until(async () => {
+      const value=await inspect();
+      return value.navWidth<=168&&value.navWidth>150?value:false;
+    }, 3000, 'narrow Home nav layout');
+    assertFlow(narrow, 'narrow Home nav');
+
+    const opened = await clickAppearanceEntry();
+    assert.equal(opened?.focused, true, 'the appearance control receives a real pointer click');
+    const settings = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='settings'&&document.querySelectorAll('iframe[aria-label]').length===1?state:false;
+    })()`), 10000, 'the nav entry opens Appearance settings');
+    if (options.generatedPayload) {
+      await cdp.evaluate(`(()=>document.querySelector('iframe[aria-label]')?.contentWindow
+        .dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true})))()`);
+    } else {
+      await cdp.evaluate(`window.__startupFixtureSend(${settings.runId},
+        {type:'azhou-startup',action:'complete',runId:${settings.runId},skipped:true})`);
+    }
+    const canceled = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status();
+      return state.phase==='complete'&&!document.querySelector('iframe[aria-label]')?state:false;
+    })()`), 5000, 'Appearance settings close before the nav remount');
+
+    assert.equal(await cdp.evaluate('window.__fixtureRemountHomeNav()'), true,
+      'the fixture replaces Home navigation with a fresh matching tree');
+    const remounted = await until(async () => {
+      const value=await inspect();
+      return value.remountCount===1&&value.priorNavDetached&&value.parentIsNavList?value:false;
+    }, 5000, 'the existing entry moves into the remounted Home nav');
+    assertFlow(remounted, 'remounted Home nav');
+    assert.equal(remounted.navInstance, '1');
+    return { completed: { runId: completed.runId, cause: completed.completion?.cause||null },
+      initial, narrow, settings: { runId: settings.runId, phase: settings.phase },
+      canceled: { runId: canceled.runId, cause: canceled.completion?.cause||null }, remounted };
+  });
+  await navigate('/fixture.html');
   await check('appearance entry remains clickable when the sidebar has no safe gap', async () => {
     try {
       let pageState = await cdp.evaluate('window.__startupAPI.status()');
