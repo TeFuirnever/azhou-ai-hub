@@ -27,6 +27,8 @@ https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 这里不做接管一切的通用框架，不为每个模型复制一份 skill，也不把 benchmark 答案藏进运行包。
 
+产品方向：[Myself first, community-ready](docs/principles.md)，以 human-facing Skills、尊重 harness 的 UI personalization、显式质量约束下的 Orchestrator Kit efficiency 互补。Planned 工作见 [roadmap](docs/roadmap.md)；原则不扩展支持声明或改变已有 license。
+
 ## 安装路径
 
 每条命令安装一个包：

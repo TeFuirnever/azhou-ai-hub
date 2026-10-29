@@ -2,6 +2,7 @@
 
 | Need | Maintained source |
 |---|---|
+| Understand product direction and tradeoffs | [Principles](principles.md) |
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Use optional project packages or diagnose imported Pet state | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |
