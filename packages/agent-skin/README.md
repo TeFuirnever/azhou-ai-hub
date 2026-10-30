@@ -1,6 +1,6 @@
 # 阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，安装入口仍为“阿舟 AI 实验室.app”；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.9.0/build 24，包含同窗口 CDP 动画、壁纸及设置流程。build 24 会等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时保留避开输入区的备用位置，导航恢复后迁回。Build 24 waits until a host control is visible and not covered by a loading layer before showing Appearance; if Home navigation is unavailable, it restores the composer-aware fallback and returns it to the Home row once available. 中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替实际安装交接或官方宿主的人工视觉验收。
+本目录是 Hub 的 canonical package `agent-skin`，应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，安装入口仍为“阿舟 AI 实验室.app”；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.9.0/build 25，包含同窗口 CDP 动画、壁纸及设置流程。build 24 会等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时保留避开输入区的备用位置，导航恢复后迁回。build 25 支持 Your dot 按钮位于列表包装内的宿主结构。Build 25 also recognizes Your dot inside grouped navigation lists. 中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替实际安装交接或官方宿主的人工视觉验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
@@ -8,7 +8,7 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
-当前固定版本 **0.9.0 / build 24**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
+当前固定版本 **0.9.0 / build 25**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
 测试要求为整个包的生产代码 UT 行覆盖率至少 95%，按语言分别阻断，并保留独立的实机功能验收。执行入口、覆盖率口径及 Finder/Dock、冷/热启动、壁纸和安装升级用例见 [测试与功能验收](docs/testing.md)。
 
@@ -129,7 +129,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.9.0 / build 24 |
+| 版本 | 0.9.0 / build 25 |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 

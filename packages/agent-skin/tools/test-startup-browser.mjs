@@ -1773,6 +1773,88 @@ try {
     return { runId: run.runId, completion: completed.completion, early, fallback: readyFallback, recovered: after };
   });
   await navigate('/fixture.html?home-nav-fixture=1' + (options.generatedPayload ? '&generated-payload=1' : ''));
+  await check('appearance entry follows Your dot inside grouped list wrappers', async () => {
+    const run = await awaitGeneratedReady('wrapped Home navigation fixture startup is ready');
+    assert.equal(await cdp.evaluate(`(() => {
+      const list=document.querySelector('[data-fixture-nav-list]');
+      if(!list)return false;
+      for(const button of [...list.querySelectorAll(':scope > button')]){
+        const group=document.createElement('div');group.setAttribute('role','list');
+        const row=document.createElement('div');row.setAttribute('role','listitem');
+        const wrapper=document.createElement('div');wrapper.style.overflow='hidden';
+        list.insertBefore(group,button);group.appendChild(row);row.appendChild(wrapper);wrapper.appendChild(button);
+      }
+      return true;
+    })()`), true);
+    if (options.generatedPayload) {
+      assert.equal(await cdp.evaluate(`(()=>{
+        const button=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-skip]');
+        if(!button)return false;button.click();return true;
+      })()`), true);
+    } else {
+      await cdp.evaluate(`window.__startupFixtureSend(${run.runId},
+        {type:'azhou-startup',action:'complete',runId:${run.runId},skipped:false})`);
+    }
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 10000, 'startup completes');
+    await delay(200);
+    const result=await cdp.evaluate(`(() => {
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const row=dot?.closest('[role="listitem"]');
+      const dotRect=dot?.getBoundingClientRect(), entryRect=entry?.getBoundingClientRect();
+      return {inNavigation:!!entry?.closest('nav'), followsDot:row?.nextElementSibling===entry,
+        afterDotGeometrically:!!dotRect&&!!entryRect&&entryRect.top>=dotRect.bottom-1,
+        position:entry?getComputedStyle(entry).position:null};
+    })()`);
+    assert.deepEqual(result, {inNavigation:true,followsDot:true,afterDotGeometrically:true,position:'static'});
+    assert.equal(await cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const group=dot.closest('[role="list"]'), duplicate=group.cloneNode(true);
+      duplicate.setAttribute('data-fixture-duplicate-dot','');
+      duplicate.querySelector('[data-agent-skin-entry]')?.remove();
+      group.parentElement.appendChild(duplicate); return true;
+    })()`), true);
+    await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      return entry && !entry.closest('nav') && getComputedStyle(entry).position==='fixed';
+    })()`), 5000, 'ambiguous visible wrapped targets fall back');
+    assert.equal(await cdp.evaluate(`(()=>{document.querySelector('[data-fixture-duplicate-dot]').remove();return true})()`), true);
+    await until(() => cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      return !!entry && dot?.closest('[role="listitem"]')?.nextElementSibling===entry;
+    })()`), 5000, 'entry returns after the duplicate disappears');
+    assert.equal(await cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const group=dot.closest('[role="list"]'), replacement=group.cloneNode(true);
+      replacement.querySelector('[data-agent-skin-entry]')?.remove();
+      group.replaceWith(replacement); return true;
+    })()`), true);
+    await until(() => cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      return !!entry && dot?.closest('[role="listitem"]')?.nextElementSibling===entry;
+    })()`), 5000, 'entry reanchors after wrapped list replacement');
+    assert.equal(await cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const list=dot.closest('[role="list"]');
+      const newChat=document.querySelector('[data-fixture-new-chat]');
+      const newChatRow=newChat.closest('[role="listitem"]');
+      const oldList=newChatRow.parentElement;
+      list.insertBefore(newChatRow,list.firstChild); oldList.remove(); return true;
+    })()`), true);
+    await until(() => cdp.evaluate(`(()=>{
+      const dot=document.querySelector('[data-fixture-your-dot]');
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      return !!entry && dot?.closest('[role="listitem"]')?.nextElementSibling===entry;
+    })()`), 5000, 'entry remains after Your dot when multiple rows share one list');
+    const clicked=await clickAppearanceEntry();
+    assert.equal(clicked?.focused, true, 'the wrapped navigation entry is visible and clickable');
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='settings'`), 10000,
+      'the wrapped navigation entry opens settings');
+    return result;
+  });
+  await navigate('/fixture.html?home-nav-fixture=1' + (options.generatedPayload ? '&generated-payload=1' : ''));
   await check('appearance entry follows Your dot in the real Home nav and survives narrow layout and remount', async () => {
     const initialRun = await awaitGeneratedReady('Home navigation fixture startup is ready');
     if (options.generatedPayload) {

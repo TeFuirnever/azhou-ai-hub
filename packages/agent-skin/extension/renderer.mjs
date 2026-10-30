@@ -421,10 +421,15 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     }
     return null;
   };
-  const navigationTargetSelector = 'nav a[href], nav > :first-child > [class~="group/nav-list"] > button';
+  const navigationTargetSelector = 'nav a[href], nav > :first-child > [class~="group/nav-list"] button';
   const isHomeNavigationButton = node => {
     if (tagName(node) !== 'BUTTON') return false;
-    const container = node.parentElement ?? node.parentNode;
+    let container = node.parentElement ?? node.parentNode;
+    while (container && tagName(container) !== 'NAV') {
+      const classes = container.getAttribute?.('class') ?? container.className ?? '';
+      if (String(classes).split(/\s+/).includes('group/nav-list')) break;
+      container = container.parentElement ?? container.parentNode;
+    }
     const header = container?.parentElement ?? container?.parentNode;
     const nav = getNavAncestor(node);
     const classes = container?.getAttribute?.('class') ?? container?.className ?? '';
@@ -528,8 +533,19 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     const anchorParent = anchor.parentElement ?? anchor.parentNode;
     let row, container;
     if (isHomeNavigationButton(anchor)) {
-      row = anchor;
-      container = anchorParent;
+      const listItem = anchor.closest?.('[role="listitem"]');
+      const list = listItem?.parentElement;
+      const group = list?.parentElement;
+      const groupClasses = group?.getAttribute?.('class') ?? group?.className ?? '';
+      if (list?.getAttribute?.('role') === 'list'
+        && String(groupClasses).split(/\s+/).includes('group/nav-list')) {
+        row = listItem;
+        container = list;
+      } else if (String(anchorParent?.getAttribute?.('class') ?? anchorParent?.className ?? '')
+        .split(/\s+/).includes('group/nav-list')) {
+        row = anchor;
+        container = anchorParent;
+      }
     } else if (anchorParent === nav) {
       row = anchor;
       container = nav;

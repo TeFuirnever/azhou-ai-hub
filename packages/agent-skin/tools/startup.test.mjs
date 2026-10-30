@@ -181,6 +181,12 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
     },
     setAttribute(name, value) { (this.attributes ??= new Map()).set(name, value); },
     getAttribute(name) { return this.attributes?.get(name) ?? null; },
+    closest(selector) {
+      for (let node = this; node; node = node.parentNode) {
+        if (selector === '[role="listitem"]' && node.getAttribute?.('role') === 'listitem') return node;
+      }
+      return null;
+    },
     appendChild(child) { return this.insertBefore(child, null); },
     insertBefore(child, reference) {
       child.parentNode?.removeChild?.(child);
@@ -202,13 +208,19 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
   for (let index = 0; index < count; index += 1) {
     let navWidth = width;
     const nav = createRow('nav', undefined, () => navWidth);
-    if (layout === 'home') {
+    if (layout === 'home' || layout === 'wrapped') {
       nav.setAttribute('aria-label', 'Home');
       const header = createRow('div', undefined, () => navWidth);
       const navList = createRow('div', undefined, () => navWidth);
       navList.setAttribute('class', 'group/nav-list flex flex-col');
       const yourDot = createRow('button', label);
-      navList.appendChild(yourDot);
+      let list, listItem;
+      if (layout === 'wrapped') {
+        list = createRow('div', undefined, () => navWidth); list.setAttribute('role', 'list');
+        listItem = createRow('div', undefined, () => navWidth); listItem.setAttribute('role', 'listitem');
+        const wrapper = createRow('div', undefined, () => navWidth);
+        wrapper.appendChild(yourDot); listItem.appendChild(wrapper); list.appendChild(listItem); navList.appendChild(list);
+      } else navList.appendChild(yourDot);
       header.appendChild(navList);
       nav.appendChild(header);
       const scrollContent = createRow('div', undefined, () => navWidth);
@@ -217,7 +229,7 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
       scrollContent.appendChild(pinned);
       scrollContent.appendChild(chatTitle);
       nav.appendChild(scrollContent);
-      rows.push({ nav, header, navList, yourDot, scrollContent, pinned, chatTitle,
+      rows.push({ nav, header, navList, yourDot, list, listItem, scrollContent, pinned, chatTitle,
         setWidth(value) { navWidth = value; } });
     } else {
       const yourDot = createRow('a', label);
@@ -229,7 +241,7 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
   }
   fixture.host.document.querySelectorAll = selector => {
     const matches = [];
-    if (layout === 'home') {
+    if (layout === 'home' || layout === 'wrapped') {
       if (selector.includes('[class~="group/nav-list"]')) matches.push(...rows.map(({ yourDot }) => yourDot));
       else if (selector.includes('nav button')) matches.push(...rows.flatMap(({ yourDot, chatTitle }) => [yourDot, chatTitle]));
     } else if (selector.includes('nav a[href]')) {
@@ -407,6 +419,23 @@ test('appearance entry follows the Home Your dot button, ignores a same-named ch
     assert.equal(button.children[0].tagName, 'img', 'the avatar remains visible in the narrow row');
     assert.equal(button.attributes.get('aria-label'), '阿舟外观');
     api.dispose();
+  }
+});
+
+test('appearance entry uses wrapped Home list rows and refuses unsupported wrappers', () => {
+  for (const valid of [true, false]) {
+    const fixture = controlledHost();
+    const [{ list, listItem }] = addAppearanceNavigation(fixture, { layout: 'wrapped' });
+    if (!valid) list.setAttribute('role', 'group');
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode, valid ? list : fixture.host.document.documentElement);
+    if (valid) assert.equal(list.children[1], entry, 'the owned entry follows the wrapped Your dot row');
+    assert.equal(entry.style.position, valid ? 'static' : 'fixed');
+    assert.equal(list.children[0], listItem);
+    fixture.host.__azhouStartup.dispose();
   }
 });
 
