@@ -5126,7 +5126,11 @@ try {
       assert.ok(generatedPayloadSource !== null, 'requires the generated install.js payload');
       const expectedTabs = { 'zh-CN': ['启动动画', '工作区背景', '关于与状态'], en: ['Startup animation', 'Workspace background', 'About & status'] };
       const matrix = [];
+      // A previous check may leave another tab in front, which pauses this page's
+      // animation frames. Exercise that case before bringing the fixture forward.
+      const { targetId: otherTarget } = await cdp.call('Target.createTarget', { url: 'about:blank' });
       try {
+        await cdp.call('Page.bringToFront');
         for (const locale of ['zh-CN', 'en']) for (const theme of ['light', 'dark']) {
           await cdp.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
           await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] });
@@ -5258,6 +5262,7 @@ try {
           }
         }
       } finally {
+        await cdp.call('Target.closeTarget', { targetId: otherTarget });
         await cdp.call('Emulation.clearDeviceMetricsOverride');
         await cdp.call('Emulation.setEmulatedMedia', { features: [] });
       }
