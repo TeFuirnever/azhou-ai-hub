@@ -392,7 +392,13 @@ class BuildOwnedThemeTests(unittest.TestCase):
             info = plistlib.loads(info_path.read_bytes())
             info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab'
             info_path.write_bytes(plistlib.dumps(info))
-            resources = legacy / "Contents/Resources"
+            resources = legacy / 'Contents/Resources'
+            for locale, name in (('en', 'Azhou AI Lab'), ('zh-Hans', '阿舟 AI 实验室')):
+                localized = resources / f'{locale}.lproj/InfoPlist.strings'
+                quoted = json.dumps(name, ensure_ascii=False)
+                localized.write_text(
+                    f'"CFBundleDisplayName" = {quoted};\n"CFBundleName" = {quoted};\n', encoding='utf-8',
+                )
             defaults_path = resources / "web/assets/defaults/contours.js"
             defaults_prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
             defaults_suffix = ");\n"
@@ -448,7 +454,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             previous, artifacts = build_staged_product(root, 'previous-theme')
             info_path = previous / 'Contents/Info.plist'
             info = plistlib.loads(info_path.read_bytes())
-            info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab'
+            info['CFBundleName'] = info['CFBundleDisplayName'] = 'Azhou AI Lab for Codex'
             info_path.write_bytes(plistlib.dumps(info))
             manifest = convert_bundle_to_pre_image_metadata(previous, artifacts)
             self.assertEqual(set(manifest["sourceInputs"]), PRE_IMAGE_METADATA_THEME_SOURCE_INPUTS)
@@ -624,7 +630,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             config = json.loads(config_path.read_text(encoding="utf-8"))
             config["identity"]["appName"] = {"zh-CN": "阿舟演示实验室", "en": "Azhou Demo Lab"}
             config["identity"]["botName"] = {"zh-CN": "小舟", "en": "Zhou"}
-            config["identity"]["installationName"] = "阿舟演示实验室.app"
+            config["identity"]["installationName"] = "阿舟 AI 实验室.app"
             config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             bundle = root / ".build/azhou-stage.test/azhou-payload"
             bundle.mkdir(parents=True)
@@ -648,7 +654,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             prefix = "window.AGENT_SKIN_ASSETS = Object.freeze("
             assets = json.loads(defaults[len(prefix):-3])
             self.assertEqual(assets["themeConfig"]["identity"]["appName"], config["identity"]["appName"])
-            self.assertEqual(assets["themeConfig"]["identity"]["installationName"], "阿舟演示实验室.app")
+            self.assertEqual(assets["themeConfig"]["identity"]["installationName"], "阿舟 AI 实验室.app")
 
             info = artifacts.write_bundle_info(bundle)
             actual_identity, parsed_info = artifacts.identity(bundle)
@@ -656,7 +662,7 @@ class BuildOwnedThemeTests(unittest.TestCase):
             self.assertEqual(parsed_info["CFBundleIdentifier"], "local.azhou.codex-startup")
             self.assertEqual(parsed_info["CFBundleExecutable"], "AzhouCodexStartup")
             self.assertEqual((parsed_info["CFBundleName"], parsed_info["CFBundleDisplayName"]),
-                             ("阿舟演示实验室", "阿舟演示实验室"))
+                             ("阿舟 AI 实验室", "阿舟 AI 实验室"))
             self.assertEqual(info["CFBundleIdentifier"], artifacts.IDENTITY[0])
             artifacts.verify_localized_names(bundle, parsed_info)
 
@@ -1043,19 +1049,22 @@ class StartupBuildTests(unittest.TestCase):
         for source in required:
             self.assertIn(source, self.marker["inputs"])
 
-    def test_native_display_names_are_localized_with_the_canonical_install_basename(self):
+    def test_native_display_names_are_localized_over_registration_safe_bundle_name(self):
         build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
         self.assertIn('python3 tools/verify-artifacts.py --write-bundle-info "$bundle"', build_script)
         self.assertIn("NAME = load_theme_config(ROOT)['identity']['installationName']",
                       (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
         info = self.verifier.write_bundle_info(self.bundle)
+        self.assertEqual(self.verifier.NAME, "阿舟 AI 实验室.app")
+        self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]),
+                         ("阿舟 AI 实验室", "阿舟 AI 实验室"))
         self.verifier.verify_localized_names(self.bundle, info)
         resources = self.bundle / "Contents/Resources"
         (resources / "zh-Hans.lproj/InfoPlist.strings").write_text("invalid\n", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "localized display-name"):
             self.verifier.verify_localized_names(self.bundle, info)
 
-    def test_finder_display_name_uses_the_generated_localized_resources(self):
+    def test_bundle_display_name_uses_the_generated_localized_resources(self):
         info = self.verifier.write_bundle_info(self.bundle)
         theme = self.verifier.load_theme_config(self.root)
         app = Path(self.temporary.name) / 'finder-probe' / theme['identity']['installationName']
@@ -1066,12 +1075,12 @@ class StartupBuildTests(unittest.TestCase):
             shutil.copytree(self.bundle / f'Contents/Resources/{language}.lproj', resources / f'{language}.lproj')
         probe = '''import Foundation
 let path = CommandLine.arguments[1]
-// Finder follows the system language, not a helper process AppleLanguages override.
-let systemLanguages = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String] ?? Locale.preferredLanguages
-let expected = systemLanguages.first?.lowercased().hasPrefix("zh") == true ? "阿舟 AI 实验室" : "Azhou AI Lab"
+let languages = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String] ?? Locale.preferredLanguages
+let chinese = languages.first?.lowercased().hasPrefix("zh") == true
+let expected = chinese ? "阿舟 AI 实验室 for Codex" : "Azhou AI Lab for Codex"
 let actual = FileManager.default.displayName(atPath: path)
 guard actual == expected else { fputs("Finder display mismatch: \\(actual) != \\(expected)\\n", stderr); exit(1) }
-for (language, name) in [("en", "Azhou AI Lab"), ("zh-Hans", "阿舟 AI 实验室")] {
+for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 AI 实验室 for Codex")] {
  let localized = Bundle(path: path + "/Contents/Resources/" + language + ".lproj")!
  guard localized.localizedString(forKey: "CFBundleDisplayName", value: nil, table: "InfoPlist") == name else { exit(2) }
 }

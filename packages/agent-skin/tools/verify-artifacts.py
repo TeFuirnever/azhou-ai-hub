@@ -112,10 +112,9 @@ def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
     installation_name = identity.get('installationName')
     if (not isinstance(installation_name, str) or len(installation_name) > 255
             or '/' in installation_name or '\\' in installation_name
-            or not installation_name.endswith('.app')
-            or installation_name != app_name['zh-CN'] + '.app'
+            or not installation_name.endswith('.app') or installation_name == '.app'
             or any(ord(character) < 32 or ord(character) == 127 for character in installation_name)):
-        raise RuntimeError('theme-config.json installationName must be a safe .app basename matching the Chinese app name.')
+        raise RuntimeError('theme-config.json installationName must be a safe .app basename.')
     icon_input = _private_input_path(identity.get('iconInput'), 'identity.iconInput')
     entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
     if icon_input == entry_avatar_input:
@@ -444,8 +443,8 @@ def write_bundle_info(path):
     info = {
         'CFBundleExecutable': IDENTITY[1],
         'CFBundleIdentifier': IDENTITY[0],
-        'CFBundleName': Path(identity['installationName']).stem,
-        'CFBundleDisplayName': Path(identity['installationName']).stem,
+        'CFBundleName': bundle_fallback_display_name(identity),
+        'CFBundleDisplayName': bundle_fallback_display_name(identity),
         'CFBundleDevelopmentRegion': 'en',
         'CFBundleLocalizations': ['en', 'zh-Hans'],
         'CFBundleIconFile': ICON_NAME,
@@ -817,10 +816,9 @@ def verify_localized_names(path, info, theme_config=None, *, legacy=False):
         fallback_name = app_name['en']
     else:
         theme = theme_config or load_theme_config(ROOT)
-        app_name = theme['identity']['appName']
-        # Verified build 10 payloads predate the Finder basename correction.
-        previous_names = theme['identity']['version'] == '0.9.0' and theme['identity']['build'] == '10'
-        fallback_name = app_name['en'] if previous_names else Path(theme['identity']['installationName']).stem
+        identity = theme['identity']
+        app_name = identity['appName']
+        fallback_name = bundle_fallback_display_name(identity)
     if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (fallback_name, fallback_name):
         raise RuntimeError('Native bundle fallback display name does not match its verified theme.')
     resources = Path(path) / 'Contents/Resources'
@@ -841,6 +839,17 @@ def verify_localized_names(path, info, theme_config=None, *, legacy=False):
             raise RuntimeError(f'Native localized display-name resource is unreadable: {relative}') from exc
         if actual != text:
             raise RuntimeError(f'Native localized display-name resource is incorrect: {relative}')
+
+
+def bundle_fallback_display_name(identity):
+    """Keep CFBundleName aligned with the installation basename for registration."""
+    version = identity['version']
+    build = int(identity['build'])
+    # Build 10 used an English fallback; build 11 onward aligns the native bundle
+    # name with the canonical path. Localized InfoPlist.strings carry the display label.
+    if version == '0.9.0' and build == 10:
+        return identity['appName']['en']
+    return Path(identity['installationName']).stem
 
 
 def verify_product(path, *, current_source=True):

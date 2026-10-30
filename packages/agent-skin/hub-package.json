@@ -9,7 +9,7 @@
   "license_status": "no open-source license grant recorded; user is contacting the upstream maintainer",
   "external_distribution": "not authorized",
   "runtime_version": "0.9.0",
-  "runtime_build": "22",
+  "runtime_build": "23",
   "build_inputs": [
     "Native/App.swift",
     "Native/Wallpaper.swift",
@@ -59,6 +59,7 @@
     "vendor/dream-image-metadata.LICENSE",
     "tools/build-startup.py",
     "tools/build-startup-assets.swift",
+    "tools/test-codex-entry-compatibility.py",
     "tools/test-startup-build.py",
     "tools/test-startup-payload-browser.py",
     "index.html",

@@ -89,7 +89,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
-| `agent-skin` | [阿舟 AI 实验室](packages/agent-skin/README.md) | 仅适配 Codex。原生入口为 `~/Applications/阿舟 AI 实验室.app`，先验证新入口，再退役已核实归属的旧名入口。候选使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 11 对齐默认 Bundle 名称与固定安装文件名，让 Finder 按 macOS 语言显示本地化名称；维护提示跟随系统语言。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属和真实宿主验收分别核验；程序再分发尚未获授权。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | 仅适配 Codex。应用本地化显示名为 `阿舟 AI 实验室 for Codex` / `Azhou AI Lab for Codex`，原生入口仍为 `~/Applications/阿舟 AI 实验室.app`；先验证新入口，再退役已核实归属的旧名入口。候选使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 23 将 Codex 显示名与固定安装文件名分离，Finder 本地化仍跟随 macOS 语言；维护提示跟随系统语言。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属和真实宿主验收分别核验；程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json

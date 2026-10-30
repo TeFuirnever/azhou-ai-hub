@@ -113,6 +113,24 @@ class VerifierApiTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/codesign", "--verify", "--strict"])
         self.assertEqual(self.verifier.fingerprint(self.bundle), self.verifier.fingerprint(self.bundle))
 
+    def test_old_090_theme_names_remain_valid_after_host_label_change(self):
+        base = self.verifier.load_theme_config(self.root)['identity']
+        old_app_names = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
+        for build, fallback in (('10', 'Azhou AI Lab'), ('22', '阿舟 AI 实验室')):
+            with self.subTest(build=build):
+                identity = {**base, 'appName': old_app_names, 'build': build}
+                theme = {'identity': identity}
+                old_info = dict(self.info)
+                old_info['CFBundleName'] = old_info['CFBundleDisplayName'] = fallback
+                resources = self.bundle / 'Contents/Resources'
+                for locale, name in (('en', old_app_names['en']), ('zh-Hans', old_app_names['zh-CN'])):
+                    quoted = json.dumps(name, ensure_ascii=False)
+                    (resources / f'{locale}.lproj/InfoPlist.strings').write_text(
+                        f'"CFBundleDisplayName" = {quoted};\n"CFBundleName" = {quoted};\n',
+                        encoding='utf-8',
+                    )
+                self.verifier.verify_localized_names(self.bundle, old_info, theme_config=theme)
+
     def test_source_metadata_and_theme_validation_reject_unsafe_inputs(self):
         source_json = self.verifier._read_source_json(self.root, "theme-config.json", "theme config")
         package = self.verifier.load_package_metadata(self.root)
