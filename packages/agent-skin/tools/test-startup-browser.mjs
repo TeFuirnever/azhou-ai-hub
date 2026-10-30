@@ -367,6 +367,15 @@ try {
       ? document.querySelector('[data-app-shell-frame]') : null;
     const heldShellFragment = document.createDocumentFragment();
     if (heldShell) heldShellFragment.appendChild(heldShell);
+    if (url.searchParams.has('focus-case')) {
+      // The wallpaper shell is absent, but the host must have a usable control
+      // before the Appearance fallback and its recovery actions are exposed.
+      const control = document.createElement('button');
+      control.id = 'theme';
+      control.textContent = 'Host control';
+      control.style.cssText = 'position:fixed;top:20px;left:80px;z-index:1';
+      document.getElementById('root').appendChild(control);
+    }
     const initialWallpaperStrength = url.searchParams.has('no-initial-wallpaper') ? 0 : 42;
     if (url.searchParams.get('legacy-wash') === 'host-important') {
       document.documentElement.style.setProperty('--azhou-wallpaper-wash', 'host-wash', 'important');
@@ -969,6 +978,13 @@ try {
       10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
   }
+  async function navigateFreshRecoveryFixture(path) {
+    const unloaded = cdp.waitForEvent('Page.loadEventFired');
+    await cdp.call('Page.navigate', { url: 'about:blank' });
+    await unloaded;
+    await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
+    await navigate(path);
+  }
   async function awaitGeneratedReady(label) {
     try {
       const outcome = await until(() => cdp.evaluate(`(()=>{
@@ -1154,6 +1170,12 @@ try {
         menuRect:rectData(menuRect),menuOverlap:overlap(menuRect),
         menuHit:!!menu&&(menuTarget===menu||menu.contains(menuTarget))};
     })()`);
+  }
+  async function waitForAppearanceEntry(label) {
+    return until(async () => {
+      const entry = await appearanceEntryMetrics();
+      return entry?.display === 'block' && entry.buttonHit ? entry : false;
+    }, 5000, label);
   }
   async function clickAppearanceEntry() {
     const point = await cdp.evaluate(`(()=>{
@@ -1461,7 +1483,7 @@ try {
     assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[aria-label]").length'), 0);
     assert.equal(await cdp.evaluate(`(()=>{const input=document.querySelector('textarea');input.focus();return document.activeElement===input;})()`), true,
       'the host composer remains focusable before opening settings');
-    const entry = await appearanceEntryMetrics();
+    const entry = await waitForAppearanceEntry('appearance entry is ready after completing playback');
     assert.equal(entry.display, 'block');
     assert.equal(entry.position, 'fixed');
     assert.equal(entry.buttonPosition, 'static');
@@ -2580,7 +2602,7 @@ try {
     assert.equal(await cdp.evaluate(`window.__startupAnimationRuns.length`), 1,
       'canceling an in-play draft does not create another animation run');
 
-    const canceledEntry = await appearanceEntryMetrics();
+    const canceledEntry = await waitForAppearanceEntry('appearance entry is ready after canceling settings');
     assert.equal(canceledEntry.display, 'block');
     const appearanceClick = await clickAppearanceEntry();
     assert.equal(appearanceClick.focused, true);
@@ -3453,7 +3475,7 @@ try {
         assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true,
           'the public API opens the first settings draft during playback');
       } else {
-        const entry = await appearanceEntryMetrics();
+        const entry = await waitForAppearanceEntry('appearance entry is ready before settings save ' + round);
         assert.equal(entry?.display, 'block', 'appearance entry is visible before settings save ' + round);
         assert.equal(entry?.entryHit, true, 'appearance entry is clickable before settings save ' + round);
         assert.equal(entry?.buttonHit, true, 'appearance button is clickable before settings save ' + round);
@@ -4621,7 +4643,7 @@ try {
   if (options.generatedPayload) {
     const startupWallpaperFailureCheck = 'generated startup wallpaper failure is visible near the appearance entry';
     if (!onlyChecks || onlyChecks.has(startupWallpaperFailureCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=notice');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=notice');
     }
     await check(startupWallpaperFailureCheck, async () => {
       const ready = await until(() => cdp.evaluate(`(()=>{
@@ -4685,8 +4707,16 @@ try {
         await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
           ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]')?.style.colorScheme
           ===${JSON.stringify(theme)}`), 3000, theme + ' recovery appearance update');
-        await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
-          ?.shadowRoot?.querySelector('[aria-haspopup="dialog"]')?.focus()`);
+        const focusStart = await cdp.evaluate(`(()=>{
+          const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+          const shadow=entry?.shadowRoot,button=shadow?.querySelector('[aria-haspopup="dialog"]');
+          const retry=shadow?.querySelector('[data-agent-skin-wallpaper-retry]');
+          button?.focus();
+          return {hostFocused:document.activeElement===entry,buttonFocused:shadow?.activeElement===button,
+            display:entry&&getComputedStyle(entry).display, inert:entry?.inert, retryDisabled:retry?.disabled};
+        })()`);
+        assert.equal(focusStart.buttonFocused, true,
+          'the appearance button receives focus before testing recovery Tab order: '+JSON.stringify(focusStart));
         await dispatchTab();
         const retryFocus = await cdp.evaluate(`(()=>{
           const shadow=document.querySelector('[data-agent-skin-entry="appearance"]')?.shadowRoot;
@@ -4738,7 +4768,7 @@ try {
 
     const startupWallpaperRetryCheck = 'generated startup wallpaper retry succeeds without replaying the animation';
     if (!onlyChecks || onlyChecks.has(startupWallpaperRetryCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=retry');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=retry');
     }
     await check(startupWallpaperRetryCheck, async () => {
       const ready = await awaitGeneratedReady('generated animation ready before its wallpaper retry');
@@ -4815,7 +4845,7 @@ try {
 
     const startupWallpaperHostFocusCheck = 'generated startup wallpaper retry preserves host focus after it moves outside recovery';
     if (!onlyChecks || onlyChecks.has(startupWallpaperHostFocusCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=host');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=host');
     }
     await check(startupWallpaperHostFocusCheck, async () => {
       const ready = await awaitGeneratedReady('generated animation ready before preserving host focus');
@@ -5773,7 +5803,7 @@ try {
           source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length,
           runningVersion:doc.querySelector('header [data-agent-skin-running-version]')?.textContent};
       })()`);
-      assert.equal(themePage.appName, '阿舟 AI 实验室');
+      assert.equal(themePage.appName, '阿舟 AI 实验室 for Codex');
       assert.equal(themePage.botName, '阿舟');
       assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);
       assert.equal(themePage.runningVersion,

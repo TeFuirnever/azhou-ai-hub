@@ -1543,8 +1543,7 @@ class PageController {
     try { observer?.disconnect(); } catch {}
   }
 
-  #restoreFocus(frame) {
-    const ownedFocus = this.document?.activeElement === frame.element;
+  #restoreFocus(frame, ownedFocus = this.document?.activeElement === frame.element) {
     if (!ownedFocus) return;
     const candidates = [this.savedFocus, this.appearanceEntry?.button];
     try {
@@ -1569,13 +1568,15 @@ class PageController {
   #stopFrame() {
     const frame = this.frame;
     const handle = this.frameHandle;
+    const ownedFocus = !!frame && this.document?.activeElement === frame.element;
     this.frame = null;
     this.frameHandle = null;
     this.#releaseHostPage();
     if (!frame) return;
-    this.#restoreFocus(frame);
     try { handle?.dispose?.(); } catch {}
     try { frame.remove(); } catch {}
+    if (this.state.phase === 'complete') this.appearanceEntry?.update(true);
+    this.#restoreFocus(frame, ownedFocus);
   }
 
   #invokeFrameSettings() {
