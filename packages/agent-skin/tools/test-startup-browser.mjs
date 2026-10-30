@@ -5262,9 +5262,11 @@ try {
           }
         }
       } finally {
-        await cdp.call('Target.closeTarget', { targetId: otherTarget });
-        await cdp.call('Emulation.clearDeviceMetricsOverride');
-        await cdp.call('Emulation.setEmulatedMedia', { features: [] });
+        try { await cdp.call('Target.closeTarget', { targetId: otherTarget }); }
+        finally {
+          try { await cdp.call('Emulation.clearDeviceMetricsOverride'); }
+          finally { await cdp.call('Emulation.setEmulatedMedia', { features: [] }); }
+        }
       }
       return { payload: options.generatedPayload, matrix };
     });
