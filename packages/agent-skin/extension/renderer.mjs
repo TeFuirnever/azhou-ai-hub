@@ -444,7 +444,9 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       const display = style?.getPropertyValue?.('display') || style?.display;
       const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
       const contentVisibility = style?.getPropertyValue?.('content-visibility') || style?.contentVisibility;
-      if (display === 'none' || visibility === 'hidden' || visibility === 'collapse' || contentVisibility === 'hidden') return false;
+      const opacity = style?.getPropertyValue?.('opacity') || style?.opacity;
+      if (display === 'none' || visibility === 'hidden' || visibility === 'collapse'
+        || contentVisibility === 'hidden' || (opacity !== '' && Number(opacity) === 0)) return false;
       // display: contents ancestors have no box; their children can still be visible.
       if (display !== 'contents' && typeof current.getBoundingClientRect === 'function') {
         try {
@@ -455,6 +457,51 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       if (current === document.documentElement) break;
     }
     return true;
+  };
+  const hostControlSelector = 'button, a[href], [role="button"], [role="textbox"], input, textarea, select, [contenteditable="true"], [data-composer-layout]';
+  const hasUsableHostControl = () => {
+    // Shell markers can lag or change while the host is loading. Reveal a fallback
+    // only when a page control has visible geometry, no hidden ancestor, and can receive a hit;
+    // mutations retry it when the host replaces or reveals its shell.
+    let appRoot = page.getElementById?.('root') ?? document.body;
+    if (typeof appRoot?.querySelectorAll !== 'function') appRoot = page;
+    if (typeof appRoot?.querySelectorAll !== 'function') return false;
+    let controls;
+    try { controls = Array.from(appRoot.querySelectorAll(hostControlSelector)); } catch { return false; }
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    return controls.some(control => {
+      for (let current = control; current; current = current.parentElement ?? current.parentNode) {
+        if (current.hidden || current.getAttribute?.('aria-hidden') === 'true') return false;
+        let style;
+        try { style = host.getComputedStyle?.(current); } catch {}
+        const display = style?.getPropertyValue?.('display') || style?.display;
+        const visibility = style?.getPropertyValue?.('visibility') || style?.visibility;
+        const contentVisibility = style?.getPropertyValue?.('content-visibility') || style?.contentVisibility;
+        const opacity = style?.getPropertyValue?.('opacity') || style?.opacity;
+        if (display === 'none' || visibility === 'hidden' || visibility === 'collapse'
+          || contentVisibility === 'hidden' || (opacity !== '' && Number(opacity) === 0)) return false;
+        if (current === document.documentElement) break;
+      }
+      let bounds;
+      try { bounds = control.getBoundingClientRect(); } catch { return false; }
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0
+        || bounds.left >= viewportWidth || bounds.right <= 0
+        || bounds.top >= viewportHeight || bounds.bottom <= 0) return false;
+      if (typeof page.elementFromPoint !== 'function') return true;
+      const insetX = Math.min(3, bounds.width / 4);
+      const insetY = Math.min(3, bounds.height / 4);
+      const points = [
+        [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2],
+        [bounds.left + insetX, bounds.top + insetY],
+        [bounds.right - insetX, bounds.bottom - insetY],
+      ];
+      return points.some(([x, y]) => {
+        let target;
+        try { target = page.elementFromPoint(x, y); } catch { return false; }
+        return target === control || control.contains?.(target) === true;
+      });
+    });
   };
   const applyEntryLayout = () => {
     element.style.display = visible ? (recoveryVisible ? 'flex' : 'block') : 'none';
@@ -501,7 +548,7 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
   };
   const fallbackControls = () => {
     try {
-      return Array.from(page.querySelectorAll('button, a[href], [role="button"], input, textarea, select'))
+      return Array.from(page.querySelectorAll(hostControlSelector))
         .map(control => ({ control, bounds: control.getBoundingClientRect?.() }))
         .filter(({ control, bounds }) => {
           if (!bounds || bounds.width <= 0 || bounds.height <= 0
@@ -592,16 +639,42 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     try { width = target.container.getBoundingClientRect?.().width ?? target.nav.getBoundingClientRect?.().width ?? 0; } catch {}
     label.style.display = width > 0 && width < 116 ? 'none' : '';
   };
+  const hideUntilHostIsUsable = () => {
+    currentTarget = null;
+    element.style.position = 'fixed';
+    element.style.left = '10px';
+    element.style.right = 'auto';
+    element.style.top = 'auto';
+    element.style.bottom = '72px';
+    element.style.zIndex = '2147483646';
+    element.style.width = 'max-content';
+    label.style.display = '';
+    element.style.display = 'none';
+    if (element.parentNode !== document.documentElement) document.documentElement.appendChild(element);
+  };
   position = () => {
     const target = findNavigationTarget();
-    if (target) showNavigationRow(target);
-    else showFallback();
+    if (target) {
+      showNavigationRow(target);
+      return;
+    }
+    if (!visible) {
+      hideUntilHostIsUsable();
+      return;
+    }
+    if (hasUsableHostControl()) showFallback();
+    else hideUntilHostIsUsable();
   };
   const isPotentialNavigationNode = node => {
     if (!node) return false;
     if (tagName(node) === 'NAV') return true;
     if (isAppearanceNavigationNode(node)) return true;
     try { return Boolean(node.querySelector?.(navigationTargetSelector) || node.querySelector?.('a[href]')); } catch { return false; }
+  };
+  const isPotentialHostControlNode = node => {
+    if (!node || node === element) return false;
+    try { return Boolean(node.matches?.(hostControlSelector) || node.querySelector?.(hostControlSelector)); }
+    catch { return false; }
   };
   const touchesFallbackColumn = node => {
     if (typeof node?.getBoundingClientRect !== 'function') return false;
@@ -640,10 +713,12 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
     if (currentTarget && (currentTarget.nav.contains?.(target) || target?.contains?.(currentTarget.nav))) return true;
     if (isNavigationRelatedNode(target)) return true;
     if (!currentTarget && touchesFallbackColumn(target)) return true;
+    if (!currentTarget && record.type === 'attributes'
+      && isPotentialHostControlNode(target)) return true;
     if (record.type === 'childList') {
       return [...(record.addedNodes ?? []), ...(record.removedNodes ?? [])]
         .some(node => isPotentialNavigationNode(node) || isNavigationRelatedNode(node)
-          || (!currentTarget && touchesFallbackColumn(node)));
+          || (!currentTarget && (touchesFallbackColumn(node) || isPotentialHostControlNode(node))));
     }
     if (record.type === 'attributes') return target === currentTarget?.anchor;
     return false;
@@ -658,14 +733,19 @@ function mountAppearanceEntry(document, openSettings, assets, factory, appearanc
       if (records.some(isNavigationMutation)) schedule();
     });
     observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true,
-      attributeFilter: ['aria-label', 'href', 'class', 'style', 'hidden', 'aria-hidden'] });
+      attributeFilter: ['aria-label', 'href', 'class', 'style', 'hidden', 'aria-hidden', 'role', 'contenteditable', 'data-composer-layout'] });
   }
   host.addEventListener?.('resize', schedule);
   host.addEventListener?.('scroll', onScroll, true);
   position();
   return {
     element, button, setAppearance, setWallpaperFailure,
-    update(value) { visible = value; applyEntryLayout(); button.disabled = !value; if (value) position(); },
+    update(value) {
+      visible = value;
+      button.disabled = !value;
+      if (value) position();
+      else applyEntryLayout();
+    },
     remove() {
       observer?.disconnect();
       if (pending !== undefined) host.clearTimeout(pending);

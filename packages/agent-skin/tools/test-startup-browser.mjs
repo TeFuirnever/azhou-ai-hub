@@ -1585,6 +1585,193 @@ try {
     }
   }
   await check('appearance entry does not cover a sidebar update button', verifySidebarUpdatePlacement);
+
+  await check('generated Escape keeps Appearance hidden until host UI is ready', async () => {
+    await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&hold-shell=1&generated-payload=1');
+    const run = await awaitGeneratedReady('generated animation ready while the app shell is held back');
+    const beforeEscape = await cdp.evaluate(`(()=>({
+      state:window.__startupAPI.status(),
+      shell:!!document.querySelector('[data-app-shell-frame]'),
+      pageSurface:!!document.querySelector('[data-app-shell-page-surface]'),
+      homeNav:!!document.querySelector('nav[aria-label="Home"]'),
+    }))()`);
+    assert.equal(beforeEscape.shell, false, 'the synthetic app shell is not mounted before Escape');
+    assert.equal(beforeEscape.homeNav, false, 'Home navigation has not appeared before Escape');
+    assert.equal(await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[aria-label]');
+      if(!frame?.contentWindow)return false;
+      frame.contentWindow.dispatchEvent(new KeyboardEvent('keydown',{
+        key:'Escape',code:'Escape',bubbles:true,cancelable:true,
+      }));
+      return true;
+    })()`), true, 'dispatch Escape into the startup animation iframe');
+    const completed = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI?.status();
+      return state?.phase==='complete'&&!document.querySelector('iframe[aria-label]')?state:false;
+    })()`), 10000, 'generated startup completes after Escape');
+    assert.equal(completed.completion?.cause, 'skip');
+    const early = await cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      if(!entry)return null;
+      const rect=entry.getBoundingClientRect(), style=getComputedStyle(entry);
+      return {visible:style.display!=='none'&&rect.width>0&&rect.height>0,
+        display:style.display,position:style.position,left:style.left,top:style.top,bottom:style.bottom,
+        rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
+        viewport:{width:innerWidth,height:innerHeight},
+        shell:!!document.querySelector('[data-app-shell-frame]')};
+    })()`);
+    assert.ok(early, 'the Appearance entry is mounted before the app shell');
+    assert.equal(early.visible, false,
+      'Escape while only the startup splash is present must not reveal Appearance at the lower left: '
+      + JSON.stringify(early));
+
+    const availableControl = await cdp.evaluate(`(()=>{
+      const root=document.getElementById('root')||document.body;
+      const button=document.createElement('button');button.type='button';button.setAttribute('data-fixture-loading-control','');
+      button.style.cssText='position:fixed;left:300px;top:300px;width:120px;height:40px;z-index:1';
+      button.textContent='Host control';root.appendChild(button);
+      return {button:true,hit:document.elementFromPoint(360,320)===button};
+    })()`);
+    assert.deepEqual(availableControl, { button: true, hit: true },
+      'an exposed page control makes the fallback available after the animation is skipped');
+    await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),rect=entry?.getBoundingClientRect();
+      return entry?.style.display==='block'&&rect?.width>0&&rect?.height>0;
+    })()`), 3000, 'the visible host control restores Appearance');
+
+    const coveredControl = await cdp.evaluate(`(()=>{
+      const button=document.querySelector('[data-fixture-loading-control]');
+      if(!button)return false;
+      const overlay=document.createElement('div');overlay.setAttribute('data-fixture-loading-overlay','');
+      overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:transparent';
+      document.documentElement.appendChild(overlay);
+      return {overlay:true,covered:document.elementFromPoint(360,320)===overlay};
+    })()`);
+    assert.deepEqual(coveredControl, { overlay: true, covered: true },
+      'a visible host control can remain underneath the loading overlay');
+    const remainsHiddenUnderOverlay = await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const rect=entry?.getBoundingClientRect();
+      return !!entry&&getComputedStyle(entry).display==='none'&&(!rect||rect.width===0||rect.height===0);
+    })()`), 3000, 'Appearance yields when the loading overlay covers a positive-size host control');
+    assert.ok(remainsHiddenUnderOverlay, 'positive-size controls covered by the loading overlay must not reveal Appearance');
+    assert.equal(await cdp.evaluate(`(()=>{
+      document.querySelector('[data-fixture-loading-overlay]')?.remove();
+      return document.elementFromPoint(360,320)===document.querySelector('[data-fixture-loading-control]');
+    })()`), true, 'the host control becomes hit-testable when the overlay is removed');
+    const recoveredUnderlay = await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const rect=entry?.getBoundingClientRect();
+      return !!entry&&getComputedStyle(entry).display!=='none'&&rect?.width>0&&rect?.height>0;
+    })()`), 3000, 'Appearance recovers after the loading overlay is removed');
+    assert.ok(recoveredUnderlay, 'the removed overlay triggers a fresh readiness check');
+    await cdp.evaluate(`document.querySelector('[data-fixture-loading-control]')?.remove()`);
+    await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')?.style.display==='none'`),
+      3000, 'removing the last visible host control hides the fallback again');
+
+    const fallback = await cdp.evaluate(`(()=>{
+      if(!window.__releaseShell())return false;
+      const shell=document.querySelector('[data-app-shell-frame]');
+      if(!shell)return false;
+      const composer=shell.querySelector('.composer');
+      if(!composer)return false;
+      shell.querySelectorAll('button,a[href],[role="button"],input,textarea,select').forEach(node=>node.remove());
+      composer.removeAttribute('data-composer-layout');
+      composer.replaceChildren();
+      const wrapper=document.createElement('div');
+      wrapper.setAttribute('data-fixture-editor-wrapper','');
+      wrapper.style.cssText='position:fixed;left:220px;bottom:20px;width:500px;height:60px;opacity:0;z-index:10';
+      const editor=document.createElement('div');
+      editor.setAttribute('role','textbox');
+      editor.setAttribute('contenteditable','true');
+      editor.setAttribute('aria-label','Synthetic editor');
+      editor.style.cssText='width:100%;height:100%';
+      wrapper.appendChild(editor);
+      composer.appendChild(wrapper);
+      shell.removeAttribute('data-app-shell-frame');
+      shell.querySelector('[data-app-shell-main-surface]')?.removeAttribute('data-app-shell-main-surface');
+      shell.querySelector('[data-app-shell-page-surface]')?.removeAttribute('data-app-shell-page-surface');
+      return {released:true,
+        shellMarkers:!!shell.matches('[data-app-shell-frame]'),
+        pageControls:shell.querySelectorAll('[role="textbox"],[contenteditable="true"]').length,
+        priorControls:shell.querySelectorAll('button,a[href],[role="button"],input,textarea,select').length};
+    })()`);
+    assert.equal(fallback?.released, true, 'the synthetic host page becomes available with only a hidden editor control');
+    assert.equal(fallback.priorControls, 0, 'no legacy button/input selector can drive readiness during this check');
+    assert.equal(fallback.pageControls, 1, 'only the generic role textbox/contenteditable remains in the app root');
+    await delay(140);
+    const stillHidden = await cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      if(!entry)return null;
+      const rect=entry.getBoundingClientRect();
+      return {visible:getComputedStyle(entry).display!=='none'&&rect.width>0&&rect.height>0,
+        parent:entry.parentElement?.tagName,position:getComputedStyle(entry).position};
+    })()`);
+    assert.ok(stillHidden, 'the delayed shell is present in the DOM');
+    assert.equal(stillHidden.visible, false,
+      'the fallback remains hidden while its editor ancestor is still opacity zero: ' + JSON.stringify(stillHidden));
+    assert.equal(await cdp.evaluate(`(()=>{
+      const wrapper=document.querySelector('[data-fixture-editor-wrapper]');
+      if(!wrapper)return false;
+      wrapper.style.opacity='1';
+      return true;
+    })()`), true, 'reveal the host editor ancestor outside the fallback column');
+    const readyFallback = await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const nav=document.querySelector('nav[aria-label="Home"]');
+      if(!entry||nav&&!nav.hidden)return false;
+      const rect=entry.getBoundingClientRect(), style=getComputedStyle(entry);
+      if(style.display==='none'||!rect.width||!rect.height||style.position!=='fixed')return false;
+      return {position:style.position,parent:entry.parentElement?.tagName,
+        rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
+        metrics:(()=>{
+          const composer=document.querySelector('.composer')?.getBoundingClientRect();
+          const x=Math.max(0,Math.min(rect.right,composer?.right||0)-Math.max(rect.left,composer?.left||0));
+          const y=Math.max(0,Math.min(rect.bottom,composer?.bottom||0)-Math.max(rect.top,composer?.top||0));
+          return {composerOverlapArea:x*y};
+        })()};
+    })()`), 5000, 'a usable host page restores fallback when Home navigation is unavailable');
+    assert.equal(readyFallback.parent, 'HTML', 'the fallback stays in the page layer outside the hidden sidebar');
+    assert.equal(readyFallback.metrics.composerOverlapArea, 0,
+      'the restored fallback must avoid the visible composer: ' + JSON.stringify(readyFallback));
+
+    const relocated = await cdp.evaluate(`(()=>{
+      const sidebar=document.querySelector('.sidebar');
+      if(!sidebar||sidebar.querySelector('nav[aria-label="Home"]'))return false;
+      const nav=document.createElement('nav');
+      nav.setAttribute('aria-label','Home');
+      nav.setAttribute('role','navigation');
+      nav.style.cssText='display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden';
+      const header=document.createElement('div');
+      header.style.cssText='flex:none;padding:12px 8px 8px';
+      const list=document.createElement('div');
+      list.className='group/nav-list';
+      list.style.cssText='display:flex;flex-direction:column;gap:4px;width:100%';
+      for(const label of ['New chat','Your dot']){
+        const button=document.createElement('button');
+        button.type='button';button.className='sidebar-item';button.textContent=label;
+        button.style.cssText='width:100%;min-height:32px';list.appendChild(button);
+      }
+      header.appendChild(list);nav.appendChild(header);sidebar.appendChild(nav);
+      return true;
+    })()`);
+    assert.equal(relocated, true, 'mount Home navigation after testing the fallback recovery');
+    const after = await until(() => cdp.evaluate(`(()=>{
+      const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+      const nav=document.querySelector('nav[aria-label="Home"]');
+      const dot=Array.from(nav?.querySelectorAll('button,a[href]')||[])
+        .find(node=>node.textContent.trim()==='Your dot');
+      if(!entry||!dot||entry.parentElement!==dot.parentElement||entry.previousElementSibling!==dot)return false;
+      const rect=entry.getBoundingClientRect(), style=getComputedStyle(entry);
+      return {visible:style.display!=='none',position:style.position,parentIsList:true,
+        afterYourDot:entry.previousElementSibling===dot,
+        rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}};
+    })()`), 5000, 'Appearance returns to Your dot when Home navigation becomes available');
+    assert.equal(after.visible, true);
+    assert.equal(after.position, 'static');
+    assert.equal(after.afterYourDot, true, 'the recovered entry follows Your dot: ' + JSON.stringify(after));
+    return { runId: run.runId, completion: completed.completion, early, fallback: readyFallback, recovered: after };
+  });
   await navigate('/fixture.html?home-nav-fixture=1' + (options.generatedPayload ? '&generated-payload=1' : ''));
   await check('appearance entry follows Your dot in the real Home nav and survives narrow layout and remount', async () => {
     const initialRun = await awaitGeneratedReady('Home navigation fixture startup is ready');
@@ -1847,8 +2034,14 @@ try {
         'the left-side fallback opens a ready settings input that can receive focus');
       const state=await cdp.evaluate('window.__startupAPI.status()');
       await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'complete',runId:${state.runId},skipped:true})`);
-      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'`), 3000,
-        'settings cancellation returns to the completed page with its entry');
+      await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'
+        &&!document.querySelector('iframe[aria-label]')`), 5000,
+      'settings cancellation removes its covering frame');
+      await until(() => cdp.evaluate(`(()=>{
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+        const rect=entry?.getBoundingClientRect();
+        return entry?.style.display==='block'&&rect?.width>0&&rect?.height>0;
+      })()`), 3000, 'Appearance returns after the settings frame is removed');
       const afterCancel = await cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),rect=entry.getBoundingClientRect();
         return {left:rect.left,visible:entry.style.display==='block',
@@ -1913,12 +2106,14 @@ try {
     }
   });
   await check('appearance entry geometry in collapsed-sidebar narrow viewport', async () => {
-    const state = await cdp.evaluate('window.__startupAPI.status()');
-    if (state.phase === 'playing') {
-      await cdp.evaluate(`window.__startupFixtureSend(${state.runId},{type:'azhou-startup',action:'complete',runId:${state.runId},skipped:false})`);
-      await until(() => cdp.evaluate('window.__startupAPI.status().phase === "complete"'), 3000,
-        'complete the animation before checking the appearance entry');
+    const current = await cdp.evaluate('window.__startupAPI.status()');
+    if (current.phase !== 'complete') {
+      const ready = await awaitGeneratedReady('startup animation is ready before the narrow-layout check');
+      await cdp.evaluate(`window.__startupFixtureSend(${ready.runId},{type:'azhou-startup',action:'complete',runId:${ready.runId},skipped:false})`);
     }
+    await until(() => cdp.evaluate(`(()=>window.__startupAPI.status().phase==='complete'
+      &&!document.querySelector('iframe[aria-label]'))()`), 5000,
+    'complete the animation and remove its covering iframe before checking the collapsed layout');
     const originalStyles = await cdp.evaluate(`(()=>{
       const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
       return {shell:shell?.getAttribute('style'),sidebar:sidebar?.getAttribute('style')};
@@ -1935,10 +2130,12 @@ try {
         document.querySelector('[role="menu"]').scrollIntoView({block:'center',inline:'nearest'});
       })()`);
       await cdp.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-      metrics = await appearanceEntryMetrics();
+      metrics = await until(async () => {
+        const value = await appearanceEntryMetrics();
+        return value?.rect.height === 44 ? value : false;
+      }, 3000, 'the 44px fallback is positioned after the collapsed sidebar settles');
       assert.ok(metrics, 'completed page still exposes the appearance entry');
-      assert.equal(metrics.rect.height, 44,
-        'the compact narrow-viewport appearance button retains a 44px touch target');
+      assert.equal(metrics.rect.height, 44, 'the compact narrow-viewport appearance button retains a 44px touch target');
       await screenshot('appearance-entry-collapsed-sidebar-640x720.png');
       assert.equal(metrics.entryHit, true, 'the entry host is hit-testable in the collapsed-sidebar viewport');
       assert.equal(metrics.buttonHit, true, 'the shadow button is hit-testable in the collapsed-sidebar viewport: '

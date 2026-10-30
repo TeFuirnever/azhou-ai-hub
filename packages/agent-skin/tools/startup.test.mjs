@@ -12,6 +12,25 @@ function controlledHost({ body = true } = {}) {
   const frames = [];
   const controls = [];
   const timers = [];
+  let hostUIReady = true;
+  const hostControl = {
+    tagName: 'DIV', style: {}, hidden: false,
+    getAttribute(name) { return name === 'role' ? 'textbox' : null; },
+    matches(selector) { return selector.includes('[role="textbox"]'); },
+    getBoundingClientRect() { return { left: 200, right: 500, width: 300, top: 680, bottom: 780, height: 100 }; },
+  };
+  const controlWrapper = {
+    style: { opacity: '1' },
+    getBoundingClientRect() { return { left: 200, right: 800, width: 600, top: 600, bottom: 790, height: 190 }; },
+    querySelector(selector) { return selector.includes('[role="textbox"]') ? hostControl : null; },
+  };
+  const appRoot = {
+    style: {},
+    getBoundingClientRect() { return { left: 0, right: 1024, width: 1024, top: 0, bottom: 800, height: 800 }; },
+    querySelectorAll() { return hostUIReady ? [hostControl] : []; },
+  };
+  controlWrapper.parentNode = appRoot;
+  hostControl.parentNode = controlWrapper;
   const documentElement = {
     children: [],
     appendChild(node) {
@@ -38,6 +57,7 @@ function controlledHost({ body = true } = {}) {
   const document = {
     documentElement,
     querySelectorAll: () => [],
+    getElementById(id) { return id === 'root' ? appRoot : null; },
     activeElement: null,
     hasFocus: () => true,
     createElement(tag) {
@@ -139,7 +159,9 @@ function controlledHost({ body = true } = {}) {
     clearTimeout(timer) { timer.cleared = true; },
   };
   return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
-    keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size };
+    keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size,
+    appRoot, hostControl, controlWrapper,
+    setHostUIReady(value) { hostUIReady = value; } };
 }
 
 function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot', layout = 'links' } = {}) {
@@ -492,6 +514,66 @@ test('appearance entry uses a stable left fallback and stops observing on dispos
   api.dispose();
   assert.equal(observer.disconnected, true);
   if (last) assert.equal(last.cleared, true);
+});
+
+test('Escape before a usable host control keeps Appearance hidden and restores its fallback when controls arrive', () => {
+  const fixture = controlledHost();
+  const doc = fixture.host.document;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 1024;
+  doc.querySelectorAll = selector => selector.includes('[role="textbox"]') ? [fixture.hostControl] : [];
+  let loadingOverlay = null;
+  doc.elementFromPoint = () => loadingOverlay ?? fixture.hostControl;
+  fixture.setHostUIReady(false);
+  fixture.controlWrapper.style.opacity = '0';
+  const createElement = doc.createElement;
+  doc.createElement = tag => {
+    const node = createElement(tag);
+    if (tag === 'div' && !node.getBoundingClientRect) {
+      node.getBoundingClientRect = () => {
+        const left = Number.parseFloat(node.style.left || '10px');
+        const top = node.style.top && node.style.top !== 'auto'
+          ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - Number.parseFloat(node.style.bottom || '72px') - 44;
+        return { left, right: left + 150, width: 150, top, bottom: top + 44, height: 44 };
+      };
+    }
+    return node;
+  };
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, _send, spec) => {
+    runId = spec.runId;
+  }, fixture.host);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: true }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(api.status().completion.beforeReady, true, 'the skipped animation completed before the host controls exist');
+  assert.equal(entry.style.display, 'none', 'the lower-left fallback stays hidden during the host splash');
+
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  fixture.setHostUIReady(true);
+  observer.trigger([{ target: fixture.controlWrapper, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'none', 'a hidden editor wrapper does not establish a usable host page');
+
+  fixture.controlWrapper.style.opacity = '1';
+  fixture.controlWrapper.getBoundingClientRect = () => ({ left: 200, right: 200, width: 0, top: 600, bottom: 600, height: 0 });
+  loadingOverlay = { tagName: 'DIV' };
+  observer.trigger([{ target: fixture.controlWrapper, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'none', 'a visible control stays unavailable while a loading overlay intercepts pointer hits');
+
+  loadingOverlay = null;
+  observer.trigger([{ target: doc.documentElement, type: 'childList', addedNodes: [], removedNodes: [] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'block', 'a visible editor restores fallback even when its host wrapper has a zero-size box');
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
+  const bounds = entry.getBoundingClientRect();
+  const textbox = fixture.hostControl.getBoundingClientRect();
+  const horizontalOverlap = bounds.left < textbox.right && bounds.right > textbox.left;
+  assert.ok(!horizontalOverlap || bounds.bottom + 8 <= textbox.top || bounds.top >= textbox.bottom + 8,
+    'the recovered fallback keeps clearance from the host textbox');
+  api.dispose();
 });
 
 test('left fallback avoids update and account controls and remains clickable', () => {
