@@ -4885,6 +4885,15 @@ try {
         return window.__startupAPI.status().phase==='settings'
           &&doc?.querySelector('[data-agent-skin-settings]')?.open;
       })()`), 15000, 'generated settings dialog opens inside the overlay iframe');
+      const chooserCancel = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        const input=doc?.querySelector('[data-agent-skin-image-input="artwork"]');
+        input?.dispatchEvent(new frame.contentWindow.Event('cancel',{bubbles:true}));
+        return {phase:window.__startupAPI.status().phase,
+          open:!!doc?.querySelector('[data-agent-skin-settings]')?.open};
+      })()`);
+      assert.deepEqual(chooserCancel,{phase:'settings',open:true},
+        'canceling the native image chooser keeps generated settings open');
       const isolation = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
         return {bodyInert:document.body.inert,rootInert:document.querySelector('#root')?.inert,
@@ -4932,12 +4941,19 @@ try {
           const focus = await cdp.evaluate(`(()=>{
             const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
             const frame=document.querySelector('iframe[aria-label]');
+            const selected=frame?.contentDocument?.activeElement;
+            const style=selected?frame.contentWindow.getComputedStyle(selected):null;
             return {value:input?.value,hostTextareaFocused:document.activeElement===input,
               hostFrameFocused:document.activeElement===frame,
               parentFocus:document.activeElement?.tagName+'#'+(document.activeElement?.id||''),
               dialogFocus:frame?.contentDocument?.activeElement?.tagName+'#'
-                +(frame?.contentDocument?.activeElement?.id||'')};
+                +(frame?.contentDocument?.activeElement?.id||''),
+              focusVisible:selected?.matches(':focus-visible'),outlineStyle:style?.outlineStyle,outlineWidth:style?.outlineWidth};
           })()`);
+          if (focus.hostFrameFocused && focus.focusVisible) {
+            assert.ok(focus.outlineStyle !== 'none' && parseFloat(focus.outlineWidth) >= 3,
+              'keyboard focus remains visible in the generated settings payload: ' + JSON.stringify(focus));
+          }
           if (!focus.hostFrameFocused && trace.length < 4) trace.push({ shiftKey, index, ...focus });
           if (focus.hostTextareaFocused) {
             textareaReached = { shiftKey, index, parentFocus: focus.parentFocus };
@@ -5837,7 +5853,10 @@ try {
         const state=window.__startupAPI.status();
         return state.phase==='complete'&&state.completion?.cause==='skip'?state:false;
       })()`), 5000, 'generated animation completes under strict style-src self');
-      const entry = await appearanceEntryMetrics();
+      const entry = await until(async () => {
+        const value = await appearanceEntryMetrics();
+        return value?.display !== 'none' ? value : false;
+      }, 5000, 'appearance entry becomes available under strict style-src self');
       const recovery = await cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
         const shadow=entry?.shadowRoot;
@@ -5921,6 +5940,14 @@ try {
         const state=window.__startupAPI.status(),frame=document.querySelector('iframe[aria-label]');
         return state.phase==='settings'&&state.ready&&frame?.contentDocument.querySelector('dialog')?.open?state:false;
       })()`), 15000, 'generated appearance entry opens settings under strict style-src self');
+      await dispatchTab(false);
+      const focus = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),element=frame?.contentDocument?.activeElement;
+        const style=element&&frame.contentWindow.getComputedStyle(element);
+        return {visible:!!element?.matches(':focus-visible'),style:style?.outlineStyle,width:style?.outlineWidth};
+      })()`);
+      assert.ok(focus.visible && focus.style !== 'none' && parseFloat(focus.width) >= 3,
+        'settings keyboard focus stays visible under strict host CSP: '+JSON.stringify(focus));
       await screenshot('appearance-settings-csp-style-src-self.png');
       return { ready: { runId: ready.runId, phase: ready.phase }, completed: completed.completion,
         wallpaper: completed.wallpaper, entry, recovery,
