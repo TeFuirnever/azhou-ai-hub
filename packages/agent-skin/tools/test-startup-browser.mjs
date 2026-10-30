@@ -4797,6 +4797,148 @@ try {
       return { runId: preview.runId, focusCycles: 4, hostComposerValue: after.value, returned, restored };
     });
 
+    await check('generated payload settings panel passes zh-CN/en, light/dark, and 390/980/1512 layout matrix', async () => {
+      assert.ok(generatedPayloadSource !== null, 'requires the generated install.js payload');
+      const expectedTabs = { 'zh-CN': ['启动动画', '工作区背景', '关于与状态'], en: ['Startup animation', 'Workspace background', 'About & status'] };
+      const matrix = [];
+      try {
+        for (const locale of ['zh-CN', 'en']) for (const theme of ['light', 'dark']) {
+          await cdp.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+          await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] });
+          await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+          await cdp.evaluate(`(()=>{document.documentElement.lang=${JSON.stringify(locale)};document.documentElement.dataset.theme=${JSON.stringify(theme)};})()`);
+          await awaitGeneratedReady('generated payload ready for ' + locale + '/' + theme);
+          await until(() => cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;
+            return d?.documentElement.lang===${JSON.stringify(locale)}&&d.documentElement.dataset.theme===${JSON.stringify(theme)};})()`),
+          5000, 'generated appearance update');
+          assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
+          await until(() => cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;
+            return d?.querySelector('dialog[data-agent-skin-settings]')?.open===true;})()`), 15000, 'generated settings dialog');
+          await until(() => cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentDocument
+            ?.querySelector('[data-agent-skin-workspace-preview-image]')?.naturalWidth>0`), 10000, 'generated preview artwork');
+          for (const viewport of [{ width: 390, height: 844 }, { width: 980, height: 900 }, { width: 1512, height: 982 }]) {
+            await cdp.call('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false });
+            await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+            await until(() => cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentWindow.innerWidth===${viewport.width}`),
+              5000, 'CSS viewport ' + viewport.width);
+            const cell = await cdp.evaluate(`(()=>{
+              const frame=document.querySelector('iframe[aria-label]'),d=frame?.contentDocument,dialog=d?.querySelector('dialog[data-agent-skin-settings]');
+              if(!d||!dialog)return null;
+              const hit=e=>{e.scrollIntoView?.({block:'center',inline:'nearest'});const r=e.getBoundingClientRect(),t=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+                return {visible:e.getClientRects().length>0&&r.width>0&&r.height>0,hit:t===e||e.contains(t),
+                  rect:{x:r.x,y:r.y,width:r.width,height:r.height},target:t?.tagName??null};};
+              const tabs=[...dialog.querySelectorAll('[role=tab]')];
+              const sections=tabs.map(t=>{t.click();const panel=dialog.querySelector('#'+CSS.escape(t.getAttribute('aria-controls')));
+                return {name:t.textContent.trim(),linked:!!panel,visible:!!panel&&!panel.hidden,hit:hit(t),
+                  overflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1
+                    ||panel?.scrollWidth>panel?.clientWidth+1};});
+              const startup=dialog.querySelector('[data-agent-skin-settings-tab=startup]');startup.click();
+              const fields=[...dialog.querySelectorAll('[maxlength]')].map(e=>{const limit=e.maxLength;
+                e.value=${JSON.stringify(locale==='en'?'A':'舟')}.repeat(limit);e.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
+                const result={limit,length:e.value.length,name:e.labels?.[0]?.textContent.trim()||'',visible:hit(e).visible,
+                  horizontalOverflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1};
+                e.value='';e.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));return {...result,empty:e.value===''};});
+              const previewAction=dialog.querySelector('[data-agent-skin-preview-animation]'),previewActionHit=hit(previewAction);
+              dialog.querySelector('[data-agent-skin-settings-tab=about]').click();
+              const summary=dialog.querySelector('[data-agent-skin-settings-section=about] summary'),summaryHit=hit(summary),details=summary.closest('details');
+              if(!details.open)summary.click();
+              const detailsOpened=details.open;
+              const version=dialog.querySelector('[data-agent-skin-setting-value=version]')?.textContent.trim();
+              dialog.querySelector('[data-agent-skin-settings-tab=workspace]').click();
+              const range=dialog.querySelector('input[type=range]'),preview=dialog.querySelector('[data-agent-skin-workspace-preview]');
+              const choose=dialog.querySelector('[data-agent-skin-image-action=artwork]');
+              const strength=[0,42,75].map(value=>{range.value=String(value);range.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
+                const image=dialog.querySelector('[data-agent-skin-workspace-preview-image]'),wash=dialog.querySelector('[data-agent-skin-workspace-preview-wash]');
+                return {value:range.value,readout:dialog.querySelector('[data-agent-skin-wallpaper-strength-value]')?.textContent.trim(),
+                  aria:range.getAttribute('aria-valuetext'),hidden:image.hidden,imageDisplay:d.defaultView.getComputedStyle(image).display,
+                  washDisplay:d.defaultView.getComputedStyle(wash).display,washImage:d.defaultView.getComputedStyle(wash).backgroundImage,
+                  imageWidth:image.getBoundingClientRect().width,naturalWidth:image.naturalWidth};});
+              const footer=[...dialog.querySelectorAll('footer button')].map(e=>({name:e.textContent.trim(),...hit(e),enabled:!e.disabled}));
+              const css=e=>d.defaultView.getComputedStyle(e), rgba=v=>{const p=String(v).match(/[0-9.]+/g)?.map(Number);
+                return p?.length>=3?{rgb:p.slice(0,3),alpha:p.length>3?p[3]:1}:null;};
+              const lum=c=>c?.map(x=>x/255<=.04045?x/3294.6:((x/255+.055)/1.055)**2.4)
+                .reduce((s,x,i)=>s+x*[.2126,.7152,.0722][i],0);
+              const base=rgba(css(dialog).backgroundColor), blend=(top,bottom)=>top.rgb.map((x,i)=>x*top.alpha+bottom[i]*(1-top.alpha));
+              const ratio=(fg,bg)=>{if(!base||base.alpha<.99)return 0;const f=rgba(fg),b=rgba(bg);if(!f||!b)return 0;
+                const background=b.alpha<.99?blend(b,base.rgb):b.rgb,foreground=f.alpha<.99?blend(f,background):f.rgb;
+                const a=lum(foreground),c=lum(background);return Number(((Math.max(a,c)+.05)/(Math.min(a,c)+.05)).toFixed(2));};
+              const title=dialog.querySelector('h2'),normal=dialog.querySelector('[data-agent-skin-settings-section=workspace] label span');
+              const muted=dialog.querySelector('[data-agent-skin-running-version]'),selected=dialog.querySelector('[role=tab][aria-selected=true]');
+              const contrast={title:ratio(css(title).color,css(dialog).backgroundColor),normal:ratio(css(normal).color,css(dialog).backgroundColor),
+                muted:ratio(css(muted).color,css(dialog).backgroundColor),selected:ratio(css(selected).color,css(selected).backgroundColor)};
+              const active=dialog.querySelector('[role=tabpanel]:not([hidden])'),r=dialog.getBoundingClientRect();
+              return {locale:d.documentElement.lang,theme:d.documentElement.dataset.theme,width:frame.contentWindow.innerWidth,height:frame.contentWindow.innerHeight,
+                dialog:{left:r.left,right:r.right,scroll:dialog.scrollWidth,client:dialog.clientWidth,root:d.documentElement.scrollWidth},
+                version:dialog.querySelector('[data-agent-skin-running-version]')?.textContent.trim(),titleSize:parseFloat(css(title).fontSize),
+                titleWeight:parseInt(css(title).fontWeight,10),tabs:tabs.map(t=>t.textContent.trim()),sections,
+                activeOverflow:active.scrollWidth>active.clientWidth+1,fields,previewAction:{name:previewAction.textContent.trim(),...previewActionHit},
+                summary:{name:summary.textContent.trim(),...summaryHit,opened:detailsOpened,version},
+                workspace:{preview:hit(preview),previewName:preview.getAttribute('aria-label'),rangeName:range.labels?.[0]?.textContent.trim(),choose:{name:choose.textContent.trim(),...hit(choose)}},
+                strength,footer,contrast};
+            })()`);
+            assert.ok(cell, 'settings panel is present');
+            assert.deepEqual({ locale: cell.locale, theme: cell.theme, width: cell.width, height: cell.height }, { locale, theme, ...viewport });
+            assert.ok(cell.version.includes(packageMetadata.runtime_version)&&cell.version.includes(packageMetadata.runtime_build),
+              'visible identity matches the package runtime version and build');
+            assert.deepEqual(cell.tabs.slice().sort(), expectedTabs[locale].slice().sort(), 'localized section names are present');
+            assert.ok(cell.sections.every(s=>s.linked&&s.visible&&s.hit.visible&&s.hit.hit&&!s.overflow), 'each named section is reachable without horizontal overflow');
+            assert.ok(cell.dialog.left>=-1&&cell.dialog.right<=viewport.width+1&&cell.dialog.scroll<=cell.dialog.client+1
+              &&cell.dialog.root<=viewport.width+1&&!cell.activeOverflow, 'settings panel fits the CSS viewport');
+            assert.deepEqual(cell.fields.map(f=>[f.limit,f.length,f.empty]), [[16,16,true],[48,48,true],[60,60,true]]);
+            assert.ok(cell.fields.every(f=>f.name&&f.visible&&!f.horizontalOverflow),
+              'bounded text fields have visible names and do not overflow horizontally: '+JSON.stringify({locale,theme,width:viewport.width,fields:cell.fields}));
+            if (!cell.previewAction.hit) {
+              const diagnostic = await cdp.evaluate(`(()=>{
+                const frame=document.querySelector('iframe[aria-label]'),d=frame?.contentDocument,dialog=d?.querySelector('dialog[data-agent-skin-settings]');
+                dialog.querySelector('[data-agent-skin-settings-tab=startup]').click();
+                const button=dialog.querySelector('[data-agent-skin-preview-animation]');button.scrollIntoView({block:'center',inline:'nearest'});
+                const r=button.getBoundingClientRect(),target=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2),footer=dialog.querySelector('footer'),f=footer.getBoundingClientRect();
+                return {button:button.textContent.trim(),buttonRect:{x:r.x,y:r.y,width:r.width,height:r.height},
+                  target:target&&{tag:target.tagName,text:target.textContent.trim().slice(0,80),rect:(()=>{const q=target.getBoundingClientRect();return {x:q.x,y:q.y,width:q.width,height:q.height};})()},
+                  panel:{scrollTop:dialog.scrollTop,scrollHeight:dialog.scrollHeight,clientHeight:dialog.clientHeight},
+                  footer:{x:f.x,y:f.y,width:f.width,height:f.height,top:f.top,bottom:f.bottom}};
+              })()`);
+              const evidence = await screenshot('settings-matrix-hit-failure-' + locale + '-' + theme + '-' + viewport.width + '.png');
+              throw new Error('animation preview action hit-test failed: ' + JSON.stringify({locale,theme,width:viewport.width,diagnostic,screenshot:evidence.file}));
+            }
+            assert.ok(cell.previewAction.name&&cell.previewAction.visible&&cell.previewAction.hit,
+              'animation preview action is reachable: '+JSON.stringify({locale,theme,width:viewport.width,action:cell.previewAction}));
+            assert.ok(cell.summary.name&&cell.summary.visible&&cell.summary.hit&&cell.summary.opened
+              &&cell.summary.version.includes(packageMetadata.runtime_version)&&cell.summary.version.includes(packageMetadata.runtime_build),
+              'about and build-details action is reachable: '+JSON.stringify({locale,theme,width:viewport.width,summary:cell.summary}));
+            assert.ok(cell.workspace.preview.visible&&cell.workspace.preview.hit&&cell.workspace.previewName
+              &&cell.workspace.rangeName&&cell.workspace.choose.name&&cell.workspace.choose.visible&&cell.workspace.choose.hit,
+              'workspace preview, strength name, and choose-background action are reachable');
+            assert.ok(cell.footer.length>=2&&cell.footer.every(a=>a.name&&a.visible&&a.hit&&a.enabled), 'footer actions are reachable');
+            assert.ok(cell.strength[0].readout===(locale==='en'?'Off':'关闭')&&cell.strength[0].aria===cell.strength[0].readout
+              &&cell.strength[0].hidden&&cell.strength[0].imageDisplay==='none'&&cell.strength[0].washDisplay==='none'
+              &&cell.strength[0].washImage==='none', 'strength 0 closes the draft artwork and exposes its off state');
+            assert.ok(cell.strength.slice(1).every(s=>s.readout===String(s.value)&&s.aria===null&&!s.hidden
+              &&s.imageDisplay==='block'&&s.washDisplay==='block'&&s.washImage!=='none'&&s.imageWidth>0&&s.naturalWidth>0),
+              'strength 42 and 75 show the generated artwork preview');
+            assert.notEqual(cell.strength[1].washImage,cell.strength[2].washImage, '42 and 75 have distinct preview strengths');
+            const titleThreshold=cell.titleSize>=24||(cell.titleSize>=18.66&&cell.titleWeight>=700)?3:4.5;
+            assert.ok(cell.contrast.title>=titleThreshold&&cell.contrast.normal>=4.5&&cell.contrast.muted>=4.5&&cell.contrast.selected>=4.5,
+              'representative parsed text/surface token contrast meets thresholds: '+JSON.stringify(cell.contrast));
+            let actionScreenshot=null;
+            if(locale==='en'&&theme==='light'&&viewport.width===390){
+              await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,dialog=d.querySelector('dialog[data-agent-skin-settings]');
+                dialog.querySelector('[data-agent-skin-settings-tab=startup]').click();
+                dialog.querySelector('[data-agent-skin-preview-animation]').scrollIntoView({block:'center',inline:'nearest'});})()`);
+              actionScreenshot=(await screenshot('settings-matrix-preview-action-en-light-390.png')).file;
+            }
+            matrix.push({locale,theme,...viewport,version:cell.version,tabs:cell.tabs,sections:cell.sections.map(s=>({name:s.name,overflow:s.overflow})),
+              fields:cell.fields.map(f=>({limit:f.limit,length:f.length,empty:f.empty,name:f.name,horizontalOverflow:f.horizontalOverflow})),strength:cell.strength.map(s=>({value:s.value,readout:s.readout,
+                imageDisplay:s.imageDisplay,washDisplay:s.washDisplay,washImage:s.washImage})),contrast:cell.contrast,actionScreenshot});
+          }
+        }
+      } finally {
+        await cdp.call('Emulation.clearDeviceMetricsOverride');
+        await cdp.call('Emulation.setEmulatedMedia', { features: [] });
+      }
+      return { payload: options.generatedPayload, matrix };
+    });
+
     await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
     await check('generated appearance entry avoids sidebar update and profile controls', async () => {
       await until(() => cdp.evaluate(`window.__startupAPI?.status().phase==='playing' && window.__startupAPI.status().ready`),
