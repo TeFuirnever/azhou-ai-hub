@@ -638,7 +638,8 @@ try {
           avatar: animationAvatar, artwork: animationArtwork,
           contours: ${JSON.stringify(animationContourFixture)}, introTitle: 'Synthetic agent',
           introCaption: 'SYNTHETIC / TEST', artworkSubtitle: 'Generated fixture only' }
-      : { wallpaper: ${JSON.stringify(pixelImage)} });
+      : { wallpaper: ${JSON.stringify(pixelImage)},
+          ...(url.searchParams.has('entry-avatar') ? { entryAvatar: ${JSON.stringify(pixelImage)} } : {}) });
     payload.createLocalization = window.createLocalization;
     if (url.searchParams.has('animation')) {
       const createSettings = window.createImageSettings;
@@ -2229,17 +2230,27 @@ try {
       });
       await cdp.evaluate(`(()=>{
         const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
-        shell.style.gridTemplateColumns='64px minmax(0,1fr)';
-        sidebar.style.width='64px';sidebar.style.overflow='hidden';
+        shell.style.gridTemplateColumns='52px minmax(0,1fr)';
+        sidebar.style.width='52px';sidebar.style.overflow='hidden';
+        const rail=document.createElement('nav');rail.dataset.fixtureCollapsedRail='1';
+        rail.style.cssText='position:fixed;left:0;top:44px;bottom:0;width:52px;z-index:10';
+        for (const top of [8,65,122,180,240,295]) {
+          const button=document.createElement('button');button.setAttribute('aria-label','Rail control');
+          button.style.cssText='position:absolute;left:6px;width:40px;height:40px;top:'+top+'px';rail.appendChild(button);
+        }
+        document.body.appendChild(rail);
         document.querySelector('[role="menu"]').scrollIntoView({block:'center',inline:'nearest'});
       })()`);
       await cdp.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+      await delay(200); // The real entry batches layout updates after host mutations.
       metrics = await until(async () => {
         const value = await appearanceEntryMetrics();
         return value?.rect.height === 44 ? value : false;
       }, 3000, 'the 44px fallback is positioned after the collapsed sidebar settles');
       assert.ok(metrics, 'completed page still exposes the appearance entry');
       assert.equal(metrics.rect.height, 44, 'the compact narrow-viewport appearance button retains a 44px touch target');
+      assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
+        'collapsed-sidebar entry must stay within the actual 52px rail and not cover conversation text: '+JSON.stringify(metrics.rect));
       await screenshot('appearance-entry-collapsed-sidebar-640x720.png');
       assert.equal(metrics.entryHit, true, 'the entry host is hit-testable in the collapsed-sidebar viewport');
       assert.equal(metrics.buttonHit, true, 'the shadow button is hit-testable in the collapsed-sidebar viewport: '
@@ -2255,14 +2266,48 @@ try {
           footerLabel: metrics.composerLabelRect, footerLabelOverlap: metrics.composerLabelOverlap,
           textarea: metrics.inputRect, textareaOverlap: metrics.inputOverlap,
         }));
-      return { modeledLayout: { sidebarWidth: 64, viewport: { width: 640, height: 720 } }, ...metrics };
+      return { modeledLayout: { sidebarWidth: 52, viewport: { width: 640, height: 720 } }, ...metrics };
     } finally {
       await cdp.evaluate(`(()=>{
+        document.querySelector('[data-fixture-collapsed-rail]')?.remove();
         const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
         const restore=(node,value)=>value===null?node.removeAttribute('style'):node.setAttribute('style',value);
         if(shell)restore(shell,${JSON.stringify(originalStyles.shell)});
         if(sidebar)restore(sidebar,${JSON.stringify(originalStyles.sidebar)});
       })()`);
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 1512, height: 889, screenWidth: 1512, screenHeight: 889, deviceScaleFactor: 1, mobile: false,
+      });
+    }
+  });
+  await check('collapsed rail keeps avatar entry compact and accessible', async () => {
+    await navigate('/fixture.html?entry-avatar=1');
+    const ready = await awaitGeneratedReady('avatar entry startup is ready');
+    await cdp.evaluate(`window.__startupFixtureSend(${ready.runId},{type:'azhou-startup',action:'complete',runId:${ready.runId},skipped:false})`);
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'
+      &&!document.querySelector('iframe[aria-label]')`), 5000, 'avatar entry startup completes');
+    try {
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 640, height: 720, screenWidth: 640, screenHeight: 720, deviceScaleFactor: 1, mobile: false,
+      });
+      await cdp.evaluate(`(()=>{
+        const rail=document.createElement('nav');rail.dataset.fixtureCollapsedRail='1';
+        rail.style.cssText='position:fixed;left:0;top:44px;bottom:0;width:52px;z-index:10';
+        const button=document.createElement('button');button.setAttribute('aria-label','Rail control');
+        button.style.cssText='position:absolute;left:6px;top:8px;width:40px;height:40px';
+        rail.appendChild(button);document.body.appendChild(rail);
+      })()`);
+      await delay(200);
+      const metrics=await appearanceEntryMetrics();
+      assert.ok(metrics.avatar, 'the real compact fallback includes an avatar');
+      assert.equal(metrics.rect.height, 44);
+      assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
+        'avatar entry must remain within the rail: '+JSON.stringify(metrics.rect));
+      assert.ok(metrics.buttonAriaLabel && metrics.buttonHit, 'the compact entry remains named and clickable');
+      await screenshot('appearance-entry-collapsed-avatar-640x720.png');
+      return metrics;
+    } finally {
+      await cdp.evaluate(`document.querySelector('[data-fixture-collapsed-rail]')?.remove()`);
       await cdp.call('Emulation.setDeviceMetricsOverride', {
         width: 1512, height: 889, screenWidth: 1512, screenHeight: 889, deviceScaleFactor: 1, mobile: false,
       });
