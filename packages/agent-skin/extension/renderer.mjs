@@ -496,11 +496,10 @@ class PageController {
       this.state.completion = settingsCancel
         ? { cause: 'settings-cancel', beforeReady: false }
         : { cause: message.skipped ? 'skip' : 'natural', beforeReady: !this.state.ready };
-      this.appearanceEntry?.update(true);
+      this.#stopFrameAndRevealEntry();
       this.#updateStartupWallpaperNotice();
       this.#clearWatchdog();
       this.host.removeEventListener('message', this.onMessage);
-      this.#stopFrame();
       return;
     }
     if (message.action === 'assetError') {
@@ -523,11 +522,10 @@ class PageController {
         this.state.completed = true;
         this.state.overlay = false;
         this.state.completion = { cause: 'settings-save', beforeReady: false };
-        this.appearanceEntry?.update(true);
+        this.#stopFrameAndRevealEntry();
         this.#updateStartupWallpaperNotice();
         this.#clearWatchdog();
         this.host.removeEventListener('message', this.onMessage);
-        this.#stopFrame();
       }
       return;
     }
@@ -857,8 +855,7 @@ class PageController {
     try { observer?.disconnect(); } catch {}
   }
 
-  #restoreFocus(frame) {
-    const ownedFocus = this.document?.activeElement === frame.element;
+  #restoreFocus(frame, ownedFocus = this.document?.activeElement === frame?.element) {
     if (!ownedFocus) return;
     const candidates = [this.savedFocus, this.appearanceEntry?.button];
     try {
@@ -880,16 +877,37 @@ class PageController {
     }
   }
 
-  #stopFrame() {
+  // Remove this controller's overlay frame without touching keyboard focus.
+  // Whether the frame still owned document focus is captured before removal,
+  // because removing the element moves focus to the body.
+  #teardownFrame() {
     const frame = this.frame;
     const handle = this.frameHandle;
+    const ownedFocus = Boolean(frame) && this.document?.activeElement === frame.element;
     this.frame = null;
     this.frameHandle = null;
     this.#releaseHostPage();
-    if (!frame) return;
-    this.#restoreFocus(frame);
+    if (!frame) return { frame: null, ownedFocus: false };
     try { handle?.dispose?.(); } catch {}
     try { frame.remove(); } catch {}
+    return { frame, ownedFocus };
+  }
+
+  #stopFrame() {
+    const { frame, ownedFocus } = this.#teardownFrame();
+    this.#restoreFocus(frame, ownedFocus);
+  }
+
+  // Completion ordering: remove this controller's own overlay, then reveal the
+  // appearance entry, then restore focus. The entry's page adapter hides the
+  // entry while a full-viewport layer covers every host control, and this
+  // controller's overlay is exactly such a layer until it is removed. Restoring
+  // focus last keeps a saved entry-button focus from being skipped for being
+  // hidden at the moment the overlay closes.
+  #stopFrameAndRevealEntry() {
+    const { frame, ownedFocus } = this.#teardownFrame();
+    this.appearanceEntry?.update(true);
+    this.#restoreFocus(frame, ownedFocus);
   }
 
   #invokeFrameSettings() {

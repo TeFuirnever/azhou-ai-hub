@@ -600,7 +600,14 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         hideUntilHostIsUsable();
         return;
       }
-      if (hasUsableHostControl()) showFallback();
+      // The host-usability gate defers only the plain floating entry. Two states
+      // keep the entry revealed without host controls: a pending wallpaper
+      // failure notice (its message — "the workspace shell has not appeared" —
+      // is precisely about the host not being ready, so hiding it would swallow
+      // the failure), and keyboard focus inside this entry (hiding a focused
+      // control would dump focus to the body and strand keyboard users).
+      if (hasUsableHostControl() || recoveryVisible
+        || shadow.activeElement === button || recoveryOwnsFocus()) showFallback();
       else hideUntilHostIsUsable();
     };
     const isPotentialNavigationNode = node => {
