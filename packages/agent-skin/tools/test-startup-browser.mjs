@@ -2763,6 +2763,25 @@ try {
         runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
     })()`), 15000, 'second draft preview becomes ready for a natural end');
     const naturalPreviewStartedAt = Date.now();
+    for (const expectedStage of ['portrait', 'shutter']) {
+      const previewLabel = await until(() => cdp.evaluate(`(()=>{
+        const settings=document.querySelector('iframe[aria-label]')?.contentDocument;
+        const frame=settings?.querySelector('iframe[data-agent-skin-settings-preview-frame]');
+        const doc=frame?.contentDocument, stage=doc?.querySelector('[data-agent-skin-stage]');
+        const label=doc?.querySelector('[data-agent-skin-stage-text]');
+        if(stage?.dataset.stage!==${JSON.stringify(expectedStage)}||!label)return false;
+        const progress=doc.querySelector('[data-agent-skin-progress]')?.textContent||'';
+        if(stage.dataset.stage==='portrait'&&Number(progress.match(/(\\d+)%/)?.[1]||0)<93)return false;
+        const style=frame.contentWindow.getComputedStyle(label);
+        return {stage:stage.dataset.stage,opacity:style.opacity,display:style.display,
+          live:label.getAttribute('aria-live'),text:label.textContent,progress};
+      })()`), 15000, `settings preview reaches ${expectedStage}`);
+      assert.equal(previewLabel.opacity, '0',
+        `${expectedStage} status must not cover the artwork subtitle in the real settings preview`);
+      assert.notEqual(previewLabel.display, 'none', 'the live status must remain accessible');
+      assert.equal(previewLabel.live, 'polite');
+      assert.ok(previewLabel.text);
+    }
     const naturalPreviewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
       const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');

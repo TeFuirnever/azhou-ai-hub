@@ -524,6 +524,9 @@ function installAnimation(
       lastStage = stage;
       root.dataset.stage = stage;
       stageText.textContent = STAGE_LABELS[stage];
+      // The settings preview runs in a blank iframe without the standalone stylesheet.
+      // Keep the live announcement while avoiding the artwork subtitle in both hosts.
+      stageText.style.opacity = stage === 'portrait' || stage === 'shutter' ? '0' : '1';
     }
     if (milliseconds - lastUI >= 60 || milliseconds === 0 || milliseconds === DURATION) {
       const progress = Math.round(progressAt(milliseconds) * 100);
