@@ -1262,78 +1262,180 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard let url = targetURL, validTarget(url) == url else {
             finishStartup(.failed(reason: "target-missing"), promoted: promoted); return
         }
+        guard let expectedApplication = startupHostKey(for: url) else {
+            finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
+        }
         let running = runtime.runningApplications(bundleIdentifier: targetID).filter { !$0.isTerminated }
         let matching = running.filter { $0.bundleURL.map({ real($0) }) == url }
         guard running.isEmpty || (running.count == 1 && matching.count == 1) else {
             finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
         }
-        let existing: StartupTargetFacts?
-        if let app = matching.first {
-            guard let facts = try? startupFacts(app) else {
-                finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
-            }
-            existing = facts
-        } else { existing = nil }
-
-        let system = runtime.makeStartupTargetSystem()
-        let budget = StartupBudget(startedAt: runtime.uptime)
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let outcome: StartupOutcome
-            do {
-                outcome = try await StartupLaunchFlow.run(
-                    existing: existing,
-                    preflightBundle: {
-                        do { try system.preflightBundle(url, deadline: budget.preflightDeadline) }
-                        catch let error as WallpaperFailure where error.state == "inspection-timeout" {
-                            throw StartupFailure(reason: "attach-timeout", message: "Codex 签名预检未能在启动预算内完成。")
-                        } catch let error as WallpaperFailure where error.state == "signature-refused" {
-                            throw StartupFailure(reason: "target-identity", message: "Codex 应用未通过 OpenAI 应用签名核验。")
-                        } catch {
-                            throw error
-                        }
-                    },
-                    validate: { try system.validate($0, deadline: budget.preflightDeadline) },
-                    activate: { facts in
-                        guard let app = self.runtime.application(processIdentifier: facts.pid), !app.isTerminated,
-                              app.bundleIdentifier == facts.bundleID,
-                              app.bundleURL.map({ self.real($0) }) == facts.bundle,
-                              app.executableURL.map({ self.real($0) }) == facts.executable,
-                              app.launchTime == facts.launchTime else {
-                            throw StartupFailure(reason: "target-identity", message: "已核验的 Codex 进程发生变化。")
-                        }
-                        self.target = app
-                        let activated = app.activate()
-                        self.activated = activated
-                        return activated
-                    },
-                    coldStart: {
-                        let payload = try self.startupPayload()
-                        guard self.runtime.uptime < budget.totalDeadline else {
-                            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动已超过 60 秒总预算。")
-                        }
-                        let port = try self.prepareStartupPort()
-                        let attachDeadline = budget.attachDeadline(startedAt: self.runtime.uptime)
-                        self.opening = true
-                        let app = try await self.openCodex(url, port: port, deadline: attachDeadline, system: system)
-                        self.opening = false
-                        self.target = app
-                        let facts = try self.startupFacts(app)
-                        let capture = NativeStartupCapture(targetPID: facts.pid)
-                        self.startupCapture = capture
-                        self.startupEventStream?.targetOpened(pid: facts.pid, at: self.runtime.uptime)
-                        guard let eventStream = self.startupEventStream else {
-                            throw StartupFailure(reason: "protocol-error", message: "原生启动事件流不可用。")
-                        }
-                        return await StartupConnector(target: facts, expectedPort: port, system: system,
-                                                      transport: self.runtime.makeStartupTransport(capture: capture, events: eventStream))
-                            .run(payload: payload, deadline: attachDeadline)
-                    }
-                )
-            } catch let error as StartupFailure { outcome = .failed(reason: error.reason) }
-            catch { outcome = .failed(reason: "protocol-error") }
+            let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
             self.opening = false
-            self.finishStartup(outcome, promoted: self.promoted)
+            self.finishStartup(startupLegacyOutcome(from: result), promoted: self.promoted)
+        }
+    }
+
+    /// Installation identity for the verified target bundle. The executable hash
+    /// stays an explicit empty placeholder in C0: this chain attests identity via
+    /// codesign validation inside each operation branch and never fabricates a
+    /// digest it did not compute.
+    private func startupHostKey(for url: URL) -> HostApplicationKey? {
+        guard let bundle = Bundle(url: url), let bundleID = bundle.bundleIdentifier,
+              let executable = bundle.executableURL.map({ real($0) }),
+              executable.path.hasPrefix(real(url).appendingPathComponent("Contents/MacOS").path + "/") else { return nil }
+        let info = bundle.infoDictionary ?? [:]
+        return HostApplicationKey(
+            host: .codex, bundleURL: real(url), executableURL: executable,
+            bundleIdentifier: bundleID,
+            version: (info["CFBundleShortVersionString"] as? String) ?? "",
+            build: (info["CFBundleVersion"] as? String) ?? "",
+            executableSHA256: "")
+    }
+
+    /// Honest per-capability evidence for the shipped Codex chain. Each entry keeps
+    /// .verified only where a named, real verification source exists: the launcher's
+    /// own live observation for identity, and the specific regression suites that
+    /// exercise each capability. Nothing here claims codesign — signature validation
+    /// runs inside the preflight/validate branches, not at assembly time. ZCode must
+    /// supply its own independently verified findings before a driver exists.
+    private func codexCapabilityFindings(for key: HostApplicationKey,
+                                         contractVersion: String) -> [CapabilityFinding] {
+        let evidence: [SkinCapability: (IDs: [String], reason: String)] = [
+            .applicationIdentity: (["workspace-bundle-identity", "tools/test-startup-native.py"],
+                                   "identity observed this launch from the verified target bundle and workspace"),
+            .activateExistingApplication: (["tools/test-startup-native.py"],
+                                           "hot-branch validate→activate order and activation result checks"),
+            .mainWindowAttachment: (["tools/test-startup-native.py"],
+                                    "connector attach with single main-page selection and port ownership"),
+            .mainPageIdentification: (["tools/test-startup-native.py", "tools/test-startup-browser.mjs"],
+                                      "main-page identification against injected and real pages"),
+            .ownedAppearanceSurface: (["tools/startup.test.mjs", "tools/test-startup-browser.mjs"],
+                                      "appearance tokens, entry mounting and fallback placement"),
+            .persistentSettings: (["tools/settings-save.unit.test.mjs", "tools/image-settings.test.mjs"],
+                                  "IndexedDB save/apply two-phase transactions and namespace contract"),
+            .lifecycleInvalidation: (["tools/startup.test.mjs"],
+                                     "dispose generation invalidation; late callbacks cannot revive a run"),
+            .ownedResourceRemoval: (["Native/WallpaperValidationTests.swift", "tools/startup.test.mjs"],
+                                    "owned controller disposal via restore/retry receipts"),
+        ]
+        return SkinCapability.allCases.map { capability in
+            let entry = evidence[capability] ?? ([], "no recorded evidence for this capability")
+            return CapabilityFinding(
+                subject: CapabilityEvidenceSubject(
+                    application: key, surface: SkinHostContract.surface(for: capability),
+                    contractVersion: contractVersion),
+                capability: capability,
+                state: entry.IDs.isEmpty ? .unverified : .verified,
+                evidenceIDs: entry.IDs, reason: entry.reason)
+        }
+    }
+
+    /// Assembles the shared skin host factory and runs the Codex driver. The
+    /// hot/cold branch strategy moved verbatim into CodexSkinDriver; this method
+    /// only binds identity, evidence and the App-owned assembly ports.
+    @MainActor
+    private func launchThroughSkinHost(expectedApplication: HostApplicationKey) async -> SkinLaunchResult {
+        let contractVersion = SkinHostContract.version
+        // Workspace-observed identity only: codesign has not run at assembly time;
+        // signature validation happens inside the preflight/validate branches.
+        let observed = HostIdentityEvidence(key: expectedApplication,
+                                            signingIdentity: "workspace-observed; codesign validated per operation branch",
+                                            evidenceID: "workspace-bundle-identity")
+        let installObservation = CodexInstallObservation()
+        let system = runtime.makeStartupTargetSystem()
+        let budget = StartupBudget(startedAt: runtime.uptime)
+        let runtime = self.runtime
+        let assembly = CodexSkinAssembly(
+            preflightBundle: { bundle, startupBudget in
+                do { try system.preflightBundle(bundle, deadline: startupBudget.preflightDeadline) }
+                catch let error as WallpaperFailure where error.state == "inspection-timeout" {
+                    throw StartupFailure(reason: "attach-timeout", message: "Codex 签名预检未能在启动预算内完成。")
+                } catch let error as WallpaperFailure where error.state == "signature-refused" {
+                    throw StartupFailure(reason: "target-identity", message: "Codex 应用未通过 OpenAI 应用签名核验。")
+                } catch {
+                    throw error
+                }
+            },
+            activateExisting: { [weak self] facts in
+                guard let self else {
+                    throw StartupFailure(reason: "target-identity", message: "启动入口已结束。")
+                }
+                guard let app = self.runtime.application(processIdentifier: facts.pid), !app.isTerminated,
+                      app.bundleIdentifier == facts.bundleID,
+                      app.bundleURL.map({ self.real($0) }) == facts.bundle,
+                      app.executableURL.map({ self.real($0) }) == facts.executable,
+                      app.launchTime == facts.launchTime else {
+                    throw StartupFailure(reason: "target-identity", message: "已核验的 Codex 进程发生变化。")
+                }
+                self.target = app
+                let activated = app.activate()
+                self.activated = activated
+                return activated
+            },
+            preparePort: { [weak self] in
+                guard let self else { throw StartupFailure(reason: "listener-mismatch", message: "启动入口已结束。") }
+                return try self.prepareStartupPort()
+            },
+            openApplication: { [weak self] url, port, deadline, openSystem in
+                guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
+                return try await self.openCodex(url, port: port, deadline: deadline, system: openSystem)
+            },
+            onTargetOpened: { [weak self] app in self?.target = app },
+            onCaptureReady: { [weak self] capture in self?.startupCapture = capture },
+            eventStream: { [weak self] in self?.startupEventStream },
+            onOpeningChanged: { [weak self] value in self?.opening = value },
+            startupFacts: { [weak self] app in
+                guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
+                return try self.startupFacts(app)
+            },
+            performDisable: nil)
+        let dependencies = SkinAssemblyDependencies(
+            // This launcher path never probes identities through the dependency: it
+            // observes the verified target bundle directly. Report that honestly
+            // instead of fabricating an observation no caller made.
+            inspectIdentity: { host, _ in
+                .unavailable(HostRefusal(
+                    host: host, reason: .identityUnavailable, findings: [],
+                    detail: "the launcher observes the verified target bundle directly; no separate identity probe is wired",
+                    nextProbe: nil))
+            },
+            capabilityEvidence: { [weak self] evidence in
+                self?.codexCapabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []
+            },
+            makeCodexDriver: { inputs in
+                CodexSkinDriver(
+                    inputs: inputs, runtime: runtime,
+                    readPayload: { [weak self] in
+                        guard let self else { throw StartupFailure(reason: "asset-invalid", message: "启动入口已结束。") }
+                        return try self.startupPayload()
+                    },
+                    makeTargetSystem: { runtime.makeStartupTargetSystem() },
+                    makeConnector: { facts, port, connectorSystem, capture, events in
+                        StartupConnector(
+                            target: facts, expectedPort: port, system: connectorSystem,
+                            transport: InstallObservingStartupTransport(
+                                base: runtime.makeStartupTransport(capture: capture, events: events),
+                                recorder: installObservation))
+                    },
+                    installObservation: installObservation, assembly: assembly)
+            },
+            makeZCodeDriver: nil) // No verified ZCode entry exists; C0 never fakes one.
+        switch SkinHostFactory.make(host: .codex,
+                                    expectedApplication: expectedApplication,
+                                    observed: observed,
+                                    findings: codexCapabilityFindings(for: expectedApplication,
+                                                                      contractVersion: contractVersion),
+                                    contractVersion: contractVersion,
+                                    dependencies: dependencies) {
+        case .unavailable(let refusal):
+            return .refused(refusal)
+        case .ready(let driver):
+            return await driver.launch(
+                SkinLaunchRequest(expectedApplication: expectedApplication, operationID: UUID(),
+                                  startedAt: budget.startedAt, deadline: budget.totalDeadline))
         }
     }
 
@@ -1357,6 +1459,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     private func openCodex(_ url: URL, port: Int, deadline: TimeInterval,
                            system: any StartupTargetSystem) async throws -> any NativeApplication {
+        try await Self.openTargetApplication(runtime: runtime, targetBundleID: targetID, url: url,
+                                             port: port, deadline: deadline, system: system,
+                                             log: { [weak self] event, fields in self?.log(event, fields) })
+    }
+
+    /// Shared bounded application-open routine (same order and failures as the
+    /// previous inline implementation, extracted so contract tests drive the
+    /// identical path).
+    @MainActor
+    static func openTargetApplication(
+        runtime: any NativeAppRuntime, targetBundleID: String, url: URL, port: Int,
+        deadline: TimeInterval, system: any StartupTargetSystem,
+        log: @escaping (String, [String: Any]) -> Void
+    ) async throws -> any NativeApplication {
         let openTimeout = try StartupBudget.boundedTimeout(
             maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
             now: runtime.uptime
@@ -1368,14 +1484,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             }
             waiter.setTimeout(timeout)
             DispatchQueue.main.asyncAfter(deadline: .now() + openTimeout, execute: timeout)
-            log("target-open-request", ["path": url.path, "bundleID": targetID, "debuggingPort": port])
-            runtime.openApplication(at: url, debuggingPort: port) { [weak self] app, error in
+            log("target-open-request", ["path": url.path, "bundleID": targetBundleID, "debuggingPort": port])
+            runtime.openApplication(at: url, debuggingPort: port) { app, error in
                 DispatchQueue.main.async {
-                    guard let self else {
-                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "启动入口已结束。")))
-                        return
-                    }
-                    guard self.runtime.uptime < deadline else {
+                    guard runtime.uptime < deadline else {
                         waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
                         return
                     }
@@ -1383,13 +1495,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         waiter.finish(.failure(StartupFailure(reason: "target-missing", message: "Codex 启动失败。")))
                         return
                     }
-                    guard let app, !app.isTerminated, app.bundleURL.map({ self.real($0) }) == url,
-                          app.bundleIdentifier == self.targetID else {
+                    guard let app, !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
+                          let bundleID = app.bundleIdentifier,
+                          bundle.resolvingSymlinksInPath().standardizedFileURL == url,
+                          bundleID == targetBundleID else {
                         waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")))
                         return
                     }
                     do {
-                        try system.validate(self.startupFacts(app), deadline: deadline)
+                        try system.validate(
+                            StartupTargetFacts(pid: app.processIdentifier,
+                                               bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
+                                               executable: executable.resolvingSymlinksInPath().standardizedFileURL,
+                                               bundleID: bundleID, launchTime: app.launchTime),
+                            deadline: deadline)
                         waiter.finish(.success(app))
                     } catch let error as StartupFailure where error.reason == "attach-timeout" {
                         waiter.finish(.failure(error))
@@ -1563,6 +1682,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail(displayLocale.message(for: "renderer-terminated"), "renderer-terminated") }
 }
+/// Maps a shared skin host launch result back onto the existing StartupOutcome
+/// contract. Old consumers must never receive unrecognized reasons, so refusal
+/// reasons fold into the two existing failure identities and every failure or
+/// partial keeps its exact legacy reason string in `detail`.
+func startupLegacyOutcome(from result: SkinLaunchResult) -> StartupOutcome {
+    switch result {
+    case .activated(let generation): return .activated(pid: generation.pid)
+    case .ready(_, let runID): return .ready(runID: runID)
+    case .skipped(_, let runID, let beforeReady): return .skipped(runID: runID, beforeReady: beforeReady)
+    case .partial(let failure, _, _): return .partial(reason: failure.detail)
+    case .failed(let failure, _, _): return .failed(reason: failure.detail)
+    case .refused(let refusal):
+        switch refusal.reason {
+        case .identityUnavailable, .identityMismatch, .capabilityUnverified:
+            return .failed(reason: "target-identity")
+        case .evidenceMismatch, .implementationUnavailable, .capabilityUnsupported:
+            return .failed(reason: "protocol-error")
+        }
+    }
+}
+
 #if !AGENT_SKIN_NATIVE_EVENT_TESTS
 @main
 struct AzhouStartupMain {

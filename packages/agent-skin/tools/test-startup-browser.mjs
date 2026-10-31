@@ -228,12 +228,13 @@ try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
-  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, imageSettingsSource, localizationSource, legacyWallpaperCSS,
+  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, codexPageAdapterSource, imageSettingsSource, localizationSource, legacyWallpaperCSS,
     legacyWallpaperRenderer, helperExpressionJSON, generatedPayloadSource] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, 'extension/renderer.mjs'), 'utf8'),
+    readFile(join(ROOT, 'extension/codex-page-adapter.mjs'), 'utf8'),
     readFile(join(ROOT, 'image-settings.js'), 'utf8'),
     readFile(join(ROOT, 'localization.js'), 'utf8'),
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
@@ -295,8 +296,10 @@ try {
   ];
   const fixtureModule = `
     import { installStartup } from '/extension/renderer.mjs';
+    import { createCodexPageAdapter } from '/extension/codex-page-adapter.mjs';
     import { installRenderer } from '/wallpaper/renderer.js';
     import { installRenderer as installLegacyWallpaper } from '/legacy/wallpaper/renderer.js';
+    const pageAdapter = createCodexPageAdapter(window);
     const outerWindow = window;
     const url = new URL(location.href);
     if (url.searchParams.has('initial-light-theme')) document.documentElement.dataset.theme = 'light';
@@ -734,7 +737,7 @@ try {
     }
     const result = url.searchParams.has('legacy-only')
       ? { installed: false, alreadyActive: false, reason: 'fixture-no-controller' }
-      : installStartup(payload, host);
+      : installStartup(payload, host, pageAdapter);
     outerWindow.__fixtureHost = host;
     outerWindow.__startupAPI = host.__azhouStartup;
     outerWindow.__startupInstallResult = generatedInstallResult || result;
@@ -783,6 +786,7 @@ try {
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
     ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
+    ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
   ]);
   if (generatedPayloadRoute !== null) {
     routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);
@@ -1113,7 +1117,7 @@ try {
   }
   async function screenshot(name) {
     await cdp.call('Page.bringToFront');
-    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
     const viewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme})');
     const result = await cdp.call('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false });
     const bytes = Buffer.from(result.data, 'base64');
@@ -3665,7 +3669,7 @@ try {
           const viewport=window.launcherUI.report().viewport;
           return viewport.width===390&&viewport.height===844?viewport:false;
         })()`), 3000, variant.name + ' responsive portrait relayout');
-        await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
         const controls = await cdp.evaluate(`(()=>{
           const bar=document.querySelector('#preview-controls'),rect=bar.getBoundingClientRect();
           const children=['#replay','#pause','#timeline','#elapsed'].map(selector=>{
@@ -4304,13 +4308,13 @@ try {
           width: size.width, height: size.height, screenWidth: size.width, screenHeight: size.height,
           deviceScaleFactor: dpr, mobile: false,
         });
-        await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
         let injectedResolutionChange = false;
         const observedDPR = await cdp.evaluate('window.launcherUI.report().viewport.dpr');
         if (observedDPR !== dpr) {
           injectedResolutionChange = await cdp.evaluate('window.__agentSkinResolutionWatch.dispatchLatest()');
           assert.equal(injectedResolutionChange, true, 'the active resolution MediaQueryList receives a change event');
-          await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+          await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
         }
         const actualViewport = await cdp.evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})');
         assert.deepEqual(actualViewport, { width: size.width, height: size.height, dpr },
@@ -4357,7 +4361,7 @@ try {
       return {stage:window.launcherUI.report().stage,pixel:[pixel[0],pixel[1],pixel[2],pixel[3]]};
     })()`);
     await cdp.call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
     const beforeColor = await samplePixel(7.17);
     const colorizeStart = await samplePixel(7.18);
     const portraitColor = await samplePixel(7.43);
@@ -4390,7 +4394,7 @@ try {
       width: 1440, height: 900, screenWidth: 1440, screenHeight: 900,
       deviceScaleFactor: 2, mobile: false,
     });
-    await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
     if (await cdp.evaluate('window.launcherUI.report().viewport.dpr') !== 2) {
       assert.equal(await cdp.evaluate('window.__agentSkinResolutionWatch.dispatchLatest()'), true,
         'the active resolution MediaQueryList receives a change event');
@@ -5222,7 +5226,7 @@ try {
             ?.querySelector('[data-agent-skin-workspace-preview-image]')?.naturalWidth>0`), 10000, 'generated preview artwork');
           for (const viewport of [{ width: 390, height: 844 }, { width: 980, height: 900 }, { width: 1512, height: 982 }]) {
             await cdp.call('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false });
-            await cdp.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+            await cdp.evaluate('new Promise(resolve => { let settled = false; const settle = () => { if (settled) return; settled = true; resolve(); }; requestAnimationFrame(() => requestAnimationFrame(settle)); setTimeout(settle, 300); })');
             await until(() => cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentWindow.innerWidth===${viewport.width}`),
               5000, 'CSS viewport ' + viewport.width);
             const cell = await cdp.evaluate(`(()=>{
@@ -5885,6 +5889,14 @@ try {
           source:value('source'),sections:doc.querySelectorAll('[data-agent-skin-settings-section]').length,
           runningVersion:doc.querySelector('header [data-agent-skin-running-version]')?.textContent};
       })()`);
+      // The settings About row reads the build-owned identity from
+      // theme-config.json. Since main 21021a5 ("distinguish the Codex launcher")
+      // that identity is deliberately "阿舟 AI 实验室 for Codex" (matching
+      // CFBundleDisplayName), and 21021a5 updated the builder-level expectations
+      // (tools/test-startup-build.py) to the same value. This browser-matrix
+      // expectation predates that change and was never re-run (the matrix is not
+      // part of scripts/verify.py), so it is aligned here rather than reverting
+      // the launcher distinction.
       assert.equal(themePage.appName, '阿舟 AI 实验室 for Codex');
       assert.equal(themePage.botName, '阿舟');
       assert.equal(themePage.version, `${packageMetadata.runtime_version} · ${packageMetadata.runtime_build}`);

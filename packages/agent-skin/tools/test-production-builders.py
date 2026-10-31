@@ -361,7 +361,8 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         self.assertTrue(module._build_script(PACKAGE, {}, "body { color: black; }", artifacts))
         with tempfile.TemporaryDirectory(prefix="agent-skin-startup-source-") as temporary:
             root = Path(temporary)
-            for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs", "extension/bootstrap.mjs",
+            for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs",
+                             "extension/codex-page-adapter.mjs", "extension/bootstrap.mjs",
                              "wallpaper/renderer.js", "wallpaper/apply.js", "localization.js",
                              "vendor/dream-image-metadata.mjs"):
                 target = root / relative
@@ -378,6 +379,11 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Missing startup source module"):
                 module._build_script(root, {}, "", artifacts)
             shutil.copyfile(PACKAGE / "animation.js", root / "animation.js")
+            (root / "extension/codex-page-adapter.mjs").write_text(
+                "export function createCodexPageAdapter() {}\nimport './x.js';\n")
+            with self.assertRaisesRegex(RuntimeError, "Codex page adapter"):
+                module._build_script(root, {}, "", artifacts)
+            shutil.copyfile(PACKAGE / "extension/codex-page-adapter.mjs", root / "extension/codex-page-adapter.mjs")
             (root / "localization.js").unlink()
             with self.assertRaisesRegex(RuntimeError, "Missing startup localization source"):
                 module._build_script(root, {}, "", artifacts)

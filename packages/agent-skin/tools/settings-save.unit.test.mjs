@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installStartup } from '../extension/renderer.mjs';
+import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
+const pageAdapter = createCodexPageAdapter(globalThis);
 
 function fixture() {
   const listeners = new Set(), frames = [];
@@ -32,7 +34,7 @@ function fixture() {
 
 test('saving settings closes the editor without replaying the startup animation', () => {
   const { host, frames, payload, listeners } = fixture();
-  installStartup(payload, host);
+  installStartup(payload, host, pageAdapter);
   const api = host.__azhouStartup;
   const send = (frame, action, extra = {}) => {
     for (const listener of listeners) listener({ source: frame.contentWindow,
@@ -57,7 +59,7 @@ test('saved wallpaper can finish after the settings editor closes and remains ca
     const { host, frames, payload, runs, listeners } = fixture();
     let finish, isCurrent;
     payload.applyWallpaper = (_request, current) => new Promise(resolve => { finish = resolve; isCurrent = current; });
-    installStartup(payload, host);
+    installStartup(payload, host, pageAdapter);
     const api = host.__azhouStartup;
     const send = (frame, action, extra = {}) => {
       for (const listener of listeners) listener({ source: frame.contentWindow,

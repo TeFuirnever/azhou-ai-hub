@@ -21,7 +21,8 @@ def main() -> int:
     target = f"{platform.machine()}-apple-macos13.0"
     command = [
         "xcrun", "--sdk", "macosx", "swiftc", "-DAGENT_SKIN_NATIVE_EVENT_TESTS", "-target", target,
-        "Native/App.swift", "Native/Wallpaper.swift", "Native/StartupNativeTests.swift",
+        "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
+        "Native/CodexSkinDriver.swift", "Native/StartupNativeTests.swift",
         "-o", str(output), "-framework", "AppKit", "-framework", "WebKit",
     ]
     print("==> " + " ".join(command), flush=True)
