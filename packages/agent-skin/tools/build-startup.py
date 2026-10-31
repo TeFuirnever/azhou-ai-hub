@@ -237,6 +237,10 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
             (root / 'extension/renderer.mjs').read_text(encoding='utf-8'),
             'export function installStartup(', 'function installStartup(', 'Page Controller',
         ).strip()
+        page_adapter = _module_function(
+            (root / 'extension/codex-page-adapter.mjs').read_text(encoding='utf-8'),
+            'export function createCodexPageAdapter(', 'function createCodexPageAdapter(', 'Codex page adapter',
+        ).strip()
         wallpaper = _module_function(
             (root / 'wallpaper/renderer.js').read_text(encoding='utf-8'),
             'export async function installRenderer(', 'async function installRenderer(', 'Wallpaper renderer',
@@ -264,8 +268,9 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
             or '\nexport ' in settings or settings.startswith('export ')):
         raise RuntimeError('Image Settings source must contain its complete self-contained factory.')
     if (controller.count('function installStartup(') != 1
-            or wallpaper.count('async function installRenderer(') != 1):
-        raise RuntimeError('Startup/controller or wallpaper module has an unexpected entry count.')
+            or wallpaper.count('async function installRenderer(') != 1
+            or page_adapter.count('function createCodexPageAdapter(') != 1):
+        raise RuntimeError('Startup/controller, page adapter or wallpaper module has an unexpected entry count.')
     css_literal = json.dumps(wallpaper_css, ensure_ascii=True, separators=(',', ':'))
     version_literal = json.dumps(artifacts.VERSION)
     payload = '\n'.join((
@@ -276,6 +281,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         '  const WALLPAPER_CSS = ' + css_literal + ';',
         image_metadata,
         controller,
+        page_adapter,
         localization,
         settings,
         wallpaper,
@@ -283,6 +289,10 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         bootstrap,
         animation,
         '''
+  const pageAdapter = createCodexPageAdapter(globalThis, undefined, {
+    installRenderer,
+    createWallpaperApplicator,
+  });
   return bootstrapStartup({
     installStartup,
     installAnimation,
@@ -294,6 +304,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
     css: WALLPAPER_CSS,
     assets: DEFAULT_ASSETS,
     host: globalThis,
+    pageAdapter,
   });
 ''',
         '})()',

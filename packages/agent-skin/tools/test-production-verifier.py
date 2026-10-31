@@ -405,8 +405,8 @@ class VerifierApiTests(unittest.TestCase):
         def missing_bootstrap_result(path):
             output = path / "Contents/Resources/startup/install.js"
             output.write_text(output.read_text(encoding="utf-8").replace(
-                "return installStartup(installAnimation, host);",
-                "installStartup(installAnimation, host);"), encoding="utf-8")
+                "return installStartup(installAnimation, host, pageAdapter);",
+                "installStartup(installAnimation, host, pageAdapter);"), encoding="utf-8")
             self.update_output_digest(path, "startup/install.js")
         self.assert_startup_rejected(missing_bootstrap_result, "未从完整 Page Controller")
 
@@ -435,6 +435,119 @@ class VerifierApiTests(unittest.TestCase):
                     output.symlink_to(bundle / "Contents/Resources/web/index.html")
                 with self.assertRaisesRegex(RuntimeError, "启动产物缺失或不是实体文件"):
                     self.verifier.verify_startup(bundle, self.info, self.marker)
+
+    def test_page_adapter_entry_predicate_accepts_new_and_legacy_bootstrap_results(self):
+        script_path = self.bundle / "Contents/Resources/startup/install.js"
+        self.assertIn("return installStartup(installAnimation, host, pageAdapter);",
+                      script_path.read_text(encoding="utf-8"))
+        self.assertIn("const pageAdapter = createCodexPageAdapter(globalThis, undefined, {",
+                      script_path.read_text(encoding="utf-8"))
+
+        # Downgrading the entry to the legacy two-argument bootstrap result stays
+        # verifiable: old payloads must keep passing the unchanged legacy predicates.
+        legacy = self.copy_bundle("legacy-two-arg-bootstrap")
+        legacy_script = legacy / "Contents/Resources/startup/install.js"
+        legacy_script.write_text(legacy_script.read_text(encoding="utf-8").replace(
+            "return installStartup(installAnimation, host, pageAdapter);",
+            "return installStartup(installAnimation, host);"), encoding="utf-8")
+        self.update_output_digest(legacy, "startup/install.js")
+        self.verifier.verify_startup(legacy, self.info, self.read_marker(legacy))
+
+        # Removing the returned installation result entirely is still rejected.
+        broken = self.copy_bundle("missing-bootstrap-result")
+        broken_script = broken / "Contents/Resources/startup/install.js"
+        broken_script.write_text(broken_script.read_text(encoding="utf-8").replace(
+            "return installStartup(installAnimation, host, pageAdapter);",
+            "installStartup(installAnimation, host, pageAdapter);"), encoding="utf-8")
+        self.update_output_digest(broken, "startup/install.js")
+        with self.assertRaisesRegex(RuntimeError, "未从完整 Page Controller"):
+            self.verifier.verify_startup(broken, self.info, self.read_marker(broken))
+
+    def test_pre_page_adapter_build25_source_set_is_read_only_and_exact(self):
+        historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
+        current = frozenset(self.verifier.STARTUP_REQUIRED_INPUTS)
+        self.assertTrue(historical < current,
+                        "the preserved build17-25 set must be a strict subset of the current inputs")
+        self.assertNotIn("extension/codex-page-adapter.mjs", historical)
+        self.assertEqual(historical, frozenset((
+            'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+            'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+            'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+            'wallpaper/renderer.js', 'wallpaper/apply.js',
+            'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+        )))
+
+        # An installed build25-style payload with that exact historical source set
+        # still verifies through the not-current path.
+        path = self.copy_bundle("pre-page-adapter-build25")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        marker["version"], marker["build"] = "0.9.0", "25"
+        historic_inputs = {name: self.marker["inputs"][name] for name in historical}
+        marker["inputs"] = historic_inputs
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(historic_inputs)
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                               encoding="utf-8")
+
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["appVersion"], manifest["appBuild"] = "0.9.0", "25"
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        manifest["sourceInputs"] = dict(historic_inputs)
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+
+        defaults_path = path / "Contents/Resources/web/assets/defaults/contours.js"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8").removeprefix(
+            "window.AGENT_SKIN_ASSETS = Object.freeze(").removesuffix(");\n"))
+        defaults["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        self.rewrite_defaults(path, defaults)
+
+        script_path = path / "Contents/Resources/startup/install.js"
+        script = script_path.read_text(encoding="utf-8")
+        prefix = "const DEFAULT_ASSETS = Object.freeze("
+        start = script.index(prefix) + len(prefix)
+        end = script.index(");\n", start)
+        embedded = json.loads(script[start:end])
+        embedded["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        script_path.write_text(script[:start] + json.dumps(embedded, ensure_ascii=False, separators=(",", ":"))
+                               + script[end:], encoding="utf-8")
+        self.update_output_digest(path, "startup/install.js")
+
+        info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="25")
+        historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
+        self.verifier.verify_startup(path, info, historic_marker, current_source=False)
+
+    def test_pre_page_adapter_source_inputs_are_rejected_when_tampered(self):
+        path = self.copy_bundle("pre-page-adapter-tampered")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        marker["version"], marker["build"] = "0.9.0", "25"
+        historic_inputs = {name: self.marker["inputs"][name]
+                           for name in self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS}
+        marker["inputs"] = historic_inputs
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(historic_inputs)
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                               encoding="utf-8")
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["appVersion"], manifest["appBuild"] = "0.9.0", "25"
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        # Drop one required historical input: the set is exact, never fuzzy.
+        manifest["sourceInputs"] = {
+            name: digest for name, digest in historic_inputs.items() if name != "style.css"
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+        defaults_path = path / "Contents/Resources/web/assets/defaults/contours.js"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8").removeprefix(
+            "window.AGENT_SKIN_ASSETS = Object.freeze(").removesuffix(");\n"))
+        defaults["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        self.rewrite_defaults(path, defaults)
+        info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="25")
+        historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(RuntimeError, "sourceInputs|来源"):
+            self.verifier.verify_startup(path, info, historic_marker, current_source=False)
 
     def test_previous_theme_build_11_12_source_set_is_read_only_and_exact(self):
         path = self.copy_bundle("previous-theme-build-11")

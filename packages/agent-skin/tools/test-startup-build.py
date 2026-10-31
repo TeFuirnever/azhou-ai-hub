@@ -32,7 +32,10 @@ BUILD_FILES = (
     "Native/InstallRegistryCore.swift",
     "Native/Wallpaper.swift",
     "Native/StartupNativeTests.swift",
+    "Native/SkinHostContract.swift",
+    "Native/CodexSkinDriver.swift",
     "extension/renderer.mjs",
+    "extension/codex-page-adapter.mjs",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -239,7 +242,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    for name in IMAGE_METADATA_SOURCE_INPUTS:
+    for name in (*IMAGE_METADATA_SOURCE_INPUTS, "extension/codex-page-adapter.mjs"):
         marker["inputs"].pop(name)
         manifest["sourceInputs"].pop(name)
     for name in omit_marker_inputs:
@@ -790,12 +793,15 @@ class ImageMetadataAssemblyTests(unittest.TestCase):
         self.assertNotIn("MAX_IMAGE_PIXELS", payload)
 
         start = "  return bootstrapStartup({"
-        end = "    host: globalThis,\n  });\n\n})()"
+        end = "    host: globalThis,\n    pageAdapter,\n  });\n\n})()"
+        adapter_factory = "  const pageAdapter = createCodexPageAdapter(globalThis, undefined, {"
         self.assertEqual(payload.count(start), 1)
         self.assertEqual(payload.count(end), 1)
+        self.assertEqual(payload.count(adapter_factory), 1)
+        self.assertIn("function createCodexPageAdapter(", payload)
         probe_payload = payload.replace(start, "  const startupResult = bootstrapStartup({", 1).replace(
             end,
-            "    host: globalThis,\n  });\n"
+            "    host: globalThis,\n    pageAdapter,\n  });\n"
             "  return { startupResult, dimensions: readRawDimensions(globalThis.__agentSkinProbeHeader, '.png') };\n})()",
             1,
         )
@@ -1096,6 +1102,100 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
                 self.verifier.verify_startup(self.bundle, self.info, self.marker)
         finally:
             self.verifier.INPUT_FILES = original
+
+    def test_payload_wires_the_codex_page_adapter_explicitly(self):
+        payload = (self.bundle / "Contents/Resources/startup/install.js").read_text(encoding="utf-8")
+        self.assertIn("function createCodexPageAdapter(", payload)
+        self.assertIn("const pageAdapter = createCodexPageAdapter(globalThis, undefined, {", payload)
+        self.assertIn("return installStartup(installAnimation, host, pageAdapter);", payload)
+        self.assertNotIn("pageAdapter: { value:", payload,
+                         "the page adapter must never ride installAnimation static properties")
+        self.assertIn((self.root / "extension/codex-page-adapter.mjs")
+                      .read_text(encoding="utf-8")
+                      .replace("export function createCodexPageAdapter(", "function createCodexPageAdapter(", 1)
+                      .strip(), payload)
+
+    def test_shared_contract_sources_are_registered_everywhere_and_stay_neutral(self):
+        shared_sources = ("Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                          "extension/codex-page-adapter.mjs")
+        package = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
+        verifier_inputs = set(self.verifier.INPUT_FILES)
+        for source in shared_sources:
+            with self.subTest(source=source):
+                self.assertIn(source, verifier_inputs)
+                self.assertIn(source, set(self.verifier.STARTUP_REQUIRED_INPUTS)
+                              if source.endswith(".mjs") else verifier_inputs)
+                self.assertIn(source, set(package["build_inputs"]))
+                self.assertIn(source, set(package["runtime_paths"]))
+                self.assertIn(source, self.marker["inputs"])
+        contract_source = (PACKAGE / "Native/SkinHostContract.swift").read_text(encoding="utf-8")
+        for forbidden in ("StartupTargetSystem", "StartupTransport", "WebSocketDebuggerUrl",
+                          "NativeAppRuntime", "StartupConnector"):
+            self.assertNotIn(forbidden, contract_source,
+                             "the neutral contract must not mention Codex adapter types")
+        adapter_source = (PACKAGE / "extension/codex-page-adapter.mjs").read_text(encoding="utf-8")
+        self.assertNotIn("\nimport ", adapter_source)
+        self.assertEqual(adapter_source.count("export function createCodexPageAdapter("), 1)
+
+    def test_adapter_module_rejects_imports_and_unbound_free_variables(self):
+        node = shutil.which("node")
+        with tempfile.TemporaryDirectory(prefix="agent-skin-adapter-negative-") as temporary:
+            root = Path(temporary) / "source"
+            clone_source_tree(root)
+            builder = load_module(BUILDER_PATH, "agent_skin_adapter_negative_builder")
+            adapter_path = root / "extension/codex-page-adapter.mjs"
+            original = adapter_path.read_text(encoding="utf-8")
+
+            adapter_path.write_text(original + "\nimport x from 'y';\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Codex page adapter"):
+                builder._build_script(root, {}, "body{}", self.verifier)
+
+            adapter_path.write_text(
+                original.replace("const hostEnvironment = environment;",
+                                 "const hostEnvironment = agentSkinUnboundProbe(environment);", 1),
+                encoding="utf-8")
+            bundle = root / ".build/azhou-stage.adapter-free-var/azhou-payload"
+            bundle.mkdir(parents=True)
+            with mock.patch.object(builder.subprocess, "check_output", return_value="arm64\n"):
+                payload = builder._build_script(root, {}, "body{}", self.verifier)
+            payload_path = Path(temporary) / "free-var-install.js"
+            payload_path.write_text(payload, encoding="utf-8")
+            if node is not None:
+                syntax = subprocess.run([node, "--check", str(payload_path)], check=False,
+                                        capture_output=True, text=True)
+                self.assertEqual(syntax.returncode, 0, syntax.stderr)
+                probe = subprocess.run([node, "--input-type=module", "-e",
+                                        f"const source = await import('node:fs').then(fs => fs.readFileSync({str(payload_path)!r}, 'utf8'));"
+                                        "try { new Function(source)(); throw new Error('expected the free variable to fail'); }"
+                                        " catch (error) { if (!(error instanceof ReferenceError)) throw error; }"],
+                                       check=False, capture_output=True, text=True)
+                self.assertEqual(probe.returncode, 0, probe.stderr + probe.stdout)
+
+    def test_one_candidate_builds_and_verifies_both_startup_and_wallpaper_payloads(self):
+        resources = self.bundle / "Contents/Resources"
+        startup_manifest = json.loads((resources / "startup/manifest.json").read_text(encoding="utf-8"))
+        self.assertIn("startup/install.js", startup_manifest["outputs"])
+        wallpaper = load_module(self.root / "tools/build-wallpaper.py", "agent_skin_dual_payload_wallpaper")
+        wallpaper.package(self.bundle)
+        wallpaper_manifest_path = resources / "wallpaper/manifest.json"
+        self.assertTrue(wallpaper_manifest_path.is_file(),
+                        "the independent wallpaper payload must exist for the same candidate")
+        wallpaper_manifest = json.loads(wallpaper_manifest_path.read_text(encoding="utf-8"))
+        wallpaper_install = resources / "wallpaper/install.js"
+        self.assertTrue(wallpaper_install.is_file())
+        self.assertNotEqual(wallpaper_install.read_bytes(),
+                            (resources / "startup/install.js").read_bytes(),
+                            "startup and wallpaper stay two independent self-contained payloads")
+        self.assertEqual(wallpaper_manifest["version"], self.verifier.VERSION)
+        self.assertEqual(wallpaper_manifest["scriptSHA256"],
+                         hashlib.sha256(wallpaper_install.read_bytes()).hexdigest(),
+                         "the wallpaper manifest fingerprints its own generated script")
+        self.assertEqual(wallpaper_manifest["rendererSHA256"],
+                         hashlib.sha256((self.root / "wallpaper/renderer.js").read_bytes()).hexdigest())
+        self.assertEqual(wallpaper_manifest["cssSHA256"],
+                         hashlib.sha256((self.root / "wallpaper/wallpaper.css").read_bytes()).hexdigest())
+        self.verifier.verify_startup(self.bundle, self.info, self.marker)
+        self.verifier.verify_wallpaper(self.bundle, self.info, self.marker)
 
     def test_startup_payload_limit_is_enforced_even_when_manifest_matches(self):
         clone = Path(self.temporary.name) / "oversized-payload"

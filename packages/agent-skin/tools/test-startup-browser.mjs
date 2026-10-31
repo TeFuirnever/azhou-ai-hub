@@ -228,12 +228,13 @@ try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
-  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, imageSettingsSource, localizationSource, legacyWallpaperCSS,
+  const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, codexPageAdapterSource, imageSettingsSource, localizationSource, legacyWallpaperCSS,
     legacyWallpaperRenderer, helperExpressionJSON, generatedPayloadSource] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, 'extension/renderer.mjs'), 'utf8'),
+    readFile(join(ROOT, 'extension/codex-page-adapter.mjs'), 'utf8'),
     readFile(join(ROOT, 'image-settings.js'), 'utf8'),
     readFile(join(ROOT, 'localization.js'), 'utf8'),
     readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
@@ -295,8 +296,10 @@ try {
   ];
   const fixtureModule = `
     import { installStartup } from '/extension/renderer.mjs';
+    import { createCodexPageAdapter } from '/extension/codex-page-adapter.mjs';
     import { installRenderer } from '/wallpaper/renderer.js';
     import { installRenderer as installLegacyWallpaper } from '/legacy/wallpaper/renderer.js';
+    const pageAdapter = createCodexPageAdapter(window);
     const outerWindow = window;
     const url = new URL(location.href);
     if (url.searchParams.has('initial-light-theme')) document.documentElement.dataset.theme = 'light';
@@ -724,7 +727,7 @@ try {
     }
     const result = url.searchParams.has('legacy-only')
       ? { installed: false, alreadyActive: false, reason: 'fixture-no-controller' }
-      : installStartup(payload, host);
+      : installStartup(payload, host, pageAdapter);
     outerWindow.__fixtureHost = host;
     outerWindow.__startupAPI = host.__azhouStartup;
     outerWindow.__startupInstallResult = generatedInstallResult || result;
@@ -773,6 +776,7 @@ try {
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
     ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
+    ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
   ]);
   if (generatedPayloadRoute !== null) {
     routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);

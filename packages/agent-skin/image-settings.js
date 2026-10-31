@@ -25,10 +25,29 @@ function createImageSettings(environment) {
   const MAX_SOURCE_PIXELS = 48_000_000;
   const LARGE_SOURCE_PIXELS = 16_000_000;
   const PNG_PREFIX = 'data:image/png;base64,';
-  const DATABASE_NAME = 'azhou-codex-startup';
-  const DATABASE_VERSION = 1;
-  const STORE_NAME = 'settings';
-  const SETTINGS_KEY = 'images';
+  // Storage namespace seam (agent-skin-zcode-contract/v0.1): a host page adapter may
+  // inject its own verified namespace through the existing environment object.
+  // The defaults below are the legacy Codex values and stay verbatim; nothing here
+  // adds a new storage backend.
+  const namespaceDefaults = Object.freeze({
+    databaseName: 'azhou-codex-startup',
+    databaseVersion: 1,
+    storeName: 'settings',
+    settingsKey: 'images',
+  });
+  const injectedNamespace = environment && typeof environment.settingsNamespace === 'object'
+    && environment.settingsNamespace !== null ? environment.settingsNamespace : {};
+  const boundedNamespaceString = value => typeof value === 'string'
+    && value.length >= 1 && value.length <= 100 ? value : null;
+  const DATABASE_NAME = boundedNamespaceString(injectedNamespace.databaseName)
+    ?? namespaceDefaults.databaseName;
+  const DATABASE_VERSION = Number.isSafeInteger(injectedNamespace.databaseVersion)
+    && injectedNamespace.databaseVersion >= 1
+    ? injectedNamespace.databaseVersion : namespaceDefaults.databaseVersion;
+  const STORE_NAME = boundedNamespaceString(injectedNamespace.storeName)
+    ?? namespaceDefaults.storeName;
+  const SETTINGS_KEY = boundedNamespaceString(injectedNamespace.settingsKey)
+    ?? namespaceDefaults.settingsKey;
   const MAX_RECORD_BYTES = 20 * 1024 * 1024;
   const TEXT_LIMITS = Object.freeze({ introTitle: 16, introCaption: 48, artworkSubtitle: 60 });
   const FALLBACK_MESSAGES = Object.freeze({

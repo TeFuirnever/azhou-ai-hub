@@ -176,6 +176,7 @@ function makeFixture(options = {}) {
       },
     },
     indexedDB: options.indexedDB,
+    settingsNamespace: options.settingsNamespace,
     localization: options.localization,
     appearanceAvatar: options.appearanceAvatar,
     themeConfig: options.themeConfig,
@@ -1626,4 +1627,88 @@ test('a settings conflict keeps the local text copyable and reopening reads the 
   pageA.api.dispose();
   pageB.api.dispose();
   reopenedPage.api.dispose();
+});
+
+test('settings keep the exact legacy codex namespace when nothing is injected', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: '', introCaption: '', artworkSubtitle: '', wallpaperStrength: 0,
+  });
+  assert.deepEqual(storage.state.opens, [{ name: 'azhou-codex-startup', version: 1 }],
+    'the default namespace stays azhou-codex-startup/version 1 verbatim');
+  fixture.api.dispose();
+});
+
+test('an injected settings namespace replaces database name, version, store and key', async () => {
+  const seen = { opens: [], stores: [], keys: [] };
+  const record = {
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: '', introCaption: '', artworkSubtitle: '', wallpaperStrength: 0,
+  };
+  const objectStore = {
+    get(key) {
+      seen.keys.push({ operation: 'get', key });
+      const request = { result: JSON.parse(JSON.stringify(record)), error: null };
+      queueMicrotask(() => request.onsuccess?.({ target: request }));
+      return request;
+    },
+    put(value, key) {
+      seen.keys.push({ operation: 'put', key });
+      const request = { result: key, error: null };
+      queueMicrotask(() => request.onsuccess?.({ target: request }));
+      return request;
+    },
+  };
+  const database = {
+    objectStoreNames: { contains: () => true },
+    transaction(store) {
+      seen.stores.push(store);
+      const transaction = { oncomplete: null, onerror: null, onabort: null, abort() {}, objectStore: () => objectStore };
+      // Complete only after the store requests delivered on the earlier microtask.
+      queueMicrotask(() => queueMicrotask(() => transaction.oncomplete?.({ target: transaction })));
+      return transaction;
+    },
+    close() {},
+  };
+  const indexedDB = {
+    open(name, version) {
+      seen.opens.push({ name, version });
+      const request = { result: database, error: null, transaction: null };
+      queueMicrotask(() => {
+        request.onupgradeneeded?.({ oldVersion: 0, newVersion: version, target: request });
+        request.onsuccess?.({ target: request });
+      });
+      return request;
+    },
+  };
+  const fixture = makeFixture({
+    indexedDB,
+    settingsNamespace: {
+      databaseName: 'azhou-zcode-host', databaseVersion: 3, storeName: 'zcode-settings', settingsKey: 'images-v3',
+    },
+  });
+  await fixture.api.load(record);
+  assert.deepEqual(seen.opens, [{ name: 'azhou-zcode-host', version: 3 }],
+    'an injected namespace replaces the database name and version');
+  assert.ok(seen.stores.length > 0 && seen.stores.every(store => store === 'zcode-settings'),
+    'an injected namespace replaces the object store');
+  assert.ok(seen.keys.length > 0 && seen.keys.every(({ key }) => key === 'images-v3'),
+    'an injected namespace replaces the record key');
+  fixture.api.dispose();
+});
+
+test('invalid injected namespace values fall back to the verbatim defaults', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, settingsNamespace: {
+    databaseName: '', databaseVersion: 0, storeName: 42, settingsKey: 'x'.repeat(101),
+  } });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: '', introCaption: '', artworkSubtitle: '', wallpaperStrength: 0,
+  });
+  assert.deepEqual(storage.state.opens, [{ name: 'azhou-codex-startup', version: 1 }],
+    'out-of-contract namespace fields keep the default namespace instead of inventing one');
+  fixture.api.dispose();
 });

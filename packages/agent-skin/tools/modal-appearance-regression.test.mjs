@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installStartup } from '../extension/renderer.mjs';
+import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
+const pageAdapter = createCodexPageAdapter(globalThis);
 
 const mainURL = 'app://-/index.html?initialRoute=%2F';
 
@@ -169,7 +171,7 @@ test('settings isolation locks current and added host siblings, then restores on
   const frames = [];
   const payload = startupPayload(frame => { frames.push(frame); });
 
-  assert.deepEqual(installStartup(payload, fixture.host), { installed: true, alreadyActive: false });
+  assert.deepEqual(installStartup(payload, fixture.host, pageAdapter), { installed: true, alreadyActive: false });
   const api = fixture.host.__azhouStartup;
   const playFrame = frameIn(fixture.body);
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: frames[0].spec.runId, skipped: false },
@@ -243,7 +245,7 @@ test('settings appearance follows valid host tokens and stops updating the close
     };
   });
 
-  assert.deepEqual(installStartup(payload, fixture.host), { installed: true, alreadyActive: false });
+  assert.deepEqual(installStartup(payload, fixture.host, pageAdapter), { installed: true, alreadyActive: false });
   const api = fixture.host.__azhouStartup;
   assert.equal(frames[0].spec.appearance.theme, 'dark', 'the host color scheme supplies a missing theme attribute');
   assert.equal(frames[0].spec.appearance.colors.surface, 'rgb(200, 210, 220)',

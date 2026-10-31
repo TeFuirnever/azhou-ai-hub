@@ -195,20 +195,35 @@ VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version'
 NAME = load_theme_config(ROOT)['identity']['installationName']
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
+    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/bootstrap.mjs',
+    'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/bootstrap.mjs',
+    'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
+# Exact startup source set used by installed builds 17 through 25, before the shared
+# Codex page adapter was added to the payload (agent-skin-zcode C0). Preserved
+# read-only so already-installed payloads re-verify instead of silently failing.
+PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
     'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+# The first build whose payload binds the shared Codex page adapter.
+PAGE_ADAPTER_STARTUP_FIRST_BUILD = 26
 # Exact 0.9.0 startup source set used before image metadata was added to the payload.
 PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
@@ -668,6 +683,10 @@ def verify_startup(path, info, marker, *, current_source=True):
         if ((expected_version, expected_build) == (VERSION, BUILD)
                 or is_known_image_metadata_build):
             allowed_theme_inputs.add(current_startup_inputs)
+        # Installed builds 17 through 25 bound the pre-page-adapter source set.
+        if (expected_version == '0.9.0' and is_known_image_metadata_build
+                and int(expected_build) < PAGE_ADAPTER_STARTUP_FIRST_BUILD):
+            allowed_theme_inputs.add(frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
     allowed_source_inputs = set(allowed_theme_inputs)
@@ -691,7 +710,10 @@ def verify_startup(path, info, marker, *, current_source=True):
             raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
 
     uses_current_startup_inputs = frozenset(source_inputs) == current_startup_inputs
-    expected_outputs = STARTUP_OUTPUTS if uses_current_startup_inputs else PRE_IMAGE_METADATA_STARTUP_OUTPUTS
+    uses_pre_page_adapter_startup_inputs = (
+        frozenset(source_inputs) == frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
+    uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs
+    expected_outputs = STARTUP_OUTPUTS if uses_image_metadata_outputs else PRE_IMAGE_METADATA_STARTUP_OUTPUTS
     outputs = manifest.get('outputs')
     if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs):
         raise RuntimeError('startup manifest 的 output 路径清单不完整。')
@@ -709,7 +731,7 @@ def verify_startup(path, info, marker, *, current_source=True):
     preview_sources = (
         ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
          'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE')
-        if uses_current_startup_inputs else PRE_IMAGE_METADATA_PREVIEW_SOURCES
+        if uses_image_metadata_outputs else PRE_IMAGE_METADATA_PREVIEW_SOURCES
     )
     for source_name in preview_sources:
         copied = output_bytes['web/' + source_name]
@@ -805,7 +827,9 @@ def verify_startup(path, info, marker, *, current_source=True):
     legacy_entry = 'return installStartup(installAnimation, globalThis);' in script
     bootstrap_entry = ('return bootstrapStartup({' in script
                        and 'return installStartup(installAnimation, host);' in script)
-    if not (legacy_entry or bootstrap_entry):
+    page_adapter_entry = ('return bootstrapStartup({' in script
+                          and 'return installStartup(installAnimation, host, pageAdapter);' in script)
+    if not (legacy_entry or bootstrap_entry or page_adapter_entry):
         raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
     return manifest
 
