@@ -397,7 +397,11 @@ function installAnimation(
     if (!progressText) progressText = createElement('span', root, {
       'data-agent-skin-progress': '', 'aria-label': t('animation.accessibility.progress'), 'text': t('animation.progress', { percent: 0 }),
     });
-    progressText.style.cssText = 'position:absolute;left:50%;bottom:4%;transform:translateX(-50%);color:var(--agent-skin-muted,#fff8ef);font:12px/1.2 system-ui,sans-serif;opacity:.92';
+    progressText.setAttribute('role', 'progressbar');
+    progressText.setAttribute('aria-valuemin', '0');
+    progressText.setAttribute('aria-valuemax', '100');
+    progressText.setAttribute('aria-valuenow', String(Math.round(progressAt(elapsed) * 100)));
+    progressText.style.cssText = 'position:absolute;left:50%;bottom:4%;transform:translateX(-50%);color:var(--agent-skin-muted,#fff8ef);font:12px/1.2 system-ui,sans-serif;opacity:0';
 
     skipButton = root.querySelector('[data-agent-skin-skip]');
     if (!skipButton) skipButton = createElement('button', root, {
@@ -530,7 +534,10 @@ function installAnimation(
     }
     if (milliseconds - lastUI >= 60 || milliseconds === 0 || milliseconds === DURATION) {
       const progress = Math.round(progressAt(milliseconds) * 100);
-      if (progressText) progressText.textContent = t('animation.progress', { percent: progress });
+      if (progressText) {
+        progressText.textContent = t('animation.progress', { percent: progress });
+        progressText.setAttribute('aria-valuenow', String(progress));
+      }
       if (elapsedText) elapsedText.textContent = t('animation.elapsed', {
         elapsed: (milliseconds / 1000).toFixed(1), duration: '12.0',
       });

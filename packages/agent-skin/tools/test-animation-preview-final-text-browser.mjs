@@ -275,6 +275,15 @@ try {
       && typeof node.name?.value === 'string' && node.name.value.length > 0),
     live: liveValue,
   };
+  const { nodeId: progressNodeId } = await cdp.call('DOM.querySelector', {
+    nodeId: documentNode.nodeId,
+    selector: '[data-agent-skin-progress]',
+  });
+  assert.ok(progressNodeId > 0, 'the preview progress must be queryable');
+  const progressAX = await cdp.call('Accessibility.getPartialAXTree', { nodeId: progressNodeId });
+  const accessibleProgress = (progressAX.nodes || []).find(node => !node.ignored && node.role?.value === 'progressbar');
+  assert.ok(accessibleProgress, 'the visually hidden progress must remain in the accessibility tree');
+  assert.ok(Number.isFinite(Number(accessibleProgress.value?.value)), 'accessible progress must expose a numeric value');
 
   const tabsToPause = await tabTo(cdp, 'pause');
   const normalFocus = await cdp.evaluate(`(() => {

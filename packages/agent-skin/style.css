@@ -55,7 +55,6 @@ body.agent-skin-native-launch .preview-heading,
 body.agent-skin-native-launch .controls { display: none !important; }
 body.agent-skin-native-launch [data-agent-skin-progress] { display: none !important; }
 body.agent-skin-native .preview-heading { display: none !important; }
-[data-agent-skin-stage][data-stage="portrait"] [data-agent-skin-progress] { display: none; }
 
 @media (hover: hover) and (pointer: fine) {
   .controls button:hover { color: var(--agent-skin-muted, #fbd8b2); }

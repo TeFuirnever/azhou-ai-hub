@@ -2770,17 +2770,24 @@ try {
         const doc=frame?.contentDocument, stage=doc?.querySelector('[data-agent-skin-stage]');
         const label=doc?.querySelector('[data-agent-skin-stage-text]');
         if(stage?.dataset.stage!==${JSON.stringify(expectedStage)}||!label)return false;
-        const progress=doc.querySelector('[data-agent-skin-progress]')?.textContent||'';
+        const progressNode=doc.querySelector('[data-agent-skin-progress]');
+        const progress=progressNode?.textContent||'';
         if(stage.dataset.stage==='portrait'&&Number(progress.match(/(\\d+)%/)?.[1]||0)<93)return false;
         const style=frame.contentWindow.getComputedStyle(label);
         return {stage:stage.dataset.stage,opacity:style.opacity,display:style.display,
-          live:label.getAttribute('aria-live'),text:label.textContent,progress};
+          live:label.getAttribute('aria-live'),text:label.textContent,progress,
+          progressOpacity:frame.contentWindow.getComputedStyle(progressNode).opacity,
+          progressRole:progressNode.getAttribute('role'),
+          progressValue:progressNode.getAttribute('aria-valuenow')};
       })()`), 15000, `settings preview reaches ${expectedStage}`);
       assert.equal(previewLabel.opacity, '0',
         `${expectedStage} status must not cover the artwork subtitle in the real settings preview`);
       assert.notEqual(previewLabel.display, 'none', 'the live status must remain accessible');
       assert.equal(previewLabel.live, 'polite');
       assert.ok(previewLabel.text);
+      assert.equal(previewLabel.progressOpacity, '0', 'numeric progress must not overlap the canvas title');
+      assert.equal(previewLabel.progressRole, 'progressbar', 'progress remains available to assistive technology');
+      assert.equal(Number(previewLabel.progressValue), Number(previewLabel.progress.match(/(\d+)%/)?.[1]));
     }
     const naturalPreviewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
