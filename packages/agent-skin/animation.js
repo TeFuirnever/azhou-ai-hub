@@ -186,6 +186,7 @@ function installAnimation(
   let offsetX = 0;
   let offsetY = 0;
   let visibleLogicalWidth = WIDTH;
+  let artworkShiftX = 0;
   let layoutKey = '';
   let lastStaticRenderKey = '';
   let appearanceRevision = 0;
@@ -439,6 +440,8 @@ function installAnimation(
     offsetY = (height - HEIGHT * scale) / 2;
     const nextVisibleLogicalWidth = Math.min(WIDTH, width / scale);
     visibleLogicalWidth = nextVisibleLogicalWidth;
+    // Match the wallpaper's 88% horizontal focal point in narrow windows.
+    artworkShiftX = width / height <= 6 / 5 ? -(WIDTH - nextVisibleLogicalWidth) * 0.38 : 0;
     fitSubtitle(nextVisibleLogicalWidth);
     const identityLayoutChanged = fitIdentity(nextVisibleLogicalWidth);
     const nextLayoutKey = [width, height, pixelRatio, scale, offsetX, offsetY, nextVisibleLogicalWidth]
@@ -632,9 +635,11 @@ function installAnimation(
 
   function drawArtwork(alpha = 1) {
     if (!artworkBitmap) return;
+    context.save();
+    context.translate(artworkShiftX, 0);
     context.globalAlpha = alpha;
     context.drawImage(artworkBitmap, 0, 0, WIDTH, HEIGHT);
-    context.globalAlpha = 1;
+    context.restore();
   }
 
   function drawPortrait(milliseconds) {
@@ -671,20 +676,34 @@ function installAnimation(
       drawIdentity(smooth((milliseconds - 1150) / 500));
     } else if (phase === 'dispersing') {
       const amount = (milliseconds - 4180) / 560;
+      context.save();
+      context.translate(artworkShiftX * smooth((milliseconds - 4180) / 900), 0);
       if (reduced) drawReducedDispersal(amount);
       else drawIdentityFragments(amount);
+      context.restore();
     } else if (phase === 'scattered') {
+      context.save();
+      context.translate(artworkShiftX * smooth((milliseconds - 4180) / 900), 0);
       if (reduced) drawPathFragments(1, true);
       else drawPathFragments(0);
+      context.restore();
     } else if (phase === 'drawing') {
+      context.save();
+      context.translate(artworkShiftX, 0);
       if (reduced) {
         const opacity = 0.78 + smooth((milliseconds - 5080) / 2100) * 0.22;
         drawPathFragments(1, true, opacity);
       } else {
         drawPathFragments((milliseconds - 5080) / 2100);
       }
+      context.restore();
     } else if (phase === 'colorize') {
-      if (lineCanvas) context.drawImage(lineCanvas, 0, 0);
+      if (lineCanvas) {
+        context.save();
+        context.translate(artworkShiftX, 0);
+        context.drawImage(lineCanvas, 0, 0);
+        context.restore();
+      }
       drawArtwork(smooth((milliseconds - 7180) / 250));
     } else if (phase === 'portrait') {
       drawPortrait(milliseconds);

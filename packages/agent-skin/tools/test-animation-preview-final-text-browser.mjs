@@ -221,6 +221,59 @@ try {
   })()`);
   assert.equal(hooked, true, 'the real preview canvas must expose its rendered text geometry');
 
+  const originalViewport = await cdp.evaluate('({ width:innerWidth, height:innerHeight })');
+  await cdp.call('Emulation.setDeviceMetricsOverride', {
+    width: 640, height: 869, screenWidth: 640, screenHeight: 869, deviceScaleFactor: 1, mobile: false,
+  });
+  await until(() => cdp.evaluate(`(()=>{
+    const canvas=document.querySelector('[data-agent-skin-canvas]');
+    return innerWidth===640 && innerHeight===869 && canvas?.width===640 && canvas?.height===869;
+  })()`), 'narrow canvas resize');
+  assert.equal(await cdp.evaluate(`(() => {
+    const prototype = CanvasRenderingContext2D.prototype, original = prototype.drawImage;
+    prototype.drawImage = function (source, ...args) {
+      if (this.canvas.matches('[data-agent-skin-canvas]') && args.length === 4
+          && args[2] === 1536 && args[3] === 1024) {
+        const matrix = this.getTransform();
+        window.__artworkTransform = { scale: matrix.a, offset: matrix.e };
+      }
+      if (this.canvas.matches('[data-agent-skin-canvas]') && args.length === 2
+          && source?.width === 1536 && source?.height === 1024) {
+        const matrix = this.getTransform();
+        window.__lineArtTransform = { scale: matrix.a, offset: matrix.e };
+      }
+      return original.call(this, source, ...args);
+    };
+    return true;
+  })()`), true);
+  assert.equal(await cdp.evaluate('window.launcherUI.seek(8.1)'), true);
+  const artworkCrop = await until(() => cdp.evaluate(`(() => {
+    const stage=document.querySelector('[data-agent-skin-stage]');
+    const transform=window.__artworkTransform;
+    return stage?.dataset.stage==='portrait' && transform ? { ...transform, width:innerWidth, height:innerHeight } : false;
+  })()`), 'narrow viewport artwork transform');
+  const visibleArtworkLeft = -artworkCrop.offset / artworkCrop.scale;
+  const artworkOverflow = 1536 - artworkCrop.width / artworkCrop.scale;
+  assert.ok(Math.abs(visibleArtworkLeft - artworkOverflow * 0.88) < 1,
+    'narrow artwork must focus on the character at 88% of the crop rather than cutting off the right side: '
+      + JSON.stringify({ artworkCrop, visibleArtworkLeft, artworkOverflow }));
+  const narrowCapture = await cdp.call('Page.captureScreenshot', { format:'png', fromSurface:true, captureBeyondViewport:false });
+  await writeFile(join(options.out, 'preview-artwork-narrow.png'), Buffer.from(narrowCapture.data, 'base64'));
+  assert.equal(await cdp.evaluate('window.launcherUI.seek(7.3)'), true);
+  const transition = await until(() => cdp.evaluate(`(()=>{
+    const stage=document.querySelector('[data-agent-skin-stage]');
+    return stage?.dataset.stage==='colorize' && window.__lineArtTransform
+      ? { line:window.__lineArtTransform, artwork:window.__artworkTransform } : false;
+  })()`), 'narrow line-art to color transition');
+  assert.ok(Math.abs(transition.line.offset - transition.artwork.offset) < 0.1,
+    'the line art and artwork must stay aligned during the color transition');
+  await cdp.call('Emulation.clearDeviceMetricsOverride');
+  await until(() => cdp.evaluate(`(()=>{
+    const canvas=document.querySelector('[data-agent-skin-canvas]');
+    return innerWidth===${originalViewport.width} && innerHeight===${originalViewport.height}
+      && canvas?.width===innerWidth && canvas?.height===innerHeight;
+  })()`), 'restored preview canvas size');
+
   const seekStarted = await cdp.evaluate(`window.launcherUI.seek(11.2)`);
   assert.equal(seekStarted, true, 'the local preview must seek to the shutter phase');
   await until(async () => cdp.evaluate(`document.querySelector('[data-agent-skin-stage]')?.dataset.stage === 'shutter'

@@ -4161,7 +4161,11 @@ try {
           return original.apply(this,args);
         };
       }
-      try{window.launcherUI.seek(${seconds});return {...state,report:window.launcherUI.report()};}
+      try{
+        window.launcherUI.seek(${seconds});
+        const stageOffset=state.translates.shift();
+        return {...state,stageOffset,report:window.launcherUI.report()};
+      }
       finally{for(const [name,original]of originals)proto[name]=original;}
     })()`);
     const inspectVariant = async dir => {
