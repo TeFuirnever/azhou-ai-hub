@@ -1295,17 +1295,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             executableSHA256: "")
     }
 
-    /// The shipped Codex chain attests its own capabilities for the shared contract.
-    /// ZCode must provide independently verified findings before its driver exists.
+    /// Honest per-capability evidence for the shipped Codex chain. Each entry keeps
+    /// .verified only where a named, real verification source exists: the launcher's
+    /// own live observation for identity, and the specific regression suites that
+    /// exercise each capability. Nothing here claims codesign — signature validation
+    /// runs inside the preflight/validate branches, not at assembly time. ZCode must
+    /// supply its own independently verified findings before a driver exists.
     private func codexCapabilityFindings(for key: HostApplicationKey,
                                          contractVersion: String) -> [CapabilityFinding] {
-        SkinCapability.allCases.map { capability in
-            CapabilityFinding(
+        let evidence: [SkinCapability: (IDs: [String], reason: String)] = [
+            .applicationIdentity: (["workspace-bundle-identity", "tools/test-startup-native.py"],
+                                   "identity observed this launch from the verified target bundle and workspace"),
+            .activateExistingApplication: (["tools/test-startup-native.py"],
+                                           "hot-branch validate→activate order and activation result checks"),
+            .mainWindowAttachment: (["tools/test-startup-native.py"],
+                                    "connector attach with single main-page selection and port ownership"),
+            .mainPageIdentification: (["tools/test-startup-native.py", "tools/test-startup-browser.mjs"],
+                                      "main-page identification against injected and real pages"),
+            .ownedAppearanceSurface: (["tools/startup.test.mjs", "tools/test-startup-browser.mjs"],
+                                      "appearance tokens, entry mounting and fallback placement"),
+            .persistentSettings: (["tools/settings-save.unit.test.mjs", "tools/image-settings.test.mjs"],
+                                  "IndexedDB save/apply two-phase transactions and namespace contract"),
+            .lifecycleInvalidation: (["tools/startup.test.mjs"],
+                                     "dispose generation invalidation; late callbacks cannot revive a run"),
+            .ownedResourceRemoval: (["Native/WallpaperValidationTests.swift", "tools/startup.test.mjs"],
+                                    "owned controller disposal via restore/retry receipts"),
+        ]
+        return SkinCapability.allCases.map { capability in
+            let entry = evidence[capability] ?? ([], "no recorded evidence for this capability")
+            return CapabilityFinding(
                 subject: CapabilityEvidenceSubject(
                     application: key, surface: SkinHostContract.surface(for: capability),
                     contractVersion: contractVersion),
-                capability: capability, state: .verified,
-                evidenceIDs: ["codex-startup-chain-v1"], reason: "verified Codex startup chain")
+                capability: capability,
+                state: entry.IDs.isEmpty ? .unverified : .verified,
+                evidenceIDs: entry.IDs, reason: entry.reason)
         }
     }
 
@@ -1315,9 +1339,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @MainActor
     private func launchThroughSkinHost(expectedApplication: HostApplicationKey) async -> SkinLaunchResult {
         let contractVersion = SkinHostContract.version
+        // Workspace-observed identity only: codesign has not run at assembly time;
+        // signature validation happens inside the preflight/validate branches.
         let observed = HostIdentityEvidence(key: expectedApplication,
-                                            signingIdentity: "codesign-verified-per-branch",
-                                            evidenceID: "codex-workspace-identity-v1")
+                                            signingIdentity: "workspace-observed; codesign validated per operation branch",
+                                            evidenceID: "workspace-bundle-identity")
         let installObservation = CodexInstallObservation()
         let system = runtime.makeStartupTargetSystem()
         let budget = StartupBudget(startedAt: runtime.uptime)
@@ -1367,10 +1393,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             },
             performDisable: nil)
         let dependencies = SkinAssemblyDependencies(
+            // This launcher path never probes identities through the dependency: it
+            // observes the verified target bundle directly. Report that honestly
+            // instead of fabricating an observation no caller made.
             inspectIdentity: { host, _ in
-                .observed(HostIdentityEvidence(key: expectedApplication,
-                                               signingIdentity: "workspace-bundle-identity",
-                                               evidenceID: "codex-workspace-identity-v1-\(host.rawValue)"))
+                .unavailable(HostRefusal(
+                    host: host, reason: .identityUnavailable, findings: [],
+                    detail: "the launcher observes the verified target bundle directly; no separate identity probe is wired",
+                    nextProbe: nil))
             },
             capabilityEvidence: { [weak self] evidence in
                 self?.codexCapabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []

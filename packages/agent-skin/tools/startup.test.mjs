@@ -1791,13 +1791,11 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
 
   const mounted = controlledHost();
   mounted.host.document.documentElement.lang = 'en-US';
-  let entryResource = null;
+  // Known limit (C0): mountEntry takes no cleanup registry — the entry node stays
+  // owned by the controller's dispose path, so there is no entry resource to register.
+  assert.equal(adapter.mountEntry.length, 8, 'mountEntry exposes the controller-owned entry surface only');
   const entry = adapter.mountEntry(mounted.host.document, () => {}, null, undefined,
-    adapter.observeAppearance(mounted.host), mounted.host, () => {}, () => {},
-    candidate => { entryResource = candidate; });
-  assert.equal(entryResource?.key, 'codex-appearance-entry');
-  assert.equal(typeof entryResource?.dispose, 'function');
+    adapter.observeAppearance(mounted.host), mounted.host, () => {}, () => {});
   assert.equal(typeof entry.remove, 'function');
-  assert.doesNotThrow(() => entryResource.dispose(),
-    'the registered disposal invokes the entry removal');
+  assert.doesNotThrow(() => entry.remove());
 });

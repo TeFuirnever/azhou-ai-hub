@@ -34,9 +34,12 @@ final class CodexInstallObservation {
 /// Transport wrapper that records the install send and delegates everything else.
 @MainActor
 final class InstallObservingStartupTransport: StartupTransport {
-    /// StartupConnector.installExpression is the only expression that resolves the
-    /// embedded payload through Promise.resolve; seeing it means the install was sent.
+    /// StartupConnector.installExpression (Wallpaper.swift installExpression) is the
+    /// only evaluation that resolves the embedded payload through Promise.resolve and
+    /// carries the literal alreadyActive field; both substrings must match so an
+    /// unrelated expression cannot look like an install send.
     private static let installMarker = "Promise.resolve(("
+    private static let installFieldMarker = "alreadyActive: false"
     private let base: any StartupTransport
     private let recorder: CodexInstallObservation
 
@@ -54,7 +57,9 @@ final class InstallObservingStartupTransport: StartupTransport {
     }
 
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
-        if source.contains(Self.installMarker) { recorder.markInstallSent() }
+        if source.contains(Self.installMarker) && source.contains(Self.installFieldMarker) {
+            recorder.markInstallSent()
+        }
         return try await base.evaluate(source, timeout: timeout)
     }
 
@@ -113,36 +118,43 @@ final class CodexSkinDriver: SkinHostDriver {
         self.assembly = assembly
     }
 
-    // MARK: - launch
+    // MARK: - shared identity guards
 
-    func launch(_ request: SkinLaunchRequest) async -> SkinLaunchResult {
-        guard request.expectedApplication == inputs.identity.key else {
-            return .refused(HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
-                                        findings: inputs.findings,
-                                        detail: "request targets another application identity",
-                                        nextProbe: nil))
-        }
-        guard !pageOperationInFlight else {
-            return busyResult(detail: "a page-changing launch is already in flight on this driver")
-        }
+    private func identityMismatchRefusal(_ detail: String) -> HostRefusal {
+        HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
+                    findings: inputs.findings, detail: detail, nextProbe: nil)
+    }
+
+    /// Live workspace observation of the installation identity (read-only).
+    private func resolvedRunningApplications()
+        -> (running: [any NativeApplication], matching: [any NativeApplication]) {
         let running = runtime.runningApplications(bundleIdentifier: inputs.identity.key.bundleIdentifier)
             .filter { !$0.isTerminated }
         let matching = running.filter {
             $0.bundleURL.map { $0.resolvingSymlinksInPath().standardizedFileURL } == inputs.identity.key.bundleURL
         }
+        return (running, matching)
+    }
+
+    // MARK: - launch
+
+    func launch(_ request: SkinLaunchRequest) async -> SkinLaunchResult {
+        guard request.expectedApplication == inputs.identity.key else {
+            return .refused(identityMismatchRefusal("request targets another application identity"))
+        }
+        guard !pageOperationInFlight else {
+            return busyResult(detail: "a page-changing launch is already in flight on this driver")
+        }
+        let (running, matching) = resolvedRunningApplications()
         guard running.isEmpty || (running.count == 1 && matching.count == 1) else {
-            return .refused(HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
-                                        findings: inputs.findings,
-                                        detail: "running Codex processes do not resolve to one verified target",
-                                        nextProbe: nil))
+            return .refused(identityMismatchRefusal(
+                "running Codex processes do not resolve to one verified target"))
         }
         let existing: StartupTargetFacts?
         if let app = matching.first {
             guard let facts = try? assembly.startupFacts(app) else {
-                return .refused(HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
-                                            findings: inputs.findings,
-                                            detail: "running Codex process lacks a complete identity",
-                                            nextProbe: nil))
+                return .refused(identityMismatchRefusal(
+                    "running Codex process lacks a complete identity"))
             }
             existing = facts
         } else {
@@ -203,20 +215,13 @@ final class CodexSkinDriver: SkinHostDriver {
 
     func inspect(_ request: SkinInspectRequest) async -> SkinInspectResult {
         guard request.expectedApplication == inputs.identity.key else {
-            return .unavailable(HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
-                                            findings: inputs.findings,
-                                            detail: "request targets another application identity",
-                                            nextProbe: nil))
+            return .unavailable(identityMismatchRefusal("request targets another application identity"))
         }
         let stage: SkinOperationStage = request.includePage ? .inspectPage : .inspectApplication
         if let refusal = capabilityRefusal(for: stage, inputs: inputs) {
             return .unavailable(refusal)
         }
-        let running = runtime.runningApplications(bundleIdentifier: inputs.identity.key.bundleIdentifier)
-            .filter { !$0.isTerminated }
-        let matching = running.filter {
-            $0.bundleURL.map { $0.resolvingSymlinksInPath().standardizedFileURL } == inputs.identity.key.bundleURL
-        }
+        let (_, matching) = resolvedRunningApplications()
         let process: HostProcessGeneration?
         if let app = matching.first, let facts = try? assembly.startupFacts(app) {
             process = HostProcessGeneration(pid: facts.pid, launchTime: facts.launchTime,
@@ -224,20 +229,18 @@ final class CodexSkinDriver: SkinHostDriver {
         } else {
             process = nil
         }
-        // Page state stays explicitly unobserved: this build performs no implicit
-        // cold start and never installs a controller to probe a page.
+        // Known limit (C0): page state stays explicitly unobserved — this build
+        // performs no implicit cold start and never installs a controller to probe a
+        // page; page-level observation is deferred to the ZCode page-observation work.
         return .observed(process: process,
-                         page: .notObserved(reason: "page observation requires an attachment attempt"))
+                         page: .notObserved(reason: "known limit (C0): page observation requires an attachment attempt; page-level observation is deferred to the page-observation ticket"))
     }
 
     // MARK: - disable (lock domain shared with launch; no rollback of foreign owners)
 
     func disable(_ request: SkinDisableRequest) async -> SkinDisableResult {
         guard request.expectedApplication == inputs.identity.key else {
-            return .unavailable(HostRefusal(host: inputs.identity.key.host, reason: .identityMismatch,
-                                            findings: inputs.findings,
-                                            detail: "request targets another application identity",
-                                            nextProbe: nil))
+            return .unavailable(identityMismatchRefusal("request targets another application identity"))
         }
         guard !pageOperationInFlight else {
             return .refused(SkinOperationFailure(reason: .operationBusy,
@@ -350,6 +353,18 @@ final class CodexSkinDriver: SkinHostDriver {
                                 cleanup: CleanupReport(state: .notNeeded, released: [],
                                                        intentionallyRetained: ["existing-startup-controller"],
                                                        unconfirmed: []))
+            }
+            if reason == "startup-interrupted" || observation.installSentCount > 0 {
+                // The install was sent (startup-interrupted additionally confirmed the
+                // install reply) and then the status observation was lost to navigation
+                // or controller disappearance. The page may hold a committed controller,
+                // so this is installation-unknown — never notObserved, never fully-clean
+                // (spec §7.3: 已发送安装但回复丢失 / 文档已变化).
+                return .partial(SkinOperationFailure(reason: .operationCancelled, detail: reason),
+                                page: .unknown(operationID: request.operationID,
+                                               detail: "install was sent; the page state after interruption is unconfirmed"),
+                                cleanup: CleanupReport(state: .unknown, released: [],
+                                                       intentionallyRetained: [], unconfirmed: ["page-controller"]))
             }
             return .partial(SkinOperationFailure(reason: .operationCancelled, detail: reason),
                             page: .notObserved(reason: reason),

@@ -715,16 +715,14 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     appearanceText(factory, appearance, themeConfig) {
       return appearanceText(factory, appearance, themeConfig);
     },
+    // Known limit (C0): the entry node's cleanup stays owned directly by the page
+    // controller's existing dispose path; mountEntry deliberately takes no cleanup
+    // registry so the adapter cannot claim a second lifecycle of the same node
+    // (spec §6.4). Adapter-created resources use registerCleanup below instead.
     mountEntry(document, openSettings, assets, factory, appearance, host,
-      retryWallpaper, dismissWallpaperFailure, registerCleanup) {
-      const entry = mountAppearanceEntry(document, openSettings, assets, factory, appearance, host,
+      retryWallpaper, dismissWallpaperFailure) {
+      return mountAppearanceEntry(document, openSettings, assets, factory, appearance, host,
         retryWallpaper, dismissWallpaperFailure);
-      // Registration belongs to the page controller's single cleanup registry
-      // (spec §6.4): the adapter never keeps a second lifecycle of the same node.
-      if (typeof registerCleanup === 'function') {
-        registerCleanup({ key: 'codex-appearance-entry', dispose: () => { entry.remove(); } });
-      }
-      return entry;
     },
     settingsEnvironment(source = hostEnvironment) {
       // Returning the environment opens no database; callers inject it into their

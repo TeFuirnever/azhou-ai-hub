@@ -2857,6 +2857,39 @@ private func skinHostContractChecks() async throws -> Int {
                "a driver refuses a request bound to another application identity")
     } else { fatalError("FAILED: cross-application requests must refuse") }
 
+    // A startup-interrupted run after a confirmed install is installation-unknown,
+    // never notObserved and never a fully-clean cleanup (spec §7.3).
+    let interruptedApp = FakeNativeApplication(
+        pid: 5329, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 208.0)
+    let interruptedRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    interruptedRuntime.openedApplication = interruptedApp
+    let interruptedTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false],
+        ])
+    let interruptedDriver = contractDriver(runtime: interruptedRuntime,
+                                           system: FakeStartupSystem(expectedPID: 5329, ports: [9333]),
+                                           transport: interruptedTransport,
+                                           findings: verifiedCodexFindings(codexKey))
+    if case .partial(let failure, let page, let cleanup) = await interruptedDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(failure.detail == "startup-interrupted",
+               "an interrupted run keeps its legacy partial reason")
+        expect(page.isInstallationUnknown,
+               "a sent install followed by a lost status observation is installation-unknown, not notObserved")
+        expect(cleanup.state == .unknown && cleanup.unconfirmed.contains("page-controller"),
+               "an interrupted install never claims a fully-clean cleanup")
+        expect(startupLegacyOutcome(from: .partial(failure, page: page, cleanup: cleanup))
+               == .partial(reason: "startup-interrupted"),
+               "the bridge still maps the interrupted partial back to its legacy reason")
+    } else { fatalError("FAILED: an interrupted install must stay a partial result") }
+
     // The bridge keeps every remaining legacy shape for old consumers.
     expect(startupLegacyOutcome(from: .skipped(.notObserved(reason: "legacy-v1-status-polling"),
                                                   runID: 5, beforeReady: true))
