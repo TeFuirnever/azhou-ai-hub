@@ -52,9 +52,13 @@ struct InstallRegistryTests {
         let infoValues: [String: Any] = [
             "CFBundleIdentifier": "local.azhou.codex-startup",
             "CFBundleExecutable": "AzhouCodexStartup",
+            // InstallRegistryCore binds this field to the physical .app path.
             "CFBundleName": "阿舟 AI 实验室",
-            "CFBundleShortVersionString": "1.2.3",
-            "CFBundleVersion": "123",
+            "CFBundleDisplayName": "阿舟 AI 实验室",
+            "CFBundleShortVersionString": "0.9.0",
+            "CFBundleVersion": "23",
+            "CFBundleDevelopmentRegion": "en",
+            "CFBundleLocalizations": ["en", "zh-Hans"],
         ]
         let executable = application.appendingPathComponent("Contents/MacOS/AzhouCodexStartup")
         let markerURL = application.appendingPathComponent("Contents/Resources/azhou-build.json")
@@ -62,6 +66,12 @@ struct InstallRegistryTests {
         try FileManager.default.createDirectory(at: markerURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        for (locale, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 AI 实验室 for Codex")] {
+            let localized = application.appendingPathComponent("Contents/Resources/\(locale).lproj/InfoPlist.strings")
+            try FileManager.default.createDirectory(at: localized.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let value = "\"CFBundleDisplayName\" = \"\(name)\";\n\"CFBundleName\" = \"\(name)\";\n"
+            try Data(value.utf8).write(to: localized)
+        }
 
         let missingInfo = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
         expect(missingInfo.output["error"] as? String == "application identity does not match the project launcher",
@@ -94,7 +104,7 @@ struct InstallRegistryTests {
         var marker: [String: Any] = [
             "schema": 1, "projectID": "azhou.codex-startup-animation",
             "bundleID": "local.azhou.codex-startup", "executable": "AzhouCodexStartup",
-            "projectRoot": root.path, "version": "1.2.3", "build": "123",
+            "projectRoot": root.path, "version": "0.9.0", "build": "23",
             "inputSHA256": String(repeating: "a", count: 64),
         ]
         func writeMarker() throws {
@@ -113,7 +123,7 @@ struct InstallRegistryTests {
             marker[key] = [
                 "schema": 1, "projectID": "azhou.codex-startup-animation",
                 "bundleID": "local.azhou.codex-startup", "executable": "AzhouCodexStartup",
-                "projectRoot": root.path, "version": "1.2.3", "build": "123",
+                "projectRoot": root.path, "version": "0.9.0", "build": "23",
                 "inputSHA256": String(repeating: "a", count: 64),
             ][key]
         }
@@ -128,12 +138,22 @@ struct InstallRegistryTests {
         platform.registerStatus = noErr
         let registrationSuccess = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
         expect(registrationSuccess.exitCode == 0 && registrationSuccess.output["ok"] as? Bool == true,
-               "a verified synthetic bundle returns the successful register receipt")
+               "the Codex display labels register through the real core while the bundle name stays path-aligned")
+
+        var mismatchedCandidateInfo = infoValues
+        mismatchedCandidateInfo["CFBundleName"] = "阿舟 AI 实验室 for Codex"
+        try writeInfo(at: application, values: mismatchedCandidateInfo)
+        let candidateNameAsPath = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(candidateNameAsPath.exitCode == 1
+               && candidateNameAsPath.output["error"] as? String == "application path does not match its built bundle name",
+               "the Codex display label cannot replace the established installation basename")
+        try writeInfo(at: application, values: infoValues)
 
         let custom = root.appendingPathComponent("Applications/自定义实验室.app", isDirectory: true)
         try FileManager.default.copyItem(at: application, to: custom)
         var customInfo = infoValues
         customInfo["CFBundleName"] = "自定义实验室"
+        customInfo["CFBundleDisplayName"] = "自定义实验室"
         try writeInfo(at: custom, values: customInfo)
         let customRegistration = InstallRegistryCLI.execute(arguments: ["register", custom.path], platform: platform)
         expect(customRegistration.exitCode == 0 && platform.registeredPaths.last == custom.path,

@@ -361,16 +361,29 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         self.assertTrue(module._build_script(PACKAGE, {}, "body { color: black; }", artifacts))
         with tempfile.TemporaryDirectory(prefix="agent-skin-startup-source-") as temporary:
             root = Path(temporary)
-            for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs", "extension/bootstrap.mjs",
-                             "wallpaper/renderer.js", "wallpaper/apply.js", "localization.js"):
+            for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs",
+                             "extension/codex-page-adapter.mjs", "extension/bootstrap.mjs",
+                             "wallpaper/renderer.js", "wallpaper/apply.js", "localization.js",
+                             "vendor/dream-image-metadata.mjs"):
                 target = root / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(PACKAGE / relative, target)
+
+            vendor_source = root / "vendor/dream-image-metadata.mjs"
+            vendor_source.unlink()
+            with self.assertRaisesRegex(RuntimeError, r"Missing startup source module: .*vendor/dream-image-metadata\.mjs"):
+                module._build_script(root, {}, "", artifacts)
+            shutil.copyfile(PACKAGE / "vendor/dream-image-metadata.mjs", vendor_source)
 
             (root / "animation.js").unlink()
             with self.assertRaisesRegex(RuntimeError, "Missing startup source module"):
                 module._build_script(root, {}, "", artifacts)
             shutil.copyfile(PACKAGE / "animation.js", root / "animation.js")
+            (root / "extension/codex-page-adapter.mjs").write_text(
+                "export function createCodexPageAdapter() {}\nimport './x.js';\n")
+            with self.assertRaisesRegex(RuntimeError, "Codex page adapter"):
+                module._build_script(root, {}, "", artifacts)
+            shutil.copyfile(PACKAGE / "extension/codex-page-adapter.mjs", root / "extension/codex-page-adapter.mjs")
             (root / "localization.js").unlink()
             with self.assertRaisesRegex(RuntimeError, "Missing startup localization source"):
                 module._build_script(root, {}, "", artifacts)
@@ -425,6 +438,39 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
                 runpy.run_path(str(root / "tools/build-startup.py"), run_name="__main__")
             self.assertEqual(error.exception.code, 1)
             self.assertIn("启动载荷构建失败", stdout.getvalue())
+
+    def test_startup_cli_updates_image_metadata_reader_and_rejects_missing_source(self):
+        helpers = load_module(TOOLS / "test-startup-build.py", "agent_skin_reader_cli_fixtures")
+        builder = load_module(TOOLS / "build-startup.py", "agent_skin_reader_cli_builder")
+        with tempfile.TemporaryDirectory(prefix="agent-skin-reader-cli-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            helpers.clone_source_tree(root)
+            script = root / "tools/build-startup.py"
+            reader = root / "image-metadata-reader.js"
+            reader.write_text("stale reader\n", encoding="utf-8")
+
+            stdout = io.StringIO()
+            with mock.patch.object(sys, "argv", [str(script), "--update-image-metadata-reader"]), \
+                    contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as success:
+                runpy.run_path(str(script), run_name="__main__")
+            self.assertEqual(success.exception.code, 0)
+            self.assertIn("Updated image-metadata-reader.js", stdout.getvalue())
+            self.assertEqual(reader.read_text(encoding="utf-8"), builder.image_metadata_reader_source(root))
+
+            stderr = io.StringIO()
+            with mock.patch.object(sys, "argv", [str(script)]), contextlib.redirect_stderr(stderr), \
+                    self.assertRaises(SystemExit) as missing_bundle:
+                runpy.run_path(str(script), run_name="__main__")
+            self.assertEqual(missing_bundle.exception.code, 2)
+            self.assertIn("--bundle is required unless --update-image-metadata-reader is used", stderr.getvalue())
+
+            (root / "vendor/dream-image-metadata.mjs").unlink()
+            stderr = io.StringIO()
+            with mock.patch.object(sys, "argv", [str(script), "--update-image-metadata-reader"]), \
+                    contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit) as missing_source:
+                runpy.run_path(str(script), run_name="__main__")
+            self.assertEqual(missing_source.exception.code, 1)
+            self.assertIn("尺寸解析器适配生成失败", stderr.getvalue())
 
     def test_startup_build_fails_closed_for_missing_sources_generation_and_output_bounds(self):
         module = self.module

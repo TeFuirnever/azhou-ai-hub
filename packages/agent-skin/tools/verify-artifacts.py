@@ -112,10 +112,9 @@ def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
     installation_name = identity.get('installationName')
     if (not isinstance(installation_name, str) or len(installation_name) > 255
             or '/' in installation_name or '\\' in installation_name
-            or not installation_name.endswith('.app')
-            or installation_name != app_name['zh-CN'] + '.app'
+            or not installation_name.endswith('.app') or installation_name == '.app'
             or any(ord(character) < 32 or ord(character) == 127 for character in installation_name)):
-        raise RuntimeError('theme-config.json installationName must be a safe .app basename matching the Chinese app name.')
+        raise RuntimeError('theme-config.json installationName must be a safe .app basename.')
     icon_input = _private_input_path(identity.get('iconInput'), 'identity.iconInput')
     entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
     if icon_input == entry_avatar_input:
@@ -196,19 +195,48 @@ VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version'
 NAME = load_theme_config(ROOT)['identity']['installationName']
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
+    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/bootstrap.mjs',
+    'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js',
 )
 STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
-    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/bootstrap.mjs',
+    'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+# Exact startup source set used by installed builds 17 through 25, before the shared
+# Codex page adapter was added to the payload (agent-skin-zcode C0). Preserved
+# read-only so already-installed payloads re-verify instead of silently failing.
+PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+    'wallpaper/renderer.js', 'wallpaper/apply.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
+# The first build whose payload binds the shared Codex page adapter.
+PAGE_ADAPTER_STARTUP_FIRST_BUILD = 26
+# Exact 0.9.0 startup source set used before image metadata was added to the payload.
+PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+    'wallpaper/renderer.js', 'wallpaper/apply.js', 'wallpaper/wallpaper.css',
+    'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
 # Builds 11/12 are installed locally and used this exact pre-extraction input set.
-PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS = tuple(name for name in STARTUP_REQUIRED_INPUTS
-                                            if name not in {'wallpaper/apply.js', 'extension/bootstrap.mjs'})
+PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS = (
+    'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+    'extension/renderer.mjs', 'image-settings.js', 'localization.js', 'wallpaper/renderer.js',
+    'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+)
 # Exact 0.9.0/build 10 source contract from before theme-config.json was added.
 LEGACY_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
@@ -220,11 +248,24 @@ LEGACY_STARTUP_ASSET_KEYS = frozenset({
 })
 # Pre-theme-config 0.9.0/build 10 bundles embedded these native names.
 LEGACY_DEFAULT_APP_NAME = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
+IMAGE_METADATA_STARTUP_FIRST_BUILD = 17
 STARTUP_OUTPUTS = (
+    'startup/install.js',
+    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
+    'web/image-metadata-reader.js', 'web/vendor/dream-image-metadata.mjs',
+    'web/vendor/dream-image-metadata.LICENSE',
+    'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
+    'web/assets/defaults/contours.js',
+)
+# Exact output set from the pre-image-metadata 0.9.0 payloads, including builds 10/11/12.
+PRE_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
+)
+PRE_IMAGE_METADATA_PREVIEW_SOURCES = (
+    'index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
 )
 MAX_STARTUP_BYTES = 24 * 1024 * 1024
 MAX_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
@@ -417,8 +458,8 @@ def write_bundle_info(path):
     info = {
         'CFBundleExecutable': IDENTITY[1],
         'CFBundleIdentifier': IDENTITY[0],
-        'CFBundleName': Path(identity['installationName']).stem,
-        'CFBundleDisplayName': Path(identity['installationName']).stem,
+        'CFBundleName': bundle_fallback_display_name(identity),
+        'CFBundleDisplayName': bundle_fallback_display_name(identity),
         'CFBundleDevelopmentRegion': 'en',
         'CFBundleLocalizations': ['en', 'zh-Hans'],
         'CFBundleIconFile': ICON_NAME,
@@ -627,11 +668,29 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
 
     source_inputs = manifest.get('sourceInputs')
-    allowed_theme_inputs = {frozenset(STARTUP_REQUIRED_INPUTS)}
-    if not current_source and expected_version == '0.9.0' and expected_build in {'11', '12'}:
-        allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
+    current_startup_inputs = frozenset(STARTUP_REQUIRED_INPUTS)
+    if current_source:
+        allowed_theme_inputs = {current_startup_inputs}
+    else:
+        allowed_theme_inputs = {frozenset(PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS)}
+        # 0.9.0 builds from 17 through this verifier's build share the image-metadata contract.
+        is_known_image_metadata_build = (
+            expected_version == '0.9.0'
+            and re.fullmatch(r'(?:0|[1-9][0-9]*)', expected_build) is not None
+            and len(expected_build) <= len(BUILD)
+            and IMAGE_METADATA_STARTUP_FIRST_BUILD <= int(expected_build) <= int(BUILD)
+        )
+        if ((expected_version, expected_build) == (VERSION, BUILD)
+                or is_known_image_metadata_build):
+            allowed_theme_inputs.add(current_startup_inputs)
+        # Installed builds 17 through 25 bound the pre-page-adapter source set.
+        if (expected_version == '0.9.0' and is_known_image_metadata_build
+                and int(expected_build) < PAGE_ADAPTER_STARTUP_FIRST_BUILD):
+            allowed_theme_inputs.add(frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
+        if expected_version == '0.9.0' and expected_build in {'11', '12'}:
+            allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
     allowed_source_inputs = set(allowed_theme_inputs)
-    if not current_source:
+    if not current_source and (expected_version, expected_build) == ('0.9.0', '10'):
         allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
     if (not isinstance(source_inputs, dict)
             or frozenset(source_inputs) not in allowed_source_inputs):
@@ -650,11 +709,16 @@ def verify_startup(path, info, marker, *, current_source=True):
                 or not set(STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
             raise RuntimeError('Hub package runtime version/build 或 startup build inputs/runtime_paths 未同步。')
 
+    uses_current_startup_inputs = frozenset(source_inputs) == current_startup_inputs
+    uses_pre_page_adapter_startup_inputs = (
+        frozenset(source_inputs) == frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
+    uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs
+    expected_outputs = STARTUP_OUTPUTS if uses_image_metadata_outputs else PRE_IMAGE_METADATA_STARTUP_OUTPUTS
     outputs = manifest.get('outputs')
-    if not isinstance(outputs, dict) or set(outputs) != set(STARTUP_OUTPUTS):
+    if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs):
         raise RuntimeError('startup manifest 的 output 路径清单不完整。')
     output_bytes = {}
-    for relative in STARTUP_OUTPUTS:
+    for relative in expected_outputs:
         candidate = resources / relative
         if candidate.is_symlink() or not candidate.is_file():
             raise RuntimeError(f'启动产物缺失或不是实体文件：{candidate}')
@@ -664,7 +728,12 @@ def verify_startup(path, info, marker, *, current_source=True):
             raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
         output_bytes[relative] = data
 
-    for source_name in ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js'):
+    preview_sources = (
+        ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
+         'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE')
+        if uses_image_metadata_outputs else PRE_IMAGE_METADATA_PREVIEW_SOURCES
+    )
+    for source_name in preview_sources:
         copied = output_bytes['web/' + source_name]
         source_digest = marker['inputs'].get(source_name)
         if source_digest != hashlib.sha256(copied).hexdigest():
@@ -758,7 +827,9 @@ def verify_startup(path, info, marker, *, current_source=True):
     legacy_entry = 'return installStartup(installAnimation, globalThis);' in script
     bootstrap_entry = ('return bootstrapStartup({' in script
                        and 'return installStartup(installAnimation, host);' in script)
-    if not (legacy_entry or bootstrap_entry):
+    page_adapter_entry = ('return bootstrapStartup({' in script
+                          and 'return installStartup(installAnimation, host, pageAdapter);' in script)
+    if not (legacy_entry or bootstrap_entry or page_adapter_entry):
         raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
     return manifest
 
@@ -769,10 +840,9 @@ def verify_localized_names(path, info, theme_config=None, *, legacy=False):
         fallback_name = app_name['en']
     else:
         theme = theme_config or load_theme_config(ROOT)
-        app_name = theme['identity']['appName']
-        # Verified build 10 payloads predate the Finder basename correction.
-        previous_names = theme['identity']['version'] == '0.9.0' and theme['identity']['build'] == '10'
-        fallback_name = app_name['en'] if previous_names else Path(theme['identity']['installationName']).stem
+        identity = theme['identity']
+        app_name = identity['appName']
+        fallback_name = bundle_fallback_display_name(identity)
     if (info.get('CFBundleName'), info.get('CFBundleDisplayName')) != (fallback_name, fallback_name):
         raise RuntimeError('Native bundle fallback display name does not match its verified theme.')
     resources = Path(path) / 'Contents/Resources'
@@ -793,6 +863,17 @@ def verify_localized_names(path, info, theme_config=None, *, legacy=False):
             raise RuntimeError(f'Native localized display-name resource is unreadable: {relative}') from exc
         if actual != text:
             raise RuntimeError(f'Native localized display-name resource is incorrect: {relative}')
+
+
+def bundle_fallback_display_name(identity):
+    """Keep CFBundleName aligned with the installation basename for registration."""
+    version = identity['version']
+    build = int(identity['build'])
+    # Build 10 used an English fallback; build 11 onward aligns the native bundle
+    # name with the canonical path. Localized InfoPlist.strings carry the display label.
+    if version == '0.9.0' and build == 10:
+        return identity['appName']['en']
+    return Path(identity['installationName']).stem
 
 
 def verify_product(path, *, current_source=True):

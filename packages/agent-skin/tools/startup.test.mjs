@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installStartup } from '../extension/renderer.mjs';
+import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
+const pageAdapter = createCodexPageAdapter(globalThis);
 
 const mainURL = 'app://-/index.html?initialRoute=%2F';
 
@@ -12,6 +14,25 @@ function controlledHost({ body = true } = {}) {
   const frames = [];
   const controls = [];
   const timers = [];
+  let hostUIReady = true;
+  const hostControl = {
+    tagName: 'DIV', style: {}, hidden: false,
+    getAttribute(name) { return name === 'role' ? 'textbox' : null; },
+    matches(selector) { return selector.includes('[role="textbox"]'); },
+    getBoundingClientRect() { return { left: 200, right: 500, width: 300, top: 680, bottom: 780, height: 100 }; },
+  };
+  const controlWrapper = {
+    style: { opacity: '1' },
+    getBoundingClientRect() { return { left: 200, right: 800, width: 600, top: 600, bottom: 790, height: 190 }; },
+    querySelector(selector) { return selector.includes('[role="textbox"]') ? hostControl : null; },
+  };
+  const appRoot = {
+    style: {},
+    getBoundingClientRect() { return { left: 0, right: 1024, width: 1024, top: 0, bottom: 800, height: 800 }; },
+    querySelectorAll() { return hostUIReady ? [hostControl] : []; },
+  };
+  controlWrapper.parentNode = appRoot;
+  hostControl.parentNode = controlWrapper;
   const documentElement = {
     children: [],
     appendChild(node) {
@@ -38,6 +59,7 @@ function controlledHost({ body = true } = {}) {
   const document = {
     documentElement,
     querySelectorAll: () => [],
+    getElementById(id) { return id === 'root' ? appRoot : null; },
     activeElement: null,
     hasFocus: () => true,
     createElement(tag) {
@@ -103,6 +125,8 @@ function controlledHost({ body = true } = {}) {
   const host = {
     location: new URL(mainURL),
     document,
+    CSS: { supports: (kind, value) => kind === 'color'
+      && /^(?:#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([^)]*\)|transparent|currentcolor)$/i.test(String(value).trim()) },
     getComputedStyle(node) { return node.computedStyle ?? node.style ?? {}; },
     MutationObserver: class MutationObserver {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
@@ -137,10 +161,12 @@ function controlledHost({ body = true } = {}) {
     clearTimeout(timer) { timer.cleared = true; },
   };
   return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
-    keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size };
+    keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size,
+    appRoot, hostControl, controlWrapper,
+    setHostUIReady(value) { hostUIReady = value; } };
 }
 
-function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot' } = {}) {
+function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'Your dot', layout = 'links' } = {}) {
   const rows = [];
   const createRow = (tagName, textContent, getWidth = () => width) => ({
     tagName,
@@ -157,6 +183,12 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
     },
     setAttribute(name, value) { (this.attributes ??= new Map()).set(name, value); },
     getAttribute(name) { return this.attributes?.get(name) ?? null; },
+    closest(selector) {
+      for (let node = this; node; node = node.parentNode) {
+        if (selector === '[role="listitem"]' && node.getAttribute?.('role') === 'listitem') return node;
+      }
+      return null;
+    },
     appendChild(child) { return this.insertBefore(child, null); },
     insertBefore(child, reference) {
       child.parentNode?.removeChild?.(child);
@@ -178,15 +210,47 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
   for (let index = 0; index < count; index += 1) {
     let navWidth = width;
     const nav = createRow('nav', undefined, () => navWidth);
-    const yourDot = createRow('a', label);
-    const pinned = createRow('a', 'Pinned');
-    nav.appendChild(yourDot);
-    nav.appendChild(pinned);
-    rows.push({ nav, yourDot, pinned, setWidth(value) { navWidth = value; } });
+    if (layout === 'home' || layout === 'wrapped') {
+      nav.setAttribute('aria-label', 'Home');
+      const header = createRow('div', undefined, () => navWidth);
+      const navList = createRow('div', undefined, () => navWidth);
+      navList.setAttribute('class', 'group/nav-list flex flex-col');
+      const yourDot = createRow('button', label);
+      let list, listItem;
+      if (layout === 'wrapped') {
+        list = createRow('div', undefined, () => navWidth); list.setAttribute('role', 'list');
+        listItem = createRow('div', undefined, () => navWidth); listItem.setAttribute('role', 'listitem');
+        const wrapper = createRow('div', undefined, () => navWidth);
+        wrapper.appendChild(yourDot); listItem.appendChild(wrapper); list.appendChild(listItem); navList.appendChild(list);
+      } else navList.appendChild(yourDot);
+      header.appendChild(navList);
+      nav.appendChild(header);
+      const scrollContent = createRow('div', undefined, () => navWidth);
+      const pinned = createRow('section', 'Pinned');
+      const chatTitle = createRow('button', 'Your dot');
+      scrollContent.appendChild(pinned);
+      scrollContent.appendChild(chatTitle);
+      nav.appendChild(scrollContent);
+      rows.push({ nav, header, navList, yourDot, list, listItem, scrollContent, pinned, chatTitle,
+        setWidth(value) { navWidth = value; } });
+    } else {
+      const yourDot = createRow('a', label);
+      const pinned = createRow('a', 'Pinned');
+      nav.appendChild(yourDot);
+      nav.appendChild(pinned);
+      rows.push({ nav, yourDot, pinned, setWidth(value) { navWidth = value; } });
+    }
   }
-  fixture.host.document.querySelectorAll = selector => selector === 'nav a[href]'
-    ? rows.flatMap(({ yourDot, pinned }) => [yourDot, pinned])
-    : fixture.host.document.appearanceControls ?? [];
+  fixture.host.document.querySelectorAll = selector => {
+    const matches = [];
+    if (layout === 'home' || layout === 'wrapped') {
+      if (selector.includes('[class~="group/nav-list"]')) matches.push(...rows.map(({ yourDot }) => yourDot));
+      else if (selector.includes('nav button')) matches.push(...rows.flatMap(({ yourDot, chatTitle }) => [yourDot, chatTitle]));
+    } else if (selector.includes('nav a[href]')) {
+      matches.push(...rows.flatMap(({ yourDot, pinned }) => [yourDot, pinned]));
+    }
+    return matches.length ? matches : fixture.host.document.appearanceControls ?? [];
+  };
   fixture.host.document.appearanceNavigation = rows;
   return rows;
 }
@@ -207,7 +271,7 @@ test('hidden navigation falls back to a visible left entry and scroll reposition
   const createElement = doc.createElement;
   doc.createElement = tag => {
     const node = createElement(tag);
-    if (tag === 'div') {
+    if (tag === 'div' && !entry) {
       entry = node;
       node.getBoundingClientRect = () => {
         const left = Number.parseFloat(node.style.left || '10px');
@@ -221,7 +285,7 @@ test('hidden navigation falls back to a visible left entry and scroll reposition
     return node;
   };
   let runId;
-  installStartup((...args) => { runId = args[14].runId; }, fixture.host);
+  installStartup((...args) => { runId = args[14].runId; }, fixture.host, pageAdapter);
   fixture.host.send({ type: 'azhou-startup', action: 'ready', runId }, fixture.frames[0].contentWindow);
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
   entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
@@ -252,7 +316,7 @@ test('display-none navigation and zero-size ancestors use fallback, then reclaim
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     runId = spec.runId;
     send({ type: 'azhou-startup', action: 'ready', runId });
-  }, fixture.host);
+  }, fixture.host, pageAdapter);
   const api = fixture.host.__azhouStartup;
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
   const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
@@ -296,7 +360,7 @@ test('appearance entry joins the unique Your dot navigation row before Pinned', 
     overlayLabel: locale === 'en' ? 'Azhou startup animation' : '阿舟启动动画',
   })[key] });
   payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
-  installStartup(payload, fixture.host);
+  installStartup(payload, fixture.host, pageAdapter);
   const entry = fixture.controls.find(node => node.tagName === 'div');
   const button = appearanceButton(fixture);
   assert.equal(nav.children[0], yourDot);
@@ -322,12 +386,122 @@ test('appearance entry joins the unique Your dot navigation row before Pinned', 
   fixture.host.__azhouStartup.dispose();
 });
 
+test('appearance entry follows the Home Your dot button, ignores a same-named chat, and fits a narrow sidebar', () => {
+  for (const label of ['Your dot', '你的 Dot']) {
+    const fixture = controlledHost();
+    const [{ nav, navList, yourDot, scrollContent, pinned, chatTitle, setWidth }] =
+      addAppearanceNavigation(fixture, { label, layout: 'home' });
+    let runId;
+    const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+      runId = spec.runId;
+      send({ type: 'azhou-startup', action: 'ready', runId });
+    };
+    payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
+    installStartup(payload, fixture.host, pageAdapter);
+    const api = fixture.host.__azhouStartup;
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    const button = appearanceButton(fixture);
+
+    assert.equal(nav.children[0].children[0], navList);
+    assert.equal(navList.children[0], yourDot);
+    assert.equal(navList.children[1], entry, 'the owned row follows the system button in normal flow');
+    assert.equal(entry.style.position, 'static');
+    assert.equal(entry.style.left, '');
+    assert.equal(entry.style.bottom, '');
+    assert.equal(scrollContent.children[0], pinned, 'Pinned remains after the system navigation row');
+    assert.equal(scrollContent.children[1], chatTitle, 'a same-named user chat stays in the scroll content');
+
+    fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+    setWidth(52);
+    const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+    observer.trigger([{ target: nav, type: 'attributes', attributeName: 'style' }]);
+    fixture.timers.at(-1).callback();
+    assert.equal(navList.children[1], entry, 'a collapsed sidebar keeps the row in its normal-flow slot');
+    assert.equal(button.children.at(-1).style.display, 'none', 'the collapsed row hides its text to avoid overflow');
+    assert.equal(button.children[0].tagName, 'img', 'the avatar remains visible in the narrow row');
+    assert.equal(button.attributes.get('aria-label'), '阿舟外观');
+    api.dispose();
+  }
+});
+
+test('appearance entry uses wrapped Home list rows and refuses unsupported wrappers', () => {
+  for (const valid of [true, false]) {
+    const fixture = controlledHost();
+    const [{ list, listItem }] = addAppearanceNavigation(fixture, { layout: 'wrapped' });
+    if (!valid) list.setAttribute('role', 'group');
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host, pageAdapter);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode, valid ? list : fixture.host.document.documentElement);
+    if (valid) assert.equal(list.children[1], entry, 'the owned entry follows the wrapped Your dot row');
+    assert.equal(entry.style.position, valid ? 'static' : 'fixed');
+    assert.equal(list.children[0], listItem);
+    fixture.host.__azhouStartup.dispose();
+  }
+});
+
+test('appearance entry accepts a boxless display-contents ancestor but rejects hidden navigation', () => {
+  for (const hidden of [false, true]) {
+    const fixture = controlledHost();
+    const [{ nav, navList }] = addAppearanceNavigation(fixture, { layout: 'home' });
+    nav.parentNode = {
+      tagName: 'DIV', hidden,
+      computedStyle: { display: 'contents', visibility: 'visible' },
+      getBoundingClientRect: () => ({ width: 0, height: 0 }),
+    };
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host, pageAdapter);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode === navList, !hidden);
+    assert.equal(entry.style.position, hidden ? 'fixed' : 'static');
+    fixture.host.__azhouStartup.dispose();
+  }
+});
+
+test('duplicate Home Your dot buttons keep the appearance entry on its fallback', () => {
+  const fixture = controlledHost();
+  addAppearanceNavigation(fixture, { count: 2, layout: 'home' });
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+  }, fixture.host, pageAdapter);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(entry.parentNode, fixture.host.document.documentElement);
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance entry reanchors into a late Home Your dot button navigation', () => {
+  const fixture = controlledHost();
+  addAppearanceNavigation(fixture, { count: 0, layout: 'home' });
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host, pageAdapter);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  assert.equal(entry.parentNode, fixture.host.document.documentElement);
+
+  const [row] = addAppearanceNavigation(fixture, { layout: 'home' });
+  fixture.host.document.documentElement.appendChild(row.nav);
+  observer.trigger([{ target: fixture.host.document.documentElement, type: 'childList', addedNodes: [row.nav] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(row.navList.children[1], entry, 'a late system button reclaims the entry into normal flow');
+  assert.equal(entry.style.position, 'static');
+  api.dispose();
+});
+
 test('appearance entry recognizes the exact Simplified Chinese Your dot navigation name', () => {
   const fixture = controlledHost();
   const [{ nav, yourDot, pinned }] = addAppearanceNavigation(fixture, { label: '你的 Dot' });
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
-  }, fixture.host);
+  }, fixture.host, pageAdapter);
   const entry = fixture.controls.find(node => node.tagName === 'div');
   assert.equal(nav.children[0], yourDot);
   assert.equal(nav.children[1], entry, 'the translated semantic anchor gets the same normal-flow row');
@@ -338,17 +512,25 @@ test('appearance entry recognizes the exact Simplified Chinese Your dot navigati
 test('appearance entry uses a stable left fallback and stops observing on dispose', () => {
   const fixture = controlledHost();
   const doc = fixture.host.document;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 1024;
+  const createElement = doc.createElement;
+  doc.createElement = tag => {
+    const node = createElement(tag);
+    if (tag === 'div') node.getBoundingClientRect = () => ({ width: 120, height: 44 });
+    return node;
+  };
   let run;
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     run = spec.runId;
     send({ type: 'azhou-startup', action: 'ready', runId: run });
-  }, fixture.host);
+  }, fixture.host, pageAdapter);
   const api = fixture.host.__azhouStartup;
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: run, skipped: false }, fixture.frames[0].contentWindow);
   const entry = fixture.controls.find(node => node.tagName === 'div');
   assert.equal(entry.style.position, 'fixed');
   assert.equal(entry.style.left, '10px');
-  assert.equal(entry.style.bottom, '72px');
+  assert.equal(entry.style.top, '684px');
   assert.equal(entry.style.display, 'block');
   const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
   assert.ok(observer);
@@ -365,6 +547,66 @@ test('appearance entry uses a stable left fallback and stops observing on dispos
   if (last) assert.equal(last.cleared, true);
 });
 
+test('Escape before a usable host control keeps Appearance hidden and restores its fallback when controls arrive', () => {
+  const fixture = controlledHost();
+  const doc = fixture.host.document;
+  doc.documentElement.clientHeight = 800;
+  doc.documentElement.clientWidth = 1024;
+  doc.querySelectorAll = selector => selector.includes('[role="textbox"]') ? [fixture.hostControl] : [];
+  let loadingOverlay = null;
+  doc.elementFromPoint = () => loadingOverlay ?? fixture.hostControl;
+  fixture.setHostUIReady(false);
+  fixture.controlWrapper.style.opacity = '0';
+  const createElement = doc.createElement;
+  doc.createElement = tag => {
+    const node = createElement(tag);
+    if (tag === 'div' && !node.getBoundingClientRect) {
+      node.getBoundingClientRect = () => {
+        const left = Number.parseFloat(node.style.left || '10px');
+        const top = node.style.top && node.style.top !== 'auto'
+          ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - Number.parseFloat(node.style.bottom || '72px') - 44;
+        return { left, right: left + 150, width: 150, top, bottom: top + 44, height: 44 };
+      };
+    }
+    return node;
+  };
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, _send, spec) => {
+    runId = spec.runId;
+  }, fixture.host, pageAdapter);
+  const api = fixture.host.__azhouStartup;
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: true }, fixture.frames[0].contentWindow);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(api.status().completion.beforeReady, true, 'the skipped animation completed before the host controls exist');
+  assert.equal(entry.style.display, 'none', 'the lower-left fallback stays hidden during the host splash');
+
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  fixture.setHostUIReady(true);
+  observer.trigger([{ target: fixture.controlWrapper, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'none', 'a hidden editor wrapper does not establish a usable host page');
+
+  fixture.controlWrapper.style.opacity = '1';
+  fixture.controlWrapper.getBoundingClientRect = () => ({ left: 200, right: 200, width: 0, top: 600, bottom: 600, height: 0 });
+  loadingOverlay = { tagName: 'DIV' };
+  observer.trigger([{ target: fixture.controlWrapper, type: 'attributes', attributeName: 'style' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'none', 'a visible control stays unavailable while a loading overlay intercepts pointer hits');
+
+  loadingOverlay = null;
+  observer.trigger([{ target: doc.documentElement, type: 'childList', addedNodes: [], removedNodes: [] }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(entry.style.display, 'block', 'a visible editor restores fallback even when its host wrapper has a zero-size box');
+  assert.equal(entry.style.position, 'fixed');
+  assert.equal(entry.style.left, '10px');
+  const bounds = entry.getBoundingClientRect();
+  const textbox = fixture.hostControl.getBoundingClientRect();
+  const horizontalOverlap = bounds.left < textbox.right && bounds.right > textbox.left;
+  assert.ok(!horizontalOverlap || bounds.bottom + 8 <= textbox.top || bounds.top >= textbox.bottom + 8,
+    'the recovered fallback keeps clearance from the host textbox');
+  api.dispose();
+});
+
 test('left fallback avoids update and account controls and remains clickable', () => {
   const fixture = controlledHost();
   const doc = fixture.host.document;
@@ -375,15 +617,21 @@ test('left fallback avoids update and account controls and remains clickable', (
   doc.createElement = tag => {
     const node = createElement(tag);
     if (tag === 'div') {
-      entry = node;
-      node.getBoundingClientRect = () => {
-        const left = Number.parseFloat(node.style.left || '10px');
-        const bottom = Number.parseFloat(node.style.bottom || '72px');
-        const label = node.children[0].children.at(-1);
-        const width = label.style.display === 'none' ? 48 : 150;
-        const top = node.style.top && node.style.top !== 'auto'
-          ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - bottom - 44;
-        return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+      const setAttribute = node.setAttribute.bind(node);
+      node.setAttribute = (name, value) => {
+        setAttribute(name, value);
+        if (name !== 'data-agent-skin-entry' || value !== 'appearance') return;
+        entry = node;
+        node.getBoundingClientRect = () => {
+          const left = Number.parseFloat(node.style.left || '10px');
+          const bottom = Number.parseFloat(node.style.bottom || '72px');
+          const button = node.children.find(child => child.attributes?.has('aria-haspopup'));
+          const label = button?.children.at(-1);
+          const width = label?.style.display === 'none' ? 48 : 150;
+          const top = node.style.top && node.style.top !== 'auto'
+            ? Number.parseFloat(node.style.top) : doc.documentElement.clientHeight - bottom - 44;
+          return { left, right: left + width, width, top, bottom: top + 44, height: 44 };
+        };
       };
     }
     return node;
@@ -398,7 +646,7 @@ test('left fallback avoids update and account controls and remains clickable', (
     runs.push(spec);
     send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
   };
-  installStartup(payload, fixture.host);
+  installStartup(payload, fixture.host, pageAdapter);
   const api = fixture.host.__azhouStartup;
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false }, fixture.frames[0].contentWindow);
   const button = appearanceButton(fixture);
@@ -421,7 +669,7 @@ test('appearance entry follows a late unique navigation and falls back across am
   installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
     runId = spec.runId;
     send({ type: 'azhou-startup', action: 'ready', runId });
-  }, fixture.host);
+  }, fixture.host, pageAdapter);
   const api = fixture.host.__azhouStartup;
   fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
   const entry = fixture.controls.find(node => node.tagName === 'div');
@@ -463,7 +711,7 @@ test('a visible appearance button opens settings after playback without a keyboa
     runs.push(frameSpec);
     SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false }, controlled.frames[0].contentWindow);
   const officialShortcut = { metaKey: true, altKey: true, key: 'b', prevented: false,
@@ -508,7 +756,7 @@ test('official language and theme flow into the overlay and update without resta
     overlayLabel: locale === 'en' ? 'Azhou startup animation' : '阿舟启动动画',
   })[key] });
   payload.assets = { entryAvatar: 'data:image/png;base64,AA==' };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   assert.equal(spec.appearance.locale, 'en');
   assert.equal(spec.appearance.theme, 'light');
   assert.equal(spec.appearance.colors.surface, '#fafafa');
@@ -532,8 +780,70 @@ test('official language and theme flow into the overlay and update without resta
   assert.equal(appearances.at(-1).locale, 'zh-CN');
 });
 
+test('wallpaper receives the first valid official surface and follows theme fallbacks', async () => {
+  const controlled = controlledHost();
+  const root = controlled.host.document.documentElement;
+  root.lang = 'en-US';
+  root.dataset = { theme: 'dark' };
+  root.getAttribute = name => name === 'lang' ? root.lang : root.dataset.theme;
+  let tokens = {
+    '--app-color-background-surface': 'not-a-color',
+    '--color-surface': 'rgb(200, 210, 220)',
+  };
+  controlled.host.getComputedStyle = () => ({
+    getPropertyValue: name => tokens[name] || '',
+    colorScheme: root.dataset.theme,
+  });
+  const appliedSurfaces = [];
+  const wallpaperAPI = {
+    owner: 'azhou.codex-startup-animation', version: '0.9.0',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }),
+    updateSurface(value) { appliedSurfaces.push(value); return true; },
+    dispose() {},
+  };
+  let spec;
+  let backgroundRequest;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    spec = frameSpec;
+    backgroundRequest = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,AA==', strength: 42 });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = async value => {
+    appliedSurfaces.push(value.surface);
+    controlled.host.__azhouWallpaper = wallpaperAPI;
+    return { applied: true };
+  };
+  installStartup(payload, controlled.host, pageAdapter);
+  await backgroundRequest;
+  assert.equal(spec.appearance.colors.surface, 'rgb(200, 210, 220)',
+    'an invalid higher-priority token falls through to the next valid token');
+  assert.equal(appliedSurfaces[0], 'rgb(200, 210, 220)',
+    'the wallpaper applicator receives the resolved color rather than a raw token');
+
+  tokens = {
+    '--app-color-background-surface': 'rgb(10, 20, 30)',
+    '--color-surface': 'rgb(200, 210, 220)',
+  };
+  root.dataset.theme = 'light';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), 'rgb(10, 20, 30)', 'the app token has first priority');
+
+  tokens = { '--app-color-background-surface': 'not-a-color', '--color-surface': 'also-not-a-color' };
+  root.dataset.theme = 'dark';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), '#10121c', 'invalid dark tokens use the dark fallback');
+
+  root.dataset.theme = 'light';
+  controlled.observers.forEach(observer => observer.trigger());
+  assert.equal(appliedSurfaces.at(-1), '#ffffff', 'invalid light tokens use the light fallback');
+  controlled.host.__azhouStartup.dispose();
+});
+
 test('the real controller and default iframe mount execute an explicit parent-realm payload bridge', () => {
   const controlled = controlledHost();
+  controlled.host.document.documentElement.lang = 'en-US';
   const observed = {};
   const result = installStartup(function (
     window, document, location, performance, indexedDB, Image, Path2D, URL,
@@ -546,7 +856,7 @@ test('the real controller and default iframe mount execute an explicit parent-re
     requestAnimationFrame(() => SEND({
       type: 'azhou-startup', action: 'ready', runId: frameSpec.runId,
     }));
-  }, controlled.host);
+  }, controlled.host, pageAdapter);
 
   assert.deepEqual(result, { installed: true, alreadyActive: false });
   assert.equal(controlled.frames.length, 1);
@@ -590,7 +900,7 @@ test('a real minimal payload can skip before ready and the controller records th
   const result = installStartup(function (_window, _document, _location, _performance, _indexedDB,
     _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
     SEND({ type: 'azhou-startup', action: 'complete', runId: frameSpec.runId, skipped: true });
-  }, controlled.host);
+  }, controlled.host, pageAdapter);
   assert.deepEqual(result, { installed: true, alreadyActive: false });
 
   const status = controlled.host.__azhouStartup.status();
@@ -605,7 +915,7 @@ test('a real minimal payload can skip before ready and the controller records th
 
 test('the loading watchdog releases a never-ready overlay and keeps a typed timeout receipt', () => {
   const controlled = controlledHost();
-  installStartup(function () {}, controlled.host);
+  installStartup(function () {}, controlled.host, pageAdapter);
   const frame = controlled.frames[0];
   const timer = controlled.timers[0];
   assert.equal(timer.delay, 25_000);
@@ -624,8 +934,8 @@ test('the loading watchdog releases a never-ready overlay and keeps a typed time
 test('install does not replace an existing controller or an unknown owner', () => {
   const controlled = controlledHost();
   const payload = function () {};
-  const first = installStartup(payload, controlled.host);
-  const second = installStartup(payload, controlled.host);
+  const first = installStartup(payload, controlled.host, pageAdapter);
+  const second = installStartup(payload, controlled.host, pageAdapter);
   assert.deepEqual(first, { installed: true, alreadyActive: false });
   assert.deepEqual(second, { installed: true, alreadyActive: true });
   assert.equal(controlled.frames.length, 1);
@@ -633,7 +943,7 @@ test('install does not replace an existing controller or an unknown owner', () =
   const unknown = controlledHost();
   const existing = { owner: 'unknown-owner', version: 9 };
   Object.defineProperty(unknown.host, '__azhouStartup', { value: existing, configurable: true });
-  assert.deepEqual(installStartup(payload, unknown.host), {
+  assert.deepEqual(installStartup(payload, unknown.host, pageAdapter), {
     installed: false, alreadyActive: false, reason: 'owner-conflict',
   });
   assert.equal(unknown.host.__azhouStartup, existing);
@@ -642,7 +952,7 @@ test('install does not replace an existing controller or an unknown owner', () =
 
 test('dispose is idempotent and removes only its owned frame and listener', () => {
   const controlled = controlledHost();
-  installStartup(function () {}, controlled.host);
+  installStartup(function () {}, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   const frame = controlled.frames[0];
   assert.deepEqual(api.dispose(), { disposed: true });
@@ -673,7 +983,7 @@ test('play and settings frames share one controller and each new run gets fresh 
   };
   payload.assets = Object.freeze({ fixture: 'controlled-assets' });
 
-  assert.deepEqual(installStartup(payload, controlled.host), { installed: true, alreadyActive: false });
+  assert.deepEqual(installStartup(payload, controlled.host, pageAdapter), { installed: true, alreadyActive: false });
   const api = controlled.host.__azhouStartup;
   assert.equal(api.openSettings(), false, 'loading resources cannot open settings');
   assert.equal(controlled.frames.length, 1);
@@ -713,7 +1023,7 @@ test('complete opens a settings-intent frame and cancellation preserves the save
     return { dispose() {} };
   };
   payload.assets = { fixture: true };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   controlled.frames[0].contentWindow.flushAnimationFrame();
   controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false }, controlled.frames[0].contentWindow);
@@ -737,7 +1047,7 @@ test('complete opens a settings-intent frame and cancellation preserves the save
 
 test('a missing body uses a temporary observer within the original loading deadline', () => {
   const controlled = controlledHost({ body: false });
-  installStartup(function () {}, controlled.host);
+  installStartup(function () {}, controlled.host, pageAdapter);
   assert.equal(controlled.frames.length, 0);
   assert.equal(controlled.timers.length, 1);
   assert.equal(controlled.timers[0].delay, 25_000);
@@ -753,7 +1063,7 @@ test('a missing body uses a temporary observer within the original loading deadl
 
 test('body wait expiry uses the same run transition and cannot mount later', () => {
   const controlled = controlledHost({ body: false });
-  installStartup(function () {}, controlled.host);
+  installStartup(function () {}, controlled.host, pageAdapter);
   const runId = controlled.host.__azhouStartup.status().runId;
   controlled.timers[0].callback();
   assert.deepEqual(controlled.host.__azhouStartup.status(), {
@@ -782,7 +1092,7 @@ test('wallpaper can finish after natural playback but is cancelled by skip or di
       stillCurrent = isCurrent;
       finishWallpaper = resolve;
     });
-    installStartup(payload, controlled.host);
+    installStartup(payload, controlled.host, pageAdapter);
     const api = controlled.host.__azhouStartup;
     const source = controlled.frames[0].contentWindow;
     controlled.host.send({ type: 'azhou-startup', action: 'ready', runId: runs[0].runId }, source);
@@ -813,7 +1123,7 @@ test('a late wallpaper callback cannot update a disposed run', async () => {
     stillCurrent = isCurrent;
     finishWallpaper = resolve;
   });
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   const frame = controlled.frames[0];
   frame.contentWindow.flushAnimationFrame();
@@ -842,7 +1152,7 @@ test('a newer disabled background invalidates an earlier decode within the same 
     return { dispose() {} };
   };
   payload.applyWallpaper = (_background, current) => new Promise(resolve => { isCurrent = current; release = resolve; });
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   const frame = controlled.frames[0];
   assert.equal(isCurrent(), true);
@@ -870,7 +1180,7 @@ test('a fresh settings frame restores its captured host focus without stealing a
     raf(() => SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId }));
     return { dispose() {} };
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   controlled.frames[0].contentWindow.flushAnimationFrame();
   controlled.host.document.activeElement = hostInput;
@@ -904,7 +1214,7 @@ test('only the exact supported wallpaper owner is composed and disposed', () => 
     owner: 'azhou.codex-startup-animation', version: '0.7.0',
     status: () => ({ applied: true }), dispose() { unknownDisposals += 1; },
   };
-  assert.deepEqual(installStartup(function () {}, unknown.host), {
+  assert.deepEqual(installStartup(function () {}, unknown.host, pageAdapter), {
     installed: false, alreadyActive: false, reason: 'owner-conflict',
   });
   assert.equal(unknown.frames.length, 0);
@@ -917,7 +1227,7 @@ test('only the exact supported wallpaper owner is composed and disposed', () => 
     status: () => ({ applied: true, imageDecoded: true, reason: '' }),
     dispose() { legacyDisposals += 1; },
   };
-  assert.deepEqual(installStartup(function () {}, supported.host), { installed: true, alreadyActive: false });
+  assert.deepEqual(installStartup(function () {}, supported.host, pageAdapter), { installed: true, alreadyActive: false });
   assert.equal(supported.host.__azhouStartup.status().wallpaper.applied, true);
   supported.host.__azhouStartup.dispose();
   assert.equal(legacyDisposals, 1);
@@ -957,7 +1267,7 @@ test('a failed wallpaper can be retried by the completed controller without repl
     return { applied: true };
   };
 
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   const originalFrame = controlled.frames[0];
   const originalRunId = api.status().runId;
@@ -1010,7 +1320,7 @@ test('status, retry, and dispose refuse an externally replaced same-owner wallpa
     controlled.host.__azhouWallpaper = ownedWallpaperAPI;
     return { applied: true };
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   await initialWallpaper;
   const runId = api.status().runId;
@@ -1030,13 +1340,118 @@ test('status, retry, and dispose refuse an externally replaced same-owner wallpa
   assert.equal(foreignDisposals, 0);
 });
 
+test('startup wallpaper failure is announced at the entry and the UI retry clears it without replay', async () => {
+  const controlled = controlledHost();
+  const senders = [];
+  let initialWallpaper;
+  let attempts = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    senders.push({ SEND, frameSpec });
+    if (frameSpec.intent === 'play') {
+      initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    }
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    attempts += 1;
+    if (attempts === 1) {
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported' };
+    }
+    controlled.host.__azhouWallpaper = {
+      owner: 'azhou.codex-startup-animation', version: '0.7.1',
+      status: () => ({ applied: true, imageDecoded: true, reason: '' }), dispose() {},
+    };
+    return { applied: true };
+  };
+
+  installStartup(payload, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const runId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false },
+    controlled.frames[0].contentWindow);
+
+  const recovery = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-recovery'));
+  const retryButton = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-retry'));
+  assert.equal(recovery.style.display, 'block');
+  assert.equal(recovery.children[0].textContent, '启动背景未应用');
+  assert.equal(recovery.children[1].textContent, '当前页面暂时无法监测可用的工作区背景区域。');
+  assert.equal(retryButton.attributes.get('aria-label'), '重试启动背景');
+  assert.equal(senders.length, 1, 'startup failure leaves the original run and appearance entry in place');
+
+  retryButton.click();
+  const retry = await api.retryWallpaper();
+  assert.equal(retry.retried, true);
+  assert.equal(retry.wallpaper.applied, true);
+  assert.equal(attempts, 2);
+  assert.equal(api.status().runId, runId);
+  assert.equal(controlled.frames.length, 1, 'the retry does not create another startup frame');
+  assert.equal(recovery.style.display, 'none', 'success removes the startup error from the existing entry');
+  assert.equal(controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-live'))
+    .textContent, '启动背景已应用。');
+  api.dispose();
+});
+
+test('settings wallpaper failure stays with the settings run and cannot replace startup recovery', async () => {
+  const controlled = controlledHost();
+  const senders = [];
+  let initialWallpaper;
+  let attempts = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    senders.push({ SEND, frameSpec });
+    if (frameSpec.intent === 'play') {
+      initialWallpaper = SEND({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+        image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    }
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+  };
+  payload.applyWallpaper = () => {
+    attempts += 1;
+    return { applied: false, reason: 'wallpaper-unsupported',
+      failureCode: attempts === 1 ? 'shell-unsupported' : 'image-decode-failed' };
+  };
+
+  installStartup(payload, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  await initialWallpaper;
+  const startupRunId = api.status().runId;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: startupRunId, skipped: false },
+    controlled.frames[0].contentWindow);
+  const recovery = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-recovery'));
+  const reason = controlled.controls.find(node => node.attributes?.has('data-agent-skin-wallpaper-reason'));
+  assert.equal(recovery.style.display, 'block');
+  assert.match(reason.textContent, /工作区背景区域/);
+
+  appearanceButton(controlled).click();
+  assert.equal(api.status().phase, 'settings');
+  const settingsRunId = api.status().runId;
+  assert.ok(settingsRunId > startupRunId);
+  const settingsWallpaper = await senders[1].SEND({ type: 'azhou-startup', action: 'background',
+    runId: settingsRunId, image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+  assert.equal(settingsWallpaper.failureCode, 'image-decode-failed');
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(recovery.style.display, 'none', 'the settings error is not copied into the startup entry');
+  assert.match(reason.textContent, /工作区背景区域/,
+    'the settings failure does not replace the prior startup reason stored for its own notice');
+
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: settingsRunId, skipped: true },
+    controlled.frames[1].contentWindow);
+  assert.equal(api.status().completion.cause, 'settings-cancel');
+  assert.equal(recovery.style.display, 'block', 'canceling settings restores only the original startup notice');
+  assert.match(reason.textContent, /工作区背景区域/);
+  api.dispose();
+});
+
 test('wallpaper retry refuses disabled, missing, and unknown-owner requests', async () => {
   const noRequest = controlledHost();
   const noRequestPayload = function (_window, _document, _location, _performance, _indexedDB,
     _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
     SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
   };
-  installStartup(noRequestPayload, noRequest.host);
+  installStartup(noRequestPayload, noRequest.host, pageAdapter);
   const noRequestAPI = noRequest.host.__azhouStartup;
   const noRequestRun = noRequestAPI.status().runId;
   noRequest.host.send({ type: 'azhou-startup', action: 'complete', runId: noRequestRun, skipped: false },
@@ -1054,7 +1469,7 @@ test('wallpaper retry refuses disabled, missing, and unknown-owner requests', as
     SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
   };
   disabledPayload.applyWallpaper = () => { disabledApplies += 1; };
-  installStartup(disabledPayload, disabled.host);
+  installStartup(disabledPayload, disabled.host, pageAdapter);
   const disabledAPI = disabled.host.__azhouStartup;
   await disabledWallpaper;
   const disabledRun = disabledAPI.status().runId;
@@ -1076,7 +1491,7 @@ test('wallpaper retry refuses disabled, missing, and unknown-owner requests', as
     attempts += 1;
     return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported' };
   };
-  installStartup(unknownPayload, unknown.host);
+  installStartup(unknownPayload, unknown.host, pageAdapter);
   const unknownAPI = unknown.host.__azhouStartup;
   await unknownWallpaper;
   const unknownRun = unknownAPI.status().runId;
@@ -1107,7 +1522,7 @@ test('wallpaper exceptions retain only whitelisted failure codes and mapped stag
     error.code = 'shell-timeout';
     throw error;
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   await wallpaperRequest;
   assert.deepEqual(api.status().wallpaper, {
@@ -1138,7 +1553,7 @@ test('concurrent wallpaper retries share one attempt and a new settings run canc
     retryIsCurrent = isCurrent;
     return new Promise(resolve => { finishRetry = resolve; });
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   await initialWallpaper;
   const originalRun = api.status().runId;
@@ -1183,7 +1598,7 @@ test('wallpaper retry times out and a late result cannot revive the canceled att
     retryIsCurrent = isCurrent;
     return new Promise(resolve => { finishRetry = resolve; });
   };
-  installStartup(payload, controlled.host);
+  installStartup(payload, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
   await initialWallpaper;
   const runId = api.status().runId;
@@ -1208,4 +1623,179 @@ test('wallpaper retry times out and a late result cannot revive the canceled att
   assert.equal(api.status().wallpaper.failureCode, 'retry-timeout');
   assert.equal(api.status().wallpaper.applied, false);
   api.dispose();
+});
+
+test('a missing page adapter refuses installation before any page work', () => {
+  const controlled = controlledHost();
+  const document = controlled.host.document;
+  const createElement = document.createElement;
+  let createdElements = 0;
+  document.createElement = (...args) => {
+    createdElements += 1;
+    return createElement(...args);
+  };
+  assert.deepEqual(installStartup(function () {}, controlled.host), {
+    installed: false, alreadyActive: false, reason: 'page-unsupported',
+  });
+  assert.equal(createdElements, 0, 'no DOM element is created without a bound page adapter');
+  assert.equal(controlled.frames.length, 0, 'no overlay frame is mounted');
+  assert.equal(Object.getOwnPropertyDescriptor(controlled.host, '__azhouStartup'), undefined,
+    'no controller global is defined');
+});
+
+test('a wrong page identified through the adapter performs zero page operations', () => {
+  const wrong = controlledHost();
+  wrong.host.location = new URL('app://-/index.html?initialRoute=%2Fquick-chat');
+  const document = wrong.host.document;
+  const createElement = document.createElement;
+  let createdElements = 0;
+  let definePropertyCalls = 0;
+  document.createElement = (...args) => {
+    createdElements += 1;
+    return createElement(...args);
+  };
+  const host = wrong.host;
+  const defineProperty = Object.defineProperty;
+  const instrumentedHost = new Proxy(host, {
+    defineProperty(target, key, descriptor) {
+      definePropertyCalls += 1;
+      return defineProperty(target, key, descriptor);
+    },
+  });
+  assert.deepEqual(installStartup(function () {}, instrumentedHost, pageAdapter), {
+    installed: false, alreadyActive: false, reason: 'page-unsupported',
+  });
+  assert.equal(createdElements, 0, 'a wrong page creates no DOM element');
+  assert.equal(definePropertyCalls, 0, 'a wrong page defines no controller global');
+  assert.equal(wrong.frames.length, 0, 'a wrong page mounts no frame and opens no database');
+});
+
+test('an adapter-injected settings environment supplies the frame indexedDB', () => {
+  const controlled = controlledHost();
+  const sentinelIndexedDB = { __adapterInjected: true };
+  const adapter = Object.freeze({
+    identify: host2 => pageAdapter.identify(host2),
+    observeAppearance: host2 => pageAdapter.observeAppearance(host2),
+    appearanceText: (...args) => pageAdapter.appearanceText(...args),
+    mountEntry: (...args) => pageAdapter.mountEntry(...args),
+    settingsEnvironment: () => ({ indexedDB: sentinelIndexedDB }),
+  });
+  let observedIndexedDB;
+  const result = installStartup(function (_window, _document, _location, _performance, indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _set, _clear, _module, send, frameSpec) {
+    observedIndexedDB = indexedDB;
+    send({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+    send({ type: 'azhou-startup', action: 'complete', runId: frameSpec.runId, skipped: false });
+  }, controlled.host, adapter);
+  assert.deepEqual(result, { installed: true, alreadyActive: false });
+  assert.equal(observedIndexedDB, sentinelIndexedDB,
+    'the settings environment injection seam carries the adapter-provided indexedDB');
+  controlled.host.__azhouStartup.dispose();
+});
+
+test('a late asynchronous wallpaper result cannot complete or resurrect a disposed run', async () => {
+  const controlled = controlledHost();
+  let finishApply;
+  const payload = function (...args) {
+    const send = args[13];
+    const frameSpec = args[14];
+    send({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    send({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+    send({ type: 'azhou-startup', action: 'complete', runId: frameSpec.runId, skipped: false });
+  };
+  payload.applyWallpaper = () => new Promise(resolve => { finishApply = resolve; });
+  installStartup(payload, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  assert.equal(api.status().phase, 'complete');
+  const disposedRunId = api.status().runId;
+  api.dispose();
+  assert.equal(api.status().phase, 'disposed');
+  finishApply({ applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-timeout' });
+  await new Promise(resolve => setImmediate(resolve));
+  const late = api.status();
+  assert.equal(late.phase, 'disposed', 'a late wallpaper result cannot resurrect a disposed run');
+  assert.equal(late.runId, disposedRunId, 'a late wallpaper result cannot renumber the disposed run');
+  assert.equal(late.wallpaper.applied, false);
+  assert.equal(controlled.frames[0].removed, true, 'the overlay frame stays removed after dispose');
+});
+
+test('a partially failed wallpaper application reports its recovery state and stays retryable', async () => {
+  const controlled = controlledHost();
+  const image = 'data:image/png;base64,aGVsbG8=';
+  let applyResult = { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-timeout' };
+  const payload = function (...args) {
+    const send = args[13];
+    const frameSpec = args[14];
+    send({ type: 'azhou-startup', action: 'background', runId: frameSpec.runId, image, strength: 42 });
+    send({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+    send({ type: 'azhou-startup', action: 'complete', runId: frameSpec.runId, skipped: false });
+  };
+  payload.applyWallpaper = () => Promise.resolve(applyResult);
+  const wallpaperAPI = {
+    owner: 'azhou.codex-startup-animation', version: '0.7.1',
+    status: () => ({ applied: false, imageDecoded: true, reason: '' }), dispose() {},
+  };
+  controlled.host.__azhouWallpaper = wallpaperAPI;
+  installStartup(payload, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  await new Promise(resolve => setImmediate(resolve));
+  const failed = api.status().wallpaper;
+  assert.equal(failed.applied, false);
+  assert.equal(failed.failureCode, 'shell-timeout');
+  assert.equal(failed.failureStage, 'shell');
+  // The saved request stays recorded: recovery reports what failed and keeps retry available.
+  const retry = await api.retryWallpaper();
+  assert.equal(retry.retried, true, 'the recovery entry keeps the failed request retryable');
+  assert.equal(retry.wallpaper.applied, false);
+  assert.equal(retry.wallpaper.failureCode, 'shell-timeout',
+    'a retry that fails again keeps reporting the real recovery state');
+  assert.equal(api.status().phase, 'complete', 'recovery does not replay the startup run');
+  assert.equal(controlled.frames.length, 1, 'recovery does not remount the startup overlay');
+  assert.equal(retry.previousFailure.failureCode, 'shell-timeout',
+    'the retry result reports the failure it recovered from');
+  api.dispose();
+});
+
+test('the codex page adapter exposes its host strategy seam explicitly', () => {
+  const adapter = createCodexPageAdapter(globalThis);
+  const controlled = controlledHost();
+  const identification = adapter.identify(controlled.host);
+  assert.equal(identification.kind, 'matched');
+  assert.equal(identification.documentToken, 'app://-/index.html?initialRoute=%2F');
+  assert.deepEqual(adapter.identify({ location: { href: 'not a url' } }),
+    { kind: 'unmatched', reason: 'page-unsupported' });
+  assert.deepEqual(adapter.identify(undefined), { kind: 'unmatched', reason: 'page-unsupported' });
+  const pluginHost = { location: new URL('app://-/index.html?initialRoute=%2Favatar') };
+  assert.equal(adapter.identify(pluginHost).kind, 'unmatched',
+    'a plugin route is not the main page');
+
+  const appearance = adapter.observeAppearance(controlled.host);
+  assert.equal(appearance.theme, 'light');
+  assert.equal(appearance.locale, 'zh-CN');
+  assert.ok(appearance.colors.surface, 'the appearance fallback surface stays available');
+
+  const sentinel = {};
+  assert.deepEqual(adapter.settingsEnvironment({ indexedDB: sentinel }), { indexedDB: sentinel });
+  assert.deepEqual(adapter.settingsEnvironment(), { indexedDB: globalThis.indexedDB });
+
+  const registered = [];
+  const withRegistry = createCodexPageAdapter(globalThis, {},
+    { registerCleanup: resource => registered.push(resource) });
+  const resource = { key: 'adapter-resource', dispose: () => {} };
+  assert.equal(withRegistry.registerCleanup(resource), true);
+  assert.deepEqual(registered, [resource]);
+  assert.equal(withRegistry.registerCleanup(null), false, 'malformed resources are refused');
+  assert.equal(adapter.registerCleanup(resource), false,
+    'without a controller registry the adapter refuses to own a second lifecycle');
+
+  const mounted = controlledHost();
+  mounted.host.document.documentElement.lang = 'en-US';
+  // Known limit (C0): mountEntry takes no cleanup registry — the entry node stays
+  // owned by the controller's dispose path, so there is no entry resource to register.
+  assert.equal(adapter.mountEntry.length, 8, 'mountEntry exposes the controller-owned entry surface only');
+  const entry = adapter.mountEntry(mounted.host.document, () => {}, null, undefined,
+    adapter.observeAppearance(mounted.host), mounted.host, () => {}, () => {});
+  assert.equal(typeof entry.remove, 'function');
+  assert.doesNotThrow(() => entry.remove());
 });

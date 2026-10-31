@@ -897,6 +897,7 @@ struct StartupNativeTests {
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
         checks += try await nativeEventContractChecks()
+        checks += try await skinHostContractChecks()
         #endif
 
         print("Startup native checks passed: \(checks). Scope: injected host facts and transport only; no real open/kill.")
@@ -2214,5 +2215,965 @@ private func nativeEventContractChecks() async throws -> Int {
     pngFailureDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
 
     return checks
+}
+#endif
+
+// MARK: - Shared skin host contract checks (agent-skin-zcode-contract/v0.1)
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+@MainActor
+private func skinHostContractChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: \(label)") }
+        checks += 1
+    }
+    let contractVersion = SkinHostContract.version
+    expect(contractVersion == "agent-skin-zcode-contract/v0.1",
+           "the shared skin host contract carries its declared version")
+
+    func applicationKey(host: SkinHostID = .codex,
+                        bundle: String = "/Applications/Codex.app",
+                        executable: String = "/Applications/Codex.app/Contents/MacOS/Codex",
+                        identifier: String = "com.openai.codex",
+                        sha: String = "codex-executable-sha") -> HostApplicationKey {
+        HostApplicationKey(host: host, bundleURL: URL(fileURLWithPath: bundle).resolvingSymlinksInPath().standardizedFileURL,
+                           executableURL: URL(fileURLWithPath: executable).resolvingSymlinksInPath().standardizedFileURL,
+                           bundleIdentifier: identifier, version: "1.9.0", build: "137",
+                           executableSHA256: sha)
+    }
+    func finding(_ capability: SkinCapability, _ state: EvidenceState,
+                 application: HostApplicationKey? = nil, surface: SkinSurface? = nil,
+                 contract: String? = nil, evidence: [String] = ["codex-chain-evidence"]) -> CapabilityFinding {
+        CapabilityFinding(
+            subject: CapabilityEvidenceSubject(application: application ?? applicationKey(),
+                                               surface: surface ?? SkinHostContract.surface(for: capability),
+                                               contractVersion: contract ?? contractVersion),
+            capability: capability, state: state,
+            evidenceIDs: state == .verified ? evidence : [], reason: "contract-test")
+    }
+    func identity(_ key: HostApplicationKey? = nil) -> HostIdentityEvidence {
+        HostIdentityEvidence(key: key ?? applicationKey(), signingIdentity: "contract-test-signer",
+                             evidenceID: "contract-test-evidence")
+    }
+    func verifiedCodexFindings(_ application: HostApplicationKey) -> [CapabilityFinding] {
+        SkinCapability.allCases.map { finding($0, .verified, application: application) }
+    }
+    func hotOnlyFindings(_ application: HostApplicationKey) -> [CapabilityFinding] {
+        [finding(.applicationIdentity, .verified, application: application),
+         finding(.activateExistingApplication, .verified, application: application),
+         finding(.persistentSettings, .unverified, application: application),
+         finding(.mainWindowAttachment, .unverified, application: application)]
+    }
+    // Factory step 1: identity binding across host, expected application and observed evidence.
+    let codexKey = applicationKey()
+    let otherApplication = applicationKey(bundle: "/Applications/OtherHost.app",
+                                          executable: "/Applications/OtherHost.app/Contents/MacOS/OtherHost",
+                                          identifier: "other.host.app", sha: "other-sha")
+    var codexDrivers = 0
+    func dependencies(codex: ((BoundHostInputs) -> any SkinHostDriver)? = nil,
+                      zcode: ((BoundHostInputs) -> any SkinHostDriver)? = nil) -> SkinAssemblyDependencies {
+        SkinAssemblyDependencies(
+            inspectIdentity: { _, _ in .observed(identity()) },
+            capabilityEvidence: { verifiedCodexFindings($0.key) },
+            makeCodexDriver: codex ?? { _ in
+                codexDrivers += 1
+                return PlaceholderSkinHostDriver(inputs: nil)
+            },
+            makeZCodeDriver: zcode)
+    }
+    if case .unavailable(let refusal) = SkinHostFactory.make(
+        host: .codex, expectedApplication: otherApplication, observed: identity(codexKey),
+        findings: [], contractVersion: contractVersion, dependencies: dependencies()) {
+        expect(refusal.reason == .identityMismatch && refusal.host == .codex,
+               "a factory refuses an expected application that differs from the observed identity")
+    } else { fatalError("FAILED: mismatched application must not assemble a driver") }
+    if case .unavailable(let refusal) = SkinHostFactory.make(
+        host: .zcode, expectedApplication: codexKey, observed: identity(codexKey),
+        findings: [], contractVersion: contractVersion, dependencies: dependencies()) {
+        expect(refusal.reason == .identityMismatch && refusal.host == .zcode,
+               "a factory refuses a host that differs from the application identity")
+    } else { fatalError("FAILED: host mismatch must not assemble a driver") }
+
+    // Factory step 2: findings must bind this application, this contract and the fixed capability surface.
+    func expectEvidenceMismatch(_ findings: [CapabilityFinding], _ label: String) {
+        if case .unavailable(let refusal) = SkinHostFactory.make(
+            host: .codex, expectedApplication: codexKey, observed: identity(codexKey),
+            findings: findings, contractVersion: contractVersion, dependencies: dependencies()) {
+            expect(refusal.reason == .evidenceMismatch, label)
+        } else { fatalError("FAILED: \(label) must be refused") }
+    }
+    expectEvidenceMismatch([finding(.applicationIdentity, .verified, application: otherApplication)],
+        "a finding for another application cannot support this installation identity")
+    expectEvidenceMismatch([finding(.applicationIdentity, .verified, contract: "agent-skin-zcode-contract/v0.0")],
+        "a finding from another contract version is rejected")
+    expectEvidenceMismatch([finding(.mainWindowAttachment, .verified, surface: .application)],
+        "an application-surface (plugin page) record cannot impersonate main-window evidence")
+
+    // Factory step 3: duplicates, conflicts and unsupported verified-without-evidence records are rejected.
+    expectEvidenceMismatch([finding(.applicationIdentity, .verified), finding(.applicationIdentity, .verified)],
+        "duplicate records for one capability are rejected")
+    expectEvidenceMismatch([finding(.applicationIdentity, .verified), finding(.applicationIdentity, .unverified)],
+        "conflicting states for one capability are rejected")
+    expectEvidenceMismatch([finding(.applicationIdentity, .verified, evidence: [])],
+        "a verified record without source evidence references is rejected")
+
+    // Factory step 4: unverified or unsupported records do not block assembly.
+    if case .ready = SkinHostFactory.make(
+        host: .codex, expectedApplication: codexKey, observed: identity(codexKey),
+        findings: [finding(.persistentSettings, .unverified), finding(.ownedResourceRemoval, .unsupported)],
+        contractVersion: contractVersion, dependencies: dependencies()) {
+        checks += 1
+    } else { fatalError("FAILED: unused unverified capabilities must not block the factory") }
+
+    // Factory step 5: no ZCode constructor means an explicit refusal, never a Codex fallback.
+    codexDrivers = 0
+    if case .unavailable(let refusal) = SkinHostFactory.make(
+        host: .zcode, expectedApplication: applicationKey(host: .zcode),
+        observed: identity(applicationKey(host: .zcode)),
+        findings: verifiedCodexFindings(applicationKey(host: .zcode)),
+        contractVersion: contractVersion, dependencies: dependencies()) {
+        expect(refusal.reason == .implementationUnavailable && refusal.host == .zcode,
+               "a missing ZCode constructor refuses with implementationUnavailable")
+    } else { fatalError("FAILED: missing constructor must refuse") }
+    expect(codexDrivers == 0, "a refused ZCode assembly never falls back to the Codex constructor")
+
+    // Factory step 6: a Codex assembly binds the driver to immutable bound inputs.
+    codexDrivers = 0
+    var capturedInputs: BoundHostInputs?
+    let codexDependencies = dependencies(codex: { inputs in
+        codexDrivers += 1
+        capturedInputs = inputs
+        return PlaceholderSkinHostDriver(inputs: inputs)
+    })
+    if case .ready(let driver) = SkinHostFactory.make(
+        host: .codex, expectedApplication: codexKey, observed: identity(codexKey),
+        findings: verifiedCodexFindings(codexKey), contractVersion: contractVersion,
+        dependencies: codexDependencies) {
+        expect(codexDrivers == 1 && driver is PlaceholderSkinHostDriver,
+               "the Codex constructor assembles exactly one driver")
+        expect(capturedInputs?.identity.key == codexKey && capturedInputs?.contractVersion == contractVersion,
+               "the driver receives immutable bound inputs for this installation identity")
+    } else { fatalError("FAILED: a consistent Codex assembly must produce a driver") }
+
+    // Per-operation capability gates.
+    func boundInputs(_ findings: [CapabilityFinding]) -> BoundHostInputs {
+        BoundHostInputs(identity: identity(codexKey), findings: findings, contractVersion: contractVersion)
+    }
+    expect(capabilityRefusal(for: .activateExisting, inputs: boundInputs(hotOnlyFindings(codexKey))) == nil,
+           "hot activation only requires identity and existing-instance activation evidence")
+    let identityGapRefusal = capabilityRefusal(for: .activateExisting, inputs: boundInputs(
+        [finding(.applicationIdentity, .unverified), finding(.activateExistingApplication, .verified)]))
+    if identityGapRefusal != nil {
+        expect(identityGapRefusal?.reason == .capabilityUnverified, "an unverified identity capability blocks its operation")
+    } else { fatalError("FAILED: unverified identity must refuse") }
+    let coldGapRefusal = capabilityRefusal(for: .coldLaunchSkin, inputs: boundInputs(hotOnlyFindings(codexKey)))
+    if let refusal = coldGapRefusal {
+        expect(refusal.reason == .capabilityUnverified
+               && refusal.findings.contains { $0.capability == .mainWindowAttachment },
+               "a cold launch missing main-window attachment is refused as unverified")
+    } else { fatalError("FAILED: cold launch without main-window capability must refuse") }
+    expect(capabilityRefusal(for: .inspectApplication, inputs: boundInputs(hotOnlyFindings(codexKey))) == nil,
+           "application-only inspection is not blocked by missing page or storage capabilities")
+    let pageInspectionRefusal = capabilityRefusal(for: .inspectPage, inputs: boundInputs(hotOnlyFindings(codexKey)))
+    if let refusal = pageInspectionRefusal {
+        expect(refusal.reason == .capabilityUnverified, "page inspection requires verified page identification")
+    } else { fatalError("FAILED: page inspection without identification must refuse") }
+    let unsupportedRemovalRefusal = capabilityRefusal(for: .disableSkin, inputs: boundInputs(
+        [finding(.applicationIdentity, .verified), finding(.mainPageIdentification, .verified),
+         finding(.ownedResourceRemoval, .unsupported)]))
+    if let refusal = unsupportedRemovalRefusal {
+        expect(refusal.reason == .capabilityUnsupported, "an unsupported removal capability is refused as unsupported")
+    } else { fatalError("FAILED: unsupported removal must refuse") }
+
+    // Driver hot path: identity + activate only; no port, transport, payload or opening side effects.
+    let hotRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    let hotApp = FakeNativeApplication(
+        pid: 4123, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 123.0)
+    hotRuntime.applications = [hotApp]
+    let hotSystem = FakeStartupSystem(expectedPID: 4123, ports: [9222])
+    var hotPayloadReads = 0
+    var hotOpeningChanges: [Bool] = []
+    let hotTransport = FakeStartupTransport()
+    var hotConnectorBuilt = false
+    let hotObservation = CodexInstallObservation()
+    let hotAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in },
+        activateExisting: { facts in
+            guard let app = hotRuntime.application(processIdentifier: facts.pid), !app.isTerminated,
+                  app.bundleIdentifier == facts.bundleID,
+                  app.bundleURL.map({ $0.resolvingSymlinksInPath().standardizedFileURL }) == facts.bundle,
+                  app.executableURL.map({ $0.resolvingSymlinksInPath().standardizedFileURL }) == facts.executable,
+                  app.launchTime == facts.launchTime else { return false }
+            return app.activate()
+        },
+        preparePort: { try hotRuntime.allocateLoopbackPort() },
+        openApplication: { _, _, _, _ in
+            throw StartupFailure(reason: "protocol-error", message: "hot path must not open Codex")
+        },
+        onTargetOpened: { _ in fatalError("FAILED: hot activation must not record a cold-open target") },
+        onCaptureReady: { _ in fatalError("FAILED: hot activation must not create a capture") },
+        eventStream: { nil },
+        onOpeningChanged: { hotOpeningChanges.append($0) },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let hotDriver = CodexSkinDriver(
+        inputs: boundInputs(hotOnlyFindings(codexKey)), runtime: hotRuntime,
+        readPayload: { hotPayloadReads += 1; return "hot-payload" },
+        makeTargetSystem: { hotSystem },
+        makeConnector: { _, _, _, _, _ in
+            hotConnectorBuilt = true
+            return StartupConnector(target: .init(pid: 4123, bundle: codexKey.bundleURL,
+                                                  executable: codexKey.executableURL,
+                                                  bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                                    expectedPort: 9222, system: hotSystem, transport: hotTransport,
+                                    now: { 0 }, sleep: { _ in })
+        },
+        installObservation: hotObservation, assembly: hotAssembly)
+    let hotResult = await hotDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160))
+    if case .activated(let generation) = hotResult {
+        expect(generation.pid == 4123, "hot activation reports the activated process generation")
+    } else { fatalError("FAILED: verified hot activation must activate") }
+    expect(hotRuntime.openCount == 0 && hotRuntime.openedPorts.isEmpty,
+           "hot activation opens no application and allocates no debugging port")
+    expect(hotConnectorBuilt == false && hotTransport.evaluateCount == 0 && hotTransport.pagesCount == 0,
+           "hot activation creates no transport, page lookup or payload evaluation")
+    expect(hotPayloadReads == 0, "hot activation never reads the production startup payload")
+    expect(hotOpeningChanges == [false],
+           "hot activation never opens; it only runs the terminal opening reset like the previous launcher")
+    expect(startupLegacyOutcome(from: hotResult) == .activated(pid: 4123),
+           "the bridge maps an activated generation back to the legacy outcome")
+
+    // Driver cold path refused before any side effect when main-window capability is unverified.
+    let coldRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    coldRuntime.applications = []
+    let coldSystem = FakeStartupSystem(expectedPID: 5321, ports: [9333])
+    var coldPayloadReads = 0
+    let coldTransport = FakeStartupTransport()
+    let coldAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in },
+        activateExisting: { _ in false },
+        preparePort: { try coldRuntime.allocateLoopbackPort() },
+        openApplication: { _, _, _, _ in throw StartupFailure(reason: "protocol-error", message: "unreachable") },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { nil },
+        onOpeningChanged: { _ in fatalError("FAILED: refused cold launch must not change opening state") },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier, bundle: codexKey.bundleURL,
+                               executable: codexKey.executableURL, bundleID: codexKey.bundleIdentifier,
+                               launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let coldDriver = CodexSkinDriver(
+        inputs: boundInputs(hotOnlyFindings(codexKey)), runtime: coldRuntime,
+        readPayload: { coldPayloadReads += 1; return "cold-payload" },
+        makeTargetSystem: { coldSystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 5321, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: coldSystem, transport: coldTransport,
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: CodexInstallObservation(), assembly: coldAssembly)
+    if case .refused(let refusal) = await coldDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(refusal.reason == .capabilityUnverified,
+               "a cold launch without the required main-window capability is refused")
+    } else { fatalError("FAILED: capability-gap cold launch must refuse") }
+    expect(coldRuntime.openCount == 0 && coldPayloadReads == 0 && coldTransport.pagesCount == 0
+           && coldTransport.evaluateCount == 0 && coldTransport.connectCount == 0,
+           "a refused cold launch starts nothing, creates no transport, writes no page and opens no database")
+
+    // Cold launch with verified capabilities installs through the connector and keeps legacy outcomes.
+    let installURL = "app://-/index.html?initialRoute=%2F"
+    func pageEntry() -> [String: Any] {
+        ["type": "page", "id": "selected-page", "url": installURL,
+         "webSocketDebuggerUrl": "ws://127.0.0.1:9333/devtools/page/selected-page"]
+    }
+    func statusBody(runID: Int, phase: String, ready: Bool) -> [String: Any] {
+        ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
+         "ready": ready, "completed": false, "overlay": true, "reason": "",
+         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+    }
+    let installedApp = FakeNativeApplication(
+        pid: 5321, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 200.0)
+    let readyRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    readyRuntime.openedApplication = installedApp
+    let readySystem = FakeStartupSystem(expectedPID: 5321, ports: [9333])
+    let readyTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "playing", ready: true)],
+        ])
+    var readyOpening: [Bool] = []
+    let readyObservation = CodexInstallObservation()
+    func contractEventStream(pid: Int) -> NativeStartupEventStream {
+        NativeStartupEventStream(writer: NativeEventWriter(
+            startedAt: 900, launcherPID: pid, launcherPath: "/Applications/Agent Skin.app",
+            now: { 901 }, sink: { _ in }))
+    }
+    let readyEvents = contractEventStream(pid: 4242)
+    let readyAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in },
+        activateExisting: { _ in false },
+        preparePort: { try readyRuntime.allocateLoopbackPort() },
+        openApplication: { url, port, deadline, system in
+            try await AppDelegate.openTargetApplication(runtime: readyRuntime, targetBundleID: "com.openai.codex",
+                                                         url: url, port: port, deadline: deadline, system: system,
+                                                         log: { _, _ in })
+        },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { readyEvents },
+        onOpeningChanged: { readyOpening.append($0) },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let readyDriver = CodexSkinDriver(
+        inputs: boundInputs(verifiedCodexFindings(codexKey)), runtime: readyRuntime,
+        readPayload: { "test-only-probe-ready" },
+        makeTargetSystem: { readySystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 5321, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: readySystem,
+                             transport: InstallObservingStartupTransport(base: readyTransport, recorder: readyObservation),
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: readyObservation, assembly: readyAssembly)
+    let readyRequest = SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(),
+                                         startedAt: 100, deadline: 160)
+    let readyResult = await readyDriver.launch(readyRequest)
+    if case .ready(let receipt, let runID) = readyResult {
+        expect(runID == 7, "a successful cold launch keeps the controller runID")
+        expect(receipt.controllerInstanceID == SkinHostContract.legacyUnreportedInstanceID
+               && receipt.createdByOperationID == readyRequest.operationID,
+               "legacy v1 receipts stay explicitly unreported instead of fabricated")
+    } else { fatalError("FAILED: verified cold launch must reach ready") }
+    expect(readyObservation.installSentCount == 1 && readyTransport.payloadCount == 1,
+           "the install observation sees exactly one payload send")
+    expect(readyOpening == [true, false, false],
+           "the cold launch opens once, resets after the open and runs the terminal opening reset")
+    expect(startupLegacyOutcome(from: readyResult) == .ready(runID: 7),
+           "the bridge keeps legacy startup-ready consumers unchanged")
+
+    // Lost reply after sending the install expression is installation-unknown, never fully-clean.
+    let lostApp = FakeNativeApplication(
+        pid: 5322, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 201.0)
+    let lostRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    lostRuntime.openedApplication = lostApp
+    let lostSystem = FakeStartupSystem(expectedPID: 5322, ports: [9333])
+    let lostTransport = LostReplyStartupTransport(pages: [pageEntry()],
+                                                  payloadMarker: "test-only-probe-lost")
+    let lostAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in }, activateExisting: { _ in false },
+        preparePort: { try lostRuntime.allocateLoopbackPort() },
+        openApplication: { url, port, deadline, system in
+            try await AppDelegate.openTargetApplication(runtime: lostRuntime, targetBundleID: "com.openai.codex",
+                                                         url: url, port: port, deadline: deadline, system: system,
+                                                         log: { _, _ in })
+        },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { contractEventStream(pid: 4343) },
+        onOpeningChanged: { _ in },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let lostObservation = CodexInstallObservation()
+    let lostDriver = CodexSkinDriver(
+        inputs: boundInputs(verifiedCodexFindings(codexKey)), runtime: lostRuntime,
+        readPayload: { "test-only-probe-lost" },
+        makeTargetSystem: { lostSystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 5322, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: lostSystem,
+                             transport: InstallObservingStartupTransport(base: lostTransport, recorder: lostObservation),
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: lostObservation, assembly: lostAssembly)
+    let lostResult = await lostDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160))
+    if case .failed(let failure, let page, let cleanup) = lostResult {
+        expect(page.isInstallationUnknown, "a lost install reply reports the page as unknown")
+        expect(cleanup.state == .unknown && cleanup.unconfirmed.contains("page-controller"),
+               "a lost install reply never claims a fully-clean cleanup")
+        expect(failure.detail == "protocol-error", "the lost-reply failure keeps its legacy reason")
+    } else { fatalError("FAILED: a lost install reply must fail with unknown installation state") }
+    expect(lostTransport.disposeEvaluations == 0,
+           "a lost reply does not blindly roll back a possibly-installed controller")
+
+    // alreadyActive keeps the existing controller: partial(startup-active), no rollback authority.
+    let activeRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    let activeApp = FakeNativeApplication(
+        pid: 5323, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 202.0)
+    activeRuntime.openedApplication = activeApp
+    let activeSystem = FakeStartupSystem(expectedPID: 5323, ports: [9333])
+    let activeTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": true],
+        ])
+    let activeAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in }, activateExisting: { _ in false },
+        preparePort: { try activeRuntime.allocateLoopbackPort() },
+        openApplication: { url, port, deadline, system in
+            try await AppDelegate.openTargetApplication(runtime: activeRuntime, targetBundleID: "com.openai.codex",
+                                                         url: url, port: port, deadline: deadline, system: system,
+                                                         log: { _, _ in })
+        },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { contractEventStream(pid: 4343) },
+        onOpeningChanged: { _ in },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let activeDriver = CodexSkinDriver(
+        inputs: boundInputs(verifiedCodexFindings(codexKey)), runtime: activeRuntime,
+        readPayload: { "active-codex-payload" },
+        makeTargetSystem: { activeSystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 5323, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: activeSystem, transport: activeTransport,
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: CodexInstallObservation(), assembly: activeAssembly)
+    let activeResult = await activeDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160))
+    if case .partial(let failure, let page, let cleanup) = activeResult {
+        expect(page.isPresentsLegacyAlreadyActive(owner: "azhou-codex-startup", protocolVersion: 1),
+               "an already-active controller is reported as a legacy v1 present observation")
+        expect(failure.detail == "startup-active" && cleanup.state == .notNeeded
+               && cleanup.intentionallyRetained.contains("existing-startup-controller"),
+               "an existing controller is intentionally retained without rollback authority")
+    } else { fatalError("FAILED: alreadyActive must stay a partial legacy result") }
+    expect(activeTransport.disposeCount == 0,
+           "an already-active attempt never disposes the pre-existing controller")
+    expect(startupLegacyOutcome(from: activeResult) == .partial(reason: "startup-active"),
+           "the bridge keeps the partial(startup-active) mapping for old consumers")
+
+    // Re-entrant page-changing operations on one driver return operation-busy.
+    let busyRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    let busyApp = FakeNativeApplication(
+        pid: 5324, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 203.0)
+    busyRuntime.openedApplication = busyApp
+    busyRuntime.deferOpenCompletion = true
+    let busySystem = FakeStartupSystem(expectedPID: 5324, ports: [9333])
+    let busyTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "playing", ready: true)],
+        ])
+    let busyAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in }, activateExisting: { _ in false },
+        preparePort: { try busyRuntime.allocateLoopbackPort() },
+        openApplication: { url, port, deadline, system in
+            try await AppDelegate.openTargetApplication(runtime: busyRuntime, targetBundleID: "com.openai.codex",
+                                                         url: url, port: port, deadline: deadline, system: system,
+                                                         log: { _, _ in })
+        },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { contractEventStream(pid: 4343) },
+        onOpeningChanged: { _ in },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let busyDriver = CodexSkinDriver(
+        inputs: boundInputs(verifiedCodexFindings(codexKey)), runtime: busyRuntime,
+        readPayload: { "busy-codex-payload" },
+        makeTargetSystem: { busySystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 5324, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: busySystem, transport: busyTransport,
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: CodexInstallObservation(), assembly: busyAssembly)
+    let busyRequest = SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(),
+                                        startedAt: 100, deadline: 160)
+    async let firstLaunch = busyDriver.launch(busyRequest)
+    try await Task.sleep(nanoseconds: 150_000_000)
+    if case .partial(let failure, _, _) = await busyDriver.launch(busyRequest) {
+        expect(failure.reason == .operationBusy,
+               "a re-entrant page-changing operation returns operation-busy")
+    } else { fatalError("FAILED: re-entrant launch must return operation-busy") }
+    busyRuntime.completePendingOpen()
+    if case .ready(_, let runID) = await firstLaunch {
+        expect(runID == 11, "the in-flight launch completes after its deferred open")
+    } else { fatalError("FAILED: the first launch must still complete") }
+
+    // Cross-driver disable/launch interleaving keeps one lock owner per target process.
+    let interleavePID = Int32.max - 7
+    let interleaveLockPath = WallpaperOperationLock.path(uid: Darwin.getuid(), pid: interleavePID)
+    defer { try? FileManager.default.removeItem(atPath: interleaveLockPath) }
+    let interleaveRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    let interleaveApp = FakeNativeApplication(
+        pid: interleavePID, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 204.0)
+    interleaveRuntime.applications = [interleaveApp]
+    let interleaveSystem = LockingStartupSystem(FakeStartupSystem(expectedPID: interleavePID, ports: [9333]))
+    var disableCalls: [Int32] = []
+    let disableAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in }, activateExisting: { _ in false },
+        preparePort: { try interleaveRuntime.allocateLoopbackPort() },
+        openApplication: { _, _, _, _ in throw StartupFailure(reason: "protocol-error", message: "unreachable") },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { contractEventStream(pid: 4343) }, onOpeningChanged: { _ in },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: { facts, _, _ in
+            disableCalls.append(facts.pid)
+            return ["disposed": true]
+        })
+    let disableDriver = CodexSkinDriver(
+        inputs: boundInputs(verifiedCodexFindings(codexKey)), runtime: interleaveRuntime,
+        readPayload: { "disable-payload" },
+        makeTargetSystem: { interleaveSystem },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: interleavePID, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9333, system: interleaveSystem, transport: FakeStartupTransport(),
+                             now: { 0 }, sleep: { _ in })
+        },
+        installObservation: CodexInstallObservation(), assembly: disableAssembly)
+    func disableRequest(pid: Int32, owner: String = "azhou-codex-startup") -> SkinDisableRequest {
+        SkinDisableRequest(
+            expectedApplication: codexKey, operationID: UUID(), deadline: 160,
+            expectedPage: .legacyV1(LegacyV1Observation(
+                location: PageLocation(application: codexKey,
+                                       process: HostProcessGeneration(pid: pid, launchTime: nil,
+                                                                      executableURL: codexKey.executableURL),
+                                       documentToken: installURL),
+                owner: owner, protocolVersion: 1)))
+    }
+    func contractDriver(runtime: FakeNativeAppRuntime, system: FakeStartupSystem,
+                        transport: StartupTransport, findings: [CapabilityFinding],
+                        performDisable: ((StartupTargetFacts, String, TimeInterval) async throws -> [String: Any])? = nil) -> CodexSkinDriver {
+        let observation = CodexInstallObservation()
+        runtime.allocatedPort = 9333
+        let assembly = CodexSkinAssembly(
+            preflightBundle: { _, _ in },
+            activateExisting: { _ in false },
+            preparePort: { try runtime.allocateLoopbackPort() },
+            openApplication: { url, port, deadline, openSystem in
+                try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex",
+                                                            url: url, port: port, deadline: deadline, system: openSystem,
+                                                            log: { _, _ in })
+            },
+            onTargetOpened: { _ in }, onCaptureReady: { _ in },
+            eventStream: { contractEventStream(pid: 4444) },
+            onOpeningChanged: { _ in },
+            startupFacts: { app in
+                guard !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
+                      let bundleID = app.bundleIdentifier else {
+                    throw StartupFailure(reason: "target-identity", message: "incomplete identity")
+                }
+                return StartupTargetFacts(pid: app.processIdentifier,
+                                          bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
+                                          executable: executable.resolvingSymlinksInPath().standardizedFileURL,
+                                          bundleID: bundleID, launchTime: app.launchTime)
+            },
+            performDisable: performDisable)
+        return CodexSkinDriver(
+            inputs: boundInputs(findings), runtime: runtime,
+            readPayload: { "test-only-probe-contract" },
+            makeTargetSystem: { system },
+            makeConnector: { facts, port, connectorSystem, _, _ in
+                StartupConnector(target: facts, expectedPort: port, system: connectorSystem,
+                                 transport: InstallObservingStartupTransport(base: transport, recorder: observation),
+                                 now: { 0 }, sleep: { _ in })
+            },
+            installObservation: observation, assembly: assembly)
+    }
+    let heldLock = try WallpaperOperationLock.acquire(pid: interleavePID)
+    if case .refused(let failure, _) = await disableDriver.disable(disableRequest(pid: interleavePID)) {
+        expect(failure.reason == .operationBusy,
+               "a driver disable refuses while another owner holds the per-process operation lock")
+    } else { fatalError("FAILED: interleaved disable must refuse with operation-busy") }
+    expect(disableCalls.isEmpty, "a refused interleave performs no page work")
+    heldLock.release()
+    if case .removed(let report) = await disableDriver.disable(disableRequest(pid: interleavePID)) {
+        expect(report.state == .complete && report.released.contains("legacy-page-controller"),
+               "an owned disable reports a complete bounded cleanup")
+    } else { fatalError("FAILED: an owned disable must remove") }
+    expect(disableCalls == [interleavePID], "the disable delegation runs exactly once under the lock")
+    if case .alreadyAbsent(let location) = await disableDriver.disable(disableRequest(pid: 31_337)) {
+        expect(location.process.pid == 31_337,
+               "a disable for a vanished process reports already-absent instead of touching the page")
+    } else { fatalError("FAILED: a vanished target must report already-absent") }
+
+    // A request for another application never reaches any operation branch.
+    if case .refused(let refusal) = await hotDriver.launch(
+        SkinLaunchRequest(expectedApplication: otherApplication, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(refusal.reason == .identityMismatch,
+               "a driver refuses a request bound to another application identity")
+    } else { fatalError("FAILED: cross-application requests must refuse") }
+
+    // A startup-interrupted run after a confirmed install is installation-unknown,
+    // never notObserved and never a fully-clean cleanup (spec §7.3).
+    let interruptedApp = FakeNativeApplication(
+        pid: 5329, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 208.0)
+    let interruptedRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    interruptedRuntime.openedApplication = interruptedApp
+    let interruptedTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false],
+        ])
+    let interruptedDriver = contractDriver(runtime: interruptedRuntime,
+                                           system: FakeStartupSystem(expectedPID: 5329, ports: [9333]),
+                                           transport: interruptedTransport,
+                                           findings: verifiedCodexFindings(codexKey))
+    if case .partial(let failure, let page, let cleanup) = await interruptedDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(failure.detail == "startup-interrupted",
+               "an interrupted run keeps its legacy partial reason")
+        expect(page.isInstallationUnknown,
+               "a sent install followed by a lost status observation is installation-unknown, not notObserved")
+        expect(cleanup.state == .unknown && cleanup.unconfirmed.contains("page-controller"),
+               "an interrupted install never claims a fully-clean cleanup")
+        expect(startupLegacyOutcome(from: .partial(failure, page: page, cleanup: cleanup))
+               == .partial(reason: "startup-interrupted"),
+               "the bridge still maps the interrupted partial back to its legacy reason")
+    } else { fatalError("FAILED: an interrupted install must stay a partial result") }
+
+    // The bridge keeps every remaining legacy shape for old consumers.
+    expect(startupLegacyOutcome(from: .skipped(.notObserved(reason: "legacy-v1-status-polling"),
+                                                  runID: 5, beforeReady: true))
+           == .skipped(runID: 5, beforeReady: true),
+           "the bridge keeps skipped runID and beforeReady data")
+    for reason in [HostRefusalReason.identityUnavailable, .identityMismatch, .capabilityUnverified] {
+        expect(startupLegacyOutcome(from: .refused(HostRefusal(host: .codex, reason: reason,
+                                                               findings: [], detail: "", nextProbe: nil)))
+               == .failed(reason: "target-identity"),
+               "identity-family refusals fold into the legacy target-identity reason (\(reason.rawValue))")
+    }
+    for reason in [HostRefusalReason.evidenceMismatch, .implementationUnavailable, .capabilityUnsupported] {
+        expect(startupLegacyOutcome(from: .refused(HostRefusal(host: .zcode, reason: reason,
+                                                               findings: [], detail: "", nextProbe: nil)))
+               == .failed(reason: "protocol-error"),
+               "contract-family refusals fold into the legacy protocol-error reason (\(reason.rawValue))")
+    }
+
+    // A cold launch whose connector fails keeps the legacy failure and no unknown claim.
+    let failedApp = FakeNativeApplication(
+        pid: 5326, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 205.0)
+    let failedRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    failedRuntime.openedApplication = failedApp
+    let failedDriver = contractDriver(runtime: failedRuntime,
+                                      system: FakeStartupSystem(expectedPID: 9999, ports: [9333]),
+                                      transport: FakeStartupTransport(),
+                                      findings: verifiedCodexFindings(codexKey))
+    if case .failed(let failure, let page, let cleanup) = await failedDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(failure.detail == "target-identity" && page.isNotObserved && cleanup.state == .notNeeded,
+               "a pre-install connector failure keeps the legacy reason and a clean no-op cleanup")
+        expect(startupLegacyOutcome(from: .failed(failure, page: page, cleanup: cleanup))
+               == .failed(reason: "target-identity"),
+               "the bridge maps connector identity failures back unchanged")
+    } else { fatalError("FAILED: a failing cold launch must report a failure") }
+
+    // A skipped controller run keeps its runID and before-ready flag.
+    let skippedApp = FakeNativeApplication(
+        pid: 5327, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 206.0)
+    let skippedRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    skippedRuntime.openedApplication = skippedApp
+    let skippedTransport = FakeStartupTransport(
+        pages: [pageEntry()],
+        evaluations: [
+            ["href": installURL, "controllerPresent": false],
+            ["installed": true, "alreadyActive": false],
+            ["href": installURL, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 8,
+                "ready": false, "completed": true, "overlay": false, "reason": "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                "completion": ["cause": "skip", "beforeReady": true]]],
+        ])
+    let skippedDriver = contractDriver(runtime: skippedRuntime,
+                                       system: FakeStartupSystem(expectedPID: 5327, ports: [9333]),
+                                       transport: skippedTransport,
+                                       findings: verifiedCodexFindings(codexKey))
+    if case .skipped(_, let runID, let beforeReady) = await skippedDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(runID == 8 && beforeReady == true,
+               "a skipped controller run keeps runID and beforeReady through the bridge")
+    } else { fatalError("FAILED: a skipped run must stay skipped") }
+
+    // Ambiguous or incomplete running identities refuse before any side effect.
+    let ambiguousRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    ambiguousRuntime.applications = [
+        FakeNativeApplication(pid: 61, bundleIdentifier: "com.openai.codex",
+                              bundleURL: URL(fileURLWithPath: "/Applications/Codex-beta.app")),
+        FakeNativeApplication(pid: 62, bundleIdentifier: "com.openai.codex",
+                              bundleURL: URL(fileURLWithPath: "/Applications/Codex-gamma.app")),
+    ]
+    let ambiguousDriver = contractDriver(runtime: ambiguousRuntime,
+                                         system: FakeStartupSystem(expectedPID: 61, ports: [9333]),
+                                         transport: FakeStartupTransport(),
+                                         findings: verifiedCodexFindings(codexKey))
+    if case .refused(let refusal) = await ambiguousDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(refusal.reason == .identityMismatch,
+               "an ambiguous set of running Codex processes refuses identity")
+    } else { fatalError("FAILED: ambiguous processes must refuse") }
+    expect(ambiguousRuntime.openCount == 0, "an ambiguous identity never opens the target")
+
+    let incompleteRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    incompleteRuntime.applications = [
+        FakeNativeApplication(pid: 63, bundleIdentifier: "com.openai.codex",
+                              bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"), executableURL: nil),
+    ]
+    let incompleteDriver = contractDriver(runtime: incompleteRuntime,
+                                          system: FakeStartupSystem(expectedPID: 63, ports: [9333]),
+                                          transport: FakeStartupTransport(),
+                                          findings: verifiedCodexFindings(codexKey))
+    if case .refused(let refusal) = await incompleteDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160)) {
+        expect(refusal.reason == .identityMismatch,
+               "a running process without a complete identity refuses launch")
+    } else { fatalError("FAILED: an incomplete identity must refuse") }
+
+    // Disable keeps the strict legacy owner binding and refuses without delegation.
+    let strictRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    strictRuntime.applications = [hotApp]
+    let strictSystem = FakeStartupSystem(expectedPID: 4123, ports: [])
+    var delegated: [Int32] = []
+    let strictDriver = contractDriver(runtime: strictRuntime, system: strictSystem,
+                                      transport: FakeStartupTransport(),
+                                      findings: verifiedCodexFindings(codexKey),
+                                      performDisable: { facts, _, _ in
+                                          delegated.append(facts.pid)
+                                          return ["disposed": true]
+                                      })
+    if case .refused(let failure, _) = await strictDriver.disable(
+        disableRequest(pid: 4123, owner: "foreign-owner")) {
+        expect(failure.reason == .ownerConflict,
+               "only the legacy azhou-codex-startup v1 controller may be disabled")
+    } else { fatalError("FAILED: a foreign owner must be refused") }
+    expect(delegated.isEmpty, "a refused owner check performs no page disposal")
+    let hooklessDriver = contractDriver(runtime: strictRuntime, system: strictSystem,
+                                        transport: FakeStartupTransport(),
+                                        findings: verifiedCodexFindings(codexKey),
+                                        performDisable: nil)
+    if case .refused(let failure, _) = await hooklessDriver.disable(disableRequest(pid: 4123)) {
+        expect(failure.reason == .protocolError && failure.detail.contains("WallpaperCLI"),
+               "without an explicit disposal assembly the driver refuses instead of degrading")
+    } else { fatalError("FAILED: a missing disposal assembly must refuse explicitly") }
+    var unconfirmedResults: [SkinDisableResult] = []
+    for behavior in ["unconfirmed", "throwing"] {
+        let driver = contractDriver(runtime: strictRuntime, system: strictSystem,
+                                    transport: FakeStartupTransport(),
+                                    findings: verifiedCodexFindings(codexKey),
+                                    performDisable: { _, _, _ in
+                                        if behavior == "unconfirmed" {
+                                            return ["disposed": false, "reason": "owner-conflict"]
+                                        }
+                                        throw StartupFailure(reason: "protocol-error", message: "dispose failed")
+                                    })
+        unconfirmedResults.append(await driver.disable(disableRequest(pid: 4123)))
+    }
+    for (index, result) in unconfirmedResults.enumerated() {
+        if case .partial(let failure, _, let cleanup) = result {
+            expect(failure.reason == .protocolError && cleanup.state == .unknown
+                   && cleanup.unconfirmed.contains("page-controller"),
+                   "an unconfirmed or throwing disposal stays partial with unknown cleanup (\(index))")
+        } else { fatalError("FAILED: unconfirmed disposal must stay partial") }
+    }
+
+    // A disable during an in-flight page-changing operation is operation-busy.
+    let busyDisableRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    let busyDisableApp = FakeNativeApplication(
+        pid: 5328, bundleIdentifier: "com.openai.codex",
+        bundleURL: URL(fileURLWithPath: "/Applications/Codex.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/Codex.app/Contents/MacOS/Codex"),
+        launchTime: 207.0)
+    busyDisableRuntime.openedApplication = busyDisableApp
+    busyDisableRuntime.deferOpenCompletion = true
+    let busyDisableDriver = contractDriver(runtime: busyDisableRuntime,
+                                           system: FakeStartupSystem(expectedPID: 5328, ports: [9333]),
+                                           transport: FakeStartupTransport(pages: [pageEntry()], evaluations: [
+                                               ["href": installURL, "controllerPresent": false],
+                                               ["installed": true, "alreadyActive": false],
+                                               ["href": installURL, "missing": false,
+                                                "status": statusBody(runID: 12, phase: "playing", ready: true)],
+                                           ]),
+                                           findings: verifiedCodexFindings(codexKey))
+    async let busyFirstLaunch = busyDisableDriver.launch(
+        SkinLaunchRequest(expectedApplication: codexKey, operationID: UUID(), startedAt: 100, deadline: 160))
+    try await Task.sleep(nanoseconds: 150_000_000)
+    if case .refused(let failure, _) = await busyDisableDriver.disable(disableRequest(pid: 5328)) {
+        expect(failure.reason == .operationBusy, "disable refuses while a launch owns the page operation")
+    } else { fatalError("FAILED: interleaved disable must refuse with operation-busy") }
+    busyDisableRuntime.completePendingOpen()
+    if case .ready(_, let runID) = await busyFirstLaunch {
+        expect(runID == 12, "the in-flight launch still completes")
+    } else { fatalError("FAILED: the in-flight launch must complete") }
+
+    // The shared bounded open routine keeps its fixed failure mapping.
+    let openErrorRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    openErrorRuntime.openError = StartupFailure(reason: "target-missing", message: "open failed")
+    do {
+        _ = try await AppDelegate.openTargetApplication(
+            runtime: openErrorRuntime, targetBundleID: "com.openai.codex",
+            url: codexKey.bundleURL, port: 9333, deadline: 200,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [9333]), log: { _, _ in })
+        fatalError("FAILED: an open error must fail the bounded open")
+    } catch let error as StartupFailure {
+        expect(error.reason == "target-missing", "an open error maps to the fixed target-missing failure")
+    }
+    do {
+        _ = try await AppDelegate.openTargetApplication(
+            runtime: openErrorRuntime, targetBundleID: "com.openai.codex",
+            url: codexKey.bundleURL, port: 9333, deadline: 50,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [9333]), log: { _, _ in })
+        fatalError("FAILED: an exhausted deadline must fail the bounded open")
+    } catch let error as StartupFailure {
+        expect(error.reason == "attach-timeout", "an exhausted stage deadline maps to attach-timeout")
+    }
+
+    // Read-only inspection keeps application observation without page capabilities.
+    let inspectRuntime = FakeNativeAppRuntime(arguments: ["Agent Skin"])
+    inspectRuntime.applications = [hotApp]
+    let inspectAssembly = CodexSkinAssembly(
+        preflightBundle: { _, _ in }, activateExisting: { _ in false },
+        preparePort: { try inspectRuntime.allocateLoopbackPort() },
+        openApplication: { _, _, _, _ in throw StartupFailure(reason: "protocol-error", message: "inspect never opens") },
+        onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { contractEventStream(pid: 4343) }, onOpeningChanged: { _ in },
+        startupFacts: { app in
+            StartupTargetFacts(pid: app.processIdentifier,
+                               bundle: app.bundleURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               executable: app.executableURL!.resolvingSymlinksInPath().standardizedFileURL,
+                               bundleID: app.bundleIdentifier!, launchTime: app.launchTime)
+        },
+        performDisable: nil)
+    let inspectDriver = CodexSkinDriver(
+        inputs: boundInputs(hotOnlyFindings(codexKey)), runtime: inspectRuntime,
+        readPayload: { "inspect-payload" },
+        makeTargetSystem: { FakeStartupSystem(expectedPID: 4123, ports: []) },
+        makeConnector: { _, _, _, _, _ in
+            StartupConnector(target: .init(pid: 4123, bundle: codexKey.bundleURL,
+                                           executable: codexKey.executableURL,
+                                           bundleID: codexKey.bundleIdentifier, launchTime: nil),
+                             expectedPort: 9222, system: FakeStartupSystem(expectedPID: 4123, ports: []),
+                             transport: FakeStartupTransport(), now: { 0 }, sleep: { _ in })
+        },
+        installObservation: CodexInstallObservation(), assembly: inspectAssembly)
+    if case .observed(let process, let page) = await inspectDriver.inspect(
+        SkinInspectRequest(expectedApplication: codexKey, operationID: UUID(), deadline: 160,
+                           includePage: false, previousObservation: nil)) {
+        expect(process?.pid == 4123, "application inspection observes the live process generation")
+        expect(page.isNotObserved, "page state stays explicitly unobserved without page capabilities")
+    } else { fatalError("FAILED: application inspection must observe") }
+    expect(inspectRuntime.openCount == 0, "inspection never implicitly cold-starts the host")
+    if case .unavailable(let refusal) = await inspectDriver.inspect(
+        SkinInspectRequest(expectedApplication: codexKey, operationID: UUID(), deadline: 160,
+                           includePage: true, previousObservation: nil)) {
+        expect(refusal.reason == .capabilityUnverified,
+               "page inspection refuses when page identification is unverified")
+    } else { fatalError("FAILED: page inspection without capability must refuse") }
+
+    return checks
+}
+
+@MainActor
+private final class PlaceholderSkinHostDriver: SkinHostDriver {
+    let inputs: BoundHostInputs?
+    init(inputs: BoundHostInputs?) { self.inputs = inputs }
+    func launch(_ request: SkinLaunchRequest) async -> SkinLaunchResult { .refused(HostRefusal(host: .codex, reason: .implementationUnavailable, findings: [], detail: "placeholder", nextProbe: nil)) }
+    func inspect(_ request: SkinInspectRequest) async -> SkinInspectResult { .unavailable(HostRefusal(host: .codex, reason: .implementationUnavailable, findings: [], detail: "placeholder", nextProbe: nil)) }
+    func disable(_ request: SkinDisableRequest) async -> SkinDisableResult { .unavailable(HostRefusal(host: .codex, reason: .implementationUnavailable, findings: [], detail: "placeholder", nextProbe: nil)) }
+}
+
+/// Fake target system whose operation lock is the real per-process WallpaperOperationLock.
+private final class LockingStartupSystem: StartupTargetSystem {
+    private let inner: FakeStartupSystem
+    init(_ inner: FakeStartupSystem) { self.inner = inner }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws { try inner.preflightBundle(bundle, deadline: deadline) }
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws { try inner.validate(target, deadline: deadline) }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] { try inner.listeningPorts(target, deadline: deadline) }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { try WallpaperOperationLock.acquire(pid: pid) }
+}
+
+/// Transport fixture whose install evaluation is sent but its reply is lost.
+private final class LostReplyStartupTransport: StartupTransport {
+    private let pagesResponse: [[String: Any]]
+    private let payloadMarker: String
+    private(set) var evaluateCount = 0
+    private(set) var disposeEvaluations = 0
+    init(pages: [[String: Any]], payloadMarker: String) {
+        self.pagesResponse = pages
+        self.payloadMarker = payloadMarker
+    }
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] { pagesResponse }
+    func connect(to url: URL, timeout: TimeInterval) throws {}
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        evaluateCount += 1
+        if source.contains(payloadMarker) {
+            throw WallpaperFailure(state: "endpoint-unavailable", chinese: "丢失回复", english: "lost reply")
+        }
+        if source.contains("dispose.value.call(api)") { disposeEvaluations += 1 }
+        if source.contains("controllerPresent") { return ["href": "app://-/index.html?initialRoute=%2F", "controllerPresent": false] }
+        return [:]
+    }
+    func close() {}
 }
 #endif

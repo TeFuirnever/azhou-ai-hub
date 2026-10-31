@@ -1,6 +1,6 @@
-# 阿舟 AI 实验室 / Azhou AI Lab
+# 阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，显示名称为“阿舟 AI 实验室 / Azhou AI Lab”；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.9.0/build 16，包含同窗口 CDP 动画、壁纸及设置流程。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替实际安装交接或官方宿主的人工视觉验收。
+本目录是 Hub 的 canonical package `agent-skin`，应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，安装入口仍为“阿舟 AI 实验室.app”；当前唯一适配宿主为 Codex。此副本的固定构建版本为 0.9.0/build 26，包含同窗口 CDP 动画、壁纸及设置流程。build 24 会等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时保留避开输入区的备用位置，导航恢复后迁回。build 25 支持 Your dot 按钮位于列表包装内的宿主结构。Build 25 also recognizes Your dot inside grouped navigation lists. build 26 将 Codex 页面策略抽成显式传入的 page adapter，并新增共享宿主合同与按操作能力门；启动载荷输入登记同步，既有行为保持不变。Build 26 moves the Codex page strategy into an explicitly passed page adapter and adds the shared host contract with per-operation capability gates; startup payload input registration follows while existing behavior stays unchanged. 中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替实际安装交接或官方宿主的人工视觉验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
@@ -8,7 +8,7 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
-当前固定版本 **0.9.0 / build 16**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
+当前固定版本 **0.9.0 / build 26**，原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
 测试要求为整个包的生产代码 UT 行覆盖率至少 95%，按语言分别阻断，并保留独立的实机功能验收。执行入口、覆盖率口径及 Finder/Dock、冷/热启动、壁纸和安装升级用例见 [测试与功能验收](docs/testing.md)。
 
@@ -129,7 +129,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.9.0 / build 16 |
+| 版本 | 0.9.0 / build 26 |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 
@@ -146,6 +146,8 @@ python3 tools/install-macos.py --check
 Hub 的 `run --mode launch` 使用已核验载荷版本评估启动器事件；热激活、控制器就绪和用户跳过各自有独立结果，壁纸失败不会改写启动器结果。独立 `smoke` 才评估动画播放是否完成。旧版本事件和当前版本事件使用各自解析规则，缺失字段、冲突 PID、重复启动边界或无效终态都会返回“行为未证实”。以上是适配器证据，不证明宿主已加载壁纸或用户看到目标画面。
 
 ## Codex 主界面壁纸
+
+当前本地候选在启动背景失败时，通过外观入口提供原因和重试；设置保存后的应用失败仍在设置面板处理。设置和预览期间会隔离宿主键盘焦点，关闭后恢复交互。图片导入对可解析的有限文件头先检查尺寸；文件头不能解析时仍走原有解码和最终尺寸检查。预览采用当前主题底色；缩略图的裁切可能与实际窗口不同。上述行为的真实宿主与人工无障碍验收尚待完成；这不改变既有再分发限制。
 
 Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。动画仍在 12 秒自然结束；尚未完成的壁纸请求可在工作区稍后就绪时继续应用，不重播动画。跳过动画、开始新一轮或释放控制器会取消旧请求；等待到期会报告 `shell-timeout` 并清理临时观察器，仍可通过维护命令重试。
 

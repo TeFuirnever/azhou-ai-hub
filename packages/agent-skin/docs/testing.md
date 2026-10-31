@@ -33,7 +33,7 @@ python3 -B tools/test-unit-coverage.py
 | ID | 触发与操作 | 期望 | 自动看护 / 实机验收 |
 |---|---|---|---|
 | FT-LOCALE | 官方页面英文、浏览器语言中文；切换官方页面语言 | 页面语言优先；文案、bot、设置和动画同步，不新增语言偏好 | `localization.test.mjs`、`startup.test.mjs`、生成载荷浏览器测试；实机观察官方界面 |
-| FT-FINDER | 按当前 macOS 语言查看已安装应用；检查中英资源 | 英文显示 `Azhou AI Lab`，中文显示主题指定名称；真实安装文件名不充当本地化结论 | `test-startup-build.py`、`test-installed-acceptance.py` 的 Finder API；真实 Finder 窗口检查 |
+| FT-FINDER | 按当前 macOS 语言查看已安装应用；检查中英资源 | 英文显示 `Azhou AI Lab for Codex`，中文显示主题指定名称；真实安装文件名不充当本地化结论 | `test-startup-build.py` 的 Bundle 回退名与本地化资源；`test-installed-acceptance.py` 的 Finder API；真实 Finder 窗口检查 |
 | FT-DOCK | 将旧版固定到 Dock，升级后再查看标签和启动目标 | 标签符合 macOS 语言，只启动唯一新入口；旧固定项或缓存不能算新版本已通过 | 安装归属 UT；Dock 实际标签与目标需现场验收。没有入口时保留 pending，不能以空列表通过 |
 | FT-COLD | 用户完整退出官方宿主，再从阿舟入口启动 | 恰好一次冷启动、控制器就绪、动画结束和壁纸生效；没有第二个宿主 | 原生协议 UT、生成载荷测试；`test-installed-acceptance.py --cold-start` 加视觉审阅 |
 | FT-HOT | 官方宿主保持运行，再打开阿舟入口 | 激活同一 PID；不重播、不覆盖控制器、不退出宿主 | 原生事件 UT；实机对照前后 PID、事件和页面 |
@@ -43,7 +43,7 @@ python3 -B tools/test-unit-coverage.py
 | FT-RETRY | 壁纸失败后重试；并发重试；健康状态重复调用 | 最多一个尝试、10 秒上限；保留已过滤的先前原因；不重播动画；健康状态只复查 | 控制器及编译后的 helper 表达式测试 |
 | FT-SURFACES | 深浅色、窄窗、CSP 拒绝图片或样式、未知遮罩 | 真实图片解码；保留输入框、菜单和代码块；失败可见；未知层不被擅自清除 | 渲染器 UT、CSP/布局浏览器测试；实机检查裁切、人物及文字可读性 |
 | FT-SETTINGS | 保存/取消/恢复草稿、并发冲突、配额或超时、强度为零 | 保存成功才应用；取消保留旧值；失败可恢复；零强度关闭背景 | `image-settings.test.mjs`、存储浏览器测试、保存与草稿预览场景 |
-| FT-SIDEBAR | 更新下载按钮或头像出现、侧栏滚动、窄窗或位置被占满 | 阿舟入口避开宿主控件并保持可见；左侧无空位时保留小入口移至其他空位，空间恢复后回到左侧 | `startup.test.mjs`、`test-startup-browser.mjs` 的几何、点击、滚动、密集侧栏及生成载荷场景；真实宿主布局需现场验收 |
+| FT-SIDEBAR | 动画期间跳过，Home 导航可见或不可用；加载层覆盖页面控件；更新下载按钮、输入区或头像出现；侧栏滚动、窄窗或导航重建 | 宿主尚无可见且可命中的页面控件时，Appearance 保持隐藏。仅有几何可见但被加载层遮挡的控件不算就绪；覆盖层移除后重试。唯一可见的 Your dot 出现时，入口在 Home 导航正常流中紧随其后、位于 Pinned 前；Home 不可用但宿主控件可交互时，使用避开控件、输入区和 composer 的备用位置。无空位时暂时隐藏，空位恢复后重新显示 | `startup.test.mjs`、`test-startup-browser.mjs` 的早期跳过与延迟 shell、加载层遮挡负例和移除后恢复、控件到达后的 fallback 恢复、导航回迁、碰撞、入口点击、窄栏和动态控件场景；合成 loading overlay 不证明官方 loading DOM 的具体形态，同一运行版本的真实宿主位置需现场验收 |
 | FT-INSTALL | 旧名称升级、跨来源接管、失败中断后重试、未知同名应用 | 先验证新入口；保留归属与签名边界；唯一实体和登记；未知对象不被删除 | `test-install-macos.py`、构建 UT、实际 `install-macos.py --check` |
 | FT-ASSETS | 缺图、非法路径、符号链接、错误尺寸、旧构建输入 | 构建拒绝并保留原有效入口；私有素材不进入 Git | preflight、构建器、校验器、资源处理及 shell UT |
 
@@ -61,5 +61,7 @@ python3 -B tools/test-installed-acceptance.py --cold-start --out .local/cold-acc
 ```
 
 实机报告明确标记 `unitCoverageInput: false`。Dock 没有固定入口、冷启动未执行或尚缺视觉审阅都不能输出全通过。报告包含当前检查结果和日志路径；历史截图或旧 build 记录不能替代当前安装的结果。
+
+宿主布局回归以脱敏的实际结构为依据：核对目标控件、影响可见性和尺寸的祖先样式、滚动容器与重建行为，不复制聊天内容。合成夹具需断言目标顺序和实际几何；选择器命中或备用入口可见不能代替目标位置通过。早期跳过回归会延迟挂载合成 app shell，并验证可交互控件到达后备用入口恢复；它不证明官方加载画面的 DOM 时序。交付分别记录测试载荷版本、安装版本和页面实际运行版本；实机结果仅在同版页面检查后判定，无法核实时保持待验收。
 
 `CI / Agent Skin full production UT coverage` 运行完整 UT 门禁，并进入聚合 Required 判定；现有 macOS 作业继续运行生成载荷浏览器功能回归。仓库通用 `python3 scripts/verify.py` 仍执行其原有完整检查，不能替代本页的包级覆盖率命令。提交/推送状态与远端 CI 结果另行报告，不因本地通过而推断远端已通过。

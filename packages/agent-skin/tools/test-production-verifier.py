@@ -113,6 +113,24 @@ class VerifierApiTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/codesign", "--verify", "--strict"])
         self.assertEqual(self.verifier.fingerprint(self.bundle), self.verifier.fingerprint(self.bundle))
 
+    def test_old_090_theme_names_remain_valid_after_host_label_change(self):
+        base = self.verifier.load_theme_config(self.root)['identity']
+        old_app_names = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
+        for build, fallback in (('10', 'Azhou AI Lab'), ('22', '阿舟 AI 实验室')):
+            with self.subTest(build=build):
+                identity = {**base, 'appName': old_app_names, 'build': build}
+                theme = {'identity': identity}
+                old_info = dict(self.info)
+                old_info['CFBundleName'] = old_info['CFBundleDisplayName'] = fallback
+                resources = self.bundle / 'Contents/Resources'
+                for locale, name in (('en', old_app_names['en']), ('zh-Hans', old_app_names['zh-CN'])):
+                    quoted = json.dumps(name, ensure_ascii=False)
+                    (resources / f'{locale}.lproj/InfoPlist.strings').write_text(
+                        f'"CFBundleDisplayName" = {quoted};\n"CFBundleName" = {quoted};\n',
+                        encoding='utf-8',
+                    )
+                self.verifier.verify_localized_names(self.bundle, old_info, theme_config=theme)
+
     def test_source_metadata_and_theme_validation_reject_unsafe_inputs(self):
         source_json = self.verifier._read_source_json(self.root, "theme-config.json", "theme config")
         package = self.verifier.load_package_metadata(self.root)
@@ -387,13 +405,158 @@ class VerifierApiTests(unittest.TestCase):
         def missing_bootstrap_result(path):
             output = path / "Contents/Resources/startup/install.js"
             output.write_text(output.read_text(encoding="utf-8").replace(
-                "return installStartup(installAnimation, host);",
-                "installStartup(installAnimation, host);"), encoding="utf-8")
+                "return installStartup(installAnimation, host, pageAdapter);",
+                "installStartup(installAnimation, host, pageAdapter);"), encoding="utf-8")
             self.update_output_digest(path, "startup/install.js")
         self.assert_startup_rejected(missing_bootstrap_result, "未从完整 Page Controller")
 
+    def test_startup_verifier_binds_metadata_source_and_requires_regular_outputs(self):
+        path = self.copy_bundle("invalid-metadata-source-digest")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        source_name = "vendor/dream-image-metadata.mjs"
+        marker["inputs"][source_name] = hashlib.sha256(b"different metadata source").hexdigest()
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(marker["inputs"])
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "启动构建源码未被来源标记覆盖：vendor/dream-image-metadata.mjs"):
+            self.verifier.verify_startup(path, self.info, marker)
+
+        output_relative = "web/image-metadata-reader.js"
+        for label, use_symlink in (("missing-metadata-reader", False), ("symlink-metadata-reader", True)):
+            with self.subTest(output=label):
+                bundle = self.copy_bundle(label)
+                output = bundle / "Contents/Resources" / output_relative
+                output.unlink()
+                if use_symlink:
+                    output.symlink_to(bundle / "Contents/Resources/web/index.html")
+                with self.assertRaisesRegex(RuntimeError, "启动产物缺失或不是实体文件"):
+                    self.verifier.verify_startup(bundle, self.info, self.marker)
+
+    def test_page_adapter_entry_predicate_accepts_new_and_legacy_bootstrap_results(self):
+        script_path = self.bundle / "Contents/Resources/startup/install.js"
+        self.assertIn("return installStartup(installAnimation, host, pageAdapter);",
+                      script_path.read_text(encoding="utf-8"))
+        self.assertIn("const pageAdapter = createCodexPageAdapter(globalThis, undefined, {",
+                      script_path.read_text(encoding="utf-8"))
+
+        # Downgrading the entry to the legacy two-argument bootstrap result stays
+        # verifiable: old payloads must keep passing the unchanged legacy predicates.
+        legacy = self.copy_bundle("legacy-two-arg-bootstrap")
+        legacy_script = legacy / "Contents/Resources/startup/install.js"
+        legacy_script.write_text(legacy_script.read_text(encoding="utf-8").replace(
+            "return installStartup(installAnimation, host, pageAdapter);",
+            "return installStartup(installAnimation, host);"), encoding="utf-8")
+        self.update_output_digest(legacy, "startup/install.js")
+        self.verifier.verify_startup(legacy, self.info, self.read_marker(legacy))
+
+        # Removing the returned installation result entirely is still rejected.
+        broken = self.copy_bundle("missing-bootstrap-result")
+        broken_script = broken / "Contents/Resources/startup/install.js"
+        broken_script.write_text(broken_script.read_text(encoding="utf-8").replace(
+            "return installStartup(installAnimation, host, pageAdapter);",
+            "installStartup(installAnimation, host, pageAdapter);"), encoding="utf-8")
+        self.update_output_digest(broken, "startup/install.js")
+        with self.assertRaisesRegex(RuntimeError, "未从完整 Page Controller"):
+            self.verifier.verify_startup(broken, self.info, self.read_marker(broken))
+
+    def test_pre_page_adapter_build25_source_set_is_read_only_and_exact(self):
+        historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
+        current = frozenset(self.verifier.STARTUP_REQUIRED_INPUTS)
+        self.assertTrue(historical < current,
+                        "the preserved build17-25 set must be a strict subset of the current inputs")
+        self.assertNotIn("extension/codex-page-adapter.mjs", historical)
+        self.assertEqual(historical, frozenset((
+            'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
+            'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
+            'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
+            'wallpaper/renderer.js', 'wallpaper/apply.js',
+            'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
+        )))
+
+        # An installed build25-style payload with that exact historical source set
+        # still verifies through the not-current path.
+        path = self.copy_bundle("pre-page-adapter-build25")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        marker["version"], marker["build"] = "0.9.0", "25"
+        historic_inputs = {name: self.marker["inputs"][name] for name in historical}
+        marker["inputs"] = historic_inputs
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(historic_inputs)
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                               encoding="utf-8")
+
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["appVersion"], manifest["appBuild"] = "0.9.0", "25"
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        manifest["sourceInputs"] = dict(historic_inputs)
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+
+        defaults_path = path / "Contents/Resources/web/assets/defaults/contours.js"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8").removeprefix(
+            "window.AGENT_SKIN_ASSETS = Object.freeze(").removesuffix(");\n"))
+        defaults["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        self.rewrite_defaults(path, defaults)
+
+        script_path = path / "Contents/Resources/startup/install.js"
+        script = script_path.read_text(encoding="utf-8")
+        prefix = "const DEFAULT_ASSETS = Object.freeze("
+        start = script.index(prefix) + len(prefix)
+        end = script.index(");\n", start)
+        embedded = json.loads(script[start:end])
+        embedded["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        script_path.write_text(script[:start] + json.dumps(embedded, ensure_ascii=False, separators=(",", ":"))
+                               + script[end:], encoding="utf-8")
+        self.update_output_digest(path, "startup/install.js")
+
+        info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="25")
+        historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
+        self.verifier.verify_startup(path, info, historic_marker, current_source=False)
+
+    def test_pre_page_adapter_source_inputs_are_rejected_when_tampered(self):
+        path = self.copy_bundle("pre-page-adapter-tampered")
+        marker_path = path / self.verifier.MARKER
+        marker = self.read_marker(path)
+        marker["version"], marker["build"] = "0.9.0", "25"
+        historic_inputs = {name: self.marker["inputs"][name]
+                           for name in self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS}
+        marker["inputs"] = historic_inputs
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(historic_inputs)
+        marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                               encoding="utf-8")
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["appVersion"], manifest["appBuild"] = "0.9.0", "25"
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        # Drop one required historical input: the set is exact, never fuzzy.
+        manifest["sourceInputs"] = {
+            name: digest for name, digest in historic_inputs.items() if name != "style.css"
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+        defaults_path = path / "Contents/Resources/web/assets/defaults/contours.js"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8").removeprefix(
+            "window.AGENT_SKIN_ASSETS = Object.freeze(").removesuffix(");\n"))
+        defaults["themeConfig"]["identity"].update(version="0.9.0", build="25")
+        self.rewrite_defaults(path, defaults)
+        info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="25")
+        historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(RuntimeError, "sourceInputs|来源"):
+            self.verifier.verify_startup(path, info, historic_marker, current_source=False)
+
     def test_previous_theme_build_11_12_source_set_is_read_only_and_exact(self):
         path = self.copy_bundle("previous-theme-build-11")
+        historical_manifest = self.helpers.convert_bundle_to_pre_image_metadata(
+            path,
+            self.build_artifacts,
+            omit_source_inputs=("wallpaper/apply.js", "extension/bootstrap.mjs"),
+        )
+        self.assertEqual(set(historical_manifest["outputs"]), self.helpers.PRE_IMAGE_METADATA_STARTUP_OUTPUTS)
         info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="11")
         marker_path = path / self.verifier.MARKER
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -431,13 +594,24 @@ class VerifierApiTests(unittest.TestCase):
             self.verifier.verify_startup(path, info, marker, current_source=True)
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["outputs"]["web/image-metadata-reader.js"] = "0" * 64
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "output 路径清单不完整"):
+            self.verifier.verify_startup(path, info, marker, current_source=False)
+
+        forged_marker = dict(self.marker)
+        forged_marker["version"], forged_marker["build"] = "0.9.0", "11"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["outputs"].pop("web/image-metadata-reader.js")
+        manifest["inputSHA256"] = forged_marker["inputSHA256"]
         manifest["sourceInputs"] = {
-            name: marker["inputs"][name] for name in self.verifier.STARTUP_REQUIRED_INPUTS
+            name: forged_marker["inputs"][name] for name in self.verifier.STARTUP_REQUIRED_INPUTS
         }
-        manifest["sourceInputs"]["Native/App.swift"] = marker["inputs"]["Native/App.swift"]
+        manifest["sourceInputs"]["Native/App.swift"] = forged_marker["inputs"]["Native/App.swift"]
+        marker_path.write_text(json.dumps(forged_marker, ensure_ascii=False), encoding="utf-8")
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "sourceInputs 清单不完整"):
-            self.verifier.verify_startup(path, info, marker, current_source=False)
+            self.verifier.verify_startup(path, info, forged_marker, current_source=False)
 
     def test_startup_verifier_rejects_default_assets_and_theme_mismatches(self):
         defaults_path = "Contents/Resources/web/assets/defaults/contours.js"

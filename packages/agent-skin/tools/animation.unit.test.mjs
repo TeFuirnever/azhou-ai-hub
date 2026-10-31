@@ -227,10 +227,13 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     matchMedia: noMatchMedia ? undefined : matchMedia,
     createImageBitmap: makeBitmap ? async canvas => {
       const index = bitmapCallCount++;
+      const width = canvas?.naturalWidth || canvas?.width || 0;
+      const height = canvas?.naturalHeight || canvas?.height || 0;
       if (bitmapMode === 'throw') throw new Error('bitmap unavailable');
       if (bitmapMode === 'pending') return new Promise((resolve, reject) => bitmapPromises.push({ resolve, reject, canvas }));
       if (bitmapMode === 'second-reject' && index === 1) throw new Error('second bitmap failed');
-      return { source: canvas, closed: false, close() { this.closed = true; } };
+      return { source: canvas, width: bitmapMode === 'wrong-dimensions' ? width - 1 : width,
+        height, closed: false, close() { this.closed = true; } };
     } : undefined,
     location: new URL('file:///tmp/preview.html'),
   };
@@ -252,6 +255,10 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
       if (imageOptions.noDecode) this.decode = undefined;
     }
     decode() {
+      if (imageOptions.decode === 'pending-complete') {
+        this.complete = true;
+        return new Promise((resolve, reject) => pendingDecodes.push({ resolve, reject, image: this }));
+      }
       if (imageOptions.pendingAfterInitial && this.index >= 2 || imageOptions.decode === 'pending') {
         return new Promise((resolve, reject) => pendingDecodes.push({ resolve, reject, image: this }));
       }
@@ -420,6 +427,23 @@ async function waitForMessage(fixture, action) {
   assert.fail(`animation did not send ${action}`);
 }
 
+async function waitForFixture(predicate, description) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (predicate()) return;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail(`fixture did not reach ${description}`);
+}
+
+function runFixtureTimers(fixture, milliseconds) {
+  const selected = [...fixture.timers.entries()].filter(([_id, timer]) => timer.delay === milliseconds);
+  for (const [id, timer] of selected) {
+    fixture.timers.delete(id);
+    timer.callback();
+  }
+  return selected.length;
+}
+
 function makePNGFile() {
   const signature = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
   return { size: 64, type: 'image/png', slice(start, end) {
@@ -543,6 +567,121 @@ test('startup failures send a fixed asset reason and partial mounts are cleaned 
   assert.equal(noLocalization.messages[0].action, 'assetError');
   assert.equal(noLocalization.messages[0].reason, 'localization-unavailable');
   assert.equal(noLocalization.handle.dispose(), false);
+});
+
+test('a pending native image decode can recover from a pixel-checked bitmap', async () => {
+  const fixture = createFixture({ settings: false, imageOptions: { decode: 'pending-complete' } });
+  await waitForFixture(() => fixture.pendingDecodes.length === 2, 'both pending image decodes');
+  assert.equal(runFixtureTimers(fixture, 250), 2, 'both bounded bitmap fallbacks start');
+  await waitReady(fixture);
+  assert.equal(fixture.messages.some(message => message.action === 'assetError'), false);
+  assert.equal(fixture.messages.some(message => message.action === 'ready'), true);
+  let resources = fixture.handle.preview.report().resources;
+  assert.equal(resources.releasedBitmaps, 2, 'validation bitmaps are closed after pixel readback');
+  assert.ok(resources.liveBitmaps >= 2, 'only render bitmaps remain live');
+  assert.equal(resources.createdBitmaps, resources.releasedBitmaps + resources.liveBitmaps);
+  fixture.handle.dispose();
+  resources = fixture.handle.preview.report().resources;
+  assert.equal(resources.liveImages, 0);
+  assert.equal(resources.liveBitmaps, 0);
+  assert.equal(resources.liveCanvases, 0);
+  assert.equal(resources.createdBitmaps, resources.releasedBitmaps);
+  assert.equal(resources.createdCanvases, resources.releasedCanvases);
+});
+
+test('a rejected or wrong-sized bitmap cannot replace a pending image decode', async t => {
+  for (const [name, options, expectedBitmaps] of [
+    ['rejection', { bitmapMode: 'throw' }, 0],
+    ['wrong dimensions', { bitmapMode: 'wrong-dimensions' }, 2],
+  ]) {
+    await t.test(name, async () => {
+      const fixture = createFixture({ ...options, settings: false,
+        imageOptions: { decode: 'pending-complete' } });
+      await waitForFixture(() => fixture.pendingDecodes.length === 2, 'both pending image decodes');
+      assert.equal(runFixtureTimers(fixture, 250), 2);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+      assert.equal(runFixtureTimers(fixture, 4000), 2, 'the original four-second operation bound remains active');
+      await waitForMessage(fixture, 'assetError');
+      const resources = fixture.handle.preview.report().resources;
+      assert.equal(fixture.messages.find(message => message.action === 'assetError').reason, 'asset-invalid');
+      assert.equal(resources.createdBitmaps, expectedBitmaps);
+      assert.equal(resources.releasedBitmaps, expectedBitmaps);
+      assert.equal(resources.liveBitmaps, 0);
+      assert.equal(resources.liveImages, 0);
+      assert.equal(resources.liveCanvases, 0);
+      fixture.handle.dispose();
+    });
+  }
+});
+
+test('pending or unavailable bitmap fallback remains bounded and rejects invalid assets', async t => {
+  await t.test('bitmap fallback timeout closes a late bitmap', async () => {
+    const fixture = createFixture({ settings: false, bitmapMode: 'pending',
+      imageOptions: { decode: 'pending-complete' } });
+    await waitForFixture(() => fixture.pendingDecodes.length === 2, 'both pending image decodes');
+    assert.equal(runFixtureTimers(fixture, 250), 2);
+    await waitForFixture(() => fixture.bitmapPromises.length === 2, 'both pending validation bitmaps');
+    assert.equal(runFixtureTimers(fixture, 4000), 2, 'bitmap and native decode share the existing four-second bound');
+    await waitForMessage(fixture, 'assetError');
+    assert.equal(fixture.messages.find(message => message.action === 'assetError').reason, 'asset-invalid');
+    assert.equal(fixture.handle.preview.report().resources.liveImages, 0);
+    const late = fixture.bitmapPromises.map(pending => {
+      const bitmap = { source: pending.canvas,
+        width: pending.canvas.naturalWidth, height: pending.canvas.naturalHeight,
+        closed: false, close() { this.closed = true; } };
+      pending.resolve(bitmap);
+      return bitmap;
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    const resources = fixture.handle.preview.report().resources;
+    assert.deepEqual(late.map(bitmap => bitmap.closed), [true, true]);
+    assert.equal(resources.createdBitmaps, 2);
+    assert.equal(resources.releasedBitmaps, 2);
+    assert.equal(resources.liveBitmaps, 0);
+    assert.equal(resources.liveCanvases, 0);
+    fixture.handle.dispose();
+  });
+
+  await t.test('without createImageBitmap the native decode retains its existing timeout', async () => {
+    const fixture = createFixture({ settings: false, makeBitmap: false,
+      imageOptions: { decode: 'pending-complete' } });
+    await waitForFixture(() => fixture.pendingDecodes.length === 2, 'both pending image decodes');
+    assert.equal(runFixtureTimers(fixture, 250), 0, 'no fallback timer exists without createImageBitmap');
+    assert.equal(runFixtureTimers(fixture, 4000), 2);
+    await waitForMessage(fixture, 'assetError');
+    const resources = fixture.handle.preview.report().resources;
+    assert.equal(fixture.messages.find(message => message.action === 'assetError').reason, 'asset-invalid');
+    assert.equal(resources.liveImages, 0);
+    assert.equal(resources.liveBitmaps, 0);
+    fixture.handle.dispose();
+  });
+});
+
+test('skip during a pending bitmap fallback closes late pixels without reviving the animation', async () => {
+  const fixture = createFixture({ settings: false, bitmapMode: 'pending',
+    imageOptions: { decode: 'pending-complete' } });
+  await waitForFixture(() => fixture.pendingDecodes.length === 2, 'both pending image decodes');
+  assert.equal(runFixtureTimers(fixture, 250), 2);
+  await waitForFixture(() => fixture.bitmapPromises.length === 2, 'both pending validation bitmaps');
+  fixture.handle.preview.skip();
+  const late = fixture.bitmapPromises.map(pending => {
+    const bitmap = { source: pending.canvas,
+      width: pending.canvas.naturalWidth, height: pending.canvas.naturalHeight,
+      closed: false, close() { this.closed = true; } };
+    pending.resolve(bitmap);
+    return bitmap;
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const resources = fixture.handle.preview.report().resources;
+  assert.equal(fixture.messages.some(message => message.action === 'assetError'), false);
+  assert.deepEqual(late.map(bitmap => bitmap.closed), [true, true]);
+  assert.equal(resources.liveImages, 0);
+  assert.equal(resources.liveBitmaps, 0);
+  assert.equal(resources.liveCanvases, 0);
+  assert.equal(resources.createdBitmaps, resources.releasedBitmaps);
+  assert.equal(resources.createdCanvases, resources.releasedCanvases);
+  fixture.handle.dispose();
 });
 
 test('settings intent opens through the real settings panel and Escape cancels playback safely', async () => {

@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -109,10 +109,23 @@ function browserChecks(maxInputBytes) {
     const childDocument = frame.contentDocument;
     childDocument.documentElement.lang = 'zh-CN';
     childDocument.documentElement.style.colorScheme = 'dark';
+    childDocument.documentElement.setAttribute('data-azhou-wallpaper', 'active');
+    const wallpaperStylesheet = childDocument.createElement('link');
+    wallpaperStylesheet.rel = 'stylesheet';
+    wallpaperStylesheet.href = new URL('/wallpaper.css', document.location.href).href;
+    childDocument.head.appendChild(wallpaperStylesheet);
+    await new Promise((resolve, reject) => {
+      wallpaperStylesheet.addEventListener('load', resolve, { once: true });
+      wallpaperStylesheet.addEventListener('error', reject, { once: true });
+    });
     childDocument.documentElement.style.setProperty('--agent-skin-surface', 'rgb(18, 24, 36)');
     childDocument.documentElement.style.setProperty('--agent-skin-text', 'rgb(238, 240, 245)');
     childDocument.documentElement.style.setProperty('--agent-skin-muted', 'rgb(176, 186, 204)');
     childDocument.documentElement.style.setProperty('--agent-skin-border', 'rgb(92, 108, 132)');
+    let currentAppearance = { locale: 'zh-CN', theme: 'dark', colors: {
+      surface: 'rgb(18, 24, 36)', text: 'rgb(238, 240, 245)',
+      muted: 'rgb(176, 186, 204)', border: 'rgb(92, 108, 132)',
+    } };
     const localization = createLocalization({ locale: childDocument.documentElement.lang });
     const appearanceAvatarCanvas = childDocument.createElement('canvas');
     appearanceAvatarCanvas.width = 8;
@@ -139,6 +152,7 @@ function browserChecks(maxInputBytes) {
       indexedDB: child.indexedDB,
       localization,
       appearanceAvatar,
+      getAppearance: () => currentAppearance,
       setTimeout: child.setTimeout.bind(child),
       clearTimeout: child.clearTimeout.bind(child),
       performance: child.performance,
@@ -150,6 +164,26 @@ function browserChecks(maxInputBytes) {
       paint(canvas.getContext('2d'));
       return canvas;
     };
+    const pngHeader = (width, height) => {
+      const bytes = new child.Uint8Array(24);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+      new child.DataView(bytes.buffer).setUint32(16, width, false);
+      new child.DataView(bytes.buffer).setUint32(20, height, false);
+      return bytes;
+    };
+    const directPagePreflightFile = new child.File([pngHeader(24_000, 2_001)],
+      'direct-page-over-pixels.png', { type: 'image/png' });
+    const directPageReaderAvailable = typeof globalThis.AGENT_SKIN_READ_RAW_DIMENSIONS === 'function';
+    const directPagePreflight = await api.importImage(directPagePreflightFile, 'avatar').then(
+      () => ({ causeCode: '', createdURLs: created.length }),
+      error => ({ causeCode: error.causeCode || '', createdURLs: created.length }),
+    );
+    if (!directPageReaderAvailable || directPagePreflight.causeCode !== 'image-too-large'
+      || directPagePreflight.createdURLs !== 0) {
+      throw new Error('direct page did not make the same raw-dimension parser available before first import: '
+        + JSON.stringify({ directPageReaderAvailable, directPagePreflight }));
+    }
     const blobFor = (canvas, type) => new Promise((resolve, reject) => {
       canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Chrome could not encode a synthetic ' + type)), type, 0.95);
     });
@@ -275,11 +309,81 @@ function browserChecks(maxInputBytes) {
       onSaved() { savedCallbackCount++; },
     });
     const settingsDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
+    const settingsStatus = settingsDialog.querySelector('[data-agent-skin-settings-status]');
+    const avatarInput = settingsDialog.querySelector('[data-agent-skin-image-input="avatar"]');
+    const selectImage = file => {
+      const transfer = new child.DataTransfer();
+      transfer.items.add(file);
+      avatarInput.files = transfer.files;
+      avatarInput.dispatchEvent(new child.Event('change', { bubbles: true }));
+    };
+    const importErrors = [];
+    const assertImportError = async (file, expectedText) => {
+      selectImage(file);
+      const message = await waitFor(() => settingsStatus.getAttribute('role') === 'alert'
+        && settingsStatus.textContent.includes(expectedText) ? settingsStatus.textContent : '', expectedText);
+      importErrors.push(message);
+      return message;
+    };
+    const emptyFile = new child.File([], 'empty.png', { type: 'image/png' });
+    await assertImportError(emptyFile, '启动头像文件为空');
+    await assertImportError(new child.File([boundaryFile, 'x'], 'over-limit.png', { type: 'image/png' }),
+      '启动头像超过 30 MiB');
+    const oversizedHeader = pngHeader(24_000, 2_001);
+    const preflightFile = new child.File([oversizedHeader], 'over-pixels.png', { type: 'image/png' });
+    await assertImportError(preflightFile, '启动头像原始像素超过 48 MP');
+    await assertImportError(new child.File([smallPng], 'forged.jpg', { type: 'image/jpeg' }),
+      '启动头像的文件类型声明与实际内容不符');
+    await assertImportError(new child.File([Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8)], 'unsupported.png',
+      { type: 'image/png' }), '启动头像内容不是受支持');
+    await assertImportError(new child.File([pngHeader(1, 1)], 'broken.png', { type: 'image/png' }),
+      '启动头像无法解码');
+    localization.setLocale('en');
+    const localizedImportError = settingsStatus.textContent;
+    if (!localizedImportError.includes('Startup portrait') || !localizedImportError.includes('could not be decoded')) {
+      throw new Error('image import alert did not re-localize the field, cause and recovery action: '
+        + localizedImportError);
+    }
+    const cancelledFile = new child.File([smallPng], 'cancelled.png', { type: 'image/png' });
+    selectImage(cancelledFile);
+    const cancelledImport = api.cancelImport();
+    await waitFor(() => settingsStatus.getAttribute('role') === 'status' && !settingsStatus.textContent
+      ? true : '', 'cancelled import status to clear');
+    const cancelStatus = { cancelled: cancelledImport, role: settingsStatus.getAttribute('role'), text: settingsStatus.textContent };
+    selectImage(new child.File([smallPng], 'recovered.png', { type: 'image/png' }));
+    await waitFor(() => settingsStatus.getAttribute('role') === 'status'
+      && settingsStatus.textContent.includes('Image ready to save') ? true : '', 'valid image recovery');
+    localization.setLocale('zh-CN');
+    const importRecovery = {
+      errors: importErrors,
+      localizedError: localizedImportError,
+      cancelStatus,
+      recoveredStatus: settingsStatus.textContent,
+      saveEnabled: !settingsDialog.querySelector('footer button:last-child').disabled,
+    };
     const settingsTabs = [...settingsDialog.querySelectorAll('[role="tab"][data-agent-skin-settings-tab]')]
       .map(tab => tab.getAttribute('data-agent-skin-settings-tab'));
     const workspacePreview = settingsDialog.querySelector('[data-agent-skin-workspace-preview]');
     const workspacePreviewImage = settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]');
     const workspacePreviewCaption = workspacePreview?.querySelector('figcaption');
+    const workspacePreviewSurface = workspacePreview?.querySelector(':scope > div');
+    const workspacePreviewWash = settingsDialog.querySelector('[data-agent-skin-workspace-preview-wash]');
+    const strengthInput = settingsDialog.querySelector('input[type="range"]');
+    const textInputs = [...settingsDialog.querySelectorAll('input[type="text"]')];
+    const titleInput = textInputs[0];
+    const captionInput = textInputs[1];
+    const subtitleInput = settingsDialog.querySelector('textarea');
+    titleInput.value = 'T'.repeat(16);
+    titleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    captionInput.value = 'C'.repeat(48);
+    captionInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    subtitleInput.value = '';
+    subtitleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    const legalTextInputs = {
+      title: { valueLength: titleInput.value.length, maxLength: titleInput.maxLength },
+      caption: { valueLength: captionInput.value.length, maxLength: captionInput.maxLength },
+      subtitle: { valueLength: subtitleInput.value.length, maxLength: subtitleInput.maxLength },
+    };
     const rectOf = element => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom,
@@ -300,17 +404,113 @@ function browserChecks(maxInputBytes) {
       };
     };
     const workspacePreviewGeometry = [];
+    // A 390 CSS-pixel viewport is the responsive layout available at 200% zoom
+    // in a 780-pixel-wide window; retain additional wider and shorter cases.
     for (const [width, height] of [[1512, 889], [800, 820], [640, 480], [390, 320]]) {
       workspacePreviewGeometry.push(await measurePreviewAt(width, height));
     }
+    const zoomEquivalentGeometry = workspacePreviewGeometry.at(-1);
+    const appearancePreviewMatrix = [];
+    for (const [theme, colors] of [
+      ['dark', { surface: 'rgb(18, 24, 36)', text: 'rgb(238, 240, 245)',
+        muted: 'rgb(176, 186, 204)', border: 'rgb(92, 108, 132)' }],
+      ['light', { surface: 'rgb(248, 250, 252)', text: 'rgb(23, 32, 51)',
+        muted: 'rgb(83, 97, 118)', border: 'rgb(203, 213, 225)' }],
+    ]) {
+      const surface = colors.surface;
+      currentAppearance = { locale: 'zh-CN', theme, colors };
+      childDocument.documentElement.dataset.theme = theme;
+      childDocument.documentElement.style.setProperty('--agent-skin-surface', surface);
+      for (const [width, height] of [[1512, 889], [800, 820]]) {
+        frame.width = String(width);
+        frame.height = String(height);
+        await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
+        api.refreshAppearance();
+        for (const strength of [0, 42, 75]) {
+          strengthInput.value = String(strength);
+          strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+          const imageStyle = child.getComputedStyle(workspacePreviewImage);
+          const washStyle = child.getComputedStyle(workspacePreviewWash);
+          const previewSurfaceStyle = child.getComputedStyle(workspacePreviewSurface);
+          appearancePreviewMatrix.push({
+            theme, surface, viewport: { width: child.innerWidth, height: child.innerHeight }, strength,
+            imageVisible: !workspacePreviewImage.hidden && imageStyle.display !== 'none'
+              && imageStyle.visibility !== 'hidden',
+            imagePosition: imageStyle.objectPosition,
+            washVisible: washStyle.display !== 'none' && washStyle.visibility !== 'hidden',
+            wash: workspacePreviewWash.style.backgroundImage,
+            previewSurface: previewSurfaceStyle.backgroundColor,
+          });
+        }
+      }
+    }
+    const appearancePreviewFailures = appearancePreviewMatrix.flatMap(state => {
+      const expectedPosition = state.viewport.width / state.viewport.height <= 6 / 5 ? '88% 50%' : '60% 50%';
+      const failures = [];
+      if (state.imageVisible !== (state.strength > 0)) failures.push('image visibility');
+      if (state.washVisible !== (state.strength > 0)) failures.push('wash visibility');
+      if (state.imagePosition !== expectedPosition) failures.push('crop position expected ' + expectedPosition);
+      if (state.previewSurface !== state.surface) failures.push('resolved surface');
+      if (state.strength > 0 && !state.wash.includes(state.surface)) failures.push('wash surface');
+      return failures.map(failure => ({ theme: state.theme, viewport: state.viewport,
+        strength: state.strength, failure, imageVisible: state.imageVisible,
+        washVisible: state.washVisible, imagePosition: state.imagePosition,
+        previewSurface: state.previewSurface, wash: state.wash }));
+    });
+    if (appearancePreviewFailures.length) {
+      throw new Error('Background draft preview must follow resolved surface, 0/42/75 closure, and 60%/88% viewport crop: '
+        + JSON.stringify(appearancePreviewFailures));
+    }
+    const surfaceCases = [
+      { name: 'dark-conflicting-tokens', theme: 'dark', app: 'rgb(10, 20, 30)', color: 'rgb(200, 210, 220)', expected: 'rgb(10, 20, 30)' },
+      { name: 'light-missing-tokens', theme: 'light', expected: 'rgb(255, 255, 255)' },
+      { name: 'dark-invalid-tokens', theme: 'dark', app: 'not-a-color', color: 'also-not-a-color',
+        appearanceSurface: 'not-a-color', expected: 'rgb(16, 18, 28)' },
+      { name: 'light-invalid-tokens', theme: 'light', app: 'not-a-color', color: 'also-not-a-color',
+        appearanceSurface: 'not-a-color', expected: 'rgb(255, 255, 255)' },
+      { name: 'dark-invalid-app-token', theme: 'dark', app: 'not-a-color', color: 'rgb(200, 210, 220)', expected: 'rgb(200, 210, 220)' },
+    ];
+    const surfaceComparison = [];
+    for (const state of surfaceCases) {
+      const root = childDocument.documentElement;
+      root.dataset.theme = state.theme;
+      root.style.removeProperty('--app-color-background-surface');
+      root.style.removeProperty('--color-surface');
+      if (state.app) root.style.setProperty('--app-color-background-surface', state.app);
+      if (state.color) root.style.setProperty('--color-surface', state.color);
+      // This is the resolved value the host controller passes to the wallpaper renderer.
+      root.style.setProperty('--azhou-wallpaper-surface', state.expected);
+      currentAppearance = {
+        locale: 'zh-CN', theme: state.theme,
+        colors: { surface: state.appearanceSurface ?? state.expected },
+      };
+      api.refreshAppearance();
+      surfaceComparison.push({
+        name: state.name,
+        expected: state.expected,
+        preview: child.getComputedStyle(workspacePreviewSurface).backgroundColor,
+        production: child.getComputedStyle(childDocument.body).backgroundColor,
+      });
+    }
+    const surfaceComparisonFailures = surfaceComparison.filter(state =>
+      state.preview !== state.expected || state.production !== state.expected);
+    if (surfaceComparisonFailures.length) {
+      throw new Error('The production wallpaper stylesheet and draft preview must use the same validated surface: '
+        + JSON.stringify(surfaceComparisonFailures));
+    }
+    currentAppearance = { locale: 'zh-CN', theme: 'dark', colors: {
+      surface: 'rgb(18, 24, 36)', text: 'rgb(238, 240, 245)',
+      muted: 'rgb(176, 186, 204)', border: 'rgb(92, 108, 132)',
+    } };
+    childDocument.documentElement.dataset.theme = 'dark';
+    childDocument.documentElement.style.setProperty('--agent-skin-surface', 'rgb(18, 24, 36)');
+    api.refreshAppearance();
     frame.width = '800';
     frame.height = '820';
     await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
     const animationPreviewButton = settingsDialog.querySelector('[data-agent-skin-preview-animation]');
-    const titleInput = settingsDialog.querySelector('input[type="text"]');
     titleInput.value = 'Local draft';
     titleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
-    const strengthInput = settingsDialog.querySelector('input[type="range"]');
     strengthInput.value = '18';
     strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
     settingsDialog.querySelector('[data-agent-skin-settings-tab="startup"]')?.click();
@@ -326,7 +526,9 @@ function browserChecks(maxInputBytes) {
       previewImage: workspacePreviewImage?.getAttribute('src'),
       previewWash: settingsDialog.querySelector('[data-agent-skin-workspace-preview-wash]')?.style.backgroundImage,
     };
+    const cropCaptionZh = workspacePreviewCaption?.textContent;
     localization.setLocale('en');
+    const cropCaptionEn = workspacePreviewCaption?.textContent;
     const inputStyle = child.getComputedStyle(titleInput);
     const restoreButton = settingsDialog.querySelector('footer button');
     const buttonStyle = child.getComputedStyle(restoreButton);
@@ -339,7 +541,7 @@ function browserChecks(maxInputBytes) {
       title: settingsDialog.querySelector('#agent-skin-settings-title').textContent,
       appearanceAvatar: Boolean(identityAvatar?.src.startsWith('data:image/png;base64,')),
       appearanceAvatarAlt: identityAvatar?.getAttribute('alt'),
-      fieldLabel: titleInput.getAttribute('aria-label'),
+      fieldLabel: titleInput.closest('label')?.textContent.trim(),
       draftValue: titleInput.value,
       colorScheme: child.getComputedStyle(settingsDialog).colorScheme,
       surface: child.getComputedStyle(settingsDialog).backgroundColor,
@@ -409,19 +611,59 @@ function browserChecks(maxInputBytes) {
       Image: secondWindow.Image,
       URL: secondWindow.URL,
       indexedDB: secondWindow.indexedDB,
+      localization,
       setTimeout: secondWindow.setTimeout.bind(secondWindow),
       clearTimeout: secondWindow.clearTimeout.bind(secondWindow),
       performance: secondWindow.performance,
     });
     const secondPageBaseline = await secondAPI.load(defaults);
-    const winningCandidate = { ...initialCommit, introTitle: 'Page A wins' };
-    const competingCandidate = { ...secondPageBaseline.settings, introTitle: 'Page B stale' };
-    const winningCommit = await api.save(winningCandidate);
-    let conflictReason = '';
-    try { await secondAPI.save(competingCandidate); }
-    catch (error) { conflictReason = error.reason || ''; }
-    const reloaded = await api.load(defaults);
-    secondAPI.dispose();
+    if (!api.openSettings() || !secondAPI.openSettings()) {
+      throw new Error('both settings pages must open for the conflict regression');
+    }
+    const pageATitle = settingsDialog.querySelector('input[type="text"]');
+    const pageAConflictSave = settingsDialog.querySelector('footer button:last-child');
+    const pageBDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
+    const pageBTitle = pageBDialog.querySelector('input[type="text"]');
+    const pageBSave = pageBDialog.querySelector('footer button:last-child');
+    const pageBStatus = pageBDialog.querySelector('[data-agent-skin-settings-status]');
+    pageATitle.value = 'Page A wins';
+    pageATitle.dispatchEvent(new child.Event('input', { bubbles: true }));
+    pageBTitle.value = 'Page B draft';
+    pageBTitle.dispatchEvent(new secondWindow.Event('input', { bubbles: true }));
+    pageAConflictSave.click();
+    await waitFor(() => !api.isSettingsOpen(), 'first page settings commit');
+    const winningCommit = await api.load(defaults);
+    pageBSave.click();
+    await waitFor(() => pageBStatus.getAttribute('role') === 'alert' ? pageBStatus.textContent : '',
+      'stale page shows the conflict recovery message');
+    const conflictStatus = pageBStatus.textContent;
+    const conflictDraft = pageBTitle.value;
+    if (conflictDraft !== 'Page B draft' || !/Closing discards.*Copy.*Reopen.*new value/i.test(conflictStatus)) {
+      throw new Error('conflict keeps a copyable draft and accurately describes close/reopen recovery: '
+        + JSON.stringify({ conflictDraft, conflictStatus }));
+    }
+    if (!secondAPI.isSettingsOpen()) throw new Error('the stale settings page remains open for copying');
+    secondAPI.cancelSettings();
+    if (!secondAPI.dispose()) throw new Error('the stale page releases its settings runtime after close');
+    const reopenedAPI = createImageSettings({
+      document: secondDocument,
+      Image: secondWindow.Image,
+      URL: secondWindow.URL,
+      indexedDB: secondWindow.indexedDB,
+      localization,
+      setTimeout: secondWindow.setTimeout.bind(secondWindow),
+      clearTimeout: secondWindow.clearTimeout.bind(secondWindow),
+      performance: secondWindow.performance,
+    });
+    const reloaded = await reopenedAPI.load(defaults);
+    if (reloaded.settings.introTitle !== 'Page A wins' || !reopenedAPI.openSettings()) {
+      throw new Error('reopening settings reads the value committed by the other page');
+    }
+    const reopenedDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
+    const reopenedTitle = reopenedDialog.querySelector('input[type="text"]');
+    if (reopenedTitle.value !== 'Page A wins') throw new Error('reopened input does not show the external winner');
+    reopenedAPI.cancelSettings();
+    reopenedAPI.dispose();
     secondPage.remove();
     const versionchange = await new Promise((resolve, reject) => {
       const request = child.indexedDB.open('azhou-codex-startup', 2);
@@ -454,15 +696,59 @@ function browserChecks(maxInputBytes) {
       caption: rectOf(workspacePreviewCaption),
       dialog: rectOf(settingsDialog),
     };
+    const zeroStrengthValue = settingsDialog.querySelector('[data-agent-skin-wallpaper-strength-value]');
+    strengthInput.value = '0';
+    strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    const zeroStrength = {
+      visibleValue: zeroStrengthValue.textContent,
+      accessibleValue: strengthInput.getAttribute('aria-valuetext'),
+      valueIsAdjacent: zeroStrengthValue.parentElement === strengthInput.parentElement,
+    };
+    const strengthRowLabel = strengthInput.closest('label');
+    const strengthLabelAssociation = {
+      controlIsSlider: strengthRowLabel?.control === strengthInput,
+      sliderLabelCount: strengthInput.labels?.length || 0,
+    };
+    strengthInput.value = '42';
+    strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    const artworkAction = settingsDialog.querySelector('[data-agent-skin-image-action="artwork"]');
+    const sectionHeadings = settingsDialog.querySelectorAll('h3').length;
+    const tabPanelsNamed = [...settingsDialog.querySelectorAll('[role="tab"]')].every(tab => {
+      const panel = settingsDialog.querySelector('#' + tab.getAttribute('aria-controls'));
+      return panel?.getAttribute('aria-labelledby') === tab.id;
+    });
+    const startupNote = [...settingsDialog.querySelectorAll('p')]
+      .map(element => element.textContent.trim())
+      .find(text => text.includes('保存后用于下次启动')) || '';
+    const settingsUi = {
+      headingCount: settingsDialog.querySelectorAll('h2').length,
+      sectionHeadingCount: sectionHeadings,
+      tabPanelsNamed,
+      restoreLabel: restoreButton?.textContent,
+      artworkButtonLabel: artworkAction?.textContent,
+      artworkButtonAriaLabel: artworkAction?.getAttribute('aria-label'),
+      startupNote,
+      zeroStrength,
+      strengthLabelAssociation,
+      legalTextInputs,
+    };
     return {
       formats,
+      directPagePreflight: { readerAvailable: directPageReaderAvailable, ...directPagePreflight },
       previewWorkflow: {
         settingsTabs,
         hasWorkspacePreview: Boolean(workspacePreview),
+        importRecovery,
       workspacePreviewGeometry,
+        zoomEquivalentGeometry,
         screenshotGeometry,
+        settingsUi,
         hasAnimationPreview: Boolean(animationPreviewButton),
         previewResult,
+        appearancePreviewMatrix,
+        surfaceComparison,
+        cropCaptionZh,
+        cropCaptionEn,
         titleAfterCancel: afterPreviewCancel.settings.introTitle,
         applyCalls,
         savedCallbackCount,
@@ -492,8 +778,11 @@ function browserChecks(maxInputBytes) {
         initialTitle: initialCommit.introTitle,
         hasAppearanceAvatar: Object.hasOwn(initialCommit, 'appearanceAvatar'),
         secondPageLoadedTitle: secondPageBaseline.settings.introTitle,
-        winningTitle: winningCommit.introTitle,
-        conflictReason,
+        winningTitle: winningCommit.settings.introTitle,
+        conflictReason: conflictStatus ? 'settings-conflict' : '',
+        conflictStatus,
+        conflictDraft,
+        reopenedTitle: reopenedTitle.value,
         reloadedTitle: reloaded.settings.introTitle,
         reloadedBaselineTitle: reloaded.baseline?.introTitle,
         versionchange,
@@ -528,20 +817,45 @@ async function cleanup() {
 try {
   assert.equal(typeof WebSocket, 'function', 'Node 22 or newer is required for the built-in WebSocket');
   const imageSettings = await readFile(join(PACKAGE_ROOT, 'image-settings.js'));
+  const imageMetadataReader = await readFile(join(PACKAGE_ROOT, 'image-metadata-reader.js'));
   const localizationSource = await readFile(join(PACKAGE_ROOT, 'localization.js'));
-  const html = '<!doctype html><meta charset="utf-8"><title>image settings fixture</title>'
-    + '<script src="/localization.js"></script><script src="/image-settings.js"></script>'
-    + '<script>window.imageSettingsReady = typeof createImageSettings === "function" && typeof createLocalization === "function";</script>';
+  const wallpaperCss = await readFile(join(PACKAGE_ROOT, 'wallpaper', 'wallpaper.css'));
+  const indexHtml = await readFile(join(PACKAGE_ROOT, 'index.html'), 'utf8');
+  const csp = indexHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i)?.[1] || '';
+  const readerTag = '<script src="image-metadata-reader.js" defer></script>';
+  const settingsTag = '<script src="image-settings.js" defer></script>';
+  assert.match(csp, /(?:^|;\s*)script-src 'self'(?:;|$)/,
+    'the direct page permits the same-origin classic metadata reader');
+  assert.match(csp, /(?:^|;\s*)img-src 'self' blob: data:(?:;|$)/,
+    'the direct page permits the object URL used to decode a selected file');
+  assert.ok(indexHtml.indexOf(readerTag) >= 0 && indexHtml.indexOf(readerTag) < indexHtml.indexOf(settingsTag),
+    'the direct page loads the classic metadata reader before the deferred settings script');
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>image settings fixture</title></head><body>'
+    + '<script src="/localization.js" defer></script><script src="/image-metadata-reader.js" defer></script>'
+    + '<script src="/image-settings.js" defer></script><script src="/image-metadata-order-probe.js" defer></script>'
+    + '</body></html>';
+  const orderProbe = "window.imageSettingsReady = typeof createImageSettings === 'function' "
+    + "&& typeof createLocalization === 'function'; window.imageMetadataReady = "
+    + "typeof window.AGENT_SKIN_READ_RAW_DIMENSIONS === 'function';";
   server = createServer((request, response) => {
     if (request.url === '/image-settings.js') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       response.end(imageSettings);
+    } else if (request.url === '/image-metadata-reader.js') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+      response.end(imageMetadataReader);
+    } else if (request.url === '/image-metadata-order-probe.js') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+      response.end(orderProbe);
     } else if (request.url === '/localization.js') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       response.end(localizationSource);
+    } else if (request.url === '/wallpaper.css') {
+      response.writeHead(200, { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' });
+      response.end(wallpaperCss);
     } else if (request.url === '/' || request.url === '/index.html') {
       response.setHeader('content-security-policy',
-        "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'");
+        csp);
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       response.end(html);
     } else {
@@ -577,10 +891,28 @@ try {
   await cdp.call('Page.enable');
   await cdp.call('Page.navigate', { url: origin + '/' });
   await until(() => cdp.evaluate('window.imageSettingsReady === true'), 10_000, 'image settings source load');
+  await until(() => cdp.evaluate('window.imageMetadataReady === true'), 10_000,
+    'classic metadata reader before deferred image settings script');
   const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ')';
   const result = await cdp.evaluate(expression);
+  await cdp.call('Accessibility.enable');
+  const frameTree = await cdp.call('Page.getFrameTree');
+  const settingsFrameId = frameTree.frameTree.childFrames?.[0]?.frame?.id;
+  assert.ok(settingsFrameId, 'the real settings iframe is available for AX inspection');
+  const settingsAXTree = await cdp.call('Accessibility.getFullAXTree', { frameId: settingsFrameId });
+  const strengthAXNode = settingsAXTree.nodes.find(node => node.role?.value === 'slider');
+  assert.deepEqual({
+    dom: result.previewWorkflow.settingsUi.strengthLabelAssociation,
+    accessibleName: strengthAXNode?.name?.value || '',
+  }, {
+    dom: { controlIsSlider: true, sliderLabelCount: 1 },
+    accessibleName: '背景强度（0–75）',
+  }, 'the real slider label association and Chromium AX tree expose its visible name');
 
   assert.deepEqual(result.formats.map(item => item.type), ['image/png', 'image/jpeg', 'image/webp']);
+  assert.deepEqual(result.directPagePreflight,
+    { readerAvailable: true, causeCode: 'image-too-large', createdURLs: 0 },
+    'the direct page must load its classic metadata reader before the first import and reject from its header');
   for (const item of result.formats) {
     assert.deepEqual(item.dimensions, [512, 512]);
     assert.equal(item.png, true);
@@ -603,6 +935,26 @@ try {
   assert.deepEqual(result.previewWorkflow.settingsTabs, ['workspace', 'startup', 'about']);
   assert.equal(result.previewWorkflow.hasWorkspacePreview, true);
   assert.equal(result.previewWorkflow.hasAnimationPreview, true);
+  assert.equal(result.previewWorkflow.importRecovery.errors.length, 6,
+    'the settings alert covers empty, byte, pixel, MIME, format and decoder errors');
+  assert.equal(result.previewWorkflow.importRecovery.errors.every(message => message.includes('启动头像')
+    && /请选择|换一张/.test(message)), true,
+  'each localized error names the affected field and a recovery action');
+  assert.match(result.previewWorkflow.importRecovery.localizedError, /Startup portrait.*could not be decoded.*Choose/,
+    'the cause and recovery action follow the selected UI locale');
+  assert.deepEqual(result.previewWorkflow.importRecovery.cancelStatus,
+    { cancelled: true, role: 'status', text: '' },
+    'canceling an import clears the alert instead of presenting a damaged-image error');
+  assert.match(result.previewWorkflow.importRecovery.recoveredStatus, /图片已准备/,
+    'a valid replacement returns the field to its ready state');
+  assert.equal(result.previewWorkflow.importRecovery.saveEnabled, true,
+    'a recovered selection leaves the save action available');
+  assert.equal(result.previewWorkflow.cropCaptionZh.includes('裁切'), true,
+    'Chinese preview caption explains that the thumbnail crop may differ');
+  assert.equal(result.previewWorkflow.cropCaptionEn.toLowerCase().includes('crop'), true,
+    'English preview caption explains that the thumbnail crop may differ');
+  assert.ok(result.previewWorkflow.surfaceComparison.length >= 5,
+    'surface preview matches the actual production stylesheet across token and theme fallback cases');
   for (const geometry of [...result.previewWorkflow.workspacePreviewGeometry, result.previewWorkflow.screenshotGeometry]) {
     assert.ok(geometry.preview.height <= 240, 'workspace preview stays under the compact 240px cap');
     assert.ok(geometry.caption.height <= 60, 'preview caption stays at text height');
@@ -616,6 +968,24 @@ try {
       && geometry.dialog.right <= geometry.viewport.width && geometry.dialog.bottom <= geometry.viewport.height,
     'settings dialog remains within its viewport');
   }
+  assert.equal(result.previewWorkflow.zoomEquivalentGeometry.viewport.width, 390,
+    '200% zoom on a 780px window uses the tested 390 CSS-pixel layout viewport');
+  assert.deepEqual(result.previewWorkflow.settingsUi, {
+    headingCount: 1,
+    sectionHeadingCount: 0,
+    tabPanelsNamed: true,
+    restoreLabel: '恢复全部默认',
+    artworkButtonLabel: '选择背景图片',
+    artworkButtonAriaLabel: null,
+    startupNote: '保存后用于下次启动；预览不会保存草稿。',
+    zeroStrength: { visibleValue: '关闭', accessibleValue: '关闭', valueIsAdjacent: true },
+    strengthLabelAssociation: { controlIsSlider: true, sliderLabelCount: 1 },
+    legalTextInputs: {
+      title: { valueLength: 16, maxLength: 16 },
+      caption: { valueLength: 48, maxLength: 48 },
+      subtitle: { valueLength: 0, maxLength: 60 },
+    },
+  });
   assert.deepEqual({ title: result.previewWorkflow.previewResult.title,
     strength: result.previewWorkflow.previewResult.strength,
     settingsOpen: result.previewWorkflow.previewResult.settingsOpen,
@@ -624,9 +994,9 @@ try {
   });
   assert.ok(result.previewWorkflow.previewResult.previewImage?.startsWith('data:image/png;base64,'));
   const expectedWashStops = [
-    '90%, transparent) 0%', '92%, transparent) 22%', '95%, transparent) 36%',
-    '93%, transparent) 62%', '87%, transparent) 73%', '72%, transparent) 87%',
-    '70%, transparent) 100%',
+    '90%, transparent 10%) 0%', '92%, transparent 8%) 22%', '95%, transparent 5%) 36%',
+    '93%, transparent 7%) 62%', '87%, transparent 13%) 73%', '72%, transparent 28%) 87%',
+    '70%, transparent 30%) 100%',
   ];
   assert.ok(result.previewWorkflow.previewResult.previewWash?.startsWith('linear-gradient(90deg,'),
     'workspace preview uses the same layered wash treatment as the wallpaper');
@@ -670,6 +1040,9 @@ try {
   assert.equal(result.storage.secondPageLoadedTitle, 'Saved fixture');
   assert.equal(result.storage.winningTitle, 'Page A wins');
   assert.equal(result.storage.conflictReason, 'settings-conflict');
+  assert.equal(result.storage.conflictDraft, 'Page B draft', 'the second page leaves its text available to copy');
+  assert.match(result.storage.conflictStatus, /Closing discards.*Copy.*Reopen.*new value/i);
+  assert.equal(result.storage.reopenedTitle, 'Page A wins', 'a new settings runtime reads the winning value');
   assert.equal(result.storage.reloadedTitle, 'Page A wins');
   assert.equal(result.storage.reloadedBaselineTitle, 'Page A wins');
   assert.equal(result.storage.versionchange.blocked, false,
@@ -683,9 +1056,47 @@ try {
     format: 'png', fromSurface: true, captureBeyondViewport: true,
   });
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+  const previewCommand = await readFile(join(PACKAGE_ROOT, '预览动画.command'), 'utf8');
+  assert.ok(previewCommand.includes('cd "$(dirname "$0")"')
+    && previewCommand.includes('open "$PWD/index.html"'),
+  'the supported native preview command opens this same local index.html');
+  const directPreviewURL = pathToFileURL(join(PACKAGE_ROOT, 'index.html')).href;
+  await cdp.call('Page.navigate', { url: directPreviewURL });
+  await until(() => cdp.evaluate('document.readyState === "complete" && typeof createImageSettings === "function"'),
+    10_000, 'actual file:// index page and preview scripts');
+  const directFilePreview = await cdp.evaluate(`(async () => {
+    const allocated = [];
+    const url = {
+      createObjectURL(file) { allocated.push(file); return URL.createObjectURL(file); },
+      revokeObjectURL(value) { URL.revokeObjectURL(value); },
+    };
+    const api = createImageSettings({ document, Image, URL: url,
+      setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window), performance });
+    const header = new Uint8Array(24);
+    header.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);
+    new DataView(header.buffer).setUint32(16, 24000, false);
+    new DataView(header.buffer).setUint32(20, 2001, false);
+    const file = new File([header], 'over-limit.png', { type: 'image/png' });
+    const outcome = await api.importImage(file, 'avatar').then(
+      () => ({ reason: '', causeCode: '' }),
+      error => ({ reason: error.reason || '', causeCode: error.causeCode || '' }),
+    );
+    api.dispose();
+    return {
+      protocol: location.protocol,
+      readerAvailable: typeof globalThis.AGENT_SKIN_READ_RAW_DIMENSIONS === 'function',
+      outcome,
+      objectURLs: allocated.length,
+    };
+  })()`);
+  assert.equal(directFilePreview.protocol, 'file:');
+  assert.deepEqual(directFilePreview, {
+    protocol: 'file:', readerAvailable: true,
+    outcome: { reason: 'asset-invalid', causeCode: 'image-too-large' }, objectURLs: 0,
+  }, 'the actual file preview must reject an oversized PNG before creating an object URL');
   console.log(JSON.stringify({
     status: 'PASS',
-    scope: 'synthetic image import, host-locale settings and theme tokens under strict style CSP, real IndexedDB save/reload, two-page conflict and versionchange close',
+    scope: 'same-origin HTTP and file:// classic image parser loading, actual local preview preflight, synthetic image import recovery, host-locale settings and theme tokens, real IndexedDB save/reload, two-page conflict and versionchange close',
     formats: result.formats.map(item => item.type),
     boundaryBytes: result.boundarySize,
     objectURLsReleased: result.revokedCount + '/' + result.createdCount,
