@@ -68,6 +68,15 @@ for (const [source, from] of [
   else console.log(`skipped ${source}, not present`);
 }
 
+// Upstream ships one harness adapter, for Claude Code. Adapter documents for
+// other runtimes are this Hub's work and sit beside the pristine tree so a
+// re-import of pstack/ replaces nothing of ours.
+const ADAPTERS = join(SCRATCH, "pstack", "docs", "harness");
+if (existsSync(join(ROOT, "hub-adapters"))) {
+  mkdirSync(ADAPTERS, { recursive: true });
+  cpSync(join(ROOT, "hub-adapters"), ADAPTERS, { recursive: true });
+}
+
 cpSync(
   join(ROOT, "scripts", "generate-pstack-harness-trees.mjs"),
   join(SCRATCH, "scripts", "generate-pstack-harness-trees.mjs"),
