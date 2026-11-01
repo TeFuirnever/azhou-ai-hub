@@ -59,14 +59,14 @@ class CoexistenceInstallTestCase(unittest.TestCase):
         self.skills = self.home / "skills"
         self.binary = install_fake_codex(self.base / "codex")
         self.pstack_source = configure_package(self.hub, "pstack", [
-            ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
+            ".agents/plugins/marketplace.json", "harness/pstack/codex", "LICENSE",
         ])
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name": "pstack-claude", "plugins": []}),
-            "plugins/pstack/.codex-plugin/plugin.json": json.dumps({"name": "pstack", "version": "0.9.102"}),
-            "plugins/pstack/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
-            "plugins/pstack/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
-            "plugins/pstack/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name": "pstack", "version": "0.9.102"}),
+            "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
+            "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
+            "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
             "LICENSE": "fixture license\n",
         }
         for name, content in files.items():

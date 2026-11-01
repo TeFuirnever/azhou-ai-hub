@@ -27,13 +27,13 @@ if a[:2] == ['marketplace', 'add']:
 elif a == ['add', 'pstack@pstack-claude']:
     if os.environ.get('PSTACK_TEST_FAIL_PLUGIN'):
         sys.exit('fixture plugin installation failure')
-    shutil.copytree(pathlib.Path(source())/'plugins/pstack', installed(), dirs_exist_ok=True)
+    shutil.copytree(pathlib.Path(source())/'harness/pstack/codex', installed(), dirs_exist_ok=True)
     print(json.dumps({'pluginId': 'pstack@pstack-claude', 'version': '0.9.102', 'installedPath': str(installed())}))
 elif a == ['marketplace', 'list']:
     entries = [{'name':'pstack-claude', 'root':source(), 'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() else []
     print(json.dumps({'marketplaces':entries}))
 elif a == ['list', '--marketplace', 'pstack-claude'] or a == ['list']:
-    entries = [{'pluginId':'pstack@pstack-claude','name':'pstack','marketplaceName':'pstack-claude','installed':True,'enabled':True,'source':{'source':'local','path':str(pathlib.Path(source())/'plugins/pstack')},'marketplaceSource':{'sourceType':'local','source':source()}}] if installed().exists() else []
+    entries = [{'pluginId':'pstack@pstack-claude','name':'pstack','marketplaceName':'pstack-claude','installed':True,'enabled':True,'source':{'source':'local','path':str(pathlib.Path(source())/'harness/pstack/codex')},'marketplaceSource':{'sourceType':'local','source':source()}}] if installed().exists() else []
     print(json.dumps({'installed':entries,'available':[]}))
 elif a == ['remove', 'pstack@pstack-claude']:
     shutil.rmtree(installed())
