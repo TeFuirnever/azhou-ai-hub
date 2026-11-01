@@ -28,6 +28,9 @@ const outIndex = args.indexOf("--out");
 const outDir = join(ROOT, outIndex >= 0 ? args[outIndex + 1] : "harness");
 
 function fail(message) {
+  // A failed build must not leave a half-assembled tree behind for the
+  // repository checks to mistake for shipped source.
+  rmSync(SCRATCH, { recursive: true, force: true });
   console.error(`build-harness: ${message}`);
   process.exit(1);
 }
