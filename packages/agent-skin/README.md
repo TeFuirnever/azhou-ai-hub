@@ -1,12 +1,12 @@
 # 阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 32**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；当前唯一实现的宿主适配器为 Codex。它包含同窗口 CDP 动画、壁纸及设置流程。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter；当前没有已核验的 ZCode driver 构造器，因此 ZCode 请求会以 `implementationUnavailable` fail closed。C0 不包含 ZCode driver。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 支持 Your dot 后的数字未读标记，并为入口增加间距。集成包尚无真实宿主验收。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
+本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 32**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；当前唯一实现的宿主适配器为 Codex。它包含同窗口 CDP 动画、壁纸及设置流程。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter；当前没有已核验的 ZCode driver 构造器，因此 ZCode 请求会以 `implementationUnavailable` fail closed。C0 不包含 ZCode driver。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。集成包尚无真实宿主验收。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
-2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
+2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名本身没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
 原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
