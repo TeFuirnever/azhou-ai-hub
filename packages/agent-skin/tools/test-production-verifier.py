@@ -587,21 +587,21 @@ class VerifierApiTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "sourceInputs|来源"):
             self.verifier.verify_startup(path, info, historic_marker, current_source=False)
 
-    def test_build31_requires_adapter_and_rejects_the_build30_pre_adapter_source_set(self):
+    def test_current_build_requires_adapter_and_rejects_the_build30_pre_adapter_source_set(self):
         historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
         current = frozenset(self.verifier.STARTUP_REQUIRED_INPUTS)
-        self.assertEqual(str(self.verifier.BUILD), "31")
+        self.assertGreater(int(self.verifier.BUILD), 30)
         self.assertEqual(self.verifier.PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD, 30)
         self.assertIn("extension/codex-page-adapter.mjs", current)
 
-        path = self.copy_bundle("build31-with-build30-source-set")
+        path = self.copy_bundle("current-with-build30-source-set")
         manifest_path = path / "Contents/Resources/startup/manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["sourceInputs"] = {name: self.marker["inputs"][name] for name in historical}
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
                                  encoding="utf-8")
 
-        # Build 31 is beyond the historical allowance, and the current-source
+        # Current builds are beyond the historical allowance, and the current-source
         # path also requires the exact adapter-bearing input set.
         for current_source in (False, True):
             with self.subTest(current_source=current_source):

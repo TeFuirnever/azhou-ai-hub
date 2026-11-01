@@ -1970,6 +1970,28 @@ try {
     };
     const initial = await inspect();
     assertFlow(initial, 'initial Home nav');
+    assert.ok(initial.entryRect.y - (initial.dotRect.y + initial.dotRect.height) >= 6,
+      'appearance has visible spacing below Your dot');
+
+    await cdp.evaluate(`(()=>{
+      const badge=document.createElement('span');
+      badge.dataset.fixtureUnread=''; badge.textContent='1';
+      document.querySelector('[data-fixture-your-dot]').appendChild(badge);
+    })()`);
+    await delay(250);
+    const unread = await until(async () => {
+      const value = await inspect();
+      return value.yourDot?.text === 'Your dot1' && value.afterYourDot
+        && value.position === 'static' ? value : false;
+    }, 3000, 'appearance stays in navigation after unread count appears');
+    assert.ok(unread.entryRect.y - (unread.dotRect.y + unread.dotRect.height) >= 6);
+    await cdp.evaluate("document.querySelector('[data-fixture-unread]').remove()");
+    await delay(250);
+    const cleared = await until(async () => {
+      const value = await inspect();
+      return value.yourDot?.text === 'Your dot' && value.afterYourDot && value.position === 'static' ? value : false;
+    }, 3000, 'appearance stays in navigation after unread count clears');
+    assertFlow(cleared, 'unread cleared');
 
     assert.equal(await cdp.evaluate('window.__fixtureSetHomeNavWidth(168)'), true);
     const narrow = await until(async () => {
