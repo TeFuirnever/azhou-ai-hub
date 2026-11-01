@@ -1,0 +1,40 @@
+{
+  "name": "pstack",
+  "version": "0.15.36",
+  "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+  "author": {
+    "name": "Lauren Tan"
+  },
+  "homepage": "https://github.com/cursor/plugins/tree/main/pstack",
+  "repository": "https://github.com/cursor/plugins",
+  "license": "MIT",
+  "keywords": [
+    "pstack",
+    "poteto-mode",
+    "workflow",
+    "principles",
+    "agent-style",
+    "subagents",
+    "unslop"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "pstack",
+    "shortDescription": "Rigorous, parallelizable agent workflows: go deep first, write less, verify everything",
+    "longDescription": "pstack guides agent work through poteto-mode's principles, parallel design exploration (architect/arena), adversarial multi-model review (interrogate), root-cause debugging, prose deslopping, and verified delivery. Skills are shared with the Claude Code build; on Codex, tool names resolve via the codex-tools mapping.",
+    "developerName": "Michael Denyer (port of Lauren Tan's pstack)",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Work on this in poteto-mode.",
+      "Interrogate this diff with multiple models."
+    ],
+    "websiteURL": "https://github.com/cursor/plugins/tree/main/pstack",
+    "brandColor": "#7C3AED"
+  }
+}

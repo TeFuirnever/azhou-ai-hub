@@ -12,7 +12,16 @@
 // root so `generate-pstack-harness-trees.mjs` runs unmodified against the
 // patched tree. Forking the generator would trade a patch queue for a fork.
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -143,6 +152,164 @@ if (generated.status !== 0) fail("upstream generator failed");
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 cpSync(join(SCRATCH, "harness"), outDir, { recursive: true });
+
+// Everything below assembles surfaces the upstream generator does not emit.
+// A failure here drops the partial outDir, keeping the invariant that a failed
+// build leaves no half-assembled tree for the repository checks to mistake for
+// shipped source.
+let assembled;
+try {
+  // hub-runtime/ holds hand-written surfaces. hooks/ carries the session
+  // routing scripts; every tree gets the same directory because each runtime's
+  // manifest (hooks.json for Claude Code, codex-hooks.json for Codex,
+  // copilot-hooks.json for Copilot) picks its own file out of it.
+  const HOOKS = join(ROOT, "hub-runtime", "hooks");
+  if (!existsSync(HOOKS)) throw new Error(`hub hooks missing at ${HOOKS}`);
+
+  const trees = readdirSync(join(outDir, "pstack"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  for (const tree of trees) cpSync(HOOKS, join(outDir, "pstack", tree, "hooks"), { recursive: true });
+
+  // Codex installs the plugin through a `.codex-plugin/` manifest plus one
+  // slash-command prompt per registered skill. The prompts are mechanical
+  // artifacts of each skill's frontmatter, so the build writes them instead of
+  // the repository storing hand-edited copies. Only the skills the port
+  // registered as commands are listed; the unlisted ones are deliberately not
+  // exposed on Codex.
+  const PROMPT_SKILLS = [
+    "architect",
+    "arena",
+    "automate-me",
+    "babysit",
+    "benchmark-checklist",
+    "blast-radius",
+    "bro",
+    "correct",
+    "create-formal-verification-skill",
+    "create-verification-skill",
+    "deslop",
+    "figure-it-out",
+    "fix-ci",
+    "fix-merge-conflicts",
+    "get-pr-comments",
+    "how",
+    "in-your-own-words",
+    "interrogate",
+    "ketchup",
+    "maintain-formal-verification-skill",
+    "maintain-verification-skill",
+    "make-pr-easy-to-review",
+    "no-comments",
+    "poteto-help",
+    "poteto-mode",
+    "recall",
+    "reflect",
+    "setup-pstack",
+    "sharpen",
+    "show-me-your-work",
+    "swarm",
+    "tdd",
+    "teach",
+    "technical-writing",
+    "thermo-nuclear-code-quality-review",
+    "thermo-nuclear-review",
+    "thermos",
+    "typescript-best-practices",
+    "unslop",
+    "what-did-i-get-done",
+    "why",
+  ];
+
+  const codexTree = join(outDir, "pstack", "codex");
+  if (!trees.includes("codex")) throw new Error("no codex tree to install the Codex plugin surface into");
+  mkdirSync(join(codexTree, ".codex-plugin"), { recursive: true });
+
+  // The manifest keeps the identity fields of the tree's own plugin.json, so a
+  // version bump in pstack/plugin.json reaches the Codex manifest without a
+  // second edit. The interface block is this Hub's display text; the icon
+  // paths the old pstack-claude manifest carried are dropped because the trees
+  // ship no assets/ directory.
+  const manifest = JSON.parse(readFileSync(join(codexTree, "plugin.json"), "utf8"));
+  writeFileSync(
+    join(codexTree, ".codex-plugin", "plugin.json"),
+    `${JSON.stringify(
+      {
+        name: manifest.name,
+        version: manifest.version,
+        description: manifest.description,
+        author: manifest.author,
+        homepage: manifest.homepage,
+        repository: manifest.repository,
+        license: manifest.license,
+        keywords: manifest.keywords,
+        skills: "./skills/",
+        hooks: "./hooks/codex-hooks.json",
+        interface: {
+          displayName: "pstack",
+          shortDescription:
+            "Rigorous, parallelizable agent workflows: go deep first, write less, verify everything",
+          longDescription:
+            "pstack guides agent work through poteto-mode's principles, parallel design exploration (architect/arena), adversarial multi-model review (interrogate), root-cause debugging, prose deslopping, and verified delivery. Skills are shared with the Claude Code build; on Codex, tool names resolve via the codex-tools mapping.",
+          developerName: "Michael Denyer (port of Lauren Tan's pstack)",
+          category: "Developer Tools",
+          capabilities: ["Interactive", "Read", "Write"],
+          defaultPrompt: ["Work on this in poteto-mode.", "Interrogate this diff with multiple models."],
+          websiteURL: manifest.homepage,
+          brandColor: "#7C3AED",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  // A frontmatter description is a plain or double-quoted single-line scalar.
+  // Anything else (folded, block, multi-line) fails the build rather than
+  // shipping a truncated command description.
+  function skillDescription(skill) {
+    const frontmatter =
+      readFileSync(join(codexTree, "skills", skill, "SKILL.md"), "utf8").match(/^---\n([\s\S]*?)\n---/)?.[1];
+    if (frontmatter === undefined) throw new Error(`skills/${skill}/SKILL.md has no frontmatter`);
+    const value = frontmatter.match(/^description:(.*)$/m)?.[1]?.trim();
+    if (value === undefined || value === "") throw new Error(`skills/${skill}/SKILL.md has no description`);
+    if (value.startsWith('"')) {
+      if (!value.endsWith('"') || value.length < 3) {
+        throw new Error(`skills/${skill}/SKILL.md has a multi-line description`);
+      }
+      const unquoted = value.slice(1, -1);
+      if (/\\(?!["\\])/.test(unquoted)) {
+        throw new Error(`skills/${skill}/SKILL.md description uses an escape beyond \\" and \\\\`);
+      }
+      return unquoted.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    }
+    return value;
+  }
+
+  const prompts = join(codexTree, ".codex-plugin", "prompts");
+  mkdirSync(prompts, { recursive: true });
+  let written = 0;
+  for (const skill of PROMPT_SKILLS) {
+    if (!existsSync(join(codexTree, "skills", skill, "SKILL.md"))) {
+      throw new Error(`${skill} is registered for a Codex prompt but is not in the assembled tree`);
+    }
+    writeFileSync(
+      join(prompts, `${skill}.md`),
+      `---\nname: ${skill}\ndescription: ${JSON.stringify(skillDescription(skill))}\n` +
+        `disable-model-invocation: true\n---\n\nInvoke the \`${skill}\` skill and follow it.\n`,
+    );
+    written += 1;
+  }
+
+  assembled = { trees: trees.length, prompts: written };
+} catch (error) {
+  rmSync(outDir, { recursive: true, force: true });
+  fail(`harness assembly failed: ${error.message}`);
+}
+
 rmSync(SCRATCH, { recursive: true, force: true });
 
-console.log(`harness trees written to ${outDir} from ${series.length} patch(es)`);
+console.log(
+  `harness trees written to ${outDir} from ${series.length} patch(es), ` +
+    `hooks assembled into ${assembled.trees} tree(s), ${assembled.prompts} Codex prompts`,
+);
