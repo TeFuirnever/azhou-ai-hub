@@ -48,6 +48,22 @@ for (const name of series) {
 rmSync(SCRATCH, { recursive: true, force: true });
 mkdirSync(join(SCRATCH, "scripts"), { recursive: true });
 cpSync(PRISTINE, join(SCRATCH, "pstack"), { recursive: true });
+
+// Upstream ships pstack, cursor-team-kit and thermos as sibling components of
+// one repository, and the distribution is their union. NOTICE-skills.md
+// attributes work to those three sources, so each stays pristine in its own
+// directory and is assembled here rather than copied into pstack/ by hand.
+// hub-skills/ holds work this Hub authors, which must not read as upstream.
+const SKILLS = join(SCRATCH, "pstack", "skills");
+for (const [source, from] of [
+  ["components/cursor-team-kit", join(ROOT, "components/cursor-team-kit/skills")],
+  ["components/thermos", join(ROOT, "components/thermos/skills")],
+  ["hub-skills", join(ROOT, "hub-skills")],
+]) {
+  if (existsSync(from)) cpSync(from, SKILLS, { recursive: true });
+  else console.log(`skipped ${source}, not present`);
+}
+
 cpSync(
   join(ROOT, "scripts", "generate-pstack-harness-trees.mjs"),
   join(SCRATCH, "scripts", "generate-pstack-harness-trees.mjs"),
