@@ -77,6 +77,18 @@ for (const [source, from] of [
   else console.log(`skipped ${source}, not present`);
 }
 
+// A component can ship agents beside its skills, as thermos does. They join
+// pstack's own agents rather than replacing them, and the same pristine
+// directory feeds the build as the skills above.
+const AGENTS = join(SCRATCH, "pstack", "agents");
+for (const from of [
+  join(ROOT, "components/cursor-team-kit/agents"),
+  join(ROOT, "components/thermos/agents"),
+  join(ROOT, "hub-agents"),
+]) {
+  if (existsSync(from)) cpSync(from, AGENTS, { recursive: true });
+}
+
 // Upstream ships one harness adapter, for Claude Code. Adapter documents for
 // other runtimes are this Hub's work and sit beside the pristine tree so a
 // re-import of pstack/ replaces nothing of ours.
