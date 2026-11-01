@@ -1,0 +1,244 @@
+Description: re-read the pull request before trusting a snapshot taken across the check queries
+Author: Azhou AI Hub
+Forwarded: no
+
+The facts are read once, then review threads and every check page are fetched
+against them. A push, a base retarget, a new review or a draft toggle in that
+window left the verdict standing on a SHA and a base the pull request no longer
+had, so the watcher could report READY for a revision that had already been
+superseded. The facts are read again after collection and the snapshot is
+refused as retryable when anything the verdict depends on moved; GitHub
+computing mergeability on demand is not such a change.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index 01002bb..c70ec20 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -109,6 +109,7 @@ describe("snapshot query planning", () => {
+       "pullRequest",
+       "reviewThreadPage:null",
+       "checksFastPath",
++      "pullRequest",
+     ]);
+   });
+ 
+@@ -298,13 +299,18 @@ describe("queued-stack cadence", () => {
+       options,
+     });
+     await expect(running).rejects.toThrow("stop after resume proof");
++    // An open snapshot reads the facts twice: once to start the verdict and once
++    // to confirm nothing it depends on moved while the checks were collected.
+     expect(timeline).toEqual([
+       "emit:QUEUE",
+       "read:20",
++      "read:20",
+       "fail:21",
+       "emit:RETRY",
+       "sleep",
+       "read:21",
++      "read:21",
++      "read:22",
+       "read:22",
+       "emit:STATUS",
+       "emit:WAITING",
+@@ -339,16 +345,14 @@ describe("queued-stack cadence", () => {
+     const one = context(40);
+     const two = context(41);
+     const base = fakeReader();
+-    const reads = new Map<number, number>();
++    let merged = false;
+     const timeline: string[] = [];
+     const reader = {
+       ...base,
+       async pullRequest(pr: PrContext) {
+         timeline.push(`read:${pr.number}`);
+         const facts = await base.pullRequest(pr);
+-        const count = (reads.get(pr.number) ?? 0) + 1;
+-        reads.set(pr.number, count);
+-        return pr.number === one.number && count > 1
++        return pr.number === one.number && merged
+           ? {
+               ...facts,
+               state: "MERGED" as const,
+@@ -367,6 +371,7 @@ describe("queued-stack cadence", () => {
+           now: () => now,
+           observedAt: () => "2026-07-26T00:00:00.000Z",
+           async sleep(seconds) {
++            merged = true;
+             timeline.push("sleep");
+             now += seconds;
+             sleeps += 1;
+@@ -384,11 +389,13 @@ describe("queued-stack cadence", () => {
+     await expect(running).rejects.toThrow("stop after advance proof");
+     expect(emitted.some((event) => event.kind === "ADVANCE")).toBe(true);
+     const firstSleep = timeline.indexOf("sleep");
+-    expect(timeline.slice(firstSleep, firstSleep + 5)).toEqual([
++    const secondSleep = timeline.indexOf("sleep", firstSleep + 1);
++    expect(timeline.slice(firstSleep, secondSleep)).toEqual([
+       "sleep",
+       "read:40",
+       "emit:ADVANCE",
+       "read:41",
++      "read:41",
+       "emit:WAITING",
+     ]);
+   });
+@@ -549,14 +556,15 @@ describe("no-checks confirmation", () => {
+   it("restarts the confirmation window when the head moves", async () => {
+     const base = noChecks();
+     let now = 0;
+-    let reads = 0;
+     const sleeps: number[] = [];
+     const reader: GitHubReader = {
+       ...base,
+       async pullRequest(pr) {
+-        reads += 1;
+         const facts = await base.pullRequest(pr);
+-        return { ...facts, headRefOid: reads === 1 ? "before-push" : "after-push" };
++        return {
++          ...facts,
++          headRefOid: now < 30 ? "before-push" : "after-push",
++        };
+       },
+     };
+     const result = await runSimple({
+@@ -615,3 +623,66 @@ describe("ready proof rests on GitHub's mergeability reading", () => {
+     });
+   });
+ });
++
++describe("snapshot consistency between the two reads", () => {
++  const changing = (
++    options: Parameters<typeof fakeReader>[0],
++    change: Partial<PullRequestFacts>
++  ): GitHubReader => {
++    const base = fakeReader(options);
++    let reads = 0;
++    return {
++      ...base,
++      async pullRequest(pr) {
++        reads += 1;
++        const facts = await base.pullRequest(pr);
++        return reads === 1 ? facts : { ...facts, ...change };
++      },
++    };
++  };
++  const collect = (reader: GitHubReader) =>
++    readSnapshot({
++      reader,
++      context: context(1),
++      pendingHistory: "include",
++      allowDraft: false,
++    });
++
++  it("refuses a verdict when the head moved while checks were collected", async () => {
++    await expect(collect(changing({}, { headRefOid: "moved" }))).rejects.toMatchObject(
++      {
++        name: "WatcherQueryError",
++        failure: { kind: "snapshot-changed", retryable: true },
++      }
++    );
++  });
++
++  it("refuses a verdict when the base or the review moved", async () => {
++    await expect(
++      collect(
++        changing(
++          {},
++          { baseRefName: "release", reviewDecision: "CHANGES_REQUESTED" }
++        )
++      )
++    ).rejects.toMatchObject({ failure: { kind: "snapshot-changed" } });
++    await expect(
++      collect(changing({}, { isDraft: true }))
++    ).rejects.toMatchObject({ failure: { kind: "snapshot-changed" } });
++  });
++
++  it("keeps the reading when GitHub merely computes mergeability", async () => {
++    const row = await collect(
++      changing(
++        {
++          facts: {
++            mergeable: "UNKNOWN",
++            mergeStateStatus: "UNKNOWN",
++          },
++        },
++        { mergeable: "MERGEABLE", mergeStateStatus: "CLEAN" }
++      )
++    );
++    expect(row.kind).toBe("open");
++  });
++});
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+index 8dae2ed..509bd93 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+@@ -160,6 +160,34 @@ async function reportedCi(
+     github: merge.github,
+   };
+ }
++const VERDICT_FACTS = [
++  "state",
++  "mergedAt",
++  "isDraft",
++  "mergeable",
++  "mergeStateStatus",
++  "reviewDecision",
++  "headRefOid",
++  "headRefName",
++  "baseRefName",
++] as const satisfies readonly (keyof T.PullRequestFacts)[];
++// GitHub computes these two on the first read that asks, so an uncomputed first
++// read usually has its answer by the re-read. That is not the PR changing.
++const COMPUTED_ON_DEMAND: ReadonlySet<string> = new Set([
++  "mergeable",
++  "mergeStateStatus",
++]);
++const mergeabilityUnknown = (facts: T.PullRequestFacts): boolean =>
++  facts.mergeable === "UNKNOWN" || facts.mergeStateStatus === "UNKNOWN";
++const changedFacts = (
++  before: T.PullRequestFacts,
++  after: T.PullRequestFacts
++): string[] =>
++  VERDICT_FACTS.filter((key) => before[key] !== after[key])
++    .filter(
++      (key) => !(mergeabilityUnknown(before) && COMPUTED_ON_DEMAND.has(key))
++    )
++    .map((key) => `${key} ${String(before[key])} -> ${String(after[key])}`);
+ export async function readSnapshot(args: {
+   readonly reader: T.GitHubReader;
+   readonly context: T.PrContext;
+@@ -182,6 +210,17 @@ export async function readSnapshot(args: {
+           args.confirmNoChecks ?? neverConfirms
+         )
+       : await reportedCi(args.reader, facts, checks, args.pendingHistory);
++  // The verdict is only sound for one reading of the pull request. Checks and
++  // threads are collected after the first read, so the facts are read again and
++  // a verdict is refused if anything it depends on moved in between.
++  const factsAfterChecks = await args.reader.pullRequest(args.context);
++  const changed = changedFacts(facts, factsAfterChecks);
++  if (changed.length > 0)
++    throw new WatcherQueryError({
++      kind: "snapshot-changed",
++      retryable: true,
++      detail: `PR changed while collecting ${facts.headRefOid} against ${facts.baseRefName}: ${changed.join(", ")}`,
++    });
+   return {
+     kind: "open",
+     context: args.context,
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 414330e..2518060 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -253,6 +253,11 @@ export type QueryFailure =
+       readonly retryable: true;
+       readonly detail: string;
+     }
++  | {
++      readonly kind: "snapshot-changed";
++      readonly retryable: true;
++      readonly detail: string;
++    }
+   | {
+       readonly kind: "invalid-context-url";
+       readonly retryable: false;

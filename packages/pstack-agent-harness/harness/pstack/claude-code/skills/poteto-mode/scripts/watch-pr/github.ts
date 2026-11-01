@@ -29,13 +29,24 @@ export class ChecksUnavailable extends WatcherQueryError {
 }
 const firstLine = (value: string): string =>
   value.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) ?? "";
-function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
+// One bound shared by every `gh` and `git` call. Without it a single hung call
+// holds the whole watch open and no verdict is ever produced.
+export const COMMAND_TIMEOUT_SECONDS = 60;
+export function runCommand(
+  argv: readonly [string, ...string[]],
+  timeoutSeconds: number = COMMAND_TIMEOUT_SECONDS
+): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(argv[0], argv.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
+    let expired = false;
+    const timer = setTimeout(() => {
+      expired = true;
+      child.kill("SIGKILL");
+    }, timeoutSeconds * 1000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -44,8 +55,30 @@ function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      // A binary that is not installed or cannot be executed will not appear on
+      // the next poll. Retrying it would retry for ever.
+      reject(
+        new WatcherQueryError({
+          kind: "spawn-failed",
+          retryable: false,
+          detail: `could not run ${argv[0]}: ${error.message}`,
+        })
+      );
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (expired)
+        reject(
+          new WatcherQueryError({
+            kind: "command-timeout",
+            retryable: true,
+            detail: `${argv.join(" ")} did not finish within ${timeoutSeconds}s`,
+          })
+        );
+      else resolve({ code: code ?? -1, stdout, stderr });
+    });
   });
 }
 function parseJson(text: string, label: string): unknown {
@@ -60,7 +93,7 @@ function parseJson(text: string, label: string): unknown {
   }
 }
 async function runJson(argv: readonly [string, ...string[]]): Promise<unknown> {
-  const result = await run(argv);
+  const result = await runCommand(argv);
   if (result.code !== 0)
     throw new WatcherQueryError({
       kind: "command-exit",
@@ -88,6 +121,11 @@ function missing(path: string, value?: unknown): never {
         : `invalid ${path}: ${raw(value)}`,
     ...(value === undefined ? {} : { rawValue: raw(value) }),
   });
+}
+function advanceCursor(cursors: Set<string>, after: string, label: string) {
+  if (cursors.has(after))
+    missing(`${label}.pageInfo.endCursor must advance`, after);
+  cursors.add(after);
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -147,20 +185,17 @@ const ROLLUP_STATES = [
   "PENDING",
   "SUCCESS",
 ] as const;
+const OPEN_PR_LIMIT = 300;
 const REVIEW_DECISIONS = [
   "APPROVED",
   "CHANGES_REQUESTED",
   "REVIEW_REQUIRED",
 ] as const;
-// `gh pr view` reports no review decision as "", not null. Only this field does
-// it, so the normalization stays here rather than in nullableEnum, where it
-// would stop a genuinely unexpected rollup state from failing closed.
+// `gh pr view` reports a nullable enum it has not filled in as "", not null.
+// Review decision and the two mergeability fields all do it.
+const unreported = (value: unknown): unknown => (value === "" ? null : value);
 const reviewDecision = (value: unknown): T.ReviewDecision =>
-  nullableEnum(
-    value === "" ? null : value,
-    REVIEW_DECISIONS,
-    "pull request.reviewDecision"
-  );
+  nullableEnum(unreported(value), REVIEW_DECISIONS, "pull request.reviewDecision");
 function parseRemote(value: string): T.Repository | null {
   let normalized = value.trim();
   if (normalized.startsWith("git@github.com:"))
@@ -232,6 +267,18 @@ function checkDetails(value: Record<string, unknown>, nameKey: string) {
     workflow: typeof value.workflow === "string" ? value.workflow : "",
   };
 }
+// gh buckets every state it does not name as pending, including conclusions that
+// are already final such as STALE, STARTUP_FAILURE and CANCELLED. Only these are
+// genuinely in flight; anything else in that bucket has finished and did not
+// pass. They are the states mapRollupNode treats as pending.
+const IN_FLIGHT_STATES = new Set([
+  "EXPECTED",
+  "REQUESTED",
+  "WAITING",
+  "QUEUED",
+  "PENDING",
+  "IN_PROGRESS",
+]);
 export function parseFastCheck(value: unknown): T.Check {
   const object = record(value, "check");
   const details = checkDetails(object, "name");
@@ -240,7 +287,8 @@ export function parseFastCheck(value: unknown): T.Check {
   if (state === "ACTION_REQUIRED") return gateOr("failed", details, state);
   if (bucket === "fail" || ["FAILURE", "ERROR"].includes(state))
     return { ...details, kind: "failed", reportedState: state };
-  if (bucket === "pending") return gateOr("pending", details, state);
+  if (bucket === "pending" && IN_FLIGHT_STATES.has(state))
+    return gateOr("pending", details, state);
   if (bucket === "pass")
     return { ...details, kind: "passed", reportedState: state };
   if (bucket === "skipping")
@@ -303,6 +351,35 @@ export function mapRollupNode(value: unknown): T.Check | null {
   return state === "SUCCESS"
     ? { ...details, link, kind: "passed", reportedState: state }
     : { ...details, link, kind: "failed", reportedState: state || "FAILURE" };
+}
+export function parseCheckRollupPage(value: unknown): T.RollupPage {
+  const commits = list(
+    at(value, ["data", "repository", "pullRequest", "commits", "nodes"]),
+    "commits.nodes"
+  );
+  if (commits.length === 0)
+    return { kind: "contexts", checks: [], endCursor: null };
+  const commit = record(at(commits[commits.length - 1], ["commit"]), "commit");
+  if (commit.statusCheckRollup === null) return { kind: "no-rollup" };
+  const contexts = record(
+    at(commit, ["statusCheckRollup", "contexts"]),
+    "contexts"
+  );
+  const checks = list(contexts.nodes, "contexts.nodes")
+    .map(mapRollupNode)
+    .filter((check): check is T.Check => check !== null);
+  const page = record(contexts.pageInfo, "contexts.pageInfo");
+  if (typeof page.hasNextPage !== "boolean")
+    missing("contexts.pageInfo.hasNextPage", page.hasNextPage);
+  const cursor = optionalString(page.endCursor, "contexts.pageInfo.endCursor");
+  // A page that claims more rows without a cursor would silently end the walk
+  // and drop every check after the first page.
+  if (page.hasNextPage && !cursor) missing("contexts.pageInfo.endCursor", cursor);
+  return {
+    kind: "contexts",
+    checks,
+    endCursor: page.hasNextPage ? cursor : null,
+  };
 }
 function parseComment(value: unknown): T.ReviewComment {
   const object = record(value, "review comment");
@@ -381,7 +458,11 @@ export function parseReviewThreadPage(value: unknown): T.ReviewThreadPage {
     page.endCursor,
     "reviewThreads.pageInfo.endCursor"
   );
-  return { threads, endCursor: page.hasNextPage && cursor ? cursor : null };
+  // A page that claims more threads without a cursor would end the walk here and
+  // hide every review thread past the first page.
+  if (page.hasNextPage && !cursor)
+    missing("reviewThreads.pageInfo.endCursor", cursor);
+  return { threads, endCursor: page.hasNextPage ? cursor : null };
 }
 export function buildReviewThreads(
   threads: readonly T.RawReviewThread[]
@@ -413,16 +494,20 @@ export function parsePullRequest(
     missing("pull request.isDraft", object.isDraft);
   return {
     context,
-    mergeable: enumValue(
-      object.mergeable,
-      ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const,
-      "pull request.mergeable"
-    ),
-    mergeStateStatus: enumValue(
-      object.mergeStateStatus,
-      MERGE_STATES,
-      "pull request.mergeStateStatus"
-    ),
+    // GitHub computes mergeability on demand. An unfilled value is "not
+    // computed yet", which waits for the next poll, not a query error.
+    mergeable:
+      nullableEnum(
+        unreported(object.mergeable),
+        ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const,
+        "pull request.mergeable"
+      ) ?? "UNKNOWN",
+    mergeStateStatus:
+      nullableEnum(
+        unreported(object.mergeStateStatus),
+        MERGE_STATES,
+        "pull request.mergeStateStatus"
+      ) ?? "UNKNOWN",
     reviewDecision: reviewDecision(object.reviewDecision),
     headRefOid: optionalString(object.headRefOid, "pull request.headRefOid"),
     headRefName: string(object.headRefName, "pull request.headRefName"),
@@ -457,7 +542,7 @@ function graphqlArgs(
 
 export class GhGitHubReader implements T.GitHubReader {
   async originRepo(): Promise<T.Repository | null> {
-    const result = await run(["git", "remote", "get-url", "origin"]);
+    const result = await runCommand(["git", "remote", "get-url", "origin"]);
     return result.code === 0 ? parseRemote(result.stdout) : null;
   }
   async currentPr(pr: T.PrNumber | null): Promise<T.PrContext> {
@@ -498,17 +583,30 @@ export class GhGitHubReader implements T.GitHubReader {
       "--state",
       "open",
       "--limit",
-      "300",
+      String(OPEN_PR_LIMIT),
       "--json",
-      "number,headRefName,baseRefName,isCrossRepository",
+      "number,headRefName,baseRefName,headRepository,headRepositoryOwner",
     ]);
     return list(value, "open PRs").map((item, index) => {
       const object = record(item, `open PRs[${index}]`);
-      if (typeof object.isCrossRepository !== "boolean")
-        missing(`open PRs[${index}].isCrossRepository`, object.isCrossRepository);
+      const headRepository =
+        object.headRepository === null || object.headRepository === undefined
+          ? null
+          : record(object.headRepository, "headRepository");
+      const headOwner =
+        object.headRepositoryOwner === null ||
+        object.headRepositoryOwner === undefined
+          ? null
+          : record(object.headRepositoryOwner, "headRepositoryOwner");
       return {
-        isCrossRepository: object.isCrossRepository,
         number: parsePrNumber(object.number, `open PRs[${index}].number`),
+        headRepository:
+          headRepository === null || headOwner === null
+            ? null
+            : {
+                owner: string(headOwner.login, "headRepositoryOwner.login"),
+                repo: string(headRepository.name, "headRepository.name"),
+              },
         headRefName: string(
           object.headRefName,
           `open PRs[${index}].headRefName`
@@ -521,7 +619,7 @@ export class GhGitHubReader implements T.GitHubReader {
     });
   }
   async checksFastPath(context: T.PrContext): Promise<T.ChecksFastPath> {
-    const result = await run([
+    const result = await runCommand([
       "gh",
       "pr",
       "checks",
@@ -540,6 +638,13 @@ export class GhGitHubReader implements T.GitHubReader {
         if (!(error instanceof WatcherQueryError)) throw error;
       }
     }
+    // Only this stderr line means gh read the head commit and found no checks.
+    // Any other exit 1 is a failed query.
+    if (
+      result.code === 1 &&
+      firstLine(result.stderr).startsWith("no checks reported on the ")
+    )
+      return { kind: "none-reported" };
     return { kind: "unusable", exitCode: result.code, stderr: result.stderr };
   }
   async checkRollupPage(
@@ -548,33 +653,7 @@ export class GhGitHubReader implements T.GitHubReader {
   ): Promise<T.RollupPage> {
     const argv = graphqlArgs(PR_CHECK_ROLLUP_QUERY, context);
     if (after !== null) argv.push("-f", `after=${after}`);
-    const value = await runJson(argv);
-    const commits = list(
-      at(value, ["data", "repository", "pullRequest", "commits", "nodes"]),
-      "commits.nodes"
-    );
-    if (commits.length === 0) return { checks: [], endCursor: null };
-    const commit = record(
-      at(commits[commits.length - 1], ["commit"]),
-      "commit"
-    );
-    if (commit.statusCheckRollup === null)
-      return { checks: [], endCursor: null };
-    const contexts = record(
-      at(commit, ["statusCheckRollup", "contexts"]),
-      "contexts"
-    );
-    const checks = list(contexts.nodes, "contexts.nodes")
-      .map(mapRollupNode)
-      .filter((check): check is T.Check => check !== null);
-    const page = record(contexts.pageInfo, "contexts.pageInfo");
-    if (typeof page.hasNextPage !== "boolean")
-      missing("contexts.pageInfo.hasNextPage", page.hasNextPage);
-    const cursor = optionalString(
-      page.endCursor,
-      "contexts.pageInfo.endCursor"
-    );
-    return { checks, endCursor: page.hasNextPage && cursor ? cursor : null };
+    return parseCheckRollupPage(await runJson(argv));
   }
   async reviewThreadPage(
     context: T.PrContext,
@@ -616,20 +695,34 @@ export async function resolveChecks(
 ): Promise<T.CheckRead> {
   const fast = await reader.checksFastPath(context);
   const direct = fast.kind === "checks" ? nonEmpty(fast.checks) : null;
-  if (direct !== null) return { source: "gh-pr-checks", checks: direct };
+  if (direct !== null)
+    return { kind: "reported", source: "gh-pr-checks", checks: direct };
   const checks: T.Check[] = [];
+  const cursors = new Set<string>();
   let after: string | null = null;
+  let headHasRollup = true;
   do {
     const page = await reader.checkRollupPage(context, after);
+    if (page.kind === "no-rollup") {
+      headHasRollup = false;
+      break;
+    }
     checks.push(...page.checks);
     after = page.endCursor;
+    if (after !== null) advanceCursor(cursors, after, "contexts");
   } while (after !== null);
   const fallback = nonEmpty(checks);
-  if (fallback !== null) return { source: "graphql-rollup", checks: fallback };
+  if (fallback !== null)
+    return { kind: "reported", source: "graphql-rollup", checks: fallback };
+  // Both reads have to say it. A failed fast path beside a null rollup can be a
+  // credential that cannot see checks, and a rollup that exists but maps to no
+  // check can hold a context type this reader does not know.
+  if (fast.kind === "none-reported" && !headHasRollup)
+    return { kind: "no-checks" };
   const suffix =
     fast.kind === "unusable"
       ? `fast path exit=${fast.exitCode}; GraphQL rollup was empty${firstLine(fast.stderr) ? `; ${firstLine(fast.stderr)}` : ""}`
-      : "fast path and GraphQL rollup were empty";
+      : "fast path reported no checks; GraphQL rollup exists but listed no readable check";
   throw new ChecksUnavailable(`could not read PR checks: ${suffix}`);
 }
 export async function resolveReviewThreads(
@@ -637,11 +730,13 @@ export async function resolveReviewThreads(
   context: T.PrContext
 ): Promise<readonly T.ReviewThread[]> {
   const threads: T.RawReviewThread[] = [];
+  const cursors = new Set<string>();
   let after: string | null = null;
   do {
     const page = await reader.reviewThreadPage(context, after);
     threads.push(...page.threads);
     after = page.endCursor;
+    if (after !== null) advanceCursor(cursors, after, "reviewThreads");
   } while (after !== null);
   return buildReviewThreads(threads);
 }
@@ -671,14 +766,18 @@ export async function resolveContext(args: {
 }
 export function orderStack(
   context: T.PrContext,
-  open: readonly T.OpenPullRequest[]
+  everyOpen: readonly T.OpenPullRequest[]
 ): T.NonEmpty<T.PrContext> {
+  // A stack edge is a branch of the repository the stack belongs to. Matching on
+  // branch name alone lets a fork branch with the same name claim the edge, so
+  // only a pull request whose head branch lives here takes part in the ordering.
+  const localHead = (pr: T.OpenPullRequest): boolean =>
+    pr.headRepository !== null &&
+    pr.headRepository.owner.toLowerCase() === context.owner.toLowerCase() &&
+    pr.headRepository.repo.toLowerCase() === context.repo.toLowerCase();
+  const open = everyOpen.filter(localHead);
   const byNumber = new Map(open.map((pr) => [pr.number, pr]));
-  // A base ref belongs to this repository. A fork head with the same name
-  // cannot be its parent, even when that name is the default branch.
-  const byHead = new Map(
-    open.filter((pr) => !pr.isCrossRepository).map((pr) => [pr.headRefName, pr])
-  );
+  const byHead = new Map(open.map((pr) => [pr.headRefName, pr]));
   const children = new Map<string, T.OpenPullRequest[]>();
   for (const pr of open)
     children.set(pr.baseRefName, [...(children.get(pr.baseRefName) ?? []), pr]);
@@ -700,7 +799,6 @@ export function orderStack(
   ]);
   const up: T.OpenPullRequest[] = [];
   const visit = (parent: T.OpenPullRequest): void => {
-    if (parent.isCrossRepository) return;
     for (const child of children.get(parent.headRefName) ?? []) {
       if (seen.has(child.number)) continue;
       seen.add(child.number);
@@ -722,5 +820,14 @@ export async function discoverStack(
   reader: T.GitHubReader,
   context: T.PrContext
 ): Promise<T.NonEmpty<T.PrContext>> {
-  return orderStack(context, await reader.openPullRequests(context));
+  const open = await reader.openPullRequests(context);
+  // gh returns the newest PRs with no truncation signal, so a full page may have
+  // dropped an older PR from the bottom of the stack.
+  if (open.length >= OPEN_PR_LIMIT)
+    throw new WatcherQueryError({
+      kind: "invalid-stack",
+      retryable: true,
+      detail: `open PR list reached the ${OPEN_PR_LIMIT}-PR limit, so the stack may be incomplete`,
+    });
+  return orderStack(context, open);
 }

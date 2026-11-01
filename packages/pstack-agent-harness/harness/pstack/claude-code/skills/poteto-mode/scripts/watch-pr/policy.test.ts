@@ -109,6 +109,7 @@ describe("snapshot query planning", () => {
       "pullRequest",
       "reviewThreadPage:null",
       "checksFastPath",
+      "pullRequest",
     ]);
   });
 
@@ -194,7 +195,7 @@ it("attributes a stack wait to the PR whose checks are pending, not the bottom",
   expect(decision).toMatchObject({
     kind: "waiting",
     frontier: { number: 21 },
-    pending: [{ name: "upstack-build" }],
+    reason: { kind: "pending-checks", pending: [{ name: "upstack-build" }] },
   });
 });
 
@@ -298,13 +299,18 @@ describe("queued-stack cadence", () => {
       options,
     });
     await expect(running).rejects.toThrow("stop after resume proof");
+    // An open snapshot reads the facts twice: once to start the verdict and once
+    // to confirm nothing it depends on moved while the checks were collected.
     expect(timeline).toEqual([
       "emit:QUEUE",
+      "read:20",
       "read:20",
       "fail:21",
       "emit:RETRY",
       "sleep",
       "read:21",
+      "read:21",
+      "read:22",
       "read:22",
       "emit:STATUS",
       "emit:WAITING",
@@ -339,16 +345,14 @@ describe("queued-stack cadence", () => {
     const one = context(40);
     const two = context(41);
     const base = fakeReader();
-    const reads = new Map<number, number>();
+    let merged = false;
     const timeline: string[] = [];
     const reader = {
       ...base,
       async pullRequest(pr: PrContext) {
         timeline.push(`read:${pr.number}`);
         const facts = await base.pullRequest(pr);
-        const count = (reads.get(pr.number) ?? 0) + 1;
-        reads.set(pr.number, count);
-        return pr.number === one.number && count > 1
+        return pr.number === one.number && merged
           ? {
               ...facts,
               state: "MERGED" as const,
@@ -367,6 +371,7 @@ describe("queued-stack cadence", () => {
           now: () => now,
           observedAt: () => "2026-07-26T00:00:00.000Z",
           async sleep(seconds) {
+            merged = true;
             timeline.push("sleep");
             now += seconds;
             sleeps += 1;
@@ -384,10 +389,12 @@ describe("queued-stack cadence", () => {
     await expect(running).rejects.toThrow("stop after advance proof");
     expect(emitted.some((event) => event.kind === "ADVANCE")).toBe(true);
     const firstSleep = timeline.indexOf("sleep");
-    expect(timeline.slice(firstSleep, firstSleep + 5)).toEqual([
+    const secondSleep = timeline.indexOf("sleep", firstSleep + 1);
+    expect(timeline.slice(firstSleep, secondSleep)).toEqual([
       "sleep",
       "read:40",
       "emit:ADVANCE",
+      "read:41",
       "read:41",
       "emit:WAITING",
     ]);
@@ -479,4 +486,343 @@ describe("polling deadline sleeps", () => {
     expect(sleeps).toEqual([60]);
   });
 
+});
+
+describe("no-checks confirmation", () => {
+  const noChecks = (): GitHubReader => {
+    const base = fakeReader({
+      fastPath: { kind: "none-reported" },
+      commitRollups: [{ oid: "head", state: null }],
+    });
+    return {
+      ...base,
+      async checkRollupPage() {
+        return { kind: "no-rollup" };
+      },
+    };
+  };
+
+  it("waits instead of reporting a head with no checks ready", async () => {
+    const row = await readSnapshot({
+      reader: noChecks(),
+      context: context(1),
+      pendingHistory: "include",
+      allowDraft: false,
+      confirmNoChecks: () => false,
+    });
+    expect(classifyPr(row)).toMatchObject({
+      kind: "waiting",
+      reason: { kind: "checks-unreported" },
+    });
+    const confirmed = await readSnapshot({
+      reader: noChecks(),
+      context: context(1),
+      pendingHistory: "include",
+      allowDraft: false,
+      confirmNoChecks: () => true,
+    });
+    expect(classifyPr(confirmed)).toMatchObject({ kind: "ready" });
+  });
+
+  it("reports ready only after the same head has shown no checks for 60 seconds", async () => {
+    let now = 0;
+    const sleeps: number[] = [];
+    const waits: string[] = [];
+    const result = await runSimple({
+      dependencies: {
+        reader: noChecks(),
+        clock: {
+          now: () => now,
+          observedAt: () => "2026-07-26T00:00:00.000Z",
+          async sleep(seconds) {
+            sleeps.push(seconds);
+            now += seconds;
+          },
+        },
+        emit(verdict) {
+          if (verdict.kind === "WAITING") waits.push(verdict.reason.kind);
+        },
+      },
+      contexts: [context(1)],
+      mode: "single",
+      statusOnly: false,
+      options: { ...options, interval: 30, timeout: 0 },
+    });
+    expect(waits).toEqual(["checks-unreported", "checks-unreported"]);
+    expect(sleeps).toEqual([30, 30]);
+    expect(result.kind).toBe("READY");
+  });
+
+  it("restarts the confirmation window when the head moves", async () => {
+    const base = noChecks();
+    let now = 0;
+    const sleeps: number[] = [];
+    const reader: GitHubReader = {
+      ...base,
+      async pullRequest(pr) {
+        const facts = await base.pullRequest(pr);
+        return {
+          ...facts,
+          headRefOid: now < 30 ? "before-push" : "after-push",
+        };
+      },
+    };
+    const result = await runSimple({
+      dependencies: {
+        reader,
+        clock: {
+          now: () => now,
+          observedAt: () => "2026-07-26T00:00:00.000Z",
+          async sleep(seconds) {
+            sleeps.push(seconds);
+            now += seconds;
+          },
+        },
+        emit() {},
+      },
+      contexts: [context(1)],
+      mode: "single",
+      statusOnly: false,
+      options: { ...options, interval: 30, timeout: 0 },
+    });
+    expect(result.kind).toBe("READY");
+    expect(sleeps).toEqual([30, 30, 30]);
+  });
+});
+
+describe("ready proof rests on GitHub's mergeability reading", () => {
+  const snapshot = (mergeable: PullRequestFacts["mergeable"], number = 1) =>
+    readSnapshot({
+      reader: fakeReader({ facts: { mergeable } }),
+      context: context(number),
+      pendingHistory: "include",
+      allowDraft: false,
+    });
+
+  it("does not report ready on passing checks alone", async () => {
+    const decision = classifyPr(await snapshot("UNKNOWN"));
+    expect(decision).toMatchObject({
+      kind: "waiting",
+      reason: { kind: "mergeability-unknown" },
+    });
+  });
+
+  it("carries the reading GitHub gave once it reports the PR mergeable", async () => {
+    const decision = classifyPr(await snapshot("MERGEABLE"));
+    if (decision.kind !== "ready")
+      throw new Error(`expected ready, got ${decision.kind}`);
+    expect(decision.pr.proof.mergeability).toBe("clear");
+  });
+
+  it("holds the whole stack back on the same unproven reading", async () => {
+    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)];
+    expect(selectTierMajorStackDecision(rows)).toMatchObject({
+      kind: "waiting",
+      frontier: { number: 2 },
+      reason: { kind: "mergeability-unknown" },
+    });
+  });
+
+  it("holds on the polling interval while GitHub has not computed mergeability", async () => {
+    for (const facts of [
+      { mergeable: "UNKNOWN" as const },
+      {
+        mergeable: "MERGEABLE" as const,
+        mergeStateStatus: "UNKNOWN" as const,
+      },
+    ]) {
+      const sleeps: number[] = [];
+      const seen: string[] = [];
+      let now = 0;
+      const running = runSimple({
+        dependencies: {
+          reader: fakeReader({ facts }),
+          clock: {
+            now: () => now,
+            observedAt: () => "2026-07-26T00:00:00.000Z",
+            async sleep(seconds) {
+              sleeps.push(seconds);
+              now += seconds;
+              throw new Error("stop after wait proof");
+            },
+          },
+          emit(verdict) {
+            seen.push(
+              verdict.kind === "WAITING" ? verdict.reason.kind : verdict.kind
+            );
+          },
+        },
+        contexts: [context(1)],
+        mode: "single",
+        statusOnly: false,
+        options: { ...options, interval: 45, timeout: 0 },
+      });
+      await expect(running).rejects.toThrow("stop after wait proof");
+      expect(seen).toEqual(["mergeability-unknown"]);
+      expect(sleeps).toEqual([45]);
+    }
+  });
+});
+
+describe("merge gates after the checks pass", () => {
+  const decided = (facts: Partial<PullRequestFacts>) =>
+    readSnapshot({
+      reader: fakeReader({ facts }),
+      context: context(1),
+      pendingHistory: "include",
+      allowDraft: false,
+    }).then(classifyPr);
+
+  it("blocks a pull request that is behind its base", async () => {
+    expect(await decided({ mergeStateStatus: "BEHIND" })).toMatchObject({
+      kind: "blocker",
+      blocker: { kind: "merge-gate", reason: "behind-base" },
+    });
+  });
+
+  it("blocks a pull request that still owes its required review", async () => {
+    expect(await decided({ reviewDecision: "REVIEW_REQUIRED" })).toMatchObject({
+      kind: "blocker",
+      blocker: { kind: "merge-gate", reason: "review-required" },
+    });
+  });
+
+  it("blocks the branch protection rule GitHub leaves the PR under", async () => {
+    expect(await decided({ mergeStateStatus: "BLOCKED" })).toMatchObject({
+      kind: "blocker",
+      blocker: { kind: "merge-gate", reason: "branch-protection" },
+    });
+  });
+
+  it("reports behind-base ahead of a required review", async () => {
+    expect(
+      await decided({
+        mergeStateStatus: "BEHIND",
+        reviewDecision: "REVIEW_REQUIRED",
+      })
+    ).toMatchObject({
+      kind: "blocker",
+      blocker: { kind: "merge-gate", reason: "behind-base" },
+    });
+  });
+
+  it("keeps reporting the wait while checks are still running", async () => {
+    const row = await readSnapshot({
+      reader: fakeReader({
+        facts: { reviewDecision: "REVIEW_REQUIRED" },
+        fastPath: { kind: "checks", checks: [pendingCheck("build")] },
+      }),
+      context: context(1),
+      pendingHistory: "include",
+      allowDraft: false,
+    });
+    expect(classifyPr(row)).toMatchObject({
+      kind: "waiting",
+      reason: { kind: "pending-checks" },
+    });
+  });
+});
+
+describe("unrecoverable query failures", () => {
+  it("ends the watch on the first failure rather than retrying it", async () => {
+    const base = fakeReader();
+    let reads = 0;
+    const reader: GitHubReader = {
+      ...base,
+      async pullRequest() {
+        reads += 1;
+        throw new WatcherQueryError({
+          kind: "spawn-failed",
+          retryable: false,
+          detail: "could not run gh: ENOENT",
+        });
+      },
+    };
+    const result = await runSimple({
+      dependencies: {
+        reader,
+        clock: {
+          now: () => 0,
+          observedAt: () => "2026-07-26T00:00:00.000Z",
+          async sleep() {
+            throw new Error("an unrecoverable failure must not reach a sleep");
+          },
+        },
+        emit() {},
+      },
+      contexts: [context(1)],
+      mode: "single",
+      statusOnly: false,
+      options,
+    });
+    expect(reads).toBe(1);
+    expect(result).toMatchObject({
+      kind: "BLOCKER",
+      exitCode: 7,
+      blocker: { kind: "status-query", failures: 1 },
+    });
+  });
+});
+
+describe("snapshot consistency between the two reads", () => {
+  const changing = (
+    options: Parameters<typeof fakeReader>[0],
+    change: Partial<PullRequestFacts>
+  ): GitHubReader => {
+    const base = fakeReader(options);
+    let reads = 0;
+    return {
+      ...base,
+      async pullRequest(pr) {
+        reads += 1;
+        const facts = await base.pullRequest(pr);
+        return reads === 1 ? facts : { ...facts, ...change };
+      },
+    };
+  };
+  const collect = (reader: GitHubReader) =>
+    readSnapshot({
+      reader,
+      context: context(1),
+      pendingHistory: "include",
+      allowDraft: false,
+    });
+
+  it("refuses a verdict when the head moved while checks were collected", async () => {
+    await expect(collect(changing({}, { headRefOid: "moved" }))).rejects.toMatchObject(
+      {
+        name: "WatcherQueryError",
+        failure: { kind: "snapshot-changed", retryable: true },
+      }
+    );
+  });
+
+  it("refuses a verdict when the base or the review moved", async () => {
+    await expect(
+      collect(
+        changing(
+          {},
+          { baseRefName: "release", reviewDecision: "CHANGES_REQUESTED" }
+        )
+      )
+    ).rejects.toMatchObject({ failure: { kind: "snapshot-changed" } });
+    await expect(
+      collect(changing({}, { isDraft: true }))
+    ).rejects.toMatchObject({ failure: { kind: "snapshot-changed" } });
+  });
+
+  it("keeps the reading when GitHub merely computes mergeability", async () => {
+    const row = await collect(
+      changing(
+        {
+          facts: {
+            mergeable: "UNKNOWN",
+            mergeStateStatus: "UNKNOWN",
+          },
+        },
+        { mergeable: "MERGEABLE", mergeStateStatus: "CLEAN" }
+      )
+    );
+    expect(row.kind).toBe("open");
+  });
 });

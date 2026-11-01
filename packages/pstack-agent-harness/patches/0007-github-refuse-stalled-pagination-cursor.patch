@@ -1,0 +1,116 @@
+Description: refuse a pagination cursor that does not advance
+Author: Azhou AI Hub
+Forwarded: no
+
+Both page walks loop while the reader hands back an endCursor. A GraphQL
+connection that returned the same cursor twice, as a misbehaving proxy or a
+retry against a stale page can, left the walk spinning: the watcher never
+finished reading checks or review threads and never produced a verdict. A
+repeated endCursor is now a retryable query error instead of another request.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index b02448b..3cfd18f 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -109,6 +109,32 @@ describe("checks fallback chain", () => {
+       ChecksUnavailable
+     );
+   });
++
++  it("refuses a check rollup cursor that repeats instead of walking for ever", async () => {
++    const reader = fakeReader({
++      fastPath: { kind: "unusable", exitCode: 8, stderr: "unreadable" },
++      rollupPages: [
++        {
++          kind: "contexts",
++          checks: [passingCheck("first")],
++          endCursor: "same",
++        },
++        {
++          kind: "contexts",
++          checks: [passingCheck("second")],
++          endCursor: "same",
++        },
++      ],
++    });
++    await expect(resolveChecks(reader, context)).rejects.toBeInstanceOf(
++      WatcherQueryError
++    );
++    expect(reader.calls).toEqual([
++      "checksFastPath",
++      "checkRollupPage:null",
++      "checkRollupPage:same",
++    ]);
++  });
+ });
+ 
+ describe("rollup node mapping", () => {
+@@ -421,6 +447,22 @@ describe("review thread pagination", () => {
+     ).toEqual(["one"]);
+   });
+ 
++  it("refuses a cursor that repeats instead of walking for ever", async () => {
++    const reader = fakeReader({
++      threadPages: [
++        { threads: [thread("one")], endCursor: "same" },
++        { threads: [thread("two")], endCursor: "same" },
++      ],
++    });
++    await expect(resolveReviewThreads(reader, context)).rejects.toBeInstanceOf(
++      WatcherQueryError
++    );
++    expect(reader.calls).toEqual([
++      "reviewThreadPage:null",
++      "reviewThreadPage:same",
++    ]);
++  });
++
+   it("rejects a page that omits pageInfo instead of assuming one page", async () => {
+     const response = {
+       data: {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index e99db7a..8ad8d7f 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -89,6 +89,11 @@ function missing(path: string, value?: unknown): never {
+     ...(value === undefined ? {} : { rawValue: raw(value) }),
+   });
+ }
++function advanceCursor(cursors: Set<string>, after: string, label: string) {
++  if (cursors.has(after))
++    missing(`${label}.pageInfo.endCursor must advance`, after);
++  cursors.add(after);
++}
+ function isRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+@@ -629,6 +634,7 @@ export async function resolveChecks(
+   if (direct !== null)
+     return { kind: "reported", source: "gh-pr-checks", checks: direct };
+   const checks: T.Check[] = [];
++  const cursors = new Set<string>();
+   let after: string | null = null;
+   let headHasRollup = true;
+   do {
+@@ -639,6 +645,7 @@ export async function resolveChecks(
+     }
+     checks.push(...page.checks);
+     after = page.endCursor;
++    if (after !== null) advanceCursor(cursors, after, "contexts");
+   } while (after !== null);
+   const fallback = nonEmpty(checks);
+   if (fallback !== null)
+@@ -659,11 +666,13 @@ export async function resolveReviewThreads(
+   context: T.PrContext
+ ): Promise<readonly T.ReviewThread[]> {
+   const threads: T.RawReviewThread[] = [];
++  const cursors = new Set<string>();
+   let after: string | null = null;
+   do {
+     const page = await reader.reviewThreadPage(context, after);
+     threads.push(...page.threads);
+     after = page.endCursor;
++    if (after !== null) advanceCursor(cursors, after, "reviewThreads");
+   } while (after !== null);
+   return buildReviewThreads(threads);
+ }

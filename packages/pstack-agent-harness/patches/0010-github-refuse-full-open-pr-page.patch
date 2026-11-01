@@ -1,0 +1,92 @@
+Description: refuse a full open pull request page instead of trusting stack discovery
+Author: Azhou AI Hub
+Forwarded: no
+
+`gh pr list` returns a page with no signal saying whether it was cut short, and
+it returns the newest pull requests first. A repository with a full page of open
+pull requests therefore handed stack discovery a list that had silently dropped
+an older pull request from the bottom of the stack, so the ordering named the
+wrong parent and the watcher drove the stack in the wrong order. A page as long
+as OPEN_PR_LIMIT is now a query error rather than a topology.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 60047f5..8eccbe9 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -7,6 +7,7 @@ import {
+   ChecksUnavailable,
+   WatcherQueryError,
+   buildReviewThreads,
++  discoverStack,
+   mapRollupNode,
+   orderStack,
+   parseCheckRollupPage,
+@@ -631,6 +632,24 @@ describe("context and stack discovery", () => {
+     expect(ordered.map((item) => Number(item.number))).toEqual([42]);
+   });
+ 
++  it("refuses a full open PR page instead of assuming it is the whole stack", async () => {
++    const open = (count: number) =>
++      Array.from({ length: count }, (_, index) => ({
++        number: parsePrNumber(index + 1),
++        isCrossRepository: false,
++        headRefName: `branch-${index + 1}`,
++        baseRefName: "main",
++      }));
++    await expect(
++      discoverStack(fakeReader({ openPullRequests: open(300) }), context)
++    ).rejects.toMatchObject({ failure: { kind: "invalid-stack" } });
++    const short = await discoverStack(
++      fakeReader({ openPullRequests: open(299) }),
++      context
++    );
++    expect(short.map((pr) => Number(pr.number))).toEqual([42]);
++  });
++
+   it("terminates when an unrelated fork opens main against main", () => {
+     // Bound the subprocess so this regression reports a failure instead of hanging the suite.
+     const program = `import { orderStack } from ${JSON.stringify(import.meta.dir + "/github.ts")};
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 7648d93..8e97d3c 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -152,6 +152,7 @@ const ROLLUP_STATES = [
+   "PENDING",
+   "SUCCESS",
+ ] as const;
++const OPEN_PR_LIMIT = 300;
+ const REVIEW_DECISIONS = [
+   "APPROVED",
+   "CHANGES_REQUESTED",
+@@ -757,5 +758,14 @@ export async function discoverStack(
+   reader: T.GitHubReader,
+   context: T.PrContext
+ ): Promise<T.NonEmpty<T.PrContext>> {
+-  return orderStack(context, await reader.openPullRequests(context));
++  const open = await reader.openPullRequests(context);
++  // gh returns the newest PRs with no truncation signal, so a full page may have
++  // dropped an older PR from the bottom of the stack.
++  if (open.length >= OPEN_PR_LIMIT)
++    throw new WatcherQueryError({
++      kind: "invalid-stack",
++      retryable: true,
++      detail: `open PR list reached the ${OPEN_PR_LIMIT}-PR limit, so the stack may be incomplete`,
++    });
++  return orderStack(context, open);
+ }
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 9e1e266..0b799f5 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -261,6 +261,11 @@ export type QueryFailure =
+       readonly retryable: true;
+       readonly detail: string;
+     }
++  | {
++      readonly kind: "invalid-stack";
++      readonly retryable: true;
++      readonly detail: string;
++    }
+   | {
+       readonly kind: "invalid-context-url";
+       readonly retryable: false;

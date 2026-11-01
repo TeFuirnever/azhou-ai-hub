@@ -37,6 +37,22 @@ clean() {
 		*) printf '%s' "$v" ;;
 	esac
 }
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-	"$ts" "$(clean "$1")" "$(clean "$2")" "$(clean "$3")" "$(clean "$4")" "$(clean "$5")" \
-	>> "$logfile"
+# Build the row before the append so the append is one write. A shell printf goes
+# through stdio, which hands a row longer than its buffer to the kernel in pieces
+# that parallel writers interleave, and the TSV no longer parses.
+printf -v row '%s\t%s\t%s\t%s\t%s\t%s\n' \
+	"$ts" "$(clean "$1")" "$(clean "$2")" "$(clean "$3")" "$(clean "$4")" "$(clean "$5")"
+# perl runs once before it sees the row, so a perl that is missing, shimmed or
+# broken by PERL5OPT cannot take the row with it. binmode drops the :utf8 layer
+# PERL_UNICODE adds: syswrite refuses that on STDOUT, and on STDIN it would
+# decode the row and corrupt non-ASCII bytes. A short write sets no $!, so it
+# reports the byte counts instead.
+if [ "$(perl -e 'print "ok"' 2>/dev/null </dev/null)" = ok ]; then
+	printf '%s' "$row" |
+		perl -e 'binmode STDIN; binmode STDOUT; local $/; $_ = <STDIN>;
+			my $n = syswrite(STDOUT, $_) // die "log.sh: $!\n";
+			$n == length or die "log.sh: short write, appended $n of ", length, " bytes of the row\n"' \
+			>> "$logfile"
+else
+	printf '%s' "$row" >> "$logfile"
+fi

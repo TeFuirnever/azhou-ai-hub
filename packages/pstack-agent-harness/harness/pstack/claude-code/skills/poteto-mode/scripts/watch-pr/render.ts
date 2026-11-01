@@ -1,12 +1,27 @@
 import type * as T from "./types.ts";
 export const renderJson = (verdict: T.WatcherVerdict): string =>
   `${JSON.stringify(verdict)}\n`;
+const MERGE_GATE_ACTION: Record<T.MergeGateReason, string> = {
+  "closed-without-merge":
+    "restore or remove the closed PR from the queued stack",
+  "draft-pr": "mark the PR ready for review before waiting for the merge queue",
+  "changes-requested":
+    "resolve the changes-requested review before waiting for the merge queue",
+  "behind-base":
+    "update the branch against the base before merging; that restarts its checks",
+  "review-required": "collect the required review before merging",
+  "branch-protection":
+    "satisfy the branch protection rule that leaves the PR BLOCKED",
+};
 function ciCell(row: T.PrSnapshot): string {
   if (row.kind !== "open") return "\u2014";
   const was = row.ci.hadPreviousPassingCi ? ", was ✅" : "";
   switch (row.ci.kind) {
     case "ci-clean":
+    case "ci-none":
       return "✅";
+    case "ci-unreported":
+      return `⏳ no checks yet${was}`;
     case "ci-pending":
       return `⏳ ${row.ci.pending.length} pending${was}`;
     case "ci-failing":
@@ -104,19 +119,12 @@ function renderBlocker(blocker: T.MergeBlocker | StatusQueryBlocker): string {
         ...details,
       ].join("\n");
     }
-    case "merge-gate": {
-      const action =
-        blocker.reason === "closed-without-merge"
-          ? "restore or remove the closed PR from the queued stack"
-          : blocker.reason === "draft-pr"
-            ? "mark the PR ready for review before waiting for the merge queue"
-            : "resolve the changes-requested review before waiting for the merge queue";
+    case "merge-gate":
       return [
         `BLOCKER: ${blocker.reason}`,
         `pr=${blocker.pr.number}`,
-        `action=${action}`,
+        `action=${MERGE_GATE_ACTION[blocker.reason]}`,
       ].join("\n");
-    }
     case "status-query":
       return [
         "BLOCKER: status-query",
@@ -139,7 +147,11 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
     case "WAITING":
       return verdict.reason.kind === "pending-checks"
         ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`
-        : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
+        : verdict.reason.kind === "checks-unreported"
+          ? `WAITING: frontier=#${verdict.frontier.number}; no checks reported yet\n`
+          : verdict.reason.kind === "mergeability-unknown"
+            ? `WAITING: frontier=#${verdict.frontier.number}; GitHub has not computed mergeability yet\n`
+            : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
     case "ADVANCE":
       return `ADVANCE: merged #${verdict.merged.number}; next=#${verdict.frontier.number}; remaining=${verdict.remaining}\n`;
     case "RETRY":
@@ -158,6 +170,10 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
     case "TIMEOUT":
       if (verdict.reason.kind === "pending-checks")
         return "TIMEOUT: checks still pending\n";
+      if (verdict.reason.kind === "checks-unreported")
+        return "TIMEOUT: no checks reported\n";
+      if (verdict.reason.kind === "mergeability-unknown")
+        return "TIMEOUT: GitHub never computed mergeability\n";
       if (verdict.reason.kind === "status-unavailable")
         return "TIMEOUT: GitHub status remained unavailable\n";
       return `TIMEOUT: queued stack still has ${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged; frontier=#${verdict.reason.frontier.number}\n`;

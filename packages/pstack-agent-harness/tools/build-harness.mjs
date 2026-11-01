@@ -54,10 +54,24 @@ cpSync(
 );
 
 for (const name of series) {
-  const result = spawnSync("git", ["apply", "--whitespace=nowarn", join(PATCHES, name)], {
-    cwd: SCRATCH,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  // git resolves patch paths against the repository root and silently skips
+  // every path outside the directory it runs from, still exiting 0. The scratch
+  // is nested inside this repository, so without the pinned work tree each patch
+  // is skipped and the build reports a pristine tree as patched.
+  const result = spawnSync(
+    "git",
+    [
+      "--work-tree",
+      SCRATCH,
+      "apply",
+      "--whitespace=nowarn",
+      join(PATCHES, name),
+    ],
+    {
+      cwd: SCRATCH,
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
   if (result.status !== 0) {
     const detail = (result.stderr || "").toString().trim();
     fail(`patch ${name} does not apply. Rebase it against the current pristine tree.\n${detail}`);

@@ -18,3 +18,18 @@
 #
 # <patch-name>.patch
 0001-logsh-neutralize-double-quote-cell.patch
+0002-policy-confirm-no-checks-before-ready.patch
+0003-policy-require-mergeable-in-ready-proof.patch
+0004-policy-re-read-pr-facts-before-verdict.patch
+0005-policy-wait-on-uncomputed-mergeability.patch
+0006-policy-honour-merge-gates.patch
+0007-github-refuse-stalled-pagination-cursor.patch
+0008-github-error-on-truncated-check-page.patch
+0009-github-error-on-truncated-review-page.patch
+0010-github-refuse-full-open-pr-page.patch
+0011-github-raise-open-pr-list-limit.patch
+0012-github-scope-stack-to-head-repository.patch
+0013-github-do-not-retry-spawn-failure.patch
+0014-github-time-out-gh-and-git-calls.patch
+0015-github-fail-finished-conclusions-in-pending-bucket.patch
+0016-logsh-append-row-with-one-write.patch

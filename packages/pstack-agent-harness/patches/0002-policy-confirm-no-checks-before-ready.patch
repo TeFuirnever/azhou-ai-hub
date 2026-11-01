@@ -1,0 +1,837 @@
+Description: hold a pull request with no checks for 60 seconds on the same head before it is ready
+Author: Azhou AI Hub
+Forwarded: no
+
+A repository that configures no check at all and the seconds after a push,
+before GitHub registers the new head's checks, are the same reading: the fast
+path and the GraphQL rollup both report nothing. The watcher treated that as a
+clean head and reported the pull request ready to merge while its CI had not
+registered yet, so a workflow that failed a moment later was never seen. A head
+must keep reporting no checks for NO_CHECKS_CONFIRM_SECONDS before the pull
+request is ready, and a push restarts that window.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/fakes.test-helper.ts b/pstack/skills/poteto-mode/scripts/watch-pr/fakes.test-helper.ts
+index 84ccf59..1459e9a 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/fakes.test-helper.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/fakes.test-helper.ts
+@@ -112,7 +112,13 @@ export function fakeReader(
+     },
+     async checkRollupPage(_requested, after) {
+       calls.push(`checkRollupPage:${after ?? "null"}`);
+-      return options.rollupPages?.[page++] ?? { checks: [], endCursor: null };
++      return (
++        options.rollupPages?.[page++] ?? {
++          kind: "contexts",
++          checks: [],
++          endCursor: null,
++        }
++      );
+     },
+     async reviewThreadPage(_requested, after) {
+       calls.push(`reviewThreadPage:${after ?? "null"}`);
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 4e58938..ba416e9 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -45,8 +45,12 @@ describe("checks fallback chain", () => {
+     const reader = fakeReader({
+       fastPath: { kind: "unusable", exitCode: 8, stderr: "" },
+       rollupPages: [
+-        { checks: [passingCheck("first")], endCursor: "next" },
+-        { checks: [failedCheck("second")], endCursor: null },
++        { kind: "contexts", checks: [passingCheck("first")], endCursor: "next" },
++        {
++          kind: "contexts",
++          checks: [failedCheck("second")],
++          endCursor: null,
++        },
+       ],
+     });
+     const read = await resolveChecks(reader, context);
+@@ -62,7 +66,13 @@ describe("checks fallback chain", () => {
+   it("falls back when valid fast-path JSON represented an empty list", async () => {
+     const reader = fakeReader({
+       fastPath: { kind: "checks", checks: [] },
+-      rollupPages: [{ checks: [pendingCheck("fallback")], endCursor: null }],
++      rollupPages: [
++        {
++          kind: "contexts",
++          checks: [pendingCheck("fallback")],
++          endCursor: null,
++        },
++      ],
+     });
+     expect((await resolveChecks(reader, context)).checks[0].name).toBe(
+       "fallback"
+@@ -83,6 +93,22 @@ describe("checks fallback chain", () => {
+     );
+     expect(reader.calls).toEqual(["checksFastPath", "checkRollupPage:null"]);
+   });
++
++  it("reports no checks only when the fast path and the rollup both say so", async () => {
++    const reader = fakeReader({
++      fastPath: { kind: "none-reported" },
++      rollupPages: [{ kind: "no-rollup" }],
++    });
++    expect(await resolveChecks(reader, context)).toEqual({ kind: "no-checks" });
++
++    const rollupExists = fakeReader({
++      fastPath: { kind: "none-reported" },
++      rollupPages: [{ kind: "contexts", checks: [], endCursor: null }],
++    });
++    await expect(resolveChecks(rollupExists, context)).rejects.toBeInstanceOf(
++      ChecksUnavailable
++    );
++  });
+ });
+ 
+ describe("rollup node mapping", () => {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 123a33b..f653f99 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -540,6 +540,13 @@ export class GhGitHubReader implements T.GitHubReader {
+         if (!(error instanceof WatcherQueryError)) throw error;
+       }
+     }
++    // Only this stderr line means gh read the head commit and found no checks.
++    // Any other exit 1 is a failed query.
++    if (
++      result.code === 1 &&
++      firstLine(result.stderr).startsWith("no checks reported on the ")
++    )
++      return { kind: "none-reported" };
+     return { kind: "unusable", exitCode: result.code, stderr: result.stderr };
+   }
+   async checkRollupPage(
+@@ -553,13 +560,12 @@ export class GhGitHubReader implements T.GitHubReader {
+       at(value, ["data", "repository", "pullRequest", "commits", "nodes"]),
+       "commits.nodes"
+     );
+-    if (commits.length === 0) return { checks: [], endCursor: null };
++    if (commits.length === 0) return { kind: "contexts", checks: [], endCursor: null };
+     const commit = record(
+       at(commits[commits.length - 1], ["commit"]),
+       "commit"
+     );
+-    if (commit.statusCheckRollup === null)
+-      return { checks: [], endCursor: null };
++    if (commit.statusCheckRollup === null) return { kind: "no-rollup" };
+     const contexts = record(
+       at(commit, ["statusCheckRollup", "contexts"]),
+       "contexts"
+@@ -574,7 +580,11 @@ export class GhGitHubReader implements T.GitHubReader {
+       page.endCursor,
+       "contexts.pageInfo.endCursor"
+     );
+-    return { checks, endCursor: page.hasNextPage && cursor ? cursor : null };
++    return {
++      kind: "contexts",
++      checks,
++      endCursor: page.hasNextPage && cursor ? cursor : null,
++    };
+   }
+   async reviewThreadPage(
+     context: T.PrContext,
+@@ -616,20 +626,32 @@ export async function resolveChecks(
+ ): Promise<T.CheckRead> {
+   const fast = await reader.checksFastPath(context);
+   const direct = fast.kind === "checks" ? nonEmpty(fast.checks) : null;
+-  if (direct !== null) return { source: "gh-pr-checks", checks: direct };
++  if (direct !== null)
++    return { kind: "reported", source: "gh-pr-checks", checks: direct };
+   const checks: T.Check[] = [];
+   let after: string | null = null;
++  let headHasRollup = true;
+   do {
+     const page = await reader.checkRollupPage(context, after);
++    if (page.kind === "no-rollup") {
++      headHasRollup = false;
++      break;
++    }
+     checks.push(...page.checks);
+     after = page.endCursor;
+   } while (after !== null);
+   const fallback = nonEmpty(checks);
+-  if (fallback !== null) return { source: "graphql-rollup", checks: fallback };
++  if (fallback !== null)
++    return { kind: "reported", source: "graphql-rollup", checks: fallback };
++  // Both reads have to say it. A failed fast path beside a null rollup can be a
++  // credential that cannot see checks, and a rollup that exists but maps to no
++  // check can hold a context type this reader does not know.
++  if (fast.kind === "none-reported" && !headHasRollup)
++    return { kind: "no-checks" };
+   const suffix =
+     fast.kind === "unusable"
+       ? `fast path exit=${fast.exitCode}; GraphQL rollup was empty${firstLine(fast.stderr) ? `; ${firstLine(fast.stderr)}` : ""}`
+-      : "fast path and GraphQL rollup were empty";
++      : "fast path reported no checks; GraphQL rollup exists but listed no readable check";
+   throw new ChecksUnavailable(`could not read PR checks: ${suffix}`);
+ }
+ export async function resolveReviewThreads(
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index 966b753..5cab271 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -194,7 +194,7 @@ it("attributes a stack wait to the PR whose checks are pending, not the bottom",
+   expect(decision).toMatchObject({
+     kind: "waiting",
+     frontier: { number: 21 },
+-    pending: [{ name: "upstack-build" }],
++    reason: { kind: "pending-checks", pending: [{ name: "upstack-build" }] },
+   });
+ });
+ 
+@@ -480,3 +480,104 @@ describe("polling deadline sleeps", () => {
+   });
+ 
+ });
++
++describe("no-checks confirmation", () => {
++  const noChecks = (): GitHubReader => {
++    const base = fakeReader({
++      fastPath: { kind: "none-reported" },
++      commitRollups: [{ oid: "head", state: null }],
++    });
++    return {
++      ...base,
++      async checkRollupPage() {
++        return { kind: "no-rollup" };
++      },
++    };
++  };
++
++  it("waits instead of reporting a head with no checks ready", async () => {
++    const row = await readSnapshot({
++      reader: noChecks(),
++      context: context(1),
++      pendingHistory: "include",
++      allowDraft: false,
++      confirmNoChecks: () => false,
++    });
++    expect(classifyPr(row)).toMatchObject({
++      kind: "waiting",
++      reason: { kind: "checks-unreported" },
++    });
++    const confirmed = await readSnapshot({
++      reader: noChecks(),
++      context: context(1),
++      pendingHistory: "include",
++      allowDraft: false,
++      confirmNoChecks: () => true,
++    });
++    expect(classifyPr(confirmed)).toMatchObject({ kind: "ready" });
++  });
++
++  it("reports ready only after the same head has shown no checks for 60 seconds", async () => {
++    let now = 0;
++    const sleeps: number[] = [];
++    const waits: string[] = [];
++    const result = await runSimple({
++      dependencies: {
++        reader: noChecks(),
++        clock: {
++          now: () => now,
++          observedAt: () => "2026-07-26T00:00:00.000Z",
++          async sleep(seconds) {
++            sleeps.push(seconds);
++            now += seconds;
++          },
++        },
++        emit(verdict) {
++          if (verdict.kind === "WAITING") waits.push(verdict.reason.kind);
++        },
++      },
++      contexts: [context(1)],
++      mode: "single",
++      statusOnly: false,
++      options: { ...options, interval: 30, timeout: 0 },
++    });
++    expect(waits).toEqual(["checks-unreported", "checks-unreported"]);
++    expect(sleeps).toEqual([30, 30]);
++    expect(result.kind).toBe("READY");
++  });
++
++  it("restarts the confirmation window when the head moves", async () => {
++    const base = noChecks();
++    let now = 0;
++    let reads = 0;
++    const sleeps: number[] = [];
++    const reader: GitHubReader = {
++      ...base,
++      async pullRequest(pr) {
++        reads += 1;
++        const facts = await base.pullRequest(pr);
++        return { ...facts, headRefOid: reads === 1 ? "before-push" : "after-push" };
++      },
++    };
++    const result = await runSimple({
++      dependencies: {
++        reader,
++        clock: {
++          now: () => now,
++          observedAt: () => "2026-07-26T00:00:00.000Z",
++          async sleep(seconds) {
++            sleeps.push(seconds);
++            now += seconds;
++          },
++        },
++        emit() {},
++      },
++      contexts: [context(1)],
++      mode: "single",
++      statusOnly: false,
++      options: { ...options, interval: 30, timeout: 0 },
++    });
++    expect(result.kind).toBe("READY");
++    expect(sleeps).toEqual([30, 30, 30]);
++  });
++});
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+index 8179f2d..3e4c56e 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+@@ -1,4 +1,5 @@
+ import {
++  ChecksUnavailable,
+   WatcherQueryError,
+   resolveChecks,
+   resolveReviewThreads,
+@@ -50,25 +51,64 @@ async function mergeAssessment(
+     }),
+   };
+ }
++type OpenFacts = Pick<T.PullRequestFacts, "context" | "headRefOid">;
++export type NoChecksConfirmer = (head: OpenFacts) => boolean;
++// GitHub registers a fresh head's checks seconds after the push, during which
++// every read matches a repository with no CI. Across 67 pushes measured in six
++// repositories the first check appeared within 9 seconds.
++export const NO_CHECKS_CONFIRM_SECONDS = 60;
++export function noChecksConfirmer(
++  clock: Pick<WatchClock, "now">
++): NoChecksConfirmer {
++  const firstSeen = new Map<
++    T.PrNumber,
++    { readonly headRefOid: string | null; readonly at: number }
++  >();
++  return (head) => {
++    const now = clock.now();
++    const prior = firstSeen.get(head.context.number);
++    if (prior?.headRefOid === head.headRefOid)
++      return now - prior.at >= NO_CHECKS_CONFIRM_SECONDS;
++    firstSeen.set(head.context.number, {
++      headRefOid: head.headRefOid,
++      at: now,
++    });
++    return false;
++  };
++}
++const neverConfirms: NoChecksConfirmer = () => false;
+ const AUTOMATION_TOKENS = [
+   "bugbot",
+   "security review",
+   "pr review automation",
+   "review automation",
+ ] as const;
+-export async function readSnapshot(args: {
+-  readonly reader: T.GitHubReader;
+-  readonly context: T.PrContext;
+-  readonly pendingHistory: "include" | "omit";
+-  readonly allowDraft: boolean;
+-}): Promise<T.PrSnapshot> {
+-  const facts = await args.reader.pullRequest(args.context);
+-  if (facts.state === "MERGED" || facts.mergedAt !== null)
+-    return { kind: "merged", context: args.context, facts };
+-  if (facts.state === "CLOSED")
+-    return { kind: "closed", context: args.context, facts };
+-  const threads = await resolveReviewThreads(args.reader, args.context);
+-  const checks = await resolveChecks(args.reader, args.context);
++async function noChecksCi(
++  reader: T.GitHubReader,
++  facts: T.PullRequestFacts,
++  confirmNoChecks: NoChecksConfirmer
++): Promise<T.CiNone | T.CiUnreported> {
++  const none = {
++    failed: [],
++    pending: [],
++    hadPreviousPassingCi: false,
++  } as const;
++  if (!confirmNoChecks(facts)) return { ...none, kind: "ci-unreported" };
++  const merge = await mergeAssessment(reader, facts);
++  // A refusal needs a failing head rollup, so it contradicts "this head has no
++  // check". One of the two readings is stale and neither can be acted on.
++  if (merge.github.kind === "refused")
++    throw new ChecksUnavailable(
++      `no checks reported on head ${facts.headRefOid}, but GitHub refuses the merge`
++    );
++  return { ...none, kind: "ci-none", github: merge.github };
++}
++async function reportedCi(
++  reader: T.GitHubReader,
++  facts: T.PullRequestFacts,
++  checks: T.ReportedChecks,
++  pendingHistory: "include" | "omit"
++): Promise<T.CiState> {
+   const failed = nonEmpty(
+     checks.checks.filter(
+       (check): check is T.FailedCheck => check.kind === "failed"
+@@ -79,9 +119,8 @@ export async function readSnapshot(args: {
+       (check): check is T.PendingCheck => check.kind === "pending"
+     )
+   );
+-  let ci: T.CiState;
+-  if (failed === null && pending !== null && args.pendingHistory === "omit")
+-    ci = {
++  if (failed === null && pending !== null && pendingHistory === "omit")
++    return {
+       kind: "ci-pending",
+       source: checks.source,
+       all: checks.checks,
+@@ -89,53 +128,75 @@ export async function readSnapshot(args: {
+       pending,
+       hadPreviousPassingCi: false,
+     };
+-  else {
+-    const merge = await mergeAssessment(args.reader, facts);
+-    const base = {
+-      source: checks.source,
+-      all: checks.checks,
+-      hadPreviousPassingCi: merge.hadPreviousPassingCi,
++  const merge = await mergeAssessment(reader, facts);
++  const base = {
++    source: checks.source,
++    all: checks.checks,
++    hadPreviousPassingCi: merge.hadPreviousPassingCi,
++  };
++  if (failed !== null)
++    return {
++      ...base,
++      kind: "ci-failing",
++      failed,
++      pending: pending ?? [],
++      github: merge.github,
+     };
+-    if (failed !== null)
+-      ci = {
+-        ...base,
+-        kind: "ci-failing",
+-        failed,
+-        pending: pending ?? [],
+-        github: merge.github,
+-      };
+-    else if (merge.github.kind === "refused")
+-      ci = {
+-        ...base,
+-        kind: "ci-github-rejected",
+-        failed: [],
+-        pending: pending ?? [],
+-        github: merge.github,
+-      };
+-    else if (pending !== null)
+-      ci = { ...base, kind: "ci-pending", failed: [], pending };
+-    else
+-      ci = {
+-        ...base,
+-        kind: "ci-clean",
+-        failed: [],
+-        pending: [],
+-        github: merge.github,
+-      };
+-  }
++  if (merge.github.kind === "refused")
++    return {
++      ...base,
++      kind: "ci-github-rejected",
++      failed: [],
++      pending: pending ?? [],
++      github: merge.github,
++    };
++  if (pending !== null)
++    return { ...base, kind: "ci-pending", failed: [], pending };
++  return {
++    ...base,
++    kind: "ci-clean",
++    failed: [],
++    pending: [],
++    github: merge.github,
++  };
++}
++export async function readSnapshot(args: {
++  readonly reader: T.GitHubReader;
++  readonly context: T.PrContext;
++  readonly pendingHistory: "include" | "omit";
++  readonly allowDraft: boolean;
++  readonly confirmNoChecks?: NoChecksConfirmer;
++}): Promise<T.PrSnapshot> {
++  const facts = await args.reader.pullRequest(args.context);
++  if (facts.state === "MERGED" || facts.mergedAt !== null)
++    return { kind: "merged", context: args.context, facts };
++  if (facts.state === "CLOSED")
++    return { kind: "closed", context: args.context, facts };
++  const threads = await resolveReviewThreads(args.reader, args.context);
++  const checks = await resolveChecks(args.reader, args.context);
++  const ci =
++    checks.kind === "no-checks"
++      ? await noChecksCi(
++          args.reader,
++          facts,
++          args.confirmNoChecks ?? neverConfirms
++        )
++      : await reportedCi(args.reader, facts, checks, args.pendingHistory);
+   return {
+     kind: "open",
+     context: args.context,
+     facts,
+     threads,
+     ci,
+-    reviewAutomationRunning: checks.checks.some(
+-      (check) =>
+-        check.kind === "pending" &&
+-        AUTOMATION_TOKENS.some((token) =>
+-          check.name.toLowerCase().includes(token)
+-        )
+-    ),
++    reviewAutomationRunning:
++      checks.kind === "reported" &&
++      checks.checks.some(
++        (check) =>
++          check.kind === "pending" &&
++          AUTOMATION_TOKENS.some((token) =>
++            check.name.toLowerCase().includes(token)
++          )
++      ),
+   };
+ }
+ const conflictBlocker = (row: T.PrSnapshot): T.MergeBlocker | null =>
+@@ -180,6 +241,13 @@ function gateBlocker(
+     ? null
+     : { kind: "merge-gate", pr: row.context, reason };
+ }
++function waitReason(row: T.PrSnapshot): T.WaitReason | null {
++  if (row.kind !== "open") return null;
++  if (row.ci.kind === "ci-pending")
++    return { kind: "pending-checks", pending: row.ci.pending };
++  if (row.ci.kind === "ci-unreported") return { kind: "checks-unreported" };
++  return null;
++}
+ function readyContribution(
+   row: T.PrSnapshot,
+   allowDraft: boolean
+@@ -192,7 +260,7 @@ function readyContribution(
+     };
+   if (
+     row.kind !== "open" ||
+-    row.ci.kind !== "ci-clean" ||
++    (row.ci.kind !== "ci-clean" && row.ci.kind !== "ci-none") ||
+     row.threads.length !== 0 ||
+     conflictBlocker(row) !== null ||
+     gateReason(row, allowDraft) !== null
+@@ -226,8 +294,9 @@ export function classifyPr(
+     gateBlocker(row, allowDraft),
+   ])
+     if (blocker !== null) return { kind: "blocker", blocker };
+-  if (row.kind === "open" && row.ci.kind === "ci-pending")
+-    return { kind: "waiting", frontier: row.context, pending: row.ci.pending };
++  const wait = waitReason(row);
++  if (wait !== null)
++    return { kind: "waiting", frontier: row.context, reason: wait };
+   const ready = readyContribution(row, allowDraft);
+   if (ready === null) throw new Error("snapshot has no classified decision");
+   return ready.kind === "merged-pr"
+@@ -247,13 +316,11 @@ export function selectTierMajorStackDecision(
+     const blocker = gateBlocker(row, allowDraft);
+     if (blocker !== null) return { kind: "blocker", blocker };
+   }
+-  for (const row of rows)
+-    if (row.kind === "open" && row.ci.kind === "ci-pending")
+-      return {
+-        kind: "waiting",
+-        frontier: row.context,
+-        pending: row.ci.pending,
+-      };
++  for (const row of rows) {
++    const wait = waitReason(row);
++    if (wait !== null)
++      return { kind: "waiting", frontier: row.context, reason: wait };
++  }
+   const prs = nonEmpty(
+     rows
+       .map((row) => readyContribution(row, allowDraft))
+@@ -428,6 +495,7 @@ export async function runSimple(args: {
+   readonly options: T.PollingOptions;
+ }): Promise<T.TerminalVerdict> {
+   const stamp = verdictFactory(args.dependencies.clock, args.mode);
++  const confirmNoChecks = noChecksConfirmer(args.dependencies.clock);
+   const step = async (): Promise<StepResult<T.TerminalVerdict>> => {
+     const rows: T.PrSnapshot[] = [];
+     for (const context of args.contexts)
+@@ -437,6 +505,7 @@ export async function runSimple(args: {
+           context,
+           pendingHistory: "include",
+           allowDraft: args.options.allowDraft,
++          confirmNoChecks,
+         })
+       );
+     const complete = nonEmpty(rows);
+@@ -501,7 +570,7 @@ export async function runSimple(args: {
+         kind: "WAITING",
+         terminal: false,
+         frontier: decision.frontier,
+-        reason: { kind: "pending-checks", pending: decision.pending },
++        reason: decision.reason,
+       })
+     );
+     return {
+@@ -512,7 +581,7 @@ export async function runSimple(args: {
+           kind: "TIMEOUT",
+           terminal: true,
+           exitCode: 5,
+-          reason: { kind: "pending-checks", pending: decision.pending },
++          reason: decision.reason,
+         }),
+     };
+   };
+@@ -639,12 +708,7 @@ export type QueueEvaluation =
+       readonly kind: "waiting";
+       readonly state: QueueState;
+       readonly frontier: T.PrContext;
+-      readonly reason:
+-        | {
+-            readonly kind: "pending-checks";
+-            readonly pending: T.NonEmpty<T.PendingCheck>;
+-          }
+-        | { readonly kind: "merge-queue"; readonly unmergedCount: number };
++      readonly reason: T.QueueWaitReason;
+       readonly emit: boolean;
+     };
+ export function evaluateQueue(
+@@ -692,16 +756,14 @@ export function evaluateQueue(
+       unmergedCount: active.length,
+     };
+   const row = rows[0];
+-  const pending =
+-    row.kind === "open" && row.ci.kind === "ci-pending" ? row.ci.pending : null;
+-  const reason =
+-    pending === null
+-      ? ({ kind: "merge-queue", unmergedCount: active.length } as const)
+-      : ({ kind: "pending-checks", pending } as const);
++  const reason: T.QueueWaitReason =
++    waitReason(row) ?? { kind: "merge-queue", unmergedCount: active.length };
+   const key =
+     reason.kind === "pending-checks"
+       ? `pending:${frontier.number}:${reason.pending.length}`
+-      : `queue:${frontier.number}:${reason.unmergedCount}`;
++      : reason.kind === "checks-unreported"
++        ? `unreported:${frontier.number}`
++        : `queue:${frontier.number}:${reason.unmergedCount}`;
+   return {
+     kind: "waiting",
+     state: { ...state, frontier, lastWaitKey: key },
+@@ -717,6 +779,7 @@ export async function runQueued(args: {
+ }): Promise<T.QueueTerminalVerdict> {
+   let state = createQueueState(args.contexts, args.dependencies.clock.now());
+   const stamp = verdictFactory(args.dependencies.clock, "queued-stack");
++  const confirmNoChecks = noChecksConfirmer(args.dependencies.clock);
+   args.dependencies.emit(
+     stamp({ kind: "QUEUE", terminal: false, queue: args.contexts })
+   );
+@@ -750,6 +813,7 @@ export async function runQueued(args: {
+       context,
+       pendingHistory: "omit",
+       allowDraft: args.options.allowDraft,
++      confirmNoChecks,
+     });
+     const applied = applyQueueSnapshot(
+       state,
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+index 0e93583..aac820d 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+@@ -6,7 +6,10 @@ function ciCell(row: T.PrSnapshot): string {
+   const was = row.ci.hadPreviousPassingCi ? ", was ✅" : "";
+   switch (row.ci.kind) {
+     case "ci-clean":
++    case "ci-none":
+       return "✅";
++    case "ci-unreported":
++      return `⏳ no checks yet${was}`;
+     case "ci-pending":
+       return `⏳ ${row.ci.pending.length} pending${was}`;
+     case "ci-failing":
+@@ -139,7 +142,9 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
+     case "WAITING":
+       return verdict.reason.kind === "pending-checks"
+         ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`
+-        : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
++        : verdict.reason.kind === "checks-unreported"
++          ? `WAITING: frontier=#${verdict.frontier.number}; no checks reported yet\n`
++          : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
+     case "ADVANCE":
+       return `ADVANCE: merged #${verdict.merged.number}; next=#${verdict.frontier.number}; remaining=${verdict.remaining}\n`;
+     case "RETRY":
+@@ -158,6 +163,8 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
+     case "TIMEOUT":
+       if (verdict.reason.kind === "pending-checks")
+         return "TIMEOUT: checks still pending\n";
++      if (verdict.reason.kind === "checks-unreported")
++        return "TIMEOUT: no checks reported\n";
+       if (verdict.reason.kind === "status-unavailable")
+         return "TIMEOUT: GitHub status remained unavailable\n";
+       return `TIMEOUT: queued stack still has ${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged; frontier=#${verdict.reason.frontier.number}\n`;
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 60b9abc..b7b9706 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -87,10 +87,18 @@ export type Check =
+     });
+ export type FailedCheck = Extract<Check, { readonly kind: "failed" }>;
+ export type PendingCheck = Extract<Check, { readonly kind: "pending" }>;
+-export interface CheckRead {
+-  readonly source: "gh-pr-checks" | "graphql-rollup";
++export type CheckSource = "gh-pr-checks" | "graphql-rollup";
++export interface ReportedChecks {
++  readonly kind: "reported";
++  readonly source: CheckSource;
+   readonly checks: NonEmpty<Check>;
+ }
++/**
++ * `no-checks` is a reading, not a failure: both the fast path and the GraphQL
++ * rollup agree the head commit has no check at all. It is only safe to treat as
++ * clean once the head has kept saying so for `NO_CHECKS_CONFIRM_SECONDS`.
++ */
++export type CheckRead = ReportedChecks | { readonly kind: "no-checks" };
+ export interface CommitRollup {
+   readonly oid: string;
+   readonly state: RollupState;
+@@ -115,7 +123,7 @@ export type GitHubMergeAllowed =
+     };
+ export type GitHubMergeAssessment = GitHubMergeAllowed | GitHubMergeRefusal;
+ interface CiBase {
+-  readonly source: CheckRead["source"];
++  readonly source: CheckSource;
+   readonly all: NonEmpty<Check>;
+   readonly hadPreviousPassingCi: boolean;
+ }
+@@ -142,7 +150,28 @@ export type CiClean = CiBase & {
+   readonly pending: readonly [];
+   readonly github: GitHubMergeAllowed;
+ };
+-export type CiState = CiFailing | CiGithubRejected | CiPending | CiClean;
++/** No check was ever configured or registered for this head, and that has held for the confirmation window. */
++export type CiNone = {
++  readonly kind: "ci-none";
++  readonly failed: readonly [];
++  readonly pending: readonly [];
++  readonly hadPreviousPassingCi: false;
++  readonly github: GitHubMergeAllowed;
++};
++/** No check is registered for this head yet, and the confirmation window has not elapsed. */
++export type CiUnreported = {
++  readonly kind: "ci-unreported";
++  readonly failed: readonly [];
++  readonly pending: readonly [];
++  readonly hadPreviousPassingCi: false;
++};
++export type CiState =
++  | CiFailing
++  | CiGithubRejected
++  | CiPending
++  | CiClean
++  | CiNone
++  | CiUnreported;
+ export type PrSnapshot =
+   | {
+       readonly kind: "merged" | "closed";
+@@ -163,7 +192,7 @@ export interface ReadyPr {
+   readonly proof: {
+     readonly mergeability: "clear";
+     readonly threads: readonly [];
+-    readonly ci: CiClean;
++    readonly ci: CiClean | CiNone;
+     readonly gate: {
+       readonly state: "OPEN";
+       readonly reviewDecision: Exclude<ReviewDecision, "CHANGES_REQUESTED">;
+@@ -230,9 +259,18 @@ export type QueryFailure =
+       readonly detail: string;
+       readonly rawValue: string;
+     };
++export type WaitReason =
++  | {
++      readonly kind: "pending-checks";
++      readonly pending: NonEmpty<PendingCheck>;
++    }
++  | { readonly kind: "checks-unreported" };
++export type QueueWaitReason =
++  | WaitReason
++  | { readonly kind: "merge-queue"; readonly unmergedCount: number };
+ /**
+- * `frontier` names the lowest unmerged PR that is actually waiting, and
+- * `pending` is that PR's checks only. Pooling every row's pending under the
++ * `frontier` names the lowest unmerged PR that is actually waiting, and the
++ * reason belongs to that PR alone. Pooling every row's pending under the
+  * bottom PR's number misattributed upstack waits to the frontier.
+  *
+  * This decision serves single and `--stack` mode. Queued mode deliberately
+@@ -244,7 +282,7 @@ export type QueryFailure =
+ export interface WaitingDecision {
+   readonly kind: "waiting";
+   readonly frontier: PrContext;
+-  readonly pending: NonEmpty<PendingCheck>;
++  readonly reason: WaitReason;
+ }
+ export type PrDecision =
+   | { readonly kind: "blocker"; readonly blocker: MergeBlocker }
+@@ -285,12 +323,7 @@ export type ProgressVerdict =
+     })
+   | (Progress<"WAITING"> & {
+       readonly frontier: PrContext;
+-      readonly reason:
+-        | {
+-            readonly kind: "pending-checks";
+-            readonly pending: NonEmpty<PendingCheck>;
+-          }
+-        | { readonly kind: "merge-queue"; readonly unmergedCount: number };
++      readonly reason: QueueWaitReason;
+     })
+   | (Progress<"ADVANCE", "queued-stack"> & {
+       readonly merged: PrContext;
+@@ -333,10 +366,7 @@ export type BlockerVerdict =
+     });
+ export type TimeoutVerdict = Terminal<"TIMEOUT", 5> & {
+   readonly reason:
+-    | {
+-        readonly kind: "pending-checks";
+-        readonly pending: NonEmpty<PendingCheck>;
+-      }
++    | WaitReason
+     | { readonly kind: "status-unavailable"; readonly failure: QueryFailure }
+     | {
+         readonly kind: "queued-stack";
+@@ -371,15 +401,23 @@ export type QueueTerminalVerdict =
+   | TimeoutVerdict;
+ export type ChecksFastPath =
+   | { readonly kind: "checks"; readonly checks: readonly Check[] }
++  | { readonly kind: "none-reported" }
+   | {
+       readonly kind: "unusable";
+       readonly exitCode: number;
+       readonly stderr: string;
+     };
+-export interface RollupPage {
+-  readonly checks: readonly Check[];
+-  readonly endCursor: string | null;
+-}
++/**
++ * `no-rollup` means the head commit has no statusCheckRollup at all, which is a
++ * different reading from a rollup that listed no check this reader understands.
++ */
++export type RollupPage =
++  | {
++      readonly kind: "contexts";
++      readonly checks: readonly Check[];
++      readonly endCursor: string | null;
++    }
++  | { readonly kind: "no-rollup" };
+ export interface RawReviewThread {
+   readonly id: string;
+   readonly firstComment: ReviewComment | null;

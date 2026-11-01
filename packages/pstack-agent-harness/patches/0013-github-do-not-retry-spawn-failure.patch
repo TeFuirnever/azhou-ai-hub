@@ -1,0 +1,139 @@
+Description: report a spawn failure as unrecoverable instead of a transient one
+Author: Azhou AI Hub
+Forwarded: no
+
+A process that cannot be started surfaces as a raw node error from spawn, and
+every read path let it out. `gh` missing from PATH, or not executable, is a state
+the next poll will not change, yet the watcher treated the failure as transient:
+it backed off and went round again for as long as the run lasted, never producing
+a verdict. A spawn failure is now a non-retryable query failure, so the watcher
+ends with the status-query blocker and names the binary it could not run.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 239940a..feb4a2d 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -747,6 +747,32 @@ printf '%s\\n' '[{"number":42,"headRefName":"feature","baseRefName":"main","head
+     }
+   });
+ 
++  it("reports a missing gh as a failure the watcher must not retry", () => {
++    const directory = mkdtempSync(join(tmpdir(), "watch-pr-nogh-"));
++    try {
++      const program = `import { GhGitHubReader } from ${JSON.stringify(import.meta.dir + "/github.ts")};
++        try {
++          await new GhGitHubReader().openPullRequests({ owner: "owner", repo: "repo" });
++          console.log(JSON.stringify({ ok: true }));
++        } catch (error) {
++          console.log(JSON.stringify({ kind: error.failure?.kind, retryable: error.failure?.retryable }));
++        }`;
++      const child = spawnSync(process.execPath, ["-e", program], {
++        encoding: "utf8",
++        timeout: 5000,
++        env: { ...process.env, PATH: directory },
++      });
++      expect(child.error).toBeUndefined();
++      expect(child.status).toBe(0);
++      expect(JSON.parse(child.stdout)).toEqual({
++        kind: "spawn-failed",
++        retryable: false,
++      });
++    } finally {
++      rmSync(directory, { recursive: true, force: true });
++    }
++  });
++
+   it("asks gh for more open pull requests than its 30-row default", () => {
+     const directory = mkdtempSync(join(tmpdir(), "watch-pr-limit-"));
+     try {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 202121f..10531ff 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -44,7 +44,17 @@ function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
+     child.stderr.on("data", (chunk: string) => {
+       stderr += chunk;
+     });
+-    child.on("error", reject);
++    child.on("error", (error) =>
++      // A binary that is not installed or cannot be executed will not appear on
++      // the next poll. Retrying it would retry for ever.
++      reject(
++        new WatcherQueryError({
++          kind: "spawn-failed",
++          retryable: false,
++          detail: `could not run ${argv[0]}: ${error.message}`,
++        })
++      )
++    );
+     child.on("close", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+   });
+ }
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index ce3296b..1bb613f 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -723,6 +723,47 @@ describe("merge gates after the checks pass", () => {
+   });
+ });
+ 
++describe("unrecoverable query failures", () => {
++  it("ends the watch on the first failure rather than retrying it", async () => {
++    const base = fakeReader();
++    let reads = 0;
++    const reader: GitHubReader = {
++      ...base,
++      async pullRequest() {
++        reads += 1;
++        throw new WatcherQueryError({
++          kind: "spawn-failed",
++          retryable: false,
++          detail: "could not run gh: ENOENT",
++        });
++      },
++    };
++    const result = await runSimple({
++      dependencies: {
++        reader,
++        clock: {
++          now: () => 0,
++          observedAt: () => "2026-07-26T00:00:00.000Z",
++          async sleep() {
++            throw new Error("an unrecoverable failure must not reach a sleep");
++          },
++        },
++        emit() {},
++      },
++      contexts: [context(1)],
++      mode: "single",
++      statusOnly: false,
++      options,
++    });
++    expect(reads).toBe(1);
++    expect(result).toMatchObject({
++      kind: "BLOCKER",
++      exitCode: 7,
++      blocker: { kind: "status-query", failures: 1 },
++    });
++  });
++});
++
+ describe("snapshot consistency between the two reads", () => {
+   const changing = (
+     options: Parameters<typeof fakeReader>[0],
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index a865d2a..84fcd37 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -267,6 +267,11 @@ export type QueryFailure =
+       readonly retryable: true;
+       readonly detail: string;
+     }
++  | {
++      readonly kind: "spawn-failed";
++      readonly retryable: false;
++      readonly detail: string;
++    }
+   | {
+       readonly kind: "invalid-context-url";
+       readonly retryable: false;
