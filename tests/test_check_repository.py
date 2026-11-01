@@ -682,7 +682,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [
-                root / "packages/pstack-agent-harness/plugins/pstack/skills/how/SKILL.md",
+                root / "packages/pstack-agent-harness/components/cursor-team-kit/skills/deslop/SKILL.md",
                 root / "packages/agent-orchestration-kit/profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery([*expected, *bundled], root))

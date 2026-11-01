@@ -8,14 +8,13 @@
   "license": "MIT",
   "runtime_paths": [
     ".agents/plugins/marketplace.json",
+    ".claude-plugin/marketplace.json",
     "LICENSE",
     "LICENSE-cursor-team-kit",
     "LICENSE-thermos",
     "NOTICE-skills.md",
     "NOTICE.md",
-    "VERSION",
     "hub-package.json",
-    "package.json",
     "harness/pstack/codex"
   ]
 }

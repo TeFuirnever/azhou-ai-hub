@@ -254,7 +254,6 @@ VENDORED_ROOTS = (
     "packages/pstack-agent-harness/pstack/",
     "packages/pstack-agent-harness/components/",
     "packages/pstack-agent-harness/harness/",
-    "packages/pstack-agent-harness/plugins/pstack/skills/",
     "packages/agent-orchestration-kit/profiles/",
 )
 
