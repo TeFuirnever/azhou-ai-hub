@@ -267,7 +267,7 @@ try {
       <div class="fixture-nav-header" style="flex:none;padding:12px 8px 8px">
         <div class="group/nav-list" data-fixture-nav-list style="display:flex;flex-direction:column;gap:4px;width:100%">
           <button type="button" class="sidebar-item" data-fixture-new-chat style="width:100%;min-height:32px;padding:5px 10px;text-align:left">New chat</button>
-          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left">Your dot</button>
+          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left"><div>Your dot</div></button>
         </div>
       </div>
       <div class="fixture-nav-scroll" style="flex:1;min-height:0;overflow:auto;padding:4px 8px">
@@ -1975,13 +1975,13 @@ try {
 
     await cdp.evaluate(`(()=>{
       const badge=document.createElement('span');
-      badge.dataset.fixtureUnread=''; badge.textContent='1';
+      badge.dataset.fixtureUnread=''; badge.textContent='11 unread message';
       document.querySelector('[data-fixture-your-dot]').appendChild(badge);
     })()`);
     await delay(250);
     const unread = await until(async () => {
       const value = await inspect();
-      return value.yourDot?.text === 'Your dot1' && value.afterYourDot
+      return value.yourDot?.text === 'Your dot11 unread message' && value.afterYourDot
         && value.position === 'static' ? value : false;
     }, 3000, 'appearance stays in navigation after unread count appears');
     assert.ok(unread.entryRect.y - (unread.dotRect.y + unread.dotRect.height) >= 6);

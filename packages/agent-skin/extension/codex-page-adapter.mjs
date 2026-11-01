@@ -360,7 +360,11 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const isAppearanceNavigationNode = node => {
       const name = node.getAttribute?.('aria-label') ?? node.textContent ?? '';
-      if (!isAppearanceAnchorName(name)) return false;
+      // The host puts the stable label in its first child and the unread badge
+      // (including screen-reader text) in a separate sibling.
+      const label = node.getAttribute?.('aria-label') == null && tagName(node) === 'BUTTON'
+        ? node.firstElementChild?.textContent : null;
+      if (!isAppearanceAnchorName(name) && !isAppearanceAnchorName(label ?? '')) return false;
       return tagName(node) === 'A' ? Boolean(getNavAncestor(node)) : isHomeNavigationButton(node);
     };
     const isVisibleNavigation = node => {
