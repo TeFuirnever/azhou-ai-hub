@@ -1,0 +1,19 @@
+Description: neutralize a cell opening with a double quote in the decision log
+Author: Azhou AI Hub
+Forwarded: no
+
+A cell whose first character is a double quote is parsed as a quoted TSV
+field by spreadsheet and TSV readers, which corrupts every column after it.
+The existing guard covers spreadsheet formula characters but not this one.
+
+--- a/pstack/skills/show-me-your-work/scripts/log.sh
++++ b/pstack/skills/show-me-your-work/scripts/log.sh
+@@ -33,7 +33,7 @@
+ 	local v
+ 	v=$(printf '%s' "$1" | tr '\t\n\r' '   ')
+ 	case "$v" in
+-		=*|+*|-*|@*) printf "'%s" "$v" ;;
++		=*|+*|-*|@*|\"*) printf "'%s" "$v" ;;
+ 		*) printf '%s' "$v" ;;
+ 	esac
+ }

@@ -33,7 +33,7 @@ clean() {
 	local v
 	v=$(printf '%s' "$1" | tr '\t\n\r' '   ')
 	case "$v" in
-		=*|+*|-*|@*) printf "'%s" "$v" ;;
+		=*|+*|-*|@*|\"*) printf "'%s" "$v" ;;
 		*) printf '%s' "$v" ;;
 	esac
 }
