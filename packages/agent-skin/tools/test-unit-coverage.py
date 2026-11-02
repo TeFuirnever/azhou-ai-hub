@@ -21,7 +21,10 @@ IGNORED_DIRECTORIES = {".git", ".build", ".local", ".azhou", "dist", "assets", "
                        "node_modules", "docs", "plans"}
 NATIVE_EXPRESSIONS = ("statusSource", "applyGuardSource", "retrySource", "restoreSource",
                       "inspectExpression", "statusExpression", "disposeExpression", "installExpression")
-GENERATED_JAVASCRIPT = tuple(f"generated/Native-Wallpaper.{name}.js" for name in NATIVE_EXPRESSIONS)
+WALLPAPER_GENERATED_JAVASCRIPT = tuple(f"generated/Native-Wallpaper.{name}.js" for name in NATIVE_EXPRESSIONS)
+ZCODE_NATIVE_EXPRESSIONS = ("safeStatusExpression", "disposeExpression")
+ZCODE_GENERATED_JAVASCRIPT = tuple(f"generated/Native-ZCodeRuntime.{name}.js" for name in ZCODE_NATIVE_EXPRESSIONS)
+GENERATED_JAVASCRIPT = WALLPAPER_GENERATED_JAVASCRIPT + ZCODE_GENERATED_JAVASCRIPT
 
 
 def production_sources(root: Path = ROOT) -> dict[str, list[str]]:
@@ -39,7 +42,9 @@ def production_sources(root: Path = ROOT) -> dict[str, list[str]]:
     # merely the Swift statements that construct their strings. Unit tests
     # compile the current producer and execute every exact emitted expression.
     if (root / "Native/Wallpaper.swift").is_file():
-        groups["javascript"].extend(GENERATED_JAVASCRIPT)
+        groups["javascript"].extend(WALLPAPER_GENERATED_JAVASCRIPT)
+    if (root / "Native/ZCodeSkinRuntime.swift").is_file():
+        groups["javascript"].extend(ZCODE_GENERATED_JAVASCRIPT)
     return groups
 
 

@@ -186,7 +186,9 @@ extension ZCodeBoundCDP {
         return try await evaluateSafe("""
         (() => {
           const value = (o,k) => { const d=o && Object.getOwnPropertyDescriptor(o,k); return d && Object.hasOwn(d,'value') ? d.value : undefined; };
-          const c=value(globalThis,'__azhouStartup');
+          const descriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+          if(descriptor && !Object.hasOwn(descriptor,'value')) return {present:true,unconfirmed:true};
+          const c=descriptor?.value;
           if (!c) return {present:false};
           if (value(c,'owner')!=='azhou-zcode-startup' || value(c,'version')!==1) return {present:true,conflict:true};
           const snapshot={};
@@ -237,7 +239,9 @@ extension ZCodeBoundCDP {
         (() => {
           const expected=\(encoded);
           const value=(o,k)=>{const d=o&&Object.getOwnPropertyDescriptor(o,k);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
-          const c=value(globalThis,'__azhouStartup');
+          const descriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouStartup');
+          if(descriptor && !Object.hasOwn(descriptor,'value')) return {disposed:false};
+          const c=descriptor?.value;
           if(!c) return {disposed:true,alreadyAbsent:true};
           if(value(c,'owner')!=='azhou-zcode-startup'||value(c,'version')!==1) return {disposed:false};
           for(const k of Object.keys(expected)) {

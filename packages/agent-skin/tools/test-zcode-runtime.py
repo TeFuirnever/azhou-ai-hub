@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Synthetic ZCode runtime fixture; no App, profile or real OS identity query.
+"""Synthetic ZCode runtime fixture; no host App/profile access; own test-PID listener metadata only.
 
 C0 owns integration. --binary launches only the supplied canonical test binary
 with --zcode-runtime-fixture PORT. REST POST /fixture/mode {mode,reset:true}.
 """
 from pathlib import Path
-import argparse,base64,datetime,hashlib,json,os,socket,socketserver,struct,subprocess,threading,time,uuid
+import platform,argparse,base64,datetime,hashlib,json,os,socket,socketserver,struct,subprocess,threading,time,uuid
 PAGE='file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
 MODES={'ready','complete','before-ready','already-active','badreceipt','absent','late','readylost','dispose-failed'}
 class Fixture:
- def __init__(self):self.lock=threading.Lock();self.log=[];self.reset('ready')
+ def __init__(self):self.lock=threading.Lock();self.log=[];self.captured={};self.capture_metadata=None;self.reset('ready')
  def reset(self,mode):
   if mode not in MODES:raise ValueError('unknown fixture mode')
   self.mode=mode;self.metadata=None;self.present=False;self.status_reads=0;self.disposed=False
@@ -41,6 +41,12 @@ class Fixture:
    if method=='Runtime.evaluate':
     if params.get('uniqueContextId')!='context-1':return {'_error':'fixture-context-mismatch'}
     expression=params.get('expression','')
+    # Capture only exact Runtime.evaluate strings from this owned synthetic
+    # ready controller; never factory bytes or any App/user data.
+    name='disposeExpression' if 'dispose.call(c)' in expression else 'safeStatusExpression' if 'status.call(c)' in expression else None
+    if self.mode=='ready' and name and isinstance(expression,str) and self.present and self.metadata:
+     if self.capture_metadata is None and name=='safeStatusExpression':self.capture_metadata=dict(self.metadata)
+     if self.capture_metadata==self.metadata and name not in self.captured:self.captured[name]=expression
     # This is a protocol fixture, not a JS interpreter. It discriminates the
     # canonical fixed dispose expression from canonical fixed safeStatus.
     if 'dispose.call(c)' in expression:
@@ -146,10 +152,24 @@ def selftest():
  print(json.dumps({'server_only_synthetic_modes':count,'passed':True,'native_runtime_not_tested':True,'host':False}))
 
 def main():
- parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--binary',type=Path);parser.add_argument('--out',type=Path);parser.add_argument('--profile-directory',type=Path);parser.add_argument('--timeout',type=float,default=90);parser.add_argument('--self-test',action='store_true');args=parser.parse_args()
+ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--binary',type=Path);parser.add_argument('--build-canonical',action='store_true');parser.add_argument('--out',type=Path);parser.add_argument('--profile-directory',type=Path);parser.add_argument('--timeout',type=float,default=90);parser.add_argument('--self-test',action='store_true');args=parser.parse_args()
  if args.self_test:selftest();return 0
- if not args.binary or not args.out:parser.error('--binary and --out are required')
- out=args.out.resolve();out.mkdir(parents=True,exist_ok=False);server=Server();thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+ if not args.out or (bool(args.binary)==bool(args.build_canonical)):parser.error('--out and exactly one of --binary/--build-canonical are required')
+ out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
+ native=Path(__file__).resolve().parents[1]/'Native';names=['App.swift','Wallpaper.swift','SkinHostContract.swift','CodexSkinDriver.swift','ZCodeSkinDriver.swift','ZCodeSkinRuntime.swift','StartupNativeTests.swift']
+ source_sha={str(native/name):hashlib.sha256((native/name).read_bytes()).hexdigest() for name in names} if args.build_canonical else None
+ compile_receipt=None
+ if args.build_canonical:
+  binary=out/'bin/CanonicalStartupTests';binary.parent.mkdir(mode=0o700)
+  argv=['/usr/bin/swiftc','-DAGENT_SKIN_NATIVE_EVENT_TESTS','-target',platform.machine()+'-apple-macos13.0','-module-cache-path',str(out/'module-cache'),*(str(native/name)for name in names),'-o',str(binary),'-framework','AppKit','-framework','WebKit']
+  if args.profile_directory:argv[1:1]=['-profile-generate','-profile-coverage-mapping']
+  started=datetime.datetime.now(datetime.timezone.utc).isoformat();compiled=subprocess.run(argv,capture_output=True,timeout=120)
+  (out/'compile.stdout').write_bytes(compiled.stdout);(out/'compile.stderr').write_bytes(compiled.stderr)
+  compile_receipt={'argv':argv,'started_at':started,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':compiled.returncode,'canonical_source_sha256':source_sha,'binary_output':str(binary),'not_shared_build_output':True}
+  (out/'COMPILE-C.json').write_text(json.dumps(compile_receipt,indent=2)+'\n')
+  if compiled.returncode:print(json.dumps(compile_receipt));return 1
+  args.binary=binary
+ server=Server();thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
  env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin'}
  if args.profile_directory:args.profile_directory.mkdir(parents=True,exist_ok=True);env['LLVM_PROFILE_FILE']=str(args.profile_directory.resolve()/'zcode-runtime-fixture-%p.profraw')
  start=datetime.datetime.now(datetime.timezone.utc).isoformat();timed_out=False
@@ -159,6 +179,18 @@ def main():
  finally:server.shutdown();server.server_close();thread.join(timeout=2)
  (out/'stdout.bin').write_bytes(stdout);(out/'stderr.bin').write_bytes(stderr);(out/'mock-protocol.json').write_text(json.dumps(server.fixture.log,indent=2)+'\n')
  methods={r.get('method') for r in server.fixture.log};exercised={'Runtime.callFunctionOn','Runtime.evaluate'}<=methods
- result={'argv':[str(args.binary.resolve()),'--zcode-runtime-fixture','<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':True,'OS_query_scope':'native test binary self-PID listener metadata only','passed':code==0 and exercised}
+ captures=server.fixture.captured;metadata=server.fixture.capture_metadata;capture_complete=set(captures)=={'safeStatusExpression','disposeExpression'}
+ expression_sha={}
+ if capture_complete:
+  d=out/'expressions';d.mkdir(mode=0o700)
+  for name,expression in captures.items():
+   data=expression.encode('utf-8');p=d/('Native-ZCodeRuntime.'+name+'.js');p.open('xb').write(data);expression_sha[name]=hashlib.sha256(data).hexdigest()
+  unchanged=source_sha is not None and all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in source_sha.items())
+  binding={'schema':'native-runtime-captured-expressions.v1','owner':'azhou-zcode-startup','version':1,'metadata':metadata,'sourceSHAs':expression_sha,
+   'captured_from':{'mode':'ready','same_instance_pair':True,'metadataSHA256':hashlib.sha256(json.dumps(metadata,sort_keys=True).encode()).hexdigest(),'transport':'actual Runtime.evaluate request params.expression bytes'},
+   'canonical_source_sha256':source_sha,'canonical_source_bytes_unchanged_after':unchanged,'compile_receipt':compile_receipt,'binary_sha256':hashlib.sha256(args.binary.read_bytes()).hexdigest(),
+   'native_fixture_exit':code,'native_fixture_timed_out':timed_out,'host':False,'factory_captured':False,'App_user_data_captured':False}
+  (out/'EXPRESSION-BINDINGS.json').open('x').write(json.dumps(binding,indent=2)+'\n')
+ result={'argv':[str(args.binary.resolve()),'--zcode-runtime-fixture','<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':True,'OS_query_scope':'native test binary self-PID listener metadata only','expression_count':len(captures),'same_ready_instance_pair':capture_complete,'expression_sha256':expression_sha,'passed':code==0 and exercised and capture_complete}
  (out/'report.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 0 if result['passed'] else 1
 if __name__=='__main__':raise SystemExit(main())

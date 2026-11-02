@@ -151,6 +151,7 @@
     "plans/001-vivid-lab-motion.md",
     "Native/ZCodeTransportTests.swift",
     "tools/test-zcode-transport.py",
-    "tools/test-zcode-runtime.py"
+    "tools/test-zcode-runtime.py",
+    "tools/native-zcode-expressions.unit.test.mjs"
   ]
 }
