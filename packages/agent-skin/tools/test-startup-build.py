@@ -1122,6 +1122,8 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
             self.verifier.INPUT_FILES = original
 
     def test_zcode_factory_is_explicit_bound_and_rejects_metadata_before_page_work(self):
+        verifier = load_module(self.root / "tools/verify-artifacts.py", "zcode_factory_artifacts")
+        verifier.configure_build_host("zcode")
         bundle = self.root / '.build/azhou-stage.zcode-factory/azhou-zcode-payload'
         bundle.mkdir(parents=True)
         manifest = self.builder.build_startup(bundle, root=self.root, host='zcode')
@@ -1131,18 +1133,18 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
         self.assertIn('extension/hosts/zcode.mjs', manifest['sourceInputs'])
         wallpaper_builder = load_module(self.root / 'tools/build-wallpaper.py', 'zcode_fixture_wallpaper')
         wallpaper_builder.package(bundle, host='zcode')
-        self.verifier.verify_wallpaper(bundle, self.info, self.marker)
+        verifier.verify_wallpaper(bundle, self.info, self.marker)
         wallpaper_manifest_path = bundle / 'Contents/Resources/wallpaper/manifest.json'
         wallpaper_manifest = json.loads(wallpaper_manifest_path.read_text())
         wallpaper_manifest['targetHost'] = 'codex'
         wallpaper_manifest_path.write_text(json.dumps(wallpaper_manifest))
         with self.assertRaisesRegex(RuntimeError, 'host label'):
-            self.verifier.verify_wallpaper(bundle, self.info, self.marker)
+            verifier.verify_wallpaper(bundle, self.info, self.marker)
 
         self.assertTrue(payload.startswith('((controllerMetadata) => {'))
         self.assertTrue(payload.rstrip().endswith('})'))
         self.assertNotIn('function createCodexPageAdapter(', payload)
-        self.verifier.verify_startup(bundle, self.info, self.marker)
+        verifier.verify_startup(bundle, self.info, self.marker)
         harness = r"""const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const script=fs.readFileSync(process.argv[1],'utf8');let writes=0;
 const scope=vm.createContext({URL,document:new Proxy({},{get(){throw Error('page must not be read')}})});
@@ -1157,16 +1159,16 @@ assert.equal(writes,0);console.log('factory-negatives:3/3');"""
         forged = dict(manifest, targetHost='codex')
         path.write_text(json.dumps(forged))
         with self.assertRaisesRegex(RuntimeError, 'sourceInputs|安装入口'):
-            self.verifier.verify_startup(bundle, self.info, self.marker)
+            verifier.verify_startup(bundle, self.info, self.marker)
         relabelled = dict(manifest, targetHost='codex', sourceInputs={k: v for k, v in manifest['sourceInputs'].items() if k != 'extension/hosts/zcode.mjs'})
         relabelled.pop('entrypoint', None)
         path.write_text(json.dumps(relabelled))
         with self.assertRaisesRegex(RuntimeError, 'Codex startup cannot carry a ZCode'):
-            self.verifier.verify_startup(bundle, self.info, self.marker)
+            verifier.verify_startup(bundle, self.info, self.marker)
         forged = dict(manifest, entrypoint='unbound')
         path.write_text(json.dumps(forged))
         with self.assertRaisesRegex(RuntimeError, 'metadata factory'):
-            self.verifier.verify_startup(bundle, self.info, self.marker)
+            verifier.verify_startup(bundle, self.info, self.marker)
 
     def test_payload_wires_the_codex_page_adapter_explicitly(self):
         payload = (self.bundle / "Contents/Resources/startup/install.js").read_text(encoding="utf-8")
