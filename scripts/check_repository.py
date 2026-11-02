@@ -347,6 +347,7 @@ SUPPORT_MATRIX_MAIN_HEADER = (
     "Claude Code",
     "MiMo Code",
     "zcode",
+    "DeepSeek Harness",
     "Other harnesses (unsupported)",
 )
 SUPPORT_MATRIX_OS_HEADING = "## Operating system support"
@@ -356,6 +357,7 @@ PLATFORM_VIEW_MAIN_HEADER = (
     "Claude Code",
     "MiMo Code",
     "zcode",
+    "DeepSeek Harness",
     "Other harnesses (unsupported)",
     "Linux",
     "macOS",
@@ -490,7 +492,7 @@ def check_skill_platform_view(root: Path) -> list[str]:
     for name in sorted(set(view_rows) - canonical_skills):
         errors.append(f"skill platform view row unexpected: {name}")
     for name, cells in view_rows.items():
-        if len(cells) == len(PLATFORM_VIEW_MAIN_HEADER) and cells[5] != "unsupported":
+        if len(cells) == len(PLATFORM_VIEW_MAIN_HEADER) and cells[-4] != "unsupported":
             errors.append(f"unsupported harness claim in skill platform view: {name}")
 
     map_rows: dict[str, list[str]] = {}

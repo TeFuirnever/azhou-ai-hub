@@ -1,12 +1,12 @@
 # pstack in skills-root hosts
 
-pstack skills use Cursor names. This tree installs into an explicit skills root that several hosts read as-is: Codex, zcode, and MiMo Code today, plus candidates under receipt. Read this file once per session, then map each Cursor name with the tables below. `<pstack>` means the folder that holds `skills/` and `docs/`. If a Cursor field has no row, drop it and say so. Never pass a field or value the tool schema rejects. No single host owns this contract, so each row names the capability and the session supplies the tool. For a host-specific tool-name mapping, read `codex.md` or `zcode.md` beside this file. A skills-only install adds no native agents, hooks, or tool mappings.
+pstack skills use Cursor names. This tree installs into an explicit skills root that several hosts read as-is: Codex, zcode, MiMo Code, and DeepSeek Harness today, plus candidates under receipt. Read this file once per session, then map each Cursor name with the tables below. `<pstack>` means the folder that holds `skills/` and `docs/`. If a Cursor field has no row, drop it and say so. Never pass a field or value the tool schema rejects. No single host owns this contract, so each row names the capability and the session supplies the tool. For a host-specific tool-name mapping, read `codex.md` or `zcode.md` beside this file. A skills-only install adds no native agents, hooks, or tool mappings.
 
 ## Tools
 
 | Cursor | skills-root host |
 | --- | --- |
-| `Task` | Dispatch a child through the session's own dispatch, when it has one. Codex calls it `spawn_agent`; zcode types the child `subagent_child`. With no dispatch, run the step yourself and say so. |
+| `Task` | Dispatch a child through the session's own dispatch, when it has one. Codex calls it `spawn_agent`; zcode types the child `subagent_child`; DeepSeek Harness exposes `subagent`, `subagent_fork`, `spawn_teammate` and `workflow`. With no dispatch, run the step yourself and say so. |
 | `AskQuestion` | Ask in plain text and let the user answer. No structured-choice tool is shared. |
 | Open a todolist | Use the host's plan tool when it has one. Otherwise keep the list in your reply and update it at each phase. |
 | Run another pstack skill (`/name` or "the **name** skill") | Invoke the project skill explicitly. Hosts discover skills at `.agents/skills/`, so read `<pstack>/skills/<name>/SKILL.md` and follow it. When you tell the user to type it, use the host's skill invocation. |
@@ -58,7 +58,7 @@ No host here loads a rules directory into every session, so `setup-pstack` write
 | `.cursor/skills/`, `~/.cursor/skills/` | `.agents/skills/` in the project, `~/.agents/skills` for the shared user root. One install at either root serves every host that reads it. |
 | `~/.cursor/plugins/`, `.cursor-plugin/plugin.json` | No shared plugin manifest. Codex installs through its own `.codex-plugin/` from the codex tree; other hosts take the Skill folders as-is. |
 | `.cursor/rules/*.mdc`, always-applied rules | `AGENTS.md` at the project root, plus the host's global instructions path when it has one. No host here reads `.mdc`. The model rule is the exception. See Models. |
-| Transcripts in `~/.cursor/projects/<slug>/agent-transcripts/` | Each host's own session store. Codex keeps `$CODEX_HOME/sessions/`, zcode keeps `~/.zcode/cli/db/db.sqlite`. Read only this workspace's records. |
+| Transcripts in `~/.cursor/projects/<slug>/agent-transcripts/` | Each host's own session store. Codex keeps `$CODEX_HOME/sessions/`, zcode keeps `~/.zcode/cli/db/db.sqlite`, DeepSeek Harness keeps `~/.dsh/sessions/` with no parser claimed. Read only this workspace's records. |
 | `https://github.com/cursor/plugins/blob/main/pstack/<path>` | `<pstack>/<path>` when that file exists. The plugin ships the skills, `docs/guide/`, and `README.md`. Read the local copy and never fetch it. Give the user the URL when they need a link. |
 
 ## Cursor-only features
