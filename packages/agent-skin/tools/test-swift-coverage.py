@@ -151,12 +151,16 @@ def main() -> int:
                        "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift"],
                        frameworks=["AppKit", "WebKit"]),
     ]
+    objects.append(compile_binary(out, "zcode-driver-tests",
+        ["Native/SkinHostContract.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinDriverTests.swift"]))
     objects.append(asset_builder_checks(out, raw_dir))
 
     environment = os.environ.copy()
-    for name, binary in zip(["startup", "wallpaper", "registry-test", "registry-cli", "startup-cli"], objects[:5]):
+    for name, binary in zip(["startup", "wallpaper", "registry-test", "registry-cli", "startup-cli", "zcode-driver"], objects[:6]):
         environment["LLVM_PROFILE_FILE"] = str(raw_dir / f"{name}-%p.profraw")
-        if name == "startup":
+        if name == "zcode-driver":
+            run([str(binary)], cwd=ROOT, log=out / "logs" / "zcode-driver-tests.log", env=environment)
+        elif name == "startup":
             run([str(binary)], cwd=ROOT, log=out / "logs" / "startup-tests.log", env=environment)
         elif name == "wallpaper":
             run([str(binary)], cwd=ROOT, log=out / "logs" / "wallpaper-tests.log", env=environment)
