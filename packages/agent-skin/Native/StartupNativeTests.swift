@@ -54,6 +54,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     private var pendingOpenCompletion: (((any NativeApplication)?, Error?) -> Void)?
     private(set) var openCount = 0
     private(set) var openedPorts: [Int] = []
+    private(set) var openedEnvironments: [[String: String]] = []
     var startupTargetSystem: (any StartupTargetSystem)?
     var startupTransportFactory: ((NativeStartupCapture, NativeStartupEventStream) -> any StartupTransport)?
     var lockBusy = false
@@ -89,6 +90,11 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
             return
         }
         completion(openedApplication, openError)
+    }
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        openedEnvironments.append(environment)
+        openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
     }
     func completePendingOpen() {
         let completion = pendingOpenCompletion
@@ -3216,6 +3222,58 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
         onEvent: { _ in }, installationProbe: {})
     do { _ = try await bridge.makeAssembly().openApplication(110);preconditionFailure("stale proof must refuse before open") } catch { checks += 1 }
     expect(fake.openCount == 0 && fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: state.path), "stale proof takes no host/port/directory effects")
+    let listenerState = temporary.appendingPathComponent("listener-fixture")
+    try FileManager.default.createDirectory(at: listenerState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let listenerApp = FakeNativeApplication(pid: 654321, bundleIdentifier: key.bundleIdentifier,
+        bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
+    let process = HostProcessGeneration(pid: listenerApp.processIdentifier, launchTime: 50, executableURL: key.executableURL)
+    fake.applications = [listenerApp]
+    let record: [String: Any] = ["pid": process.pid, "launchTime": 50.0, "port": 45678, "executableSHA256": key.executableSHA256]
+    try JSONSerialization.data(withJSONObject: record).write(to: listenerState.appendingPathComponent("launch-receipt.json"))
+    let invalidListeners: [ZCodeNativeRuntime.ListenerCommandResult] = [
+        .init(status: 0, stdout: Data("p654321\nn127.0.0.1:45678\n".utf8), stderr: Data("warning".utf8)),
+        .init(status: 2, stdout: Data(), stderr: Data()),
+        .init(status: 0, stdout: Data([255]), stderr: Data()),
+        .init(status: 0, stdout: Data(repeating: 65, count: 65536), stderr: Data()),
+        .init(status: 0, stdout: Data("p999999\nn127.0.0.1:45678\n".utf8), stderr: Data()),
+        .init(status: 0, stdout: Data("p654321\nn0.0.0.0:45678\n".utf8), stderr: Data()),
+        .init(status: 0, stdout: Data("n127.0.0.1:45678\n".utf8), stderr: Data()),
+    ]
+    for result in invalidListeners {
+        var calls: [Int32] = []
+        let checked = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+            onEvent: { _ in }, installationProbe: {}, listenerCommand: { pid in calls.append(pid);return result })
+        do { _ = try await checked.makeAssembly().attach(process, 110);preconditionFailure("invalid listener evidence accepted") }
+        catch { checks += 1 }
+        expect(calls == [process.pid], "only the bound synthetic process is queried once before refusal")
+    }
+    var cleanNotReadyCalls = 0
+    let notReady = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in
+            cleanNotReadyCalls += 1;fake.uptime = 111
+            return .init(status: 1, stdout: Data(), stderr: Data())
+        })
+    do { _ = try await notReady.makeAssembly().attach(process, 110);preconditionFailure("clean empty inspection cannot mean ready") }
+    catch { checks += 1 }
+    expect(cleanNotReadyCalls == 1, "empty successful query remains not-ready until bounded deadline")
+    fake.uptime = 101
+    let absent = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("stale process must refuse before listener query") })
+    fake.applications = []
+    do { try absent.makeAssembly().validateProcess(process);preconditionFailure("missing process accepted") }
+    catch { checks += 1 }
+    fake.applications = [listenerApp]
+    let symbolicState = temporary.appendingPathComponent("symbolic-listener")
+    try FileManager.default.createSymbolicLink(at: symbolicState, withDestinationURL: listenerState)
+    let publicState = temporary.appendingPathComponent("too-wide-listener")
+    try FileManager.default.createDirectory(at: publicState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: publicState.path)
+    for invalidState in [symbolicState, publicState] {
+        let rejected = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: invalidState,
+            onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("invalid directory must refuse before process query") })
+        do { _ = try await rejected.makeAssembly().attach(process, 110);preconditionFailure("invalid directory accepted") }
+        catch let error as StartupFailure { expect(error.reason == "profile-isolation-unproven", "directory hint normalization preserves symlink and private-permission guards") }
+    }
     var captured: NSWorkspace.OpenConfiguration?
     let system = SystemNativeAppRuntime(openApplication: { _, config, done in captured = config;done(nil, nil) })
     let environment = ["HOME": "/synthetic/owned/home", "ZCODE_DATA_BASE_DIR": "/synthetic/owned/business"]

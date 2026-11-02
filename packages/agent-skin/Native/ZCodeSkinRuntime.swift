@@ -272,6 +272,13 @@ import Darwin
     private let stateRoot: URL
     private let onEvent: ([String: Any]) -> Void
     private let installationProbe: (() throws -> Void)?
+    struct ListenerCommandResult {
+        let status: Int32
+        let stdout: Data
+        let stderr: Data
+    }
+    typealias ListenerCommandRunner = (Int32) throws -> ListenerCommandResult
+    private let listenerCommand: ListenerCommandRunner
     private var port: Int?
     private var connection: ZCodeBoundCDP?
     private var opening: StartupApplicationWaiter?
@@ -283,9 +290,11 @@ import Darwin
         "Contents/Resources/app.asar": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
     ]
     init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
-         stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil) {
+         stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil,
+         listenerCommand: ListenerCommandRunner? = nil) {
         self.inputs = inputs;self.runtime = runtime;self.readPayload = readPayload
         self.stateRoot = stateRoot;self.onEvent = onEvent;self.installationProbe = installationProbe
+        self.listenerCommand = listenerCommand ?? { try Self.runListenerCommand($0) }
     }
     private func failure(_ reason: String) -> StartupFailure { StartupFailure(reason: reason, message: "ZCode 接入未通过本次核验。") }
     private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
@@ -338,8 +347,12 @@ import Darwin
         guard let app = runtime.application(processIdentifier: process.pid), try generation(app) == process else { throw failure("target-identity") }
     }
     private func directory(_ url: URL, create: Bool) throws {
-        guard url.isFileURL, url.path.hasPrefix("/"), url.standardizedFileURL == url,
-              url.resolvingSymlinksInPath() == url else { throw failure("profile-isolation-unproven") }
+        // Foundation discovers the directory hint after creation. Compare the
+        // same explicit hint on both sides; path/symlink checks stay exact.
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw failure("profile-isolation-unproven") }
+        if !components.percentEncodedPath.hasSuffix("/") { components.percentEncodedPath += "/" }
+        guard let directoryURL = components.url, url.isFileURL, url.path.hasPrefix("/"), directoryURL.standardizedFileURL == directoryURL,
+              directoryURL.resolvingSymlinksInPath() == directoryURL else { throw failure("profile-isolation-unproven") }
         if create { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]) }
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         guard attributes[.type] as? FileAttributeType == .typeDirectory,
@@ -402,16 +415,22 @@ import Darwin
     // Only the exact pid's listener metadata is queried; exit1 with empty output
     // is a clean not-ready result, while any diagnostic/nonzero result refuses.
     private func listenerRows(_ process: HostProcessGeneration) throws -> String {
+        let result = try listenerCommand(process.pid)
+        return try Self.validatedListenerOutput(status: result.status, stdout: result.stdout, stderr: result.stderr)
+    }
+    // Internal test injection cannot be selected through App configuration or CLI.
+    // Production always uses this same bounded Process adapter by default.
+    private static func runListenerCommand(_ pid: Int32) throws -> ListenerCommandResult {
         let command = Process(), output = Pipe(), errors = Pipe(), done = DispatchSemaphore(value: 0)
         command.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        command.arguments = ["-nP", "-a", "-p", String(process.pid), "-iTCP", "-sTCP:LISTEN", "-FpfnT"]
+        command.arguments = ["-nP", "-a", "-p", String(pid), "-iTCP", "-sTCP:LISTEN", "-FpfnT"]
         command.standardOutput = output;command.standardError = errors;command.terminationHandler = { _ in done.signal() }
         try command.run()
         if done.wait(timeout: .now()+2) == .timedOut {
             command.terminate();if done.wait(timeout: .now()+0.2) == .timedOut { kill(command.processIdentifier, SIGKILL) }
-            throw failure("inspection-timeout")
+            throw StartupFailure(reason: "inspection-timeout", message: "ZCode 接入未通过本次核验。")
         }
-        return try Self.validatedListenerOutput(status: command.terminationStatus,
+        return ListenerCommandResult(status: command.terminationStatus,
             stdout: output.fileHandleForReading.readDataToEndOfFile(), stderr: errors.fileHandleForReading.readDataToEndOfFile())
     }
     static func validatedListenerOutput(status: Int32, stdout: Data, stderr: Data) throws -> String {
