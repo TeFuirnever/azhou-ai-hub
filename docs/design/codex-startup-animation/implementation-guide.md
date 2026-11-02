@@ -1,5 +1,7 @@
 # Agent执行指南：Agent Skin 首期 Codex 适配
 
+> 历史执行稿（2026-10-27）：本文中的路径、Planned 阶段和授权状态只反映当时的迁移基线；Agent Skin 已迁至 `packages/agent-skin/`。当前包入口、命令和验收边界以[包说明](../../../packages/agent-skin/README.md)、[接入操作说明](../../integrations.md)、[功能测试](../../../packages/agent-skin/docs/testing.md)和[支持矩阵](../../support-matrix.md)为准。本文不代表当前安装获准或真实宿主验收已通过。
+
 本文件是[详细设计](detailed-design.md)的执行分支，全部新代码和命令为Planned。它不登记tracker状态；工作单完成情况写在实际任务回执中。只改文档时不执行下列产品实现、安装或宿主写入。
 
 用户已确认产品名 Agent Skin、包名 `agent-skin`，面向 AI 工具的启动动画、壁纸和外观设置，本轮仅完成 Codex 适配。当前真实包目录和 Hub 入口尚未更名；下文现有路径仍指实际对象。命名/迁移前置单完成时同步修正未来命令与调用方，不新增其他宿主实现。
