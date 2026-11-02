@@ -127,6 +127,36 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     private(set) var processExitCode: Int32 = 0
 }
 
+/// Old conformers deliberately implement only the original open method.
+@MainActor
+private final class LegacyOnlyNativeRuntime: NativeAppRuntime {
+    let base = FakeNativeAppRuntime(arguments: ["synthetic-legacy"])
+    var arguments: [String] { base.arguments }
+    var epoch: TimeInterval { base.epoch }
+    var uptime: TimeInterval { base.uptime }
+    var processIdentifier: Int { base.processIdentifier }
+    var bundleURL: URL { base.bundleURL }
+    var resourceURL: URL? { base.resourceURL }
+    var frontmostApplication: (any NativeApplication)? { base.frontmostApplication }
+    func appearanceTheme() -> String { base.appearanceTheme() }
+    func runningApplications(bundleIdentifier: String) -> [any NativeApplication] { base.runningApplications(bundleIdentifier: bundleIdentifier) }
+    func application(processIdentifier: Int32) -> (any NativeApplication)? { base.application(processIdentifier: processIdentifier) }
+    func urlForApplication(bundleIdentifier: String) -> URL? { base.urlForApplication(bundleIdentifier: bundleIdentifier) }
+    func openApplication(at url: URL, debuggingPort: Int, completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        base.openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
+    }
+    func acquireInstanceLock(identifier: String) -> NativeLockAcquisition { base.acquireInstanceLock(identifier: identifier) }
+    func allocateLoopbackPort() throws -> Int { try base.allocateLoopbackPort() }
+    func makeStartupTargetSystem() -> any StartupTargetSystem { base.makeStartupTargetSystem() }
+    func makeStartupTransport(capture: NativeStartupCapture, events: NativeStartupEventStream) -> any StartupTransport { base.makeStartupTransport(capture: capture, events: events) }
+    func systemFallbackLocale() -> NativeDisplayLocale { base.systemFallbackLocale() }
+    func setAccessoryPolicy() { base.setAccessoryPolicy() }
+    func activateIgnoringOtherApps() { base.activateIgnoringOtherApps() }
+    func terminate() { base.terminate() }
+    func exit(code: Int32) { base.exit(code: code) }
+    func writeStandardOutput(_ line: String) { base.writeStandardOutput(line) }
+}
+
 @MainActor
 private final class FakeScheduledAction: NativeScheduledAction {
     let delay: TimeInterval
@@ -3525,6 +3555,22 @@ private func nativePureStatusContractChecks() -> Int {
         precondition(condition(), label)
         checks += 1
     }
+    let old = LegacyOnlyNativeRuntime()
+    let legacy: any NativeAppRuntime = old
+    var completions = 0
+    var refusal: NSError?
+    legacy.openApplication(at: URL(fileURLWithPath: "/synthetic/Legacy.app"), debuggingPort: 1337, environment: ["HOME": "/synthetic/home"]) { app, error in
+        expect(app == nil, "legacy runtime cannot pretend to open with an unimplemented environment")
+        refusal = error as NSError?;completions += 1
+    }
+    expect(completions == 1 && refusal?.domain == "local.azhou.zcode-startup" && refusal?.code == 1 && old.base.openCount == 0,
+           "nonempty environment refuses before the legacy open path, preserving isolation")
+    legacy.openApplication(at: URL(fileURLWithPath: "/synthetic/Legacy.app"), debuggingPort: 1337, environment: [:]) { _, error in
+        expect(error == nil, "empty environment retains the original legacy callback")
+        completions += 1
+    }
+    expect(completions == 2 && old.base.openCount == 1 && old.base.openedPorts == [1337] && old.base.openedEnvironments.isEmpty,
+           "empty environment forwards exactly once to the original open method")
     func status(phase: String = "loading", ready: Bool = false, completed: Bool = false,
                 overlay: Bool = true, completion: Any = NSNull(), reason: String = "") -> [String: Any] {
         ["owner": "azhou-codex-startup", "version": 1, "runId": 7, "phase": phase,
