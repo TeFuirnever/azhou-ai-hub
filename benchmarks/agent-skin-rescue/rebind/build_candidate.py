@@ -1,12 +1,14 @@
-"""Build retained source-copy resources with explicit diagnostic and default paths.
+"""Build retained source-copy resources from the exact historical build 31 tree.
 
-Source is extracted from the public anchor commit, so a fresh clone can run the
-whole composition. All subprocesses operate on private copies. This never
-builds, installs, signs, launches, or connects to a host application.
+The source is reconstructed without the unpublished historical commit object:
+the public anchor archive plus the tracked, digest-pinned restoration patch,
+verified by Git tree id before use. All subprocesses operate on private copies.
+This never builds, installs, signs, launches, or connects to a host application.
 """
 from pathlib import Path
 from types import SimpleNamespace
 import argparse
+import base64
 import hashlib
 import importlib.util
 import io
@@ -22,6 +24,9 @@ from source_patch import patch_sources
 
 ANCHOR = "b689702097be8bd3e2a4b6f2a10afb348cf5cb37"
 ANCHOR_TREE = "93de39312c4a7aadaa2800ff2d60d52de3e4aac7"
+BASELINE = "8eec664611c2f679be6714bd888a07d764459c8a"
+BASELINE_TREE = "3060b7e3587b37a0486c54423f76bb3d792c7b6d"
+RESTORATION_SHA256 = "5b5382b8b4dcfd4dfe1894ff4140fec1ac6c5dbc7146d320de92e429e5a045fb"
 MATERIALS = {
     "working.png": ("working.png", "34dc9a8e9c06c226ec0cc80878548f118ff4a23b4a87d160674e66db4a905e58"),
     "wallpaper-scene-q-v3.png": ("wallpaper-scene-q-v3.png", "566eee5034343bb8463fa684dc0b90fe3d2c5d8f2adde1c9d71356bf192acbcb"),
@@ -53,6 +58,33 @@ def copy_new(source, destination):
         raise ValueError("copy input changed")
 
 
+def restoration_patch(destination, encoded=None):
+    source = Path(encoded) if encoded is not None else Path(__file__).parent / "restoration.patch.b64"
+    patch_bytes = base64.b64decode("".join(source.read_text().splitlines()), validate=True)
+    if hashlib.sha256(patch_bytes).hexdigest() != RESTORATION_SHA256:
+        raise ValueError("restoration patch digest mismatch")
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with destination.open("xb") as handle:
+        handle.write(patch_bytes)
+    return destination
+
+
+def restored_tree_id(directory, scratch):
+    scratch.mkdir(mode=0o700)
+    gitdir, index = scratch / "restore.git", scratch / "add.index"
+    subprocess.run(["git", "init", "-q"], env=dict(os.environ, GIT_DIR=str(gitdir)), check=True,
+                   stdin=subprocess.DEVNULL, capture_output=True)
+    environment = dict(os.environ, GIT_DIR=str(gitdir), GIT_WORK_TREE=str(directory),
+                       GIT_INDEX_FILE=str(index), GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null")
+    try:
+        subprocess.run(["git", "add", "-A", "--force"], cwd=directory, env=environment, check=True,
+                       stdin=subprocess.DEVNULL, capture_output=True)
+        return subprocess.check_output(["git", "write-tree"], env=environment, stdin=subprocess.DEVNULL,
+                                       text=True, encoding="ascii").strip()
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
 def prepare(root, source, materials, tools):
     if not root.is_absolute() or root.resolve() != root or root.exists():
         raise ValueError("root must be a new absolute private container")
@@ -82,6 +114,17 @@ def prepare(root, source, materials, tools):
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             with destination.open("xb") as handle:
                 handle.write(bundle.extractfile(entry).read())
+            os.chmod(destination, entry.mode & 0o777)
+    patch_file = restoration_patch(root / "restoration.patch")
+    try:
+        applied = subprocess.run(["patch", "--batch", "--forward", "-p3", "-i", str(patch_file)],
+                                 cwd=baseline, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8")
+    finally:
+        patch_file.unlink()
+    if applied.returncode != 0:
+        raise ValueError("build-31 restoration patch failed: " + applied.stderr.strip()[:400])
+    if restored_tree_id(baseline, root / "restoration-scratch") != BASELINE_TREE:
+        raise ValueError("restored build-31 tree mismatch")
     material_root = root / "materials/assets/private"
     for destination, (origin, expected) in MATERIALS.items():
         path = materials / origin
@@ -185,9 +228,11 @@ def build(root, output):
     logger.record(["node", str(tooling / "rebind/assembly_controls.cjs"), str(output)], cwd=output, env=environment, check=True)
     item = lambda path: {"path": str(path.relative_to(root)), "sha256": sha(path)}
     receipts = [item(path) for path in sorted(commands.glob("*/command.json"))]
-    binding = {"kind": "A", "schema": "offline-resource-binding.v1", "source_commit": ANCHOR,
-               "source_baseline": {"anchor_commit": ANCHOR, "anchor_tree": ANCHOR_TREE,
-                                   "scope": "public monorepo source at the anchor; the unpublished historical build-31 tree is not reconstructed"},
+    binding = {"kind": "A", "schema": "offline-resource-binding.v1", "source_commit": BASELINE,
+               "source_baseline": {"commit": BASELINE, "tree": BASELINE_TREE,
+                                   "scope": "exact historical build-31 source tree, reconstructed from the public anchor and the tracked restoration patch; the unpublished historical commit object is not required",
+                                   "anchor": {"commit": ANCHOR, "tree": ANCHOR_TREE},
+                                   "restoration_patch_sha256": RESTORATION_SHA256},
                "scope": "real registered private resources and source-copy builders; VM fixtures only; no host",
                "inputs": inputs, "source_stage": str(source.relative_to(root)), "source_inputs": source_inputs,
                "base_payload": item(base), "startup_manifest": item(resources / "startup/manifest.json"),

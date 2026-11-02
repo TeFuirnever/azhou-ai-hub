@@ -45,7 +45,7 @@ class BindingTests(unittest.TestCase):
         manifest=item("build/manifest.json","{}")
         wrapper=item("build/mount.js","synthetic wrapper")
         source=item("build/source/input.js","fixed input")
-        binding={"kind":"A","scope":"synthetic unit fixture", "source_commit":"b689702097be8bd3e2a4b6f2a10afb348cf5cb37", "inputs":[source],"source_stage":"build/source","source_inputs":{"input.js":source["sha256"]},"base_payload":payload,"startup_manifest":manifest,"wrappers":{"mount":dict(wrapper,config={"owner":"fixture"}),"clean":wrapper},"command_count":0,"commands":[]}
+        binding={"kind":"A","scope":"synthetic unit fixture", "source_commit":"8eec664611c2f679be6714bd888a07d764459c8a", "inputs":[source],"source_stage":"build/source","source_inputs":{"input.js":source["sha256"]},"base_payload":payload,"startup_manifest":manifest,"wrappers":{"mount":dict(wrapper,config={"owner":"fixture"}),"clean":wrapper},"command_count":0,"commands":[]}
         bp=root/"build/binding.json";bp.write_text(json.dumps(binding))
         producer={"argv":["synthetic-fixture"],"observed_at":"2026-11-01T00:00:00Z","signal":None,"kind":"C","execution_state":"exited","exit_code":0,"error":None,"inputs_unchanged":True,"argument_inputs_unchanged":True,"evidence_errors":[],"evidence_complete":True,"inputs":[],"argument_inputs":[],"outputs":{"raw_files":[]},"artifacts":[{"source_path":"build/binding.json","relation":"produced","source_sha256":hashlib.sha256(bp.read_bytes()).hexdigest()}]}
         pp=root/"producer.json";pp.write_text(json.dumps(producer));return bp,pp
@@ -132,6 +132,8 @@ class AnchorRestorationTests(unittest.TestCase):
         git("-c", "user.email=fixture@example.com", "-c", "user.name=fixture", "commit", "-q", "-m", "fixture")
         return repo
 
+    RESTORED_HUB_SHA256 = "69abd69f66f0d92f0d16ab6622e293fc0a7f43f8725d6e531527b48238796189"
+
     def test_missing_public_anchor_is_reported_before_any_extraction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
@@ -140,18 +142,30 @@ class AnchorRestorationTests(unittest.TestCase):
                 prepare(root / "candidate", self.synthetic_repo(root) / "packages/agent-skin", root, HERE)
             self.assertFalse((root / "candidate/baseline").exists())
 
-    def test_anchor_source_prepares_then_unregistered_material_bytes_are_refused(self):
+    def test_restores_exact_build31_tree_without_the_historical_object_and_refuses_material_drift(self):
+        from build_candidate import BASELINE, BASELINE_TREE, prepare, restored_tree_id
+        self.assertNotEqual(0, subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", BASELINE + "^{commit}"], capture_output=True).returncode)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
             materials = root / "materials"; materials.mkdir(mode=0o700)
             (materials / "working.png").write_bytes(b"drift")
-            from build_candidate import prepare
             with self.assertRaisesRegex(ValueError, "registered material digest mismatch"):
                 prepare(root / "candidate", ROOT / "packages/agent-skin", materials, HERE)
-            extracted = root / "candidate/baseline/hub-package.json"
-            self.assertTrue(extracted.is_file())
-            self.assertEqual(hashlib.sha256(extracted.read_bytes()).hexdigest(),
-                             hashlib.sha256((ROOT / "packages/agent-skin/hub-package.json").read_bytes()).hexdigest())
+            self.assertFalse((root / "candidate/materials").exists())
+            self.assertEqual(restored_tree_id(root / "candidate/baseline", root / "tree-check"), BASELINE_TREE)
+            hub = hashlib.sha256((root / "candidate/baseline/hub-package.json").read_bytes()).hexdigest()
+            self.assertEqual(hub, self.RESTORED_HUB_SHA256)
+
+    def test_restoration_patch_digest_drift_is_refused(self):
+        from build_candidate import RESTORATION_SHA256, restoration_patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            destination = restoration_patch(root / "patch.out")
+            self.assertEqual(hashlib.sha256(destination.read_bytes()).hexdigest(), RESTORATION_SHA256)
+            corrupted = root / "corrupt.b64"
+            corrupted.write_text("X" + (HERE / "rebind/restoration.patch.b64").read_text()[1:])
+            with self.assertRaisesRegex(ValueError, "restoration patch digest mismatch"):
+                restoration_patch(root / "patch-2.out", encoded=corrupted)
 
     def test_harness_patch_bytes_are_pinned(self):
         import run_browser as harness

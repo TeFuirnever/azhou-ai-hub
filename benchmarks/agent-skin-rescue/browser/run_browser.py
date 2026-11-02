@@ -16,10 +16,11 @@ import sys
 
 ANCHOR = "b689702097be8bd3e2a4b6f2a10afb348cf5cb37"
 EXPECTED = {
-    "test-startup-browser.mjs": "aeab9fd4f364733430884944d0244c2600f35acbdc7236161ee6f3317c8bde16",
+    "test-startup-browser.mjs": "0ffb327cf7071965504512c668bead84725b91972c2d70360dd6775484ac7355",
     "fixture-browser-lifecycle.mjs": "559ef05ea3f71ffaf3b64c65157476feeb9aa54c24c97b40c64777b00bafab77",
 }
 HARNESS_PATCH_SHA256 = "9f98ade764e5f0f6d66a1808976a39dfe306748e834bc16ba2f12bd7ee9bc396"
+WALLPAPER_SUBTREE = "92cfa938ad3f342c9d3111e4a6114cd3f37c7a8b"
 WALLPAPERS = {
     "wallpaper.css": "e2974673a1c92d2d1f4c8b36cfc695d5806bb975e4c7c27f70b430fc4dbfc16a",
     "renderer.js": "38226c5f4d31ba773def9eca1f69e44048c5e7d9a6206fd9bdc1dae43149a933",
@@ -49,6 +50,9 @@ def read_patch(root):
 
 def restore_wallpapers(root, fixture_repo):
     require_anchor(fixture_repo)
+    subtree = subprocess.check_output(["git", "-C", str(fixture_repo), "rev-parse", ANCHOR + ":packages/codex-startup-animation/wallpaper"], text=True, encoding="ascii").strip()
+    if subtree != WALLPAPER_SUBTREE:
+        raise ValueError("wallpaper subtree mismatch at the public anchor")
     for name, digest in WALLPAPERS.items():
         data = subprocess.check_output(["git", "-C", str(fixture_repo), "show", ANCHOR + ":packages/codex-startup-animation/wallpaper/" + name])
         if hashlib.sha256(data).hexdigest() != digest:
@@ -109,10 +113,10 @@ def prepare(args):
     copy_file(resource / normal["path"], root / "normal/install.js")
     copy_file(resource / manifest["path"], root / "normal/manifest.json")
     restore_wallpapers(root, Path(__file__).resolve().parents[3])
-    provenance = {"scope": "same new resource candidate, public-anchor source with recorded fixture restoration; fixture only",
-                  "source_anchor": {"commit": ANCHOR,
-                                    "wallpaper": {"source_commit": ANCHOR, "digests": WALLPAPERS,
-                                                  "historical_baseline": "copies recorded as identical at the historical baseline; digests re-verified on every run"}},
+    provenance = {"scope": "same new resource candidate, exact build-31 source restoration, verified legacy wallpaper subtree; fixture only",
+                  "source_baseline": binding["source_baseline"],
+                  "wallpaper": {"source_commit": ANCHOR, "source_subtree": WALLPAPER_SUBTREE, "digests": WALLPAPERS,
+                                "historical_baseline": "wallpaper subtree identical at the public anchor and the historical build-31 baseline; digests re-verified on every run"},
                   "source_binding": {"path": str(binding_path), "sha256": sha(binding_path)},
                   "source_producer": {"path": str(producer_path), "sha256": sha(producer_path)},
                   "normal_payload": {"path": "normal/install.js", "sha256": sha(root / "normal/install.js")},
