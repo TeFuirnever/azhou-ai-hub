@@ -159,6 +159,6 @@ def main():
  finally:server.shutdown();server.server_close();thread.join(timeout=2)
  (out/'stdout.bin').write_bytes(stdout);(out/'stderr.bin').write_bytes(stderr);(out/'mock-protocol.json').write_text(json.dumps(server.fixture.log,indent=2)+'\n')
  methods={r.get('method') for r in server.fixture.log};exercised={'Runtime.callFunctionOn','Runtime.evaluate'}<=methods
- result={'argv':[str(args.binary.resolve()),'--zcode-runtime-fixture','<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':False,'passed':code==0 and exercised}
+ result={'argv':[str(args.binary.resolve()),'--zcode-runtime-fixture','<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':True,'OS_query_scope':'native test binary self-PID listener metadata only','passed':code==0 and exercised}
  (out/'report.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 0 if result['passed'] else 1
 if __name__=='__main__':raise SystemExit(main())
