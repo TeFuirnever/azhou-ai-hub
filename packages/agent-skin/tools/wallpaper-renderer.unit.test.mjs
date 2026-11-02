@@ -684,3 +684,30 @@ test('ZCode refuses protected, ambiguous or foreign-marked surfaces before styli
     } finally { fixture.restore(); }
   }
 });
+
+
+test('ZCode does not overwrite a surface marker changed during decode or before replacement', async () => {
+  for (const mode of ['during-decode', 'replacement']) {
+    const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+    try {
+      const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+      main.tagName = 'MAIN';fixture.applicationRoot.contains = node => node === main;
+      const adapter = Object.freeze({ controllerOwner: 'azhou-zcode-startup', identify: () => ({ kind: 'matched' }),
+        wallpaperShellState: () => 'ready', wallpaperSurfaces: () => [main] });
+      const payload = { ...fixture.payload, pageAdapter: adapter };
+      let previous;
+      if (mode === 'replacement') {
+        await installRenderer(payload);previous = globalThis.__azhouWallpaper;
+        main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign');
+      } else {
+        const decode = fixture.image.decode;
+        fixture.image.decode = async function () { await decode.call(this);main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign'); };
+      }
+      await assert.rejects(installRenderer(payload), /namespace-conflict|namespace-changed-during-decode/);
+      assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+      assert.equal(globalThis.__azhouWallpaper, previous);
+      if (previous) previous.dispose();
+      assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+    } finally { fixture.restore(); }
+  }
+});

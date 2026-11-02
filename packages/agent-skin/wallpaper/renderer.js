@@ -176,10 +176,15 @@ export async function installRenderer(payload) {
       || typeof ownValue(previous, 'dispose') !== 'function' || typeof ownValue(previous, 'status') !== 'function')) {
     throw problem('namespace-conflict');
   }
-  if (zcode && !previous && [applicationRoot, ...currentSurfaces()]
-      .some(node => node.getAttribute('data-azhou-zcode-wallpaper-surface') !== null)) {
-    throw problem('namespace-conflict');
-  }
+  const ownsSurfaceMarkers = current => {
+    if (!zcode) return true;
+    const recorded = ownValue(ownValue(current, BASELINE_KEY), 'zcodeAttributes');
+    return [applicationRoot, ...currentSurfaces()].every(node => {
+      const value = node.getAttribute('data-azhou-zcode-wallpaper-surface');
+      return value === null || (value === 'active' && recorded instanceof Map && recorded.has(node));
+    });
+  };
+  if (!ownsSurfaceMarkers(previous)) throw problem('namespace-conflict');
   const existingStyle = document.getElementById(STYLE_ID);
   if (existingStyle && (!previous || existingStyle.getAttribute('data-azhou-owner') !== OWNER)) {
     throw problem('style-id-conflict');
@@ -218,6 +223,10 @@ export async function installRenderer(payload) {
     throw problem('namespace-changed-during-decode');
   }
   if (active !== previous) {
+    URL.revokeObjectURL(imageURL); image.src = '';
+    throw problem('namespace-changed-during-decode');
+  }
+  if (!ownsSurfaceMarkers(active)) {
     URL.revokeObjectURL(imageURL); image.src = '';
     throw problem('namespace-changed-during-decode');
   }
