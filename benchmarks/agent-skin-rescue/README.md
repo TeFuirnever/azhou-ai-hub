@@ -57,8 +57,9 @@ component or browser suites; run them separately as described here.
 The source-verification entrypoint runs every existing repository gate and keeps
 all tracked source, including this candidate, in the public file inventory. Only
 untracked root `.scratch/` and the retained `benchmarks/agent-skin-rescue/.scratch/`
-runtime data are process-locally ignored: those preserved
-negative fixtures deliberately contain invalid JSON and links. A process-local
+runtime data stay out of that inventory — durably via the committed `.gitignore`,
+re-asserted process-locally during verification: those preserved negative fixtures
+deliberately contain invalid JSON and links. A process-local
 Git discovery ceiling keeps synthetic independent projects from inheriting the
 enclosing repository remote. HOME remains private at its original long path;
 no assertion, repository configuration, global configuration, or test is removed.
