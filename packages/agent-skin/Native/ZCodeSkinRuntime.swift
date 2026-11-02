@@ -271,6 +271,7 @@ import Darwin
     private let readPayload: () throws -> String
     private let stateRoot: URL
     private let onEvent: ([String: Any]) -> Void
+    private let installationProbe: (() throws -> Void)?
     private var port: Int?
     private var connection: ZCodeBoundCDP?
     private var opening: StartupApplicationWaiter?
@@ -282,9 +283,9 @@ import Darwin
         "Contents/Resources/app.asar": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
     ]
     init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
-         stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void) {
+         stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil) {
         self.inputs = inputs;self.runtime = runtime;self.readPayload = readPayload
-        self.stateRoot = stateRoot;self.onEvent = onEvent
+        self.stateRoot = stateRoot;self.onEvent = onEvent;self.installationProbe = installationProbe
     }
     private func failure(_ reason: String) -> StartupFailure { StartupFailure(reason: reason, message: "ZCode 接入未通过本次核验。") }
     private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
@@ -297,6 +298,7 @@ import Darwin
         guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.1", key.build == "3.17.1.9553",
               key.bundleURL.path == "/Applications/ZCode.app", key.executableURL.path == "/Applications/ZCode.app/Contents/MacOS/ZCode",
               key.executableSHA256 == expectedFiles["Contents/MacOS/ZCode"] else { throw failure("target-identity") }
+        if let installationProbe { try installationProbe();return }
         if installation.isEmpty {
             var observed: [String: [FileAttributeKey: Any]] = [:]
             for (name, hash) in expectedFiles {
@@ -357,6 +359,9 @@ import Darwin
     }
     private func open(_ deadline: TimeInterval) async throws -> HostProcessGeneration {
         try checkTime(deadline);guard try running().isEmpty else { throw failure("target-identity") }
+        let coldPayload = try readPayload()
+        try validateUIProof(payloadSHA256: digest(Data(coldPayload.utf8)))
+        try checkTime(deadline)
         let env = try environment();let chosen = try runtime.allocateLoopbackPort();port = chosen
         onEvent(["stage": "zcode-open-request", "debuggingPort": chosen, "entryPID": runtime.processIdentifier,
                  "environmentKeys": env.keys.sorted(), "host_is_not_native_child": true])
@@ -397,18 +402,23 @@ import Darwin
     // Only the exact pid's listener metadata is queried; exit1 with empty output
     // is a clean not-ready result, while any diagnostic/nonzero result refuses.
     private func listenerRows(_ process: HostProcessGeneration) throws -> String {
-        let command = Process(), pipe = Pipe(), done = DispatchSemaphore(value: 0)
+        let command = Process(), output = Pipe(), errors = Pipe(), done = DispatchSemaphore(value: 0)
         command.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         command.arguments = ["-nP", "-a", "-p", String(process.pid), "-iTCP", "-sTCP:LISTEN", "-FpfnT"]
-        command.standardOutput = pipe;command.standardError = pipe;command.terminationHandler = { _ in done.signal() }
+        command.standardOutput = output;command.standardError = errors;command.terminationHandler = { _ in done.signal() }
         try command.run()
         if done.wait(timeout: .now()+2) == .timedOut {
             command.terminate();if done.wait(timeout: .now()+0.2) == .timedOut { kill(command.processIdentifier, SIGKILL) }
             throw failure("inspection-timeout")
         }
-        let bytes = pipe.fileHandleForReading.readDataToEndOfFile()
-        if command.terminationStatus == 1 && bytes.isEmpty { return "" }
-        guard command.terminationStatus == 0, bytes.count < 65536, let text = String(data: bytes, encoding: .utf8) else { throw failure("inspection-failed") }
+        return try Self.validatedListenerOutput(status: command.terminationStatus,
+            stdout: output.fileHandleForReading.readDataToEndOfFile(), stderr: errors.fileHandleForReading.readDataToEndOfFile())
+    }
+    static func validatedListenerOutput(status: Int32, stdout: Data, stderr: Data) throws -> String {
+        if status == 1 && stdout.isEmpty && stderr.isEmpty { return "" }
+        guard status == 0, stderr.isEmpty, stdout.count < 65536, let text = String(data: stdout, encoding: .utf8) else {
+            throw StartupFailure(reason: "inspection-failed", message: "ZCode listener inspection returned diagnostics or incomplete data.")
+        }
         return text
     }
     private func kernelReady(_ process: HostProcessGeneration, port: Int) throws -> Bool {
@@ -521,12 +531,24 @@ import Darwin
 extension ZCodeNativeRuntime {
     // A build-owned, hash-bound receipt from the actual UI acceptance window.
     // It is not an auth/profile file and is never synthesized from fixture passes.
+    private static func evidenceTimeValid(_ value: String) -> Bool {
+        if ISO8601DateFormatter().date(from: value) != nil { return true }
+        let fractional = ISO8601DateFormatter();fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) != nil
+    }
     private static func proof(_ resources: URL?) -> [String: Any]? {
         guard let resources else { return nil }
         let path = resources.appendingPathComponent("zcode-validation.json")
         guard path.resolvingSymlinksInPath() == path, let data = try? Data(contentsOf: path), data.count < 16384,
               let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               value["schema"] as? String == "agent-skin-zcode-ui-evidence/v1",
+              value["contractVersion"] as? String == SkinHostContract.version,
+              let recordID = value["recordID"] as? String, !recordID.isEmpty, recordID.utf8.count <= 256,
+              !recordID.contains("\n"),
+              let recordSHA = value["recordSHA256"] as? String, recordSHA.utf8.count == 64,
+              recordSHA.allSatisfy({ "0123456789abcdef".contains($0) }),
+              let observedAt = value["observedAt"] as? String, evidenceTimeValid(observedAt),
+              value["infoSHA256"] as? String == "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
               value["version"] as? String == "3.17.1.9553",
               value["executableSHA256"] as? String == "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
               value["appAsarSHA256"] as? String == "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",

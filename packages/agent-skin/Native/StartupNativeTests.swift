@@ -4,6 +4,7 @@ import Foundation
 import Darwin
 import AppKit
 import WebKit
+import CryptoKit
 
 @MainActor
 private final class FakeNativeApplication: NativeApplication {
@@ -57,6 +58,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     var startupTransportFactory: ((NativeStartupCapture, NativeStartupEventStream) -> any StartupTransport)?
     var lockBusy = false
     var lockError: Int32?
+    private(set) var allocationCount = 0
     var allocatedPort = 45678
     var allocatedPortError: NativeLoopbackPortError?
     var allocationError: Error?
@@ -100,6 +102,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
         return .acquired(lock)
     }
     func allocateLoopbackPort() throws -> Int {
+        allocationCount += 1
         if let allocatedPortError { throw allocatedPortError }
         if let allocationError { throw allocationError }
         return allocatedPort
@@ -898,6 +901,7 @@ struct StartupNativeTests {
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
+        checks += try await zcodeRuntimeReviewChecks()
         #endif
 
         print("Startup native checks passed: \(checks). Scope: injected host facts and transport only; no real open/kill.")
@@ -3177,3 +3181,47 @@ private final class LostReplyStartupTransport: StartupTransport {
     func close() {}
 }
 #endif
+
+
+@MainActor
+private func zcodeRuntimeReviewChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: Bool, _ message: String) { precondition(value, message);checks += 1 }
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: nil) == nil, "ZCode missing host must not choose Codex")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "codex") == nil, "ZCode wrong host must refuse")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.codex-startup", declaredHost: nil) == .codex, "legacy Codex default preserved")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "zcode") == .zcode, "explicit ZCode identity bound")
+    let row = Data("p123\nn127.0.0.1:45678\n".utf8)
+    expect(try ZCodeNativeRuntime.validatedListenerOutput(status: 0, stdout: row, stderr: Data()) == String(decoding: row, as: UTF8.self), "clean listener output retained")
+    do { _ = try ZCodeNativeRuntime.validatedListenerOutput(status: 0, stdout: row, stderr: Data("warning".utf8));preconditionFailure("warning must refuse") } catch { checks += 1 }
+    expect(try ZCodeNativeRuntime.validatedListenerOutput(status: 1, stdout: Data(), stderr: Data()) == "", "clean empty not-ready distinct")
+    let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app",
+        version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+    let proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
+        "recordID": "SYNTHETIC-only", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T14:00:00Z",
+        "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
+        "version": "3.17.1.9553", "executableSHA256": key.executableSHA256,
+        "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "payloadSHA256": String(repeating: "a", count: 64), "evidenceIDs": ["SYNTHETIC-fixture-not-host"],
+        "ownedAppearanceSurface": true, "persistentSettings": true]
+    try JSONSerialization.data(withJSONObject: proof).write(to: temporary.appendingPathComponent("zcode-validation.json"))
+    let fake = FakeNativeAppRuntime(arguments: [], resourceURL: temporary)
+    let inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic"), findings: [], contractVersion: SkinHostContract.version)
+    let state = temporary.appendingPathComponent("must-not-create")
+    let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "different-real-bytes" }, stateRoot: state,
+        onEvent: { _ in }, installationProbe: {})
+    do { _ = try await bridge.makeAssembly().openApplication(110);preconditionFailure("stale proof must refuse before open") } catch { checks += 1 }
+    expect(fake.openCount == 0 && fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: state.path), "stale proof takes no host/port/directory effects")
+    var captured: NSWorkspace.OpenConfiguration?
+    let system = SystemNativeAppRuntime(openApplication: { _, config, done in captured = config;done(nil, nil) })
+    let environment = ["HOME": "/synthetic/owned/home", "ZCODE_DATA_BASE_DIR": "/synthetic/owned/business"]
+    system.openApplication(at: key.bundleURL, debuggingPort: 12345, environment: environment) { _, _ in }
+    expect(captured?.environment == environment && captured?.arguments == ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=12345"], "NSWorkspace receives exact explicit environment")
+    system.openApplication(at: URL(fileURLWithPath: "/synthetic/Codex.app"), debuggingPort: 12345) { _, _ in }
+    expect(captured?.environment == NSWorkspace.OpenConfiguration().environment, "Codex original configuration default environment unchanged")
+    return checks
+}

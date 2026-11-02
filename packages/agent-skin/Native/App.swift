@@ -1002,14 +1002,22 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     }
 }
 
+enum NativeEntryIdentity {
+    static func host(bundleIdentifier: String?, declaredHost: Any?) -> SkinHostID? {
+        if bundleIdentifier == "local.azhou.zcode-startup" {
+            return declaredHost as? String == "zcode" ? .zcode : nil
+        }
+        guard let declaredHost else { return .codex } // Existing Codex/legacy entries.
+        return declaredHost as? String == "codex" && bundleIdentifier == "local.azhou.codex-startup" ? .codex : nil
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private var launcherHost: SkinHostID? {
         let bundle = Bundle(url: runtime.bundleURL)
-        guard let declared = bundle?.object(forInfoDictionaryKey: "AzhouTargetHost") as? String else { return .codex }
-        if declared == "codex", bundle?.bundleIdentifier == "local.azhou.codex-startup" { return .codex }
-        if declared == "zcode", bundle?.bundleIdentifier == "local.azhou.zcode-startup" { return .zcode }
-        return nil
+        return NativeEntryIdentity.host(bundleIdentifier: bundle?.bundleIdentifier,
+            declaredHost: bundle?.object(forInfoDictionaryKey: "AzhouTargetHost"))
     }
     private var launcherID: String {
         guard let host = launcherHost else { return "local.azhou.invalid-entry" }
