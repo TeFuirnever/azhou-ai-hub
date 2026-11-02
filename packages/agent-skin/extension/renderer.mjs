@@ -62,7 +62,7 @@ function wallpaperReason(value, fallback = 'wallpaper-unsupported') {
   }
 }
 
-function existingController(host) {
+function existingController(host, owner = OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, GLOBAL_NAME);
   if (!descriptor) return { present: false };
   if (!Object.hasOwn(descriptor, 'value') || !descriptor.value || typeof descriptor.value !== 'object') {
@@ -71,7 +71,7 @@ function existingController(host) {
   const api = descriptor.value;
   return {
     present: true,
-    owned: dataProperty(api, 'owner') === OWNER
+    owned: dataProperty(api, 'owner') === owner
       && dataProperty(api, 'version') === VERSION
       && typeof dataProperty(api, 'status') === 'function'
       && typeof dataProperty(api, 'openSettings') === 'function'
@@ -128,6 +128,10 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
     setTimeout: bind('setTimeout'),
     clearTimeout: bind('clearTimeout'),
   });
+  const settingsFactory = dataProperty(payload, 'createImageSettings');
+  // Preserve the exact legacy factory when no host namespace was supplied.
+  const createSettings = environment.settingsNamespace === undefined || typeof settingsFactory !== 'function'
+    ? settingsFactory : input => settingsFactory({ ...input, settingsNamespace: environment.settingsNamespace });
   const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance });
   // Preserve the result so the settings panel can report wallpaper failures.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
@@ -140,7 +144,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
         environment.performance, environment.indexedDB, environment.Image,
         environment.Path2D, environment.URL, environment.requestAnimationFrame,
         environment.cancelAnimationFrame, environment.setTimeout, environment.clearTimeout,
-        undefined, SEND, frameSpec, dataProperty(payload, 'createImageSettings'), dataProperty(payload, 'createLocalization'),
+        undefined, SEND, frameSpec, createSettings, dataProperty(payload, 'createLocalization'),
       );
     },
     remove: () => frame.remove(),
@@ -148,7 +152,8 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 }
 
 class PageController {
-  constructor(host, payload, pageAdapter) {
+  constructor(host, payload, pageAdapter, owner) {
+    this.owner = owner;
     this.host = host;
     this.document = host.document;
     this.payload = payload;
@@ -189,7 +194,7 @@ class PageController {
     };
     this.onMessage = (event) => this.#receive(event);
     this.api = Object.freeze({
-      owner: OWNER,
+      owner: this.owner,
       version: VERSION,
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
@@ -936,7 +941,7 @@ class PageController {
   #status() {
     this.#refreshWallpaper();
     return {
-      owner: OWNER,
+      owner: this.owner,
       version: VERSION,
       phase: this.state.phase,
       runId: this.state.runId,
@@ -994,14 +999,19 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
   if (!identification || identification.kind !== 'matched') {
     return { installed: false, alreadyActive: false, reason: PAGE_REASON };
   }
-  const current = existingController(host);
+  const ownerDescriptor = Object.getOwnPropertyDescriptor(pageAdapter, 'controllerOwner');
+  const owner = ownerDescriptor ? dataProperty(pageAdapter, 'controllerOwner') : OWNER;
+  if (owner !== OWNER && owner !== 'azhou-zcode-startup') {
+    return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
+  }
+  const current = existingController(host, owner);
   if (current.present) {
     return current.owned
       ? { installed: true, alreadyActive: true }
       : { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
   if (typeof payload !== 'function') return { installed: false, alreadyActive: false, reason: ASSET_REASON };
-  const controller = new PageController(host, payload, pageAdapter);
+  const controller = new PageController(host, payload, pageAdapter, owner);
   try {
     Object.defineProperty(host, GLOBAL_NAME, {
       value: controller.api, configurable: true, enumerable: false, writable: false,
