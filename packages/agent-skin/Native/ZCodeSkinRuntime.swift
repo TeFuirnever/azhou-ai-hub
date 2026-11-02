@@ -1,0 +1,559 @@
+// ZCode-specific fixed-target CDP transport. Native assembly supplies trusted OS identity ports.
+// Main-actor, one ticket/target/context only; no generic cross-host transport.
+import Foundation
+
+private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+}
+@MainActor final class ZCodeBoundCDP {
+    enum Failure: Error { case deadline, cancelled, busy, identity, protocolError, unavailable }
+    private let session: URLSession
+    private var socket: URLSessionWebSocketTask?
+    private var serial = 0
+    private var pending = false
+    private var sentMetadata: [String: String]?
+    private var contexts: [String: [String: Any]] = [:]
+    private var frameID = ""
+    private var pinnedURL = "" // memory only; never log query values.
+    private let guardLive: () throws -> Void
+    private let now: () -> TimeInterval
+    private let process: HostProcessGeneration
+    private let endpoint: URL
+    private let installedPage: String
+    private(set) var binding: ZCodePageBinding?
+
+    // guardLive MUST independently verify installation/PID/birth/executable AND
+    // kernel listener ownership and loopback-only addresses, including all sockets.
+    init(process: HostProcessGeneration, endpoint: URL, installedPage: String,
+         now: @escaping () -> TimeInterval, guardLive: @escaping () throws -> Void) throws {
+        guard endpoint.scheme == "http", endpoint.host == "127.0.0.1", endpoint.port != nil,
+              endpoint.user == nil, endpoint.password == nil, endpoint.query == nil,
+              endpoint.fragment == nil, endpoint.path.isEmpty || endpoint.path == "/" else { throw Failure.identity }
+        self.process = process; self.endpoint = endpoint; self.installedPage = installedPage
+        self.now = now; self.guardLive = guardLive
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil; configuration.urlCredentialStorage = nil
+        configuration.urlCache = nil; configuration.connectionProxyDictionary = [:]
+        session = URLSession(configuration: configuration, delegate: ZCodeRejectRedirect(), delegateQueue: nil)
+    }
+    func close() { socket?.cancel(with: .normalClosure, reason: nil); socket = nil; session.invalidateAndCancel() }
+    private func check(_ deadline: TimeInterval) throws {
+        if Task.isCancelled { throw Failure.cancelled }
+        guard deadline.isFinite, now() < deadline else { throw Failure.deadline }
+        try guardLive()
+    }
+    private func validPage(_ raw: String) -> Bool {
+        guard let u = URLComponents(string: raw), u.scheme == "file", (u.host ?? "").isEmpty,
+              u.user == nil, u.password == nil, u.fragment == nil, u.path == installedPage else { return false }
+        let keys: Set<String> = ["restoreSession", "supportsSettings", "initialWorkspacePath", "initialWorkspacePurpose", "unavailableWorkspacePath", "windowKind", "locale", "zcodeLaunchMarks"]
+        var seen = Set<String>()
+        return (u.queryItems ?? []).allSatisfy { keys.contains($0.name) && seen.insert($0.name).inserted && ($0.name != "windowKind" || $0.value == "main") }
+    }
+    private func receive(_ deadline: TimeInterval) async throws -> [String: Any] {
+        try check(deadline)
+        guard let ws = socket else { throw Failure.unavailable }
+        let seconds = min(4, deadline - now())
+        let message = try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: URLSessionWebSocketTask.Message.self) { group in
+                group.addTask { try await ws.receive() }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+                    ws.cancel(with: .goingAway, reason: nil)
+                    throw Failure.deadline
+                }
+                defer { group.cancelAll() }
+                guard let first = try await group.next() else { throw Failure.protocolError }
+                return first
+            }
+        } onCancel: { ws.cancel(with: .goingAway, reason: nil) }
+        let bytes: Data
+        switch message { case .data(let data): bytes = data; case .string(let text): bytes = Data(text.utf8); @unknown default: throw Failure.protocolError }
+        guard bytes.count <= 1_048_576,
+              let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { throw Failure.protocolError }
+        return object
+    }
+    private func send(_ message: URLSessionWebSocketTask.Message, deadline: TimeInterval, willSend: (() -> Void)?) async throws {
+        try check(deadline)
+        guard let ws = socket else { throw Failure.unavailable }
+        let seconds = max(0, deadline - now())
+        willSend?()
+        try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask { try await ws.send(message) }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    ws.cancel(with: .goingAway, reason: nil)
+                    throw Failure.deadline
+                }
+                defer { group.cancelAll() }
+                _ = try await group.next()
+            }
+        } onCancel: { ws.cancel(with: .goingAway, reason: nil) }
+    }
+    private func call(_ method: String, _ params: [String: Any] = [:], deadline: TimeInterval, willSend: (() -> Void)? = nil) async throws -> [String: Any] {
+        try check(deadline)
+        guard !pending, socket != nil else { throw Failure.busy }
+        pending = true; defer { pending = false }
+        serial += 1; let id = serial
+        let data = try JSONSerialization.data(withJSONObject: ["id": id, "method": method, "params": params])
+        let rpcDeadline = min(deadline, now() + 4)
+        try await send(.string(String(decoding: data, as: UTF8.self)), deadline: rpcDeadline, willSend: willSend)
+        while true {
+            let response = try await receive(rpcDeadline)
+            if let event = response["method"] as? String, let p = response["params"] as? [String: Any] {
+                if event == "Runtime.executionContextsCleared" { contexts.removeAll() }
+                if event == "Runtime.executionContextCreated", let c = p["context"] as? [String: Any], let token = c["uniqueId"] as? String { contexts[token] = c }
+                if event == "Runtime.executionContextDestroyed", let destroyed = p["executionContextId"] as? Int { contexts = contexts.filter { ($0.value["id"] as? Int) != destroyed } }
+            }
+            if response["id"] as? Int != id { continue }
+            guard response["error"] == nil, let value = response["result"] as? [String: Any] else { throw Failure.protocolError }
+            try check(deadline); return value
+        }
+    }
+    func attach(deadline: TimeInterval) async throws -> ZCodePageBinding {
+        try check(deadline)
+        var request = URLRequest(url: endpoint.appendingPathComponent("json/list"))
+        request.timeoutInterval = max(0.01, min(3, deadline - now())); request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (bytes, response) = try await session.data(for: request)
+        try check(deadline)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, bytes.count <= 1_048_576,
+              let pages = try JSONSerialization.jsonObject(with: bytes) as? [[String: Any]] else { throw Failure.protocolError }
+        let candidates = pages.filter { $0["type"] as? String == "page" && validPage($0["url"] as? String ?? "") }
+        guard candidates.count == 1, let page = candidates.first,
+              let id = page["id"] as? String, id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil,
+              let address = page["webSocketDebuggerUrl"] as? String, let wsURL = URL(string: address),
+              wsURL.scheme == "ws", wsURL.host == "127.0.0.1", wsURL.port == endpoint.port,
+              wsURL.user == nil, wsURL.password == nil, wsURL.query == nil, wsURL.fragment == nil,
+              wsURL.path == "/devtools/page/" + id else { throw Failure.identity }
+        let ws = session.webSocketTask(with: wsURL); ws.maximumMessageSize = 1_048_576; socket = ws; ws.resume()
+        let tree = try await call("Page.getFrameTree", deadline: deadline)
+        guard let t = tree["frameTree"] as? [String: Any], let frame = t["frame"] as? [String: Any],
+              let fid = frame["id"] as? String, let url = frame["url"] as? String, validPage(url) else { throw Failure.identity }
+        frameID = fid; pinnedURL = url
+        _ = try await call("Runtime.enable", deadline: deadline)
+        _ = try await call("Page.enable", deadline: deadline)
+        let matches = contexts.filter { _, c in
+            guard let aux = c["auxData"] as? [String: Any] else { return false }
+            return aux["isDefault"] as? Bool == true && aux["frameId"] as? String == fid
+        }
+        guard matches.count == 1, let context = matches.first?.key, let pageURL = URL(string: url) else { throw Failure.identity }
+        let result = ZCodePageBinding(process: process, endpoint: endpoint, pageURL: pageURL, targetID: id, documentToken: context)
+        binding = result; return result
+    }
+    private func recheckFrame(deadline: TimeInterval) async throws {
+        let tree = try await call("Page.getFrameTree", deadline: deadline)
+        guard let t = tree["frameTree"] as? [String: Any], let frame = t["frame"] as? [String: Any],
+              frame["id"] as? String == frameID, frame["url"] as? String == pinnedURL,
+              let token = binding?.documentToken, contexts[token] != nil else { throw Failure.identity }
+    }
+    // factoryBytes are the exact SHA-bound factory file, not a self-referential
+    // payload hash. Metadata values are non-sensitive and operation-scoped.
+    func install(factoryBytes: String, payloadSHA256: String, operationID: UUID,
+                 observation: ZCodeInstallObservation, deadline: TimeInterval) async throws -> [String: Any] {
+        try await recheckFrame(deadline: deadline)
+        guard let binding else { throw Failure.unavailable }
+        let metadata: [String: String] = ["controllerInstanceID": UUID().uuidString,
+            "createdByOperationID": operationID.uuidString, "payloadSHA256": payloadSHA256,
+            "documentToken": binding.documentToken]
+        let reply = try await call("Runtime.callFunctionOn", ["functionDeclaration": "function(metadata) { return (" + factoryBytes + ")(metadata); }",
+            "uniqueContextId": binding.documentToken, "arguments": [["value": metadata]],
+            "awaitPromise": true, "returnByValue": true, "timeout": max(1, min(2000, (deadline-now())*1000))], deadline: deadline, willSend: { self.sentMetadata = metadata; observation.markSent() })
+        guard reply["exceptionDetails"] == nil, let object = reply["result"] as? [String: Any],
+              let value = object["value"] as? [String: Any] else { throw Failure.protocolError }
+        try await recheckFrame(deadline: deadline)
+        return value // NOT a fabricated ready receipt; status must acknowledge safe fields.
+    }
+    func evaluateSafe(_ expression: String, deadline: TimeInterval) async throws -> [String: Any] {
+        try await recheckFrame(deadline: deadline)
+        guard let token = binding?.documentToken else { throw Failure.unavailable }
+        let reply = try await call("Runtime.evaluate", ["expression": expression, "uniqueContextId": token,
+            "returnByValue": true, "awaitPromise": true, "timeout": max(1, min(2000, (deadline-now())*1000))], deadline: deadline)
+        guard reply["exceptionDetails"] == nil, let result = reply["result"] as? [String: Any], let value = result["value"] as? [String: Any] else { throw Failure.protocolError }
+        try await recheckFrame(deadline: deadline)
+        return value
+    }
+}
+
+extension ZCodeBoundCDP {
+    // Fixed controller API only. Does not inspect DOM, forms, text, storage, URLs
+    // or user content. status() refreshes this owned controller's lifecycle only.
+    func safeStatus(deadline: TimeInterval) async throws -> [String: Any] {
+        guard let token = binding?.documentToken else { throw Failure.unavailable }
+        let encodedToken = String(decoding: try JSONSerialization.data(withJSONObject: token, options: .fragmentsAllowed), as: UTF8.self)
+        return try await evaluateSafe("""
+        (() => {
+          const value = (o,k) => { const d=o && Object.getOwnPropertyDescriptor(o,k); return d && Object.hasOwn(d,'value') ? d.value : undefined; };
+          const c=value(globalThis,'__azhouStartup');
+          if (!c) return {present:false};
+          if (value(c,'owner')!=='azhou-zcode-startup' || value(c,'version')!==1) return {present:true,conflict:true};
+          const snapshot={};
+          for(const k of ['controllerInstanceID','createdByOperationID','payloadSHA256','documentToken']) snapshot[k]=value(c,k);
+          const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+          if(typeof snapshot.controllerInstanceID!=='string'||snapshot.controllerInstanceID.length!==36||!uuid.test(snapshot.controllerInstanceID)
+            ||typeof snapshot.createdByOperationID!=='string'||snapshot.createdByOperationID.length!==36||!uuid.test(snapshot.createdByOperationID)
+            ||typeof snapshot.payloadSHA256!=='string'||snapshot.payloadSHA256.length!==64||!/^[a-f0-9]{64}$/.test(snapshot.payloadSHA256)
+            ||typeof snapshot.documentToken!=='string'||snapshot.documentToken!==\(encodedToken)) return {present:true,unconfirmed:true};
+          const status=value(c,'status');
+          if(typeof status!=='function') return {present:true,unconfirmed:true};
+          const s=status.call(c);
+          return {present:true,owner:value(c,'owner'),version:value(c,'version'),...snapshot,
+            ready:value(s,'ready')===true,completed:value(s,'completed')===true,
+            runId:Number.isSafeInteger(value(s,'runId')) ? value(s,'runId') : null,
+            completion:{skipped:value(value(s,'completion'),'skipped')===true,beforeReady:value(value(s,'completion'),'beforeReady')===true},
+            phase:['loading','playing','complete','settings','disposed','failed'].includes(value(s,'phase')) ? value(s,'phase') : 'unconfirmed'};
+        })()
+        """, deadline: deadline)
+    }
+    func acknowledgedReceipt(_ status: [String: Any], key: HostApplicationKey,
+                             payloadSHA256: String, acquisition: PageAcquisition = .created) throws -> ControllerReceipt {
+        guard let b = binding, status["present"] as? Bool == true,
+              status["owner"] as? String == "azhou-zcode-startup", status["version"] as? Int == 1,
+              let instance = status["controllerInstanceID"] as? String, UUID(uuidString: instance) != nil,
+              let operation = status["createdByOperationID"] as? String, let op = UUID(uuidString: operation),
+              status["payloadSHA256"] as? String == payloadSHA256,
+              status["documentToken"] as? String == b.documentToken else { throw Failure.identity }
+        if case .created = acquisition {
+            guard let sent = sentMetadata,
+                  sent["controllerInstanceID"] == instance,
+                  sent["createdByOperationID"].flatMap(UUID.init(uuidString:)) == op,
+                  sent["payloadSHA256"] == payloadSHA256,
+                  sent["documentToken"] == b.documentToken else { throw Failure.identity }
+        }
+        return ControllerReceipt(location: PageLocation(application: key, process: b.process, documentToken: b.documentToken),
+            owner: "azhou-zcode-startup", protocolVersion: 1, payloadSHA256: payloadSHA256,
+            controllerInstanceID: instance, createdByOperationID: op)
+    }
+    func disposeConfirmed(_ receipt: ControllerReceipt, deadline: TimeInterval) async throws -> Bool {
+        guard let b = binding, receipt.owner == "azhou-zcode-startup", receipt.protocolVersion == 1,
+              receipt.location.process == b.process, receipt.location.documentToken == b.documentToken else { throw Failure.identity }
+        let expected: [String: String] = ["controllerInstanceID": receipt.controllerInstanceID,
+            "createdByOperationID": receipt.createdByOperationID.uuidString,
+            "payloadSHA256": receipt.payloadSHA256, "documentToken": receipt.location.documentToken]
+        let encoded = String(decoding: try JSONSerialization.data(withJSONObject: expected), as: UTF8.self)
+        let result = try await evaluateSafe("""
+        (() => {
+          const expected=\(encoded);
+          const value=(o,k)=>{const d=o&&Object.getOwnPropertyDescriptor(o,k);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+          const c=value(globalThis,'__azhouStartup');
+          if(!c) return {disposed:true,alreadyAbsent:true};
+          if(value(c,'owner')!=='azhou-zcode-startup'||value(c,'version')!==1) return {disposed:false};
+          for(const k of Object.keys(expected)) {
+            const a=value(c,k),b=expected[k];
+            if(k==='createdByOperationID' ? typeof a!=='string'||a.toLowerCase()!==b.toLowerCase() : a!==b) return {disposed:false};
+          }
+          const dispose=value(c,'dispose');
+          if(typeof dispose!=='function')return {disposed:false};
+          const result=dispose.call(c);
+          return {disposed:value(result,'disposed')===true};
+        })()
+        """, deadline: deadline)
+        return result["disposed"] as? Bool == true
+    }
+}
+
+// Concrete native ports for the fixed, evidenced ZCode installation.
+import AppKit
+import CryptoKit
+import Darwin
+
+@MainActor private final class ZCodeRuntimeLease: ZCodeOperationLease {
+    private var releaseBody: (() -> Void)?
+    init(_ release: @escaping () -> Void) { releaseBody = release }
+    func release() { let action = releaseBody;releaseBody = nil;action?() }
+}
+
+@MainActor final class ZCodeNativeRuntime {
+    private let inputs: BoundHostInputs
+    private let runtime: any NativeAppRuntime
+    private let readPayload: () throws -> String
+    private let stateRoot: URL
+    private let onEvent: ([String: Any]) -> Void
+    private var port: Int?
+    private var connection: ZCodeBoundCDP?
+    private var opening: StartupApplicationWaiter?
+    private var openingToken: UUID?
+    private var installation: [String: [FileAttributeKey: Any]] = [:]
+    private let expectedFiles = [
+        "Contents/MacOS/ZCode": "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
+        "Contents/Info.plist": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
+        "Contents/Resources/app.asar": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+    ]
+    init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
+         stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void) {
+        self.inputs = inputs;self.runtime = runtime;self.readPayload = readPayload
+        self.stateRoot = stateRoot;self.onEvent = onEvent
+    }
+    private func failure(_ reason: String) -> StartupFailure { StartupFailure(reason: reason, message: "ZCode 接入未通过本次核验。") }
+    private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    private func checkTime(_ deadline: TimeInterval) throws {
+        if Task.isCancelled { throw CancellationError() }
+        guard deadline.isFinite, runtime.uptime < deadline else { throw failure("attach-timeout") }
+    }
+    private func validateInstallation() throws {
+        let key = inputs.identity.key
+        guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.1", key.build == "3.17.1.9553",
+              key.bundleURL.path == "/Applications/ZCode.app", key.executableURL.path == "/Applications/ZCode.app/Contents/MacOS/ZCode",
+              key.executableSHA256 == expectedFiles["Contents/MacOS/ZCode"] else { throw failure("target-identity") }
+        if installation.isEmpty {
+            var observed: [String: [FileAttributeKey: Any]] = [:]
+            for (name, hash) in expectedFiles {
+                let url = key.bundleURL.appendingPathComponent(name)
+                guard url.resolvingSymlinksInPath() == url,
+                      digest(try Data(contentsOf: url)) == hash else { throw failure("target-identity") }
+                observed[name] = try FileManager.default.attributesOfItem(atPath: url.path)
+            }
+            _ = try WallpaperCommand.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", key.bundleURL.path], timeout: 3)
+            let detail = try WallpaperCommand.run("/usr/bin/codesign", ["-dv", "--verbose=4", key.bundleURL.path], timeout: 3)
+            guard detail.split(separator: "\n").contains("TeamIdentifier=8A5X4JJ39T") else { throw failure("target-identity") }
+            installation = observed
+        } else {
+            for (name, original) in installation {
+                let current = try FileManager.default.attributesOfItem(atPath: key.bundleURL.appendingPathComponent(name).path)
+                guard current[.systemFileNumber] as? NSNumber == original[.systemFileNumber] as? NSNumber,
+                      current[.size] as? NSNumber == original[.size] as? NSNumber,
+                      current[.modificationDate] as? Date == original[.modificationDate] as? Date else { throw failure("target-identity") }
+            }
+        }
+    }
+    private func generation(_ app: any NativeApplication) throws -> HostProcessGeneration {
+        let key = inputs.identity.key
+        guard !app.isTerminated, app.bundleIdentifier == key.bundleIdentifier,
+              app.bundleURL?.resolvingSymlinksInPath() == key.bundleURL,
+              app.executableURL?.resolvingSymlinksInPath() == key.executableURL,
+              let birth = app.launchTime, birth.isFinite, birth > 0 else { throw failure("target-identity") }
+        return HostProcessGeneration(pid: app.processIdentifier, launchTime: birth, executableURL: key.executableURL)
+    }
+    private func running() throws -> [HostProcessGeneration] {
+        try validateInstallation()
+        return try runtime.runningApplications(bundleIdentifier: inputs.identity.key.bundleIdentifier)
+            .filter { !$0.isTerminated }.map { try generation($0) }
+    }
+    private func validate(_ process: HostProcessGeneration) throws {
+        try validateInstallation()
+        guard let app = runtime.application(processIdentifier: process.pid), try generation(app) == process else { throw failure("target-identity") }
+    }
+    private func directory(_ url: URL, create: Bool) throws {
+        guard url.isFileURL, url.path.hasPrefix("/"), url.standardizedFileURL == url,
+              url.resolvingSymlinksInPath() == url else { throw failure("profile-isolation-unproven") }
+        if create { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]) }
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard attributes[.type] as? FileAttributeType == .typeDirectory,
+              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+              ((attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0o777) & 0o077 == 0 else { throw failure("profile-isolation-unproven") }
+    }
+    private func environment() throws -> [String: String] {
+        try directory(stateRoot, create: true)
+        var paths: [String: String] = [:]
+        for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
+            let child = stateRoot.appendingPathComponent(name);try directory(child, create: true);paths[name] = child.path
+        }
+        return ["PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
+            "HOME": paths["home"]!, "ZCODE_DESKTOP_HOME_DIR": paths["home"]!, "TMPDIR": paths["tmp"]!,
+            "ZCODE_DATA_BASE_DIR": paths["business"]!, "ZCODE_DESKTOP_USER_DATA_DIR": paths["electron-user"]!,
+            "ZCODE_DESKTOP_SESSION_DATA_DIR": paths["electron-session"]!]
+    }
+    private func open(_ deadline: TimeInterval) async throws -> HostProcessGeneration {
+        try checkTime(deadline);guard try running().isEmpty else { throw failure("target-identity") }
+        let env = try environment();let chosen = try runtime.allocateLoopbackPort();port = chosen
+        onEvent(["stage": "zcode-open-request", "debuggingPort": chosen, "entryPID": runtime.processIdentifier,
+                 "environmentKeys": env.keys.sorted(), "host_is_not_native_child": true])
+        let token = UUID();openingToken = token
+        defer { opening = nil;openingToken = nil }
+        let app: any NativeApplication = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation);opening = waiter
+                let timeout = DispatchWorkItem { waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "ZCode 系统启动结果未在预算内确认。"))) }
+                waiter.setTimeout(timeout);DispatchQueue.main.asyncAfter(deadline: .now() + max(0.01, min(45, deadline-runtime.uptime)), execute: timeout)
+                runtime.openApplication(at: inputs.identity.key.bundleURL, debuggingPort: chosen, environment: env) { [weak self] app, error in
+                    Task { @MainActor in
+                        guard let self else { waiter.finish(.failure(CancellationError()));return }
+                        if let app, let process = try? self.generation(app) {
+                            self.onEvent(["stage": "zcode-open-selected-process", "hostPID": process.pid,
+                                "hostStartedAt": process.launchTime!, "debuggingPort": chosen, "entryPID": self.runtime.processIdentifier,
+                                "native_child_wait_claim": false])
+                        }
+                        guard error == nil, let app, self.runtime.uptime < deadline else {
+                            waiter.finish(.failure(self.failure("attach-timeout")));return
+                        }
+                        waiter.finish(.success(app))
+                    }
+                }
+            }
+        } onCancel: { [weak self] in Task { @MainActor in
+            guard self?.openingToken == token else { return };self?.opening?.finish(.failure(CancellationError()))
+        } }
+        let process = try generation(app);try validate(process);try checkTime(deadline)
+        guard app.activate() else { throw failure("target-identity") }
+        let record: [String: Any] = ["pid": process.pid, "launchTime": process.launchTime!, "port": chosen,
+            "executableSHA256": inputs.identity.key.executableSHA256]
+        let path = stateRoot.appendingPathComponent("launch-receipt.json")
+        try JSONSerialization.data(withJSONObject: record).write(to: path, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        return process
+    }
+    // Only the exact pid's listener metadata is queried; exit1 with empty output
+    // is a clean not-ready result, while any diagnostic/nonzero result refuses.
+    private func listenerRows(_ process: HostProcessGeneration) throws -> String {
+        let command = Process(), pipe = Pipe(), done = DispatchSemaphore(value: 0)
+        command.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        command.arguments = ["-nP", "-a", "-p", String(process.pid), "-iTCP", "-sTCP:LISTEN", "-FpfnT"]
+        command.standardOutput = pipe;command.standardError = pipe;command.terminationHandler = { _ in done.signal() }
+        try command.run()
+        if done.wait(timeout: .now()+2) == .timedOut {
+            command.terminate();if done.wait(timeout: .now()+0.2) == .timedOut { kill(command.processIdentifier, SIGKILL) }
+            throw failure("inspection-timeout")
+        }
+        let bytes = pipe.fileHandleForReading.readDataToEndOfFile()
+        if command.terminationStatus == 1 && bytes.isEmpty { return "" }
+        guard command.terminationStatus == 0, bytes.count < 65536, let text = String(data: bytes, encoding: .utf8) else { throw failure("inspection-failed") }
+        return text
+    }
+    private func kernelReady(_ process: HostProcessGeneration, port: Int) throws -> Bool {
+        try validate(process);let text = try listenerRows(process)
+        if text.isEmpty { return false }
+        var owner = false, found = false
+        for line in text.split(separator: "\n") {
+            if line.hasPrefix("p") { guard String(line.dropFirst()) == String(process.pid) else { throw failure("listener-mismatch") };owner = true }
+            if line.hasPrefix("n") {
+                let address = String(line.dropFirst());guard owner,
+                    address.hasPrefix("127.0.0.1:") || address.hasPrefix("[::1]:") else { throw failure("listener-mismatch") }
+                if address.hasSuffix(":" + String(port)) { found = true }
+            }
+        }
+        return found
+    }
+    private func recordedPort(_ process: HostProcessGeneration) throws -> Int {
+        if let port { return port }
+        try directory(stateRoot, create: false)
+        let url = stateRoot.appendingPathComponent("launch-receipt.json")
+        guard url.resolvingSymlinksInPath() == url, let data = try? Data(contentsOf: url), data.count < 4096,
+              let record = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              record["pid"] as? Int32 == process.pid, record["launchTime"] as? Double == process.launchTime,
+              record["executableSHA256"] as? String == inputs.identity.key.executableSHA256,
+              let port = record["port"] as? Int, (1...65535).contains(port) else { throw failure("endpoint-unavailable") }
+        self.port = port;return port
+    }
+    private func attach(_ process: HostProcessGeneration, deadline: TimeInterval) async throws -> ZCodePageBinding {
+        let chosen = try recordedPort(process)
+        while true {
+            try checkTime(deadline)
+            if try kernelReady(process, port: chosen) { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        let client = try ZCodeBoundCDP(process: process, endpoint: URL(string: "http://127.0.0.1:\(chosen)")!,
+            installedPage: inputs.identity.key.bundleURL.appendingPathComponent("Contents/Resources/app.asar/out/renderer/index.html").path,
+            now: { [runtime] in runtime.uptime }, guardLive: { [weak self] in
+                guard let self, try self.kernelReady(process, port: chosen) else { throw StartupFailure(reason: "listener-mismatch", message: "ZCode endpoint identity changed.") }
+            })
+        connection?.close();connection = client
+        do {
+            let binding = try await client.attach(deadline: deadline)
+            onEvent(["stage": "zcode-page-bound", "hostPID": process.pid, "hostStartedAt": process.launchTime!,
+                "debuggingPort": chosen, "targetID": binding.targetID,
+                "documentTokenSHA256": digest(Data(binding.documentToken.utf8))])
+            return binding
+        } catch { client.close();connection = nil;throw error }
+    }
+    private func install(_ binding: ZCodePageBinding, request: SkinLaunchRequest, observation: ZCodeInstallObservation) async throws -> SkinLaunchResult {
+        guard let client = connection else { throw failure("endpoint-unavailable") }
+        let payload = try readPayload(), hash = digest(Data(payload.utf8))
+        try validateUIProof(payloadSHA256: hash)
+        guard payload.hasPrefix("((controllerMetadata) => {"), payload.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("})") else { throw failure("asset-invalid") }
+        let result = try await client.install(factoryBytes: payload, payloadSHA256: hash, operationID: request.operationID,
+            observation: observation, deadline: request.deadline)
+        guard result["installed"] as? Bool == true, let already = result["alreadyActive"] as? Bool else { throw failure("protocol-error") }
+        let acquisition: PageAcquisition = already ? .alreadyActive : .created
+        var receipt: ControllerReceipt?
+        do {
+            while true {
+                try checkTime(request.deadline)
+                let status = try await client.safeStatus(deadline: request.deadline)
+                receipt = try client.acknowledgedReceipt(status, key: inputs.identity.key, payloadSHA256: hash, acquisition: acquisition)
+                if already { return .skipped(.present(.instance(receipt!), acquisition: .alreadyActive), runID: status["runId"] as? Int ?? 0, beforeReady: false) }
+                if status["ready"] as? Bool == true {
+                    onEvent(["stage": "zcode-controller-ready", "operationID": request.operationID.uuidString,
+                        "hostPID": binding.process.pid, "payloadSHA256": hash,
+                        "controllerInstanceID": receipt!.controllerInstanceID, "runId": status["runId"] as? Int ?? 0,
+                        "completion_observed": status["completed"] as? Bool == true])
+                    return .ready(receipt!, runID: status["runId"] as? Int ?? 0)
+                }
+                if status["completed"] as? Bool == true {
+                    let completion = status["completion"] as? [String: Any]
+                    return .skipped(.present(.instance(receipt!), acquisition: .created), runID: status["runId"] as? Int ?? 0,
+                        beforeReady: completion?["beforeReady"] as? Bool ?? true)
+                }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+        } catch {
+            guard let receipt else { throw error }
+            return .partial(SkinOperationFailure(reason: Task.isCancelled ? .operationCancelled : .protocolError,
+                detail: "ZCode controller confirmed before later interruption"),
+                page: .present(.instance(receipt), acquisition: acquisition),
+                cleanup: CleanupReport(state: .unknown, released: [], intentionallyRetained: ["confirmed-ZCode-page-controller"], unconfirmed: ["current-page-controller"]))
+        }
+    }
+    func makeAssembly() -> ZCodeSkinAssembly {
+        ZCodeSkinAssembly(now: { [runtime] in runtime.uptime }, runningProcesses: { try self.running() },
+            validateProcess: { try self.validate($0) }, activateExisting: { process in
+                try self.validate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
+            }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1) },
+            install: { try await self.install($0, request: $1, observation: $2) }, inspectPage: { binding, deadline in
+                defer { self.connection?.close();self.connection = nil }
+                guard let client = self.connection else { throw self.failure("endpoint-unavailable") }
+                let status = try await client.safeStatus(deadline: deadline)
+                if status["present"] as? Bool == false { return .absent(PageLocation(application: self.inputs.identity.key, process: binding.process, documentToken: binding.documentToken)) }
+                let hash = self.digest(Data(try self.readPayload().utf8))
+                return .present(.instance(try client.acknowledgedReceipt(status, key: self.inputs.identity.key, payloadSHA256: hash, acquisition: .alreadyActive)), acquisition: .alreadyActive)
+            }, dispose: { _, receipt, deadline in
+                defer { self.connection?.close();self.connection = nil }
+                guard let client = self.connection else { throw self.failure("endpoint-unavailable") }
+                return try await client.disposeConfirmed(receipt, deadline: deadline)
+            }, acquireOperation: { pid in
+                let lock = try WallpaperOperationLock.acquire(pid: pid)
+                return ZCodeRuntimeLease { self.connection?.close();self.connection = nil;lock.release() }
+            })
+    }
+}
+
+extension ZCodeNativeRuntime {
+    // A build-owned, hash-bound receipt from the actual UI acceptance window.
+    // It is not an auth/profile file and is never synthesized from fixture passes.
+    private static func proof(_ resources: URL?) -> [String: Any]? {
+        guard let resources else { return nil }
+        let path = resources.appendingPathComponent("zcode-validation.json")
+        guard path.resolvingSymlinksInPath() == path, let data = try? Data(contentsOf: path), data.count < 16384,
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["schema"] as? String == "agent-skin-zcode-ui-evidence/v1",
+              value["version"] as? String == "3.17.1.9553",
+              value["executableSHA256"] as? String == "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
+              value["appAsarSHA256"] as? String == "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+              let hash = value["payloadSHA256"] as? String, hash.utf8.count == 64,
+              hash.allSatisfy({ "0123456789abcdef".contains($0) }),
+              let ids = value["evidenceIDs"] as? [String], !ids.isEmpty,
+              ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 && !$0.contains("\n") }) else { return nil }
+        return value
+    }
+    static func findings(for key: HostApplicationKey, resources: URL?) -> [CapabilityFinding] {
+        let proof = proof(resources), ids = proof?["evidenceIDs"] as? [String] ?? []
+        return SkinCapability.allCases.map { capability in
+            let isUI = capability == .ownedAppearanceSurface || capability == .persistentSettings
+            let field = capability == .ownedAppearanceSurface ? "ownedAppearanceSurface" : "persistentSettings"
+            let state: EvidenceState = isUI ? (proof?[field] as? Bool == true ? .verified : .unverified) : .verified
+            return CapabilityFinding(subject: CapabilityEvidenceSubject(application: key,
+                surface: SkinHostContract.surface(for: capability), contractVersion: SkinHostContract.version),
+                capability: capability, state: state,
+                evidenceIDs: isUI ? ids : ["fixed-3.17.1.9553-host-entry08-H1", "ZCode-native-contract-tests"],
+                reason: isUI ? "requires actual hash-bound ZCode UI evidence; fixtures do not fill this receipt"
+                    : "host capability established by fixed-install H1 and contract tests; live identity/context rechecked per operation; Native entry acceptance remains separate")
+        }
+    }
+    func validateUIProof(payloadSHA256: String) throws {
+        guard let value = Self.proof(runtime.resourceURL), value["payloadSHA256"] as? String == payloadSHA256,
+              value["ownedAppearanceSurface"] as? Bool == true, value["persistentSettings"] as? Bool == true else {
+            throw StartupFailure(reason: "asset-invalid", message: "ZCode 尚缺本候选真实外观与保存证据。")
+        }
+    }
+}

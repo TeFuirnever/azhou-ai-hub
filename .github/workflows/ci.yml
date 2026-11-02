@@ -112,7 +112,7 @@ jobs:
           mkdir -p .build
           xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
-            Native/CodexSkinDriver.swift -o .build/startup-app-compile \
+            Native/CodexSkinDriver.swift Native/ZCodeSkinDriver.swift Native/ZCodeSkinRuntime.swift -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
       - name: Run pure wallpaper validation
         working-directory: packages/codex-startup-animation

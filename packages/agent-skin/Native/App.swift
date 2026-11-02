@@ -1,3 +1,4 @@
+import CryptoKit
 import AppKit
 import WebKit
 import Darwin
@@ -494,7 +495,7 @@ enum NativeSmokeReportValidator {
     }
 }
 
-private final class StartupApplicationWaiter: @unchecked Sendable {
+final class StartupApplicationWaiter: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<any NativeApplication, Error>?
     private var completed = false
@@ -704,6 +705,8 @@ protocol NativeAppRuntime: AnyObject {
     func urlForApplication(bundleIdentifier: String) -> URL?
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void)
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void)
     func acquireInstanceLock(identifier: String) -> NativeLockAcquisition
     func allocateLoopbackPort() throws -> Int
     func makeStartupTargetSystem() -> any StartupTargetSystem
@@ -714,6 +717,18 @@ protocol NativeAppRuntime: AnyObject {
     func terminate()
     func exit(code: Int32)
     func writeStandardOutput(_ line: String)
+}
+
+extension NativeAppRuntime {
+    // Existing Codex runtimes/mocks retain the original API; a runtime without an
+    // explicit environment implementation must not silently discard isolation.
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        guard environment.isEmpty else {
+            completion(nil, NSError(domain: "local.azhou.zcode-startup", code: 1));return
+        }
+        openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
+    }
 }
 
 @MainActor
@@ -768,11 +783,20 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
     }
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        configuredOpen(at: url, debuggingPort: debuggingPort, environment: nil, completion: completion)
+    }
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        configuredOpen(at: url, debuggingPort: debuggingPort, environment: environment, completion: completion)
+    }
+    private func configuredOpen(at url: URL, debuggingPort: Int, environment: [String: String]?,
+                                completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
         configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
         configuration.addsToRecentItems = false
         configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(debuggingPort)"]
+        if let environment { configuration.environment = environment }
         openApplicationBody(url, configuration) { application, error in
             completion(application.map { SystemNativeApplication($0) }, error)
         }
@@ -980,7 +1004,18 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
-    private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
+    private var launcherHost: SkinHostID? {
+        let bundle = Bundle(url: runtime.bundleURL)
+        guard let declared = bundle?.object(forInfoDictionaryKey: "AzhouTargetHost") as? String else { return .codex }
+        if declared == "codex", bundle?.bundleIdentifier == "local.azhou.codex-startup" { return .codex }
+        if declared == "zcode", bundle?.bundleIdentifier == "local.azhou.zcode-startup" { return .zcode }
+        return nil
+    }
+    private var launcherID: String {
+        guard let host = launcherHost else { return "local.azhou.invalid-entry" }
+        return host == .zcode ? "local.azhou.zcode-startup" : "local.azhou.codex-startup"
+    }
+    private var targetID: String { launcherHost == .zcode ? "dev.zcode.app" : "com.openai.codex" }
     private let runtime: any NativeAppRuntime
     private let args: [String]
     private let epoch: TimeInterval
@@ -1061,7 +1096,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func validTarget(_ candidate: URL) -> URL? {
         let url = real(candidate)
-        guard url.pathExtension.lowercased() == "app", url != real(runtime.bundleURL),
+        guard launcherHost != nil, url.pathExtension.lowercased() == "app", url != real(runtime.bundleURL),
               !url.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }),
               let bundle = Bundle(url: url), bundle.bundleIdentifier == targetID,
               let executable = bundle.executableURL.map({ real($0) }),
@@ -1071,7 +1106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func resolveTarget() -> URL? {
         var candidates = runtime.runningApplications(bundleIdentifier: targetID).compactMap { $0.bundleURL }
-        candidates += [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
+        candidates += launcherHost == .zcode ? [URL(fileURLWithPath: "/Applications/ZCode.app")]
+            : [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
         if let url = runtime.urlForApplication(bundleIdentifier: targetID) { candidates.append(url) }
         return candidates.compactMap { validTarget($0) }.first
     }
@@ -1287,12 +1323,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
               let executable = bundle.executableURL.map({ real($0) }),
               executable.path.hasPrefix(real(url).appendingPathComponent("Contents/MacOS").path + "/") else { return nil }
         let info = bundle.infoDictionary ?? [:]
+        guard let host = launcherHost else { return nil }
+        var executableHash = ""
+        if host == .zcode {
+            guard let bytes = try? Data(contentsOf: executable) else { return nil }
+            executableHash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        }
         return HostApplicationKey(
-            host: .codex, bundleURL: real(url), executableURL: executable,
+            host: host, bundleURL: real(url), executableURL: executable,
             bundleIdentifier: bundleID,
             version: (info["CFBundleShortVersionString"] as? String) ?? "",
             build: (info["CFBundleVersion"] as? String) ?? "",
-            executableSHA256: "")
+            executableSHA256: executableHash)
+    }
+
+    private func capabilityFindings(for key: HostApplicationKey, contractVersion: String) -> [CapabilityFinding] {
+        if key.host == .zcode { return ZCodeNativeRuntime.findings(for: key, resources: runtime.resourceURL) }
+        return codexCapabilityFindings(for: key, contractVersion: contractVersion)
     }
 
     /// Honest per-capability evidence for the shipped Codex chain. Each entry keeps
@@ -1403,7 +1450,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     nextProbe: nil))
             },
             capabilityEvidence: { [weak self] evidence in
-                self?.codexCapabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []
+                self?.capabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []
             },
             makeCodexDriver: { inputs in
                 CodexSkinDriver(
@@ -1422,11 +1469,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     },
                     installObservation: installObservation, assembly: assembly)
             },
-            makeZCodeDriver: nil) // No verified ZCode entry exists; C0 never fakes one.
-        switch SkinHostFactory.make(host: .codex,
+            makeZCodeDriver: { [weak self] inputs in
+                let state = self?.option("--zcode-state-root").map { URL(fileURLWithPath: $0) }
+                    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Azhou AI Lab/ZCode")
+                let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: runtime, readPayload: { [weak self] in
+                    guard let self else { throw StartupFailure(reason: "asset-invalid", message: "启动入口已结束。") }
+                    return try self.startupPayload()
+                }, stateRoot: state, onEvent: { [weak self] fields in self?.log("zcode-runtime", fields) })
+                return ZCodeSkinDriver(inputs: inputs, assembly: bridge.makeAssembly())
+            })
+        switch SkinHostFactory.make(host: expectedApplication.host,
                                     expectedApplication: expectedApplication,
                                     observed: observed,
-                                    findings: codexCapabilityFindings(for: expectedApplication,
+                                    findings: capabilityFindings(for: expectedApplication,
                                                                       contractVersion: contractVersion),
                                     contractVersion: contractVersion,
                                     dependencies: dependencies) {

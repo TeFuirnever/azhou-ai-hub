@@ -136,11 +136,11 @@ def main() -> int:
     (out / "coverage.json").unlink(missing_ok=True)
     objects = [
         compile_binary(out, "startup-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift",
                        "Native/StartupNativeTests.swift"], frameworks=["AppKit", "WebKit"],
                       defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "wallpaper-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift",
                        "Native/WallpaperValidationTests.swift"], frameworks=["AppKit", "WebKit"],
                       defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "install-registry-tests", ["Native/InstallRegistryCore.swift",
@@ -148,7 +148,7 @@ def main() -> int:
         compile_binary(out, "install-registry-cli", ["Native/InstallRegistryCore.swift",
                        "Native/InstallRegistry.swift"], frameworks=["AppKit", "CoreServices"]),
         compile_binary(out, "startup-cli", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift"],
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift"],
                        frameworks=["AppKit", "WebKit"]),
     ]
     objects.append(asset_builder_checks(out, raw_dir))

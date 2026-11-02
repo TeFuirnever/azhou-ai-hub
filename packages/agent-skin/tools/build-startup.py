@@ -327,6 +327,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex') -> di
     root = Path(root).resolve()
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
+    artifacts.configure_build_host(host)
     bundle = artifacts.staged_path(bundle)
     theme_config = artifacts.load_theme_config(root, require_inputs=True)
     _require_private_inputs(root, theme_config)

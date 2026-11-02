@@ -34,6 +34,8 @@ BUILD_FILES = (
     "Native/StartupNativeTests.swift",
     "Native/SkinHostContract.swift",
     "Native/CodexSkinDriver.swift",
+    "Native/ZCodeSkinDriver.swift",
+    "Native/ZCodeSkinRuntime.swift",
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/zcode.mjs",
@@ -1106,7 +1108,7 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
             self.verifier.INPUT_FILES = original
 
     def test_zcode_factory_is_explicit_bound_and_rejects_metadata_before_page_work(self):
-        bundle = self.root / '.build/azhou-stage.zcode-factory/azhou-payload'
+        bundle = self.root / '.build/azhou-stage.zcode-factory/azhou-zcode-payload'
         bundle.mkdir(parents=True)
         manifest = self.builder.build_startup(bundle, root=self.root, host='zcode')
         payload = (bundle / 'Contents/Resources/startup/install.js').read_text()

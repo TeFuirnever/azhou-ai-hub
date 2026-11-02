@@ -17,6 +17,7 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'dist'  # Legacy location; only the installer may retire its apps.
+ACTIVE_HOST = 'codex'
 LEGACY_NAME = '阿舟启动 Codex.app'
 IDENTITY = ('local.azhou.codex-startup', 'AzhouCodexStartup')
 LEGACY = {
@@ -185,6 +186,9 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
     config = _read_source_json(root, 'theme-config.json', 'theme config')
     package = load_package_metadata(root)
     theme = _validate_theme_config_data(config, package['runtime_version'], package['runtime_build'])
+    if ACTIVE_HOST == 'zcode':
+        theme['identity']['appName'] = {'zh-CN': '阿舟 AI 实验室 for ZCode', 'en': 'Azhou AI Lab for ZCode'}
+        theme['identity']['installationName'] = '阿舟 AI 实验室 for ZCode.app'
     if require_inputs:
         _private_input(root, theme['identity']['iconInput'], 'identity.iconInput', required=True)
         _private_input(root, theme['identity']['entryAvatarInput'], 'identity.entryAvatarInput', required=True)
@@ -193,9 +197,22 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
 
 VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version', 'runtime_build'))
 NAME = load_theme_config(ROOT)['identity']['installationName']
+def configure_build_host(host):
+    """Fixed two-entry build selection; default Codex identity stays unchanged."""
+    global ACTIVE_HOST, IDENTITY, KNOWN_IDENTITIES, PROJECT_ID, PAYLOAD, NAME
+    if host not in ('codex', 'zcode'):
+        raise RuntimeError('Unsupported build host.')
+    ACTIVE_HOST = host
+    IDENTITY = ('local.azhou.zcode-startup', 'AzhouZCodeStartup') if host == 'zcode' else ('local.azhou.codex-startup', 'AzhouCodexStartup')
+    KNOWN_IDENTITIES = (IDENTITY,) if host == 'zcode' else (IDENTITY, *LEGACY.values())
+    PROJECT_ID = 'azhou.zcode-startup-animation' if host == 'zcode' else 'azhou.codex-startup-animation'
+    PAYLOAD = ROOT / ('.build/azhou-zcode-payload' if host == 'zcode' else '.build/azhou-payload')
+    NAME = load_theme_config(ROOT)['identity']['installationName']
+
+
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
-    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift',
+    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift', 'Native/ZCodeSkinDriver.swift', 'Native/ZCodeSkinRuntime.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
     'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs', 'extension/bootstrap.mjs',
@@ -470,6 +487,8 @@ def write_bundle_info(path):
         'LSUIElement': True,
         'NSHighResolutionCapable': True,
     }
+    if ACTIVE_HOST == 'zcode':
+        info['AzhouTargetHost'] = 'zcode'
     with info_path.open('wb') as stream:
         plistlib.dump(info, stream, fmt=plistlib.FMT_XML, sort_keys=False)
     resources = contents / 'Resources'
@@ -985,12 +1004,14 @@ def publish(staged):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', choices=('codex', 'zcode'), default='codex')
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--publish', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-marker', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-bundle-info', metavar='STAGED_PAYLOAD')
     actions.add_argument('--check-inputs', metavar='STAGED_PAYLOAD')
     options = parser.parse_args()
+    configure_build_host(options.host)
     try:
         if options.publish:
             publish(options.publish)

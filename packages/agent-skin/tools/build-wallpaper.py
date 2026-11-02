@@ -22,6 +22,7 @@ def package(bundle, *, host='codex'):
     spec = importlib.util.spec_from_file_location('azhou_artifacts', ROOT / 'tools/verify-artifacts.py')
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
+    artifacts.configure_build_host(host)
     bundle = artifacts.staged_path(bundle)
     theme = artifacts.load_theme_config(ROOT)
     source = ROOT / 'assets/private/wallpaper-scene-q-v3.png'
