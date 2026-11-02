@@ -36,6 +36,20 @@ Refresh after package updates with `claude plugin marketplace update pstack-clau
 
 **Codex** uses the Hub integration commands in [docs/integrations.md](../../docs/integrations.md), which install from `harness/pstack/codex` into a dedicated `CODEX_HOME`.
 
-**ZCode** links the canonical skills into a project's `.agents/skills/` root; no plugin or hook installs.
+**ZCode** links the skills into a project's `.agents/skills/` root; no plugin or hook installs. Run from the project root, with `PSTACK_PACKAGE` set to this package's absolute path. Existing files, directories and links stay untouched:
+
+```shell
+: "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
+SRC="$PSTACK_PACKAGE/harness/pstack/zcode/skills"
+test -d "$SRC" || { printf '%s\n' "no zcode skills at $SRC" >&2; exit 2; }
+mkdir -p .agents/skills
+for source in "$SRC"/*/; do
+  skill="${source%/}"; target=".agents/skills/${skill##*/}"
+  [ -e "$target" ] || [ -L "$target" ] || ln -s "$skill" "$target"
+done
+zcode skills list --cwd "$(pwd -P)"
+```
+
+The final command needs a `zcode` CLI on PATH; it is what proves the host discovered the links.
 
 Configure per-role models with `/setup-pstack`; the sheet lives at `~/.claude/pstack-models.md` on Claude Code and `<codex-home>/pstack-models.md` on Codex. All licenses are MIT; the notices under `NOTICE*.md` and `LICENSE-*` cover the three upstream sources.
