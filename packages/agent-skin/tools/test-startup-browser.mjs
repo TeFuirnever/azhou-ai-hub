@@ -6205,20 +6205,19 @@ try {
           const strength=dialog.querySelector('input[type="range"]');
           if(strength){strength.value='42';strength.dispatchEvent(new win.Event('input',{bubbles:true}));}
           const panel=dialog.querySelector('[role="tabpanel"]:not([hidden])');
-          const body=dialog.querySelector('[data-agent-skin-settings-body]')||dialog;
           const footer=dialog.querySelector('footer');
-          if(!panel||!body||!footer)throw new Error('settings layout is missing a measured region');
+          if(!panel||!footer)throw new Error('settings layout is missing a measured region');
           const rect=element=>{const r=element.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};
-          body.scrollTop=0;
+          dialog.scrollTop=0;
           const footerBefore=rect(footer),dialogBox=rect(dialog);
-          body.scrollTop=body.scrollHeight;
+          dialog.scrollTop=dialog.scrollHeight;
           const footerAfter=rect(footer);
-          const overflow=dialog.scrollWidth>dialog.clientWidth+1||body.scrollWidth>body.clientWidth+1
+          const overflow=dialog.scrollWidth>dialog.clientWidth+1
             ||doc.documentElement.scrollWidth>win.innerWidth+1||doc.body.scrollWidth>win.innerWidth+1;
           const result={viewport:{width:win.innerWidth,height:win.innerHeight},dialog:dialogBox,
-            body:{clientHeight:body.clientHeight,scrollHeight:body.scrollHeight},overflow,
+            scroller:{clientHeight:dialog.clientHeight,scrollHeight:dialog.scrollHeight},overflow,
             footerStable:Math.abs(footerBefore.top-footerAfter.top)<1};
-          body.scrollTop=0;
+          dialog.scrollTop=0;
           selectedTab.focus();
           return result;
         })()`);
@@ -6228,7 +6227,7 @@ try {
         if(metrics.dialog.left<0||metrics.dialog.right>scenario.width+1
           ||metrics.dialog.top<0||metrics.dialog.bottom>scenario.height+1)scenarioIssues.push('dialog outside viewport');
         if(!metrics.footerStable)scenarioIssues.push('footer scrolls away');
-        if(metrics.body.clientHeight<48)scenarioIssues.push('content scroller has no usable space');
+        if(metrics.scroller.clientHeight<48)scenarioIssues.push('content scroller has no usable space');
         for(let step=0;step<8;step++){
           await dispatchTab();
           const focus=await cdp.evaluate(`(()=>{
@@ -6237,14 +6236,19 @@ try {
             if(!active||!dialog.contains(active))return {inside:false};
             const box=active.getBoundingClientRect(),style=frame.contentWindow.getComputedStyle(active);
             const hit=doc.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+            const footer=dialog.querySelector('footer'),footerBox=footer?.getBoundingClientRect();
+            const dialogBox=dialog.getBoundingClientRect();
+            const fitsAboveFooter=box.height<=footerBox.top-dialogBox.top+0.5;
             return {inside:true,tag:active.tagName,label:active.id||active.getAttribute('aria-label')||active.textContent?.trim()||active.type,
               hit:hit===active||active.contains(hit),visible:box.width>0&&box.height>0
               &&box.bottom>0&&box.top<frame.contentWindow.innerHeight,
+              clearFooter:!footerBox||footer.contains(active)||!fitsAboveFooter||box.bottom<=footerBox.top+0.5,
               focusVisible:active.matches(':focus-visible'),outlineStyle:style.outlineStyle,
               outlineWidth:parseFloat(style.outlineWidth),outlineColor:style.outlineColor};
           })()`);
           keyboard.push(focus);
           if(!focus.inside||!focus.visible||!focus.hit)scenarioIssues.push('keyboard focus is outside or obscured in settings: '+JSON.stringify(focus));
+          if(focus.inside&&!focus.clearFooter)scenarioIssues.push('keyboard focus is clipped by the settings footer: '+JSON.stringify(focus));
           if(focus.inside&&(!focus.focusVisible||focus.outlineStyle==='none'||focus.outlineWidth<1.9||focus.outlineColor==='transparent'))
             scenarioIssues.push('keyboard focus indicator missing: '+JSON.stringify(focus));
         }

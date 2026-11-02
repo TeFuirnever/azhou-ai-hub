@@ -968,6 +968,7 @@ function createImageSettings(environment) {
 
   function containPanelTab(event) {
     if (!panelOpen || event.key !== 'Tab' || !dialog) return;
+    syncPanelScrollPadding();
     const preview = dialog.querySelector('[data-agent-skin-settings-preview]');
     const scope = preview || dialog;
     const controls = Array.from(scope.querySelectorAll(
@@ -1493,10 +1494,16 @@ function createImageSettings(environment) {
       controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
-      workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel,
+      workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
     };
     updatePanelText();
     return true;
+  }
+
+  function syncPanelScrollPadding() {
+    if (!panelOpen || !dialog || !panelControls?.footer) return;
+    const footerHeight = panelControls.footer.offsetHeight;
+    if (footerHeight > 0) dialog.style.setProperty('scroll-padding-bottom', footerHeight + 6 + 'px');
   }
 
   function openSettings(callbacks = {}) {
@@ -1520,6 +1527,7 @@ function createImageSettings(environment) {
       panelCallbacks = null;
       return false;
     }
+    syncPanelScrollPadding();
     updatePanelBusy();
     try { panelCallbacks.onOpen?.(); } catch {}
     return true;
