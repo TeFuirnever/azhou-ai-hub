@@ -198,7 +198,7 @@ INPUT_FILES = (
     'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/bootstrap.mjs',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs', 'extension/bootstrap.mjs',
     'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
     'wallpaper/renderer.js', 'wallpaper/apply.js',
@@ -212,6 +212,8 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+ZCODE_STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/zcode.mjs')
+
 # Exact pre-adapter startup source set, retained for installed local builds through 30.
 # C0 and the parallel Codex line used overlapping build numbers with distinct inputs.
 PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS = (
@@ -666,7 +668,12 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup manifest schema、protocol、version/build 或输入摘要无效。')
 
     source_inputs = manifest.get('sourceInputs')
-    current_startup_inputs = frozenset(STARTUP_REQUIRED_INPUTS)
+    target_host = manifest.get('targetHost', 'codex')
+    if target_host not in ('codex', 'zcode'):
+        raise RuntimeError('Startup manifest targetHost is invalid.')
+    if target_host == 'zcode' and manifest.get('entrypoint') != 'controller-metadata-factory/v1':
+        raise RuntimeError('ZCode startup must bind its explicit metadata factory entrypoint.')
+    current_startup_inputs = frozenset(ZCODE_STARTUP_REQUIRED_INPUTS if target_host == 'zcode' else STARTUP_REQUIRED_INPUTS)
     if current_source:
         allowed_theme_inputs = {current_startup_inputs}
     else:
@@ -687,6 +694,8 @@ def verify_startup(path, info, marker, *, current_source=True):
             allowed_theme_inputs.add(frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
+    if target_host == 'zcode':
+        allowed_theme_inputs = {current_startup_inputs}
     allowed_source_inputs = set(allowed_theme_inputs)
     if not current_source and (expected_version, expected_build) == ('0.9.0', '10'):
         allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
@@ -827,7 +836,12 @@ def verify_startup(path, info, marker, *, current_source=True):
                        and 'return installStartup(installAnimation, host);' in script)
     page_adapter_entry = ('return bootstrapStartup({' in script
                           and 'return installStartup(installAnimation, host, pageAdapter);' in script)
-    if not (legacy_entry or bootstrap_entry or page_adapter_entry):
+    zcode_factory_entry = (target_host == 'zcode' and page_adapter_entry
+                           and script.startswith('((controllerMetadata) => {\n') and script.rstrip().endswith('})')
+                           and 'const pageAdapter = createZCodePageAdapter(globalThis, { controllerMetadata }, {' in script
+                           and 'function createZCodePageAdapter(' in script
+                           and 'function createCodexPageAdapter(' not in script)
+    if (target_host == 'zcode' and not zcode_factory_entry) or (target_host == 'codex' and not (legacy_entry or bootstrap_entry or page_adapter_entry)):
         raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
     return manifest
 

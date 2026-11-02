@@ -1840,7 +1840,7 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
 
 
 test('explicit ZCode owner is independent and cannot adopt a Codex controller', () => {
-  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-zcode-startup' });
+  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-zcode-startup', controllerMetadata: { controllerInstanceID: '11111111-1111-4111-8111-111111111111', createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64), documentToken: 'synthetic-CDP-unique-context' } });
   const host = controlledHost().host;
   assert.equal(installStartup(function () {}, host, adapter).installed, true);
   assert.equal(host.__azhouStartup.owner, 'azhou-zcode-startup');
@@ -1883,4 +1883,27 @@ test('host settings namespace reaches the actual factory while legacy identity i
     assert.equal(result.indexedDB, input.indexedDB);
     controlled.host.__azhouStartup.dispose();
   }
+});
+
+
+test('ZCode metadata is validated before writes and retained by the actual controller', () => {
+  const metadata = { controllerInstanceID: '11111111-1111-4111-8111-111111111111',
+    createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64),
+    documentToken: 'synthetic-CDP-unique-context' };
+  for (const bad of [undefined, {}, { ...metadata, payloadSHA256: 'wrong' },
+    { ...metadata, documentToken: '' }, { ...metadata, payloadSHA256: metadata.payloadSHA256 + '\n' },
+    { ...metadata, controllerInstanceID: metadata.controllerInstanceID + '\n' }, { ...metadata, controllerInstanceID: 'legacy-v1-unreported' }]) {
+    const controlled = controlledHost();
+    const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup', controllerMetadata: bad };
+    assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'controller-metadata-invalid');
+    assert.equal(controlled.frames.length, 0);
+  }
+  const controlled = controlledHost();
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup', controllerMetadata: metadata };
+  assert.equal(installStartup(function () {}, controlled.host, adapter).installed, true);
+  metadata.documentToken = 'changed-after-install';
+  assert.equal(controlled.host.__azhouStartup.status().documentToken, 'synthetic-CDP-unique-context');
+  assert.equal(controlled.host.__azhouStartup.controllerInstanceID, metadata.controllerInstanceID);
+  assert.equal(controlled.host.__azhouStartup.status().payloadSHA256, metadata.payloadSHA256);
+  controlled.host.__azhouStartup.dispose();
 });

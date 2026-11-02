@@ -36,6 +36,7 @@ BUILD_FILES = (
     "Native/CodexSkinDriver.swift",
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
+    "extension/hosts/zcode.mjs",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -1103,6 +1104,38 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
                 self.verifier.verify_startup(self.bundle, self.info, self.marker)
         finally:
             self.verifier.INPUT_FILES = original
+
+    def test_zcode_factory_is_explicit_bound_and_rejects_metadata_before_page_work(self):
+        bundle = self.root / '.build/azhou-stage.zcode-factory/azhou-payload'
+        bundle.mkdir(parents=True)
+        manifest = self.builder.build_startup(bundle, root=self.root, host='zcode')
+        payload = (bundle / 'Contents/Resources/startup/install.js').read_text()
+        self.assertEqual(manifest['targetHost'], 'zcode')
+        self.assertEqual(manifest['entrypoint'], 'controller-metadata-factory/v1')
+        self.assertIn('extension/hosts/zcode.mjs', manifest['sourceInputs'])
+        self.assertTrue(payload.startswith('((controllerMetadata) => {'))
+        self.assertTrue(payload.rstrip().endswith('})'))
+        self.assertNotIn('function createCodexPageAdapter(', payload)
+        self.verifier.verify_startup(bundle, self.info, self.marker)
+        harness = r"""const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const script=fs.readFileSync(process.argv[1],'utf8');let writes=0;
+const scope=vm.createContext({URL,document:new Proxy({},{get(){throw Error('page must not be read')}})});
+const factory=vm.runInContext(script,scope);assert.equal(typeof factory,'function');
+for(const input of [undefined,{},Object.defineProperty({},'documentToken',{get(){writes++;throw Error('getter')}})]) {
+ const result=factory(input);assert.equal(result.reason,'controller-metadata-invalid');assert.equal(result.installed,false);
+}
+assert.equal(writes,0);console.log('factory-negatives:3/3');"""
+        result = subprocess.run(['node', '-e', harness, str(bundle / 'Contents/Resources/startup/install.js')], capture_output=True, text=True, check=True)
+        self.assertIn('factory-negatives:3/3', result.stdout)
+        path = bundle / 'Contents/Resources/startup/manifest.json'
+        forged = dict(manifest, targetHost='codex')
+        path.write_text(json.dumps(forged))
+        with self.assertRaisesRegex(RuntimeError, 'sourceInputs|安装入口'):
+            self.verifier.verify_startup(bundle, self.info, self.marker)
+        forged = dict(manifest, entrypoint='unbound')
+        path.write_text(json.dumps(forged))
+        with self.assertRaisesRegex(RuntimeError, 'metadata factory'):
+            self.verifier.verify_startup(bundle, self.info, self.marker)
 
     def test_payload_wires_the_codex_page_adapter_explicitly(self):
         payload = (self.bundle / "Contents/Resources/startup/install.js").read_text(encoding="utf-8")

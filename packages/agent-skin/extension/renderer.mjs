@@ -62,6 +62,17 @@ function wallpaperReason(value, fallback = 'wallpaper-unsupported') {
   }
 }
 
+function controllerMetadataSnapshot(source) {
+  const values = Object.fromEntries(['controllerInstanceID', 'createdByOperationID', 'payloadSHA256', 'documentToken']
+    .map(key => [key, dataProperty(source, key)]));
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  if (typeof values.controllerInstanceID !== 'string' || values.controllerInstanceID.length !== 36 || !uuid.test(values.controllerInstanceID)
+      || typeof values.createdByOperationID !== 'string' || values.createdByOperationID.length !== 36 || !uuid.test(values.createdByOperationID)
+      || typeof values.payloadSHA256 !== 'string' || values.payloadSHA256.length !== 64 || !/^[a-f0-9]{64}$/.test(values.payloadSHA256)
+      || typeof values.documentToken !== 'string' || !values.documentToken || values.documentToken.length > 256) return null;
+  return Object.freeze(values);
+}
+
 function existingController(host, owner = OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, GLOBAL_NAME);
   if (!descriptor) return { present: false };
@@ -152,8 +163,9 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 }
 
 class PageController {
-  constructor(host, payload, pageAdapter, owner) {
+  constructor(host, payload, pageAdapter, owner, metadata) {
     this.owner = owner;
+    this.metadata = metadata;
     this.host = host;
     this.document = host.document;
     this.payload = payload;
@@ -196,6 +208,7 @@ class PageController {
     this.api = Object.freeze({
       owner: this.owner,
       version: VERSION,
+      ...this.metadata,
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
       openSettings: () => this.#openSettings(),
@@ -943,6 +956,7 @@ class PageController {
     return {
       owner: this.owner,
       version: VERSION,
+      ...this.metadata,
       phase: this.state.phase,
       runId: this.state.runId,
       ready: this.state.ready,
@@ -1004,6 +1018,11 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
   if (owner !== OWNER && owner !== 'azhou-zcode-startup') {
     return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
+  let metadata;
+  if (owner === 'azhou-zcode-startup') {
+    metadata = controllerMetadataSnapshot(dataProperty(pageAdapter, 'controllerMetadata'));
+    if (!metadata) return { installed: false, alreadyActive: false, reason: 'controller-metadata-invalid' };
+  }
   const current = existingController(host, owner);
   if (current.present) {
     return current.owned
@@ -1011,7 +1030,7 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
       : { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
   if (typeof payload !== 'function') return { installed: false, alreadyActive: false, reason: ASSET_REASON };
-  const controller = new PageController(host, payload, pageAdapter, owner);
+  const controller = new PageController(host, payload, pageAdapter, owner, metadata);
   try {
     Object.defineProperty(host, GLOBAL_NAME, {
       value: controller.api, configurable: true, enumerable: false, writable: false,
