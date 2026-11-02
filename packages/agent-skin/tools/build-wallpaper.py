@@ -16,7 +16,9 @@ import struct
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def package(bundle):
+def package(bundle, *, host='codex'):
+    if host not in ('codex', 'zcode'):
+        raise RuntimeError('Unsupported wallpaper host.')
     spec = importlib.util.spec_from_file_location('azhou_artifacts', ROOT / 'tools/verify-artifacts.py')
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
@@ -45,7 +47,17 @@ def package(bundle):
                'imageSHA256': hashlib.sha256(data).hexdigest(), 'css': css,
                'strength': theme['wallpaper']['strength']}
     expression = '(async () => {\n' + renderer.replace(prefix, 'async function installRenderer(', 1)
-    expression += '\nreturn await installRenderer(' + json.dumps(payload, ensure_ascii=False) + ');\n})()\n'
+    if host == 'zcode':
+        builder_spec = importlib.util.spec_from_file_location('azhou_zcode_builder', ROOT / 'tools/build-startup.py')
+        builder = importlib.util.module_from_spec(builder_spec)
+        builder_spec.loader.exec_module(builder)
+        adapter = builder._module_function((ROOT / 'extension/hosts/zcode.mjs').read_text(),
+            'export function createZCodePageAdapter(', 'function createZCodePageAdapter(', 'ZCode page adapter')
+        expression += '\n' + adapter + '\nconst pageAdapter = createZCodePageAdapter(globalThis);\n'
+        expression += 'const wallpaperPayload = ' + json.dumps(payload, ensure_ascii=False) + ';\n'
+        expression += 'wallpaperPayload.pageAdapter = pageAdapter;\nreturn await installRenderer(wallpaperPayload);\n})()\n'
+    else:
+        expression += '\nreturn await installRenderer(' + json.dumps(payload, ensure_ascii=False) + ');\n})()\n'
     target = bundle / 'Contents/Resources/wallpaper'
     target.mkdir(parents=True, exist_ok=True)
     (target / 'install.js').write_text(expression, encoding='utf-8')
@@ -57,6 +69,9 @@ def package(bundle):
                 'cssSHA256': hashlib.sha256(css.encode()).hexdigest(),
                 'scriptSHA256': hashlib.sha256(expression.encode()).hexdigest(),
                 'scope': 'Codex renderer only; no desktop image or official bundle writes'}
+    if host == 'zcode':
+        manifest.update(targetHost='zcode', adapterSHA256=hashlib.sha256((ROOT / 'extension/hosts/zcode.mjs').read_bytes()).hexdigest(),
+                        scope='ZCode renderer only; no desktop image or official bundle writes')
     (target / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
     print('Packaged private Azhou wallpaper:', target)
 
@@ -64,4 +79,6 @@ def package(bundle):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', required=True, type=Path)
-    package(parser.parse_args().bundle)
+    parser.add_argument('--host', choices=('codex', 'zcode'), default='codex')
+    args = parser.parse_args()
+    package(args.bundle, host=args.host)

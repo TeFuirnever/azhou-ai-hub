@@ -1,8 +1,12 @@
 export function createWallpaperApplicator(installRenderer, options, host = globalThis) {
   const { version, css } = options;
+  const pageAdapter = options.pageAdapter;
+  const zcode = pageAdapter?.controllerOwner === 'azhou-zcode-startup';
 
   function wallpaperShellState(isCurrent) {
     if (typeof isCurrent === 'function' && !isCurrent()) return 'cancelled';
+    if (zcode) return typeof pageAdapter.wallpaperShellState === 'function'
+      ? pageAdapter.wallpaperShellState(isCurrent, host) : null;
     const document = host.document;
     const applicationRoot = document?.getElementById('root');
     return document?.body && applicationRoot
@@ -37,7 +41,8 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         observer = new Observer(check);
         observer.observe(document.documentElement, {
           childList: true, subtree: true, attributes: true,
-          attributeFilter: ['data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'],
+          attributeFilter: zcode ? ['data-testid', 'hidden', 'aria-hidden', 'class', 'style']
+            : ['data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'],
         });
       } catch {
         finish('unsupported');
@@ -71,6 +76,7 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     return installRenderer({
       version, image: value.image, imageSHA256, css,
       strength: value.strength, surface: value.surface, isCurrent,
+      ...(zcode ? { pageAdapter } : {}),
     });
   };
 }

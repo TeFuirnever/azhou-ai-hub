@@ -1113,6 +1113,16 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
         self.assertEqual(manifest['targetHost'], 'zcode')
         self.assertEqual(manifest['entrypoint'], 'controller-metadata-factory/v1')
         self.assertIn('extension/hosts/zcode.mjs', manifest['sourceInputs'])
+        wallpaper_builder = load_module(self.root / 'tools/build-wallpaper.py', 'zcode_fixture_wallpaper')
+        wallpaper_builder.package(bundle, host='zcode')
+        self.verifier.verify_wallpaper(bundle, self.info, self.marker)
+        wallpaper_manifest_path = bundle / 'Contents/Resources/wallpaper/manifest.json'
+        wallpaper_manifest = json.loads(wallpaper_manifest_path.read_text())
+        wallpaper_manifest['targetHost'] = 'codex'
+        wallpaper_manifest_path.write_text(json.dumps(wallpaper_manifest))
+        with self.assertRaisesRegex(RuntimeError, 'host label'):
+            self.verifier.verify_wallpaper(bundle, self.info, self.marker)
+
         self.assertTrue(payload.startswith('((controllerMetadata) => {'))
         self.assertTrue(payload.rstrip().endswith('})'))
         self.assertNotIn('function createCodexPageAdapter(', payload)

@@ -1877,6 +1877,8 @@ test('host settings namespace reaches the actual factory while legacy identity i
     payload.createImageSettings = factory;
     assert.equal(installStartup(payload, controlled.host, adapter).installed, true);
     const input = { document: 'synthetic-document', indexedDB: 'synthetic-idb' };
+    assert.equal(controlled.frames[0].attributes.has('data-agent-skin-controller-instance'), false);
+    assert.equal(controlled.controls.some(node => node.attributes?.has('data-agent-skin-controller-instance')), false);
     assert.equal(observed === factory, !custom);
     const result = observed(input);
     assert.equal(result.settingsNamespace, custom ? namespace : undefined);
@@ -1901,6 +1903,8 @@ test('ZCode metadata is validated before writes and retained by the actual contr
   const controlled = controlledHost();
   const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup', controllerMetadata: metadata };
   assert.equal(installStartup(function () {}, controlled.host, adapter).installed, true);
+  assert.equal(controlled.frames[0].attributes.get('data-agent-skin-controller-instance'), metadata.controllerInstanceID);
+  assert.equal(controlled.controls.filter(node => node.attributes?.get('data-agent-skin-controller-instance') === metadata.controllerInstanceID).length, 1);
   metadata.documentToken = 'changed-after-install';
   assert.equal(controlled.host.__azhouStartup.status().documentToken, 'synthetic-CDP-unique-context');
   assert.equal(controlled.host.__azhouStartup.controllerInstanceID, metadata.controllerInstanceID);

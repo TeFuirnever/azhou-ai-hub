@@ -649,3 +649,38 @@ test('decorative diagnostics skip protected, hidden, and noninteractive nodes wh
     });
   });
 });
+
+
+test('ZCode renderer uses only its validated main surface and restores owned attributes', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN';fixture.applicationRoot.contains = node => node === main;
+    const adapter = Object.freeze({ controllerOwner: 'azhou-zcode-startup', identify: () => ({ kind: 'matched' }),
+      wallpaperShellState: () => 'ready', wallpaperSurfaces: () => [main] });
+    const payload = { ...fixture.payload, pageAdapter: adapter };
+    assert.equal((await installRenderer(payload)).applied, true);
+    assert.equal(globalThis.__azhouWallpaper.owner, 'azhou.zcode-startup-animation');
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal((await installRenderer(payload)).applied, true);
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+  } finally { fixture.restore(); }
+});
+
+test('ZCode refuses protected, ambiguous or foreign-marked surfaces before styling', async () => {
+  for (const mode of ['protected', 'ambiguous', 'foreign']) {
+    const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+    try {
+      const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+      main.tagName = 'MAIN';main.protected = mode === 'protected';fixture.applicationRoot.contains = node => node === main;
+      if (mode === 'foreign') main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign');
+      const adapter = Object.freeze({ controllerOwner: 'azhou-zcode-startup', identify: () => ({ kind: 'matched' }),
+        wallpaperShellState: () => 'ready', wallpaperSurfaces: () => mode === 'ambiguous' ? [main, main] : [main] });
+      await assert.rejects(installRenderer({ ...fixture.payload, pageAdapter: adapter }), /unsupported-shell|namespace-conflict/);
+      assert.equal(fixture.styleElements.length, 0);
+      if (mode === 'foreign') assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+    } finally { fixture.restore(); }
+  }
+});

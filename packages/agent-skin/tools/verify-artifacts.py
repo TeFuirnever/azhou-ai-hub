@@ -507,6 +507,18 @@ def verify_wallpaper(path, info, marker):
         raise RuntimeError(f'壁纸资源与版本或构建输入不一致：{path}')
 
 
+    wallpaper_host = manifest.get('targetHost', 'codex')
+    wallpaper_script = script.read_text(encoding='utf-8')
+    if wallpaper_host == 'zcode':
+        if (manifest.get('adapterSHA256') != marker['inputs'].get('extension/hosts/zcode.mjs')
+                or 'function createZCodePageAdapter(' not in wallpaper_script
+                or 'const pageAdapter = createZCodePageAdapter(globalThis);' not in wallpaper_script
+                or 'wallpaperPayload.pageAdapter = pageAdapter;' not in wallpaper_script
+                or 'return await installRenderer(wallpaperPayload);' not in wallpaper_script):
+            raise RuntimeError('ZCode wallpaper adapter/entry binding is invalid.')
+    elif wallpaper_host != 'codex' or 'createZCodePageAdapter(' in wallpaper_script:
+        raise RuntimeError('Wallpaper host label does not match its adapter entry.')
+
 def png_details(data, label):
     """Validate a complete, non-interlaced 8-bit RGB/RGBA PNG without Pillow."""
     if not isinstance(data, bytes) or not data.startswith(b'\x89PNG\r\n\x1a\n'):

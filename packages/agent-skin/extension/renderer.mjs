@@ -90,21 +90,21 @@ function existingController(host, owner = OWNER) {
   };
 }
 
-function wallpaperRecord(host) {
+function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, WALLPAPER_GLOBAL);
   if (!descriptor) return { present: false, supported: false, api: null };
   if (!Object.hasOwn(descriptor, 'value') || !descriptor.value || typeof descriptor.value !== 'object') {
     return { present: true, supported: false, api: null };
   }
   const api = descriptor.value;
-  const supported = dataProperty(api, 'owner') === LEGACY_WALLPAPER_OWNER
+  const supported = dataProperty(api, 'owner') === owner
     && WALLPAPER_VERSIONS.has(dataProperty(api, 'version'))
     && typeof dataProperty(api, 'status') === 'function'
     && typeof dataProperty(api, 'dispose') === 'function';
   return { present: true, supported, api: supported ? api : null };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter) {
+function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -115,6 +115,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
   frame.setAttribute('aria-label', text.t('overlayLabel'));
   frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
   frame.src = 'about:blank';
+  if (controllerMetadata) frame.setAttribute('data-agent-skin-controller-instance', controllerMetadata.controllerInstanceID);
   const parent = typeof document.body.appendChild === 'function' ? document.body : document.documentElement;
   parent.appendChild(frame);
   const contentWindow = frame.contentWindow;
@@ -165,6 +166,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 class PageController {
   constructor(host, payload, pageAdapter, owner, metadata) {
     this.owner = owner;
+    this.wallpaperOwner = owner === 'azhou-zcode-startup' ? 'azhou.zcode-startup-animation' : LEGACY_WALLPAPER_OWNER;
     this.metadata = metadata;
     this.host = host;
     this.document = host.document;
@@ -223,7 +225,7 @@ class PageController {
         ? { installed: false, alreadyActive: false, reason: 'owner-conflict' }
         : { installed: false, alreadyActive: false, reason: ASSET_REASON };
     }
-    const wallpaper = wallpaperRecord(this.host);
+    const wallpaper = wallpaperRecord(this.host, this.wallpaperOwner);
     if (wallpaper.present && !wallpaper.supported) {
       return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
     }
@@ -301,9 +303,13 @@ class PageController {
       if (!this.appearanceEntry) this.appearanceEntry = this.pageAdapter.mountEntry(this.document, () => this.#openSettings(),
         this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host,
         () => this.#retryWallpaper(), () => { this.startupWallpaperNoticeDismissed = true; });
+      const entryElement = dataProperty(this.appearanceEntry, 'element');
+      if (this.metadata && typeof entryElement?.setAttribute === 'function') {
+        entryElement.setAttribute('data-agent-skin-controller-instance', this.metadata.controllerInstanceID);
+      }
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
-        this.pageAdapter,
+        this.pageAdapter, this.metadata,
       );
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
@@ -622,7 +628,7 @@ class PageController {
     }
     if (!this.wallpaperRequest) return Promise.resolve(this.#retryResult(false, previousFailure, 'no-request'));
 
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if ((current.present && (!current.supported || current.api !== this.wallpaperAPI))
       || (!current.present && this.wallpaperAPI)) {
       return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
@@ -732,7 +738,7 @@ class PageController {
       if (dataProperty(result, 'applied') === false) {
         const reason = wallpaperReason(result);
         const failure = wallpaperFailure(result) ?? wallpaperFailure({ failureCode: 'apply-failed' });
-        const current = wallpaperRecord(this.host);
+        const current = wallpaperRecord(this.host, this.wallpaperOwner);
         if (current.present && !current.supported) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
           if (this.intent === 'play') this.startupWallpaperFailure = null;
@@ -743,7 +749,7 @@ class PageController {
         const imageDecoded = dataProperty(result, 'imageDecoded') === true;
         return this.#setWallpaperFailure(failure.failureCode, reason, imageDecoded);
       }
-      const current = wallpaperRecord(this.host);
+      const current = wallpaperRecord(this.host, this.wallpaperOwner);
       if (!current.supported) {
         if (current.present) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
@@ -814,7 +820,7 @@ class PageController {
   }
 
   #refreshWallpaper() {
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if (!current.present) {
       if (this.state.wallpaper.applied) {
         this.state.wallpaper = { applied: false, reason: 'not-installed', imageDecoded: false };
@@ -969,7 +975,7 @@ class PageController {
   }
 
   #disposeWallpaper() {
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if (!current.supported || !this.wallpaperAPI || current.api !== this.wallpaperAPI) return;
     try { dataProperty(current.api, 'dispose').call(current.api); } catch {}
     this.wallpaperAPI = null;
