@@ -148,6 +148,8 @@
     "docs/codex-pet-maintenance-2026-10-26.md",
     "docs/asset-audit-and-replacement-plan.md",
     "plans/README.md",
-    "plans/001-vivid-lab-motion.md"
+    "plans/001-vivid-lab-motion.md",
+    "Native/ZCodeTransportTests.swift",
+    "tools/test-zcode-transport.py"
   ]
 }

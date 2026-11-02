@@ -153,6 +153,10 @@ def main() -> int:
     ]
     objects.append(compile_binary(out, "zcode-driver-tests",
         ["Native/SkinHostContract.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinDriverTests.swift"]))
+    transport_out = out / "zcode-transport"
+    run([sys.executable, "tools/test-zcode-transport.py", "--out", str(transport_out),
+         "--profile-directory", str(raw_dir)], cwd=ROOT, log=out / "logs/zcode-transport.log")
+    objects.append(transport_out / "transport-fixture")
     objects.append(asset_builder_checks(out, raw_dir))
 
     environment = os.environ.copy()
