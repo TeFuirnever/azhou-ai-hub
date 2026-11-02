@@ -102,7 +102,7 @@ struct ZCodePageBinding: Sendable {
     private func validReceipt(_ r: ControllerReceipt, _ b: ZCodePageBinding) -> Bool {
         r.location.application == inputs.identity.key && r.location.process == b.process &&
         r.location.documentToken == b.documentToken && r.owner == Self.owner && r.protocolVersion == 1 &&
-        r.payloadSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil &&
+        r.payloadSHA256.utf8.count == 64 && r.payloadSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil &&
         !r.controllerInstanceID.isEmpty && r.controllerInstanceID != SkinHostContract.legacyUnreportedInstanceID
     }
     private func errorReason(_ error: Error) -> SkinOperationFailure {
@@ -119,7 +119,7 @@ struct ZCodePageBinding: Sendable {
         if let r = refusal(request.expectedApplication) { return .refused(r) }
         if busy { return failed(Stop(reason: .operationBusy, detail: "page-operation-in-flight"), request, sent: false) }
         let observation = ZCodeInstallObservation()
-        var committed: ControllerReceipt?
+        var committed: (receipt: ControllerReceipt, acquisition: PageAcquisition, cleanup: CleanupReport?)?
         do {
             guard request.startedAt.isFinite, request.startedAt <= assembly.now() else { throw Stop(reason: .protocolError, detail: "invalid-start-time") }
             let deadline = min(request.deadline, request.startedAt + 60)
@@ -142,12 +142,31 @@ struct ZCodePageBinding: Sendable {
             try validate(binding, process: process); try checkTime(deadline)
             let bounded = SkinLaunchRequest(expectedApplication: request.expectedApplication, operationID: request.operationID, startedAt: request.startedAt, deadline: deadline)
             let result = try await assembly.install(binding, bounded, observation)
-            // Preserve a confirmed commit before cancellation/deadline or identity recheck.
-            if case .ready(let receipt, _) = result {
-                guard validReceipt(receipt, binding), receipt.createdByOperationID == request.operationID else {
-                    throw Stop(reason: .protocolError, detail: "controller-receipt-mismatch")
+            // Every result can carry a confirmed page, including partial failure
+            // and alreadyActive skips. Preserve the exact acquisition, never gain
+            // rollback rights over an instance created by an earlier operation.
+            let confirmedPage: PageEffect?
+            let confirmedCleanup: CleanupReport?
+            switch result {
+            case .ready(let receipt, _):
+                confirmedPage = .present(.instance(receipt), acquisition: .created)
+                confirmedCleanup = nil
+            case .skipped(let page, _, _):
+                confirmedPage = page; confirmedCleanup = nil
+            case .partial(_, let page, let cleanup), .failed(_, let page, let cleanup):
+                confirmedPage = page; confirmedCleanup = cleanup
+            default: confirmedPage = nil; confirmedCleanup = nil
+            }
+            if case .present(let instance, let acquisition) = confirmedPage {
+                guard case .instance(let receipt) = instance, validReceipt(receipt, binding) else {
+                    throw Stop(reason: .ownerConflict, detail: "controller-receipt-mismatch")
                 }
-                committed = receipt
+                if case .created = acquisition {
+                    guard receipt.createdByOperationID == request.operationID else {
+                        throw Stop(reason: .ownerConflict, detail: "controller-operation-mismatch")
+                    }
+                }
+                committed = (receipt, acquisition, confirmedCleanup)
             }
             try validate(binding, process: process); try checkTime(deadline)
             switch result {
@@ -163,19 +182,19 @@ struct ZCodePageBinding: Sendable {
                 return .skipped(page, runID: runID, beforeReady: beforeReady)
             case .partial, .failed:
                 // A transport result cannot erase an uncertain install send.
-                if observation.sent { return failed(Stop(reason: .protocolError, detail: "install-result-partial"), request, sent: true) }
+                if committed == nil && observation.sent { return failed(Stop(reason: .protocolError, detail: "install-result-partial"), request, sent: true) }
                 return result
             case .refused: return observation.sent ? failed(Stop(reason: .protocolError, detail: "refusal-after-send"), request, sent: true) : result
             case .activated: throw Stop(reason: .protocolError, detail: "cold-install-cannot-activate")
             }
         } catch {
-            if let receipt = committed {
+            if let confirmed = committed {
                 // The old bound document acknowledged a commit. Never relabel it
                 // unknown or roll it back just because a later check was cancelled.
                 let failure = errorReason(error)
                 let retained = failure.reason == .operationCancelled || failure.reason == .operationTimeout
-                return .partial(failure, page: .present(.instance(receipt), acquisition: .created),
-                    cleanup: CleanupReport(state: retained ? .notNeeded : .unknown, released: [],
+                return .partial(failure, page: .present(.instance(confirmed.receipt), acquisition: confirmed.acquisition),
+                    cleanup: confirmed.cleanup ?? CleanupReport(state: retained ? .notNeeded : .unknown, released: [],
                         intentionallyRetained: ["confirmed-ZCode-page-controller"],
                         unconfirmed: retained ? [] : ["current-page-controller"]))
             }

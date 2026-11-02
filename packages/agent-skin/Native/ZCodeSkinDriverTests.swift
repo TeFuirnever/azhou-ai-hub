@@ -4,6 +4,7 @@ import Foundation
     var processes: [HostProcessGeneration] = []
     var calls: [String] = []
     var mode = "ready"
+    var payloadHash = String(repeating:"b",count:64)
     var endpoint = "http://127.0.0.1:1234"
     var page = "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?locale=en"
     var waiting: CheckedContinuation<Void, Never>?
@@ -15,7 +16,7 @@ import Foundation
         BoundHostInputs(identity:HostIdentityEvidence(key:key,signingIdentity:"fixture",evidenceID:"synthetic"),findings:capabilities.map { CapabilityFinding(subject:CapabilityEvidenceSubject(application:key,surface:SkinHostContract.surface(for:$0),contractVersion:SkinHostContract.version),capability:$0,state:.verified,evidenceIDs:["synthetic-only"],reason:"fixture") },contractVersion:SkinHostContract.version)
     }
     func receipt(_ binding: ZCodePageBinding, op: UUID? = nil) -> ControllerReceipt {
-        ControllerReceipt(location:PageLocation(application:key,process:binding.process,documentToken:binding.documentToken),owner:ZCodeSkinDriver.owner,protocolVersion:1,payloadSHA256:String(repeating:"b",count:64),controllerInstanceID:"instance-1",createdByOperationID:op ?? request.operationID)
+        ControllerReceipt(location:PageLocation(application:key,process:binding.process,documentToken:binding.documentToken),owner:ZCodeSkinDriver.owner,protocolVersion:1,payloadSHA256:payloadHash,controllerInstanceID:"instance-1",createdByOperationID:op ?? request.operationID)
     }
     var binding: ZCodePageBinding { ZCodePageBinding(process:process,endpoint:URL(string:endpoint)!,pageURL:URL(string:page)!,targetID:"target1",documentToken:"context1") }
     func assembly() -> ZCodeSkinAssembly {
@@ -25,14 +26,25 @@ import Foundation
             if self.mode == "skip-before-send" { return .skipped(.notObserved(reason:"fixture"),runID:1,beforeReady:true) }
             obs.markSent()
             if self.mode == "skip-after-send" { return .skipped(.notObserved(reason:"fixture"),runID:1,beforeReady:true) }
-            if self.mode == "hold" || self.mode == "hold-ready" {
+            if self.mode == "hold" || self.mode == "hold-ready" || self.mode == "hold-existing" {
                 await withCheckedContinuation { self.waiting = $0 }
                 if self.mode == "hold" { throw NSError(domain:"synthetic",code:3) }
             }
             if self.mode == "lost-reply" { throw NSError(domain:"synthetic",code:2) }
             if self.mode == "drift-after-send" { self.expired = true }
             if self.mode == "ready-timeout" { self.clock = 161 }
+            if self.mode == "hold-existing" { return .skipped(.present(.instance(self.receipt(b,op:UUID())),acquisition:.alreadyActive),runID:2,beforeReady:true) }
             if self.mode == "already-active" { return .skipped(.present(.instance(self.receipt(b,op:UUID())),acquisition:.alreadyActive),runID:2,beforeReady:true) }
+            if self.mode.hasPrefix("direct-") {
+                let acquisition: PageAcquisition = self.mode.contains("existing") ? .alreadyActive : .created
+                let original = self.receipt(b,op:self.mode.contains("existing") ? UUID() : nil)
+                let receipt = self.mode.contains("foreign") ? ControllerReceipt(location:original.location,owner:"foreign",protocolVersion:1,payloadSHA256:original.payloadSHA256,controllerInstanceID:original.controllerInstanceID,createdByOperationID:original.createdByOperationID) : original
+                let page = PageEffect.present(.instance(receipt), acquisition:acquisition)
+                let cleanup = CleanupReport(state:.notNeeded,released:[],intentionallyRetained:["confirmed-controller"],unconfirmed:[])
+                let failure = SkinOperationFailure(reason:.operationCancelled,detail:"synthetic-known-page")
+                if self.mode.contains("failed") {return .failed(failure,page:page,cleanup:cleanup)}
+                return .partial(failure,page:page,cleanup:cleanup)
+            }
             if self.mode == "bad-receipt" { return .ready(self.receipt(b,op:UUID()),runID:1) }
             return .ready(self.receipt(b),runID:1)
         },inspectPage:{b,_ in self.calls.append("inspect");return .present(.instance(self.receipt(b)),acquisition:.alreadyActive)},dispose:{_,_,_ in self.calls.append("dispose");return self.mode != "dispose-failed"},acquireOperation:{_ in self.calls.append("lock");return Lease(self)})
@@ -54,6 +66,7 @@ import Foundation
             if case .failed(_,let page,let cleanup)=result {expect(page.isInstallationUnknown == sent && cleanup.state == (sent ? .unknown : .notNeeded),mode+" unknown semantics")}else{fatalError(mode)}
             expect(f.calls.contains("release"),mode+" releases lock")
         }
+        do {let f=Fixture();f.payloadHash += "\n";let result=await f.driver().launch(f.request);if case .failed(_,let page,let cleanup)=result {expect(page.isInstallationUnknown && cleanup.state == .unknown,"payload digest exact length rejects newline")}else{fatalError("hash suffix accepted")}}
         for (endpoint,page) in [("http://192.0.2.1:1234", "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html"),("http://127.0.0.1:1234", "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/login.html"),("http://127.0.0.1:1234", "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?locale=en&locale=zh"),("http://127.0.0.1:1234", "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?unknown=value")] {
             let f=Fixture();f.endpoint=endpoint;f.page=page;_ = await f.driver().launch(f.request);expect(!f.calls.contains("install"),"wrong endpoint/page refuses before install")
         }
@@ -72,6 +85,9 @@ import Foundation
         do {let f=Fixture();f.mode="skip-before-send";let result=await f.driver().launch(f.request);if case .skipped=result {expect(true,"unobserved skip allowed only before send")}else{fatalError("skip before")}}
         for mode in ["drift-after-send", "ready-timeout"] {let f=Fixture();f.mode=mode;let result=await f.driver().launch(f.request);if case .partial(let failure,.present(.instance(let receipt),_),let cleanup)=result {expect(receipt.createdByOperationID == f.request.operationID,"confirmed receipt retained after "+mode);expect(cleanup.state == (mode == "ready-timeout" ? .notNeeded : .unknown),"confirmed receipt cleanup scoped "+mode);if mode == "ready-timeout" {expect(failure.reason == .operationTimeout,"confirmed commit timeout reason")}}else{fatalError(mode+" committed receipt lost")}}
         do {let f=Fixture();f.mode="hold-ready";let driver=f.driver();let task=Task {await driver.launch(f.request)};while f.waiting == nil {await Task.yield()};task.cancel();f.waiting?.resume();let result=await task.value;if case .partial(let error,.present(.instance(let receipt),let acquisition),let cleanup)=result {expect(error.reason == .operationCancelled && receipt.createdByOperationID == f.request.operationID && cleanup.state == .notNeeded,"confirmed receipt retained after cancellation");if case .created=acquisition {expect(true,"confirmed commit acquisition preserved")}else{fatalError("acquisition")}}else{fatalError("confirmed cancellation")}}
+        for mode in ["direct-partial", "direct-failed", "direct-existing-partial"] {let f=Fixture();f.mode=mode;let result=await f.driver().launch(f.request);let page:PageEffect;let cleanup:CleanupReport;switch result {case .partial(_,let p,let c),.failed(_,let p,let c):page=p;cleanup=c;default:fatalError("direct confirmed result lost")};if case .present(.instance(let receipt),let acquisition)=page {expect(receipt.owner == ZCodeSkinDriver.owner && cleanup.state == .notNeeded,"direct result preserves confirmed page/cleanup "+mode);if mode.contains("existing") {if case .alreadyActive=acquisition {expect(true,"existing acquisition preserved")}else{fatalError("rollback right upgraded")}}}else{fatalError("direct page erased")};expect(!f.calls.contains("dispose"),"no automatic rollback "+mode)}
+        do {let f=Fixture();f.mode="direct-foreign-partial";let result=await f.driver().launch(f.request);if case .failed(_,let p,let c)=result {expect(p.isInstallationUnknown && c.state == .unknown,"foreign confirmed receipt rejected")}else{fatalError("foreign direct accepted")}}
+        do {let f=Fixture();f.mode="hold-existing";let driver=f.driver();let task=Task {await driver.launch(f.request)};while f.waiting == nil {await Task.yield()};task.cancel();f.waiting?.resume();let result=await task.value;if case .partial(_,.present(.instance(let receipt),.alreadyActive),let c)=result {expect(receipt.createdByOperationID != f.request.operationID && c.state == .notNeeded,"cancel after existing skip preserves acquisition without rollback");expect(!f.calls.contains("dispose"),"cancel existing never disposes")}else{fatalError("existing cancellation receipt erased")}}
         print("ZCode native synthetic checks: \(count) passed; real host not run")
     }
 }
