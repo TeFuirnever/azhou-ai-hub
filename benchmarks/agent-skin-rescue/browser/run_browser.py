@@ -50,7 +50,7 @@ def read_patch(root):
 
 def restore_wallpapers(root, fixture_repo):
     require_anchor(fixture_repo)
-    subtree = subprocess.check_output(["git", "-C", str(fixture_repo), "rev-parse", ANCHOR + ":packages/codex-startup-animation/wallpaper"], text=True, encoding="ascii").strip()
+    subtree = subprocess.check_output(["git", "-C", str(fixture_repo), "rev-parse", ANCHOR + ":packages/codex-startup-animation/wallpaper"], text=True, encoding="utf-8").strip()
     if subtree != WALLPAPER_SUBTREE:
         raise ValueError("wallpaper subtree mismatch at the public anchor")
     for name, digest in WALLPAPERS.items():

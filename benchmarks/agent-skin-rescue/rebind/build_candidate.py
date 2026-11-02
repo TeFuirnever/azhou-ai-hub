@@ -80,7 +80,7 @@ def restored_tree_id(directory, scratch):
         subprocess.run(["git", "add", "-A", "--force"], cwd=directory, env=environment, check=True,
                        stdin=subprocess.DEVNULL, capture_output=True)
         return subprocess.check_output(["git", "write-tree"], env=environment, stdin=subprocess.DEVNULL,
-                                       text=True, encoding="ascii").strip()
+                                       text=True, encoding="utf-8").strip()
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
