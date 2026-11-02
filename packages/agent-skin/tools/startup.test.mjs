@@ -424,6 +424,44 @@ test('appearance entry follows the Home Your dot button, ignores a same-named ch
   }
 });
 
+test('appearance entry stays below Your dot when an unread count appears and disappears', () => {
+  const fixture = controlledHost();
+  const [{ list, listItem, yourDot }] = addAppearanceNavigation(fixture, { layout: 'wrapped' });
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host, pageAdapter);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(list.children[1], entry);
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  yourDot.textContent = 'Your dot1';
+  observer.trigger([{ target: yourDot, type: 'childList' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(list.children[0], listItem);
+  assert.equal(list.children[1], entry, 'unread badge must not dislodge the entry');
+  assert.equal(entry.style.position, 'static');
+  yourDot.textContent = 'Your dot';
+  observer.trigger([{ target: yourDot, type: 'childList' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(list.children[1], entry);
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance recognizes initial numeric unread badges without matching unrelated labels', () => {
+  for (const [label, expected] of [['Your dot1', true], ['你的 Dot 99+', true], ['Your dot settings', false]]) {
+    const fixture = controlledHost();
+    const [{ list }] = addAppearanceNavigation(fixture, { label, layout: 'wrapped' });
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host, pageAdapter);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode === list, expected, label);
+    fixture.host.__azhouStartup.dispose();
+  }
+});
+
 test('appearance entry uses wrapped Home list rows and refuses unsupported wrappers', () => {
   for (const valid of [true, false]) {
     const fixture = controlledHost();

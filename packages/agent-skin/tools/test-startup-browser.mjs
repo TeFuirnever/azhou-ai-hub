@@ -267,7 +267,7 @@ try {
       <div class="fixture-nav-header" style="flex:none;padding:12px 8px 8px">
         <div class="group/nav-list" data-fixture-nav-list style="display:flex;flex-direction:column;gap:4px;width:100%">
           <button type="button" class="sidebar-item" data-fixture-new-chat style="width:100%;min-height:32px;padding:5px 10px;text-align:left">New chat</button>
-          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left">Your dot</button>
+          <button type="button" class="sidebar-item" data-fixture-your-dot style="width:100%;min-height:32px;padding:5px 10px;text-align:left"><div>Your dot</div></button>
         </div>
       </div>
       <div class="fixture-nav-scroll" style="flex:1;min-height:0;overflow:auto;padding:4px 8px">
@@ -370,6 +370,15 @@ try {
       ? document.querySelector('[data-app-shell-frame]') : null;
     const heldShellFragment = document.createDocumentFragment();
     if (heldShell) heldShellFragment.appendChild(heldShell);
+    if (url.searchParams.has('focus-case')) {
+      // The wallpaper shell is absent, but the host must have a usable control
+      // before the Appearance fallback and its recovery actions are exposed.
+      const control = document.createElement('button');
+      control.id = 'theme';
+      control.textContent = 'Host control';
+      control.style.cssText = 'position:fixed;top:20px;left:80px;z-index:1';
+      document.getElementById('root').appendChild(control);
+    }
     const initialWallpaperStrength = url.searchParams.has('no-initial-wallpaper') ? 0 : 42;
     if (url.searchParams.get('legacy-wash') === 'host-important') {
       document.documentElement.style.setProperty('--azhou-wallpaper-wash', 'host-wash', 'important');
@@ -632,7 +641,8 @@ try {
           avatar: animationAvatar, artwork: animationArtwork,
           contours: ${JSON.stringify(animationContourFixture)}, introTitle: 'Synthetic agent',
           introCaption: 'SYNTHETIC / TEST', artworkSubtitle: 'Generated fixture only' }
-      : { wallpaper: ${JSON.stringify(pixelImage)} });
+      : { wallpaper: ${JSON.stringify(pixelImage)},
+          ...(url.searchParams.has('entry-avatar') ? { entryAvatar: ${JSON.stringify(pixelImage)} } : {}) });
     payload.createLocalization = window.createLocalization;
     if (url.searchParams.has('animation')) {
       const createSettings = window.createImageSettings;
@@ -973,6 +983,13 @@ try {
       10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
   }
+  async function navigateFreshRecoveryFixture(path) {
+    const unloaded = cdp.waitForEvent('Page.loadEventFired');
+    await cdp.call('Page.navigate', { url: 'about:blank' });
+    await unloaded;
+    await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
+    await navigate(path);
+  }
   async function awaitGeneratedReady(label) {
     try {
       const outcome = await until(() => cdp.evaluate(`(()=>{
@@ -1158,6 +1175,12 @@ try {
         menuRect:rectData(menuRect),menuOverlap:overlap(menuRect),
         menuHit:!!menu&&(menuTarget===menu||menu.contains(menuTarget))};
     })()`);
+  }
+  async function waitForAppearanceEntry(label) {
+    return until(async () => {
+      const entry = await appearanceEntryMetrics();
+      return entry?.display === 'block' && entry.buttonHit ? entry : false;
+    }, 5000, label);
   }
   async function clickAppearanceEntry() {
     const point = await cdp.evaluate(`(()=>{
@@ -1465,7 +1488,7 @@ try {
     assert.equal(await cdp.evaluate('document.querySelectorAll("iframe[aria-label]").length'), 0);
     assert.equal(await cdp.evaluate(`(()=>{const input=document.querySelector('textarea');input.focus();return document.activeElement===input;})()`), true,
       'the host composer remains focusable before opening settings');
-    const entry = await appearanceEntryMetrics();
+    const entry = await waitForAppearanceEntry('appearance entry is ready after completing playback');
     assert.equal(entry.display, 'block');
     assert.equal(entry.position, 'fixed');
     assert.equal(entry.buttonPosition, 'static');
@@ -1947,6 +1970,28 @@ try {
     };
     const initial = await inspect();
     assertFlow(initial, 'initial Home nav');
+    assert.ok(initial.entryRect.y - (initial.dotRect.y + initial.dotRect.height) >= 6,
+      'appearance has visible spacing below Your dot');
+
+    await cdp.evaluate(`(()=>{
+      const badge=document.createElement('span');
+      badge.dataset.fixtureUnread=''; badge.textContent='11 unread message';
+      document.querySelector('[data-fixture-your-dot]').appendChild(badge);
+    })()`);
+    await delay(250);
+    const unread = await until(async () => {
+      const value = await inspect();
+      return value.yourDot?.text === 'Your dot11 unread message' && value.afterYourDot
+        && value.position === 'static' ? value : false;
+    }, 3000, 'appearance stays in navigation after unread count appears');
+    assert.ok(unread.entryRect.y - (unread.dotRect.y + unread.dotRect.height) >= 6);
+    await cdp.evaluate("document.querySelector('[data-fixture-unread]').remove()");
+    await delay(250);
+    const cleared = await until(async () => {
+      const value = await inspect();
+      return value.yourDot?.text === 'Your dot' && value.afterYourDot && value.position === 'static' ? value : false;
+    }, 3000, 'appearance stays in navigation after unread count clears');
+    assertFlow(cleared, 'unread cleared');
 
     assert.equal(await cdp.evaluate('window.__fixtureSetHomeNavWidth(168)'), true);
     const narrow = await until(async () => {
@@ -2211,17 +2256,27 @@ try {
       });
       await cdp.evaluate(`(()=>{
         const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
-        shell.style.gridTemplateColumns='64px minmax(0,1fr)';
-        sidebar.style.width='64px';sidebar.style.overflow='hidden';
+        shell.style.gridTemplateColumns='52px minmax(0,1fr)';
+        sidebar.style.width='52px';sidebar.style.overflow='hidden';
+        const rail=document.createElement('nav');rail.dataset.fixtureCollapsedRail='1';
+        rail.style.cssText='position:fixed;left:0;top:44px;bottom:0;width:52px;z-index:10';
+        for (const top of [8,65,122,180,240,295]) {
+          const button=document.createElement('button');button.setAttribute('aria-label','Rail control');
+          button.style.cssText='position:absolute;left:6px;width:40px;height:40px;top:'+top+'px';rail.appendChild(button);
+        }
+        document.body.appendChild(rail);
         document.querySelector('[role="menu"]').scrollIntoView({block:'center',inline:'nearest'});
       })()`);
       await cdp.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+      await delay(200); // The real entry batches layout updates after host mutations.
       metrics = await until(async () => {
         const value = await appearanceEntryMetrics();
         return value?.rect.height === 44 ? value : false;
       }, 3000, 'the 44px fallback is positioned after the collapsed sidebar settles');
       assert.ok(metrics, 'completed page still exposes the appearance entry');
       assert.equal(metrics.rect.height, 44, 'the compact narrow-viewport appearance button retains a 44px touch target');
+      assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
+        'collapsed-sidebar entry must stay within the actual 52px rail and not cover conversation text: '+JSON.stringify(metrics.rect));
       await screenshot('appearance-entry-collapsed-sidebar-640x720.png');
       assert.equal(metrics.entryHit, true, 'the entry host is hit-testable in the collapsed-sidebar viewport');
       assert.equal(metrics.buttonHit, true, 'the shadow button is hit-testable in the collapsed-sidebar viewport: '
@@ -2237,14 +2292,48 @@ try {
           footerLabel: metrics.composerLabelRect, footerLabelOverlap: metrics.composerLabelOverlap,
           textarea: metrics.inputRect, textareaOverlap: metrics.inputOverlap,
         }));
-      return { modeledLayout: { sidebarWidth: 64, viewport: { width: 640, height: 720 } }, ...metrics };
+      return { modeledLayout: { sidebarWidth: 52, viewport: { width: 640, height: 720 } }, ...metrics };
     } finally {
       await cdp.evaluate(`(()=>{
+        document.querySelector('[data-fixture-collapsed-rail]')?.remove();
         const shell=document.querySelector('[data-app-shell-frame]'),sidebar=document.querySelector('.sidebar');
         const restore=(node,value)=>value===null?node.removeAttribute('style'):node.setAttribute('style',value);
         if(shell)restore(shell,${JSON.stringify(originalStyles.shell)});
         if(sidebar)restore(sidebar,${JSON.stringify(originalStyles.sidebar)});
       })()`);
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 1512, height: 889, screenWidth: 1512, screenHeight: 889, deviceScaleFactor: 1, mobile: false,
+      });
+    }
+  });
+  await check('collapsed rail keeps avatar entry compact and accessible', async () => {
+    await navigate('/fixture.html?entry-avatar=1');
+    const ready = await awaitGeneratedReady('avatar entry startup is ready');
+    await cdp.evaluate(`window.__startupFixtureSend(${ready.runId},{type:'azhou-startup',action:'complete',runId:${ready.runId},skipped:false})`);
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'
+      &&!document.querySelector('iframe[aria-label]')`), 5000, 'avatar entry startup completes');
+    try {
+      await cdp.call('Emulation.setDeviceMetricsOverride', {
+        width: 640, height: 720, screenWidth: 640, screenHeight: 720, deviceScaleFactor: 1, mobile: false,
+      });
+      await cdp.evaluate(`(()=>{
+        const rail=document.createElement('nav');rail.dataset.fixtureCollapsedRail='1';
+        rail.style.cssText='position:fixed;left:0;top:44px;bottom:0;width:52px;z-index:10';
+        const button=document.createElement('button');button.setAttribute('aria-label','Rail control');
+        button.style.cssText='position:absolute;left:6px;top:8px;width:40px;height:40px';
+        rail.appendChild(button);document.body.appendChild(rail);
+      })()`);
+      await delay(200);
+      const metrics=await appearanceEntryMetrics();
+      assert.ok(metrics.avatar, 'the real compact fallback includes an avatar');
+      assert.equal(metrics.rect.height, 44);
+      assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
+        'avatar entry must remain within the rail: '+JSON.stringify(metrics.rect));
+      assert.ok(metrics.buttonAriaLabel && metrics.buttonHit, 'the compact entry remains named and clickable');
+      await screenshot('appearance-entry-collapsed-avatar-640x720.png');
+      return metrics;
+    } finally {
+      await cdp.evaluate(`document.querySelector('[data-fixture-collapsed-rail]')?.remove()`);
       await cdp.call('Emulation.setDeviceMetricsOverride', {
         width: 1512, height: 889, screenWidth: 1512, screenHeight: 889, deviceScaleFactor: 1, mobile: false,
       });
@@ -2584,7 +2673,7 @@ try {
     assert.equal(await cdp.evaluate(`window.__startupAnimationRuns.length`), 1,
       'canceling an in-play draft does not create another animation run');
 
-    const canceledEntry = await appearanceEntryMetrics();
+    const canceledEntry = await waitForAppearanceEntry('appearance entry is ready after canceling settings');
     assert.equal(canceledEntry.display, 'block');
     const appearanceClick = await clickAppearanceEntry();
     assert.equal(appearanceClick.focused, true);
@@ -2745,6 +2834,32 @@ try {
         runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
     })()`), 15000, 'second draft preview becomes ready for a natural end');
     const naturalPreviewStartedAt = Date.now();
+    for (const expectedStage of ['portrait', 'shutter']) {
+      const previewLabel = await until(() => cdp.evaluate(`(()=>{
+        const settings=document.querySelector('iframe[aria-label]')?.contentDocument;
+        const frame=settings?.querySelector('iframe[data-agent-skin-settings-preview-frame]');
+        const doc=frame?.contentDocument, stage=doc?.querySelector('[data-agent-skin-stage]');
+        const label=doc?.querySelector('[data-agent-skin-stage-text]');
+        if(stage?.dataset.stage!==${JSON.stringify(expectedStage)}||!label)return false;
+        const progressNode=doc.querySelector('[data-agent-skin-progress]');
+        const progress=progressNode?.textContent||'';
+        if(stage.dataset.stage==='portrait'&&Number(progress.match(/(\\d+)%/)?.[1]||0)<93)return false;
+        const style=frame.contentWindow.getComputedStyle(label);
+        return {stage:stage.dataset.stage,opacity:style.opacity,display:style.display,
+          live:label.getAttribute('aria-live'),text:label.textContent,progress,
+          progressOpacity:frame.contentWindow.getComputedStyle(progressNode).opacity,
+          progressRole:progressNode.getAttribute('role'),
+          progressValue:progressNode.getAttribute('aria-valuenow')};
+      })()`), 15000, `settings preview reaches ${expectedStage}`);
+      assert.equal(previewLabel.opacity, '0',
+        `${expectedStage} status must not cover the artwork subtitle in the real settings preview`);
+      assert.notEqual(previewLabel.display, 'none', 'the live status must remain accessible');
+      assert.equal(previewLabel.live, 'polite');
+      assert.ok(previewLabel.text);
+      assert.equal(previewLabel.progressOpacity, '0', 'numeric progress must not overlap the canvas title');
+      assert.equal(previewLabel.progressRole, 'progressbar', 'progress remains available to assistive technology');
+      assert.equal(Number(previewLabel.progressValue), Number(previewLabel.progress.match(/(\d+)%/)?.[1]));
+    }
     const naturalPreviewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
       const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
@@ -3457,7 +3572,7 @@ try {
         assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true,
           'the public API opens the first settings draft during playback');
       } else {
-        const entry = await appearanceEntryMetrics();
+        const entry = await waitForAppearanceEntry('appearance entry is ready before settings save ' + round);
         assert.equal(entry?.display, 'block', 'appearance entry is visible before settings save ' + round);
         assert.equal(entry?.entryHit, true, 'appearance entry is clickable before settings save ' + round);
         assert.equal(entry?.buttonHit, true, 'appearance button is clickable before settings save ' + round);
@@ -4072,7 +4187,11 @@ try {
           return original.apply(this,args);
         };
       }
-      try{window.launcherUI.seek(${seconds});return {...state,report:window.launcherUI.report()};}
+      try{
+        window.launcherUI.seek(${seconds});
+        const stageOffset=state.translates.shift();
+        return {...state,stageOffset,report:window.launcherUI.report()};
+      }
       finally{for(const [name,original]of originals)proto[name]=original;}
     })()`);
     const inspectVariant = async dir => {
@@ -4625,7 +4744,7 @@ try {
   if (options.generatedPayload) {
     const startupWallpaperFailureCheck = 'generated startup wallpaper failure is visible near the appearance entry';
     if (!onlyChecks || onlyChecks.has(startupWallpaperFailureCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=notice');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=notice');
     }
     await check(startupWallpaperFailureCheck, async () => {
       const ready = await until(() => cdp.evaluate(`(()=>{
@@ -4689,8 +4808,16 @@ try {
         await until(() => cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
           ?.shadowRoot?.querySelector('[data-agent-skin-wallpaper-recovery]')?.style.colorScheme
           ===${JSON.stringify(theme)}`), 3000, theme + ' recovery appearance update');
-        await cdp.evaluate(`document.querySelector('[data-agent-skin-entry="appearance"]')
-          ?.shadowRoot?.querySelector('[aria-haspopup="dialog"]')?.focus()`);
+        const focusStart = await cdp.evaluate(`(()=>{
+          const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
+          const shadow=entry?.shadowRoot,button=shadow?.querySelector('[aria-haspopup="dialog"]');
+          const retry=shadow?.querySelector('[data-agent-skin-wallpaper-retry]');
+          button?.focus();
+          return {hostFocused:document.activeElement===entry,buttonFocused:shadow?.activeElement===button,
+            display:entry&&getComputedStyle(entry).display, inert:entry?.inert, retryDisabled:retry?.disabled};
+        })()`);
+        assert.equal(focusStart.buttonFocused, true,
+          'the appearance button receives focus before testing recovery Tab order: '+JSON.stringify(focusStart));
         await dispatchTab();
         const retryFocus = await cdp.evaluate(`(()=>{
           const shadow=document.querySelector('[data-agent-skin-entry="appearance"]')?.shadowRoot;
@@ -4742,7 +4869,7 @@ try {
 
     const startupWallpaperRetryCheck = 'generated startup wallpaper retry succeeds without replaying the animation';
     if (!onlyChecks || onlyChecks.has(startupWallpaperRetryCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=retry');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=retry');
     }
     await check(startupWallpaperRetryCheck, async () => {
       const ready = await awaitGeneratedReady('generated animation ready before its wallpaper retry');
@@ -4819,7 +4946,7 @@ try {
 
     const startupWallpaperHostFocusCheck = 'generated startup wallpaper retry preserves host focus after it moves outside recovery';
     if (!onlyChecks || onlyChecks.has(startupWallpaperHostFocusCheck)) {
-      await navigate('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=host');
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-shell=1&fail-first-wallpaper-shell-observer=1&focus-case=host');
     }
     await check(startupWallpaperHostFocusCheck, async () => {
       const ready = await awaitGeneratedReady('generated animation ready before preserving host focus');
@@ -4889,6 +5016,15 @@ try {
         return window.__startupAPI.status().phase==='settings'
           &&doc?.querySelector('[data-agent-skin-settings]')?.open;
       })()`), 15000, 'generated settings dialog opens inside the overlay iframe');
+      const chooserCancel = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+        const input=doc?.querySelector('[data-agent-skin-image-input="artwork"]');
+        input?.dispatchEvent(new frame.contentWindow.Event('cancel',{bubbles:true}));
+        return {phase:window.__startupAPI.status().phase,
+          open:!!doc?.querySelector('[data-agent-skin-settings]')?.open};
+      })()`);
+      assert.deepEqual(chooserCancel,{phase:'settings',open:true},
+        'canceling the native image chooser keeps generated settings open');
       const isolation = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
         return {bodyInert:document.body.inert,rootInert:document.querySelector('#root')?.inert,
@@ -4936,12 +5072,19 @@ try {
           const focus = await cdp.evaluate(`(()=>{
             const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
             const frame=document.querySelector('iframe[aria-label]');
+            const selected=frame?.contentDocument?.activeElement;
+            const style=selected?frame.contentWindow.getComputedStyle(selected):null;
             return {value:input?.value,hostTextareaFocused:document.activeElement===input,
               hostFrameFocused:document.activeElement===frame,
               parentFocus:document.activeElement?.tagName+'#'+(document.activeElement?.id||''),
               dialogFocus:frame?.contentDocument?.activeElement?.tagName+'#'
-                +(frame?.contentDocument?.activeElement?.id||'')};
+                +(frame?.contentDocument?.activeElement?.id||''),
+              focusVisible:selected?.matches(':focus-visible'),outlineStyle:style?.outlineStyle,outlineWidth:style?.outlineWidth};
           })()`);
+          if (focus.hostFrameFocused && focus.focusVisible) {
+            assert.ok(focus.outlineStyle !== 'none' && parseFloat(focus.outlineWidth) >= 3,
+              'keyboard focus remains visible in the generated settings payload: ' + JSON.stringify(focus));
+          }
           if (!focus.hostFrameFocused && trace.length < 4) trace.push({ shiftKey, index, ...focus });
           if (focus.hostTextareaFocused) {
             textareaReached = { shiftKey, index, parentFocus: focus.parentFocus };
@@ -5084,7 +5227,11 @@ try {
       assert.ok(generatedPayloadSource !== null, 'requires the generated install.js payload');
       const expectedTabs = { 'zh-CN': ['启动动画', '工作区背景', '关于与状态'], en: ['Startup animation', 'Workspace background', 'About & status'] };
       const matrix = [];
+      // A previous check may leave another tab in front, which pauses this page's
+      // animation frames. Exercise that case before bringing the fixture forward.
+      const { targetId: otherTarget } = await cdp.call('Target.createTarget', { url: 'about:blank' });
       try {
+        await cdp.call('Page.bringToFront');
         for (const locale of ['zh-CN', 'en']) for (const theme of ['light', 'dark']) {
           await cdp.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
           await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] });
@@ -5216,8 +5363,11 @@ try {
           }
         }
       } finally {
-        await cdp.call('Emulation.clearDeviceMetricsOverride');
-        await cdp.call('Emulation.setEmulatedMedia', { features: [] });
+        try { await cdp.call('Target.closeTarget', { targetId: otherTarget }); }
+        finally {
+          try { await cdp.call('Emulation.clearDeviceMetricsOverride'); }
+          finally { await cdp.call('Emulation.setEmulatedMedia', { features: [] }); }
+        }
       }
       return { payload: options.generatedPayload, matrix };
     });
@@ -5849,7 +5999,10 @@ try {
         const state=window.__startupAPI.status();
         return state.phase==='complete'&&state.completion?.cause==='skip'?state:false;
       })()`), 5000, 'generated animation completes under strict style-src self');
-      const entry = await appearanceEntryMetrics();
+      const entry = await until(async () => {
+        const value = await appearanceEntryMetrics();
+        return value?.display !== 'none' ? value : false;
+      }, 5000, 'appearance entry becomes available under strict style-src self');
       const recovery = await cdp.evaluate(`(()=>{
         const entry=document.querySelector('[data-agent-skin-entry="appearance"]');
         const shadow=entry?.shadowRoot;
@@ -5933,6 +6086,14 @@ try {
         const state=window.__startupAPI.status(),frame=document.querySelector('iframe[aria-label]');
         return state.phase==='settings'&&state.ready&&frame?.contentDocument.querySelector('dialog')?.open?state:false;
       })()`), 15000, 'generated appearance entry opens settings under strict style-src self');
+      await dispatchTab(false);
+      const focus = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),element=frame?.contentDocument?.activeElement;
+        const style=element&&frame.contentWindow.getComputedStyle(element);
+        return {visible:!!element?.matches(':focus-visible'),style:style?.outlineStyle,width:style?.outlineWidth};
+      })()`);
+      assert.ok(focus.visible && focus.style !== 'none' && parseFloat(focus.width) >= 3,
+        'settings keyboard focus stays visible under strict host CSP: '+JSON.stringify(focus));
       await screenshot('appearance-settings-csp-style-src-self.png');
       return { ready: { runId: ready.runId, phase: ready.phase }, completed: completed.completion,
         wallpaper: completed.wallpaper, entry, recovery,

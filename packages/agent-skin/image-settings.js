@@ -135,6 +135,7 @@ function createImageSettings(environment) {
   let defaultTextFallbacks = Object.create(null);
   let loadReason = '';
   let dialog = null;
+  let panelFocusSheet = null;
   let panelControls = null;
   let draft = null;
   let panelOpen = false;
@@ -1063,6 +1064,20 @@ function createImageSettings(environment) {
     dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
     dialog.style.setProperty('color', 'var(--agent-skin-text, CanvasText)');
 
+    const focusRules = '[data-agent-skin-settings] :is(button,input,textarea,select,summary,[tabindex]):focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 5px #111}@media(forced-colors:active){[data-agent-skin-settings] :is(button,input,textarea,select,summary,[tabindex]):focus-visible{outline-color:Highlight;box-shadow:none}}';
+    try {
+      const Sheet = document.defaultView?.CSSStyleSheet;
+      if (typeof Sheet === 'function' && 'adoptedStyleSheets' in document) {
+        panelFocusSheet = new Sheet();
+        panelFocusSheet.replaceSync(focusRules);
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, panelFocusSheet];
+      }
+    } catch { panelFocusSheet = null; }
+    if (!panelFocusSheet) {
+      const focusStyle = document.createElement('style');
+      focusStyle.textContent = focusRules;
+      dialog.appendChild(focusStyle);
+    }
     const content = document.createElement('section');
     content.style.cssText = 'padding:20px clamp(16px,3vw,26px) 0';
     const header = document.createElement('header');
@@ -1468,6 +1483,7 @@ function createImageSettings(environment) {
     dialog.appendChild(content);
     document.body.appendChild(dialog);
     dialog.addEventListener('cancel', event => {
+      if (event.target !== dialog) return;
       event.preventDefault();
       cancelSettings();
     });
@@ -1551,6 +1567,10 @@ function createImageSettings(environment) {
       draft = null;
     }
     try { dialog?.remove(); } catch {}
+    if (panelFocusSheet) {
+      try { document.adoptedStyleSheets = document.adoptedStyleSheets.filter(sheet => sheet !== panelFocusSheet); } catch {}
+      panelFocusSheet = null;
+    }
     try { localizationUnsubscribe?.(); } catch {}
     localizationUnsubscribe = null;
     dialog = null;

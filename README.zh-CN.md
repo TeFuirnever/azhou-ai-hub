@@ -89,7 +89,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | 可选地安装为原生 Codex 插件，目标路径必须显式指定；hook 信任需单独检查。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | 仅适配 Codex。应用本地化显示名为 `阿舟 AI 实验室 for Codex` / `Azhou AI Lab for Codex`，原生入口仍为 `~/Applications/阿舟 AI 实验室.app`；先验证新入口，再退役已核实归属的旧名入口。候选使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 23 将 Codex 显示名与固定安装文件名分离，Finder 本地化仍跟随 macOS 语言；维护提示跟随系统语言。build 24 在页面内控件可见且可命中之前隐藏 Appearance 备用入口；Home 导航未出现时，备用位置避开 composer，导航出现后回到 Your dot 下方。build 25 兼容 Your dot 按钮位于导航列表包装中的结构。build 26 将 Codex 页面策略抽成显式传入的 page adapter，并新增共享宿主合同与按操作能力门；启动载荷输入登记同步，既有行为保持不变。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属和真实宿主验收分别核验；程序再分发尚未获授权。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | 仅适配 Codex，当前源码版本为 `0.9.0/build 32`。应用本地化显示名为 `阿舟 AI 实验室 for Codex` / `Azhou AI Lab for Codex`，原生入口仍为 `~/Applications/阿舟 AI 实验室.app`；先验证新入口，再退役已核实归属的旧名入口。使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 23 将 Codex 显示名与固定安装文件名分离，Finder 本地化仍跟随 macOS 语言；维护提示跟随系统语言。build 24 在页面内控件可见且可命中之前隐藏 Appearance 备用入口；Home 导航未出现时，备用位置避开 composer，导航出现后回到 Your dot 下方。build 25 兼容 Your dot 按钮位于导航列表包装中的结构。C0 定义共享宿主合同和按操作能力门，当前仅构造 Codex driver；没有已核验的 ZCode driver，因此 ZCode 请求会 fail closed。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。集成包尚无真实宿主验收。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属需单独核验；程序再分发尚未获授权。 |
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
@@ -100,7 +100,7 @@ python scripts/azhou_hub.py integrations agent-skin --help
 
 Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)：沿用已完成控制器最近请求的图片和强度，不重播动画。状态检查仍只读，并报告有限的失败原因码；不替换不受支持或其他所有者的控制器。
 
-当前本地候选增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
+当前源码增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
 
 `python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。两个编排包同时交付任务归属合同——普通任务沿用 Kit 命名角色，用户明确选定的 pstack 工作流负责该任务，并以显式模型与 effort 派发且不选命名角色——并在隔离 Codex 环境留有有界派发回据（[证据](evidence/pstack-orchestrator-dispatch-2026-10-26.md)）。两个包也可共享同一受控 Codex 环境：Hub 与 Kit 两个入口共用同一兼容判定（原生注册加上模型表 `session hook: off` 行共同决定），其安装生命周期既经确定性测试验证，也在已记录的 Codex 客户端上原生验证过——一次性环境中的两种安装顺序、重复安装、armed 目标转换与两种移除顺序（[原生验收](evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)）；五个任务边界行为——普通任务默认路径、同任务追问保持负责人、pstack 任务完成后恢复默认规则、中途切换先处理在途子代理、显式模型被拒时明确阻塞并报告原因——已在一次性受控环境中真机观测（[live 会话记录](evidence/pstack-orchestrator-live-sessions-2026-10-27.md)）。每个入口也都具备属主明确的退出方式——Hub `uninstall-plan`/`uninstall` 与 Kit `--uninstall`——只恢复各自记录的受管范围，保留另一模块与用户后续修改，并以差异报告代替强制覆盖。既有安装——Kit 加共享 pstack Skills、原生插件或本地改过的共享 Skills——先经只读 `transition-plan` 入口审阅：逐状态标明实际来源、内容差异、owner 与恢复依据；仅当原生注册表能把当前注册解析回 Hub 回据的快照时才给出可应用的转换；绝不凭同名或字节相同接管未知安装；该入口本身不授权对主环境应用任何变更。
 

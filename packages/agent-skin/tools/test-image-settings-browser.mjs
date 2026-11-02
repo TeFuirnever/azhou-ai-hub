@@ -311,6 +311,23 @@ function browserChecks(maxInputBytes) {
     const settingsDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
     const settingsStatus = settingsDialog.querySelector('[data-agent-skin-settings-status]');
     const avatarInput = settingsDialog.querySelector('[data-agent-skin-image-input="avatar"]');
+    const wallpaperInput = settingsDialog.querySelector('[data-agent-skin-image-input="artwork"]');
+    // File inputs emit a bubbling cancel event when their native chooser is dismissed.
+    avatarInput.dispatchEvent(new child.Event('cancel', { bubbles: true }));
+    wallpaperInput.dispatchEvent(new child.Event('cancel', { bubbles: true }));
+    if (!settingsDialog.open || !api.isSettingsOpen()) {
+      throw new Error('Dismissing the image chooser closed Appearance settings');
+    }
+    const firstSettingsTab = settingsDialog.querySelector('[role="tab"][aria-selected="true"]');
+    firstSettingsTab.focus();
+    await new Promise(resolve => { window.finishSettingsFocusTest = resolve; window.settingsFocusTestReady = true; });
+    const keyboardTarget = childDocument.activeElement;
+    const focusStyle = child.getComputedStyle(keyboardTarget);
+    if (!settingsDialog.contains(keyboardTarget) || !keyboardTarget.matches(':focus-visible') || focusStyle.outlineStyle === 'none'
+      || parseFloat(focusStyle.outlineWidth) < 3) {
+      throw new Error('Keyboard focus on Appearance controls needs a clearly visible outline: '
+        + JSON.stringify({ visible: keyboardTarget.matches(':focus-visible'), style: focusStyle.outlineStyle, width: focusStyle.outlineWidth }));
+    }
     const selectImage = file => {
       const transfer = new child.DataTransfer();
       transfer.items.add(file);
@@ -511,6 +528,10 @@ function browserChecks(maxInputBytes) {
     const animationPreviewButton = settingsDialog.querySelector('[data-agent-skin-preview-animation]');
     titleInput.value = 'Local draft';
     titleInput.dispatchEvent(new child.Event('input', { bubbles: true }));
+    wallpaperInput.dispatchEvent(new child.Event('cancel', { bubbles: true }));
+    if (!api.isSettingsOpen() || titleInput.value !== 'Local draft') {
+      throw new Error('Dismissing the image chooser did not preserve the open settings draft');
+    }
     strengthInput.value = '18';
     strengthInput.dispatchEvent(new child.Event('input', { bubbles: true }));
     settingsDialog.querySelector('[data-agent-skin-settings-tab="startup"]')?.click();
@@ -554,7 +575,8 @@ function browserChecks(maxInputBytes) {
       saveSurface: saveStyle.backgroundColor,
       saveText: saveStyle.color,
     };
-    api.cancelSettings();
+    settingsDialog.dispatchEvent(new child.Event('cancel', { cancelable: true }));
+    if (api.isSettingsOpen()) throw new Error('Canceling the settings dialog should still close settings');
     const afterPreviewCancel = await api.load(defaults);
     api.openSettings({
       onApply: async value => {
@@ -894,7 +916,20 @@ try {
   await until(() => cdp.evaluate('window.imageMetadataReady === true'), 10_000,
     'classic metadata reader before deferred image settings script');
   const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ')';
-  const result = await cdp.evaluate(expression);
+  let checkFailure;
+  const checks = cdp.evaluate(expression).then(value => ({ value }), error => {
+    checkFailure = error;
+    return { error };
+  });
+  await until(async () => checkFailure || await cdp.evaluate('window.settingsFocusTestReady === true'),
+    10_000, 'keyboard focus test setup');
+  if (checkFailure) throw checkFailure;
+  await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await cdp.evaluate('window.finishSettingsFocusTest()');
+  const outcome = await checks;
+  if (outcome.error) throw outcome.error;
+  const result = outcome.value;
   await cdp.call('Accessibility.enable');
   const frameTree = await cdp.call('Page.getFrameTree');
   const settingsFrameId = frameTree.frameTree.childFrames?.[0]?.frame?.id;

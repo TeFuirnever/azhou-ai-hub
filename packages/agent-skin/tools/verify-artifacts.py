@@ -212,9 +212,8 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
-# Exact startup source set used by installed builds 17 through 25, before the shared
-# Codex page adapter was added to the payload (agent-skin-zcode C0). Preserved
-# read-only so already-installed payloads re-verify instead of silently failing.
+# Exact pre-adapter startup source set, retained for installed local builds through 30.
+# C0 and the parallel Codex line used overlapping build numbers with distinct inputs.
 PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
     'extension/renderer.mjs', 'extension/bootstrap.mjs', 'image-settings.js', 'localization.js',
@@ -222,8 +221,7 @@ PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS = (
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
-# The first build whose payload binds the shared Codex page adapter.
-PAGE_ADAPTER_STARTUP_FIRST_BUILD = 26
+PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD = 30
 # Exact 0.9.0 startup source set used before image metadata was added to the payload.
 PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS = (
     'tools/build-startup.py', 'tools/build-startup-assets.swift', 'tools/verify-artifacts.py',
@@ -683,9 +681,9 @@ def verify_startup(path, info, marker, *, current_source=True):
         if ((expected_version, expected_build) == (VERSION, BUILD)
                 or is_known_image_metadata_build):
             allowed_theme_inputs.add(current_startup_inputs)
-        # Installed builds 17 through 25 bound the pre-page-adapter source set.
+        # The local 17–30 line predates the adapter; C0 build 26 also exists.
         if (expected_version == '0.9.0' and is_known_image_metadata_build
-                and int(expected_build) < PAGE_ADAPTER_STARTUP_FIRST_BUILD):
+                and int(expected_build) <= PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD):
             allowed_theme_inputs.add(frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))

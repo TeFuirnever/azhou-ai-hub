@@ -53,6 +53,7 @@ BUILD_FILES = (
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
+    "tools/test-animation-preview-final-text-browser.mjs",
     "tools/startup-browser-selection.mjs",
     "tools/test-startup-native.py",
     "tools/build-startup.py",

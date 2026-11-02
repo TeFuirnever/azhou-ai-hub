@@ -518,6 +518,44 @@ class VerifierApiTests(unittest.TestCase):
         historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
         self.verifier.verify_startup(path, info, historic_marker, current_source=False)
 
+    def test_build30_exact_pre_page_adapter_source_set_is_allowed(self):
+        self.assertEqual(self.verifier.PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD, 30)
+        historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
+        path = self.copy_bundle("pre-page-adapter-build30")
+        marker = self.read_marker(path)
+        marker["version"], marker["build"] = "0.9.0", "30"
+        marker["inputSHA256"] = self.verifier.aggregate_inputs(marker["inputs"])
+        (path / self.verifier.MARKER).write_text(
+            json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["appVersion"], manifest["appBuild"] = "0.9.0", "30"
+        manifest["inputSHA256"] = marker["inputSHA256"]
+        manifest["sourceInputs"] = {name: marker["inputs"][name] for name in historical}
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+
+        defaults_path = path / "Contents/Resources/web/assets/defaults/contours.js"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8").removeprefix(
+            "window.AGENT_SKIN_ASSETS = Object.freeze(").removesuffix(");\n"))
+        defaults["themeConfig"]["identity"].update(version="0.9.0", build="30")
+        self.rewrite_defaults(path, defaults)
+
+        script_path = path / "Contents/Resources/startup/install.js"
+        script = script_path.read_text(encoding="utf-8")
+        prefix = "const DEFAULT_ASSETS = Object.freeze("
+        start = script.index(prefix) + len(prefix)
+        end = script.index(");\n", start)
+        embedded = json.loads(script[start:end])
+        embedded["themeConfig"]["identity"].update(version="0.9.0", build="30")
+        script_path.write_text(script[:start] + json.dumps(embedded, ensure_ascii=False, separators=(",", ":"))
+                               + script[end:], encoding="utf-8")
+        self.update_output_digest(path, "startup/install.js")
+
+        info = dict(self.info, CFBundleShortVersionString="0.9.0", CFBundleVersion="30")
+        self.verifier.verify_startup(path, info, marker, current_source=False)
+
     def test_pre_page_adapter_source_inputs_are_rejected_when_tampered(self):
         path = self.copy_bundle("pre-page-adapter-tampered")
         marker_path = path / self.verifier.MARKER
@@ -548,6 +586,27 @@ class VerifierApiTests(unittest.TestCase):
         historic_marker = json.loads((path / self.verifier.MARKER).read_text(encoding="utf-8"))
         with self.assertRaisesRegex(RuntimeError, "sourceInputs|来源"):
             self.verifier.verify_startup(path, info, historic_marker, current_source=False)
+
+    def test_current_build_requires_adapter_and_rejects_the_build30_pre_adapter_source_set(self):
+        historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
+        current = frozenset(self.verifier.STARTUP_REQUIRED_INPUTS)
+        self.assertGreater(int(self.verifier.BUILD), 30)
+        self.assertEqual(self.verifier.PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD, 30)
+        self.assertIn("extension/codex-page-adapter.mjs", current)
+
+        path = self.copy_bundle("current-with-build30-source-set")
+        manifest_path = path / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["sourceInputs"] = {name: self.marker["inputs"][name] for name in historical}
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                                 encoding="utf-8")
+
+        # Current builds are beyond the historical allowance, and the current-source
+        # path also requires the exact adapter-bearing input set.
+        for current_source in (False, True):
+            with self.subTest(current_source=current_source):
+                with self.assertRaisesRegex(RuntimeError, "sourceInputs 清单不完整"):
+                    self.verifier.verify_startup(path, self.info, self.marker, current_source=current_source)
 
     def test_previous_theme_build_11_12_source_set_is_read_only_and_exact(self):
         path = self.copy_bundle("previous-theme-build-11")

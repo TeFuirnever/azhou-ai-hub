@@ -745,6 +745,26 @@ test('settings editor leads with a draft workspace preview and passes a clone to
   fixture.api.dispose();
 });
 
+test('disposing settings releases its focus stylesheet without disturbing host styles', async () => {
+  const fixture = makeFixture();
+  const existing = {};
+  class CSSStyleSheet {
+    replaceSync(rules) { this.rules = rules; }
+  }
+  fixture.environment.document.defaultView = { CSSStyleSheet };
+  fixture.environment.document.adoptedStyleSheets = [existing];
+  await fixture.api.load({ avatar: '', artwork: '', contours: [], introTitle: 'Title',
+    introCaption: '', artworkSubtitle: '', wallpaperStrength: 42 });
+  assert.equal(fixture.api.openSettings(), true);
+  assert.equal(fixture.environment.document.adoptedStyleSheets.length, 2);
+  assert.equal(fixture.api.cancelSettings(), true);
+  assert.equal(fixture.api.openSettings(), true);
+  assert.equal(fixture.environment.document.adoptedStyleSheets.length, 2);
+  fixture.api.dispose();
+  assert.equal(fixture.environment.document.adoptedStyleSheets.length, 1);
+  assert.equal(fixture.environment.document.adoptedStyleSheets[0], existing);
+});
+
 test('a failed animation preview reports an error and keeps the draft editable', async () => {
   const fixture = makeFixture();
   await fixture.api.load({

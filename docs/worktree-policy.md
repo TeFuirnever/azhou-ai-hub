@@ -43,6 +43,8 @@ If `get` reports every slot in use or dirty, do not delete or force anything. A 
 
 Return only after proving that work is merged, committed on the intended branch, or preserved by another explicitly verified recovery point. The worktree must be clean, idle and no longer needed for review.
 
+An installed package may still bind its source marker and installation receipt to a leased worktree. Merged code alone does not release that dependency: retain the worktree, its lease, receipt and build payload until the package's native source handoff and installed-entry check succeed from the replacement source. See [the Agent Skin installation lifecycle](../packages/agent-skin/docs/installation-lifecycle.md).
+
 Before returning, `cd` the host shell to a path outside the worktree, and prompt every persistent agent shell, background terminal or editor session still holding that directory as its working directory to move out too. `treehouse return` deletes the worktree directory, and a persistent shell left inside it fails `getcwd` on every later prompt until it is moved out manually (observed 2026-10-06; `docs/research/2026-10-06-cross-harness-execution-evidence.md` §3.8).
 
 For automation, condition the return on both immutable acquisition identity and holder, and run the command from a shell whose working directory is outside `$LEASE_PATH`:
