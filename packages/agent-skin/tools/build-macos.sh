@@ -34,14 +34,14 @@ cleanup_stage() {
 trap cleanup_stage EXIT
 bundle="$stage_root/$payload_name"
 mkdir -p "$bundle/Contents/MacOS"
-python3 tools/verify-artifacts.py "${host_args[@]}" --write-bundle-info "$bundle"
-python3 tools/verify-artifacts.py "${host_args[@]}" --write-marker "$bundle"
+python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-bundle-info "$bundle"
+python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-marker "$bundle"
 "$system_bin/xcrun" --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache \
   Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift Native/CodexSkinDriver.swift Native/ZCodeSkinDriver.swift Native/ZCodeSkinRuntime.swift \
   -o "$bundle/Contents/MacOS/$native_executable" -framework AppKit -framework WebKit
 "$system_bin/xcrun" --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache Native/InstallRegistry.swift Native/InstallRegistryCore.swift -o "$stage_root/azhou-install-registry" -framework AppKit -framework CoreServices
-python3 tools/build-wallpaper.py "${host_args[@]}" --bundle "$bundle"
-python3 tools/build-startup.py "${host_args[@]}" --bundle "$bundle"
+python3 tools/build-wallpaper.py ${host_args[@]+"${host_args[@]}"} --bundle "$bundle"
+python3 tools/build-startup.py ${host_args[@]+"${host_args[@]}"} --bundle "$bundle"
 icon_source="$PWD/$theme_icon_input"
 iconset="$stage_root/AzhouAppIcon.iconset"
 mkdir -p "$iconset"
@@ -51,11 +51,11 @@ for icon_size in 16 32 128 256 512; do
   "$system_bin/sips" -z "$icon_pixels" "$icon_pixels" "$icon_source" --out "$iconset/icon_${icon_size}x${icon_size}@2x.png" >/dev/null
 done
 "$system_bin/iconutil" -c icns "$iconset" -o "$bundle/Contents/Resources/AzhouAppIcon.icns"
-python3 tools/verify-artifacts.py "${host_args[@]}" --check-inputs "$bundle"
+python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --check-inputs "$bundle"
 plutil -lint "$bundle/Contents/Info.plist"
 codesign --force --sign - "$bundle"
 codesign --verify --strict "$bundle"
-python3 tools/verify-artifacts.py "${host_args[@]}" --publish "$bundle"
+python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --publish "$bundle"
 mv -f "$stage_root/azhou-install-registry" .build/azhou-install-registry
 if [[ "$build_host" == zcode ]]; then
   printf '%s\n' 'ZCode本地候选已构建：.build/azhou-zcode-payload；未安装或替换任何日常入口。';exit 0

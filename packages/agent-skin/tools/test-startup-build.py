@@ -1059,9 +1059,23 @@ class StartupBuildTests(unittest.TestCase):
         for source in required:
             self.assertIn(source, self.marker["inputs"])
 
+    def test_system_bash_preserves_default_and_explicit_host_arguments(self):
+        script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
+        prefix = script.split('system_bin=', 1)[0]
+        command = next(line for line in script.splitlines()
+                       if line.startswith('python3 tools/verify-artifacts.py ') and '--write-bundle-info' in line)
+        probe = prefix + '\nbundle=synthetic-bundle\npython3() { printf "%s\\n" "$@"; }\n' + command + '\n'
+        for args, expected in (([], ["tools/verify-artifacts.py", "--write-bundle-info", "synthetic-bundle"]),
+                               (["--host", "zcode"], ["tools/verify-artifacts.py", "--host", "zcode", "--write-bundle-info", "synthetic-bundle"])):
+            result = subprocess.run(["/bin/bash", "-c", probe, "tools/build-macos.sh", *args],
+                                    cwd=self.root, capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+            self.assertEqual(result.stdout.splitlines(), expected)
+
     def test_native_display_names_are_localized_over_registration_safe_bundle_name(self):
         build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
-        self.assertIn('python3 tools/verify-artifacts.py --write-bundle-info "$bundle"', build_script)
+        self.assertIn('python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-bundle-info "$bundle"', build_script)
         self.assertIn("NAME = load_theme_config(ROOT)['identity']['installationName']",
                       (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
         info = self.verifier.write_bundle_info(self.bundle)
