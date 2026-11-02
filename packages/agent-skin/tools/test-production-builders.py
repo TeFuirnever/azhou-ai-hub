@@ -485,6 +485,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         class MissingInputArtifacts:
             STARTUP_REQUIRED_INPUTS = artifacts.STARTUP_REQUIRED_INPUTS
             INPUT_FILES = artifacts.STARTUP_REQUIRED_INPUTS
+            def configure_build_host(self, host): artifacts.configure_build_host(host)
             def staged_path(self, path): return Path(path)
             def load_theme_config(self, _root, require_inputs=False):
                 theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))
