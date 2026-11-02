@@ -4,6 +4,7 @@ import Foundation
     var processes: [HostProcessGeneration] = []
     var calls: [String] = []
     var mode = "ready"
+    var inspection: PageEffect?
     var payloadHash = String(repeating:"b",count:64)
     var endpoint = "http://127.0.0.1:1234"
     var page = "file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?locale=en"
@@ -47,7 +48,7 @@ import Foundation
             }
             if self.mode == "bad-receipt" { return .ready(self.receipt(b,op:UUID()),runID:1) }
             return .ready(self.receipt(b),runID:1)
-        },inspectPage:{b,_ in self.calls.append("inspect");return .present(.instance(self.receipt(b)),acquisition:.alreadyActive)},dispose:{_,_,_ in self.calls.append("dispose");return self.mode != "dispose-failed"},acquireOperation:{_ in self.calls.append("lock");return Lease(self)})
+        },inspectPage:{b,_ in self.calls.append("inspect");return self.inspection ?? .present(.instance(self.receipt(b)),acquisition:.alreadyActive)},dispose:{_,_,_ in self.calls.append("dispose");return self.mode != "dispose-failed"},acquireOperation:{_ in self.calls.append("lock");return Lease(self)})
     }
     func driver(_ capabilities: [SkinCapability] = SkinCapability.allCases) -> ZCodeSkinDriver { ZCodeSkinDriver(inputs:inputs(capabilities),assembly:assembly()) }
 }
@@ -88,6 +89,79 @@ import Foundation
         for mode in ["direct-partial", "direct-failed", "direct-existing-partial"] {let f=Fixture();f.mode=mode;let result=await f.driver().launch(f.request);let page:PageEffect;let cleanup:CleanupReport;switch result {case .partial(_,let p,let c),.failed(_,let p,let c):page=p;cleanup=c;default:fatalError("direct confirmed result lost")};if case .present(.instance(let receipt),let acquisition)=page {expect(receipt.owner == ZCodeSkinDriver.owner && cleanup.state == .notNeeded,"direct result preserves confirmed page/cleanup "+mode);if mode.contains("existing") {if case .alreadyActive=acquisition {expect(true,"existing acquisition preserved")}else{fatalError("rollback right upgraded")}}}else{fatalError("direct page erased")};expect(!f.calls.contains("dispose"),"no automatic rollback "+mode)}
         do {let f=Fixture();f.mode="direct-foreign-partial";let result=await f.driver().launch(f.request);if case .failed(_,let p,let c)=result {expect(p.isInstallationUnknown && c.state == .unknown,"foreign confirmed receipt rejected")}else{fatalError("foreign direct accepted")}}
         do {let f=Fixture();f.mode="hold-existing";let driver=f.driver();let task=Task {await driver.launch(f.request)};while f.waiting == nil {await Task.yield()};task.cancel();f.waiting?.resume();let result=await task.value;if case .partial(_,.present(.instance(let receipt),.alreadyActive),let c)=result {expect(receipt.createdByOperationID != f.request.operationID && c.state == .notNeeded,"cancel after existing skip preserves acquisition without rollback");expect(!f.calls.contains("dispose"),"cancel existing never disposes")}else{fatalError("existing cancellation receipt erased")}}
+        // Binding and inspection counterexamples: synthetic ports only.
+        do {
+            let f = Fixture(), original = Fixture().inputs()
+            let inputs = BoundHostInputs(identity: original.identity, findings: original.findings, contractVersion: "unsupported-contract")
+            let result = await ZCodeSkinDriver(inputs: inputs, assembly: f.assembly()).launch(f.request)
+            if case .refused(let refusal) = result { expect(refusal.reason == .identityMismatch && f.calls.isEmpty, "wrong bound contract refuses before IO") }
+            else { fatalError("bound contract accepted") }
+        }
+        do {
+            let f = Fixture(), original = Fixture().inputs()
+            let finding = original.findings[0]
+            let inputs = BoundHostInputs(identity: original.identity, findings: [finding, finding], contractVersion: original.contractVersion)
+            let result = await ZCodeSkinDriver(inputs: inputs, assembly: f.assembly()).launch(f.request)
+            if case .refused(let refusal) = result { expect(refusal.reason == .evidenceMismatch && f.calls.isEmpty, "conflicting evidence refuses before IO") }
+            else { fatalError("duplicate evidence accepted") }
+        }
+        do {
+            let f = Fixture(); f.processes = [f.process]
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: .instance(f.receipt(f.binding))))
+            if case .observed(let process, .present(.instance(let receipt), .alreadyActive)) = result {
+                expect(process == f.process && receipt.location == f.receipt(f.binding).location, "inspect preserves same-generation confirmed receipt")
+                expect(!f.calls.contains("install") && !f.calls.contains("dispose"), "page inspect performs no install or disposal")
+            } else { fatalError("same generation inspection lost") }
+        }
+        for legacy in [false, true] {
+            let f = Fixture(); f.processes = [f.process]
+            let old = PageLocation(application: f.key, process: f.process, documentToken: "old-context")
+            let receipt = f.receipt(f.binding)
+            let previous: PageObservation = legacy
+                ? .legacyV1(LegacyV1Observation(location: old, owner: "azhou-codex-startup", protocolVersion: 1))
+                : .instance(ControllerReceipt(location: old, owner: receipt.owner, protocolVersion: receipt.protocolVersion, payloadSHA256: receipt.payloadSHA256, controllerInstanceID: receipt.controllerInstanceID, createdByOperationID: receipt.createdByOperationID))
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: previous))
+            if case .staleTarget(let failure) = result {
+                expect(failure.reason == .targetStale && !f.calls.contains("inspect"), "old instance/legacy document refuses before page read")
+            } else { fatalError("old document observed as current") }
+        }
+        do {
+            let f = Fixture(); f.processes = [f.process]; f.payloadHash = "invalid"
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: nil))
+            if case .staleTarget(let failure) = result { expect(failure.reason == .ownerConflict, "inspect refuses malformed confirmed receipt") }
+            else { fatalError("malformed inspection receipt accepted") }
+        }
+        for sameLocation in [true, false] {
+            let f = Fixture(); f.processes = [f.process]
+            let location = PageLocation(application: f.key, process: f.process, documentToken: sameLocation ? f.binding.documentToken : "other-document")
+            f.inspection = .absent(location)
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: nil))
+            if sameLocation {
+                if case .observed(_, .absent(let observed)) = result { expect(observed == location, "absence is accepted only for the bound document") }
+                else { fatalError("bound absence lost") }
+            } else {
+                if case .staleTarget(let failure) = result { expect(failure.reason == .targetStale, "another document cannot prove absence") }
+                else { fatalError("foreign absence accepted") }
+            }
+        }
+        do {
+            let f = Fixture(); f.processes = [f.process]
+            f.inspection = .present(.legacyV1(LegacyV1Observation(location: f.receipt(f.binding).location, owner: "azhou-codex-startup", protocolVersion: 1)), acquisition: .alreadyActive)
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: nil))
+            if case .staleTarget(let failure) = result { expect(failure.reason == .ownerConflict && !f.calls.contains("dispose"), "Codex legacy controller is refused without disposal") }
+            else { fatalError("legacy controller promoted to ZCode") }
+        }
+        for unknown in [false, true] {
+            let f = Fixture(); f.processes = [f.process]
+            let operationID = UUID()
+            f.inspection = unknown ? .unknown(operationID: operationID, detail: "synthetic-unconfirmed") : .notObserved(reason: "synthetic-not-read")
+            let result = await f.driver().inspect(SkinInspectRequest(expectedApplication: f.key, operationID: UUID(), deadline: 200, includePage: true, previousObservation: nil))
+            if case .observed(_, let page) = result {
+                if unknown { if case .unknown(let id, _) = page { expect(id == operationID, "inspect preserves unknown operation provenance") } else { fatalError("unknown was invented as absence") } }
+                else { expect(page.isNotObserved, "inspect preserves not-observed without invented absence") }
+            } else { fatalError("unconfirmed observation lost") }
+        }
+
         print("ZCode native synthetic checks: \(count) passed; real host not run")
     }
 }
