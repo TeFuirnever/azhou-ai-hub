@@ -14,14 +14,49 @@ import shutil
 import subprocess
 import sys
 
+ANCHOR = "b689702097be8bd3e2a4b6f2a10afb348cf5cb37"
 EXPECTED = {
-    "test-startup-browser.mjs": "0ffb327cf7071965504512c668bead84725b91972c2d70360dd6775484ac7355",
+    "test-startup-browser.mjs": "aeab9fd4f364733430884944d0244c2600f35acbdc7236161ee6f3317c8bde16",
     "fixture-browser-lifecycle.mjs": "559ef05ea3f71ffaf3b64c65157476feeb9aa54c24c97b40c64777b00bafab77",
+}
+HARNESS_PATCH_SHA256 = "9f98ade764e5f0f6d66a1808976a39dfe306748e834bc16ba2f12bd7ee9bc396"
+WALLPAPERS = {
+    "wallpaper.css": "e2974673a1c92d2d1f4c8b36cfc695d5806bb975e4c7c27f70b430fc4dbfc16a",
+    "renderer.js": "38226c5f4d31ba773def9eca1f69e44048c5e7d9a6206fd9bdc1dae43149a933",
 }
 
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def require_anchor(fixture_repo):
+    probe = subprocess.run(["git", "-C", str(fixture_repo), "cat-file", "-e", ANCHOR + "^{commit}"], capture_output=True, check=False)
+    if probe.returncode != 0:
+        raise ValueError("public source anchor " + ANCHOR + " is missing from this repository; fetch the public history containing it")
+
+
+def read_patch(root):
+    encoded = root / "tooling/browser/harness.patch.b64"
+    patch_bytes = base64.b64decode("".join(encoded.read_text().splitlines()), validate=True)
+    if hashlib.sha256(patch_bytes).hexdigest() != HARNESS_PATCH_SHA256:
+        raise ValueError("packaged harness patch digest mismatch")
+    patch = root / "tooling/browser/harness.patch"
+    with patch.open("xb") as handle:
+        handle.write(patch_bytes)
+    return patch
+
+
+def restore_wallpapers(root, fixture_repo):
+    require_anchor(fixture_repo)
+    for name, digest in WALLPAPERS.items():
+        data = subprocess.check_output(["git", "-C", str(fixture_repo), "show", ANCHOR + ":packages/codex-startup-animation/wallpaper/" + name])
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError("recorded wallpaper digest mismatch: " + name)
+        destination = root / "codex-startup-animation/wallpaper" / name
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with destination.open("xb") as handle:
+            handle.write(data)
 
 
 def copy_file(source, destination):
@@ -59,13 +94,7 @@ def prepare(args):
     from command_log import CommandLog
     patch_commands = root / "prepare-commands"
     patch_commands.mkdir(mode=0o700)
-    patch = root / "tooling/browser/harness.patch"
-    encoded_patch = root / "tooling/browser/harness.patch.b64"
-    patch_bytes = base64.b64decode("".join(encoded_patch.read_text().splitlines()), validate=True)
-    if hashlib.sha256(patch_bytes).hexdigest() != "9f98ade764e5f0f6d66a1808976a39dfe306748e834bc16ba2f12bd7ee9bc396":
-        raise ValueError("packaged harness patch digest mismatch")
-    with patch.open("xb") as handle:
-        handle.write(patch_bytes)
+    patch = read_patch(root)
     log = CommandLog(patch_commands, [{"path": str(patch.relative_to(root)), "sha256": sha(patch)}], root=root, stage=root)
     log.record(["patch", "--batch", "--forward", "-p1", "-i", str(patch)], cwd=source, check=True,
                artifact_paths=[source / "tools" / name for name in [*EXPECTED, "test-startup-build.py", "test-animation-preview-final-text-browser.mjs"]])
@@ -79,15 +108,11 @@ def prepare(args):
     manifest = binding["normal_default_manifest"]
     copy_file(resource / normal["path"], root / "normal/install.js")
     copy_file(resource / manifest["path"], root / "normal/manifest.json")
-    fixture_repo = Path(__file__).resolve().parents[3]
-    for name in ["wallpaper.css", "renderer.js"]:
-        relative = "packages/codex-startup-animation/wallpaper/" + name
-        data = subprocess.check_output(["git", "-C", str(fixture_repo), "show", "8eec664611c2f679be6714bd888a07d764459c8a:" + relative])
-        destination = root / "codex-startup-animation/wallpaper" / name
-        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with destination.open("xb") as handle:
-            handle.write(data)
-    provenance = {"scope": "same new resource candidate, exact restored harness; fixture only",
+    restore_wallpapers(root, Path(__file__).resolve().parents[3])
+    provenance = {"scope": "same new resource candidate, public-anchor source with recorded fixture restoration; fixture only",
+                  "source_anchor": {"commit": ANCHOR,
+                                    "wallpaper": {"source_commit": ANCHOR, "digests": WALLPAPERS,
+                                                  "historical_baseline": "copies recorded as identical at the historical baseline; digests re-verified on every run"}},
                   "source_binding": {"path": str(binding_path), "sha256": sha(binding_path)},
                   "source_producer": {"path": str(producer_path), "sha256": sha(producer_path)},
                   "normal_payload": {"path": "normal/install.js", "sha256": sha(root / "normal/install.js")},

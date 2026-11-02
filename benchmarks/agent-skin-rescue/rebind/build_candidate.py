@@ -1,7 +1,8 @@
 """Build retained source-copy resources with explicit diagnostic and default paths.
 
-All subprocesses operate on private copies. This never builds, installs, signs,
-launches, or connects to a host application.
+Source is extracted from the public anchor commit, so a fresh clone can run the
+whole composition. All subprocesses operate on private copies. This never
+builds, installs, signs, launches, or connects to a host application.
 """
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,8 @@ import uuid
 
 from source_patch import patch_sources
 
-BASE = "8eec664611c2f679be6714bd888a07d764459c8a"
+ANCHOR = "b689702097be8bd3e2a4b6f2a10afb348cf5cb37"
+ANCHOR_TREE = "93de39312c4a7aadaa2800ff2d60d52de3e4aac7"
 MATERIALS = {
     "working.png": ("working.png", "34dc9a8e9c06c226ec0cc80878548f118ff4a23b4a87d160674e66db4a905e58"),
     "wallpaper-scene-q-v3.png": ("wallpaper-scene-q-v3.png", "566eee5034343bb8463fa684dc0b90fe3d2c5d8f2adde1c9d71356bf192acbcb"),
@@ -57,7 +59,13 @@ def prepare(root, source, materials, tools):
     root.mkdir(mode=0o700)
     repo = Path(subprocess.check_output(["git", "-C", str(source), "rev-parse", "--show-toplevel"], text=True, encoding="utf-8").strip())
     relative = source.relative_to(repo)
-    archive = subprocess.check_output(["git", "-C", str(repo), "archive", BASE, str(relative)])
+    probe = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", ANCHOR + "^{commit}"], capture_output=True, check=False)
+    if probe.returncode != 0:
+        raise ValueError("public source anchor " + ANCHOR + " is missing from this repository; fetch the public history containing it")
+    tree = subprocess.check_output(["git", "-C", str(repo), "rev-parse", ANCHOR + ":" + str(relative)], text=True, encoding="utf-8").strip()
+    if tree != ANCHOR_TREE:
+        raise ValueError("public source anchor tree mismatch for " + str(relative))
+    archive = subprocess.check_output(["git", "-C", str(repo), "archive", ANCHOR, str(relative)])
     baseline = root / "baseline"
     baseline.mkdir(mode=0o700)
     # Git supplies tracked fixed-commit files only; reject links and traversal.
@@ -177,7 +185,9 @@ def build(root, output):
     logger.record(["node", str(tooling / "rebind/assembly_controls.cjs"), str(output)], cwd=output, env=environment, check=True)
     item = lambda path: {"path": str(path.relative_to(root)), "sha256": sha(path)}
     receipts = [item(path) for path in sorted(commands.glob("*/command.json"))]
-    binding = {"kind": "A", "schema": "offline-resource-binding.v1", "source_commit": BASE,
+    binding = {"kind": "A", "schema": "offline-resource-binding.v1", "source_commit": ANCHOR,
+               "source_baseline": {"anchor_commit": ANCHOR, "anchor_tree": ANCHOR_TREE,
+                                   "scope": "public monorepo source at the anchor; the unpublished historical build-31 tree is not reconstructed"},
                "scope": "real registered private resources and source-copy builders; VM fixtures only; no host",
                "inputs": inputs, "source_stage": str(source.relative_to(root)), "source_inputs": source_inputs,
                "base_payload": item(base), "startup_manifest": item(resources / "startup/manifest.json"),

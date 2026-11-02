@@ -1,8 +1,7 @@
 """Read only three public installation files; never inspects daily user state."""
 from pathlib import Path
-import ast,hashlib,os,plistlib,stat,sys
-L=Path(__file__).resolve().parent;R=L.parent
-sys.path.insert(0,str(R/'candidate'))
+import ast,hashlib,os,plistlib,stat
+L=Path(__file__).resolve().parent
 from datetime import datetime,timezone
 def utc():return datetime.now(timezone.utc).isoformat()
 ACTUAL_BUNDLE=Path('/Applications/ZCode.app')

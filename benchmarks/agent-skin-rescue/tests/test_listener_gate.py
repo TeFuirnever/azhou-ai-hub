@@ -1,13 +1,11 @@
 """Targeted offline gate tests; only owned synthetic TCP listeners, no traffic.
 
-CLI requires a fresh --out under this worktree/.scratch. Legacy --probe is an
-optional exact-path/exact-SHA metadata-only backend, never its host probe entry.
+CLI requires a fresh --out under this worktree/.scratch.
 """
 import argparse
 from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -26,7 +24,6 @@ import listener_gate as gate
 from offline_runtime import DirectChildIdentity, validate_result
 
 OUT = None
-PROBE = None
 NATIVE = []
 
 
@@ -171,12 +168,10 @@ class PredicateTests(unittest.TestCase):
 
 class Metadata:
     def __init__(self):
-        self.processes = PROBE.Processes() if PROBE else DirectChildIdentity()
+        self.processes = DirectChildIdentity()
     def path(self, pid):
         return self.processes.path(pid)
     def birth(self, pid):
-        if PROBE:
-            return PROBE.birth(pid)
         result = subprocess.run(["/bin/ps", "-p", str(pid), "-o", "lstart="], stdin=subprocess.DEVNULL, capture_output=True, close_fds=True, check=True)
         return result.stdout.decode("ascii").strip()
     def guard(self, pid, exe, birth):
@@ -185,8 +180,6 @@ class Metadata:
     def current(self, pid):
         return {"pid": pid, "exe": self.path(pid), "birth": self.birth(pid)}
     def listeners(self, pid):
-        if PROBE:
-            return PROBE.listeners(pid)
         argv = ["/usr/sbin/lsof", "-nP", "-a", "-p", str(pid), "-iTCP", "-sTCP:LISTEN", "-FpfnT"]
         result = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, close_fds=True)
         if result.returncode not in (0, 1) or result.stderr:
@@ -367,20 +360,13 @@ class NativeTests(unittest.TestCase):
 
 
 def main():
-    global OUT, PROBE
+    global OUT
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--probe", type=Path)
     args = parser.parse_args()
     OUT = args.out
     if not OUT.is_absolute() or ".." in OUT.parts or not OUT.is_relative_to(gate.WORKTREE / ".scratch") or OUT.exists() or OUT.parent.resolve() != OUT.parent:
         parser.error("--out must be a fresh canonical worktree/.scratch directory")
-    if args.probe:
-        known = gate.WORKTREE.parents[4] / "agent-skin-rescue-c-20261101-0318/.treehouse/azhou-ai-hub-2cc7ce/1/azhou-ai-hub/.scratch/current-mac-r10-prepared-01/zcode_readonly_probe_current.py"
-        if args.probe != known or args.probe.resolve() != args.probe or not args.probe.is_file(): parser.error("unexpected probe path")
-        if hashlib.sha256(args.probe.read_bytes()).hexdigest() != "bc9a36ec3e95b4b0f21829444c4d0f168f89b54600932b13a878128e63b72b80": parser.error("unexpected probe SHA")
-        spec = importlib.util.spec_from_file_location("readonly_probe", args.probe)
-        PROBE = importlib.util.module_from_spec(spec); spec.loader.exec_module(PROBE)
     OUT.mkdir(mode=0o700)
     started = datetime.now(timezone.utc).isoformat()
     stream = io.StringIO()
