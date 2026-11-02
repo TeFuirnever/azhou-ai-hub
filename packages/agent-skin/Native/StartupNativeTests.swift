@@ -307,6 +307,12 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--zcode-runtime-fixture"),
+           index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
+            let checks = try await zcodeRuntimeFixtureChecks(port: port)
+            print("{\"syntheticRuntimeChecks\":\(checks),\"host\":false,\"realOSQueries\":false}")
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--wallpaper-transport-fixture"),
            index + 2 < CommandLine.arguments.count,
            let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
@@ -3281,5 +3287,186 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     expect(captured?.environment == environment && captured?.arguments == ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=12345"] && captured?.activates == true, "ZCode NSWorkspace requests activation with its exact explicit environment")
     system.openApplication(at: URL(fileURLWithPath: "/synthetic/Codex.app"), debuggingPort: 12345) { _, _ in }
     expect(captured?.environment == NSWorkspace.OpenConfiguration().environment && captured?.activates == false, "Codex original default environment and inactive launch unchanged")
+    return checks
+}
+
+@MainActor
+private final class ZCodeRuntimeFixture {
+    let root: URL
+    let state: URL
+    let resources: URL
+    let fake: FakeNativeAppRuntime
+    let app: FakeNativeApplication
+    let key: HostApplicationKey
+    let inputs: BoundHostInputs
+    let port: Int
+    var payload = "((controllerMetadata) => { return {installed:true}; })"
+    var payloadReadFailure = false
+    var payloadReads = 0
+    var probeFailure = false
+    var events: [[String: Any]] = []
+    var listenerPIDs: [Int32] = []
+    var listenerOverride: ((Int32) throws -> ZCodeNativeRuntime.ListenerCommandResult)?
+    var held: [any ZCodeOperationLease] = []
+    lazy var bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { [weak self] in
+        guard let self, !self.payloadReadFailure else { throw StartupFailure(reason: "asset-invalid", message: "synthetic payload failure") }
+        self.payloadReads += 1;return self.payload
+    }, stateRoot: state, onEvent: { [weak self] in self?.events.append($0) }, installationProbe: { [weak self] in
+        guard let self, !self.probeFailure else { throw StartupFailure(reason: "target-identity", message: "synthetic installation failure") }
+    }, listenerCommand: { [weak self] pid in
+        guard let self else { throw StartupFailure(reason: "inspection-failed", message: "synthetic fixture gone") }
+        self.listenerPIDs.append(pid)
+        if let override = self.listenerOverride { return try override(pid) }
+        return .init(status: 0, stdout: Data("p\(pid)\nn127.0.0.1:\(self.port)\n".utf8), stderr: Data())
+    })
+    init(port: Int) throws {
+        self.port = port
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("zcode-runtime-unit-" + UUID().uuidString, isDirectory: true).resolvingSymlinksInPath()
+        state = root.appendingPathComponent("state", isDirectory: true)
+        resources = root.appendingPathComponent("resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic-only"), findings: [], contractVersion: SkinHostContract.version)
+        fake = FakeNativeAppRuntime(arguments: ["SYNTHETIC-ONLY"], resourceURL: resources)
+        fake.allocatedPort = port
+        app = FakeNativeApplication(pid: 654321, bundleIdentifier: key.bundleIdentifier, bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
+        fake.openedApplication = app
+        fake.beforeOpenCompletion = { [weak fake, weak app] in if let app { fake?.applications = [app] } }
+        try writeProof()
+    }
+    var hash: String { SHA256.hash(data: Data(payload.utf8)).map { String(format: "%02x", $0) }.joined() }
+    var process: HostProcessGeneration { .init(pid: app.processIdentifier, launchTime: 50, executableURL: key.executableURL) }
+    var assembly: ZCodeSkinAssembly { bridge.makeAssembly() }
+    var request: SkinLaunchRequest { .init(expectedApplication: key, operationID: UUID(), startedAt: 100, deadline: 160) }
+    func writeProof(_ overrides: [String: Any] = [:]) throws {
+        var proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
+            "recordID": "SYNTHETIC-NOT-HOST", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T15:00:00.123Z",
+            "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4", "version": "3.17.1.9553",
+            "executableSHA256": key.executableSHA256, "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+            "payloadSHA256": hash, "evidenceIDs": ["SYNTHETIC-ONLY-NOT-ACCEPTANCE"], "ownedAppearanceSurface": true, "persistentSettings": true]
+        proof.merge(overrides) { _, replacement in replacement }
+        try JSONSerialization.data(withJSONObject: proof).write(to: resources.appendingPathComponent("zcode-validation.json"))
+    }
+    func acquire() throws { held.append(try assembly.acquireOperation(process.pid)) }
+    func close() { held.forEach { $0.release() };held.removeAll() }
+    func cleanup() { close();try? FileManager.default.removeItem(at: root) }
+}
+
+@MainActor
+private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
+    var checks = 0
+    var fixtures: [ZCodeRuntimeFixture] = []
+    func expect(_ value: Bool, _ label: String) { precondition(value, label);checks += 1 }
+    func make() throws -> ZCodeRuntimeFixture { let f = try ZCodeRuntimeFixture(port: port);fixtures.append(f);return f }
+    defer { fixtures.forEach { $0.cleanup() } }
+    func mode(_ value: String, reset: Bool = true) async throws {
+        let configuration = URLSessionConfiguration.ephemeral;configuration.httpCookieStorage = nil;configuration.urlCredentialStorage = nil
+        let session = URLSession(configuration: configuration);defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/fixture/mode")!);request.httpMethod = "POST";request.timeoutInterval = 2
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["mode": value, "reset": reset]);request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await session.data(for: request)
+        expect((response as? HTTPURLResponse)?.statusCode == 200, "owned synthetic fixture accepts mode")
+    }
+    func open(_ f: ZCodeRuntimeFixture) async throws -> ZCodePageBinding {
+        let observed = try await f.assembly.openApplication(160)
+        expect(observed == f.process, "cold callback retains exact generation")
+        try f.acquire()
+        return try await f.assembly.attach(observed, 160)
+    }
+    // Real assembly, fake native boundary, and real owned loopback protocol.
+    try await mode("ready")
+    let ready = try make();let binding = try await open(ready)
+    expect(ready.fake.openCount == 1 && ready.fake.allocationCount == 1, "cold path opens and allocates once")
+    let expectedKeys: Set<String> = ["PATH", "LANG", "HOME", "TMPDIR", "ZCODE_DESKTOP_HOME_DIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_USER_DATA_DIR", "ZCODE_DESKTOP_SESSION_DATA_DIR"]
+    expect(ready.fake.openedEnvironments.count == 1 && Set(ready.fake.openedEnvironments[0].keys) == expectedKeys, "cold environment has only explicit isolation keys")
+    for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
+        let attributes = try FileManager.default.attributesOfItem(atPath: ready.state.appendingPathComponent(name).path)
+        expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700, "each isolated directory is private")
+    }
+    let record = try JSONSerialization.jsonObject(with: Data(contentsOf: ready.state.appendingPathComponent("launch-receipt.json"))) as! [String: Any]
+    expect(record["pid"] as? Int32 == ready.process.pid && record["launchTime"] as? Double == 50 && record["port"] as? Int == port, "owned launch record preserves exact generation and port")
+    expect(try ready.assembly.runningProcesses() == [ready.process], "running inspection returns exact known generation")
+    expect(try ready.assembly.activateExisting(ready.process), "hot activation uses validated existing generation")
+    let observation = ZCodeInstallObservation();let request = ready.request
+    let result = try await ready.assembly.install(binding, request, observation)
+    guard case .ready(let receipt, let runID) = result else { fatalError("synthetic ready assembly did not acknowledge") }
+    expect(observation.sent && runID == 1 && receipt.createdByOperationID == request.operationID && receipt.payloadSHA256 == ready.hash, "ready is backed by actual sent metadata and status")
+    expect(!ready.listenerPIDs.isEmpty && ready.listenerPIDs.allSatisfy { $0 == ready.process.pid }, "all listener checks query only bound fake PID")
+    if case .present(.instance(let inspected), .alreadyActive) = try await ready.assembly.inspectPage(binding, 160) {
+        expect(inspected.location.application == receipt.location.application && inspected.location.process == receipt.location.process
+            && inspected.location.documentToken == receipt.location.documentToken && inspected.owner == receipt.owner
+            && inspected.protocolVersion == receipt.protocolVersion && inspected.payloadSHA256 == receipt.payloadSHA256
+            && inspected.controllerInstanceID == receipt.controllerInstanceID && inspected.createdByOperationID == receipt.createdByOperationID,
+            "inspect reads every exact current owned receipt field")
+    } else { fatalError("synthetic inspect lost receipt") }
+    do { _ = try await ready.assembly.inspectPage(binding, 160);fatalError("closed connection must not inspect") } catch { checks += 1 }
+    let disposeBinding = try await ready.assembly.attach(ready.process, 160)
+    expect(try await ready.assembly.dispose(disposeBinding, receipt, 160), "dispose acknowledges matching owner instance")
+    let repeatBinding = try await ready.assembly.attach(ready.process, 160)
+    expect(try await ready.assembly.dispose(repeatBinding, receipt, 160), "repeat dispose confirms already absent")
+    let absentBinding = try await ready.assembly.attach(ready.process, 160)
+    ready.payloadReadFailure = true
+    if case .absent(let location) = try await ready.assembly.inspectPage(absentBinding, 160) { expect(location.process == ready.process, "absence is exact and does not read payload") }
+    else { fatalError("disposed controller not absent") }
+    do { _ = try await ready.assembly.dispose(absentBinding, receipt, 160);fatalError("closed connection must not dispose") } catch { checks += 1 }
+    ready.close();ready.close()
+    expect(ready.events.contains { $0["stage"] as? String == "zcode-open-selected-process" && $0["native_child_wait_claim"] as? Bool == false }, "NSWorkspace selected host never fabricates native child wait")
+
+    for value in ["complete", "before-ready", "already-active", "readylost", "badreceipt", "absent", "dispose-failed", "late"] {
+        try await mode(value);let f = try make();let b = try await open(f);let observed = ZCodeInstallObservation();let req = f.request
+        var expiry: Task<Void, Never>?
+        if value == "late" { expiry = Task { try? await Task.sleep(nanoseconds: 150_000_000);f.fake.uptime = 161 } }
+        defer { expiry?.cancel();f.close() }
+        do {
+            let outcome = try await f.assembly.install(b, req, observed)
+            switch value {
+            case "complete", "before-ready":
+                guard case .skipped(.present(.instance(let r), .created), _, let before) = outcome else { fatalError("completion acquisition lost") }
+                expect(before == (value == "before-ready") && r.createdByOperationID == req.operationID, "completion preserves actual before-ready flag and created receipt")
+            case "already-active":
+                guard case .skipped(.present(.instance(let r), .alreadyActive), _, _) = outcome else { fatalError("existing acquisition upgraded") }
+                expect(r.createdByOperationID != req.operationID, "already-active retains previous operation")
+            case "readylost", "late":
+                guard case .partial(_, .present(.instance(let r), .created), let cleanup) = outcome else { fatalError("confirmed receipt erased after interruption") }
+                expect(r.createdByOperationID == req.operationID && cleanup.state == .unknown, "later interruption preserves confirmed effect and unknown cleanup")
+            case "dispose-failed":
+                guard case .ready(let r, _) = outcome else { fatalError("dispose fixture not ready") }
+                expect(try await f.assembly.dispose(b, r, 160) == false, "unconfirmed dispose cannot claim clean")
+            default: fatalError("invalid receipt/absent controller unexpectedly acknowledged")
+            }
+            expect(observed.sent, "result follows a real protocol send")
+        } catch {
+            expect(["badreceipt", "absent"].contains(value) && observed.sent, "unacknowledged sent install remains an error")
+        }
+    }
+
+    // Proof validation must finish before any native open, port or state effects.
+    let invalidProofs: [[String: Any]] = [["recordSHA256": "bad"], ["observedAt": "not-a-date"], ["evidenceIDs": []], ["ownedAppearanceSurface": false], ["persistentSettings": false], ["payloadSHA256": String(repeating: "f", count: 64)]]
+    for overrides in invalidProofs {
+        let f = try make();try f.writeProof(overrides)
+        do { _ = try await f.assembly.openApplication(160);fatalError("invalid proof opened host") } catch { checks += 1 }
+        expect(f.fake.openCount == 0 && f.fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: f.state.path), "invalid proof has zero cold side effects")
+    }
+    let existing = try make();existing.fake.applications = [existing.app]
+    do { _ = try await existing.assembly.openApplication(160);fatalError("cold path ignored running process") } catch { checks += 1 }
+    expect(existing.payloadReads == 0 && existing.fake.openCount == 0, "existing process refuses cold before payload access")
+    let invalidProcess = try make();invalidProcess.fake.applications = [FakeNativeApplication(pid: invalidProcess.process.pid, bundleIdentifier: invalidProcess.key.bundleIdentifier, bundleURL: invalidProcess.key.bundleURL, executableURL: invalidProcess.key.executableURL, launchTime: nil)]
+    do { try invalidProcess.assembly.validateProcess(invalidProcess.process);fatalError("missing process birth accepted") } catch { checks += 1 }
+    let probe = try make();probe.probeFailure = true
+    do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
+    expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
+
+    // Bounded cancellation and late callbacks must never create a success receipt.
+    let timeout = try make();timeout.fake.deferOpenCompletion = true
+    do { _ = try await timeout.assembly.openApplication(101.02);fatalError("deferred callback ignored deadline") } catch { checks += 1 }
+    timeout.fake.completePendingOpen();try await Task.sleep(nanoseconds: 10_000_000)
+    expect(!FileManager.default.fileExists(atPath: timeout.state.appendingPathComponent("launch-receipt.json").path), "late callback cannot write a ready launch receipt")
+    let cancelled = try make();cancelled.fake.deferOpenCompletion = true
+    let pending = Task { () -> Bool in do { _ = try await cancelled.assembly.openApplication(160);return false } catch { return true } }
+    for _ in 0..<100 where cancelled.fake.openCount == 0 { await Task.yield() }
+    expect(cancelled.fake.openCount == 1, "cancel test reached the actual fake open callback")
+    pending.cancel();let canceled = await pending.value;expect(canceled, "open cancellation unblocks bounded waiter")
+    cancelled.fake.completePendingOpen();await Task.yield()
+    expect(!FileManager.default.fileExists(atPath: cancelled.state.appendingPathComponent("launch-receipt.json").path), "cancelled late callback cannot claim a receipt")
     return checks
 }

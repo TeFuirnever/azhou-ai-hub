@@ -153,6 +153,9 @@ def main() -> int:
     ]
     objects.append(compile_binary(out, "zcode-driver-tests",
         ["Native/SkinHostContract.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinDriverTests.swift"]))
+    run([sys.executable, "tools/test-zcode-runtime.py", "--binary", str(objects[0]),
+         "--out", str(out / "zcode-runtime"), "--profile-directory", str(raw_dir)],
+        cwd=ROOT, log=out / "logs/zcode-runtime.log")
     transport_out = out / "zcode-transport"
     run([sys.executable, "tools/test-zcode-transport.py", "--out", str(transport_out),
          "--profile-directory", str(raw_dir)], cwd=ROOT, log=out / "logs/zcode-transport.log")
