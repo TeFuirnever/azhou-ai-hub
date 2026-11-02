@@ -134,6 +134,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   const pendingDecodes = [];
   const images = [];
   const drawnTexts = { identity: [], stage: [] };
+  const stageTranslations = [];
   let bitmapCallCount = 0;
   const messages = [];
   let nextId = 1;
@@ -175,7 +176,10 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     canvas, globalAlpha: 1, fillStyle: '', strokeStyle: '', lineWidth: 1,
     save() {}, restore() {}, setTransform() {}, clearRect() {}, fillRect() {},
     beginPath() {}, arc() {}, stroke() {}, fill() {}, clip() {}, drawImage() {},
-    translate() {}, rotate() {}, moveTo() {}, lineTo() {},
+    translate(x, y) {
+      if (canvas.getAttribute('data-agent-skin-canvas') !== null) stageTranslations.push([x, y]);
+    },
+    rotate() {}, moveTo() {}, lineTo() {},
     strokeText() {}, measureText(value) {
       const pixels = Number(/(\d+(?:\.\d+)?)px/.exec(this.font)?.[1] || 16);
       return { width: String(value).length * pixels * 0.6 };
@@ -341,7 +345,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   return { handle, get root() { return document.body.querySelector('[data-agent-skin-stage]') || root; }, timeline, pause, replay, elapsed, controls, body, document,
     window, timers, raf, messages, mediaListeners, resizeObservers, bitmapPromises, pendingDecodes, images, resolveReady,
     ImageMock, Path2DMock, environment, payload, settingsFactory, settingsInstance, localizationFactory,
-    ready, flushFrame, dispatchWindow, drawnTexts, setNow(value) { now = value; } };
+    ready, flushFrame, dispatchWindow, drawnTexts, stageTranslations, setNow(value) { now = value; } };
 }
 
 function attachPreviewIframeEnvironment(fixture) {
@@ -544,6 +548,30 @@ test('playing completes naturally and keyboard shortcuts skip only a supported p
   });
   assert.equal(preview.handle.preview.report().skipped, true);
   assert.equal(preview.handle.dispose(), true);
+});
+
+test('continuous playback keeps the scattered transition smooth and caches truly static frames', async () => {
+  for (const [width, height, reduced] of [[640, 869, false], [640, 869, true], [1280, 800, false]]) {
+    const fixture = createFixture({ intent: 'play', settings: false, rootWidth: width, rootHeight: height, reducedMotion: reduced });
+    await waitReady(fixture);
+    let lastX = 0;
+    const positions = [];
+    let scatteredRenders = 0;
+    for (let time = 4720; time <= 5120; time += 16) {
+      fixture.stageTranslations.length = 0;
+      const before = fixture.handle.preview.report().jsFrame.sceneRenderCount;
+      assert.equal(fixture.flushFrame(time), true);
+      const rendered = fixture.handle.preview.report().jsFrame.sceneRenderCount > before;
+      if (rendered && time >= 4740 && time < 5080) scatteredRenders++;
+      if (fixture.stageTranslations.length) lastX = fixture.stageTranslations[0][0] * Math.max(width / 1536, height / 1024);
+      positions.push(lastX);
+    }
+    const maxStep = Math.max(...positions.slice(1).map((x, i) => Math.abs(x - positions[i])));
+    assert.ok(maxStep < 10, `${width}x${height} reduced=${reduced}: largest frame jump ${maxStep.toFixed(2)} CSS px`);
+    if (width === 640) assert.ok(Math.abs(positions.at(-1) - positions[0]) > 40, 'narrow view follows its horizontal shift');
+    else assert.equal(scatteredRenders, 1, 'wide static scattered frames are reused');
+    fixture.handle.dispose();
+  }
 });
 
 test('startup failures send a fixed asset reason and partial mounts are cleaned up', async () => {
