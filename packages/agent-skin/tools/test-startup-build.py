@@ -1132,6 +1132,11 @@ assert.equal(writes,0);console.log('factory-negatives:3/3');"""
         path.write_text(json.dumps(forged))
         with self.assertRaisesRegex(RuntimeError, 'sourceInputs|安装入口'):
             self.verifier.verify_startup(bundle, self.info, self.marker)
+        relabelled = dict(manifest, targetHost='codex', sourceInputs={k: v for k, v in manifest['sourceInputs'].items() if k != 'extension/hosts/zcode.mjs'})
+        relabelled.pop('entrypoint', None)
+        path.write_text(json.dumps(relabelled))
+        with self.assertRaisesRegex(RuntimeError, 'Codex startup cannot carry a ZCode'):
+            self.verifier.verify_startup(bundle, self.info, self.marker)
         forged = dict(manifest, entrypoint='unbound')
         path.write_text(json.dumps(forged))
         with self.assertRaisesRegex(RuntimeError, 'metadata factory'):

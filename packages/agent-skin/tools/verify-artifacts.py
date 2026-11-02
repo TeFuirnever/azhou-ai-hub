@@ -836,6 +836,8 @@ def verify_startup(path, info, marker, *, current_source=True):
                        and 'return installStartup(installAnimation, host);' in script)
     page_adapter_entry = ('return bootstrapStartup({' in script
                           and 'return installStartup(installAnimation, host, pageAdapter);' in script)
+    if target_host == 'codex' and ('createZCodePageAdapter(' in script or script.startswith('((controllerMetadata) => {')):
+        raise RuntimeError('Codex startup cannot carry a ZCode factory or adapter entry.')
     zcode_factory_entry = (target_host == 'zcode' and page_adapter_entry
                            and script.startswith('((controllerMetadata) => {\n') and script.rstrip().endswith('})')
                            and 'const pageAdapter = createZCodePageAdapter(globalThis, { controllerMetadata }, {' in script
