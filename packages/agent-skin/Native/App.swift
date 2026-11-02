@@ -792,7 +792,7 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
     private func configuredOpen(at url: URL, debuggingPort: Int, environment: [String: String]?,
                                 completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
+        configuration.activates = environment != nil; configuration.hides = false; configuration.hidesOthers = false
         configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
         configuration.addsToRecentItems = false
         configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(debuggingPort)"]

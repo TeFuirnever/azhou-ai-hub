@@ -3220,8 +3220,8 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     let system = SystemNativeAppRuntime(openApplication: { _, config, done in captured = config;done(nil, nil) })
     let environment = ["HOME": "/synthetic/owned/home", "ZCODE_DATA_BASE_DIR": "/synthetic/owned/business"]
     system.openApplication(at: key.bundleURL, debuggingPort: 12345, environment: environment) { _, _ in }
-    expect(captured?.environment == environment && captured?.arguments == ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=12345"], "NSWorkspace receives exact explicit environment")
+    expect(captured?.environment == environment && captured?.arguments == ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=12345"] && captured?.activates == true, "ZCode NSWorkspace requests activation with its exact explicit environment")
     system.openApplication(at: URL(fileURLWithPath: "/synthetic/Codex.app"), debuggingPort: 12345) { _, _ in }
-    expect(captured?.environment == NSWorkspace.OpenConfiguration().environment, "Codex original configuration default environment unchanged")
+    expect(captured?.environment == NSWorkspace.OpenConfiguration().environment && captured?.activates == false, "Codex original default environment and inactive launch unchanged")
     return checks
 }
