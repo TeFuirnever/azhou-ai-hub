@@ -639,6 +639,7 @@ try {
     payload.assets = Object.freeze(url.searchParams.has('animation')
       ? { wallpaper: ${JSON.stringify(pixelImage)}, wallpaperStrength: initialWallpaperStrength,
           avatar: animationAvatar, artwork: animationArtwork,
+          ...(url.searchParams.has('entry-avatar') ? { entryAvatar: ${JSON.stringify(pixelImage)} } : {}),
           contours: ${JSON.stringify(animationContourFixture)}, introTitle: 'Synthetic agent',
           introCaption: 'SYNTHETIC / TEST', artworkSubtitle: 'Generated fixture only' }
       : { wallpaper: ${JSON.stringify(pixelImage)},
@@ -6144,6 +6145,128 @@ try {
     }
     return samples;
   });
+
+  await check('settings dialog remains usable by keyboard across constrained viewports', async () => {
+    const scenarios = [
+      { name: 'desktop-dark-zh', width: 1440, height: 900, locale: 'zh-CN', theme: 'dark', tab: 'workspace' },
+      { name: 'desktop-light-en', width: 1440, height: 900, locale: 'en', theme: 'light', tab: 'startup' },
+      { name: 'narrow-dark-en', width: 320, height: 568, locale: 'en', theme: 'dark', tab: 'startup' },
+      { name: 'short-light-en', width: 640, height: 360, locale: 'en', theme: 'light', tab: 'workspace' },
+      { name: 'small-dark-zh', width: 320, height: 360, locale: 'zh-CN', theme: 'dark', tab: 'startup' },
+      { name: 'about-light-en', width: 640, height: 600, locale: 'en', theme: 'light', tab: 'about' },
+    ];
+    const results = [];
+    const issues = [];
+    try {
+      await navigate('/fixture.html?animation=1&no-initial-wallpaper=1&entry-avatar=1');
+      await until(() => cdp.evaluate("window.__startupAPI?.status().phase === 'playing' && window.__startupAPI.status().ready"),
+        15000, 'settings design fixture ready');
+      assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
+      await until(() => cdp.evaluate(`(()=>{
+        const state=window.__startupAPI?.status();
+        return state?.phase==='settings'&&state.ready&&document.querySelector('iframe[aria-label]')?.contentDocument
+          ?.querySelector('[data-agent-skin-settings]');
+      })()`), 15000, 'settings dialog ready');
+
+      for (const scenario of scenarios) {
+        await cdp.call('Emulation.setDeviceMetricsOverride', {
+          width: scenario.width, height: scenario.height, deviceScaleFactor: 1, mobile: false,
+        });
+        await cdp.evaluate(`(()=>{
+          const scenario=${JSON.stringify(scenario)},root=document.documentElement;
+          root.lang=scenario.locale;root.dataset.theme=scenario.theme;
+          const colors=scenario.theme==='light'
+            ? ['#f8fafc','#172033','#536176','#cbd5e1']
+            : ['#10121c','#fff8ef','#b8b4c4','#595366'];
+          ['--color-surface','--color-text-primary','--color-text-secondary','--color-border']
+            .forEach((key,index)=>root.style.setProperty(key,colors[index]));
+        })()`);
+        await until(() => cdp.evaluate(`(()=>{
+          const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+          return doc?.documentElement.lang===${JSON.stringify(scenario.locale)}
+            &&doc.documentElement.dataset.theme===${JSON.stringify(scenario.theme)};
+        })()`), 5000, 'settings locale and theme update');
+
+        const metrics = await cdp.evaluate(`(()=>{
+          const scenario=${JSON.stringify(scenario)};
+          const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument,win=frame.contentWindow;
+          const dialog=doc.querySelector('[data-agent-skin-settings]');
+          const selectedTab=dialog.querySelector('[data-agent-skin-settings-tab="'+scenario.tab+'"]');
+          if(!selectedTab)throw new Error('missing settings tab: '+scenario.tab);
+          selectedTab.click();
+          const textFields=[...dialog.querySelectorAll('input[type="text"],textarea')];
+          const values=['阿舟的 Agent 实验室','Azhou / Intelligent Agents & Creative Workflows',
+            '和阿舟一起，把真实工作里的复杂想法变成可以检查、可以复用、可以交付的结果。'];
+          textFields.forEach((field,index)=>{
+            const limit=field.maxLength>0?field.maxLength:values[index%values.length].length;
+            field.value=values[index%values.length].slice(0,limit);
+            field.dispatchEvent(new win.Event('input',{bubbles:true}));
+          });
+          const strength=dialog.querySelector('input[type="range"]');
+          if(strength){strength.value='42';strength.dispatchEvent(new win.Event('input',{bubbles:true}));}
+          const panel=dialog.querySelector('[role="tabpanel"]:not([hidden])');
+          const body=dialog.querySelector('[data-agent-skin-settings-body]')||dialog;
+          const footer=dialog.querySelector('footer');
+          if(!panel||!body||!footer)throw new Error('settings layout is missing a measured region');
+          const rect=element=>{const r=element.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};
+          body.scrollTop=0;
+          const footerBefore=rect(footer),dialogBox=rect(dialog);
+          body.scrollTop=body.scrollHeight;
+          const footerAfter=rect(footer);
+          const overflow=dialog.scrollWidth>dialog.clientWidth+1||body.scrollWidth>body.clientWidth+1
+            ||doc.documentElement.scrollWidth>win.innerWidth+1||doc.body.scrollWidth>win.innerWidth+1;
+          const result={viewport:{width:win.innerWidth,height:win.innerHeight},dialog:dialogBox,
+            body:{clientHeight:body.clientHeight,scrollHeight:body.scrollHeight},overflow,
+            footerStable:Math.abs(footerBefore.top-footerAfter.top)<1};
+          body.scrollTop=0;
+          selectedTab.focus();
+          return result;
+        })()`);
+        const scenarioIssues=[];
+        const keyboard=[];
+        if(metrics.overflow)scenarioIssues.push('horizontal overflow');
+        if(metrics.dialog.left<0||metrics.dialog.right>scenario.width+1
+          ||metrics.dialog.top<0||metrics.dialog.bottom>scenario.height+1)scenarioIssues.push('dialog outside viewport');
+        if(!metrics.footerStable)scenarioIssues.push('footer scrolls away');
+        if(metrics.body.clientHeight<48)scenarioIssues.push('content scroller has no usable space');
+        for(let step=0;step<8;step++){
+          await dispatchTab();
+          const focus=await cdp.evaluate(`(()=>{
+            const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
+            const dialog=doc.querySelector('[data-agent-skin-settings]'),active=doc.activeElement;
+            if(!active||!dialog.contains(active))return {inside:false};
+            const box=active.getBoundingClientRect(),style=frame.contentWindow.getComputedStyle(active);
+            const hit=doc.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+            return {inside:true,tag:active.tagName,label:active.id||active.getAttribute('aria-label')||active.textContent?.trim()||active.type,
+              hit:hit===active||active.contains(hit),visible:box.width>0&&box.height>0
+              &&box.bottom>0&&box.top<frame.contentWindow.innerHeight,
+              focusVisible:active.matches(':focus-visible'),outlineStyle:style.outlineStyle,
+              outlineWidth:parseFloat(style.outlineWidth),outlineColor:style.outlineColor};
+          })()`);
+          keyboard.push(focus);
+          if(!focus.inside||!focus.visible||!focus.hit)scenarioIssues.push('keyboard focus is outside or obscured in settings: '+JSON.stringify(focus));
+          if(focus.inside&&(!focus.focusVisible||focus.outlineStyle==='none'||focus.outlineWidth<1.9||focus.outlineColor==='transparent'))
+            scenarioIssues.push('keyboard focus indicator missing: '+JSON.stringify(focus));
+        }
+        if(new Set(keyboard.map(focus=>focus.label)).size<3)scenarioIssues.push('Tab did not traverse at least three distinct controls');
+        results.push({scenario,metrics,keyboard,issues:scenarioIssues});
+        issues.push(...scenarioIssues.map(issue=>scenario.name+': '+issue));
+        await screenshot('settings-design-'+scenario.name+'.png');
+      }
+      await writeFile(join(options.out,'settings-design-matrix.json'),JSON.stringify({
+        scope:'Current source in an isolated synthetic host; keyboard focus is tested through Tab traversal. Actual browser zoom and installed-host behavior are not tested.',
+        results,issues,
+      },null,2)+'\n');
+      assert.deepEqual(issues,[],issues.join('\n'));
+      return {scenarios:results.length,checks:results.map(result=>({name:result.scenario.name,issues:result.issues})),
+        focusMethod:'keyboard Tab traversal; actual browser zoom not tested'};
+    } finally {
+      await cdp.evaluate('window.__startupAPI?.dispose()');
+      await cdp.call('Emulation.setDeviceMetricsOverride',{width:1512,height:889,deviceScaleFactor:1,mobile:false});
+      await cdp.call('Emulation.setEmulatedMedia',{features:[]});
+    }
+  });
+
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;
