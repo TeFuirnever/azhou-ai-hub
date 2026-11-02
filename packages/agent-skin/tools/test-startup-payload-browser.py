@@ -79,7 +79,17 @@ def main() -> int:
         for name in args.only:
             command.extend(("--only", name))
         print("==> " + " ".join(command), flush=True)
-        return subprocess.run(command, cwd=root, check=False).returncode
+        result = subprocess.run(command, cwd=root, check=False).returncode
+        if result or args.only:
+            return result
+        preview = bundle / "Contents/Resources/web/index.html"
+        preview_test = root / "tools/test-animation-preview-final-text-browser.mjs"
+        preview_command = [node, str(preview_test), "--preview", str(preview),
+                           "--out", str(args.out / "animation-preview")]
+        if args.chrome:
+            preview_command.extend(("--chrome", str(args.chrome)))
+        print("==> " + " ".join(preview_command), flush=True)
+        return subprocess.run(preview_command, cwd=root, check=False).returncode
 
 
 if __name__ == "__main__":

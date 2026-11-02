@@ -360,7 +360,11 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const isAppearanceNavigationNode = node => {
       const name = node.getAttribute?.('aria-label') ?? node.textContent ?? '';
-      if (!isAppearanceAnchorName(name)) return false;
+      // The host puts the stable label in its first child and the unread badge
+      // (including screen-reader text) in a separate sibling.
+      const label = node.getAttribute?.('aria-label') == null && tagName(node) === 'BUTTON'
+        ? node.firstElementChild?.textContent : null;
+      if (!isAppearanceAnchorName(name) && !isAppearanceAnchorName(label ?? '')) return false;
       return tagName(node) === 'A' ? Boolean(getNavAncestor(node)) : isHomeNavigationButton(node);
     };
     const isVisibleNavigation = node => {
@@ -440,7 +444,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const isAppearanceAnchorName = value => {
       const name = String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-      return name === 'your dot' || name === '你的 dot';
+      // The host appends the unread badge to the navigation button's text.
+      return /^(?:your dot|你的 dot)(?:\s*\d{1,3}\+?)?$/.test(name);
     };
     const findNavigationTarget = () => {
       if (typeof page.querySelectorAll !== 'function') return null;
@@ -506,24 +511,36 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         return [];
       }
     };
-    const findFallbackPosition = () => {
+    const findCollapsedRail = () => {
+      let rails;
+      try { rails = Array.from(page.querySelectorAll('nav,[role="navigation"]')); } catch { return null; }
+      const candidates = rails.filter(isVisibleNavigation).map(rail => rail.getBoundingClientRect())
+        .filter(bounds => bounds.left >= 0 && bounds.left <= 2 && bounds.width >= 44 && bounds.width <= 110
+          && bounds.height >= 200 && bounds.top <= 100);
+      return candidates.length === 1 ? candidates[0] : null;
+    };
+    const findFallbackPosition = (rail = null) => {
       if (!visible || typeof element.getBoundingClientRect !== 'function') return null;
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
       if (!viewportWidth || !viewportHeight) return null;
       const rect = element.getBoundingClientRect();
       const height = rect.height || 44;
-      const width = Math.max(rect.width || 0, hasAvatar ? 48 : 120);
+      const width = Math.max(rect.width || 0, rail ? 44 : hasAvatar ? 48 : 120);
       const controls = fallbackControls();
       const desired = Math.max(8, Math.min(viewportHeight - height - 8, viewportHeight - 72 - height));
-      const columns = [10, ...controls.map(({ bounds }) => bounds.right + 8)]
-        .filter(left => left >= 8 && left + width <= viewportWidth - 8)
+      const columns = (rail ? [rail.left + (rail.width - width) / 2]
+        : [10, ...controls.map(({ bounds }) => bounds.right + 8)])
+        .filter(left => rail ? left >= rail.left && left + width <= rail.right
+          : left >= 8 && left + width <= viewportWidth - 8)
         .sort((a, b) => a - b);
       for (const left of columns) {
         const columnControls = controls.filter(({ bounds }) => bounds.left < left + width + 8 && bounds.right + 8 > left);
-        const candidates = [desired, 8, viewportHeight - height - 8,
+        const topLimit = rail ? Math.max(8, rail.top) : 8;
+        const bottomLimit = rail ? Math.min(viewportHeight - 8, rail.bottom) : viewportHeight - 8;
+        const candidates = [desired, topLimit, bottomLimit - height,
           ...columnControls.flatMap(({ bounds }) => [bounds.top - height - 8, bounds.bottom + 8])];
-        const available = candidates.filter(top => top >= 8 && top + height <= viewportHeight - 8
+        const available = candidates.filter(top => top >= topLimit && top + height <= bottomLimit
           && columnControls.every(({ bounds }) => top + height + 8 <= bounds.top || top >= bounds.bottom + 8));
         if (available.length) {
           const top = available.reduce((best, candidate) =>
@@ -535,6 +552,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const showFallback = () => {
       currentTarget = null;
+      element.style.marginTop = '';
       element.style.position = 'fixed';
       element.style.left = '10px';
       element.style.right = 'auto';
@@ -544,9 +562,16 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       element.style.width = 'max-content';
       applyEntryLayout();
       label.style.display = '';
+      label.style.maxWidth = '';
+      label.style.overflow = '';
       if (element.parentNode !== document.documentElement) document.documentElement.appendChild(element);
-      let placement = findFallbackPosition();
-      if (placement === null && hasAvatar) {
+      const rail = recoveryVisible ? null : findCollapsedRail();
+      if (rail) {
+        if (hasAvatar) label.style.display = 'none';
+        else { label.style.maxWidth = '20px'; label.style.overflow = 'hidden'; }
+      }
+      let placement = findFallbackPosition(rail);
+      if (!rail && placement === null && hasAvatar) {
         label.style.display = 'none';
         placement = findFallbackPosition();
       }
@@ -561,6 +586,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const showNavigationRow = target => {
       currentTarget = target;
+      element.style.marginTop = '6px';
       element.style.position = 'static';
       element.style.left = '';
       element.style.right = '';
@@ -568,6 +594,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       element.style.bottom = '';
       element.style.zIndex = '';
       element.style.width = '100%';
+      label.style.maxWidth = '';
+      label.style.overflow = '';
       applyEntryLayout();
       const next = target.row.nextSibling ?? null;
       if (element.parentNode !== target.container || next !== element) {
@@ -579,6 +607,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const hideUntilHostIsUsable = () => {
       currentTarget = null;
+      element.style.marginTop = '';
       element.style.position = 'fixed';
       element.style.left = '10px';
       element.style.right = 'auto';
