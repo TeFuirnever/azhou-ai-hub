@@ -309,6 +309,80 @@ final class NativeStartupEventStream: @unchecked Sendable {
         return resolved
     }
 
+    /// The ZCode driver confirms a typed controller receipt, not a Codex status
+    /// capture. Preserve that evidence without inventing a Codex phase, complete
+    /// event, or earlier open/install timestamps. The legacy resolver stays exact.
+    @discardableResult
+    func resolveZCode(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
+                      at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted else { return nil }
+        var fields: [String: Any] = ["host": "zcode", "evidence": "typed-controller-receipt",
+                                     "completion_not_inferred": true]
+        let resolved: NativeStartupFinalOutcome
+        if let pendingFailure {
+            resolved = .behaviorNotProven(reason: pendingFailure)
+        } else if let pendingInterruption {
+            resolved = .partial(reason: pendingInterruption)
+        } else if expectedApplication.host != .zcode {
+            resolved = .behaviorNotProven(reason: "target-identity")
+        } else {
+            switch result {
+            case .activated(let process):
+                if Self.validZCodeGeneration(process, expectedApplication) {
+                    fields["targetPID"] = Int(process.pid)
+                    resolved = .activated
+                } else { resolved = .behaviorNotProven(reason: "target-identity") }
+            case .ready(let receipt, let runID):
+                if runID > 0, let receiptFields = Self.zcodeReceiptFields(receipt, expectedApplication) {
+                    fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
+                    fields["runId"] = runID;fields["ready"] = true
+                    resolved = .ready
+                } else { resolved = .behaviorNotProven(reason: "protocol-error") }
+            case .skipped(let page, let runID, let beforeReady):
+                if runID > 0, case .present(.instance(let receipt), let acquisition) = page,
+                   let receiptFields = Self.zcodeReceiptFields(receipt, expectedApplication) {
+                    fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
+                    fields["runId"] = runID;fields["beforeReady"] = beforeReady
+                    fields["acquisition"] = acquisition == .created ? "created" : "alreadyActive"
+                    resolved = .skipped
+                } else { resolved = .behaviorNotProven(reason: "protocol-error") }
+            case .partial, .failed, .refused:
+                resolved = Self.finalOutcome(for: startupLegacyOutcome(from: result), observation: nil,
+                                             openedPID: nil, installedPID: nil, installedRunID: nil)
+            }
+        }
+        finalOutcome = resolved
+        if let reason = resolved.reason { fields["reason"] = reason }
+        writer.emit(resolved.event, fields: fields, at: uptime)
+        return resolved
+    }
+
+    private static func validZCodeGeneration(_ process: HostProcessGeneration,
+                                             _ expected: HostApplicationKey) -> Bool {
+        process.pid > 0 && process.launchTime.map { $0.isFinite && $0 > 0 } == true &&
+            process.executableURL == expected.executableURL
+    }
+
+    private static func zcodeReceiptFields(_ receipt: ControllerReceipt,
+                                           _ expected: HostApplicationKey) -> [String: Any]? {
+        guard receipt.location.application == expected,
+              validZCodeGeneration(receipt.location.process, expected),
+              receipt.owner == "azhou-zcode-startup", receipt.protocolVersion == 1,
+              receipt.controllerInstanceID.utf8.count == 36,
+              UUID(uuidString: receipt.controllerInstanceID) != nil,
+              receipt.payloadSHA256.utf8.count == 64,
+              receipt.payloadSHA256.allSatisfy({ "0123456789abcdef".contains($0) }),
+              !receipt.location.documentToken.isEmpty else { return nil }
+        return ["targetPID": Int(receipt.location.process.pid), "owner": receipt.owner,
+                "version": receipt.protocolVersion, "controllerInstanceID": receipt.controllerInstanceID,
+                "createdByOperationID": receipt.createdByOperationID.uuidString,
+                "payloadSHA256": receipt.payloadSHA256,
+                "documentTokenSHA256": SHA256.hash(data: Data(receipt.location.documentToken.utf8))
+                    .map { String(format: "%02x", $0) }.joined()]
+    }
+
     @discardableResult
     func finish(at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
         lock.lock()
@@ -1318,7 +1392,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             guard let self else { return }
             let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
             self.opening = false
-            self.finishStartup(startupLegacyOutcome(from: result), promoted: self.promoted)
+            if expectedApplication.host == .zcode {
+                self.finishZCodeStartup(result, expectedApplication: expectedApplication, promoted: self.promoted)
+            } else {
+                self.finishStartup(startupLegacyOutcome(from: result), promoted: self.promoted)
+            }
         }
     }
 
@@ -1590,6 +1668,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard let final = startupEventStream?.resolve(
             outcome, observation: startupCapture?.snapshot(), at: runtime.uptime
         ) else { return }
+        finishResolvedStartup(final, promoted: promoted)
+    }
+
+    private func finishZCodeStartup(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
+                                   promoted: Bool) {
+        beginStartupEvents()
+        guard let final = startupEventStream?.resolveZCode(result, expectedApplication: expectedApplication,
+                                                          at: runtime.uptime) else { return }
+        finishResolvedStartup(final, promoted: promoted)
+    }
+
+    private func finishResolvedStartup(_ final: NativeStartupFinalOutcome, promoted: Bool) {
         processExitCode = final.exitCode
         switch final {
         case .activated:

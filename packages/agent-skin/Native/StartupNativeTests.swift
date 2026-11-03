@@ -396,6 +396,7 @@ struct StartupNativeTests {
         }
 
         var checks = 0
+        checks += zcodeTypedEventContractChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
@@ -3664,5 +3665,229 @@ private func nativePureStatusContractChecks() -> Int {
     }
     expect(NativeEntryIdentity.host(bundleIdentifier: "other.launcher", declaredHost: "codex") == nil,
            "declaring Codex cannot authorize a different bundle")
+    return checks
+}
+
+// File-scope test helper. In StartupNativeTests.main, before old tests:
+// checks += zcodeTypedEventContractChecks()
+@MainActor
+private func zcodeTypedEventContractChecks() -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: \(label)") }
+        checks += 1
+    }
+    func key(host: SkinHostID = .zcode, path: String = "/synthetic/ZCode.app",
+             executable: String = "/synthetic/ZCode.app/Contents/MacOS/ZCode",
+             identifier: String = "dev.zcode.app", version: String = "synthetic",
+             build: String = "synthetic", hash: String = String(repeating: "a", count: 64)) -> HostApplicationKey {
+        HostApplicationKey(host: host, bundleURL: URL(fileURLWithPath: path),
+            executableURL: URL(fileURLWithPath: executable), bundleIdentifier: identifier,
+            version: version, build: build, executableSHA256: hash)
+    }
+    let expected = key()
+    let process = HostProcessGeneration(pid: 700, launchTime: 50, executableURL: expected.executableURL)
+    let instance = "12345678-1234-4234-8234-123456789abc"
+    let operation = UUID(uuidString: "abcdefab-1234-4234-9234-123456789abc")!
+    let payload = String(repeating: "b", count: 64)
+    let token = "synthetic-owned-context"
+    let tokenSHA = SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    func receipt(application: HostApplicationKey? = nil, generation: HostProcessGeneration? = nil,
+                 owner: String = "azhou-zcode-startup", version: Int = 1,
+                 hash: String? = nil, context: String? = nil, controller: String? = nil) -> ControllerReceipt {
+        ControllerReceipt(location: PageLocation(application: application ?? expected, process: generation ?? process,
+                documentToken: context ?? token), owner: owner, protocolVersion: version,
+            payloadSHA256: hash ?? payload, controllerInstanceID: controller ?? instance, createdByOperationID: operation)
+    }
+    func makeStream() -> (NativeStartupEventStream, () -> [[String: Any]]) {
+        var records: [[String: Any]] = []
+        let stream = NativeStartupEventStream(writer: NativeEventWriter(
+            startedAt: 0, launcherPID: 1, launcherPath: "/synthetic/launcher", sink: { records.append($0) }))
+        return (stream, { records })
+    }
+    func events(_ records: [[String: Any]]) -> [String] { records.map { $0["event"] as? String ?? "" } }
+    func checkReceiptEvent(_ event: [String: Any], _ label: String) {
+        expect(event["host"] as? String == "zcode" && event["evidence"] as? String == "typed-controller-receipt",
+               "\(label) identifies typed ZCode evidence")
+        expect(event["targetPID"] as? Int == 700 && event["runId"] as? Int == 7,
+               "\(label) binds its observed process and run")
+        expect(event["owner"] as? String == "azhou-zcode-startup" && event["version"] as? Int == 1
+               && event["controllerInstanceID"] as? String == instance
+               && event["createdByOperationID"] as? String == operation.uuidString
+               && event["payloadSHA256"] as? String == payload,
+               "\(label) retains verified controller metadata")
+        expect(event["documentTokenSHA256"] as? String == tokenSHA && event["documentToken"] == nil,
+               "\(label) hashes its context identity")
+        expect(["phase", "completed", "completion", "overlay", "cause"].allSatisfy { event[$0] == nil },
+               "\(label) does not invent lifecycle fields absent from the typed result")
+    }
+
+    // The original bug: a valid typed ZCode receipt must not require Codex capture.
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == .ready,
+               "typed ZCode readiness succeeds without Codex startup capture or milestone history")
+        expect(stream.finish(at: 3) == .ready, "typed readiness retains its successful final outcome")
+        expect(events(records()) == ["launcher-start", "startup-ready", "launcher-exit"],
+               "typed receipt finalization never fabricates target-opened or startup-installed history")
+        checkReceiptEvent(records()[1], "ready")
+        expect(records()[1]["ready"] as? Bool == true && records()[1]["beforeReady"] == nil,
+               "ready reports readiness without inventing skip status")
+        expect(records()[2]["exitCode"] as? Int == 0 && records()[2]["outcome"] as? String == "startup-ready",
+               "typed readiness emits a successful launcher exit")
+    }
+    for acquisition: PageAcquisition in [.created, .alreadyActive] {
+        for beforeReady in [false, true] {
+            let (stream, records) = makeStream(); stream.begin(at: 1)
+            let result = SkinLaunchResult.skipped(.present(.instance(receipt()), acquisition: acquisition),
+                                                  runID: 7, beforeReady: beforeReady)
+            expect(stream.resolveZCode(result, expectedApplication: expected, at: 2) == .skipped,
+                   "confirmed typed skip accepts a created or already-active receipt")
+            _ = stream.finish(at: 3)
+            expect(events(records()) == ["launcher-start", "startup-skipped", "launcher-exit"],
+                   "typed skip preserves only evidenced event history")
+            checkReceiptEvent(records()[1], "skip")
+            let acquisitionName: String
+            switch acquisition { case .created: acquisitionName = "created"; case .alreadyActive: acquisitionName = "alreadyActive" }
+            expect(records()[1]["beforeReady"] as? Bool == beforeReady
+                   && records()[1]["acquisition"] as? String == acquisitionName && records()[1]["ready"] == nil,
+                   "skip emits its typed timing and acquisition without a readiness claim")
+            expect(records()[2]["exitCode"] as? Int == 0 && records()[2]["outcome"] as? String == "skipped",
+                   "typed skip finalizes as successful skip")
+        }
+    }
+
+    // Each malformed receipt is exercised as both ready and confirmed-present skip.
+    let badProcesses = [
+        HostProcessGeneration(pid: 0, launchTime: 50, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: -1, launchTime: 50, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: nil, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: .nan, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: .infinity, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: 0, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: -1, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: 50, executableURL: URL(fileURLWithPath: "/synthetic/foreign-executable"))
+    ]
+    var malformed: [(String, ControllerReceipt)] = [
+        ("foreign owner", receipt(owner: "azhou-codex-startup")), ("unsupported version", receipt(version: 2)),
+        ("empty context", receipt(context: "")), ("short instance", receipt(controller: "1234")),
+        ("invalid UUID", receipt(controller: String(repeating: "g", count: 36))),
+        ("UUID trailing newline", receipt(controller: instance + "\n")),
+        ("short SHA", receipt(hash: String(repeating: "a", count: 63))),
+        ("uppercase SHA", receipt(hash: String(repeating: "A", count: 64))),
+        ("nonhex SHA", receipt(hash: String(repeating: "g", count: 64))),
+        ("SHA trailing newline", receipt(hash: payload + "\n")),
+        ("foreign host", receipt(application: key(host: .codex))),
+        ("foreign bundle path", receipt(application: key(path: "/synthetic/Other.app"))),
+        ("foreign executable key", receipt(application: key(executable: "/synthetic/other"))),
+        ("foreign bundle ID", receipt(application: key(identifier: "foreign.app"))),
+        ("foreign version", receipt(application: key(version: "other"))),
+        ("foreign build", receipt(application: key(build: "other"))),
+        ("foreign executable SHA", receipt(application: key(hash: String(repeating: "c", count: 64))))
+    ]
+    malformed += badProcesses.enumerated().map { ("invalid process \($0.offset)", receipt(generation: $0.element)) }
+    func expectRefusal(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey = expected, label: String) {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        let outcome = stream.resolveZCode(result, expectedApplication: expectedApplication, at: 2)
+        if case .behaviorNotProven? = outcome { checks += 1 }
+        else { fatalError("FAILED: \(label) must refuse claimed success") }
+        _ = stream.finish(at: 3)
+        expect(events(records()) == ["launcher-start", "startup-failed", "launcher-exit"]
+               && records().last?["exitCode"] as? Int == 1, "\(label) emits no success milestone")
+    }
+    for (label, malformedReceipt) in malformed {
+        expectRefusal(.ready(malformedReceipt, runID: 7), label: label + " ready")
+        expectRefusal(.skipped(.present(.instance(malformedReceipt), acquisition: .created), runID: 7, beforeReady: true),
+                      label: label + " skipped")
+    }
+    for runID in [0, -1] {
+        expectRefusal(.ready(receipt(), runID: runID), label: "nonpositive ready run")
+        expectRefusal(.skipped(.present(.instance(receipt()), acquisition: .created), runID: runID, beforeReady: false),
+                      label: "nonpositive skipped run")
+    }
+    let legacy = LegacyV1Observation(location: receipt().location, owner: "azhou-zcode-startup", protocolVersion: 1)
+    for page: PageEffect in [.notObserved(reason: "unobserved"), .absent(receipt().location),
+                            .unknown(operationID: operation, detail: "unknown"),
+                            .present(.legacyV1(legacy), acquisition: .alreadyActive)] {
+        expectRefusal(.skipped(page, runID: 7, beforeReady: false), label: "skip without confirmed instance receipt")
+    }
+    expectRefusal(.ready(receipt(application: key(host: .codex)), runID: 7), expectedApplication: key(host: .codex),
+                  label: "matching Codex identity cannot use ZCode resolver")
+    expectRefusal(.activated(process), expectedApplication: key(host: .codex), label: "Codex activation cannot use ZCode resolver")
+    for invalid in badProcesses { expectRefusal(.activated(invalid), label: "invalid activated process") }
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(.activated(process), expectedApplication: expected, at: 2) == .activated,
+               "valid typed process activation succeeds")
+        _ = stream.finish(at: 3)
+        expect(events(records()) == ["launcher-start", "target-activated", "launcher-exit"]
+               && records()[1]["targetPID"] as? Int == 700, "activation identifies its process without a controller claim")
+    }
+
+    let cleanup = CleanupReport(state: .notNeeded, released: [], intentionallyRetained: [], unconfirmed: [])
+    let page = PageEffect.notObserved(reason: "synthetic no page")
+    let failureCases: [(SkinLaunchResult, NativeStartupFinalOutcome)] = [
+        (.partial(SkinOperationFailure(reason: .targetStale, detail: "startup-interrupted"), page: page, cleanup: cleanup),
+         .partial(reason: "startup-interrupted")),
+        (.partial(SkinOperationFailure(reason: .ownerConflict, detail: "startup-active"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "startup-active")),
+        (.failed(SkinOperationFailure(reason: .targetIdentity, detail: "target-identity"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "target-identity")),
+        (.failed(SkinOperationFailure(reason: .protocolError, detail: "private arbitrary detail"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "protocol-error"))
+    ]
+    for (result, expectedOutcome) in failureCases {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(result, expectedApplication: expected, at: 2) == expectedOutcome,
+               "typed failure keeps established partial/failure reason semantics")
+        _ = stream.finish(at: 3)
+        expect(records().last?["exitCode"] as? Int == Int(expectedOutcome.exitCode), "failure exit code agrees with its outcome")
+    }
+    for reason: HostRefusalReason in [.identityUnavailable, .identityMismatch, .capabilityUnverified,
+                                      .evidenceMismatch, .implementationUnavailable, .capabilityUnsupported] {
+        let refusal = HostRefusal(host: .zcode, reason: reason, findings: [], detail: "synthetic refusal", nextProbe: nil)
+        let (stream, _) = makeStream(); stream.begin(at: 1)
+        let foldedReason = [.identityUnavailable, .identityMismatch, .capabilityUnverified].contains(reason)
+            ? "target-identity" : "protocol-error"
+        expect(stream.resolveZCode(.refused(refusal), expectedApplication: expected, at: 2)
+               == .behaviorNotProven(reason: foldedReason), "typed refusal preserves existing fixed reason folding")
+    }
+    for latchFailure in [false, true] {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        stream.latchInterruption()
+        if latchFailure { stream.latchFailure("asset-invalid") }
+        let expectedOutcome: NativeStartupFinalOutcome = latchFailure
+            ? .behaviorNotProven(reason: "asset-invalid") : .partial(reason: "startup-interrupted")
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == expectedOutcome,
+               "latched failure/interruption dominates a later typed ready result")
+        _ = stream.finish(at: 3)
+        expect(!events(records()).contains("startup-ready") && records().count == 3,
+               "latched failure/interruption emits exactly one final result and exit")
+    }
+    do {
+        let (stream, records) = makeStream()
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 0) == nil
+               && records().isEmpty, "typed resolution before begin emits nothing")
+        stream.begin(at: 1)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == .ready,
+               "a begun typed stream can finalize once")
+        expect(stream.resolveZCode(.activated(process), expectedApplication: expected, at: 3) == nil,
+               "a later typed success cannot replace an earlier final result")
+        expect(stream.resolve(.failed(reason: "asset-invalid"), observation: nil, at: 4) == nil,
+               "legacy resolution cannot overwrite the typed final result")
+        _ = stream.finish(at: 5)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 6) == nil
+               && stream.finish(at: 7) == .ready && records().count == 3,
+               "post-exit typed callbacks and repeated finish cannot duplicate a final event")
+    }
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        _ = stream.resolve(.failed(reason: "asset-invalid"), observation: nil, at: 2)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 3) == nil,
+               "typed resolution cannot erase an existing legacy failure")
+        _ = stream.finish(at: 4)
+        expect(events(records()) == ["launcher-start", "startup-failed", "launcher-exit"],
+               "mixed callbacks retain the initial failure event")
+    }
     return checks
 }
