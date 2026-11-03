@@ -1158,6 +1158,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         data["launcherPath"] = real(runtime.bundleURL).path
         writeLogRecord(data)
     }
+    // The runtime producer uses the same strict envelope as entry lifecycle
+    // events. Generic player/Codex diagnostics retain their existing log path.
+    func emitZCodeRuntimeEvent(_ fields: [String: Any]) {
+        nativeEventWriter.emit("zcode-runtime", fields: fields, at: runtime.uptime)
+    }
     private func writeLogRecord(_ data: [String: Any]) {
         logLock.lock()
         defer { logLock.unlock() }
@@ -1561,7 +1566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: runtime, readPayload: { [weak self] in
                     guard let self else { throw StartupFailure(reason: "asset-invalid", message: "启动入口已结束。") }
                     return try self.startupPayload()
-                }, stateRoot: state, onEvent: { [weak self] fields in self?.log("zcode-runtime", fields) })
+                }, stateRoot: state, onEvent: { [weak self] fields in self?.emitZCodeRuntimeEvent(fields) })
                 return ZCodeSkinDriver(inputs: inputs, assembly: bridge.makeAssembly())
             })
         switch SkinHostFactory.make(host: expectedApplication.host,

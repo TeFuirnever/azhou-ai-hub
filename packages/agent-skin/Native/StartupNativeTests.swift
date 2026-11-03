@@ -396,6 +396,7 @@ struct StartupNativeTests {
         }
 
         var checks = 0
+        checks += zcodeRuntimeEventEnvelopeChecks()
         checks += zcodeTypedEventContractChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
@@ -3300,10 +3301,16 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     let fake = FakeNativeAppRuntime(arguments: [], resourceURL: temporary)
     let inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic"), findings: [], contractVersion: SkinHostContract.version)
     let state = temporary.appendingPathComponent("must-not-create")
+    var proofFailureEvents: [[String: Any]] = []
     let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "different-real-bytes" }, stateRoot: state,
-        onEvent: { _ in }, installationProbe: {})
+        onEvent: { proofFailureEvents.append($0) }, installationProbe: {})
     do { _ = try await bridge.makeAssembly().openApplication(110);preconditionFailure("stale proof must refuse before open") } catch { checks += 1 }
     expect(fake.openCount == 0 && fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: state.path), "stale proof takes no host/port/directory effects")
+    expect(proofFailureEvents.count == 1 && Set(proofFailureEvents[0].keys) == ["stage", "point", "reason"]
+        && proofFailureEvents[0]["stage"] as? String == "zcode-runtime-failed"
+        && proofFailureEvents[0]["point"] as? String == "open-proof"
+        && proofFailureEvents[0]["reason"] as? String == "asset-invalid",
+        "stale proof reports only the actual bounded failure point and fixed reason before any open effect")
     let listenerState = temporary.appendingPathComponent("listener-fixture")
     try FileManager.default.createDirectory(at: listenerState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     let listenerApp = FakeNativeApplication(pid: 654321, bundleIdentifier: key.bundleIdentifier,
@@ -3321,13 +3328,19 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
         .init(status: 0, stdout: Data("p654321\nn0.0.0.0:45678\n".utf8), stderr: Data()),
         .init(status: 0, stdout: Data("n127.0.0.1:45678\n".utf8), stderr: Data()),
     ]
-    for result in invalidListeners {
+    for (index, result) in invalidListeners.enumerated() {
         var calls: [Int32] = []
+        var listenerFailureEvents: [[String: Any]] = []
         let checked = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
-            onEvent: { _ in }, installationProbe: {}, listenerCommand: { pid in calls.append(pid);return result })
+            onEvent: { listenerFailureEvents.append($0) }, installationProbe: {}, listenerCommand: { pid in calls.append(pid);return result })
         do { _ = try await checked.makeAssembly().attach(process, 110);preconditionFailure("invalid listener evidence accepted") }
         catch { checks += 1 }
         expect(calls == [process.pid], "only the bound synthetic process is queried once before refusal")
+        expect(listenerFailureEvents.count == 1 && Set(listenerFailureEvents[0].keys) == ["stage", "point", "reason"]
+            && listenerFailureEvents[0]["stage"] as? String == "zcode-runtime-failed"
+            && listenerFailureEvents[0]["point"] as? String == "listener"
+            && listenerFailureEvents[0]["reason"] as? String == (index < 4 ? "inspection-failed" : "listener-mismatch"),
+            "listener inspection failure retains its actual stage and bounded reason without raw command output")
     }
     var cleanNotReadyCalls = 0
     let notReady = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
@@ -3564,14 +3577,72 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
     expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
 
-    let openError = try make();openError.fake.openError = StartupFailure(reason: "synthetic-open-failed", message: "synthetic")
+    func checkOpenFailure(_ f: ZCodeRuntimeFixture, points: [(String, String)], selected: Bool, _ label: String) {
+        let failures = f.events.filter { $0["stage"] as? String == "zcode-runtime-failed" }
+        expect(failures.count == points.count, "\(label) reports exactly its actual failed phases")
+        for (event, expected) in zip(failures, points) {
+            expect(Set(event.keys) == ["stage", "point", "reason"]
+                && event["point"] as? String == expected.0 && event["reason"] as? String == expected.1,
+                "\(label) exposes only fixed stage/point/reason tags")
+        }
+        expect(f.events.filter { $0["stage"] as? String == "zcode-open-request" }.count == 1
+            && f.events.filter { $0["stage"] as? String == "zcode-open-selected-process" }.count == (selected ? 1 : 0),
+            "\(label) preserves actual request/selection facts without converting them into success")
+        expect(!f.events.contains { event in
+            event["stage"] as? String == "zcode-controller-ready"
+                || ["startup-ready", "startup-skipped", "target-activated", "launcher-exit"].contains(event["event"] as? String ?? "")
+                || event["ready"] as? Bool == true || event["completed"] as? Bool == true
+        }, "\(label) never claims controller readiness, startup success or final exit")
+    }
+    let openError = try make()
+    openError.fake.openError = NSError(domain: "synthetic-private", code: 17,
+        userInfo: [NSLocalizedDescriptionKey: "private-url?token=must-not-leak"])
     do { _ = try await openError.assembly.openApplication(160);fatalError("NSWorkspace error callback was accepted") }
     catch let error as StartupFailure { expect(error.reason == "attach-timeout", "open callback errors retain bounded failure mapping") }
     expect(openError.fake.openCount == 1 && !FileManager.default.fileExists(atPath: openError.state.appendingPathComponent("launch-receipt.json").path), "error callback cannot create a selected success receipt")
+    checkOpenFailure(openError, points: [("open-callback-error", "unclassified"), ("open-callback", "attach-timeout")],
+        selected: true, "native callback error")
+    let callbackEventJSON = String(decoding: try JSONSerialization.data(withJSONObject: openError.events), as: UTF8.self)
+    expect(!callbackEventJSON.contains("synthetic-private") && !callbackEventJSON.contains("must-not-leak"),
+        "native callback diagnostics never emit private error domain or localized description")
     let inactive = try make();inactive.app.activationResult = false
     do { _ = try await inactive.assembly.openApplication(160);fatalError("failed activation was accepted") }
     catch let error as StartupFailure { expect(error.reason == "target-identity", "failed activation does not become cold ready") }
     expect(inactive.app.activationCount == 1 && !FileManager.default.fileExists(atPath: inactive.state.appendingPathComponent("launch-receipt.json").path), "failed activation does not persist a reusable generation")
+    checkOpenFailure(inactive, points: [("open-activation", "target-identity")], selected: true, "activation refusal")
+
+    let unobservedSelection = try make();unobservedSelection.fake.beforeOpenCompletion = {}
+    do { _ = try await unobservedSelection.assembly.openApplication(160);fatalError("unobserved selected process was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "target-identity", "callback selection still requires live fake runtime validation") }
+    expect(unobservedSelection.app.activationCount == 0
+        && !FileManager.default.fileExists(atPath: unobservedSelection.state.appendingPathComponent("launch-receipt.json").path),
+        "selected callback without live generation cannot activate or create a reusable receipt")
+    checkOpenFailure(unobservedSelection, points: [("open-selected-validation", "target-identity")], selected: true,
+        "unobserved selected generation")
+
+    let nilCallback = try make();nilCallback.fake.openedApplication = nil
+    do { _ = try await nilCallback.assembly.openApplication(160);fatalError("empty callback was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "attach-timeout", "empty callback retains bounded failure mapping") }
+    expect(nilCallback.app.activationCount == 0
+        && !FileManager.default.fileExists(atPath: nilCallback.state.appendingPathComponent("launch-receipt.json").path),
+        "empty callback cannot activate or create a reusable receipt")
+    checkOpenFailure(nilCallback, points: [("open-callback", "attach-timeout")], selected: false, "empty callback")
+
+    let blockedReceipt = try make()
+    try FileManager.default.createDirectory(at: blockedReceipt.state, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
+        try FileManager.default.createDirectory(at: blockedReceipt.state.appendingPathComponent(name),
+            withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    }
+    let receiptDirectory = blockedReceipt.state.appendingPathComponent("launch-receipt.json", isDirectory: true)
+    try FileManager.default.createDirectory(at: receiptDirectory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    do { _ = try await blockedReceipt.assembly.openApplication(160);fatalError("receipt write into existing directory was accepted") }
+    catch { checks += 1 }
+    let blockedAttributes = try FileManager.default.attributesOfItem(atPath: receiptDirectory.path)
+    expect(blockedAttributes[.type] as? FileAttributeType == .typeDirectory
+        && blockedReceipt.app.activationCount == 1,
+        "failed receipt write retains the fixture directory and never produces a reusable file despite activation")
+    checkOpenFailure(blockedReceipt, points: [("open-receipt-write", "unclassified")], selected: true, "receipt write refusal")
     let unreadable = try make();unreadable.payloadReadFailure = true
     do { _ = try await unreadable.assembly.openApplication(160);fatalError("unreadable payload opened host") } catch { checks += 1 }
     expect(unreadable.fake.openCount == 0 && unreadable.fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: unreadable.state.path), "unreadable payload refuses before every cold effect")
@@ -3964,5 +4035,148 @@ private func zcodeTypedEventContractChecks() -> Int {
         expect(runtime.openCount == 0 && runtime.allocationCount == 0 && runtime.openedEnvironments.isEmpty,
                "terminal result handling itself cannot open a host or create launch side effects")
     }
+    return checks
+}
+
+// File-scope helper; add checks += zcodeRuntimeEventEnvelopeChecks() in main.
+@MainActor
+private func zcodeRuntimeEventEnvelopeChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+    let runtime = FakeNativeAppRuntime(arguments: ["SYNTHETIC-EVENTS-ONLY"])
+    runtime.bundleURL = URL(fileURLWithPath: "/tmp/synthetic-zcode-event-envelope/Azhou.app")
+    let presentation = FakeNativePlayerPresentation()
+    let delegate = AppDelegate(runtime: runtime, presentation: presentation)
+    let port = 45678
+    let hostPID = 700
+    let hostBirth = 50.125
+    let environmentKeys = ["HOME", "LANG", "PATH", "TMPDIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_HOME_DIR",
+                           "ZCODE_DESKTOP_SESSION_DATA_DIR", "ZCODE_DESKTOP_USER_DATA_DIR"]
+    let request: [String: Any] = ["stage": "zcode-open-request", "debuggingPort": port,
+        "entryPID": runtime.processIdentifier, "environmentKeys": environmentKeys, "host_is_not_native_child": true]
+    let selected: [String: Any] = ["stage": "zcode-open-selected-process", "debuggingPort": port,
+        "entryPID": runtime.processIdentifier, "hostPID": hostPID, "hostStartedAt": hostBirth,
+        "native_child_wait_claim": false]
+    runtime.uptime = 101
+    delegate.emitZCodeRuntimeEvent(request)
+    runtime.uptime = 100.5 // A regressing source clock must not regress envelope time.
+    delegate.emitZCodeRuntimeEvent(selected)
+    var overridden = request
+    overridden.merge(["schema": "foreign.schema", "event": "startup-ready", "seconds": -100.0,
+                      "launcherPID": -1, "launcherPath": "/synthetic/foreign-entry"]) { _, new in new }
+    runtime.uptime = 103
+    delegate.emitZCodeRuntimeEvent(overridden)
+
+    let records = runtime.output.compactMap { line -> [String: Any]? in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+    expect(records.count == 3 && runtime.output.count == 3,
+           "each runtime diagnostic is emitted as one valid JSON record")
+    let expectedPath = runtime.bundleURL.resolvingSymlinksInPath().standardizedFileURL.path
+    expect(records.allSatisfy {
+        $0["schema"] as? String == NativeEventWriter.schema && $0["event"] as? String == "zcode-runtime"
+            && $0["launcherPID"] as? Int == runtime.processIdentifier && $0["launcherPath"] as? String == expectedPath
+    }, "runtime request and selected process share the strict owner envelope and exact entry identity")
+    expect(records.compactMap { $0["seconds"] as? Double } == [1, 1, 3],
+           "runtime event elapsed seconds remain monotonic when the source clock moves backward")
+    let envelope: Set<String> = ["schema", "event", "seconds", "launcherPID", "launcherPath"]
+    expect(Set(records[0].keys) == Set(request.keys).union(envelope)
+           && Set(records[1].keys) == Set(selected.keys).union(envelope),
+           "the writer preserves actual runtime fieldsets without adding unsupported evidence")
+    expect(records[0]["debuggingPort"] as? Int == port && records[1]["debuggingPort"] as? Int == port
+           && records[0]["entryPID"] as? Int == runtime.processIdentifier
+           && records[1]["entryPID"] as? Int == runtime.processIdentifier,
+           "request and selection retain the same port and entry PID")
+    expect(records[1]["hostPID"] as? Int == hostPID && records[1]["hostStartedAt"] as? Double == hostBirth,
+           "selected process diagnostic preserves the actual host generation rather than the entry PID")
+    expect(records[0]["environmentKeys"] as? [String] == environmentKeys
+           && records[0]["host_is_not_native_child"] as? Bool == true
+           && records[1]["native_child_wait_claim"] as? Bool == false,
+           "launch request records isolation key names and selection never claims a native child wait")
+    expect(records[2]["stage"] as? String == "zcode-open-request" && records[2]["debuggingPort"] as? Int == port
+           && records[2]["schema"] as? String == NativeEventWriter.schema
+           && records[2]["event"] as? String == "zcode-runtime" && records[2]["seconds"] as? Double == 3
+           && records[2]["launcherPID"] as? Int == runtime.processIdentifier
+           && records[2]["launcherPath"] as? String == expectedPath,
+           "producer fields cannot overwrite the writer's schema, event, monotonic time or entry identity")
+    expect(records.allSatisfy { record in
+        ["ready", "completed", "completion", "outcome", "exitCode", "runId"].allSatisfy { record[$0] == nil }
+    }, "request and selection diagnostics do not fabricate startup success, completion or finalization")
+    expect(runtime.openCount == 0 && runtime.allocationCount == 0 && runtime.terminated == 0
+           && runtime.activated == 0 && presentation.createdPlayers.isEmpty && presentation.evaluations.isEmpty,
+           "emitting runtime evidence performs no application launch, port allocation, UI or shutdown action")
+
+    let secret = "fixture-private-url?query=must-not-be-emitted"
+    let allowedStartup = ["target-identity", "attach-timeout", "listener-mismatch", "endpoint-unavailable",
+        "profile-isolation-unproven", "asset-invalid", "inspection-failed", "inspection-timeout", "protocol-error"]
+    for reason in allowedStartup {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: StartupFailure(reason: reason, message: secret)) == reason,
+               "known startup diagnostic retains only its fixed reason tag")
+    }
+    for reason in ["busy", "inspection-failed", "inspection-timeout"] {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: WallpaperFailure(state: reason, chinese: secret, english: secret)) == reason,
+               "known operation diagnostic retains only its fixed state tag")
+    }
+    let cdpErrors: [(ZCodeBoundCDP.Failure, String)] = [
+        (.deadline, "cdp-deadline"), (.cancelled, "cdp-cancelled"), (.busy, "cdp-busy"),
+        (.identity, "cdp-identity"), (.protocolError, "cdp-protocol-error"), (.unavailable, "cdp-unavailable")
+    ]
+    for (error, reason) in cdpErrors {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: error) == reason,
+               "CDP diagnostic identifies its bounded failure class")
+    }
+    expect(ZCodeNativeRuntime.diagnosticReason(for: CancellationError()) == "cancelled",
+           "task cancellation remains a fixed diagnostic tag")
+    for error: Error in [StartupFailure(reason: secret, message: secret),
+                         WallpaperFailure(state: secret, chinese: secret, english: secret),
+                         NSError(domain: secret, code: 17, userInfo: [NSLocalizedDescriptionKey: secret])] {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: error) == "unclassified",
+               "unknown reasons, error domains and localized text cannot enter diagnostic fields")
+    }
+    final class DescriptionReads { var count = 0 }
+    struct PrivateDiagnosticError: LocalizedError {
+        let reads: DescriptionReads
+        var errorDescription: String? { reads.count += 1; return "fixture-private-localized-description" }
+    }
+    let reads = DescriptionReads()
+    expect(ZCodeNativeRuntime.diagnosticReason(for: PrivateDiagnosticError(reads: reads)) == "unclassified"
+           && reads.count == 0, "classifying unknown errors never evaluates localized description")
+    runtime.uptime = 104
+    delegate.emitZCodeRuntimeEvent(["stage": "zcode-runtime-failed", "point": "open-proof",
+                                   "reason": ZCodeNativeRuntime.diagnosticReason(for: StartupFailure(reason: "asset-invalid", message: secret))])
+    let diagnostic = try! JSONSerialization.jsonObject(with: Data(runtime.output.last!.utf8)) as! [String: Any]
+    expect(Set(diagnostic.keys) == envelope.union(["stage", "point", "reason"])
+           && diagnostic["stage"] as? String == "zcode-runtime-failed"
+           && diagnostic["point"] as? String == "open-proof" && diagnostic["reason"] as? String == "asset-invalid",
+           "runtime failure diagnostic has exactly a fixed point and reason inside the strict envelope")
+    expect(!runtime.output.last!.contains(secret) && diagnostic["event"] as? String == "zcode-runtime"
+           && diagnostic["schema"] as? String == NativeEventWriter.schema,
+           "private exception text never accompanies a fixed runtime failure diagnostic")
+
+    // A renderer/runtime failure remains failure after the legacy bridge. The
+    // diagnostic repair must never make an unknown detail into a successful run.
+    let failure = SkinOperationFailure(reason: .protocolError, detail: "fixture-private-url?query=must-not-be-emitted")
+    let typed = SkinLaunchResult.failed(failure, page: .notObserved(reason: "fixture"),
+        cleanup: CleanupReport(state: .notNeeded, released: [], intentionallyRetained: [], unconfirmed: []))
+    var finalRecords: [[String: Any]] = []
+    let stream = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 1,
+        launcherPath: "/synthetic/entry", sink: { finalRecords.append($0) }))
+    stream.begin(at: 1)
+    let expectedApplication = HostApplicationKey(host: .zcode,
+        bundleURL: URL(fileURLWithPath: "/synthetic/ZCode.app"),
+        executableURL: URL(fileURLWithPath: "/synthetic/ZCode.app/Contents/MacOS/ZCode"),
+        bundleIdentifier: "dev.zcode.app", version: "synthetic", build: "synthetic",
+        executableSHA256: String(repeating: "a", count: 64))
+    expect(stream.resolveZCode(typed, expectedApplication: expectedApplication, at: 2)
+           == .behaviorNotProven(reason: "protocol-error"),
+           "fixed diagnostic reporting leaves the actual typed ZCode finalizer non-successful")
+    _ = stream.finish(at: 3)
+    expect(finalRecords.map { $0["event"] as? String ?? "" } == ["launcher-start", "startup-failed", "launcher-exit"]
+           && finalRecords.last?["exitCode"] as? Int == 1
+           && finalRecords[1]["reason"] as? String == "protocol-error",
+           "the final generic failure remains sanitized and emits a nonzero exit")
     return checks
 }

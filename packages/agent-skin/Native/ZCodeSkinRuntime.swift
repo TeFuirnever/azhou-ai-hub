@@ -10,6 +10,12 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
 }
 @MainActor final class ZCodeBoundCDP {
     enum Failure: Error { case deadline, cancelled, busy, identity, protocolError, unavailable }
+    enum AttachmentStage: String {
+        case targetList = "target-list", mainPageMissing = "main-page-missing"
+        case mainPageAmbiguous = "main-page-ambiguous", targetEndpoint = "target-endpoint"
+        case frame, context, bound
+    }
+    private(set) var attachmentStage = AttachmentStage.targetList
     private let session: URLSession
     private var socket: URLSessionWebSocketTask?
     private var serial = 0
@@ -114,6 +120,7 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         }
     }
     func attach(deadline: TimeInterval) async throws -> ZCodePageBinding {
+        attachmentStage = .targetList
         try check(deadline)
         var request = URLRequest(url: endpoint.appendingPathComponent("json/list"))
         request.timeoutInterval = max(0.01, min(3, deadline - now())); request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -122,6 +129,11 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         guard (response as? HTTPURLResponse)?.statusCode == 200, bytes.count <= 1_048_576,
               let pages = try JSONSerialization.jsonObject(with: bytes) as? [[String: Any]] else { throw Failure.protocolError }
         let candidates = pages.filter { $0["type"] as? String == "page" && validPage($0["url"] as? String ?? "") }
+        if candidates.count != 1 {
+            attachmentStage = candidates.isEmpty ? .mainPageMissing : .mainPageAmbiguous
+            throw Failure.identity
+        }
+        attachmentStage = .targetEndpoint
         guard candidates.count == 1, let page = candidates.first,
               let id = page["id"] as? String, id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil,
               let address = page["webSocketDebuggerUrl"] as? String, let wsURL = URL(string: address),
@@ -129,10 +141,12 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
               wsURL.user == nil, wsURL.password == nil, wsURL.query == nil, wsURL.fragment == nil,
               wsURL.path == "/devtools/page/" + id else { throw Failure.identity }
         let ws = session.webSocketTask(with: wsURL); ws.maximumMessageSize = 1_048_576; socket = ws; ws.resume()
+        attachmentStage = .frame
         let tree = try await call("Page.getFrameTree", deadline: deadline)
         guard let t = tree["frameTree"] as? [String: Any], let frame = t["frame"] as? [String: Any],
               let fid = frame["id"] as? String, let url = frame["url"] as? String, validPage(url) else { throw Failure.identity }
         frameID = fid; pinnedURL = url
+        attachmentStage = .context
         _ = try await call("Runtime.enable", deadline: deadline)
         _ = try await call("Page.enable", deadline: deadline)
         let matches = contexts.filter { _, c in
@@ -141,7 +155,7 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         }
         guard matches.count == 1, let context = matches.first?.key, let pageURL = URL(string: url) else { throw Failure.identity }
         let result = ZCodePageBinding(process: process, endpoint: endpoint, pageURL: pageURL, targetID: id, documentToken: context)
-        binding = result; return result
+        binding = result; attachmentStage = .bound; return result
     }
     private func recheckFrame(deadline: TimeInterval) async throws {
         let tree = try await call("Page.getFrameTree", deadline: deadline)
@@ -301,6 +315,40 @@ import Darwin
         self.listenerCommand = listenerCommand ?? { try Self.runListenerCommand($0) }
     }
     private func failure(_ reason: String) -> StartupFailure { StartupFailure(reason: reason, message: "ZCode 接入未通过本次核验。") }
+    private enum DiagnosticPoint: String {
+        case openPreflight = "open-preflight", openProof = "open-proof", openEnvironment = "open-environment"
+        case openCallback = "open-callback", openCallbackError = "open-callback-error"
+        case openSelectedGeneration = "open-selected-generation", openSelectedValidation = "open-selected-validation"
+        case openActivation = "open-activation", openReceiptWrite = "open-receipt-write", openReceiptMode = "open-receipt-mode"
+        case validateProcess = "validate-process", operationLock = "operation-lock"
+        case recordedPort = "recorded-port", listener, transportInit = "transport-init", pageAttach = "page-attach"
+    }
+    // Only finite tags leave the native boundary: never error descriptions,
+    // URLs, query values, path-bearing userInfo, or arbitrary exception text.
+    static func diagnosticReason(for error: Error) -> String {
+        let allowed: Set<String> = ["target-identity", "attach-timeout", "listener-mismatch", "endpoint-unavailable",
+            "profile-isolation-unproven", "asset-invalid", "inspection-failed", "inspection-timeout", "protocol-error"]
+        if let error = error as? StartupFailure { return allowed.contains(error.reason) ? error.reason : "unclassified" }
+        if let error = error as? WallpaperFailure {
+            return ["busy", "inspection-failed", "inspection-timeout"].contains(error.state) ? error.state : "unclassified"
+        }
+        if let error = error as? ZCodeBoundCDP.Failure {
+            switch error {
+            case .deadline: return "cdp-deadline"
+            case .cancelled: return "cdp-cancelled"
+            case .busy: return "cdp-busy"
+            case .identity: return "cdp-identity"
+            case .protocolError: return "cdp-protocol-error"
+            case .unavailable: return "cdp-unavailable"
+            }
+        }
+        return error is CancellationError ? "cancelled" : "unclassified"
+    }
+    private func reportFailure(_ error: Error, point: DiagnosticPoint,
+                               attachment: ZCodeBoundCDP.AttachmentStage? = nil) {
+        onEvent(["stage": "zcode-runtime-failed", "point": attachment.map { "cdp-" + $0.rawValue } ?? point.rawValue,
+                 "reason": Self.diagnosticReason(for: error)])
+    }
     private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     private func checkTime(_ deadline: TimeInterval) throws {
         if Task.isCancelled { throw CancellationError() }
@@ -375,46 +423,59 @@ import Darwin
             "ZCODE_DESKTOP_SESSION_DATA_DIR": paths["electron-session"]!]
     }
     private func open(_ deadline: TimeInterval) async throws -> HostProcessGeneration {
-        try checkTime(deadline);guard try running().isEmpty else { throw failure("target-identity") }
-        let coldPayload = try readPayload()
-        try validateUIProof(payloadSHA256: digest(Data(coldPayload.utf8)))
-        try checkTime(deadline)
-        let env = try environment();let chosen = try runtime.allocateLoopbackPort();port = chosen
-        onEvent(["stage": "zcode-open-request", "debuggingPort": chosen, "entryPID": runtime.processIdentifier,
-                 "environmentKeys": env.keys.sorted(), "host_is_not_native_child": true])
-        let token = UUID();openingToken = token
-        defer { opening = nil;openingToken = nil }
-        let app: any NativeApplication = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                let waiter = StartupApplicationWaiter(continuation);opening = waiter
-                let timeout = DispatchWorkItem { waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "ZCode 系统启动结果未在预算内确认。"))) }
-                waiter.setTimeout(timeout);DispatchQueue.main.asyncAfter(deadline: .now() + max(0.01, min(45, deadline-runtime.uptime)), execute: timeout)
-                runtime.openApplication(at: inputs.identity.key.bundleURL, debuggingPort: chosen, environment: env) { [weak self] app, error in
-                    Task { @MainActor in
-                        guard let self else { waiter.finish(.failure(CancellationError()));return }
-                        if let app, let process = try? self.generation(app) {
-                            self.onEvent(["stage": "zcode-open-selected-process", "hostPID": process.pid,
-                                "hostStartedAt": process.launchTime!, "debuggingPort": chosen, "entryPID": self.runtime.processIdentifier,
-                                "native_child_wait_claim": false])
+        var point = DiagnosticPoint.openPreflight
+        do {
+            try checkTime(deadline);guard try running().isEmpty else { throw failure("target-identity") }
+            point = .openProof
+            let coldPayload = try readPayload()
+            try validateUIProof(payloadSHA256: digest(Data(coldPayload.utf8)))
+            try checkTime(deadline)
+            point = .openEnvironment
+            let env = try environment();let chosen = try runtime.allocateLoopbackPort();port = chosen
+            onEvent(["stage": "zcode-open-request", "debuggingPort": chosen, "entryPID": runtime.processIdentifier,
+                     "environmentKeys": env.keys.sorted(), "host_is_not_native_child": true])
+            let token = UUID();openingToken = token
+            defer { opening = nil;openingToken = nil }
+            point = .openCallback
+            let app: any NativeApplication = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    let waiter = StartupApplicationWaiter(continuation);opening = waiter
+                    let timeout = DispatchWorkItem { waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "ZCode 系统启动结果未在预算内确认。"))) }
+                    waiter.setTimeout(timeout);DispatchQueue.main.asyncAfter(deadline: .now() + max(0.01, min(45, deadline-runtime.uptime)), execute: timeout)
+                    runtime.openApplication(at: inputs.identity.key.bundleURL, debuggingPort: chosen, environment: env) { [weak self] app, error in
+                        Task { @MainActor in
+                            guard let self else { waiter.finish(.failure(CancellationError()));return }
+                            if let app, let process = try? self.generation(app) {
+                                self.onEvent(["stage": "zcode-open-selected-process", "hostPID": process.pid,
+                                    "hostStartedAt": process.launchTime!, "debuggingPort": chosen, "entryPID": self.runtime.processIdentifier,
+                                    "native_child_wait_claim": false])
+                            }
+                            if let error { self.reportFailure(error, point: .openCallbackError) }
+                            guard error == nil, let app, self.runtime.uptime < deadline else {
+                                waiter.finish(.failure(self.failure("attach-timeout")));return
+                            }
+                            waiter.finish(.success(app))
                         }
-                        guard error == nil, let app, self.runtime.uptime < deadline else {
-                            waiter.finish(.failure(self.failure("attach-timeout")));return
-                        }
-                        waiter.finish(.success(app))
                     }
                 }
-            }
-        } onCancel: { [weak self] in Task { @MainActor in
-            guard self?.openingToken == token else { return };self?.opening?.finish(.failure(CancellationError()))
-        } }
-        let process = try generation(app);try validate(process);try checkTime(deadline)
-        guard app.activate() else { throw failure("target-identity") }
-        let record: [String: Any] = ["pid": process.pid, "launchTime": process.launchTime!, "port": chosen,
-            "executableSHA256": inputs.identity.key.executableSHA256]
-        let path = stateRoot.appendingPathComponent("launch-receipt.json")
-        try JSONSerialization.data(withJSONObject: record).write(to: path, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
-        return process
+            } onCancel: { [weak self] in Task { @MainActor in
+                guard self?.openingToken == token else { return };self?.opening?.finish(.failure(CancellationError()))
+            } }
+            point = .openSelectedGeneration
+            let process = try generation(app)
+            point = .openSelectedValidation
+            try validate(process);try checkTime(deadline)
+            point = .openActivation
+            guard app.activate() else { throw failure("target-identity") }
+            let record: [String: Any] = ["pid": process.pid, "launchTime": process.launchTime!, "port": chosen,
+                "executableSHA256": inputs.identity.key.executableSHA256]
+            let path = stateRoot.appendingPathComponent("launch-receipt.json")
+            point = .openReceiptWrite
+            try JSONSerialization.data(withJSONObject: record).write(to: path, options: .atomic)
+            point = .openReceiptMode
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+            return process
+        } catch { reportFailure(error, point: point);throw error }
     }
     // Only the exact pid's listener metadata is queried; exit1 with empty output
     // is a clean not-ready result, while any diagnostic/nonzero result refuses.
@@ -470,17 +531,22 @@ import Darwin
         self.port = port;return port
     }
     private func attach(_ process: HostProcessGeneration, deadline: TimeInterval) async throws -> ZCodePageBinding {
-        let chosen = try recordedPort(process)
-        while true {
-            try checkTime(deadline)
-            if try kernelReady(process, port: chosen) { break }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        let client = try ZCodeBoundCDP(process: process, endpoint: URL(string: "http://127.0.0.1:\(chosen)")!,
+        let chosen: Int
+        do { chosen = try recordedPort(process) }
+        catch { reportFailure(error, point: .recordedPort);throw error }
+        do {
+            while true {
+                try checkTime(deadline)
+                if try kernelReady(process, port: chosen) { break }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+        } catch { reportFailure(error, point: .listener);throw error }
+        let client: ZCodeBoundCDP
+        do { client = try ZCodeBoundCDP(process: process, endpoint: URL(string: "http://127.0.0.1:\(chosen)")!,
             installedPage: inputs.identity.key.bundleURL.appendingPathComponent("Contents/Resources/app.asar/out/renderer/index.html").path,
             now: { [runtime] in runtime.uptime }, guardLive: { [weak self] in
                 guard let self, try self.kernelReady(process, port: chosen) else { throw StartupFailure(reason: "listener-mismatch", message: "ZCode endpoint identity changed.") }
-            })
+            }) } catch { reportFailure(error, point: .transportInit);throw error }
         connection?.close();connection = client
         do {
             let binding = try await client.attach(deadline: deadline)
@@ -488,7 +554,7 @@ import Darwin
                 "debuggingPort": chosen, "targetID": binding.targetID,
                 "documentTokenSHA256": digest(Data(binding.documentToken.utf8))])
             return binding
-        } catch { client.close();connection = nil;throw error }
+        } catch { reportFailure(error, point: .pageAttach, attachment: client.attachmentStage);client.close();connection = nil;throw error }
     }
     private func install(_ binding: ZCodePageBinding, request: SkinLaunchRequest, observation: ZCodeInstallObservation) async throws -> SkinLaunchResult {
         guard let client = connection else { throw failure("endpoint-unavailable") }
@@ -530,7 +596,10 @@ import Darwin
     }
     func makeAssembly() -> ZCodeSkinAssembly {
         ZCodeSkinAssembly(now: { [runtime] in runtime.uptime }, runningProcesses: { try self.running() },
-            validateProcess: { try self.validate($0) }, activateExisting: { process in
+            validateProcess: { process in
+                do { try self.validate(process) }
+                catch { self.reportFailure(error, point: .validateProcess);throw error }
+            }, activateExisting: { process in
                 try self.validate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
             }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1) },
             install: { try await self.install($0, request: $1, observation: $2) }, inspectPage: { binding, deadline in
@@ -545,8 +614,10 @@ import Darwin
                 guard let client = self.connection else { throw self.failure("endpoint-unavailable") }
                 return try await client.disposeConfirmed(receipt, deadline: deadline)
             }, acquireOperation: { pid in
-                let lock = try WallpaperOperationLock.acquire(pid: pid)
-                return ZCodeRuntimeLease { self.connection?.close();self.connection = nil;lock.release() }
+                do {
+                    let lock = try WallpaperOperationLock.acquire(pid: pid)
+                    return ZCodeRuntimeLease { self.connection?.close();self.connection = nil;lock.release() }
+                } catch { self.reportFailure(error, point: .operationLock);throw error }
             })
     }
 }
