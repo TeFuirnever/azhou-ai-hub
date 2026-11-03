@@ -18,24 +18,24 @@ with log.open('a') as out:
 def source():
     return json.loads(state.read_text())['source']
 def installed():
-    return h / 'plugins/cache/pstack-claude/pstack/0.9.102'
+    return h / 'plugins/cache/pstack-claude/pstack-azhouzhou/0.9.102'
 if a[:2] == ['marketplace', 'add']:
     assert pathlib.Path(a[2]).is_absolute()
     assert not a[2].startswith('https:')
     state.write_text(json.dumps({'source': a[2]}))
     print(json.dumps({'marketplaceName': 'pstack-claude', 'installedRoot': a[2], 'alreadyAdded': False}))
-elif a == ['add', 'pstack@pstack-claude']:
+elif a == ['add', 'pstack-azhouzhou@pstack-claude']:
     if os.environ.get('PSTACK_TEST_FAIL_PLUGIN'):
         sys.exit('fixture plugin installation failure')
     shutil.copytree(pathlib.Path(source())/'harness/pstack/codex', installed(), dirs_exist_ok=True)
-    print(json.dumps({'pluginId': 'pstack@pstack-claude', 'version': '0.9.102', 'installedPath': str(installed())}))
+    print(json.dumps({'pluginId': 'pstack-azhouzhou@pstack-claude', 'version': '0.9.102', 'installedPath': str(installed())}))
 elif a == ['marketplace', 'list']:
     entries = [{'name':'pstack-claude', 'root':source(), 'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() else []
     print(json.dumps({'marketplaces':entries}))
 elif a == ['list', '--marketplace', 'pstack-claude'] or a == ['list']:
-    entries = [{'pluginId':'pstack@pstack-claude','name':'pstack','marketplaceName':'pstack-claude','installed':True,'enabled':True,'source':{'source':'local','path':str(pathlib.Path(source())/'harness/pstack/codex')},'marketplaceSource':{'sourceType':'local','source':source()}}] if installed().exists() else []
+    entries = [{'pluginId':'pstack-azhouzhou@pstack-claude','name':'pstack-azhouzhou','marketplaceName':'pstack-claude','installed':True,'enabled':True,'source':{'source':'local','path':str(pathlib.Path(source())/'harness/pstack/codex')},'marketplaceSource':{'sourceType':'local','source':source()}}] if installed().exists() else []
     print(json.dumps({'installed':entries,'available':[]}))
-elif a == ['remove', 'pstack@pstack-claude']:
+elif a == ['remove', 'pstack-azhouzhou@pstack-claude']:
     shutil.rmtree(installed())
     print(json.dumps({'removed':True}))
 elif a == ['marketplace', 'remove', 'pstack-claude']:

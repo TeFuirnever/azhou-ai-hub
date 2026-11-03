@@ -38,7 +38,7 @@ from test_integration_model_router import (FakeInstaller, FakeNative,
 ROOT = Path(__file__).resolve().parents[1]
 OFF_SHEET = "# pstack model configuration\nsession hook: off\n"
 ARMED_SHEET = "# pstack model configuration\nfeature: opus\nsession hook: on\n"
-FOREIGN_INSTALLED = "plugins/cache/pstack-claude/pstack/0.9.102"
+FOREIGN_INSTALLED = "plugins/cache/pstack-claude/pstack-azhouzhou/0.9.102"
 
 
 class TransitionTestCase(unittest.TestCase):
@@ -69,7 +69,7 @@ class TransitionTestCase(unittest.TestCase):
         ])
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name": "pstack-claude", "plugins": []}),
-            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name": "pstack", "version": "0.9.102"}),
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name": "pstack-azhouzhou", "version": "0.9.102"}),
             "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
             "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
             "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",

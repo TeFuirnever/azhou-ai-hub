@@ -27,7 +27,7 @@ class PstackIntegrationTest(unittest.TestCase):
         self.binary = install_fake_codex(self.base / "codex")
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name":"pstack-claude", "plugins":[]}),
-            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name":"pstack", "version":"0.9.102"}),
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name":"pstack-azhouzhou", "version":"0.9.102"}),
             "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
             "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
             "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",

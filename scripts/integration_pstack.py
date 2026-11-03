@@ -34,7 +34,8 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = "pstack"
 MARKETPLACE = "pstack-claude"
-PLUGIN = "pstack@pstack-claude"
+PLUGIN = "pstack-azhouzhou@pstack-claude"
+PLUGIN_NAME = PLUGIN.split("@")[0]
 PLUGIN_ROOT = "harness/pstack/codex/"
 RECEIPT_SCHEMA = "azhou-hub.pstack-install.v1"
 TRANSITION_SCHEMA = "azhou-hub.pstack-transition.v1"
@@ -432,7 +433,7 @@ def _installed_copy(home: Path, lock: dict, *, allow_dependencies: bool = False)
             metadata = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if metadata.get("name") == "pstack":
+        if metadata.get("name") == PLUGIN_NAME:
             candidates.append(manifest.parent.parent)
     if len(candidates) != 1:
         raise common.IntegrationError(f"expected exactly one native installed pstack copy; found {len(candidates)}")
@@ -670,7 +671,7 @@ def _plugin_copies(home: Path) -> tuple[list[Path], list[str]]:
         except (OSError, ValueError):
             anomalies.append("unreadable plugin manifest: " + name)
             continue
-        if metadata.get("name") == "pstack":
+        if metadata.get("name") in (PLUGIN_NAME, "pstack"):
             roots.append(manifest.parent.parent)
     return roots, anomalies
 
@@ -782,7 +783,7 @@ def _registry_sources(marketplaces: dict, plugins: dict) -> dict:
     selected = [row for row in (rows or []) if isinstance(row, dict) and row.get("name") == MARKETPLACE]
     installed_rows = plugins.get("installed") if isinstance(plugins, dict) else None
     pstack_rows = [row for row in (installed_rows or [])
-                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == "pstack")]
+                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == PLUGIN_NAME)]
     return {"marketplaces": selected, "installed_plugins": pstack_rows}
 
 

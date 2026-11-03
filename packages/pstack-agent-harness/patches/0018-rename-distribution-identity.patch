@@ -1,0 +1,37 @@
+Description: rename the Hub distribution identity to pstack-azhouzhou
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+Upstream ships the plugin under the name pstack. This Hub distributes
+the same skills under its own identity so every harness registry can
+tell the Hub build from the upstream one. Only the distribution name
+and the keyword list change. Authorship, version, and every skill stay
+upstream's, and a re-import of pristine upstream reapplies this patch
+through the queue.
+
+--- a/pstack/plugin.json
++++ b/pstack/plugin.json
+@@ -1,6 +1,6 @@
+ {
+   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+-  "name": "pstack",
++  "name": "pstack-azhouzhou",
+   "version": "0.15.36",
+   "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+   "author": {
+@@ -10,12 +10,13 @@
+   "repository": "https://github.com/cursor/plugins",
+   "license": "MIT",
+   "keywords": [
+-    "pstack",
++    "pstack-azhouzhou",
+     "poteto-mode",
+     "workflow",
+     "principles",
+     "agent-style",
+     "subagents",
+-    "unslop"
++    "unslop",
++    "azhouzhou"
+   ]
+ }

@@ -318,7 +318,7 @@ def pstack_coexistence(codex_home, skills_dir=None):
                 registered_name = json.loads(data).get("name")
             except ValueError as exc:
                 raise InstallError(f"Unreadable plugin manifest: {manifest_path}") from exc
-            if registered_name == "pstack":
+            if registered_name in ("pstack", "pstack-azhouzhou"):
                 copies += 1
     if copies > 1:
         raise InstallError(f"Duplicate pstack plugin copies in this target; inspect them before installing: {copies} found")
