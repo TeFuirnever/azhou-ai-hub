@@ -313,7 +313,63 @@ try {
     written += 1;
   }
 
-  assembled = { trees: trees.length, prompts: written };
+  // ZCode installs a commands-only plugin. Its skills stay served by the
+  // shared skills root (`~/.agents/skills`), so the plugin surface adds slash
+  // commands without a second copy of the 68 skills. The local-marketplace
+  // layout and the `commands` manifest pointer were proven against zcode
+  // 0.17.1 on 2026-11-03; a `hooks` field has no proven declaration format
+  // and stays out.
+  const ZCODE_MARKETPLACE = "azhou-hub";
+  const zcodeRoot = join(outDir, "pstack", "zcode-plugin");
+  // No version layer: the local-source installer copies the plugin directory
+  // into its own cache version folder, so the manifest must sit at the
+  // directory root (zcode 0.17.1, observed 2026-11-03).
+  const zcodeBundle = join(zcodeRoot, "pstack-azhouzhou");
+  mkdirSync(join(zcodeBundle, ".zcode-plugin"), { recursive: true });
+  mkdirSync(join(zcodeBundle, "commands"), { recursive: true });
+  writeFileSync(
+    join(zcodeBundle, ".zcode-plugin", "plugin.json"),
+    `${JSON.stringify(
+      {
+        name: manifest.name,
+        version: manifest.version,
+        description: manifest.description,
+        author: manifest.author,
+        license: manifest.license,
+        commands: "commands",
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  for (const skill of PROMPT_SKILLS) {
+    writeFileSync(
+      join(zcodeBundle, "commands", `${skill}.md`),
+      `---\ndescription: ${JSON.stringify(skillDescription(skill))}\n---\n\nInvoke the \`${skill}\` skill and follow it.\n`,
+    );
+  }
+  cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
+  writeFileSync(
+    join(zcodeRoot, "marketplace.json"),
+    `${JSON.stringify(
+      {
+        name: ZCODE_MARKETPLACE,
+        plugins: [
+          {
+            // No `source` object: zcode then resolves the plugin directory that
+            // sits beside this marketplace.json, which is the one proven local
+            // install path (zcode 0.17.1, source-validated 2026-11-03).
+            name: manifest.name,
+            description: manifest.description,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  assembled = { trees: trees.length, prompts: written, zcodeCommands: written };
 } catch (error) {
   rmSync(outDir, { recursive: true, force: true });
   fail(`harness assembly failed: ${error.message}`);
@@ -323,5 +379,6 @@ rmSync(SCRATCH, { recursive: true, force: true });
 
 console.log(
   `harness trees written to ${outDir} from ${series.length} patch(es), ` +
-    `hooks assembled into ${assembled.trees} tree(s), ${assembled.prompts} Codex prompts`,
+    `hooks assembled into ${assembled.trees} tree(s), ${assembled.prompts} Codex prompts, ` +
+    `${assembled.zcodeCommands} ZCode commands`,
 );

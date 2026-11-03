@@ -1,0 +1,10 @@
+{
+  "name": "pstack-azhouzhou",
+  "version": "0.15.36",
+  "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+  "author": {
+    "name": "Lauren Tan"
+  },
+  "license": "MIT",
+  "commands": "commands"
+}

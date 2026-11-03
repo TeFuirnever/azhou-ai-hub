@@ -170,14 +170,14 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 
 **Files.**
 
-- [ ] Edit `tools/build-harness.mjs` with one zcode plugin bundle emitter.
-- [ ] Create `docs/integrations.md` zcode plugin section.
-- [ ] Create `evidence/zcode-plugin-fabric-<date>.md` from the probe.
+- [x] Edit `tools/build-harness.mjs` with one zcode plugin bundle emitter.
+- [x] Create `docs/integrations.md` zcode plugin section.
+- [x] Create `evidence/zcode-plugin-fabric-<date>.md` from the probe.
 
 **Build.**
 
-- [ ] One probe first. Establish whether `zcode plugins marketplace add` accepts a local directory, and read the official plugin layout for its skills, commands, and hooks fields from an installed cache entry under `~/.zcode/cli/plugins/cache/`.
-- [ ] One emitter in the assembler packages the skills-root payload as a zcode plugin bundle named `pstack-azhouzhou`, carrying skills first, commands and hooks only if the probe proves their declaration format. An unproven field stays out and the omission is recorded.
+- [x] One probe first. Established that `zcode plugins marketplace add` accepts a local directory, that the marketplace entry must carry no `source` object so the installer resolves the sibling plugin directory, that the bundle must be flat, and that the `commands` manifest pointer is proven while `hooks` has no sample (receipt `evidence/zcode-plugin-fabric-2026-11-03.md`).
+- [x] One emitter in the assembler packages the payload as a zcode plugin bundle named `pstack-azhouzhou`, commands only, with skills left on the shared root. The hooks field stays out as unproven and the omission is recorded.
 
 **You see.**
 
