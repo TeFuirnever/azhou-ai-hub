@@ -4,6 +4,7 @@ import Foundation
 import Darwin
 import AppKit
 import WebKit
+import CryptoKit
 
 @MainActor
 private final class FakeNativeApplication: NativeApplication {
@@ -53,10 +54,12 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     private var pendingOpenCompletion: (((any NativeApplication)?, Error?) -> Void)?
     private(set) var openCount = 0
     private(set) var openedPorts: [Int] = []
+    private(set) var openedEnvironments: [[String: String]] = []
     var startupTargetSystem: (any StartupTargetSystem)?
     var startupTransportFactory: ((NativeStartupCapture, NativeStartupEventStream) -> any StartupTransport)?
     var lockBusy = false
     var lockError: Int32?
+    private(set) var allocationCount = 0
     var allocatedPort = 45678
     var allocatedPortError: NativeLoopbackPortError?
     var allocationError: Error?
@@ -88,6 +91,11 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
         }
         completion(openedApplication, openError)
     }
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        openedEnvironments.append(environment)
+        openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
+    }
     func completePendingOpen() {
         let completion = pendingOpenCompletion
         pendingOpenCompletion = nil
@@ -100,6 +108,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
         return .acquired(lock)
     }
     func allocateLoopbackPort() throws -> Int {
+        allocationCount += 1
         if let allocatedPortError { throw allocatedPortError }
         if let allocationError { throw allocationError }
         return allocatedPort
@@ -116,6 +125,36 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     func exit(code: Int32) { processExitCode = code }
     func writeStandardOutput(_ line: String) { output.append(line) }
     private(set) var processExitCode: Int32 = 0
+}
+
+/// Old conformers deliberately implement only the original open method.
+@MainActor
+private final class LegacyOnlyNativeRuntime: NativeAppRuntime {
+    let base = FakeNativeAppRuntime(arguments: ["synthetic-legacy"])
+    var arguments: [String] { base.arguments }
+    var epoch: TimeInterval { base.epoch }
+    var uptime: TimeInterval { base.uptime }
+    var processIdentifier: Int { base.processIdentifier }
+    var bundleURL: URL { base.bundleURL }
+    var resourceURL: URL? { base.resourceURL }
+    var frontmostApplication: (any NativeApplication)? { base.frontmostApplication }
+    func appearanceTheme() -> String { base.appearanceTheme() }
+    func runningApplications(bundleIdentifier: String) -> [any NativeApplication] { base.runningApplications(bundleIdentifier: bundleIdentifier) }
+    func application(processIdentifier: Int32) -> (any NativeApplication)? { base.application(processIdentifier: processIdentifier) }
+    func urlForApplication(bundleIdentifier: String) -> URL? { base.urlForApplication(bundleIdentifier: bundleIdentifier) }
+    func openApplication(at url: URL, debuggingPort: Int, completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        base.openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
+    }
+    func acquireInstanceLock(identifier: String) -> NativeLockAcquisition { base.acquireInstanceLock(identifier: identifier) }
+    func allocateLoopbackPort() throws -> Int { try base.allocateLoopbackPort() }
+    func makeStartupTargetSystem() -> any StartupTargetSystem { base.makeStartupTargetSystem() }
+    func makeStartupTransport(capture: NativeStartupCapture, events: NativeStartupEventStream) -> any StartupTransport { base.makeStartupTransport(capture: capture, events: events) }
+    func systemFallbackLocale() -> NativeDisplayLocale { base.systemFallbackLocale() }
+    func setAccessoryPolicy() { base.setAccessoryPolicy() }
+    func activateIgnoringOtherApps() { base.activateIgnoringOtherApps() }
+    func terminate() { base.terminate() }
+    func exit(code: Int32) { base.exit(code: code) }
+    func writeStandardOutput(_ line: String) { base.writeStandardOutput(line) }
 }
 
 @MainActor
@@ -298,6 +337,12 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--zcode-runtime-fixture"),
+           index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
+            let checks = try await zcodeRuntimeFixtureChecks(port: port)
+            print("{\"syntheticRuntimeChecks\":\(checks),\"host\":false,\"realOSQueries\":true,\"OSQueryScope\":\"self-PID listener metadata only\"}")
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--wallpaper-transport-fixture"),
            index + 2 < CommandLine.arguments.count,
            let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
@@ -351,6 +396,8 @@ struct StartupNativeTests {
         }
 
         var checks = 0
+        checks += zcodeRuntimeEventEnvelopeChecks()
+        checks += zcodeTypedEventContractChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
@@ -898,6 +945,8 @@ struct StartupNativeTests {
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
+        checks += try await zcodeRuntimeReviewChecks()
+        checks += nativePureStatusContractChecks()
         #endif
 
         print("Startup native checks passed: \(checks). Scope: injected host facts and transport only; no real open/kill.")
@@ -3177,3 +3226,957 @@ private final class LostReplyStartupTransport: StartupTransport {
     func close() {}
 }
 #endif
+
+
+@MainActor
+private func zcodeRuntimeReviewChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: Bool, _ message: String) { precondition(value, message);checks += 1 }
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: nil) == nil, "ZCode missing host must not choose Codex")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "codex") == nil, "ZCode wrong host must refuse")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.codex-startup", declaredHost: nil) == .codex, "legacy Codex default preserved")
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "zcode") == .zcode, "explicit ZCode identity bound")
+    let row = Data("p123\nn127.0.0.1:45678\n".utf8)
+    expect(try ZCodeNativeRuntime.validatedListenerOutput(status: 0, stdout: row, stderr: Data()) == String(decoding: row, as: UTF8.self), "clean listener output retained")
+    do { _ = try ZCodeNativeRuntime.validatedListenerOutput(status: 0, stdout: row, stderr: Data("warning".utf8));preconditionFailure("warning must refuse") } catch { checks += 1 }
+    expect(try ZCodeNativeRuntime.validatedListenerOutput(status: 1, stdout: Data(), stderr: Data()) == "", "clean empty not-ready distinct")
+    let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"),
+        executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app",
+        version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+    let proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
+        "recordID": "SYNTHETIC-only", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T14:00:00Z",
+        "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
+        "version": "3.17.1.9553", "executableSHA256": key.executableSHA256,
+        "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "payloadSHA256": String(repeating: "a", count: 64), "evidenceIDs": ["SYNTHETIC-fixture-not-host"],
+        "ownedAppearanceSurface": true, "persistentSettings": true]
+    try JSONSerialization.data(withJSONObject: proof).write(to: temporary.appendingPathComponent("zcode-validation.json"))
+    // A real Bundle returns resources relative to its bundle base. The exact
+    // same physical proof must work through that URL form, without accepting a
+    // real symlink or relaxing any proof/installed-identity field.
+    let fixtureBundleURL = temporary.appendingPathComponent("ProofResources.app", isDirectory: true)
+    let fixtureContents = fixtureBundleURL.appendingPathComponent("Contents", isDirectory: true)
+    let fixtureResources = fixtureContents.appendingPathComponent("Resources", isDirectory: true)
+    try FileManager.default.createDirectory(at: fixtureResources, withIntermediateDirectories: true)
+    let fixtureInfo: [String: Any] = ["CFBundleIdentifier": "local.azhou.synthetic.proof-resources",
+        "CFBundleExecutable": "SyntheticNotExecutable", "CFBundlePackageType": "APPL", "CFBundleVersion": "1"]
+    try PropertyListSerialization.data(fromPropertyList: fixtureInfo, format: .xml, options: 0)
+        .write(to: fixtureContents.appendingPathComponent("Info.plist"))
+    let fixtureBundle = Bundle(url: fixtureBundleURL)!
+    let bundleResources = fixtureBundle.resourceURL!
+    let bundleProof = bundleResources.appendingPathComponent("zcode-validation.json")
+    let proofBytes = try JSONSerialization.data(withJSONObject: proof)
+    try proofBytes.write(to: bundleProof)
+    expect(bundleProof.baseURL != nil && bundleProof.path == bundleProof.resolvingSymlinksInPath().path,
+           "real Bundle fixture reproduces the same physical file with a retained base URL")
+    func hasUIEvidence(_ resources: URL) -> Bool {
+        ZCodeNativeRuntime.findings(for: key, resources: resources)
+            .filter { $0.capability == .ownedAppearanceSurface || $0.capability == .persistentSettings }
+            .allSatisfy { $0.state == .verified && $0.evidenceIDs == ["SYNTHETIC-fixture-not-host"] }
+    }
+    expect(hasUIEvidence(bundleResources), "actual Bundle resources accept the physical valid proof without a representation false refusal")
+    let invalidProofs: [[String: Any]] = [["schema": "wrong"], ["contractVersion": "wrong"],
+        ["version": "wrong"], ["infoSHA256": String(repeating: "0", count: 64)],
+        ["executableSHA256": String(repeating: "0", count: 64)], ["appAsarSHA256": String(repeating: "0", count: 64)],
+        ["recordSHA256": "short"], ["payloadSHA256": "short"], ["observedAt": "not-a-time"], ["evidenceIDs": []]]
+    for overrides in invalidProofs {
+        var invalid = proof;invalid.merge(overrides) { _, replacement in replacement }
+        try JSONSerialization.data(withJSONObject: invalid).write(to: bundleProof)
+        expect(!hasUIEvidence(bundleResources), "Bundle URL normalization preserves schema/hash/installation/time/evidence refusal")
+    }
+    try proofBytes.write(to: bundleProof)
+    let alternateProof = temporary.appendingPathComponent("other-owned-proof.json")
+    try proofBytes.write(to: alternateProof)
+    try FileManager.default.removeItem(at: bundleProof)
+    try FileManager.default.createSymbolicLink(at: bundleProof, withDestinationURL: alternateProof)
+    expect(!hasUIEvidence(bundleResources), "real proof-file symlink remains refused through Bundle resources")
+    try FileManager.default.removeItem(at: bundleProof);try proofBytes.write(to: bundleProof)
+    let physicalResources = fixtureContents.appendingPathComponent("PhysicalResources", isDirectory: true)
+    try FileManager.default.moveItem(at: fixtureResources, to: physicalResources)
+    try FileManager.default.createSymbolicLink(at: fixtureResources, withDestinationURL: physicalResources)
+    expect(!hasUIEvidence(bundleResources), "a symlinked Resources ancestor remains refused even with identical proof bytes")
+    let fake = FakeNativeAppRuntime(arguments: [], resourceURL: temporary)
+    let inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic"), findings: [], contractVersion: SkinHostContract.version)
+    let state = temporary.appendingPathComponent("must-not-create")
+    var proofFailureEvents: [[String: Any]] = []
+    let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "different-real-bytes" }, stateRoot: state,
+        onEvent: { proofFailureEvents.append($0) }, installationProbe: {})
+    do { _ = try await bridge.makeAssembly().openApplication(110);preconditionFailure("stale proof must refuse before open") } catch { checks += 1 }
+    expect(fake.openCount == 0 && fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: state.path), "stale proof takes no host/port/directory effects")
+    expect(proofFailureEvents.count == 1 && Set(proofFailureEvents[0].keys) == ["stage", "point", "reason"]
+        && proofFailureEvents[0]["stage"] as? String == "zcode-runtime-failed"
+        && proofFailureEvents[0]["point"] as? String == "open-proof"
+        && proofFailureEvents[0]["reason"] as? String == "asset-invalid",
+        "stale proof reports only the actual bounded failure point and fixed reason before any open effect")
+    let listenerState = temporary.appendingPathComponent("listener-fixture")
+    try FileManager.default.createDirectory(at: listenerState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let listenerApp = FakeNativeApplication(pid: 654321, bundleIdentifier: key.bundleIdentifier,
+        bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
+    let process = HostProcessGeneration(pid: listenerApp.processIdentifier, launchTime: 50, executableURL: key.executableURL)
+    fake.applications = [listenerApp]
+    let record: [String: Any] = ["pid": process.pid, "launchTime": 50.0, "port": 45678, "executableSHA256": key.executableSHA256]
+    try JSONSerialization.data(withJSONObject: record).write(to: listenerState.appendingPathComponent("launch-receipt.json"))
+    let invalidListeners: [ZCodeNativeRuntime.ListenerCommandResult] = [
+        .init(status: 0, stdout: Data("p654321\nn127.0.0.1:45678\n".utf8), stderr: Data("warning".utf8)),
+        .init(status: 2, stdout: Data(), stderr: Data()),
+        .init(status: 0, stdout: Data([255]), stderr: Data()),
+        .init(status: 0, stdout: Data(repeating: 65, count: 65536), stderr: Data()),
+        .init(status: 0, stdout: Data("p999999\nn127.0.0.1:45678\n".utf8), stderr: Data()),
+        .init(status: 0, stdout: Data("p654321\nn0.0.0.0:45678\n".utf8), stderr: Data()),
+        .init(status: 0, stdout: Data("n127.0.0.1:45678\n".utf8), stderr: Data()),
+    ]
+    for (index, result) in invalidListeners.enumerated() {
+        var calls: [Int32] = []
+        var listenerFailureEvents: [[String: Any]] = []
+        let checked = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+            onEvent: { listenerFailureEvents.append($0) }, installationProbe: {}, listenerCommand: { pid in calls.append(pid);return result })
+        do { _ = try await checked.makeAssembly().attach(process, 110);preconditionFailure("invalid listener evidence accepted") }
+        catch { checks += 1 }
+        expect(calls == [process.pid], "only the bound synthetic process is queried once before refusal")
+        expect(listenerFailureEvents.count == 1 && Set(listenerFailureEvents[0].keys) == ["stage", "point", "reason"]
+            && listenerFailureEvents[0]["stage"] as? String == "zcode-runtime-failed"
+            && listenerFailureEvents[0]["point"] as? String == "listener"
+            && listenerFailureEvents[0]["reason"] as? String == (index < 4 ? "inspection-failed" : "listener-mismatch"),
+            "listener inspection failure retains its actual stage and bounded reason without raw command output")
+    }
+    var cleanNotReadyCalls = 0
+    let notReady = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in
+            cleanNotReadyCalls += 1;fake.uptime = 111
+            return .init(status: 1, stdout: Data(), stderr: Data())
+        })
+    do { _ = try await notReady.makeAssembly().attach(process, 110);preconditionFailure("clean empty inspection cannot mean ready") }
+    catch { checks += 1 }
+    expect(cleanNotReadyCalls == 1, "empty successful query remains not-ready until bounded deadline")
+    fake.uptime = 101
+    let absent = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("stale process must refuse before listener query") })
+    fake.applications = []
+    do { try absent.makeAssembly().validateProcess(process);preconditionFailure("missing process accepted") }
+    catch { checks += 1 }
+    fake.applications = [listenerApp]
+    let symbolicState = temporary.appendingPathComponent("symbolic-listener")
+    try FileManager.default.createSymbolicLink(at: symbolicState, withDestinationURL: listenerState)
+    let publicState = temporary.appendingPathComponent("too-wide-listener")
+    try FileManager.default.createDirectory(at: publicState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: publicState.path)
+    for invalidState in [symbolicState, publicState] {
+        let rejected = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: invalidState,
+            onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("invalid directory must refuse before process query") })
+        do { _ = try await rejected.makeAssembly().attach(process, 110);preconditionFailure("invalid directory accepted") }
+        catch let error as StartupFailure { expect(error.reason == "profile-isolation-unproven", "directory hint normalization preserves symlink and private-permission guards") }
+    }
+    var captured: NSWorkspace.OpenConfiguration?
+    let system = SystemNativeAppRuntime(openApplication: { _, config, done in captured = config;done(nil, nil) })
+    let environment = ["HOME": "/synthetic/owned/home", "ZCODE_DATA_BASE_DIR": "/synthetic/owned/business"]
+    system.openApplication(at: key.bundleURL, debuggingPort: 12345, environment: environment) { _, _ in }
+    expect(captured?.environment == environment && captured?.arguments == ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=12345"] && captured?.activates == true, "ZCode NSWorkspace requests activation with its exact explicit environment")
+    system.openApplication(at: URL(fileURLWithPath: "/synthetic/Codex.app"), debuggingPort: 12345) { _, _ in }
+    expect(captured?.environment == NSWorkspace.OpenConfiguration().environment && captured?.activates == false, "Codex original default environment and inactive launch unchanged")
+    return checks
+}
+
+@MainActor
+private final class ZCodeRuntimeFixture {
+    let root: URL
+    let state: URL
+    let resources: URL
+    let fake: FakeNativeAppRuntime
+    let app: FakeNativeApplication
+    let key: HostApplicationKey
+    let inputs: BoundHostInputs
+    let port: Int
+    var payload = "((controllerMetadata) => { return {installed:true}; })"
+    var payloadReadFailure = false
+    var payloadReads = 0
+    var probeFailure = false
+    var events: [[String: Any]] = []
+    var listenerPIDs: [Int32] = []
+    var listenerOverride: ((Int32) throws -> ZCodeNativeRuntime.ListenerCommandResult)?
+    var held: [any ZCodeOperationLease] = []
+    lazy var bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { [weak self] in
+        guard let self, !self.payloadReadFailure else { throw StartupFailure(reason: "asset-invalid", message: "synthetic payload failure") }
+        self.payloadReads += 1;return self.payload
+    }, stateRoot: state, onEvent: { [weak self] in self?.events.append($0) }, installationProbe: { [weak self] in
+        guard let self, !self.probeFailure else { throw StartupFailure(reason: "target-identity", message: "synthetic installation failure") }
+    }, listenerCommand: { [weak self] pid in
+        guard let self else { throw StartupFailure(reason: "inspection-failed", message: "synthetic fixture gone") }
+        self.listenerPIDs.append(pid)
+        if let override = self.listenerOverride { return try override(pid) }
+        return .init(status: 0, stdout: Data("p\(pid)\nn127.0.0.1:\(self.port)\n".utf8), stderr: Data())
+    })
+    init(port: Int, pid: Int32 = 654321) throws {
+        self.port = port
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("zcode-runtime-unit-" + UUID().uuidString, isDirectory: true).resolvingSymlinksInPath()
+        state = root.appendingPathComponent("state", isDirectory: true)
+        resources = root.appendingPathComponent("resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic-only"), findings: [], contractVersion: SkinHostContract.version)
+        fake = FakeNativeAppRuntime(arguments: ["SYNTHETIC-ONLY"], resourceURL: resources)
+        fake.allocatedPort = port
+        app = FakeNativeApplication(pid: pid, bundleIdentifier: key.bundleIdentifier, bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
+        fake.openedApplication = app
+        fake.beforeOpenCompletion = { [weak fake, weak app] in if let app { fake?.applications = [app] } }
+        try writeProof()
+    }
+    var hash: String { SHA256.hash(data: Data(payload.utf8)).map { String(format: "%02x", $0) }.joined() }
+    var process: HostProcessGeneration { .init(pid: app.processIdentifier, launchTime: 50, executableURL: key.executableURL) }
+    var assembly: ZCodeSkinAssembly { bridge.makeAssembly() }
+    var request: SkinLaunchRequest { .init(expectedApplication: key, operationID: UUID(), startedAt: 100, deadline: 160) }
+    func writeProof(_ overrides: [String: Any] = [:]) throws {
+        var proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
+            "recordID": "SYNTHETIC-NOT-HOST", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T15:00:00.123Z",
+            "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4", "version": "3.17.1.9553",
+            "executableSHA256": key.executableSHA256, "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+            "payloadSHA256": hash, "evidenceIDs": ["SYNTHETIC-ONLY-NOT-ACCEPTANCE"], "ownedAppearanceSurface": true, "persistentSettings": true]
+        proof.merge(overrides) { _, replacement in replacement }
+        try JSONSerialization.data(withJSONObject: proof).write(to: resources.appendingPathComponent("zcode-validation.json"))
+    }
+    func acquire() throws { held.append(try assembly.acquireOperation(process.pid)) }
+    func close() { held.forEach { $0.release() };held.removeAll() }
+    func cleanup() { close();try? FileManager.default.removeItem(at: root) }
+}
+
+@MainActor
+private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
+    var checks = 0
+    var fixtures: [ZCodeRuntimeFixture] = []
+    func expect(_ value: Bool, _ label: String) { precondition(value, label);checks += 1 }
+    func make() throws -> ZCodeRuntimeFixture { let f = try ZCodeRuntimeFixture(port: port);fixtures.append(f);return f }
+    defer { fixtures.forEach { $0.cleanup() } }
+    func mode(_ value: String, reset: Bool = true) async throws {
+        let configuration = URLSessionConfiguration.ephemeral;configuration.httpCookieStorage = nil;configuration.urlCredentialStorage = nil
+        let session = URLSession(configuration: configuration);defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/fixture/mode")!);request.httpMethod = "POST";request.timeoutInterval = 2
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["mode": value, "reset": reset]);request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await session.data(for: request)
+        expect((response as? HTTPURLResponse)?.statusCode == 200, "owned synthetic fixture accepts mode")
+    }
+    func open(_ f: ZCodeRuntimeFixture) async throws -> ZCodePageBinding {
+        let observed = try await f.assembly.openApplication(160)
+        expect(observed == f.process, "cold callback retains exact generation")
+        try f.acquire()
+        return try await f.assembly.attach(observed, 160)
+    }
+    let capabilityFixture = try make()
+    let validFindings = ZCodeNativeRuntime.findings(for: capabilityFixture.key, resources: capabilityFixture.resources)
+    expect(validFindings.count == SkinCapability.allCases.count, "every capability has its own typed finding")
+    expect(validFindings.allSatisfy { $0.subject.application == capabilityFixture.key && $0.subject.contractVersion == SkinHostContract.version }, "finding subjects remain bound to the requested installation contract")
+    for capability in [SkinCapability.ownedAppearanceSurface, .persistentSettings] {
+        let finding = validFindings.first { $0.capability == capability }
+        expect(finding?.state == .verified && finding?.evidenceIDs == ["SYNTHETIC-ONLY-NOT-ACCEPTANCE"], "only explicit fixture proof fills the matching UI capability")
+    }
+    let absentFindings = ZCodeNativeRuntime.findings(for: capabilityFixture.key, resources: nil)
+    expect(absentFindings.filter { $0.capability == .ownedAppearanceSurface || $0.capability == .persistentSettings }.allSatisfy { $0.state == .unverified && $0.evidenceIDs.isEmpty }, "absent resource proof never invents UI evidence")
+    try capabilityFixture.writeProof(["ownedAppearanceSurface": false])
+    let splitFindings = ZCodeNativeRuntime.findings(for: capabilityFixture.key, resources: capabilityFixture.resources)
+    expect(splitFindings.first { $0.capability == .ownedAppearanceSurface }?.state == .unverified
+        && splitFindings.first { $0.capability == .persistentSettings }?.state == .verified, "appearance and storage evidence stay independent")
+    try Data(repeating: 65, count: 16384).write(to: capabilityFixture.resources.appendingPathComponent("zcode-validation.json"))
+    expect(ZCodeNativeRuntime.findings(for: capabilityFixture.key, resources: capabilityFixture.resources).filter { $0.capability == .ownedAppearanceSurface || $0.capability == .persistentSettings }.allSatisfy { $0.state == .unverified }, "oversized proof is never a capability receipt")
+
+    // Exercise the unchanged default Process adapter against this test binary
+    // only. It cannot own the Python fixture server's port; no host PID is read.
+    let selfListener = try ZCodeRuntimeFixture(port: port, pid: getpid());fixtures.append(selfListener)
+    selfListener.fake.applications = [selfListener.app]
+    try FileManager.default.createDirectory(at: selfListener.state, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let ownRecord: [String: Any] = ["pid": selfListener.process.pid, "launchTime": 50.0, "port": port, "executableSHA256": selfListener.key.executableSHA256]
+    try JSONSerialization.data(withJSONObject: ownRecord).write(to: selfListener.state.appendingPathComponent("launch-receipt.json"))
+    let realListener = ZCodeNativeRuntime(inputs: selfListener.inputs, runtime: selfListener.fake, readPayload: { "unused" },
+        stateRoot: selfListener.state, onEvent: { _ in }, installationProbe: {})
+    let expireOwnRead = Task { try? await Task.sleep(nanoseconds: 100_000_000);selfListener.fake.uptime = 111 }
+    do { _ = try await realListener.makeAssembly().attach(selfListener.process, 110);fatalError("test binary cannot own the separate fixture server port") }
+    catch let error as StartupFailure { expect(["attach-timeout", "listener-mismatch"].contains(error.reason), "default self-PID inspection refuses an unowned port, not an inspection error") }
+    expireOwnRead.cancel()
+    expect(selfListener.fake.openCount == 0, "self-listener unit probe opens no host application")
+
+    // Real assembly, fake native boundary, and real owned loopback protocol.
+    try await mode("ready")
+    let ready = try make();let binding = try await open(ready)
+    expect(ready.fake.openCount == 1 && ready.fake.allocationCount == 1, "cold path opens and allocates once")
+    let expectedKeys: Set<String> = ["PATH", "LANG", "HOME", "TMPDIR", "ZCODE_DESKTOP_HOME_DIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_USER_DATA_DIR", "ZCODE_DESKTOP_SESSION_DATA_DIR"]
+    expect(ready.fake.openedEnvironments.count == 1 && Set(ready.fake.openedEnvironments[0].keys) == expectedKeys, "cold environment has only explicit isolation keys")
+    for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
+        let attributes = try FileManager.default.attributesOfItem(atPath: ready.state.appendingPathComponent(name).path)
+        expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700, "each isolated directory is private")
+    }
+    let record = try JSONSerialization.jsonObject(with: Data(contentsOf: ready.state.appendingPathComponent("launch-receipt.json"))) as! [String: Any]
+    expect(record["pid"] as? Int32 == ready.process.pid && record["launchTime"] as? Double == 50 && record["port"] as? Int == port, "owned launch record preserves exact generation and port")
+    expect(try ready.assembly.runningProcesses() == [ready.process], "running inspection returns exact known generation")
+    expect(try ready.assembly.activateExisting(ready.process), "hot activation uses validated existing generation")
+    let observation = ZCodeInstallObservation();let request = ready.request
+    let result = try await ready.assembly.install(binding, request, observation)
+    guard case .ready(let receipt, let runID) = result else { fatalError("synthetic ready assembly did not acknowledge") }
+    expect(observation.sent && runID == 1 && receipt.createdByOperationID == request.operationID && receipt.payloadSHA256 == ready.hash, "ready is backed by actual sent metadata and status")
+    expect(!ready.listenerPIDs.isEmpty && ready.listenerPIDs.allSatisfy { $0 == ready.process.pid }, "all listener checks query only bound fake PID")
+    if case .present(.instance(let inspected), .alreadyActive) = try await ready.assembly.inspectPage(binding, 160) {
+        expect(inspected.location.application == receipt.location.application && inspected.location.process == receipt.location.process
+            && inspected.location.documentToken == receipt.location.documentToken && inspected.owner == receipt.owner
+            && inspected.protocolVersion == receipt.protocolVersion && inspected.payloadSHA256 == receipt.payloadSHA256
+            && inspected.controllerInstanceID == receipt.controllerInstanceID && inspected.createdByOperationID == receipt.createdByOperationID,
+            "inspect reads every exact current owned receipt field")
+    } else { fatalError("synthetic inspect lost receipt") }
+    do { _ = try await ready.assembly.inspectPage(binding, 160);fatalError("closed connection must not inspect") } catch { checks += 1 }
+    let disposeBinding = try await ready.assembly.attach(ready.process, 160)
+    expect(try await ready.assembly.dispose(disposeBinding, receipt, 160), "dispose acknowledges matching owner instance")
+    let repeatBinding = try await ready.assembly.attach(ready.process, 160)
+    expect(try await ready.assembly.dispose(repeatBinding, receipt, 160), "repeat dispose confirms already absent")
+    let absentBinding = try await ready.assembly.attach(ready.process, 160)
+    ready.payloadReadFailure = true
+    if case .absent(let location) = try await ready.assembly.inspectPage(absentBinding, 160) { expect(location.process == ready.process, "absence is exact and does not read payload") }
+    else { fatalError("disposed controller not absent") }
+    do { _ = try await ready.assembly.dispose(absentBinding, receipt, 160);fatalError("closed connection must not dispose") } catch { checks += 1 }
+    ready.close();ready.close()
+    expect(ready.events.contains { $0["stage"] as? String == "zcode-open-selected-process" && $0["native_child_wait_claim"] as? Bool == false }, "NSWorkspace selected host never fabricates native child wait")
+
+    for value in ["complete", "before-ready", "already-active", "readylost", "badreceipt", "absent", "dispose-failed", "late"] {
+        try await mode(value);let f = try make();let b = try await open(f);let observed = ZCodeInstallObservation();let req = f.request
+        var expiry: Task<Void, Never>?
+        if value == "late" { expiry = Task { try? await Task.sleep(nanoseconds: 150_000_000);f.fake.uptime = 161 } }
+        defer { expiry?.cancel();f.close() }
+        do {
+            let outcome = try await f.assembly.install(b, req, observed)
+            switch value {
+            case "complete", "before-ready":
+                guard case .skipped(.present(.instance(let r), .created), _, let before) = outcome else { fatalError("completion acquisition lost") }
+                expect(before == (value == "before-ready") && r.createdByOperationID == req.operationID, "completion preserves actual before-ready flag and created receipt")
+            case "already-active":
+                guard case .skipped(.present(.instance(let r), .alreadyActive), _, _) = outcome else { fatalError("existing acquisition upgraded") }
+                expect(r.createdByOperationID != req.operationID, "already-active retains previous operation")
+            case "readylost", "late":
+                guard case .partial(_, .present(.instance(let r), .created), let cleanup) = outcome else { fatalError("confirmed receipt erased after interruption") }
+                expect(r.createdByOperationID == req.operationID && cleanup.state == .unknown, "later interruption preserves confirmed effect and unknown cleanup")
+            case "dispose-failed":
+                guard case .ready(let r, _) = outcome else { fatalError("dispose fixture not ready") }
+                expect(try await f.assembly.dispose(b, r, 160) == false, "unconfirmed dispose cannot claim clean")
+            default: fatalError("invalid receipt/absent controller unexpectedly acknowledged")
+            }
+            expect(observed.sent, "result follows a real protocol send")
+        } catch {
+            expect(["badreceipt", "absent"].contains(value) && observed.sent, "unacknowledged sent install remains an error")
+        }
+    }
+
+    // Proof validation must finish before any native open, port or state effects.
+    let invalidProofs: [[String: Any]] = [["recordSHA256": "bad"], ["observedAt": "not-a-date"], ["evidenceIDs": []], ["ownedAppearanceSurface": false], ["persistentSettings": false], ["payloadSHA256": String(repeating: "f", count: 64)]]
+    for overrides in invalidProofs {
+        let f = try make();try f.writeProof(overrides)
+        do { _ = try await f.assembly.openApplication(160);fatalError("invalid proof opened host") } catch { checks += 1 }
+        expect(f.fake.openCount == 0 && f.fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: f.state.path), "invalid proof has zero cold side effects")
+    }
+    let existing = try make();existing.fake.applications = [existing.app]
+    do { _ = try await existing.assembly.openApplication(160);fatalError("cold path ignored running process") } catch { checks += 1 }
+    expect(existing.payloadReads == 0 && existing.fake.openCount == 0, "existing process refuses cold before payload access")
+    let invalidProcess = try make();invalidProcess.fake.applications = [FakeNativeApplication(pid: invalidProcess.process.pid, bundleIdentifier: invalidProcess.key.bundleIdentifier, bundleURL: invalidProcess.key.bundleURL, executableURL: invalidProcess.key.executableURL, launchTime: nil)]
+    do { try invalidProcess.assembly.validateProcess(invalidProcess.process);fatalError("missing process birth accepted") } catch { checks += 1 }
+    let probe = try make();probe.probeFailure = true
+    do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
+    expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
+
+    func checkOpenFailure(_ f: ZCodeRuntimeFixture, points: [(String, String)], selected: Bool, _ label: String) {
+        let failures = f.events.filter { $0["stage"] as? String == "zcode-runtime-failed" }
+        expect(failures.count == points.count, "\(label) reports exactly its actual failed phases")
+        for (event, expected) in zip(failures, points) {
+            expect(Set(event.keys) == ["stage", "point", "reason"]
+                && event["point"] as? String == expected.0 && event["reason"] as? String == expected.1,
+                "\(label) exposes only fixed stage/point/reason tags")
+        }
+        expect(f.events.filter { $0["stage"] as? String == "zcode-open-request" }.count == 1
+            && f.events.filter { $0["stage"] as? String == "zcode-open-selected-process" }.count == (selected ? 1 : 0),
+            "\(label) preserves actual request/selection facts without converting them into success")
+        expect(!f.events.contains { event in
+            event["stage"] as? String == "zcode-controller-ready"
+                || ["startup-ready", "startup-skipped", "target-activated", "launcher-exit"].contains(event["event"] as? String ?? "")
+                || event["ready"] as? Bool == true || event["completed"] as? Bool == true
+        }, "\(label) never claims controller readiness, startup success or final exit")
+    }
+    let openError = try make()
+    openError.fake.openError = NSError(domain: "synthetic-private", code: 17,
+        userInfo: [NSLocalizedDescriptionKey: "private-url?token=must-not-leak"])
+    do { _ = try await openError.assembly.openApplication(160);fatalError("NSWorkspace error callback was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "attach-timeout", "open callback errors retain bounded failure mapping") }
+    expect(openError.fake.openCount == 1 && !FileManager.default.fileExists(atPath: openError.state.appendingPathComponent("launch-receipt.json").path), "error callback cannot create a selected success receipt")
+    checkOpenFailure(openError, points: [("open-callback-error", "unclassified"), ("open-callback", "attach-timeout")],
+        selected: true, "native callback error")
+    let callbackEventJSON = String(decoding: try JSONSerialization.data(withJSONObject: openError.events), as: UTF8.self)
+    expect(!callbackEventJSON.contains("synthetic-private") && !callbackEventJSON.contains("must-not-leak"),
+        "native callback diagnostics never emit private error domain or localized description")
+    let inactive = try make();inactive.app.activationResult = false
+    do { _ = try await inactive.assembly.openApplication(160);fatalError("failed activation was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "target-identity", "failed activation does not become cold ready") }
+    expect(inactive.app.activationCount == 1 && !FileManager.default.fileExists(atPath: inactive.state.appendingPathComponent("launch-receipt.json").path), "failed activation does not persist a reusable generation")
+    checkOpenFailure(inactive, points: [("open-activation", "target-identity")], selected: true, "activation refusal")
+
+    let unobservedSelection = try make();unobservedSelection.fake.beforeOpenCompletion = {}
+    do { _ = try await unobservedSelection.assembly.openApplication(160);fatalError("unobserved selected process was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "target-identity", "callback selection still requires live fake runtime validation") }
+    expect(unobservedSelection.app.activationCount == 0
+        && !FileManager.default.fileExists(atPath: unobservedSelection.state.appendingPathComponent("launch-receipt.json").path),
+        "selected callback without live generation cannot activate or create a reusable receipt")
+    checkOpenFailure(unobservedSelection, points: [("open-selected-validation", "target-identity")], selected: true,
+        "unobserved selected generation")
+
+    let nilCallback = try make();nilCallback.fake.openedApplication = nil
+    do { _ = try await nilCallback.assembly.openApplication(160);fatalError("empty callback was accepted") }
+    catch let error as StartupFailure { expect(error.reason == "attach-timeout", "empty callback retains bounded failure mapping") }
+    expect(nilCallback.app.activationCount == 0
+        && !FileManager.default.fileExists(atPath: nilCallback.state.appendingPathComponent("launch-receipt.json").path),
+        "empty callback cannot activate or create a reusable receipt")
+    checkOpenFailure(nilCallback, points: [("open-callback", "attach-timeout")], selected: false, "empty callback")
+
+    let blockedReceipt = try make()
+    try FileManager.default.createDirectory(at: blockedReceipt.state, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
+        try FileManager.default.createDirectory(at: blockedReceipt.state.appendingPathComponent(name),
+            withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    }
+    let receiptDirectory = blockedReceipt.state.appendingPathComponent("launch-receipt.json", isDirectory: true)
+    try FileManager.default.createDirectory(at: receiptDirectory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+    do { _ = try await blockedReceipt.assembly.openApplication(160);fatalError("receipt write into existing directory was accepted") }
+    catch { checks += 1 }
+    let blockedAttributes = try FileManager.default.attributesOfItem(atPath: receiptDirectory.path)
+    expect(blockedAttributes[.type] as? FileAttributeType == .typeDirectory
+        && blockedReceipt.app.activationCount == 1,
+        "failed receipt write retains the fixture directory and never produces a reusable file despite activation")
+    checkOpenFailure(blockedReceipt, points: [("open-receipt-write", "unclassified")], selected: true, "receipt write refusal")
+    let unreadable = try make();unreadable.payloadReadFailure = true
+    do { _ = try await unreadable.assembly.openApplication(160);fatalError("unreadable payload opened host") } catch { checks += 1 }
+    expect(unreadable.fake.openCount == 0 && unreadable.fake.allocationCount == 0 && !FileManager.default.fileExists(atPath: unreadable.state.path), "unreadable payload refuses before every cold effect")
+
+    // Bounded cancellation and late callbacks must never create a success receipt.
+    let timeout = try make();timeout.fake.deferOpenCompletion = true
+    do { _ = try await timeout.assembly.openApplication(101.02);fatalError("deferred callback ignored deadline") } catch { checks += 1 }
+    timeout.fake.completePendingOpen();try await Task.sleep(nanoseconds: 10_000_000)
+    expect(!FileManager.default.fileExists(atPath: timeout.state.appendingPathComponent("launch-receipt.json").path), "late callback cannot write a ready launch receipt")
+    let cancelled = try make();cancelled.fake.deferOpenCompletion = true
+    let pending = Task { () -> Bool in do { _ = try await cancelled.assembly.openApplication(160);return false } catch { return true } }
+    for _ in 0..<100 where cancelled.fake.openCount == 0 { await Task.yield() }
+    expect(cancelled.fake.openCount == 1, "cancel test reached the actual fake open callback")
+    pending.cancel();let canceled = await pending.value;expect(canceled, "open cancellation unblocks bounded waiter")
+    cancelled.fake.completePendingOpen();await Task.yield()
+    expect(!FileManager.default.fileExists(atPath: cancelled.state.appendingPathComponent("launch-receipt.json").path), "cancelled late callback cannot claim a receipt")
+    return checks
+}
+
+// Insert at file scope in StartupNativeTests.swift. Call from main before old tests:
+// checks += nativePureStatusContractChecks()
+@MainActor
+private func nativePureStatusContractChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label)
+        checks += 1
+    }
+    let old = LegacyOnlyNativeRuntime()
+    let legacy: any NativeAppRuntime = old
+    var completions = 0
+    var refusal: NSError?
+    legacy.openApplication(at: URL(fileURLWithPath: "/synthetic/Legacy.app"), debuggingPort: 1337, environment: ["HOME": "/synthetic/home"]) { app, error in
+        expect(app == nil, "legacy runtime cannot pretend to open with an unimplemented environment")
+        refusal = error as NSError?;completions += 1
+    }
+    expect(completions == 1 && refusal?.domain == "local.azhou.zcode-startup" && refusal?.code == 1 && old.base.openCount == 0,
+           "nonempty environment refuses before the legacy open path, preserving isolation")
+    legacy.openApplication(at: URL(fileURLWithPath: "/synthetic/Legacy.app"), debuggingPort: 1337, environment: [:]) { _, error in
+        expect(error == nil, "empty environment retains the original legacy callback")
+        completions += 1
+    }
+    expect(completions == 2 && old.base.openCount == 1 && old.base.openedPorts == [1337] && old.base.openedEnvironments.isEmpty,
+           "empty environment forwards exactly once to the original open method")
+    func status(phase: String = "loading", ready: Bool = false, completed: Bool = false,
+                overlay: Bool = true, completion: Any = NSNull(), reason: String = "") -> [String: Any] {
+        ["owner": "azhou-codex-startup", "version": 1, "runId": 7, "phase": phase,
+         "ready": ready, "completed": completed, "overlay": overlay, "completion": completion,
+         "reason": reason, "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false]]
+    }
+    let accepted = [
+        status(), status(phase: "playing", ready: true), status(phase: "settings", ready: true),
+        status(phase: "complete", completed: true, overlay: false,
+               completion: ["cause": "natural", "beforeReady": false]),
+        status(phase: "failed", overlay: false, reason: "asset-invalid"),
+        status(phase: "timeout", overlay: false, reason: "overlay-timeout"),
+        status(phase: "disposed", overlay: false)
+    ]
+    for value in accepted {
+        expect(NativeStartupStatus.parse(value)?.phase == value["phase"] as? String,
+               "valid lifecycle state is retained: \(value["phase"]!)")
+        var visible = value
+        visible["overlay"] = !(value["overlay"] as! Bool)
+        expect(NativeStartupStatus.parse(visible) == nil,
+               "lifecycle state rejects contradictory overlay: \(value["phase"]!)")
+    }
+    for value in [status(ready: true), status(completed: true),
+                  status(phase: "playing"), status(phase: "settings"),
+                  status(phase: "complete", overlay: false),
+                  status(phase: "failed", overlay: false), status(phase: "timeout", overlay: false)] {
+        expect(NativeStartupStatus.parse(value) == nil, "contradictory lifecycle flags fail closed")
+    }
+    for completion: Any in ["skip", [:] as [String: Any], ["cause": "unknown", "beforeReady": true],
+                            ["cause": "skip", "beforeReady": 1], ["cause": "skip"]] {
+        expect(NativeStartupStatus.parse(status(phase: "complete", completed: true, overlay: false,
+                                                completion: completion)) == nil,
+               "completion proof must have a known cause and a JSON boolean")
+    }
+    for field in ["version", "runId"] {
+        for value: Any in [true, -1, 1.5, Double.nan, Double.infinity, "1"] {
+            var malformed = status(); malformed[field] = value
+            expect(NativeStartupStatus.parse(malformed) == nil,
+                   "protocol integer rejects boolean, fractional, nonfinite, negative or string: \(field)")
+        }
+    }
+    for field in ["ready", "completed", "overlay"] {
+        var malformed = status(); malformed[field] = 0
+        expect(NativeStartupStatus.parse(malformed) == nil, "numeric flag cannot impersonate JSON boolean: \(field)")
+    }
+
+    // An observed installation owns one run; another run cannot overwrite readiness.
+    let capture = NativeStartupCapture(targetPID: 700)
+    expect(capture.observe(["status": accepted[1]], at: 1) == nil
+           && capture.snapshot().status == nil, "status without our installation does not establish ownership")
+    expect(capture.observe(["installed": true, "alreadyActive": false, "status": accepted[0]], at: 2)?.runID == 7,
+           "installation establishes its first valid run")
+    var stale = accepted[1]; stale["runId"] = 8
+    expect(capture.observe(["status": stale], at: 3) == nil
+           && capture.snapshot().status?.runID == 7 && capture.snapshot().statusAt == 2,
+           "a foreign run cannot replace the owned loading observation")
+    _ = capture.observe(["status": accepted[1]], at: 4)
+    expect(capture.snapshot().status?.ready == true && capture.snapshot().statusAt == 4
+           && capture.snapshot().installedAt == 2, "the same run advances readiness without moving installation time")
+
+    let outcomes: [(NativeStartupFinalOutcome, String, String, Int32, String?)] = [
+        (.activated, "target-activated", "activated", 0, nil),
+        (.ready, "startup-ready", "startup-ready", 0, nil),
+        (.skipped, "startup-skipped", "skipped", 0, nil),
+        (.partial(reason: "startup-interrupted"), "startup-interrupted", "partial", 2, "startup-interrupted"),
+        (.behaviorNotProven(reason: "protocol-error"), "startup-failed", "behavior-not-proven", 1, "protocol-error")
+    ]
+    for (outcome, event, exitName, code, reason) in outcomes {
+        expect(outcome.event == event && outcome.exitName == exitName && outcome.exitCode == code
+               && outcome.reason == reason, "public outcome envelope agrees on event, exit name, code and reason")
+    }
+    var records: [[String: Any]] = []
+    let stream = NativeStartupEventStream(writer: NativeEventWriter(
+        startedAt: 0, launcherPID: 1, launcherPath: "/synthetic/launcher", sink: { records.append($0) }))
+    expect(stream.finish(at: 0) == nil && records.isEmpty, "teardown before begin emits no fictitious startup")
+    stream.begin(at: 1)
+    expect(stream.resolve(.activated(pid: 0), observation: nil, at: 2)
+           == .behaviorNotProven(reason: "target-identity"), "activation without a positive process identity refuses success")
+    let final = stream.finish(at: 3)
+    expect(stream.finish(at: 4) == final && records.count == 3,
+           "repeated teardown preserves the refusal and emits exactly one exit")
+    stream.targetOpened(pid: 701, at: 5); stream.startupInstalled(pid: 701, runID: 7, at: 6)
+    stream.portError(operation: "bind", errno: 48, at: 7)
+    expect(records.count == 3, "late host callbacks cannot append milestones after the launcher exit")
+
+    expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.codex-startup", declaredHost: "codex") == .codex,
+           "explicit Codex declaration binds to its launcher identity")
+    for declaration: Any in ["zcode", "unknown", 1, true] {
+        expect(NativeEntryIdentity.host(bundleIdentifier: "local.azhou.codex-startup", declaredHost: declaration) == nil,
+               "Codex entry refuses another host or non-string declaration")
+    }
+    expect(NativeEntryIdentity.host(bundleIdentifier: "other.launcher", declaredHost: "codex") == nil,
+           "declaring Codex cannot authorize a different bundle")
+    return checks
+}
+
+// File-scope test helper. In StartupNativeTests.main, before old tests:
+// checks += zcodeTypedEventContractChecks()
+@MainActor
+private func zcodeTypedEventContractChecks() -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: \(label)") }
+        checks += 1
+    }
+    func key(host: SkinHostID = .zcode, path: String = "/synthetic/ZCode.app",
+             executable: String = "/synthetic/ZCode.app/Contents/MacOS/ZCode",
+             identifier: String = "dev.zcode.app", version: String = "synthetic",
+             build: String = "synthetic", hash: String = String(repeating: "a", count: 64)) -> HostApplicationKey {
+        HostApplicationKey(host: host, bundleURL: URL(fileURLWithPath: path),
+            executableURL: URL(fileURLWithPath: executable), bundleIdentifier: identifier,
+            version: version, build: build, executableSHA256: hash)
+    }
+    let expected = key()
+    let process = HostProcessGeneration(pid: 700, launchTime: 50, executableURL: expected.executableURL)
+    let instance = "12345678-1234-4234-8234-123456789abc"
+    let operation = UUID(uuidString: "abcdefab-1234-4234-9234-123456789abc")!
+    let payload = String(repeating: "b", count: 64)
+    let token = "synthetic-owned-context"
+    let tokenSHA = SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    func receipt(application: HostApplicationKey? = nil, generation: HostProcessGeneration? = nil,
+                 owner: String = "azhou-zcode-startup", version: Int = 1,
+                 hash: String? = nil, context: String? = nil, controller: String? = nil) -> ControllerReceipt {
+        ControllerReceipt(location: PageLocation(application: application ?? expected, process: generation ?? process,
+                documentToken: context ?? token), owner: owner, protocolVersion: version,
+            payloadSHA256: hash ?? payload, controllerInstanceID: controller ?? instance, createdByOperationID: operation)
+    }
+    func makeStream() -> (NativeStartupEventStream, () -> [[String: Any]]) {
+        var records: [[String: Any]] = []
+        let stream = NativeStartupEventStream(writer: NativeEventWriter(
+            startedAt: 0, launcherPID: 1, launcherPath: "/synthetic/launcher", sink: { records.append($0) }))
+        return (stream, { records })
+    }
+    func events(_ records: [[String: Any]]) -> [String] { records.map { $0["event"] as? String ?? "" } }
+    func checkReceiptEvent(_ event: [String: Any], _ label: String) {
+        expect(event["host"] as? String == "zcode" && event["evidence"] as? String == "typed-controller-receipt",
+               "\(label) identifies typed ZCode evidence")
+        expect(event["targetPID"] as? Int == 700 && event["runId"] as? Int == 7,
+               "\(label) binds its observed process and run")
+        expect(event["owner"] as? String == "azhou-zcode-startup" && event["version"] as? Int == 1
+               && event["controllerInstanceID"] as? String == instance
+               && event["createdByOperationID"] as? String == operation.uuidString
+               && event["payloadSHA256"] as? String == payload,
+               "\(label) retains verified controller metadata")
+        expect(event["documentTokenSHA256"] as? String == tokenSHA && event["documentToken"] == nil,
+               "\(label) hashes its context identity")
+        expect(["phase", "completed", "completion", "overlay", "cause"].allSatisfy { event[$0] == nil },
+               "\(label) does not invent lifecycle fields absent from the typed result")
+    }
+
+    // The original bug: a valid typed ZCode receipt must not require Codex capture.
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == .ready,
+               "typed ZCode readiness succeeds without Codex startup capture or milestone history")
+        expect(stream.finish(at: 3) == .ready, "typed readiness retains its successful final outcome")
+        expect(events(records()) == ["launcher-start", "startup-ready", "launcher-exit"],
+               "typed receipt finalization never fabricates target-opened or startup-installed history")
+        checkReceiptEvent(records()[1], "ready")
+        expect(records()[1]["ready"] as? Bool == true && records()[1]["beforeReady"] == nil,
+               "ready reports readiness without inventing skip status")
+        expect(records()[2]["exitCode"] as? Int == 0 && records()[2]["outcome"] as? String == "startup-ready",
+               "typed readiness emits a successful launcher exit")
+    }
+    for acquisition: PageAcquisition in [.created, .alreadyActive] {
+        for beforeReady in [false, true] {
+            let (stream, records) = makeStream(); stream.begin(at: 1)
+            let result = SkinLaunchResult.skipped(.present(.instance(receipt()), acquisition: acquisition),
+                                                  runID: 7, beforeReady: beforeReady)
+            expect(stream.resolveZCode(result, expectedApplication: expected, at: 2) == .skipped,
+                   "confirmed typed skip accepts a created or already-active receipt")
+            _ = stream.finish(at: 3)
+            expect(events(records()) == ["launcher-start", "startup-skipped", "launcher-exit"],
+                   "typed skip preserves only evidenced event history")
+            checkReceiptEvent(records()[1], "skip")
+            let acquisitionName: String
+            switch acquisition { case .created: acquisitionName = "created"; case .alreadyActive: acquisitionName = "alreadyActive" }
+            expect(records()[1]["beforeReady"] as? Bool == beforeReady
+                   && records()[1]["acquisition"] as? String == acquisitionName && records()[1]["ready"] == nil,
+                   "skip emits its typed timing and acquisition without a readiness claim")
+            expect(records()[2]["exitCode"] as? Int == 0 && records()[2]["outcome"] as? String == "skipped",
+                   "typed skip finalizes as successful skip")
+        }
+    }
+
+    // Each malformed receipt is exercised as both ready and confirmed-present skip.
+    let badProcesses = [
+        HostProcessGeneration(pid: 0, launchTime: 50, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: -1, launchTime: 50, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: nil, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: .nan, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: .infinity, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: 0, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: -1, executableURL: expected.executableURL),
+        HostProcessGeneration(pid: 700, launchTime: 50, executableURL: URL(fileURLWithPath: "/synthetic/foreign-executable"))
+    ]
+    var malformed: [(String, ControllerReceipt)] = [
+        ("foreign owner", receipt(owner: "azhou-codex-startup")), ("unsupported version", receipt(version: 2)),
+        ("empty context", receipt(context: "")), ("short instance", receipt(controller: "1234")),
+        ("invalid UUID", receipt(controller: String(repeating: "g", count: 36))),
+        ("UUID trailing newline", receipt(controller: instance + "\n")),
+        ("short SHA", receipt(hash: String(repeating: "a", count: 63))),
+        ("uppercase SHA", receipt(hash: String(repeating: "A", count: 64))),
+        ("nonhex SHA", receipt(hash: String(repeating: "g", count: 64))),
+        ("SHA trailing newline", receipt(hash: payload + "\n")),
+        ("foreign host", receipt(application: key(host: .codex))),
+        ("foreign bundle path", receipt(application: key(path: "/synthetic/Other.app"))),
+        ("foreign executable key", receipt(application: key(executable: "/synthetic/other"))),
+        ("foreign bundle ID", receipt(application: key(identifier: "foreign.app"))),
+        ("foreign version", receipt(application: key(version: "other"))),
+        ("foreign build", receipt(application: key(build: "other"))),
+        ("foreign executable SHA", receipt(application: key(hash: String(repeating: "c", count: 64))))
+    ]
+    malformed += badProcesses.enumerated().map { ("invalid process \($0.offset)", receipt(generation: $0.element)) }
+    func expectRefusal(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey = expected, label: String) {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        let outcome = stream.resolveZCode(result, expectedApplication: expectedApplication, at: 2)
+        if case .behaviorNotProven? = outcome { checks += 1 }
+        else { fatalError("FAILED: \(label) must refuse claimed success") }
+        _ = stream.finish(at: 3)
+        expect(events(records()) == ["launcher-start", "startup-failed", "launcher-exit"]
+               && records().last?["exitCode"] as? Int == 1, "\(label) emits no success milestone")
+    }
+    for (label, malformedReceipt) in malformed {
+        expectRefusal(.ready(malformedReceipt, runID: 7), label: label + " ready")
+        expectRefusal(.skipped(.present(.instance(malformedReceipt), acquisition: .created), runID: 7, beforeReady: true),
+                      label: label + " skipped")
+    }
+    for runID in [0, -1] {
+        expectRefusal(.ready(receipt(), runID: runID), label: "nonpositive ready run")
+        expectRefusal(.skipped(.present(.instance(receipt()), acquisition: .created), runID: runID, beforeReady: false),
+                      label: "nonpositive skipped run")
+    }
+    let legacy = LegacyV1Observation(location: receipt().location, owner: "azhou-zcode-startup", protocolVersion: 1)
+    for page: PageEffect in [.notObserved(reason: "unobserved"), .absent(receipt().location),
+                            .unknown(operationID: operation, detail: "unknown"),
+                            .present(.legacyV1(legacy), acquisition: .alreadyActive)] {
+        expectRefusal(.skipped(page, runID: 7, beforeReady: false), label: "skip without confirmed instance receipt")
+    }
+    expectRefusal(.ready(receipt(application: key(host: .codex)), runID: 7), expectedApplication: key(host: .codex),
+                  label: "matching Codex identity cannot use ZCode resolver")
+    expectRefusal(.activated(process), expectedApplication: key(host: .codex), label: "Codex activation cannot use ZCode resolver")
+    for invalid in badProcesses { expectRefusal(.activated(invalid), label: "invalid activated process") }
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(.activated(process), expectedApplication: expected, at: 2) == .activated,
+               "valid typed process activation succeeds")
+        _ = stream.finish(at: 3)
+        expect(events(records()) == ["launcher-start", "target-activated", "launcher-exit"]
+               && records()[1]["targetPID"] as? Int == 700, "activation identifies its process without a controller claim")
+    }
+
+    let cleanup = CleanupReport(state: .notNeeded, released: [], intentionallyRetained: [], unconfirmed: [])
+    let page = PageEffect.notObserved(reason: "synthetic no page")
+    let failureCases: [(SkinLaunchResult, NativeStartupFinalOutcome)] = [
+        (.partial(SkinOperationFailure(reason: .targetStale, detail: "startup-interrupted"), page: page, cleanup: cleanup),
+         .partial(reason: "startup-interrupted")),
+        (.partial(SkinOperationFailure(reason: .ownerConflict, detail: "startup-active"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "startup-active")),
+        (.failed(SkinOperationFailure(reason: .targetIdentity, detail: "target-identity"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "target-identity")),
+        (.failed(SkinOperationFailure(reason: .protocolError, detail: "private arbitrary detail"), page: page, cleanup: cleanup),
+         .behaviorNotProven(reason: "protocol-error"))
+    ]
+    for (result, expectedOutcome) in failureCases {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        expect(stream.resolveZCode(result, expectedApplication: expected, at: 2) == expectedOutcome,
+               "typed failure keeps established partial/failure reason semantics")
+        _ = stream.finish(at: 3)
+        expect(records().last?["exitCode"] as? Int == Int(expectedOutcome.exitCode), "failure exit code agrees with its outcome")
+    }
+    for reason: HostRefusalReason in [.identityUnavailable, .identityMismatch, .capabilityUnverified,
+                                      .evidenceMismatch, .implementationUnavailable, .capabilityUnsupported] {
+        let refusal = HostRefusal(host: .zcode, reason: reason, findings: [], detail: "synthetic refusal", nextProbe: nil)
+        let (stream, _) = makeStream(); stream.begin(at: 1)
+        let foldedReason = [.identityUnavailable, .identityMismatch, .capabilityUnverified].contains(reason)
+            ? "target-identity" : "protocol-error"
+        expect(stream.resolveZCode(.refused(refusal), expectedApplication: expected, at: 2)
+               == .behaviorNotProven(reason: foldedReason), "typed refusal preserves existing fixed reason folding")
+    }
+    for latchFailure in [false, true] {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        stream.latchInterruption()
+        if latchFailure { stream.latchFailure("asset-invalid") }
+        let expectedOutcome: NativeStartupFinalOutcome = latchFailure
+            ? .behaviorNotProven(reason: "asset-invalid") : .partial(reason: "startup-interrupted")
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == expectedOutcome,
+               "latched failure/interruption dominates a later typed ready result")
+        _ = stream.finish(at: 3)
+        expect(!events(records()).contains("startup-ready") && records().count == 3,
+               "latched failure/interruption emits exactly one final result and exit")
+    }
+    do {
+        let (stream, records) = makeStream()
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 0) == nil
+               && records().isEmpty, "typed resolution before begin emits nothing")
+        stream.begin(at: 1)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 2) == .ready,
+               "a begun typed stream can finalize once")
+        expect(stream.resolveZCode(.activated(process), expectedApplication: expected, at: 3) == nil,
+               "a later typed success cannot replace an earlier final result")
+        expect(stream.resolve(.failed(reason: "asset-invalid"), observation: nil, at: 4) == nil,
+               "legacy resolution cannot overwrite the typed final result")
+        _ = stream.finish(at: 5)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 6) == nil
+               && stream.finish(at: 7) == .ready && records().count == 3,
+               "post-exit typed callbacks and repeated finish cannot duplicate a final event")
+    }
+    do {
+        let (stream, records) = makeStream(); stream.begin(at: 1)
+        _ = stream.resolve(.failed(reason: "asset-invalid"), observation: nil, at: 2)
+        expect(stream.resolveZCode(.ready(receipt(), runID: 7), expectedApplication: expected, at: 3) == nil,
+               "typed resolution cannot erase an existing legacy failure")
+        _ = stream.finish(at: 4)
+        expect(events(records()) == ["launcher-start", "startup-failed", "launcher-exit"],
+               "mixed callbacks retain the initial failure event")
+    }
+    // Exercise the actual App-owned exit adapter, not only the event resolver.
+    // The fake runtime records termination and exit without opening a real App.
+    let lifecycleCases: [(SkinLaunchResult, String, String, Int)] = [
+        (.ready(receipt(), runID: 7), "startup-ready", "startup-ready", 0),
+        (.skipped(.present(.instance(receipt()), acquisition: .alreadyActive), runID: 7, beforeReady: false),
+         "startup-skipped", "skipped", 0),
+        (.activated(process), "target-activated", "activated", 0),
+        (.partial(SkinOperationFailure(reason: .operationCancelled, detail: "startup-interrupted"),
+                  page: page, cleanup: cleanup), "startup-interrupted", "partial", 2),
+        (.ready(receipt(owner: "foreign"), runID: 7), "startup-failed", "behavior-not-proven", 1)
+    ]
+    for (result, event, outcome, exitCode) in lifecycleCases {
+        let runtime = FakeNativeAppRuntime(arguments: ["synthetic-ZCode-entry"])
+        let delegate = AppDelegate(runtime: runtime)
+        delegate.finishZCodeStartup(result, expectedApplication: expected, promoted: false)
+        expect(runtime.terminated == 1, "typed App lifecycle requests exactly one termination for \(outcome)")
+        delegate.finishZCodeStartup(.ready(receipt(), runID: 7), expectedApplication: expected, promoted: false)
+        expect(runtime.terminated == 1, "a duplicate typed callback does not terminate twice or replace \(outcome)")
+        delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        let output = runtime.output.compactMap { line -> [String: Any]? in
+            guard let data = line.data(using: .utf8) else { return nil }
+            return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        }
+        expect(events(output) == ["launcher-start", event, "player-terminated", "launcher-exit"],
+               "typed App lifecycle keeps one real event sequence for \(outcome)")
+        expect(output.last?["outcome"] as? String == outcome && output.last?["exitCode"] as? Int == exitCode
+               && runtime.processExitCode == Int32(exitCode),
+               "willTerminate propagates the exact typed outcome and native exit code for \(outcome)")
+        expect(runtime.openCount == 0 && runtime.allocationCount == 0 && runtime.openedEnvironments.isEmpty,
+               "terminal result handling itself cannot open a host or create launch side effects")
+    }
+    return checks
+}
+
+// File-scope helper; add checks += zcodeRuntimeEventEnvelopeChecks() in main.
+@MainActor
+private func zcodeRuntimeEventEnvelopeChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+    let runtime = FakeNativeAppRuntime(arguments: ["SYNTHETIC-EVENTS-ONLY"])
+    runtime.bundleURL = URL(fileURLWithPath: "/tmp/synthetic-zcode-event-envelope/Azhou.app")
+    let presentation = FakeNativePlayerPresentation()
+    let delegate = AppDelegate(runtime: runtime, presentation: presentation)
+    let port = 45678
+    let hostPID = 700
+    let hostBirth = 50.125
+    let environmentKeys = ["HOME", "LANG", "PATH", "TMPDIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_HOME_DIR",
+                           "ZCODE_DESKTOP_SESSION_DATA_DIR", "ZCODE_DESKTOP_USER_DATA_DIR"]
+    let request: [String: Any] = ["stage": "zcode-open-request", "debuggingPort": port,
+        "entryPID": runtime.processIdentifier, "environmentKeys": environmentKeys, "host_is_not_native_child": true]
+    let selected: [String: Any] = ["stage": "zcode-open-selected-process", "debuggingPort": port,
+        "entryPID": runtime.processIdentifier, "hostPID": hostPID, "hostStartedAt": hostBirth,
+        "native_child_wait_claim": false]
+    runtime.uptime = 101
+    delegate.emitZCodeRuntimeEvent(request)
+    runtime.uptime = 100.5 // A regressing source clock must not regress envelope time.
+    delegate.emitZCodeRuntimeEvent(selected)
+    var overridden = request
+    overridden.merge(["schema": "foreign.schema", "event": "startup-ready", "seconds": -100.0,
+                      "launcherPID": -1, "launcherPath": "/synthetic/foreign-entry"]) { _, new in new }
+    runtime.uptime = 103
+    delegate.emitZCodeRuntimeEvent(overridden)
+
+    let records = runtime.output.compactMap { line -> [String: Any]? in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+    expect(records.count == 3 && runtime.output.count == 3,
+           "each runtime diagnostic is emitted as one valid JSON record")
+    let expectedPath = runtime.bundleURL.resolvingSymlinksInPath().standardizedFileURL.path
+    expect(records.allSatisfy {
+        $0["schema"] as? String == NativeEventWriter.schema && $0["event"] as? String == "zcode-runtime"
+            && $0["launcherPID"] as? Int == runtime.processIdentifier && $0["launcherPath"] as? String == expectedPath
+    }, "runtime request and selected process share the strict owner envelope and exact entry identity")
+    expect(records.compactMap { $0["seconds"] as? Double } == [1, 1, 3],
+           "runtime event elapsed seconds remain monotonic when the source clock moves backward")
+    let envelope: Set<String> = ["schema", "event", "seconds", "launcherPID", "launcherPath"]
+    expect(Set(records[0].keys) == Set(request.keys).union(envelope)
+           && Set(records[1].keys) == Set(selected.keys).union(envelope),
+           "the writer preserves actual runtime fieldsets without adding unsupported evidence")
+    expect(records[0]["debuggingPort"] as? Int == port && records[1]["debuggingPort"] as? Int == port
+           && records[0]["entryPID"] as? Int == runtime.processIdentifier
+           && records[1]["entryPID"] as? Int == runtime.processIdentifier,
+           "request and selection retain the same port and entry PID")
+    expect(records[1]["hostPID"] as? Int == hostPID && records[1]["hostStartedAt"] as? Double == hostBirth,
+           "selected process diagnostic preserves the actual host generation rather than the entry PID")
+    expect(records[0]["environmentKeys"] as? [String] == environmentKeys
+           && records[0]["host_is_not_native_child"] as? Bool == true
+           && records[1]["native_child_wait_claim"] as? Bool == false,
+           "launch request records isolation key names and selection never claims a native child wait")
+    expect(records[2]["stage"] as? String == "zcode-open-request" && records[2]["debuggingPort"] as? Int == port
+           && records[2]["schema"] as? String == NativeEventWriter.schema
+           && records[2]["event"] as? String == "zcode-runtime" && records[2]["seconds"] as? Double == 3
+           && records[2]["launcherPID"] as? Int == runtime.processIdentifier
+           && records[2]["launcherPath"] as? String == expectedPath,
+           "producer fields cannot overwrite the writer's schema, event, monotonic time or entry identity")
+    expect(records.allSatisfy { record in
+        ["ready", "completed", "completion", "outcome", "exitCode", "runId"].allSatisfy { record[$0] == nil }
+    }, "request and selection diagnostics do not fabricate startup success, completion or finalization")
+    expect(runtime.openCount == 0 && runtime.allocationCount == 0 && runtime.terminated == 0
+           && runtime.activated == 0 && presentation.createdPlayers.isEmpty && presentation.evaluations.isEmpty,
+           "emitting runtime evidence performs no application launch, port allocation, UI or shutdown action")
+
+    let secret = "fixture-private-url?query=must-not-be-emitted"
+    let allowedStartup = ["target-identity", "attach-timeout", "listener-mismatch", "endpoint-unavailable",
+        "profile-isolation-unproven", "asset-invalid", "inspection-failed", "inspection-timeout", "protocol-error"]
+    for reason in allowedStartup {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: StartupFailure(reason: reason, message: secret)) == reason,
+               "known startup diagnostic retains only its fixed reason tag")
+    }
+    for reason in ["busy", "inspection-failed", "inspection-timeout"] {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: WallpaperFailure(state: reason, chinese: secret, english: secret)) == reason,
+               "known operation diagnostic retains only its fixed state tag")
+    }
+    let cdpErrors: [(ZCodeBoundCDP.Failure, String)] = [
+        (.deadline, "cdp-deadline"), (.cancelled, "cdp-cancelled"), (.busy, "cdp-busy"),
+        (.identity, "cdp-identity"), (.protocolError, "cdp-protocol-error"), (.unavailable, "cdp-unavailable")
+    ]
+    for (error, reason) in cdpErrors {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: error) == reason,
+               "CDP diagnostic identifies its bounded failure class")
+    }
+    expect(ZCodeNativeRuntime.diagnosticReason(for: CancellationError()) == "cancelled",
+           "task cancellation remains a fixed diagnostic tag")
+    for error: Error in [StartupFailure(reason: secret, message: secret),
+                         WallpaperFailure(state: secret, chinese: secret, english: secret),
+                         NSError(domain: secret, code: 17, userInfo: [NSLocalizedDescriptionKey: secret])] {
+        expect(ZCodeNativeRuntime.diagnosticReason(for: error) == "unclassified",
+               "unknown reasons, error domains and localized text cannot enter diagnostic fields")
+    }
+    final class DescriptionReads { var count = 0 }
+    struct PrivateDiagnosticError: LocalizedError {
+        let reads: DescriptionReads
+        var errorDescription: String? { reads.count += 1; return "fixture-private-localized-description" }
+    }
+    let reads = DescriptionReads()
+    expect(ZCodeNativeRuntime.diagnosticReason(for: PrivateDiagnosticError(reads: reads)) == "unclassified"
+           && reads.count == 0, "classifying unknown errors never evaluates localized description")
+    runtime.uptime = 104
+    delegate.emitZCodeRuntimeEvent(["stage": "zcode-runtime-failed", "point": "open-proof",
+                                   "reason": ZCodeNativeRuntime.diagnosticReason(for: StartupFailure(reason: "asset-invalid", message: secret))])
+    let diagnostic = try! JSONSerialization.jsonObject(with: Data(runtime.output.last!.utf8)) as! [String: Any]
+    expect(Set(diagnostic.keys) == envelope.union(["stage", "point", "reason"])
+           && diagnostic["stage"] as? String == "zcode-runtime-failed"
+           && diagnostic["point"] as? String == "open-proof" && diagnostic["reason"] as? String == "asset-invalid",
+           "runtime failure diagnostic has exactly a fixed point and reason inside the strict envelope")
+    expect(!runtime.output.last!.contains(secret) && diagnostic["event"] as? String == "zcode-runtime"
+           && diagnostic["schema"] as? String == NativeEventWriter.schema,
+           "private exception text never accompanies a fixed runtime failure diagnostic")
+
+    // A renderer/runtime failure remains failure after the legacy bridge. The
+    // diagnostic repair must never make an unknown detail into a successful run.
+    let failure = SkinOperationFailure(reason: .protocolError, detail: "fixture-private-url?query=must-not-be-emitted")
+    let typed = SkinLaunchResult.failed(failure, page: .notObserved(reason: "fixture"),
+        cleanup: CleanupReport(state: .notNeeded, released: [], intentionallyRetained: [], unconfirmed: []))
+    var finalRecords: [[String: Any]] = []
+    let stream = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 1,
+        launcherPath: "/synthetic/entry", sink: { finalRecords.append($0) }))
+    stream.begin(at: 1)
+    let expectedApplication = HostApplicationKey(host: .zcode,
+        bundleURL: URL(fileURLWithPath: "/synthetic/ZCode.app"),
+        executableURL: URL(fileURLWithPath: "/synthetic/ZCode.app/Contents/MacOS/ZCode"),
+        bundleIdentifier: "dev.zcode.app", version: "synthetic", build: "synthetic",
+        executableSHA256: String(repeating: "a", count: 64))
+    expect(stream.resolveZCode(typed, expectedApplication: expectedApplication, at: 2)
+           == .behaviorNotProven(reason: "protocol-error"),
+           "fixed diagnostic reporting leaves the actual typed ZCode finalizer non-successful")
+    _ = stream.finish(at: 3)
+    expect(finalRecords.map { $0["event"] as? String ?? "" } == ["launcher-start", "startup-failed", "launcher-exit"]
+           && finalRecords.last?["exitCode"] as? Int == 1
+           && finalRecords[1]["reason"] as? String == "protocol-error",
+           "the final generic failure remains sanitized and emits a nonzero exit")
+    return checks
+}

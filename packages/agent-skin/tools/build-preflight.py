@@ -2,6 +2,7 @@
 """Validate private build inputs and Git boundaries before staging a bundle."""
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 from pathlib import Path
@@ -11,25 +12,27 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_PATHS = (
-    ".build", ".build/module-cache", ".build/azhou-payload", ".build/azhou-install-registry",
+    ".build", ".build/module-cache", ".build/azhou-payload", ".build/azhou-zcode-payload",
+    ".build/azhou-install-registry",
     "dist", "assets/private",
 )
 
 
-def load_theme(root: Path) -> dict:
+def load_theme(root: Path, *, host: str = "codex") -> dict:
     path = root / "tools/verify-artifacts.py"
     spec = importlib.util.spec_from_file_location("agent_skin_preflight_artifacts", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load artifact verifier: {path}")
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
+    artifacts.configure_build_host(host)
     return artifacts.load_theme_config(root, require_inputs=True)
 
 
-def preflight(root: Path = ROOT) -> dict:
+def preflight(root: Path = ROOT, *, host: str = "codex") -> dict:
     """Return the validated theme after checking private paths and Git state."""
     root = Path(root).resolve()
-    theme = load_theme(root)
+    theme = load_theme(root, host=host)
     for name in BUILD_PATHS:
         if (root / name).is_symlink():
             raise SystemExit("拒绝通过符号链接构建：" + name)
@@ -60,8 +63,11 @@ def preflight(root: Path = ROOT) -> dict:
     return theme
 
 
-def main(root: Path = ROOT) -> int:
-    theme = preflight(root)
+def main(root: Path = ROOT, *, argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", choices=("codex", "zcode"), default="codex")
+    args = parser.parse_args(argv)
+    theme = preflight(root, host=args.host)
     print(json.dumps(theme, ensure_ascii=False, separators=(",", ":")))
     return 0
 
