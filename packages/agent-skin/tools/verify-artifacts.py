@@ -102,7 +102,8 @@ def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
 
 
 def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
-    if set(config) != {'identity', 'startup', 'wallpaper'}:
+    if set(config) not in ({'identity', 'startup', 'wallpaper'},
+                           {'identity', 'startup', 'wallpaper', 'hostIcons'}):
         raise RuntimeError('theme-config.json has an unsupported top-level shape.')
     identity = config.get('identity')
     if not isinstance(identity, dict) or set(identity) != {
@@ -120,6 +121,13 @@ def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
     entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
     if icon_input == entry_avatar_input:
         raise RuntimeError('theme-config.json iconInput and entryAvatarInput must be distinct assets.')
+    if 'hostIcons' in config:
+        host_icons = config['hostIcons']
+        if not isinstance(host_icons, dict) or set(host_icons) != {'zcode'}:
+            raise RuntimeError('theme-config.json hostIcons must define exactly zcode.')
+        zcode_icon = _private_input_path(host_icons['zcode'], 'hostIcons.zcode')
+        if zcode_icon in (icon_input, entry_avatar_input):
+            raise RuntimeError('hostIcons.zcode must be distinct from the Codex icon and entry avatar.')
 
     startup = config.get('startup')
     if not isinstance(startup, dict) or set(startup) != {'durationMs', 'text'}:
@@ -187,6 +195,9 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
     package = load_package_metadata(root)
     theme = _validate_theme_config_data(config, package['runtime_version'], package['runtime_build'])
     if ACTIVE_HOST == 'zcode':
+        if 'hostIcons' not in config:
+            raise RuntimeError('ZCode builds require an explicit hostIcons.zcode private icon.')
+        theme['identity']['iconInput'] = config['hostIcons']['zcode']
         theme['identity']['appName'] = {'zh-CN': '阿舟 AI 实验室 for ZCode', 'en': 'Azhou AI Lab for ZCode'}
         theme['identity']['installationName'] = '阿舟 AI 实验室 for ZCode.app'
     if require_inputs:

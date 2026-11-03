@@ -19,7 +19,7 @@ if [[ ! -d assets/private || ! -f assets/private/working.png || ! -f assets/priv
   printf '%s\n' '缺少本地阿舟素材（working.png、scene.js、wallpaper-scene-q-v3.png）。请先准备本地私有素材。' >&2
   exit 1
 fi
-theme_json="$(python3 tools/build-preflight.py)"
+theme_json="$(python3 tools/build-preflight.py ${host_args[@]+"${host_args[@]}"})"
 theme_icon_input="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["iconInput"])')"
 theme_installation_name="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["installationName"])')"
 mkdir -p .build/module-cache

@@ -36,6 +36,14 @@
 
 私有路径必须在实体 `assets/private/` 内，不接受穿越或符号链接。启动文案上限为 UTF-16 16/48/60 单位；背景强度范围和 12 秒阶段结构是现有运行契约，不是新增调节项。更改这些限制需要实现和验证运行时，不能只修改 JSON。
 
+## 双入口图标构建
+
+Codex 默认读取 `identity.iconInput`（`assets/private/app-icon/source.png`）；ZCode 构建读取源码配置中的 `hostIcons.zcode`（`assets/private/app-icon/zcode.png`）。两者使用独立的私有 PNG，且均不得与 `identity.entryAvatarInput` 共用路径。`hostIcons` 仅用于源码构建选择，嵌入应用的主题仍保留原有三段结构和已选定的 `identity.iconInput` 字符串；历史 Codex 配置无需增加映射。
+
+`bash tools/build-macos.sh` 构建 Codex 候选，`bash tools/build-macos.sh --host zcode` 构建 ZCode 候选。宿主选择贯穿预检、图标生成及产物验证；ZCode 映射或对应实体素材缺失时停止构建，不回退到 Codex 图标。两套图标均要求至少 1024×1024 的方形 PNG；图标与 bot、启动动画素材分别管理。
+
+将已审阅素材以原字节放入上述私有路径，并保留来源、SHA-256 和审阅边界。宿主标识不会因本机构建而获得公开再分发授权，私有素材、ICNS 与应用产物均不得提交到 Git。产物检查需核对两个包各自的图标；候选构建成功不代表 Finder、Dock、启动台的已安装入口已经完成实机验收。
+
 ## 验证边界
 
 Build 12 修复工作区外壳晚于启动动画出现时壁纸失效的问题：等待最长 60 秒，动画自然结束不再取消同一轮仍有效的壁纸请求。取消、覆盖或释放仍使旧请求失效。生成载荷浏览器测试覆盖自然结束后挂载、60 秒超时及观察器清理；真实冷启动仍须在用户完整退出官方应用后观察，不主动重启现有会话。

@@ -204,6 +204,8 @@ def clone_source_tree(destination: Path, *, private: bool = True) -> None:
         (private_dir / "scene.js").write_text("window.AZHOU_WORKING_IMAGE = 'synthetic';\n")
         synthetic_png(private_dir / "app-icon/source.png", 1024, 1024,
                       lambda x, y: (x % 256, y % 256, 90, 255))
+        synthetic_png(private_dir / "app-icon/zcode.png", 1024, 1024,
+                      lambda x, y: (90, x % 256, y % 256, 255))
 
 
 def build_staged_product(root: Path, label: str):
@@ -611,8 +613,10 @@ class BuildOwnedThemeTests(unittest.TestCase):
             self.assertEqual(set(preview_assets), {
                 "avatar", "entryAvatar", "artwork", "artworkSHA256", "contours", "wallpaperStrength", "themeConfig",
             })
-            expected_theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))
+            source_theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))
+            expected_theme = {key: source_theme[key] for key in ("identity", "startup", "wallpaper")}
             expected_theme["identity"].update({"version": app_version, "build": app_build})
+            self.assertNotIn("hostIcons", preview_assets["themeConfig"])
 
             self.assertEqual(preview_assets["themeConfig"], expected_theme)
             self.assertEqual(preview_assets["wallpaperStrength"], expected_theme["wallpaper"]["strength"])

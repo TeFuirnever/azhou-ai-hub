@@ -49,6 +49,7 @@ def make_fixture(root: Path, *, missing: str | None = None, build_symlink: bool 
     icon = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR"
             + struct.pack(">II", icon_size, icon_size))
     (root / "assets/private/app-icon/source.png").write_bytes(icon)
+    (root / "assets/private/app-icon/zcode.png").write_bytes(icon)
     (root / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
     (root / ".gitignore").write_text("/.build/\n/assets/private/\n", encoding="utf-8")
     if build_symlink:
@@ -122,6 +123,10 @@ if [[ "${1:-}" == "-c" ]]; then exec "${REAL_PYTHON3:?}" "$@"; fi
 case "${1:-}" in
   tools/build-preflight.py) exec "${REAL_PYTHON3:?}" "$@" ;;
   tools/verify-artifacts.py)
+    if [[ "${2:-}" == "--host" ]]; then
+      [[ "${3:-}" == "zcode" ]] || exit 94
+      set -- "$1" "${@:4}"
+    fi
     case "${2:-}" in
       --write-bundle-info) mkdir -p "$3/Contents"; : > "$3/Contents/Info.plist" ;;
       --write-marker) mkdir -p "$3/Contents/Resources"; : > "$3/Contents/Resources/azhou-build.json" ;;
@@ -328,6 +333,8 @@ def run_suite(report_path: Path) -> dict[str, object]:
         add_case("preflight-ignore", "build", environment={"FAKE_GIT_UNIGNORED_EXIT": "1"})
         add_case("preflight-bad-icon", "build", icon_size=256)
         add_case("build-success", "build")
+        add_case("build-zcode-success", "build", ("--host", "zcode"))
+        add_case("build-zcode-missing-icon", "build", ("--host", "zcode"), missing="app-icon/zcode.png")
         add_case("build-preserve-stage", "build", environment={"FAKE_PRESERVE_STAGE": "1"})
         add_case("build-xcrun-failure", "build", environment={"FAKE_XCRUN_EXIT": "18"})
         add_case("build-codesign-failure", "build", environment={"FAKE_CODESIGN_EXIT": "19"})
@@ -406,6 +413,12 @@ exit status.exitstatus
                 "Native/InstallRegistry.swift Native/InstallRegistryCore.swift",
                 "-framework AppKit -framework CoreServices",
             ), ()),
+            "build-zcode-success": (0, "ZCode本地候选已构建", "", (
+                "tools/build-preflight.py --host zcode", "tools/verify-artifacts.py --host zcode",
+                "xcrun", "sips", "iconutil", "azhou-zcode-payload",
+            ), ()),
+            "build-zcode-missing-icon": (1, "", "identity.iconInput",
+                                         ("tools/build-preflight.py --host zcode",), ("xcrun", "sips")),
             "build-preserve-stage": (0, "", "原子回滚未完成", ("--publish",), ()),
             "build-xcrun-failure": (18, "", "", ("xcrun",), ("codesign", "--publish")),
             "build-codesign-failure": (19, "", "", ("codesign",), ("--publish",)),
@@ -423,6 +436,15 @@ exit status.exitstatus
         for name, (status, stdout, stderr, events, absent) in expected_cases.items():
             assert_case(output_root, name, status, stdout=stdout, stderr=stderr,
                         events=events, absent=absent)
+
+        for name, icon_name in (("build-success", "source.png"), ("build-zcode-success", "zcode.png")):
+            events = (output_root / name / "events.log").read_text(encoding="utf-8").splitlines()
+            resizes = [line for line in events if line.startswith("sips\t")]
+            assert len(resizes) == 10, f"{name}: expected ten icon sizes"
+            assert all(f"/assets/private/app-icon/{icon_name} --out " in line for line in resizes), \
+                f"{name}: production shell selected the wrong host icon: {resizes!r}"
+        zcode_stdout = (output_root / "build-zcode-success/stdout").read_text(encoding="utf-8")
+        assert "tools/install-macos.sh" not in zcode_stdout, "ZCode candidate must not suggest the Codex installer"
 
         build_success = output_root / "build-success"
         build_stdout = (build_success / "stdout").read_text(encoding="utf-8", errors="replace")
