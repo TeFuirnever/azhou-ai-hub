@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise canonical fixed-target CDP against an owned loopback fixture only."""
 from pathlib import Path
-import argparse,platform,socketserver,socket,threading,json,hashlib,base64,struct,subprocess,datetime,os
+import argparse,platform,socketserver,socket,threading,json,hashlib,base64,struct,subprocess,datetime,os,time
 ROOT=Path(__file__).resolve().parents[1]
 def main():
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--profile-directory',type=Path);args=parser.parse_args()
@@ -34,6 +34,7 @@ def main():
   b=json.dumps(o).encode();h=bytes([129,len(b)]) if len(b)<126 else bytes([129,126])+struct.pack('!H',len(b));c.sendall(h+b)
  class Handler(socketserver.BaseRequestHandler):
   def handle(self):
+   case=case_state;mode=case['mode']
    c=self.request;c.settimeout(6);data=b''
    try:
     while b'\r\n\r\n' not in data:
@@ -46,7 +47,19 @@ def main():
      while c.recv(4096):pass
      return
     if path=='/json/list':
-     body=json.dumps([{'id':'TARGET1','type':'page','url':'file:///fixture/index.html?windowKind=main','webSocketDebuggerUrl':f'ws://127.0.0.1:{self.server.server_address[1]}/devtools/page/TARGET1'}]).encode();c.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: '+str(len(body)).encode()+b'\r\nConnection: close\r\n\r\n'+body);return
+     if mode=='slow-http': time.sleep(0.60)
+     url='file:///fixture/index.html?windowKind=main'
+     good={'id':'TARGET1','type':'page','url':url,'webSocketDebuggerUrl':f'ws://127.0.0.1:{self.server.server_address[1]}/devtools/page/TARGET1'}
+     if case['started'] is None: case['started']=time.monotonic()
+     elapsed=time.monotonic()-case['started']
+     if mode in ('empty','timeout','cancel','hot-empty') and (mode not in ('empty',) or elapsed<0.35): pages=[]
+     elif mode=='blank' and elapsed<0.35: pages=[{'id':'BLANK','type':'page','url':'about:blank'}]
+     elif mode=='login': pages=[{'id':'LOGIN','type':'page','url':'file:///fixture/login.html'}]
+     elif mode=='external': pages=[{'id':'OTHER','type':'page','url':'file:///other/index.html'}]
+     elif mode=='ambiguous': pages=[good,dict(good,id='TARGET2')]
+     else: pages=[good]
+     log.append({'discovery_mode':mode,'elapsed':elapsed,'count':len(pages)})
+     body=json.dumps(pages).encode();c.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: '+str(len(body)).encode()+b'\r\nConnection: close\r\n\r\n'+body);return
     headers=dict(x.split(b':',1) for x in data.split(b'\r\n')[1:] if b':' in x);key=next(v.strip() for k,v in headers.items() if k.lower()==b'sec-websocket-key');accept=base64.b64encode(hashlib.sha1(key+b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest());c.sendall(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+b'\r\n\r\n')
     changed=False
     while True:
@@ -68,15 +81,15 @@ def main():
  class Server(socketserver.ThreadingTCPServer):allow_reuse_address=True;daemon_threads=True
  server=Server(('127.0.0.1',0),Handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();records=[]
  try:
-  for m in ['send-timeout','receive-timeout','send-cancel','receive-cancel','normal','context-drift','url-drift']:
-   mode=m;start=datetime.datetime.now(datetime.timezone.utc).isoformat();r=subprocess.run([str(out/'transport-fixture'),m,str(server.server_address[1])],capture_output=True,timeout=10,env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','LLVM_PROFILE_FILE':str(profiles/('zcode-transport-'+m+'-%p.profraw'))})
+  for m in ['send-timeout','receive-timeout','send-cancel','receive-cancel','normal','context-drift','url-drift','empty','blank','login','external','ambiguous','timeout','slow-http','cancel','hot-empty','guard-error-late','guard-return-late','guard-cancel-late']:
+   mode=m;case_state={'mode':m,'started':None};start=datetime.datetime.now(datetime.timezone.utc).isoformat();r=subprocess.run([str(out/'transport-fixture'),m,str(server.server_address[1])],capture_output=True,timeout=10,env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','LLVM_PROFILE_FILE':str(profiles/('zcode-transport-'+m+'-%p.profraw'))})
    (out/(m+'.stdout')).write_bytes(r.stdout);(out/(m+'.stderr')).write_bytes(r.stderr)
    row={'case':m,'started_at':start,'native_exit':r.returncode,'stdout':r.stdout.decode(),'stderr':r.stderr.decode()};records.append(row)
    if r.returncode:break
  finally:server.shutdown();server.server_close();thread.join(timeout=2)
  assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in snapshots.items()),'canonical source changed while compiling/running'
  (out/'mock-protocol.json').write_text(json.dumps(log,indent=2)+'\n')
- report={'canonical_source_sha256':snapshots,'source_bytes_unchanged_after':True,'canonical_compiled_complete':True,'sourceLocation_used':False,'compile_exit':0,'cases':records,'host_executed':False,'real_OS_queries':False,'passed':len(records)==7 and all(x['native_exit']==0 for x in records)}
+ report={'canonical_source_sha256':snapshots,'source_bytes_unchanged_after':True,'canonical_compiled_complete':True,'sourceLocation_used':False,'compile_exit':0,'cases':records,'host_executed':False,'real_OS_queries':False,'passed':len(records)==19 and all(x['native_exit']==0 for x in records)}
  (out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report));return 0 if report['passed'] else 1
 
 if __name__=='__main__':

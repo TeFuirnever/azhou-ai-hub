@@ -156,6 +156,9 @@ def main() -> int:
     run([sys.executable, "tools/test-zcode-runtime.py", "--binary", str(objects[0]),
          "--out", str(out / "zcode-runtime"), "--profile-directory", str(raw_dir)],
         cwd=ROOT, log=out / "logs/zcode-runtime.log")
+    run([sys.executable, "tools/test-zcode-runtime.py", "--interleave-test", "--binary", str(objects[0]),
+         "--out", str(out / "zcode-runtime-interleave"), "--profile-directory", str(raw_dir)],
+        cwd=ROOT, log=out / "logs/zcode-runtime-interleave.log")
     transport_out = out / "zcode-transport"
     run([sys.executable, "tools/test-zcode-transport.py", "--out", str(transport_out),
          "--profile-directory", str(raw_dir)], cwd=ROOT, log=out / "logs/zcode-transport.log")

@@ -3,6 +3,9 @@ import Foundation
     let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath:"/Applications/ZCode.app"), executableURL: URL(fileURLWithPath:"/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier:"dev.zcode.app", version:"3.17.1", build:"3.17.1.9553", executableSHA256:String(repeating:"a",count:64))
     var processes: [HostProcessGeneration] = []
     var calls: [String] = []
+    var purposes: [ZCodeAttachPurpose] = []
+    var enforceLock = false
+    var lockHeld = false
     var mode = "ready"
     var inspection: PageEffect?
     var payloadHash = String(repeating:"b",count:64)
@@ -21,7 +24,17 @@ import Foundation
     }
     var binding: ZCodePageBinding { ZCodePageBinding(process:process,endpoint:URL(string:endpoint)!,pageURL:URL(string:page)!,targetID:"target1",documentToken:"context1") }
     func assembly() -> ZCodeSkinAssembly {
-        ZCodeSkinAssembly(now:{self.clock},runningProcesses:{self.calls.append("running");return self.processes},validateProcess:{p in self.calls.append("validate");if self.expired { throw NSError(domain:"synthetic",code:1) }},activateExisting:{_ in self.calls.append("activate");return true},openApplication:{_ in self.calls.append("open");return self.process},attach:{_,_ in self.calls.append("attach");return self.binding},install:{b,r,obs in
+        ZCodeSkinAssembly(now:{self.clock},runningProcesses:{self.calls.append("running");return self.processes},validateProcess:{p in self.calls.append("validate");if self.expired { throw NSError(domain:"synthetic",code:1) }},activateExisting:{_ in self.calls.append("activate");return true},openApplication:{_ in self.calls.append("open");return self.process},attach:{_,deadline,purpose in
+            self.calls.append("attach");self.purposes.append(purpose)
+            if self.mode == "listener-46" {
+                let limit=purpose.stageDeadline(caller:deadline,now:self.clock)
+                self.clock += 46
+                if self.clock >= limit { throw ZCodeAttachFailure.deadline }
+            }
+            if self.mode == "attach-deadline" { throw ZCodeAttachFailure.deadline }
+            if self.mode == "attach-cancelled" { throw ZCodeAttachFailure.cancelled }
+            return self.binding
+        },install:{b,r,obs in
             self.calls.append("install")
             if self.mode == "before-send" { throw NSError(domain:"synthetic",code:1) }
             if self.mode == "skip-before-send" { return .skipped(.notObserved(reason:"fixture"),runID:1,beforeReady:true) }
@@ -48,15 +61,134 @@ import Foundation
             }
             if self.mode == "bad-receipt" { return .ready(self.receipt(b,op:UUID()),runID:1) }
             return .ready(self.receipt(b),runID:1)
-        },inspectPage:{b,_ in self.calls.append("inspect");return self.inspection ?? .present(.instance(self.receipt(b)),acquisition:.alreadyActive)},dispose:{_,_,_ in self.calls.append("dispose");return self.mode != "dispose-failed"},acquireOperation:{_ in self.calls.append("lock");return Lease(self)})
+        },inspectPage:{b,_ in
+            self.calls.append("inspect")
+            if self.mode == "hold-inspect" { await withCheckedContinuation { self.waiting = $0 } }
+            if self.mode == "inspection-error" { throw NSError(domain:"synthetic-inspection",code:1) }
+            return self.inspection ?? .present(.instance(self.receipt(b)),acquisition:.alreadyActive)
+        },dispose:{_,_,_ in self.calls.append("dispose");return self.mode != "dispose-failed"},acquireOperation:{_ in
+            self.calls.append("lock")
+            if self.mode == "lock-failed" { throw NSError(domain:"synthetic",code:9) }
+            if self.mode == "lock-expired-busy" { self.clock = 201;throw ZCodeOperationLockFailure.busy }
+            if self.mode == "lock-cancel-busy" { Thread.sleep(forTimeInterval:0.12);throw ZCodeOperationLockFailure.busy }
+            if self.mode == "lock-expired-success" { self.clock = 201;self.lockHeld = true;return Lease(self) }
+            if self.mode == "lock-cancel-success" { Thread.sleep(forTimeInterval:0.12);self.lockHeld = true;return Lease(self) }
+            if self.enforceLock && self.lockHeld { throw ZCodeOperationLockFailure.busy }
+            self.lockHeld = true
+            return Lease(self)
+        })
     }
     func driver(_ capabilities: [SkinCapability] = SkinCapability.allCases) -> ZCodeSkinDriver { ZCodeSkinDriver(inputs:inputs(capabilities),assembly:assembly()) }
 }
-@MainActor final class Lease: ZCodeOperationLease { let f:Fixture;init(_ f:Fixture){self.f=f};func release(){f.calls.append("release")} }
+@MainActor final class Lease: ZCodeOperationLease { let f:Fixture;init(_ f:Fixture){self.f=f};func release(){f.calls.append("release");f.lockHeld = false} }
 @main struct ZCodeTests {
     @MainActor static func main() async {
         var count = 0
         func expect(_ value: Bool, _ name: String) { precondition(value,name);count += 1 }
+        do {
+            expect(ZCodeAttachPurpose.coldLaunch.stageDeadline(caller:200,now:100)==145,"cold stage capped to 45")
+            expect(ZCodeAttachPurpose.coldLaunch.stageDeadline(caller:120,now:100)==120,"cold honors caller deadline")
+            expect(ZCodeAttachPurpose.existingPage.stageDeadline(caller:200,now:100)==200,"existing page preserves deadline")
+        }
+        do {
+            let f=Fixture();f.mode="listener-46";let result=await f.driver().launch(f.request)
+            if case .failed(let failure,_,_) = result { expect(failure.reason == .operationTimeout,"cold 46s listener hits stage deadline") } else { fatalError("cold 46s accepted") }
+            expect(f.purposes == [.coldLaunch],"cold attaches with cold purpose")
+        }
+        do {
+            let f=Fixture();f.mode="listener-46";f.processes=[f.process]
+            let result=await f.driver().inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .observed = result { expect(f.purposes == [.existingPage] && f.clock == 146,"page inspect honors caller deadline after 46s") } else { fatalError("inspect deadline shortened") }
+        }
+        do {
+            let f=Fixture();f.mode="listener-46";f.processes=[f.process]
+            let result=await f.driver().disable(SkinDisableRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,expectedPage:.instance(f.receipt(f.binding))))
+            if case .removed = result { expect(f.purposes == [.existingPage] && f.clock == 146,"disable honors caller deadline after 46s") } else { fatalError("disable deadline shortened") }
+        }
+        do {
+            let f=Fixture();let driver=f.driver();f.mode="lock-failed";_ = await driver.launch(f.request)
+            expect(f.purposes.isEmpty,"failed cold lock never attaches")
+            f.mode="ready";f.processes=[f.process]
+            let result=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .observed = result { expect(f.purposes == [.existingPage],"failed cold operation cannot leak wait purpose") } else { fatalError("post-lock inspect failed") }
+        }
+        for (mode,reason) in [("attach-deadline",SkinFailureReason.operationTimeout),("attach-cancelled",SkinFailureReason.operationCancelled)] {
+            let f=Fixture();f.mode=mode;let result=await f.driver().launch(f.request)
+            if case .failed(let error,_,_) = result { expect(error.reason == reason,mode+" preserves error class") } else { fatalError(mode+" did not fail") }
+        }
+        do {
+            let f=Fixture();f.mode="hold-inspect";f.processes=[f.process];let driver=f.driver()
+            let first=Task { await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
+            while f.waiting == nil { await Task.yield() }
+            let second=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure)=second { expect(failure.reason == .operationBusy,"second page inspect refuses while busy") } else { fatalError("overlapping page inspect accepted") }
+            let disabled=await driver.disable(SkinDisableRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,expectedPage:.instance(f.receipt(f.binding))))
+            if case .refused(let failure,_) = disabled { expect(failure.reason == .operationBusy,"disable refuses while inspect owns connection") } else { fatalError("overlapping disable accepted") }
+            let appOnly=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:false,previousObservation:nil))
+            if case .observed(_, .notObserved) = appOnly { expect(true,"application-only inspect remains available") } else { fatalError("application-only inspect blocked") }
+            expect(f.calls.filter{$0=="attach"}.count == 1,"overlap does not attach a replacement")
+            f.waiting?.resume()
+            if case .observed = await first.value { expect(f.calls.filter{$0=="release"}.count == 1,"first inspect finishes and releases exactly once") } else { fatalError("original inspect interrupted") }
+        }
+        do {
+            let f=Fixture();f.mode="hold-ready";let driver=f.driver()
+            let first=Task { await driver.launch(f.request) }
+            while f.waiting == nil { await Task.yield() }
+            let inspected=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure)=inspected { expect(failure.reason == .operationBusy,"inspect refuses while launch owns connection") } else { fatalError("inspect raced launch") }
+            expect(f.calls.filter{$0=="attach"}.count == 1,"inspect did not replace launch connection")
+            f.waiting?.resume()
+            if case .ready = await first.value { expect(f.calls.filter{$0=="release"}.count == 1,"launch finishes and releases exactly once") } else { fatalError("launch interrupted") }
+        }
+        do {
+            let f=Fixture();f.mode="hold-inspect";f.enforceLock=true;f.processes=[f.process]
+            let firstDriver=f.driver(), secondDriver=f.driver()
+            let first=Task { await firstDriver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
+            while f.waiting == nil { await Task.yield() }
+            let second=await secondDriver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure) = second { expect(failure.reason == .operationBusy && f.calls.filter{$0=="attach"}.count == 1,"cross-driver lock reports busy before replacement attach") } else { fatalError("cross-driver lock bypassed") }
+            f.waiting?.resume()
+            if case .observed = await first.value { expect(!f.lockHeld && f.calls.filter{$0=="release"}.count == 1,"cross-driver contention preserves first and releases once") } else { fatalError("cross-driver contention interrupted first") }
+        }
+        for mode in ["attach-deadline","attach-cancelled","inspection-error"] {
+            let f=Fixture();f.mode=mode;f.processes=[f.process];let driver=f.driver()
+            let first=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure) = first {
+                if mode == "attach-deadline" { expect(failure.reason == .operationTimeout,"inspect deadline preserved") }
+                if mode == "attach-cancelled" { expect(failure.reason == .operationCancelled,"inspect cancellation preserved") }
+                expect(f.calls.filter{$0=="release"}.count == 1,"inspect failure releases once: "+mode)
+            } else { fatalError("failing inspect reported success") }
+            f.mode="ready"
+            if case .observed = await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) {
+                expect(f.calls.filter{$0=="release"}.count == 2,"inspect can be reused after failure: "+mode)
+            } else { fatalError("inspect remained busy after failure") }
+        }
+        do {
+            let f=Fixture();f.processes=[f.process];f.mode="lock-expired-busy"
+            let result=await f.driver().inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure)=result { expect(failure.reason == .operationTimeout && !f.calls.contains("attach"),"deadline takes precedence over late busy lock") } else { fatalError("late busy lock accepted") }
+        }
+        do {
+            let f=Fixture();f.processes=[f.process];f.mode="lock-cancel-busy"
+            let task=Task { await f.driver().inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
+            Task.detached { try? await Task.sleep(nanoseconds:20_000_000);task.cancel() }
+            if case .staleTarget(let failure)=await task.value { expect(failure.reason == .operationCancelled && !f.calls.contains("attach"),"cancellation takes precedence over late busy lock") } else { fatalError("cancelled busy lock accepted") }
+        }
+        do {
+            let f=Fixture();f.processes=[f.process];f.mode="lock-expired-success";let driver=f.driver()
+            let result=await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil))
+            if case .staleTarget(let failure)=result { expect(failure.reason == .operationTimeout && !f.calls.contains("attach") && f.calls.filter{$0=="release"}.count == 1,"successful lock after deadline releases once without attach") } else { fatalError("expired acquired lock accepted") }
+            f.mode="ready";f.clock=100
+            if case .observed = await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) { expect(f.calls.filter{$0=="release"}.count == 2,"inspect reusable after expired lock") } else { fatalError("expired lock did not release") }
+        }
+        do {
+            let f=Fixture();f.processes=[f.process];f.mode="lock-cancel-success";let driver=f.driver()
+            let task=Task { await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
+            Task.detached { try? await Task.sleep(nanoseconds:20_000_000);task.cancel() }
+            if case .staleTarget(let failure)=await task.value { expect(failure.reason == .operationCancelled && !f.calls.contains("attach") && f.calls.filter{$0=="release"}.count == 1,"successful lock after cancellation releases once without attach") } else { fatalError("cancelled acquired lock accepted") }
+            f.mode="ready"
+            if case .observed = await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) { expect(f.calls.filter{$0=="release"}.count == 2,"inspect reusable after cancelled lock") } else { fatalError("cancelled lock did not release") }
+        }
         do { let f=Fixture();_ = f.driver();expect(f.calls.isEmpty,"constructor no IO") }
         do { let f=Fixture();f.processes=[f.process];let result=await f.driver([.applicationIdentity,.activateExistingApplication]).launch(f.request);if case .activated(let p)=result {expect(p==f.process,"hot generation") }else{fatalError("hot")};expect(!f.calls.contains("open") && !f.calls.contains("attach") && !f.calls.contains("install"),"hot no replay or attach") }
         do { let f=Fixture();let result=await f.driver().launch(f.request);if case .ready = result {expect(true,"cold ready") }else{fatalError("cold")};expect(f.calls.filter{$0=="lock"}.count==1 && f.calls.filter{$0=="release"}.count==1,"one operation lock") }
