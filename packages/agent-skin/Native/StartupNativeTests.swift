@@ -3889,5 +3889,36 @@ private func zcodeTypedEventContractChecks() -> Int {
         expect(events(records()) == ["launcher-start", "startup-failed", "launcher-exit"],
                "mixed callbacks retain the initial failure event")
     }
+    // Exercise the actual App-owned exit adapter, not only the event resolver.
+    // The fake runtime records termination and exit without opening a real App.
+    let lifecycleCases: [(SkinLaunchResult, String, String, Int)] = [
+        (.ready(receipt(), runID: 7), "startup-ready", "startup-ready", 0),
+        (.skipped(.present(.instance(receipt()), acquisition: .alreadyActive), runID: 7, beforeReady: false),
+         "startup-skipped", "skipped", 0),
+        (.activated(process), "target-activated", "activated", 0),
+        (.partial(SkinOperationFailure(reason: .operationCancelled, detail: "startup-interrupted"),
+                  page: page, cleanup: cleanup), "startup-interrupted", "partial", 2),
+        (.ready(receipt(owner: "foreign"), runID: 7), "startup-failed", "behavior-not-proven", 1)
+    ]
+    for (result, event, outcome, exitCode) in lifecycleCases {
+        let runtime = FakeNativeAppRuntime(arguments: ["synthetic-ZCode-entry"])
+        let delegate = AppDelegate(runtime: runtime)
+        delegate.finishZCodeStartup(result, expectedApplication: expected, promoted: false)
+        expect(runtime.terminated == 1, "typed App lifecycle requests exactly one termination for \(outcome)")
+        delegate.finishZCodeStartup(.ready(receipt(), runID: 7), expectedApplication: expected, promoted: false)
+        expect(runtime.terminated == 1, "a duplicate typed callback does not terminate twice or replace \(outcome)")
+        delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        let output = runtime.output.compactMap { line -> [String: Any]? in
+            guard let data = line.data(using: .utf8) else { return nil }
+            return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        }
+        expect(events(output) == ["launcher-start", event, "player-terminated", "launcher-exit"],
+               "typed App lifecycle keeps one real event sequence for \(outcome)")
+        expect(output.last?["outcome"] as? String == outcome && output.last?["exitCode"] as? Int == exitCode
+               && runtime.processExitCode == Int32(exitCode),
+               "willTerminate propagates the exact typed outcome and native exit code for \(outcome)")
+        expect(runtime.openCount == 0 && runtime.allocationCount == 0 && runtime.openedEnvironments.isEmpty,
+               "terminal result handling itself cannot open a host or create launch side effects")
+    }
     return checks
 }

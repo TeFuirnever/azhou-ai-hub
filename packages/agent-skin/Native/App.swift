@@ -1671,7 +1671,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         finishResolvedStartup(final, promoted: promoted)
     }
 
-    private func finishZCodeStartup(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
+    // Module-internal so lifecycle tests drive the real termination/exit path;
+    // no production CLI, environment switch, or injectable result source.
+    func finishZCodeStartup(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
                                    promoted: Bool) {
         beginStartupEvents()
         guard let final = startupEventStream?.resolveZCode(result, expectedApplication: expectedApplication,
