@@ -222,14 +222,14 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 
 **Files.**
 
-- [ ] Edit `tools/build-harness.mjs` with one dsh package emitter.
-- [ ] Create `docs/integrations.md` dsh plugin section.
-- [ ] Create `evidence/dsh-plugin-fabric-<date>.md` from the probe.
+- [ ] Edit `tools/build-harness.mjs` with one dsh package emitter. Parked. The probe proved the surface carries cordis patches only.
+- [ ] Create `docs/integrations.md` dsh plugin section. Parked with the emitter.
+- [x] Create `evidence/dsh-plugin-fabric-<date>.md` from the probe.
 
 **Build.**
 
-- [ ] One probe first. Create a minimal pnpm package, add it to a throwaway profile through `dsh plugin --profile <name> add <path>`, and observe what cordis registers, skills, commands, hooks, or nothing beyond node_modules. The probe's finding decides the emitter.
-- [ ] One emitter packages the payload for whatever surface the probe proved. If the probe finds the pnpm surface adds nothing the shared skills root does not already provide, the emitter is parked, the negative receipt lands, and AZ4 closes as evidence-only. That exit is a result, not a failure.
+- [x] One probe first. A minimal package in a throwaway profile registered nothing beyond node_modules, the bundle contract decodes to `dsh.bundle.patch` cordis patch layers with icon and locale metadata, and no field carries skills, commands, or hooks (receipt `evidence/dsh-plugin-fabric-2026-11-03.md`).
+- [x] One emitter packaged for whatever surface the probe proved. The probe found none for this payload, so the emitter is parked and AZ4 closes as evidence-only on the plan's stated exit.
 
 **You see.**
 
