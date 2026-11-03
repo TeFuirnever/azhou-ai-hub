@@ -3253,6 +3253,50 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
         "payloadSHA256": String(repeating: "a", count: 64), "evidenceIDs": ["SYNTHETIC-fixture-not-host"],
         "ownedAppearanceSurface": true, "persistentSettings": true]
     try JSONSerialization.data(withJSONObject: proof).write(to: temporary.appendingPathComponent("zcode-validation.json"))
+    // A real Bundle returns resources relative to its bundle base. The exact
+    // same physical proof must work through that URL form, without accepting a
+    // real symlink or relaxing any proof/installed-identity field.
+    let fixtureBundleURL = temporary.appendingPathComponent("ProofResources.app", isDirectory: true)
+    let fixtureContents = fixtureBundleURL.appendingPathComponent("Contents", isDirectory: true)
+    let fixtureResources = fixtureContents.appendingPathComponent("Resources", isDirectory: true)
+    try FileManager.default.createDirectory(at: fixtureResources, withIntermediateDirectories: true)
+    let fixtureInfo: [String: Any] = ["CFBundleIdentifier": "local.azhou.synthetic.proof-resources",
+        "CFBundleExecutable": "SyntheticNotExecutable", "CFBundlePackageType": "APPL", "CFBundleVersion": "1"]
+    try PropertyListSerialization.data(fromPropertyList: fixtureInfo, format: .xml, options: 0)
+        .write(to: fixtureContents.appendingPathComponent("Info.plist"))
+    let fixtureBundle = Bundle(url: fixtureBundleURL)!
+    let bundleResources = fixtureBundle.resourceURL!
+    let bundleProof = bundleResources.appendingPathComponent("zcode-validation.json")
+    let proofBytes = try JSONSerialization.data(withJSONObject: proof)
+    try proofBytes.write(to: bundleProof)
+    expect(bundleProof.baseURL != nil && bundleProof.path == bundleProof.resolvingSymlinksInPath().path,
+           "real Bundle fixture reproduces the same physical file with a retained base URL")
+    func hasUIEvidence(_ resources: URL) -> Bool {
+        ZCodeNativeRuntime.findings(for: key, resources: resources)
+            .filter { $0.capability == .ownedAppearanceSurface || $0.capability == .persistentSettings }
+            .allSatisfy { $0.state == .verified && $0.evidenceIDs == ["SYNTHETIC-fixture-not-host"] }
+    }
+    expect(hasUIEvidence(bundleResources), "actual Bundle resources accept the physical valid proof without a representation false refusal")
+    let invalidProofs: [[String: Any]] = [["schema": "wrong"], ["contractVersion": "wrong"],
+        ["version": "wrong"], ["infoSHA256": String(repeating: "0", count: 64)],
+        ["executableSHA256": String(repeating: "0", count: 64)], ["appAsarSHA256": String(repeating: "0", count: 64)],
+        ["recordSHA256": "short"], ["payloadSHA256": "short"], ["observedAt": "not-a-time"], ["evidenceIDs": []]]
+    for overrides in invalidProofs {
+        var invalid = proof;invalid.merge(overrides) { _, replacement in replacement }
+        try JSONSerialization.data(withJSONObject: invalid).write(to: bundleProof)
+        expect(!hasUIEvidence(bundleResources), "Bundle URL normalization preserves schema/hash/installation/time/evidence refusal")
+    }
+    try proofBytes.write(to: bundleProof)
+    let alternateProof = temporary.appendingPathComponent("other-owned-proof.json")
+    try proofBytes.write(to: alternateProof)
+    try FileManager.default.removeItem(at: bundleProof)
+    try FileManager.default.createSymbolicLink(at: bundleProof, withDestinationURL: alternateProof)
+    expect(!hasUIEvidence(bundleResources), "real proof-file symlink remains refused through Bundle resources")
+    try FileManager.default.removeItem(at: bundleProof);try proofBytes.write(to: bundleProof)
+    let physicalResources = fixtureContents.appendingPathComponent("PhysicalResources", isDirectory: true)
+    try FileManager.default.moveItem(at: fixtureResources, to: physicalResources)
+    try FileManager.default.createSymbolicLink(at: fixtureResources, withDestinationURL: physicalResources)
+    expect(!hasUIEvidence(bundleResources), "a symlinked Resources ancestor remains refused even with identical proof bytes")
     let fake = FakeNativeAppRuntime(arguments: [], resourceURL: temporary)
     let inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic"), findings: [], contractVersion: SkinHostContract.version)
     let state = temporary.appendingPathComponent("must-not-create")

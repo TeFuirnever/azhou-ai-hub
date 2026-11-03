@@ -561,7 +561,9 @@ extension ZCodeNativeRuntime {
     }
     private static func proof(_ resources: URL?) -> [String: Any]? {
         guard let resources else { return nil }
-        let path = resources.appendingPathComponent("zcode-validation.json")
+        // Bundle.resourceURL can retain a base URL. Flatten that representation
+        // before the unchanged symlink/physical-path comparison.
+        let path = resources.appendingPathComponent("zcode-validation.json").absoluteURL
         guard path.resolvingSymlinksInPath() == path, let data = try? Data(contentsOf: path), data.count < 16384,
               let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               value["schema"] as? String == "agent-skin-zcode-ui-evidence/v1",
