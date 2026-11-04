@@ -125,3 +125,31 @@ test('bootstrap passes the page adapter explicitly as the third installStartup a
   assert.equal(Object.getOwnPropertyDescriptor(installAnimation, 'pageAdapter'), undefined,
     'the adapter is never attached to installAnimation as a static property');
 });
+
+test('bootstrap forwards the page adapter to the applicator only when wallpaper ports exist', () => {
+  const calls = [];
+  const record = (...args) => { calls.push(args); return () => {}; };
+  for (const [label, adapter, expected] of [
+    ['wallpaper ports', Object.freeze({ identify: () => ({ kind: 'matched' }),
+      wallpaper: Object.freeze({ shellState() {} }) }), true],
+    ['no wallpaper ports', Object.freeze({ identify: () => ({ kind: 'matched' }),
+      controllerOwner: 'azhou-zcode-startup' }), false],
+  ]) {
+    calls.length = 0;
+    bootstrapStartup({
+      installStartup: () => {},
+      installAnimation: () => {},
+      createLocalization: () => {},
+      createImageSettings: () => {},
+      createWallpaperApplicator: record,
+      installRenderer: () => {},
+      version: '1',
+      css: '',
+      assets: {},
+      host: {},
+      pageAdapter: adapter,
+    });
+    assert.equal(calls[0][1].pageAdapter === adapter, expected,
+      `${label}: the applicator options carry the adapter exactly when ports exist`);
+  }
+});

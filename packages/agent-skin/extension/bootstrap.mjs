@@ -12,7 +12,7 @@ export function bootstrapStartup({
   pageAdapter,
 }) {
   const wallpaperOptions = { version, css };
-  if (pageAdapter?.controllerOwner === 'azhou-zcode-startup') wallpaperOptions.pageAdapter = pageAdapter;
+  if (pageAdapter?.wallpaper) wallpaperOptions.pageAdapter = pageAdapter;
   const applyWallpaper = createWallpaperApplicator(installRenderer, wallpaperOptions, host);
   // Static properties below carry animation-owned factories only. The host page
   // strategy (pageAdapter) is passed explicitly to installStartup and must never
