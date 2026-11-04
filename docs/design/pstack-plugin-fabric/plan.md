@@ -274,14 +274,18 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 
 **Files.**
 
-- [ ] Edit `docs/support-matrix.md`.
-- [ ] Edit `docs/skill-platform-view.md`.
-- [ ] Edit `scripts/check_repository.py` when a row vocabulary gains a token.
-- [ ] Create `evidence/pstack-azhouzhou-retirement-<date>.md`.
+- [x] Edit `docs/support-matrix.md`.
+- [x] Edit `docs/skill-platform-view.md`.
+- [x] Edit `scripts/check_repository.py` when a row vocabulary gains a token.
+- [x] Create `evidence/pstack-azhouzhou-retirement-<date>.md`.
+
+The matrix gains one dated plugin-form paragraph in Optional integrations naming all four program targets with their receipts, at `docs/support-matrix.md` beside the `0.9.103` note it supersedes. The view needs no edit: it derives only from capability and OS rows, carries no pstack coverage, and the paragraph sits outside its derivation, so the lockstep holds unchanged. The gate needs no edit: no row vocabulary token was added. The receipt is `evidence/pstack-azhouzhou-retirement-2026-11-04.md`.
 
 **Build.**
 
-- [ ] One retirement sweep, evidence-first. The sweep removes the Claude `pstack@pstack-claude` registration, the dedicated home at `~/pstack-accept-tmp` after AZ2 supersedes it, and any zcode or dsh artifacts still carrying the old name. The skills-root links stay, they carry no plugin name. A finding from the sweep holds the whole item here, no machine carries an install named `pstack` that this Hub did not build, so "original pstack" has no separate uninstall target, and the receipt records that.
+- [x] One retirement sweep, evidence-first. The sweep removes the Claude `pstack@pstack-claude` registration, the dedicated home at `~/pstack-accept-tmp` after AZ2 supersedes it, and any zcode or dsh artifacts still carrying the old name. The skills-root links stay, they carry no plugin name. A finding from the sweep holds the whole item here, no machine carries an install named `pstack` that this Hub did not build, so "original pstack" has no separate uninstall target, and the receipt records that.
+
+The sweep ran 2026-11-04. The Claude registration was already gone, replaced by `pstack-azhouzhou@pstack-claude` on 2026-11-02, so the removals covered the superseded `~/pstack-accept-tmp` accept home (48M, the last machine state registering `pstack@pstack-claude`), the pre-rename Hub caches `pstack-claude/pstack/0.15.36` and `0.9.103`, and the upstream cursor caches `cursor-plugins/pstack/0.15.25` and `0.15.29`. No install named `pstack` that this Hub did not build was registered anywhere: upstream pstack had no separate uninstall target, and the receipt records that. Zcode and dsh carried no old-name artifact.
 
 **You see.**
 
