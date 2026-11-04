@@ -80,31 +80,31 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 
 **You see.**
 
-- [ ] `claude plugin details pstack-azhouzhou@pstack-claude` reports 68 skills, 4 agents, 1 SessionStart hook, after the reinstall lane runs.
+- [x] `claude plugin details pstack-azhouzhou@pstack-claude` reports 68 skills, 4 agents, 1 SessionStart hook, after the reinstall lane runs.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `python scripts/verify.py` green with the renamed identity in the trees. Run `python scripts/verify.py`.
+- [x] `python scripts/verify.py` green with the renamed identity in the trees. Run `python scripts/verify.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `opus` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Install the trunk-named `pstack@pstack-claude` and the head-named `pstack-azhouzhou@pstack-claude` in sequence and compare the plugin details output for skill, agent, and hook counts. Save `rename-parity.png`. Pass when both report 68, 4, and 1.
-- [ ] Lane 2. Uninstall `pstack@pstack-claude`, install `pstack-azhouzhou@pstack-claude`, and list `/pstack-azhouzhou:poteto-mode` as invocable. Save `claude-rename-list.png`. Pass when the namespaced skill appears.
-- [ ] Lane 3. Invoke `/pstack-azhouzhou:poteto-mode` in a fresh session and confirm the first-message restatement. Save `claude-rename-invoke.png`. Pass when the reply restates goal and smallest change.
+- [x] Lane 1. Regression lane against trunk. Install the trunk-named `pstack@pstack-claude` and the head-named `pstack-azhouzhou@pstack-claude` in sequence and compare the plugin details output for skill, agent, and hook counts. Save `rename-parity.png`. Pass when both report 68, 4, and 1.
+- [x] Lane 2. Uninstall `pstack@pstack-claude`, install `pstack-azhouzhou@pstack-claude`, and list `/pstack-azhouzhou:poteto-mode` as invocable. Save `claude-rename-list.png`. Pass when the namespaced skill appears.
+- [x] Lane 3. Invoke `/pstack-azhouzhou:poteto-mode` in a fresh session and confirm the first-message restatement. Save `claude-rename-invoke.png`. Pass when the reply restates goal and smallest change.
 - [ ] Lane 4. Confirm the SessionStart mandate still injects under the new name in a fresh session. Save `claude-rename-mandate.png`. Pass when the mandate block names `pstack-azhouzhou`.
-- [ ] Lane 5. Confirm the skills-root tree at `~/.agents/skills` is untouched by the rename, 164 entries, 68 pstack. Save `skillsroot-stable.png`. Pass when the counts hold.
-- [ ] Lane 6. Rebuild twice and byte-compare the trees. Save `rebuild-idempotent.png`. Pass when the second build changes nothing.
-- [ ] Lane 7. Read the generated Codex `.codex-plugin/plugin.json` and confirm the name field and the identity parity with the Claude manifest. Save `codex-manifest-name.png`. Pass when both read `pstack-azhouzhou`.
-- [ ] Lane 8. Run the Codex dedicated-home install loop from `docs/integrations.md` against a throwaway home and confirm registration under the new name. Save `codex-throwaway-install.png`. Pass when `doctor` reports the plugin by name.
-- [ ] Lane 9. Grep the generated trees for a stray `"pstack"` identity string in manifest position. Save `no-stray-identity.png`. Pass when every manifest names `pstack-azhouzhou` and no skill file changed.
-- [ ] Lane 10. Check the patch queue still applies on a pristine re-import by rebuilding from scratch after `rm -rf .build-harness`. Save `patch-queue-clean.png`. Pass when the build succeeds and reports 17 plus 1 patches.
+- [x] Lane 5. Confirm the skills-root tree at `~/.agents/skills` is untouched by the rename, 164 entries, 68 pstack. Save `skillsroot-stable.png`. Pass when the counts hold.
+- [x] Lane 6. Rebuild twice and byte-compare the trees. Save `rebuild-idempotent.png`. Pass when the second build changes nothing.
+- [x] Lane 7. Read the generated Codex `.codex-plugin/plugin.json` and confirm the name field and the identity parity with the Claude manifest. Save `codex-manifest-name.png`. Pass when both read `pstack-azhouzhou`.
+- [x] Lane 8. Run the Codex dedicated-home install loop from `docs/integrations.md` against a throwaway home and confirm registration under the new name. Save `codex-throwaway-install.png`. Pass when `doctor` reports the plugin by name.
+- [x] Lane 9. Grep the generated trees for a stray `"pstack"` identity string in manifest position. Save `no-stray-identity.png`. Pass when every manifest names `pstack-azhouzhou` and no skill file changed.
+- [x] Lane 10. Check the patch queue still applies on a pristine re-import by rebuilding from scratch after `rm -rf .build-harness`. Save `patch-queue-clean.png`. Pass when the build succeeds and reports 17 plus 1 patches.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Wall time of one full `node tools/build-harness.mjs` run, trunk and head, same machine, interleaved three times each.
-- [ ] Probe. `/usr/bin/time node tools/build-harness.mjs` at trunk and at head, alternating.
-- [ ] Baseline. Record the trunk median first.
-- [ ] Rule. Head median within 1.5x of trunk. The rename adds one patch application, so any real regression is a parse or copy defect, not load.
+- [x] Metric. Wall time of one full `node tools/build-harness.mjs` run, trunk and head, same machine, interleaved three times each.
+- [x] Probe. `/usr/bin/time node tools/build-harness.mjs` at trunk and at head, alternating.
+- [x] Baseline. Record the trunk median first.
+- [x] Rule. Head median within 1.5x of trunk. The rename adds one patch application, so any real regression is a parse or copy defect, not load.
 
 **Review gate.** None. AZ1 is not review-gated.
 
