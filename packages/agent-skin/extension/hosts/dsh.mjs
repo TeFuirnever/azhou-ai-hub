@@ -28,8 +28,10 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
   }
   function appearance(host) {
     const root = host.document.documentElement;
-    const style = host.getComputedStyle(root);
     const body = host.document.body;
+    // DSH writes its --dsw-* token variables inline on document.body, so the
+    // palette is read there; documentElement only carries lang and color-scheme.
+    const style = host.getComputedStyle(body ?? root);
     const theme = typeof body?.hasAttribute === 'function'
       ? (body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light')
       : (host.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light');

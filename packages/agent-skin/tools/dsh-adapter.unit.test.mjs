@@ -63,6 +63,13 @@ test('appearance reads DSH tokens, dark body attribute, zh locale, reduced motio
   assert.deepEqual(appearance.colors, { surface: '#0d1117', text: '#e6edf3', muted: '#8b949e', border: '#30363d' });
   assert.equal(appearance.reducedMotion, true);
   assert(Object.isFrozen(appearance));assert(Object.isFrozen(appearance.colors));
+  // DSH writes --dsw-* tokens inline on document.body; a palette published only
+  // on the body must win over an empty documentElement read.
+  const bodyScoped = host();
+  bodyScoped.document.body = { hasAttribute: () => true };
+  bodyScoped.getComputedStyle = element => ({ getPropertyValue: token =>
+    element === bodyScoped.document.body ? (dark[token] || '') : '' });
+  assert.equal(createDSHPageAdapter(bodyScoped).observeAppearance().colors.surface, '#0d1117');
 });
 test('appearance sanitizes tokens, falls back hardcoded, and defaults light', () => {
   const h = host();
