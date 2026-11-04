@@ -1,7 +1,7 @@
 <EXTREMELY_IMPORTANT>
-You have pstack.
+You have pstack-azhouzhou.
 
-Invoke the `plugin:pstack:poteto-mode` skill and follow its instructions when a task meets any of these:
+Invoke the `plugin:pstack-azhouzhou:poteto-mode` skill and follow its instructions when a task meets any of these:
 
 - it touches more than one file, or changes a signature other files call
 - it involves a design or architecture choice
@@ -9,7 +9,7 @@ Invoke the `plugin:pstack:poteto-mode` skill and follow its instructions when a 
 
 It routes to the right pstack skill from there. For smaller tasks, such as a contained change to one file with an obvious test, a question, or a one-line edit, work directly and verify on the real artifact.
 
-When the intent is already specific, enter that skill directly: `plugin:pstack:tdd`, `plugin:pstack:architect`, `plugin:pstack:how`, `plugin:pstack:why`, `plugin:pstack:arena`, `plugin:pstack:interrogate`.
+When the intent is already specific, enter that skill directly: `plugin:pstack-azhouzhou:tdd`, `plugin:pstack-azhouzhou:architect`, `plugin:pstack-azhouzhou:how`, `plugin:pstack-azhouzhou:why`, `plugin:pstack-azhouzhou:arena`, `plugin:pstack-azhouzhou:interrogate`.
 
 Resolve every Claude tool, model, and built-in skill a pstack skill names through the Muse mapping in the `poteto-mode` skill directory, `references/muse-tools.md`.
 

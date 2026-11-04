@@ -91,7 +91,7 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 - [x] Lane 1. Regression lane against trunk. Install the trunk-named `pstack@pstack-claude` and the head-named `pstack-azhouzhou@pstack-claude` in sequence and compare the plugin details output for skill, agent, and hook counts. Save `rename-parity.png`. Pass when both report 68, 4, and 1.
 - [x] Lane 2. Uninstall `pstack@pstack-claude`, install `pstack-azhouzhou@pstack-claude`, and list `/pstack-azhouzhou:poteto-mode` as invocable. Save `claude-rename-list.png`. Pass when the namespaced skill appears.
 - [x] Lane 3. Invoke `/pstack-azhouzhou:poteto-mode` in a fresh session and confirm the first-message restatement. Save `claude-rename-invoke.png`. Pass when the reply restates goal and smallest change.
-- [ ] Lane 4. Confirm the SessionStart mandate still injects under the new name in a fresh session. Save `claude-rename-mandate.png`. Pass when the mandate block names `pstack-azhouzhou`.
+- [x] Lane 4. Confirm the SessionStart mandate still injects under the new name in a fresh session. Save `claude-rename-mandate.png`. Pass when the mandate block names `pstack-azhouzhou`.
 - [x] Lane 5. Confirm the skills-root tree at `~/.agents/skills` is untouched by the rename, 164 entries, 68 pstack. Save `skillsroot-stable.png`. Pass when the counts hold.
 - [x] Lane 6. Rebuild twice and byte-compare the trees. Save `rebuild-idempotent.png`. Pass when the second build changes nothing.
 - [x] Lane 7. Read the generated Codex `.codex-plugin/plugin.json` and confirm the name field and the identity parity with the Claude manifest. Save `codex-manifest-name.png`. Pass when both read `pstack-azhouzhou`.

@@ -48,7 +48,7 @@ function view_rule(    path) {
 function task_rule(    type, model) {
   type = arg("agent_type")
   model = arg("model")
-  if (JBAD || index(type, "pstack:") != 1 || model == "") return
+  if (JBAD || index(type, "pstack-azhouzhou:") != 1 || model == "") return
   if (!sheet_read(sheet) || sheet_problems() != "") return
   if (model in SHEET_MODELS) return
   if (MODEL_LIST == "") {
