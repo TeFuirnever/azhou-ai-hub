@@ -1,6 +1,6 @@
 import Foundation
 @MainActor final class Fixture {
-    let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath:"/Applications/ZCode.app"), executableURL: URL(fileURLWithPath:"/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier:"dev.zcode.app", version:"3.17.1", build:"3.17.1.9553", executableSHA256:String(repeating:"a",count:64))
+    let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath:"/Applications/ZCode.app"), executableURL: URL(fileURLWithPath:"/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier:"dev.zcode.app", version:"3.17.2", build:"3.17.2.9661", executableSHA256:String(repeating:"a",count:64))
     var processes: [HostProcessGeneration] = []
     var calls: [String] = []
     var purposes: [ZCodeAttachPurpose] = []

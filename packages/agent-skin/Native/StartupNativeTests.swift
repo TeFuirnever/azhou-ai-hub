@@ -3280,12 +3280,12 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     defer { try? FileManager.default.removeItem(at: temporary) }
     let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"),
         executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app",
-        version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        version: "3.17.2", build: "3.17.2.9661", executableSHA256: "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d")
     let proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
         "recordID": "SYNTHETIC-only", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T14:00:00Z",
-        "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-        "version": "3.17.1.9553", "executableSHA256": key.executableSHA256,
-        "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "infoSHA256": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+        "version": "3.17.2.9661", "executableSHA256": key.executableSHA256,
+        "appAsarSHA256": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
         "payloadSHA256": String(repeating: "a", count: 64), "evidenceIDs": ["SYNTHETIC-fixture-not-host"],
         "ownedAppearanceSurface": true, "persistentSettings": true]
     try JSONSerialization.data(withJSONObject: proof).write(to: temporary.appendingPathComponent("zcode-validation.json"))
@@ -3449,7 +3449,7 @@ private final class ZCodeRuntimeFixture {
         state = root.appendingPathComponent("state", isDirectory: true)
         resources = root.appendingPathComponent("resources", isDirectory: true)
         try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.2", build: "3.17.2.9661", executableSHA256: "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d")
         inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic-only"), findings: [], contractVersion: SkinHostContract.version)
         fake = FakeNativeAppRuntime(arguments: ["SYNTHETIC-ONLY"], resourceURL: resources)
         fake.allocatedPort = port
@@ -3465,8 +3465,8 @@ private final class ZCodeRuntimeFixture {
     func writeProof(_ overrides: [String: Any] = [:]) throws {
         var proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
             "recordID": "SYNTHETIC-NOT-HOST", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T15:00:00.123Z",
-            "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4", "version": "3.17.1.9553",
-            "executableSHA256": key.executableSHA256, "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+            "infoSHA256": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593", "version": "3.17.2.9661",
+            "executableSHA256": key.executableSHA256, "appAsarSHA256": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
             "payloadSHA256": hash, "evidenceIDs": ["SYNTHETIC-ONLY-NOT-ACCEPTANCE"], "ownedAppearanceSurface": true, "persistentSettings": true]
         proof.merge(overrides) { _, replacement in replacement }
         try JSONSerialization.data(withJSONObject: proof).write(to: resources.appendingPathComponent("zcode-validation.json"))

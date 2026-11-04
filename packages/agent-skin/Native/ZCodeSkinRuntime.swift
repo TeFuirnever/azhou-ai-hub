@@ -364,9 +364,9 @@ import Darwin
     private var openingToken: UUID?
     private var installation: [String: [FileAttributeKey: Any]] = [:]
     private let expectedFiles = [
-        "Contents/MacOS/ZCode": "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
-        "Contents/Info.plist": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-        "Contents/Resources/app.asar": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "Contents/MacOS/ZCode": "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d",
+        "Contents/Info.plist": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+        "Contents/Resources/app.asar": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
     ]
     init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
          stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil,
@@ -417,7 +417,7 @@ import Darwin
     }
     private func validateInstallation() throws {
         let key = inputs.identity.key
-        guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.1", key.build == "3.17.1.9553",
+        guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.2", key.build == "3.17.2.9661",
               key.bundleURL.path == "/Applications/ZCode.app", key.executableURL.path == "/Applications/ZCode.app/Contents/MacOS/ZCode",
               key.executableSHA256 == expectedFiles["Contents/MacOS/ZCode"] else { throw failure("target-identity") }
         if let installationProbe { try installationProbe();return }
@@ -738,10 +738,10 @@ extension ZCodeNativeRuntime {
               let recordSHA = value["recordSHA256"] as? String, recordSHA.utf8.count == 64,
               recordSHA.allSatisfy({ "0123456789abcdef".contains($0) }),
               let observedAt = value["observedAt"] as? String, evidenceTimeValid(observedAt),
-              value["infoSHA256"] as? String == "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-              value["version"] as? String == "3.17.1.9553",
-              value["executableSHA256"] as? String == "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
-              value["appAsarSHA256"] as? String == "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+              value["infoSHA256"] as? String == "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+              value["version"] as? String == "3.17.2.9661",
+              value["executableSHA256"] as? String == "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d",
+              value["appAsarSHA256"] as? String == "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
               let hash = value["payloadSHA256"] as? String, hash.utf8.count == 64,
               hash.allSatisfy({ "0123456789abcdef".contains($0) }),
               let ids = value["evidenceIDs"] as? [String], !ids.isEmpty,
@@ -757,7 +757,7 @@ extension ZCodeNativeRuntime {
             return CapabilityFinding(subject: CapabilityEvidenceSubject(application: key,
                 surface: SkinHostContract.surface(for: capability), contractVersion: SkinHostContract.version),
                 capability: capability, state: state,
-                evidenceIDs: isUI ? ids : ["fixed-3.17.1.9553-host-entry08-H1", "ZCode-native-contract-tests"],
+                evidenceIDs: isUI ? ids : ["fixed-3.17.2.9661-host-entry08-H1", "ZCode-native-contract-tests"],
                 reason: isUI ? "requires actual hash-bound ZCode UI evidence; fixtures do not fill this receipt"
                     : "host capability established by fixed-install H1 and contract tests; live identity/context rechecked per operation; Native entry acceptance remains separate")
         }
