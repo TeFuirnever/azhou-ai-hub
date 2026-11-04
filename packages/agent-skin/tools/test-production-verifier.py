@@ -719,5 +719,57 @@ class VerifierApiTests(unittest.TestCase):
         self.assert_startup_rejected(bad_manifest_assets, "startup manifest 默认图像")
 
 
+class DshPluginVerifierContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_plugin_verifier")
+
+    def test_dsh_plugin_inputs_are_registered_and_historical_sets_stay_frozen(self):
+        verifier = self.verifier
+        self.assertEqual(verifier.DSH_PLUGIN_REQUIRED_INPUTS,
+                         (*verifier.STARTUP_REQUIRED_INPUTS,
+                          "extension/hosts/dsh.mjs", "tools/build-dsh-plugin.py"))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(verifier.INPUT_FILES))
+        self.assertEqual(verifier.DSH_PLUGIN_PACKAGE_ENTRIES,
+                         (*verifier.DSH_PLUGIN_OUTPUTS, "manifest.json"))
+        self.assertEqual(verifier.MAX_PLUGIN_ICON_BYTES, 256 * 1024)
+        package = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(package["build_inputs"]))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(package["runtime_paths"]))
+        for name in ("PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS",
+                     "PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS",
+                     "PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS",
+                     "LEGACY_STARTUP_REQUIRED_INPUTS"):
+            frozen = frozenset(getattr(verifier, name))
+            with self.subTest(input_set=name):
+                self.assertNotIn("extension/hosts/dsh.mjs", frozen)
+                self.assertNotIn("tools/build-dsh-plugin.py", frozen)
+
+    def test_verify_dsh_plugin_rejects_missing_foreign_or_linked_directories(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-verify-") as temporary:
+            base = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "缺失|实体目录"):
+                self.verifier.verify_dsh_plugin(base / "absent")
+            package = base / "azhou-agent-skin"
+            package.mkdir()
+            (package / "client.js").write_text("window.__ModuleLoader__.load({});\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "文件清单"):
+                self.verifier.verify_dsh_plugin(package)
+            linked = base / "linked-plugin"
+            linked.symlink_to(package)
+            try:
+                with self.assertRaisesRegex(RuntimeError, "符号链接"):
+                    self.verifier.verify_dsh_plugin(linked)
+            finally:
+                linked.unlink()
+            (package / "locale").mkdir()
+            (package / "locale/en.json").symlink_to(package / "client.js")
+            try:
+                with self.assertRaisesRegex(RuntimeError, "符号链接"):
+                    self.verifier.verify_dsh_plugin(package)
+            finally:
+                (package / "locale/en.json").unlink()
+
+
 if __name__ == "__main__":
     unittest.main()
