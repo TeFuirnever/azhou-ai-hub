@@ -192,6 +192,18 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟外观入口打开设置（[配置覆盖与保存边界](docs/theme-appearance.md)）；取消不保存，保存后应用背景并关闭设置，启动动画可单独预览草稿。设置和壁纸仍待真实宿主验收，不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
 
+## DeepSeek Harness 插件包
+
+`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口落在稳定侧栏列，壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
+
+```sh
+cd packages/agent-skin
+python3 tools/build-dsh-plugin.py
+python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
+```
+
+构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。本地证据止于组装确定性、校验器与单元测试，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)；真实宿主内的渲染、入口、壁纸与插件管理页展示均未验收。
+
 ## 安装、升级与旧入口清理
 
 构建与安装的职责固定如下：
