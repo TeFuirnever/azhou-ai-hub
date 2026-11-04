@@ -1,9 +1,6 @@
-// DeepSeek Harness page adapter. Identification is structural (top-level boot
-// graph: __ModuleLoader__ plus an own __DSH_BOOT__ data property and a body;
-// never URL-based), the appearance entry rides the stable sidebar column beside
-// the React-rendered footer slot container, and the wallpaper surface is the
-// unique [data-slot='main'] element. DSH injects no controller metadata, so the
-// adapter declares none.
+// DeepSeek Harness page adapter. Identification is structural and never
+// URL-based, unlike the ZCode adapter's pinned file URL. DSH injects no
+// controller metadata, so the adapter declares none.
 export function createDSHPageAdapter(environment = globalThis, configuration = {}, dependencies = {}) {
   const namespace = Object.freeze({ databaseName: 'azhou-dsh-startup', databaseVersion: 1,
     storeName: 'settings', settingsKey: 'images' });

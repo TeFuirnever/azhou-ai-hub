@@ -243,8 +243,7 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
 ZCODE_STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/zcode.mjs')
-# The DSH plugin shares the whole neutral startup payload surface plus its own
-# host adapter and emitter; it ships as a web plugin package, never a bundle.
+# A web plugin package, never a macOS bundle.
 DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs', 'tools/build-dsh-plugin.py')
 DSH_PLUGIN_PACKAGE_NAME = 'azhou-agent-skin'
 DSH_PLUGIN_OUTPUTS = (
