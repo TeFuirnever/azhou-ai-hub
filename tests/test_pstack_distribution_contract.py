@@ -1,0 +1,138 @@
+"""Release-surface checks for generated pstack host distributions.
+
+These assertions cover the shipped plugin/skills layout; they do not pretend
+to replace the removed old-port behavioral suite or real host invocation.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = ROOT / "packages" / "pstack-agent-harness"
+HARNESS = PACKAGE / "harness" / "pstack"
+EXPECTED_PLUGIN = "pstack-azhouzhou"
+EXPECTED_VERSION = "0.15.36"
+EXPECTED_SKILLS = 68
+EXPECTED_COMMANDS = 41
+
+
+def json_file(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def skills_for(tree: str) -> set[str]:
+    root = HARNESS / tree / "skills"
+    return {p.name for p in root.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()}
+
+
+class PstackDistributionContractTest(unittest.TestCase):
+    def test_four_generated_skill_trees_share_the_same_full_inventory(self) -> None:
+        by_host = {host: skills_for(host) for host in
+                   ("claude-code", "codex", "zcode", "skills-root")}
+        reference = by_host["claude-code"]
+        self.assertEqual(len(reference), EXPECTED_SKILLS)
+        self.assertIn("poteto-mode", reference)
+        self.assertIn("architect", reference)
+        for host, skills in by_host.items():
+            with self.subTest(host=host):
+                self.assertEqual(skills, reference)
+
+    def test_codex_native_plugin_names_and_exposes_41_prompts(self) -> None:
+        tree = HARNESS / "codex"
+        manifest = json_file(tree / ".codex-plugin/plugin.json")
+        self.assertEqual((manifest["name"], manifest["version"]),
+                         (EXPECTED_PLUGIN, EXPECTED_VERSION))
+        self.assertEqual(manifest["skills"], "./skills/")
+        self.assertEqual(manifest["hooks"], "./hooks/codex-hooks.json")
+        prompts = {p.stem for p in (tree / ".codex-plugin/prompts").glob("*.md")}
+        self.assertEqual(len(prompts), EXPECTED_COMMANDS)
+        self.assertTrue(prompts <= skills_for("codex"))
+        registry = json_file(PACKAGE / ".agents/plugins/marketplace.json")
+        entries = registry["plugins"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["name"], EXPECTED_PLUGIN)
+        self.assertEqual(entries[0]["source"]["path"], "./harness/pstack/codex")
+
+    def test_claude_code_native_distribution_uses_the_new_identity(self) -> None:
+        manifest = json_file(HARNESS / "claude-code/.claude-plugin/plugin.json")
+        self.assertEqual((manifest["name"], manifest["version"]),
+                         (EXPECTED_PLUGIN, EXPECTED_VERSION))
+        registry = json_file(PACKAGE / ".claude-plugin/marketplace.json")
+        self.assertEqual(registry["plugins"][0]["name"], EXPECTED_PLUGIN)
+        self.assertEqual(registry["plugins"][0]["source"], "./harness/pstack/claude-code")
+
+    def test_codex_agent_reference_is_resolved_from_adapter_not_child_cwd(self) -> None:
+        tree = HARNESS / "codex"
+        adapter = tree / "skills/poteto-mode/references/codex-tools.md"
+        text = adapter.read_text(encoding="utf-8")
+        relative = "../../../agents/comment-sicko.md"
+        self.assertIn(relative, text)
+        self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", text)
+        self.assertIn("resolved from this Codex adapter file", text)
+        resolved = (adapter.parent / relative).resolve()
+        self.assertEqual(resolved, tree / "agents/comment-sicko.md")
+        self.assertTrue(resolved.is_file())
+
+    def test_distributed_namespace_instructions_match_native_registration(self) -> None:
+        for host in ("claude-code", "codex", "zcode", "skills-root"):
+            tree = HARNESS / host
+            with self.subTest(host=host):
+                readme = (tree / "README.md").read_text(encoding="utf-8")
+                self.assertIn("/pstack-azhouzhou:poteto-mode", readme)
+                self.assertNotIn("/pstack:poteto-mode", readme)
+                helper = (tree / "skills/poteto-help/SKILL.md").read_text(encoding="utf-8")
+                self.assertIn("pstack-azhouzhou@pstack-claude", helper)
+                self.assertNotIn("pstack@cursor-plugins", helper)
+                guide = (tree / "docs/guide/01-setup.md").read_text(encoding="utf-8")
+                self.assertIn("/pstack-azhouzhou:setup-pstack", guide)
+                self.assertNotIn("/pstack:setup-pstack", guide)
+                copilot = (tree / "skills/poteto-mode/references/copilot-tools.md").read_text(encoding="utf-8")
+                self.assertIn("pstack-azhouzhou:poteto-agent", copilot)
+                self.assertNotIn("pstack:poteto-agent", copilot)
+                muse = (tree / "skills/poteto-mode/references/muse-tools.md").read_text(encoding="utf-8")
+                self.assertIn("plugin:pstack-azhouzhou:poteto-mode", muse)
+                self.assertNotIn("plugin:pstack:poteto-mode", muse)
+                self.assertIn("pstack-azhouzhou/poteto-agent", muse)
+                self.assertIn("muse plugins approve pstack-azhouzhou", muse)
+                self.assertIn("the setup-pstack Skill's Other runtimes table", muse)
+                self.assertNotIn("setup-pstack-azhouzhou/SKILL.md", muse)
+                copilot_setup = (tree / "skills/setup-pstack/copilot.md").read_text(encoding="utf-8")
+                self.assertIn("You have pstack-azhouzhou.", copilot_setup)
+                self.assertNotIn("You have pstack.", copilot_setup)
+        claude = (HARNESS / "claude-code/docs/harness/claude-code.md").read_text(encoding="utf-8")
+        self.assertIn("pstack-azhouzhou:comment-sicko", claude)
+        self.assertNotIn("pstack:comment-sicko", claude)
+        codex = (HARNESS / "codex/docs/harness/codex.md").read_text(encoding="utf-8")
+        self.assertIn("$poteto-mode", codex)
+        self.assertNotIn("/pstack:<name>", codex)
+        zcode = (HARNESS / "zcode/docs/harness/zcode.md").read_text(encoding="utf-8")
+        self.assertIn("zcode skills list", zcode)
+        self.assertIn("/architect", zcode)
+        self.assertNotIn("/pstack:<name>", zcode)
+
+    def test_zcode_commands_plugin_is_flat_and_has_no_skills_or_hooks(self) -> None:
+        tree = HARNESS / "zcode-plugin"
+        registry = json_file(tree / "marketplace.json")
+        self.assertEqual(registry["name"], "azhou-hub")
+        self.assertEqual(len(registry["plugins"]), 1)
+        self.assertEqual(registry["plugins"][0]["name"], EXPECTED_PLUGIN)
+        payload = tree / EXPECTED_PLUGIN
+        manifest = json_file(payload / ".zcode-plugin/plugin.json")
+        self.assertEqual((manifest["name"], manifest["version"]),
+                         (EXPECTED_PLUGIN, EXPECTED_VERSION))
+        self.assertEqual(manifest["commands"], "commands")
+        self.assertNotIn("skills", manifest)
+        self.assertNotIn("hooks", manifest)
+        commands = {p.stem for p in (payload / "commands").glob("*.md")}
+        self.assertEqual(len(commands), EXPECTED_COMMANDS)
+        self.assertTrue(commands <= skills_for("zcode"))
+        self.assertFalse((payload / "skills").exists())
+        self.assertFalse((payload / "hooks").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

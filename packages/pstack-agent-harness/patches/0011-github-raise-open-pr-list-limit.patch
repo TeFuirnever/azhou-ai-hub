@@ -1,0 +1,69 @@
+Description: share one open pull request page size between the listing and its guard
+Author: Azhou AI Hub
+Forwarded: no
+
+`gh pr list` returns 30 rows when no --limit is given, and it returns the newest
+pull requests first, so a repository with more open pull requests than that
+silently loses the older edges of the stack with no error anywhere. The listing
+asked for 300 rows as a bare literal that nothing shared with the truncation
+guard, so the two could drift and either side could start assuming the wrong page
+size. The request now reads OPEN_PR_LIMIT, the same constant the guard compares
+against, and a test drives a gh that truncates at 30 to pin the request.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 8eccbe9..c8f2342 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -689,4 +689,39 @@ printf '%s\\n' '[{"number":42,"headRefName":"feature","baseRefName":"main","isCr
+     }
+   });
+ 
++  it("asks gh for more open pull requests than its 30-row default", () => {
++    const directory = mkdtempSync(join(tmpdir(), "watch-pr-limit-"));
++    try {
++      // Model `gh pr list`: it returns 30 rows unless --limit asks for more.
++      writeFileSync(join(directory, "gh"), `#!/bin/sh
++limit=30
++prev=
++for arg in "$@"; do
++  if [ "$prev" = "--limit" ]; then limit=$arg; fi
++  prev=$arg
++done
++if [ "$limit" -gt 31 ]; then limit=31; fi
++i=1
++printf '['
++while [ "$i" -le "$limit" ]; do
++  if [ "$i" -gt 1 ]; then printf ','; fi
++  printf '{"number":%s,"headRefName":"branch-%s","baseRefName":"main","isCrossRepository":false}' "$i" "$i"
++  i=$((i + 1))
++done
++printf ']\\n'
++`, { mode: 0o755 });
++      const program = `import { GhGitHubReader } from ${JSON.stringify(import.meta.dir + "/github.ts")};
++        console.log(JSON.stringify((await new GhGitHubReader().openPullRequests({ owner: "owner", repo: "repo" })).map((pr) => pr.number)));`;
++      const child = spawnSync(process.execPath, ["-e", program], {
++        encoding: "utf8", timeout: 2000,
++        env: { ...process.env, PATH: directory + ":" + process.env.PATH },
++      });
++      expect(child.error).toBeUndefined();
++      expect(child.status).toBe(0);
++      expect(JSON.parse(child.stdout)).toHaveLength(31);
++    } finally {
++      rmSync(directory, { recursive: true, force: true });
++    }
++  });
++
+ });
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 8e97d3c..498d444 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -537,7 +537,7 @@ export class GhGitHubReader implements T.GitHubReader {
+       "--state",
+       "open",
+       "--limit",
+-      "300",
++      String(OPEN_PR_LIMIT),
+       "--json",
+       "number,headRefName,baseRefName,isCrossRepository",
+     ]);

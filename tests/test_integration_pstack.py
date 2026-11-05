@@ -27,14 +27,14 @@ class PstackIntegrationTest(unittest.TestCase):
         self.binary = install_fake_codex(self.base / "codex")
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name":"pstack-claude", "plugins":[]}),
-            "plugins/pstack/.codex-plugin/plugin.json": json.dumps({"name":"pstack", "version":"0.9.102"}),
-            "plugins/pstack/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
-            "plugins/pstack/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
-            "plugins/pstack/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name":"pstack-azhouzhou", "version":"0.9.102"}),
+            "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
+            "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
+            "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
             "LICENSE": "fixture license\n",
         }
         self.source = configure_package(self.hub, "pstack", [
-            ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
+            ".agents/plugins/marketplace.json", "harness/pstack/codex", "LICENSE",
         ])
         for name, content in files.items():
             target = self.source / name
@@ -134,7 +134,7 @@ class PstackIntegrationTest(unittest.TestCase):
 
     def test_package_edit_is_valid_but_invalidates_an_old_reviewed_plan(self):
         old_plan = self.plan()
-        (self.source / "plugins/pstack/hooks/session-start.sh").write_text("changed\n", encoding="utf-8")
+        (self.source / "harness/pstack/codex/hooks/session-start.sh").write_text("changed\n", encoding="utf-8")
 
         fresh_plan = self.plan()
         self.assertNotEqual(old_plan["source_lock_sha256"], fresh_plan["source_lock_sha256"])
@@ -149,7 +149,7 @@ class PstackIntegrationTest(unittest.TestCase):
         mutated = []
 
         def mutate_then_snapshot(component, source, workspace, *, hub_root, expected_digest=None):
-            (self.source / "plugins/pstack/hooks/session-start.sh").write_text("unreviewed hook\n", encoding="utf-8")
+            (self.source / "harness/pstack/codex/hooks/session-start.sh").write_text("unreviewed hook\n", encoding="utf-8")
             mutated.append(True)
             return snapshot_source(component, source, workspace, hub_root=hub_root, expected_digest=expected_digest)
 
@@ -201,7 +201,7 @@ class PstackIntegrationTest(unittest.TestCase):
     def test_unlocked_skill_in_cached_snapshot_is_not_installed(self):
         plan = self.plan()
         snapshot = common.snapshot_source("pstack", self.source, self.workspace, hub_root=self.hub)
-        extra = snapshot / "plugins/pstack/skills/unlocked/SKILL.md"
+        extra = snapshot / "harness/pstack/codex/skills/unlocked/SKILL.md"
         extra.parent.mkdir()
         extra.write_text("unreviewed instructions", encoding="utf-8")
         with self.assertRaisesRegex(common.IntegrationError, "unlocked pstack runtime"):

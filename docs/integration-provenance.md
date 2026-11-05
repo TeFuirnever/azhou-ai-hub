@@ -10,7 +10,7 @@ Each project's `hub-package.json` declares its repository/import provenance, nat
 
 | Integration | Complete project and provenance | Runtime version and rights |
 | --- | --- | --- |
-| pstack | [packages/pstack-agent-harness](../packages/pstack-agent-harness/README.md), a local fork of Michael Denyer's Codex port; original selected port commit `356c6e0f978df729eb16f227d795f34d221c5aad` | Hub-maintained `0.9.103`, imported from `0.9.102`; MIT package plus retained Cursor Team Kit and thermos notices |
+| pstack | [packages/pstack-agent-harness](../packages/pstack-agent-harness/README.md), assembled from three upstream components of [cursor/plugins](https://github.com/cursor/plugins) (pstack, six cursor-team-kit skills, three thermos skills) at commit `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`; downstream defects ride the patch queue at [patches/series](../packages/pstack-agent-harness/patches/series) | `0.15.36`, MIT with retained Cursor Team Kit and thermos notices |
 | Model router | [packages/agent-orchestration-kit](../packages/agent-orchestration-kit/README.md), a local continuation of [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator); see its [UPSTREAM.md](../packages/agent-orchestration-kit/UPSTREAM.md) for source commit ancestry | Unreleased package; Apache-2.0 |
 | Agent Skin (Codex) | [packages/agent-skin](../packages/agent-skin/README.md); canonical copy of the Hub-tracked TeFuirnever source, with original public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation) and local origin `TeFuirnever/codex-startup-animation` | Runtime `0.7.1`, build `8`; no open-source license grant recorded and no external distribution authorization |
 | Legacy startup-animation | [packages/codex-startup-animation](../packages/codex-startup-animation/README.md); retained for existing installation and Pet receipt ownership | Runtime `0.7.1`, build `8`; same unlicensed source and distribution boundary as Agent Skin |
@@ -19,50 +19,19 @@ The package descriptors' commit fields record original import provenance. Their 
 
 Only each manifest's declared runtime paths are initially materialized under the workspace's ignored `.azhou/hub/sources/<integration>/<digest>` directory. The receipt stores the frozen manifest, input digest and recovery data. That private snapshot remains available for owned recovery or cleanup if package files later change. Private paths, pre-install bytes, raw evidence, generated outputs and private artwork stay outside Git. A runtime update requires a new plan against the current package; do not silently adopt changed target files.
 
-## pstack: complete source and generation chain
+## pstack: source and generation chain
 
-### Original upstream components
+The current source is the assembled distribution under [packages/pstack-agent-harness](../packages/pstack-agent-harness/), recorded in its [UPSTREAM.md](../packages/pstack-agent-harness/UPSTREAM.md): pristine `cursor/plugins` components at commit `c742dd61706fbacc1b95f1a20b7b988cf096ce6c` (`pstack`, six cursor-team-kit skills, three thermos skills plus both thermos agents), Hub-authored `hub-skills/`, `hub-adapters/` and `hub-runtime/`, and a quilt patch queue under `patches/` carrying one DEP-3 patch per upstream defect. `node tools/build-harness.mjs` assembles those sources, applies `patches/series`, runs upstream's own `generate-pstack-harness-trees.mjs` unmodified, and emits the runtime trees under `harness/pstack/`. The build refuses a patch that changes none of the files it declares, which is also the signal that upstream carries the fix and the patch should leave the queue.
 
-The selected port's `tools/upstream.json` declares three inputs from [cursor/plugins](https://github.com/cursor/plugins):
+### Retired fork-and-sync record (historical)
 
-| Original component | Upstream path | Declared immutable pin | Local destination in the port |
-| --- | --- | --- | --- |
-| Lauren Tan's pstack | `pstack` | `7b353f78f6ec193bdbe48ed8059444eb09b6878e` | `plugins/pstack` |
-| Cursor Team Kit | `cursor-team-kit/skills` | `e46364b8be46000b7df0f260550cd712afbb8d36` | Selected entries under `plugins/pstack/skills` |
-| thermos | `thermos` | `118e73b0e196e4d49d5aade7ce6dd8985a621f68` | Selected entries under `plugins/pstack` |
-
-The same file declares exclusions; an excluded upstream directory is not an accidentally missing runtime dependency. Examples include Cursor-only plugin metadata, original assets and automations, and the replaced upstream worktree-audit shell script. Preserve the actual exclusion list when reviewing an update.
-
-These original pins were first read from the selected port's source declaration. A later primary-source audit queried GitHub's Git API for all three exact commits and their complete, non-truncated tree listings, then fetched eight original license/entry files and verified each Git blob hash against its tree. The selected pstack tree has 172 blobs, Cursor Team Kit 29 and thermos 10. Read original files include all three component licenses, pstack's README, `poteto-mode` and `how`, Team Kit's `deslop`, and thermos's entry Skill. This independently establishes the pins, original component paths, MIT attribution and selected original workflow contracts. It is not a semantic comparison of every original blob against the port. The [dated evidence](../evidence/optional-integrations-2026-10-25.md) records the earlier retrieval limitation and its supplementary audit; neither is the current package inventory or fresh native acceptance.
-
-The opening pstack row in `NOTICE.md` still links to an older `e46364b` reference; it is a historical attribution link, not the current synchronization pin. The original `how` entry uses Cursor Task dispatch and a `pstack-models.mdc` rule; the port provides its own role defaults and `pstack-models.md` policy, while its Codex mapping explicitly translates to ad-hoc `spawn_agent`. Keeping those differences explicit is necessary to avoid installing a Cursor policy as if it were the Codex runtime contract.
-
-### Port and local fork
-
-The translation and host adaptation are maintained in [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude). The selected [public port commit](https://github.com/michael-denyer/pstack-claude/commit/356c6e0f978df729eb16f227d795f34d221c5aad) is `356c6e0f978df729eb16f227d795f34d221c5aad`, with parent `4ebb588f072fc9bb128f12ccac26153f77badc57`. That immutable commit was independently opened during source verification.
-
-The local fork's recorded origin is [TeFuirnever/pstack-agent-harness](https://github.com/TeFuirnever/pstack-agent-harness). Its selected HEAD was the same port commit, and the source was clean at import. No additional local policy delta is claimed for that original pin. The local repository name does not imply a separately developed implementation at import.
-
-The Hub now maintains its package directly. Version `0.9.103` makes end-user installation instructions select local Hub sources and preserves the ZCode model-sheet mapping found in the retired local port checkout. The mapping records the inspected configuration pattern; it does not establish native ZCode plugin or hook acceptance. [UPSTREAM.md](../packages/pstack-agent-harness/UPSTREAM.md) records the maintained changes and update boundary. Original upstream identities and licenses remain intact.
-
-The package explicitly records differences from Cursor in `tools/forks.json`, classified as `policy` or `port-feature`. Each entry identifies its reason, introduction version and upstream status. Examples include review-gate preservation, worktree isolation, merge-ready versus merge authority, host-specific tool translation, and the abandoned-agent replacement policy. The Hub also records the imported EOF normalization needed by its whitespace gate. These declared differences do not establish that one workflow is faster or better.
-
-### Generation and synchronization
-
-The source path is reproducible through the port's own tooling:
-
-1. `tools/upstream.json` selects each original tree and exclusions. `tools/substitutions.json` defines mechanical rewrites and a denylist. `tools/forks.json` declares intentional differences.
-2. `tools/sync.mjs` derives the original text for the old and new pins, then performs a three-way reconciliation with the local port. Its dry run is the review entry; the Hub never invokes a source-writing sync automatically.
-3. `tools/generate.mjs` stamps `VERSION`, the role policy in `plugins/pstack/models.json`, the public-command table, host mapping preambles, prompt stubs and portable attribution copies into their maintained outputs.
-4. `bun tools/generate.mjs --check` rejects generated-file drift, unresolved merge markers and the packaging/link/model inconsistencies covered by the source contract.
-
-During this integration, the selected source's generation check reported **85 generated files current**, and the selected source test suites passed **376 tests** in an isolated complete source copy after installing its frozen development dependencies. The original source repository was not used as a dependency-installation target. These are source and packaging checks; they do not prove live Skill invocation or model routing.
+The earlier package was a local fork of Michael Denyer's Claude Code port ([`356c6e0`](https://github.com/michael-denyer/pstack-claude/commit/356c6e0f978df729eb16f227d795f34d221c5aad), origin `TeFuirnever/pstack-agent-harness`), maintained as Hub version `0.9.103`. It tracked its three upstream inputs through `tools/upstream.json` pins (`pstack` `7b353f78`, cursor-team-kit `e46364b`, thermos `118e73b`), reconciled updates with `tools/sync.mjs`, declared intentional divergence in `tools/forks.json`, and stamped releases with `tools/generate.mjs` plus a package-root `VERSION`. A primary-source audit on 2026-10-25 verified those pins against GitHub's Git API (172, 29 and 10 blobs respectively); the [dated evidence](../evidence/optional-integrations-2026-10-25.md) records the earlier retrieval limitation and its supplementary audit. That tooling, the fork tree `plugins/pstack/`, the package test suite and the TLA+/Lean models were retired when the package moved to pristine sources plus the patch queue. This paragraph is their provenance record, not current behavior.
 
 ### The installed object
 
 The native Codex marketplace name remains `pstack-claude`, and the plugin identifier remains `pstack@pstack-claude`. Those names are retained from the selected source; they are not sufficient to identify where the installed bytes came from.
 
-The Hub registers the **explicit absolute path of its private package snapshot**, whose `.agents/plugins/marketplace.json` resolves `pstack` from `./plugins/pstack`. User installation instructions select the maintained Hub package; upstream repositories remain source-update and attribution references. After installation, the adapter compares the native marketplace root and source, the plugin's local source path, and the installed runtime files with the selected snapshot and its per-plan fingerprint. This prevents a familiar plugin name from concealing installation of different bytes.
+The Hub registers the **explicit absolute path of its private package snapshot**, whose `.agents/plugins/marketplace.json` resolves `pstack` from `./harness/pstack/codex`. User installation instructions select the maintained Hub package; upstream repositories remain source-update and attribution references. After installation, the adapter compares the native marketplace root and source, the plugin's local source path, and the installed runtime files with the selected snapshot and its per-plan fingerprint. This prevents a familiar plugin name from concealing installation of different bytes.
 
 Codex owns the plugin registration and installed cache. The Hub owns its snapshot and receipt. Extra Skills, hooks or other unlisted source files invalidate the installation check. The source's Bun bootstrap may later generate `skills/poteto-mode/scripts/node_modules` using its frozen production lockfile; the adapter reports that dependency runtime separately and does not treat an install marker as a content audit. Unrecorded generated dependencies are not silently deleted by Hub removal.
 
@@ -80,7 +49,7 @@ pstack and this profile remain separate workflow entries. pstack's Codex mapping
 
 ## Startup animation: code, assets and host boundaries
 
-The local fork's package metadata records public upstream `panding999/codex-startup-animation`, local origin `TeFuirnever/codex-startup-animation`, original base commit `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`, and current runtime version `0.7.1` / build `8`. The base commit alone does not reproduce its maintained implementation. The Hub migration was explicitly authorized as local work with attribution; this is not permission to publish source or binaries.
+The local fork's package metadata records public upstream `panding999/codex-startup-animation`, local origin `TeFuirnever/codex-startup-animation` and original base commit `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`. The retained legacy source recorded runtime version `0.7.1` / build `8`; the current Agent Skin version is declared by its own `hub-package.json`. The base commit alone does not reproduce the maintained implementation. The Hub migration was explicitly authorized as local work with attribution; this is not permission to publish source or binaries.
 
 The launcher implementation has three distinct parts:
 
@@ -90,7 +59,7 @@ The launcher implementation has three distinct parts:
 | Codex launch/reuse | Existing native target resolution, launch and activation code | A running target must be reused without restarting an active session; target activation is not model readiness |
 | Codex wallpaper helper | `Native/Wallpaper.swift`, `wallpaper/renderer.js`, `wallpaper/wallpaper.css` and generated wallpaper resources | A separate page operation requiring the existing target identity and connection conditions; a completed player does not prove wallpaper application |
 
-The current normal launch path also attempts its existing wallpaper operation. There is no selected pure-launch flag that removes that coupling. Smoke preview, target probe, wallpaper status and explicit restoration are separate operations. Historic `extension/` code and `Native/Extension.swift`, other-host adapters and new artwork are outside this selection.
+The normal launch path also attempts its wallpaper operation. Smoke preview, target probe, wallpaper status and explicit restoration are separate operations. The original migration excluded the legacy `Native/Extension.swift`, other-host adapters and new artwork; the current Agent Skin package includes its own same-window `extension/` implementation.
 
 Pet theme configuration, maintenance/import code and isolated tests are included in the package runtime paths. Generated atlases, frozen inputs, reviewed candidates and installation receipts were excluded from the source import. The candidate importer can subsequently revalidate explicitly supplied local data, preserve original atlas/QA bytes and record its source while creating a new root-owned candidate; it does not generate images or transfer an installed receipt. On the maintainer Mac, a later native handoff separately moved verified App and Pet receipt ownership to the Hub package. Follow the [Pet maintenance boundary](integrations.md#pet-maintenance-after-the-import) before operating from another root.
 

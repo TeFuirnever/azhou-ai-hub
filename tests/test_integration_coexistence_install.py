@@ -59,14 +59,14 @@ class CoexistenceInstallTestCase(unittest.TestCase):
         self.skills = self.home / "skills"
         self.binary = install_fake_codex(self.base / "codex")
         self.pstack_source = configure_package(self.hub, "pstack", [
-            ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
+            ".agents/plugins/marketplace.json", "harness/pstack/codex", "LICENSE",
         ])
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name": "pstack-claude", "plugins": []}),
-            "plugins/pstack/.codex-plugin/plugin.json": json.dumps({"name": "pstack", "version": "0.9.102"}),
-            "plugins/pstack/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
-            "plugins/pstack/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
-            "plugins/pstack/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name": "pstack-azhouzhou", "version": "0.9.102"}),
+            "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
+            "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
+            "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
             "LICENSE": "fixture license\n",
         }
         for name, content in files.items():
@@ -130,7 +130,7 @@ class CoexistenceInstallTestCase(unittest.TestCase):
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
 
     def plugin_installed(self):
-        return (self.home / "plugins/cache/pstack-claude/pstack/0.9.102/.codex-plugin/plugin.json").is_file()
+        return (self.home / "plugins/cache/pstack-claude/pstack-azhouzhou/0.9.102/.codex-plugin/plugin.json").is_file()
 
 
 class BothEntriesAgreeTests(CoexistenceInstallTestCase):

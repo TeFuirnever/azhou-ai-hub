@@ -38,7 +38,7 @@ from test_integration_model_router import (FakeInstaller, FakeNative,
 ROOT = Path(__file__).resolve().parents[1]
 OFF_SHEET = "# pstack model configuration\nsession hook: off\n"
 ARMED_SHEET = "# pstack model configuration\nfeature: opus\nsession hook: on\n"
-FOREIGN_INSTALLED = "plugins/cache/pstack-claude/pstack/0.9.102"
+FOREIGN_INSTALLED = "plugins/cache/pstack-claude/pstack-azhouzhou/0.9.102"
 
 
 class TransitionTestCase(unittest.TestCase):
@@ -65,14 +65,14 @@ class TransitionTestCase(unittest.TestCase):
         self.shared = self.base / "shared-skills"
         self.binary = install_fake_codex(self.base / "codex")
         self.pstack_source = configure_package(self.hub, "pstack", [
-            ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE",
+            ".agents/plugins/marketplace.json", "harness/pstack/codex", "LICENSE",
         ])
         files = {
             ".agents/plugins/marketplace.json": json.dumps({"name": "pstack-claude", "plugins": []}),
-            "plugins/pstack/.codex-plugin/plugin.json": json.dumps({"name": "pstack", "version": "0.9.102"}),
-            "plugins/pstack/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
-            "plugins/pstack/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
-            "plugins/pstack/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
+            "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name": "pstack-azhouzhou", "version": "0.9.102"}),
+            "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
+            "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
+            "harness/pstack/codex/hooks/session-start.sh": "#!/bin/sh\nprintf 'fixture hook'\n",
             "LICENSE": "fixture license\n",
         }
         for name, content in files.items():
@@ -140,7 +140,7 @@ class TransitionTestCase(unittest.TestCase):
     def install_shared_skill(self, *, modify=False, drop=None, extra=None):
         """Rebuild the shared Skills entry from the pinned package bytes, then optionally drift it."""
         self.shared.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.pstack_source / "plugins/pstack/skills/poteto-mode",
+        shutil.copytree(self.pstack_source / "harness/pstack/codex/skills/poteto-mode",
                         self.shared / "poteto-mode")
         skill = self.shared / "poteto-mode"
         if modify:
@@ -157,7 +157,7 @@ class TransitionTestCase(unittest.TestCase):
         """A native pstack install this Hub never wrote, registered from a foreign source."""
         installed = self.home / FOREIGN_INSTALLED
         installed.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.pstack_source / "plugins/pstack", installed)
+        shutil.copytree(self.pstack_source / "harness/pstack/codex", installed)
         self.home.mkdir(parents=True, exist_ok=True)
         (self.home / "native-marketplace.json").write_text(
             json.dumps({"source": marketplace_source}), encoding="utf-8")
@@ -257,9 +257,9 @@ class ReachableStateTests(TransitionTestCase):
         self.assertEqual(shared_before, self.tree_digests(self.shared))
 
     def test_shared_skill_symlinks_report_their_actual_source(self):
-        clone = self.base / "pstack-clone/plugins/pstack/skills/poteto-mode"
+        clone = self.base / "pstack-clone/harness/pstack/codex/skills/poteto-mode"
         clone.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.pstack_source / "plugins/pstack/skills/poteto-mode", clone)
+        shutil.copytree(self.pstack_source / "harness/pstack/codex/skills/poteto-mode", clone)
         self.shared.mkdir(parents=True, exist_ok=True)
         (self.shared / "poteto-mode").symlink_to(clone)
         report = self.transition()

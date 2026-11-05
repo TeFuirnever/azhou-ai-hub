@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 KIT_PACKAGE = ROOT / "packages" / "agent-orchestration-kit"
 KIT_INSTRUCTIONS = KIT_PACKAGE / "profiles" / "azhou-balanced" / "AGENTS.md"
 KIT_SKILL = KIT_PACKAGE / "profiles" / "azhou-balanced" / "agents" / "skills" / "astra-orchestrator" / "SKILL.md"
-PSTACK_MAPPING = (ROOT / "packages" / "pstack-agent-harness" / "plugins" / "pstack" / "skills"
-                  / "poteto-mode" / "references" / "codex-tools.md")
+PSTACK_MAPPING = (ROOT / "packages" / "pstack-agent-harness" / "harness" / "pstack" / "codex"
+                  / "skills" / "poteto-mode" / "references" / "codex-tools.md")
 CONTRACT = ROOT / "docs" / "integrations.md"
 INSTALLER = KIT_PACKAGE / "scripts" / "install_codex.py"
 BEGIN = "<!-- ASTRA-LUNA-ORCHESTRATOR:BEGIN -->"

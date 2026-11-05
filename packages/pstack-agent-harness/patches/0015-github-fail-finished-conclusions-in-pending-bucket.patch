@@ -1,0 +1,81 @@
+Description: fail a completed conclusion that gh files under its pending bucket
+Author: Azhou AI Hub
+Forwarded: no
+
+gh's `bucket` field is a convenience grouping and it files states it does not
+name alongside the in-flight ones, so a check that had already finished with a
+conclusion such as STALE, STARTUP_FAILURE or CANCELLED arrived as
+bucket "pending". parseFastCheck trusted the bucket alone and reported that check
+as still running: the watcher waited on it for the rest of the run and never
+reported a failure. Only states that are genuinely in flight are pending now;
+anything else in that bucket has finished and did not pass.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 56626ae..3f37099 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -231,6 +231,31 @@ describe("rollup node mapping", () => {
+   });
+ });
+ 
++describe("fast-path check bucket", () => {
++  it("treats a finished state as a failure even when gh buckets it pending", () => {
++    for (const state of ["STALE", "STARTUP_FAILURE", "CANCELLED"]) {
++      expect(parseFastCheck({ name: "ci", state, bucket: "pending" })).toMatchObject(
++        { kind: "failed", reportedState: state }
++      );
++    }
++  });
++
++  it("keeps a check that is genuinely in flight as pending", () => {
++    for (const state of [
++      "EXPECTED",
++      "REQUESTED",
++      "WAITING",
++      "QUEUED",
++      "PENDING",
++      "IN_PROGRESS",
++    ]) {
++      expect(parseFastCheck({ name: "ci", state, bucket: "pending" })).toMatchObject(
++        { kind: "pending" }
++      );
++    }
++  });
++});
++
+ describe("check rollup page parsing", () => {
+   const response = (pageInfo: Record<string, unknown>) => ({
+     data: {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index ab105b8..299113d 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -267,6 +267,18 @@ function checkDetails(value: Record<string, unknown>, nameKey: string) {
+     workflow: typeof value.workflow === "string" ? value.workflow : "",
+   };
+ }
++// gh buckets every state it does not name as pending, including conclusions that
++// are already final such as STALE, STARTUP_FAILURE and CANCELLED. Only these are
++// genuinely in flight; anything else in that bucket has finished and did not
++// pass. They are the states mapRollupNode treats as pending.
++const IN_FLIGHT_STATES = new Set([
++  "EXPECTED",
++  "REQUESTED",
++  "WAITING",
++  "QUEUED",
++  "PENDING",
++  "IN_PROGRESS",
++]);
+ export function parseFastCheck(value: unknown): T.Check {
+   const object = record(value, "check");
+   const details = checkDetails(object, "name");
+@@ -275,7 +287,8 @@ export function parseFastCheck(value: unknown): T.Check {
+   if (state === "ACTION_REQUIRED") return gateOr("failed", details, state);
+   if (bucket === "fail" || ["FAILURE", "ERROR"].includes(state))
+     return { ...details, kind: "failed", reportedState: state };
+-  if (bucket === "pending") return gateOr("pending", details, state);
++  if (bucket === "pending" && IN_FLIGHT_STATES.has(state))
++    return gateOr("pending", details, state);
+   if (bucket === "pass")
+     return { ...details, kind: "passed", reportedState: state };
+   if (bucket === "skipping")

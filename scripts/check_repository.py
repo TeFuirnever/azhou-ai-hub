@@ -248,13 +248,31 @@ def check_integration_provenance_versions(root: Path) -> list[str]:
     return errors
 
 
+# Third-party trees the Hub vendors. Their prose and links belong to their
+# upstream, so repository policy checks do not grade them.
+VENDORED_ROOTS = (
+    "packages/pstack-agent-harness/pstack/",
+    "packages/pstack-agent-harness/components/",
+    "packages/pstack-agent-harness/harness/",
+    "packages/agent-orchestration-kit/profiles/",
+)
+
+# Skill trees that ship inside an optional package, Hub-authored overlay
+# included. They are that package's distribution, not entries of the Hub's
+# installable skill catalogue.
+SKILL_BUNDLE_ROOTS = VENDORED_ROOTS + (
+    "packages/pstack-agent-harness/hub-skills/",
+)
+
+# Overlay content is written against the layout it ships in, so its relative
+# links only resolve once it is assembled beside the rest of the skills tree.
+OVERLAY_ROOT = "packages/pstack-agent-harness/hub-skills/"
+OVERLAY_HOME = "packages/pstack-agent-harness/pstack/skills/"
+
+
 def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
-    bundled_roots = (
-        "packages/pstack-agent-harness/plugins/pstack/skills/",
-        "packages/agent-orchestration-kit/profiles/",
-    )
     actual = {path.relative_to(root).as_posix() for path in files if path.name == "SKILL.md"
-              and not path.relative_to(root).as_posix().startswith(bundled_roots)}
+              and not path.relative_to(root).as_posix().startswith(SKILL_BUNDLE_ROOTS)}
     repository_extensions = {
         path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
     }
@@ -329,6 +347,7 @@ SUPPORT_MATRIX_MAIN_HEADER = (
     "Claude Code",
     "MiMo Code",
     "zcode",
+    "DeepSeek Harness",
     "Other harnesses (unsupported)",
 )
 SUPPORT_MATRIX_OS_HEADING = "## Operating system support"
@@ -338,6 +357,7 @@ PLATFORM_VIEW_MAIN_HEADER = (
     "Claude Code",
     "MiMo Code",
     "zcode",
+    "DeepSeek Harness",
     "Other harnesses (unsupported)",
     "Linux",
     "macOS",
@@ -472,7 +492,7 @@ def check_skill_platform_view(root: Path) -> list[str]:
     for name in sorted(set(view_rows) - canonical_skills):
         errors.append(f"skill platform view row unexpected: {name}")
     for name, cells in view_rows.items():
-        if len(cells) == len(PLATFORM_VIEW_MAIN_HEADER) and cells[5] != "unsupported":
+        if len(cells) == len(PLATFORM_VIEW_MAIN_HEADER) and cells[-4] != "unsupported":
             errors.append(f"unsupported harness claim in skill platform view: {name}")
 
     map_rows: dict[str, list[str]] = {}
@@ -952,12 +972,37 @@ def relative_markdown_targets(text: str) -> list[str]:
     return targets
 
 
+def assembled_exists(root: Path, resolved: Path) -> bool:
+    """True when the link lands somewhere the shipped tree would have it.
+
+    The build merges hub-skills/ onto the vendored skills tree, so a target may
+    live in either and still resolve for a reader of the built plugin.
+    """
+    if resolved.exists():
+        return True
+    try:
+        rest = resolved.relative_to((root / OVERLAY_HOME).resolve())
+    except ValueError:
+        return False
+    return (root / OVERLAY_ROOT / rest).exists()
+
+
 def check_markdown_links(files: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
     root_resolved = root.resolve()
     for path in files:
         if path.suffix.lower() != ".md":
             continue
+        relative = path.relative_to(root).as_posix()
+        if relative.startswith(VENDORED_ROOTS):
+            continue
+        # An overlay file reads as if it sat at its shipped location, so a link
+        # written against that layout is checked there and not in the source tree.
+        if relative.startswith(OVERLAY_ROOT):
+            base = root / OVERLAY_HOME / relative[len(OVERLAY_ROOT):]
+            link_parent = base.parent
+        else:
+            link_parent = path.parent
         try:
             targets = relative_markdown_targets(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError) as exc:
@@ -969,13 +1014,13 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
             if target.startswith("/"):
                 errors.append(f"absolute local link in {path.relative_to(root)}: {target}")
                 continue
-            resolved = (path.parent / target).resolve()
+            resolved = (link_parent / target).resolve()
             try:
                 resolved.relative_to(root_resolved)
             except ValueError:
                 errors.append(f"link escapes repository in {path.relative_to(root)}: {target}")
                 continue
-            if not resolved.exists():
+            if not assembled_exists(root, resolved):
                 errors.append(f"broken local link in {path.relative_to(root)}: {target}")
     return errors
 

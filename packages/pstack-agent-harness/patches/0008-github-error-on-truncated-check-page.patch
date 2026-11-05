@@ -1,0 +1,155 @@
+Description: error on a check rollup page that claims more rows without a cursor
+Author: Azhou AI Hub
+Forwarded: no
+
+The rollup reader folded "hasNextPage is true but there is no endCursor" into
+"there are no more checks", so the walk stopped at page one and every check past
+the first hundred disappeared. A pull request with a failing check on page two
+was read as clean and reported ready to merge. The parser now raises that page as
+a query error instead of truncating, and it is a named parser so the boundary is
+covered by a test the way the review thread and pull request parsers already are.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index 3cfd18f..c45e9b4 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -9,6 +9,7 @@ import {
+   buildReviewThreads,
+   mapRollupNode,
+   orderStack,
++  parseCheckRollupPage,
+   parseFastCheck,
+   parsePullRequest,
+   parseReviewThreadPage,
+@@ -228,6 +229,53 @@ describe("rollup node mapping", () => {
+   });
+ });
+ 
++describe("check rollup page parsing", () => {
++  const response = (pageInfo: Record<string, unknown>) => ({
++    data: {
++      repository: {
++        pullRequest: {
++          commits: {
++            nodes: [
++              {
++                commit: {
++                  statusCheckRollup: {
++                    contexts: {
++                      pageInfo,
++                      nodes: [
++                        {
++                          __typename: "CheckRun",
++                          name: "ci",
++                          status: "COMPLETED",
++                          conclusion: "SUCCESS",
++                        },
++                      ],
++                    },
++                  },
++                },
++              },
++            ],
++          },
++        },
++      },
++    },
++  });
++
++  it("keeps the cursor when the page reports more rows", () => {
++    expect(
++      parseCheckRollupPage(response({ hasNextPage: true, endCursor: "next" }))
++    ).toMatchObject({ kind: "contexts", endCursor: "next" });
++  });
++
++  it("refuses a page that claims more rows without a cursor", () => {
++    expect(() =>
++      parseCheckRollupPage(response({ hasNextPage: true, endCursor: null }))
++    ).toThrow(WatcherQueryError);
++    expect(() =>
++      parseCheckRollupPage(response({ hasNextPage: true, endCursor: "" }))
++    ).toThrow(WatcherQueryError);
++  });
++});
++
+ describe("closed enum parsing", () => {
+   const rawPullRequest = {
+     mergeable: "MERGEABLE",
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 8ad8d7f..a647dab 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -305,6 +305,35 @@ export function mapRollupNode(value: unknown): T.Check | null {
+     ? { ...details, link, kind: "passed", reportedState: state }
+     : { ...details, link, kind: "failed", reportedState: state || "FAILURE" };
+ }
++export function parseCheckRollupPage(value: unknown): T.RollupPage {
++  const commits = list(
++    at(value, ["data", "repository", "pullRequest", "commits", "nodes"]),
++    "commits.nodes"
++  );
++  if (commits.length === 0)
++    return { kind: "contexts", checks: [], endCursor: null };
++  const commit = record(at(commits[commits.length - 1], ["commit"]), "commit");
++  if (commit.statusCheckRollup === null) return { kind: "no-rollup" };
++  const contexts = record(
++    at(commit, ["statusCheckRollup", "contexts"]),
++    "contexts"
++  );
++  const checks = list(contexts.nodes, "contexts.nodes")
++    .map(mapRollupNode)
++    .filter((check): check is T.Check => check !== null);
++  const page = record(contexts.pageInfo, "contexts.pageInfo");
++  if (typeof page.hasNextPage !== "boolean")
++    missing("contexts.pageInfo.hasNextPage", page.hasNextPage);
++  const cursor = optionalString(page.endCursor, "contexts.pageInfo.endCursor");
++  // A page that claims more rows without a cursor would silently end the walk
++  // and drop every check after the first page.
++  if (page.hasNextPage && !cursor) missing("contexts.pageInfo.endCursor", cursor);
++  return {
++    kind: "contexts",
++    checks,
++    endCursor: page.hasNextPage ? cursor : null,
++  };
++}
+ function parseComment(value: unknown): T.ReviewComment {
+   const object = record(value, "review comment");
+   const author =
+@@ -560,36 +589,7 @@ export class GhGitHubReader implements T.GitHubReader {
+   ): Promise<T.RollupPage> {
+     const argv = graphqlArgs(PR_CHECK_ROLLUP_QUERY, context);
+     if (after !== null) argv.push("-f", `after=${after}`);
+-    const value = await runJson(argv);
+-    const commits = list(
+-      at(value, ["data", "repository", "pullRequest", "commits", "nodes"]),
+-      "commits.nodes"
+-    );
+-    if (commits.length === 0) return { kind: "contexts", checks: [], endCursor: null };
+-    const commit = record(
+-      at(commits[commits.length - 1], ["commit"]),
+-      "commit"
+-    );
+-    if (commit.statusCheckRollup === null) return { kind: "no-rollup" };
+-    const contexts = record(
+-      at(commit, ["statusCheckRollup", "contexts"]),
+-      "contexts"
+-    );
+-    const checks = list(contexts.nodes, "contexts.nodes")
+-      .map(mapRollupNode)
+-      .filter((check): check is T.Check => check !== null);
+-    const page = record(contexts.pageInfo, "contexts.pageInfo");
+-    if (typeof page.hasNextPage !== "boolean")
+-      missing("contexts.pageInfo.hasNextPage", page.hasNextPage);
+-    const cursor = optionalString(
+-      page.endCursor,
+-      "contexts.pageInfo.endCursor"
+-    );
+-    return {
+-      kind: "contexts",
+-      checks,
+-      endCursor: page.hasNextPage && cursor ? cursor : null,
+-    };
++    return parseCheckRollupPage(await runJson(argv));
+   }
+   async reviewThreadPage(
+     context: T.PrContext,

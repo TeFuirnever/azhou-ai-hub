@@ -1,0 +1,81 @@
+Description: error on a review thread page that claims more threads without a cursor
+Author: Azhou AI Hub
+Forwarded: no
+
+The review thread walk drives on the endCursor the page parser hands back, and
+that parser folded "hasNextPage is true but there is no endCursor" into "there
+are no more threads". One such page ended the walk at page one, so every review
+thread past it was invisible and an unresolved reviewer comment on page two never
+blocked a ready verdict. The parser now raises that page as a query error so the
+walk either covers every page or reports that it could not.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index c45e9b4..60047f5 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -511,6 +511,48 @@ describe("review thread pagination", () => {
+     ]);
+   });
+ 
++  it("refuses a page that claims more threads without a cursor", () => {
++    const response = (pageInfo: Record<string, unknown>) => ({
++      data: {
++        repository: {
++          pullRequest: {
++            reviewThreads: {
++              pageInfo,
++              nodes: [
++                {
++                  id: "one",
++                  isResolved: false,
++                  comments: {
++                    nodes: [
++                      {
++                        body: "please fix",
++                        createdAt: "now",
++                        path: "a.ts",
++                        line: 1,
++                        author: { login: "someone" },
++                      },
++                    ],
++                  },
++                },
++              ],
++            },
++          },
++        },
++      },
++    });
++    expect(() =>
++      parseReviewThreadPage(response({ hasNextPage: true, endCursor: null }))
++    ).toThrow(WatcherQueryError);
++    expect(
++      parseReviewThreadPage(response({ hasNextPage: true, endCursor: "next" }))
++        .endCursor
++    ).toBe("next");
++    expect(
++      parseReviewThreadPage(response({ hasNextPage: false, endCursor: null }))
++        .endCursor
++    ).toBeNull();
++  });
++
+   it("rejects a page that omits pageInfo instead of assuming one page", async () => {
+     const response = {
+       data: {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index a647dab..7648d93 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -411,7 +411,11 @@ export function parseReviewThreadPage(value: unknown): T.ReviewThreadPage {
+     page.endCursor,
+     "reviewThreads.pageInfo.endCursor"
+   );
+-  return { threads, endCursor: page.hasNextPage && cursor ? cursor : null };
++  // A page that claims more threads without a cursor would end the walk here and
++  // hide every review thread past the first page.
++  if (page.hasNextPage && !cursor)
++    missing("reviewThreads.pageInfo.endCursor", cursor);
++  return { threads, endCursor: page.hasNextPage ? cursor : null };
+ }
+ export function buildReviewThreads(
+   threads: readonly T.RawReviewThread[]

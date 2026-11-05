@@ -1,0 +1,154 @@
+Description: bound every gh and git call with one shared timeout
+Author: Azhou AI Hub
+Forwarded: no
+
+Each read path spawned `gh` or `git` and waited for it with no deadline. A call
+that hangs, on a stalled network or a credential prompt that never gets answered,
+held the whole watch open: no further poll ran and no verdict was ever produced,
+and the process was left running until somebody killed it. Every call now shares
+one timeout and a call that outlives it is killed and reported as a retryable
+timeout, so the watcher goes on polling instead of stalling.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index feb4a2d..56626ae 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -17,6 +17,7 @@ import {
+   resolveChecks,
+   resolveContext,
+   resolveReviewThreads,
++  runCommand,
+ } from "./github.ts";
+ import {
+   fakeReader,
+@@ -809,3 +810,23 @@ printf ']\\n'
+   });
+ 
+ });
++
++describe("command timeout", () => {
++  it("gives up on a hung gh or git call instead of blocking the watch", async () => {
++    await expect(
++      runCommand([process.execPath, "-e", "setTimeout(() => {}, 10000)"], 0.05)
++    ).rejects.toMatchObject({
++      failure: { kind: "command-timeout", retryable: true },
++    });
++  });
++
++  it("returns normally for a command that finished in time", async () => {
++    const result = await runCommand([
++      process.execPath,
++      "-e",
++      "console.log('ok')",
++    ]);
++    expect(result.code).toBe(0);
++    expect(result.stdout.trim()).toBe("ok");
++  });
++});
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 10531ff..ab105b8 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -29,13 +29,24 @@ export class ChecksUnavailable extends WatcherQueryError {
+ }
+ const firstLine = (value: string): string =>
+   value.trim().split(/\r?\n/, 1)[0]?.slice(0, 240) ?? "";
+-function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
++// One bound shared by every `gh` and `git` call. Without it a single hung call
++// holds the whole watch open and no verdict is ever produced.
++export const COMMAND_TIMEOUT_SECONDS = 60;
++export function runCommand(
++  argv: readonly [string, ...string[]],
++  timeoutSeconds: number = COMMAND_TIMEOUT_SECONDS
++): Promise<CommandResult> {
+   return new Promise((resolve, reject) => {
+     const child = spawn(argv[0], argv.slice(1), {
+       stdio: ["ignore", "pipe", "pipe"],
+     });
+     let stdout = "";
+     let stderr = "";
++    let expired = false;
++    const timer = setTimeout(() => {
++      expired = true;
++      child.kill("SIGKILL");
++    }, timeoutSeconds * 1000);
+     child.stdout.setEncoding("utf8");
+     child.stderr.setEncoding("utf8");
+     child.stdout.on("data", (chunk: string) => {
+@@ -44,7 +55,8 @@ function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
+     child.stderr.on("data", (chunk: string) => {
+       stderr += chunk;
+     });
+-    child.on("error", (error) =>
++    child.on("error", (error) => {
++      clearTimeout(timer);
+       // A binary that is not installed or cannot be executed will not appear on
+       // the next poll. Retrying it would retry for ever.
+       reject(
+@@ -53,9 +65,20 @@ function run(argv: readonly [string, ...string[]]): Promise<CommandResult> {
+           retryable: false,
+           detail: `could not run ${argv[0]}: ${error.message}`,
+         })
+-      )
+-    );
+-    child.on("close", (code) => resolve({ code: code ?? -1, stdout, stderr }));
++      );
++    });
++    child.on("close", (code) => {
++      clearTimeout(timer);
++      if (expired)
++        reject(
++          new WatcherQueryError({
++            kind: "command-timeout",
++            retryable: true,
++            detail: `${argv.join(" ")} did not finish within ${timeoutSeconds}s`,
++          })
++        );
++      else resolve({ code: code ?? -1, stdout, stderr });
++    });
+   });
+ }
+ function parseJson(text: string, label: string): unknown {
+@@ -70,7 +93,7 @@ function parseJson(text: string, label: string): unknown {
+   }
+ }
+ async function runJson(argv: readonly [string, ...string[]]): Promise<unknown> {
+-  const result = await run(argv);
++  const result = await runCommand(argv);
+   if (result.code !== 0)
+     throw new WatcherQueryError({
+       kind: "command-exit",
+@@ -506,7 +529,7 @@ function graphqlArgs(
+ 
+ export class GhGitHubReader implements T.GitHubReader {
+   async originRepo(): Promise<T.Repository | null> {
+-    const result = await run(["git", "remote", "get-url", "origin"]);
++    const result = await runCommand(["git", "remote", "get-url", "origin"]);
+     return result.code === 0 ? parseRemote(result.stdout) : null;
+   }
+   async currentPr(pr: T.PrNumber | null): Promise<T.PrContext> {
+@@ -583,7 +606,7 @@ export class GhGitHubReader implements T.GitHubReader {
+     });
+   }
+   async checksFastPath(context: T.PrContext): Promise<T.ChecksFastPath> {
+-    const result = await run([
++    const result = await runCommand([
+       "gh",
+       "pr",
+       "checks",
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 84fcd37..5bf0452 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -272,6 +272,11 @@ export type QueryFailure =
+       readonly retryable: false;
+       readonly detail: string;
+     }
++  | {
++      readonly kind: "command-timeout";
++      readonly retryable: true;
++      readonly detail: string;
++    }
+   | {
+       readonly kind: "invalid-context-url";
+       readonly retryable: false;

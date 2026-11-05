@@ -1,0 +1,143 @@
+Description: ground the ready proof in a mergeability GitHub actually reported
+Author: Azhou AI Hub
+Forwarded: no
+
+Passing checks alone were enough to produce a ReadyPr whose proof claimed
+mergeability "clear". GitHub reports mergeable as UNKNOWN until it has computed
+it, and that window sits exactly where a fresh push lands, so a pull request was
+announced ready to merge on the strength of its checks while GitHub had not said
+it could be merged. A ReadyPr can now only be built once GitHub reports MERGEABLE,
+and the literal the proof carries is indexed from that reading; an uncomputed
+reading waits instead.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index 5cab271..01002bb 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -581,3 +581,37 @@ describe("no-checks confirmation", () => {
+     expect(sleeps).toEqual([30, 30, 30]);
+   });
+ });
++
++describe("ready proof rests on GitHub's mergeability reading", () => {
++  const snapshot = (mergeable: PullRequestFacts["mergeable"], number = 1) =>
++    readSnapshot({
++      reader: fakeReader({ facts: { mergeable } }),
++      context: context(number),
++      pendingHistory: "include",
++      allowDraft: false,
++    });
++
++  it("does not report ready on passing checks alone", async () => {
++    const decision = classifyPr(await snapshot("UNKNOWN"));
++    expect(decision).toMatchObject({
++      kind: "waiting",
++      reason: { kind: "mergeability-unknown" },
++    });
++  });
++
++  it("carries the reading GitHub gave once it reports the PR mergeable", async () => {
++    const decision = classifyPr(await snapshot("MERGEABLE"));
++    if (decision.kind !== "ready")
++      throw new Error(`expected ready, got ${decision.kind}`);
++    expect(decision.pr.proof.mergeability).toBe("clear");
++  });
++
++  it("holds the whole stack back on the same unproven reading", async () => {
++    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)];
++    expect(selectTierMajorStackDecision(rows)).toMatchObject({
++      kind: "waiting",
++      frontier: { number: 2 },
++      reason: { kind: "mergeability-unknown" },
++    });
++  });
++});
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+index 3e4c56e..8dae2ed 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+@@ -246,8 +246,15 @@ function waitReason(row: T.PrSnapshot): T.WaitReason | null {
+   if (row.ci.kind === "ci-pending")
+     return { kind: "pending-checks", pending: row.ci.pending };
+   if (row.ci.kind === "ci-unreported") return { kind: "checks-unreported" };
+-  return null;
++  // GitHub computes mergeability on demand, so an unread value is a wait, not a
++  // reading the ready proof can stand on.
++  return row.facts.mergeable === "MERGEABLE"
++    ? null
++    : { kind: "mergeability-unknown" };
+ }
++// Indexed by the fact itself, so a proof compiles only where the guard below
++// has narrowed mergeable to MERGEABLE.
++const CLEAR_ONLY_WHEN = { MERGEABLE: "clear" } as const;
+ function readyContribution(
+   row: T.PrSnapshot,
+   allowDraft: boolean
+@@ -262,6 +269,7 @@ function readyContribution(
+     row.kind !== "open" ||
+     (row.ci.kind !== "ci-clean" && row.ci.kind !== "ci-none") ||
+     row.threads.length !== 0 ||
++    row.facts.mergeable !== "MERGEABLE" ||
+     conflictBlocker(row) !== null ||
+     gateReason(row, allowDraft) !== null
+   )
+@@ -272,7 +280,7 @@ function readyContribution(
+     kind: "ready-pr",
+     context: row.context,
+     proof: {
+-      mergeability: "clear",
++      mergeability: CLEAR_ONLY_WHEN[row.facts.mergeable],
+       threads: [],
+       ci: row.ci,
+       gate: {
+@@ -761,9 +769,9 @@ export function evaluateQueue(
+   const key =
+     reason.kind === "pending-checks"
+       ? `pending:${frontier.number}:${reason.pending.length}`
+-      : reason.kind === "checks-unreported"
+-        ? `unreported:${frontier.number}`
+-        : `queue:${frontier.number}:${reason.unmergedCount}`;
++      : reason.kind === "merge-queue"
++        ? `queue:${frontier.number}:${reason.unmergedCount}`
++        : `${reason.kind}:${frontier.number}`;
+   return {
+     kind: "waiting",
+     state: { ...state, frontier, lastWaitKey: key },
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+index aac820d..a344e80 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+@@ -144,7 +144,9 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
+         ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`
+         : verdict.reason.kind === "checks-unreported"
+           ? `WAITING: frontier=#${verdict.frontier.number}; no checks reported yet\n`
+-          : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
++          : verdict.reason.kind === "mergeability-unknown"
++            ? `WAITING: frontier=#${verdict.frontier.number}; GitHub has not computed mergeability yet\n`
++            : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
+     case "ADVANCE":
+       return `ADVANCE: merged #${verdict.merged.number}; next=#${verdict.frontier.number}; remaining=${verdict.remaining}\n`;
+     case "RETRY":
+@@ -165,6 +167,8 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
+         return "TIMEOUT: checks still pending\n";
+       if (verdict.reason.kind === "checks-unreported")
+         return "TIMEOUT: no checks reported\n";
++      if (verdict.reason.kind === "mergeability-unknown")
++        return "TIMEOUT: GitHub never computed mergeability\n";
+       if (verdict.reason.kind === "status-unavailable")
+         return "TIMEOUT: GitHub status remained unavailable\n";
+       return `TIMEOUT: queued stack still has ${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged; frontier=#${verdict.reason.frontier.number}\n`;
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index b7b9706..414330e 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -264,7 +264,8 @@ export type WaitReason =
+       readonly kind: "pending-checks";
+       readonly pending: NonEmpty<PendingCheck>;
+     }
+-  | { readonly kind: "checks-unreported" };
++  | { readonly kind: "checks-unreported" }
++  | { readonly kind: "mergeability-unknown" };
+ export type QueueWaitReason =
+   | WaitReason
+   | { readonly kind: "merge-queue"; readonly unmergedCount: number };
