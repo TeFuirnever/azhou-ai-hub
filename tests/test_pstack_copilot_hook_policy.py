@@ -21,7 +21,8 @@ SCRIPTS = PLUGIN / "skills/setup-pstack/scripts"
 HOOK = PLUGIN / "hooks/pre-tool-use.sh"
 
 
-@unittest.skipUnless(shutil.which("awk") and shutil.which("sh"), "requires POSIX sh and awk")
+@unittest.skipUnless(os.name == "posix" and Path("/bin/sh").is_file() and shutil.which("awk"),
+                     "requires a POSIX host with /bin/sh and awk; Windows Hook validation is separate")
 class PstackCopilotHookPolicyTest(unittest.TestCase):
     def test_registered_models_are_enforced_only_for_pstack_agent_types(self) -> None:
         parser = SCRIPTS / "sheet.awk"
