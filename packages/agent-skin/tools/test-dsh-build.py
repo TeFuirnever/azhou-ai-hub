@@ -2,8 +2,10 @@
 """End-to-end tests for the DeepSeek Harness plugin package emitter."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shutil
@@ -244,6 +246,139 @@ class DshPluginBuildTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "assets/private|私有素材"):
             emitter.build_plugin(destination, root=root)
         self.assertFalse(destination.exists())
+
+    def test_payload_body_refuses_foreign_and_tail_less_payloads(self):
+        with self.assertRaisesRegex(RuntimeError, "codex-style single-adapter expression"):
+            self.emitter._payload_body("((controllerMetadata) => { createDSHPageAdapter(globalThis); })()\n")
+        tail_less = ("(() => {\nfunction createDSHPageAdapter(host) { return host; }\n"
+                     "const pageAdapter = createDSHPageAdapter(globalThis);\n})()\n")
+        with self.assertRaisesRegex(RuntimeError, "fixed adapter wiring tail"):
+            self.emitter._payload_body(tail_less)
+
+    def test_load_builder_refuses_when_no_module_loader_can_be_created(self):
+        with mock.patch.object(importlib.util, "spec_from_file_location", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "Missing startup builder module"):
+                self.emitter.load_builder(self.root)
+
+    def test_render_icon_refuses_without_the_macos_sips_tool(self):
+        theme = self.artifacts.load_theme_config(self.root, require_inputs=True)
+        with mock.patch.object(shutil, "which", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "requires the macOS sips tool"):
+                self.emitter._render_icon(self.root, self.artifacts, theme)
+
+    def test_compose_package_refuses_existing_destination(self):
+        theme = self.artifacts.load_theme_config(self.root, require_inputs=True)
+        destination = Path(self.temporary.name) / "compose-existing"
+        destination.mkdir()
+        with self.assertRaisesRegex(RuntimeError, "Refusing to compose over an existing directory"):
+            self.emitter._compose_package(destination, body="const placeholder = 1;\n",
+                                          icon=b"\x89PNG\r\n\x1a\n", theme=theme,
+                                          inputs=self.artifacts.source_inputs(), artifacts=self.artifacts)
+        self.assertTrue(destination.is_dir())
+
+    def test_build_refuses_symlinked_build_and_stage_directories(self):
+        build_dir = self.root / ".build"
+        relocated = self.root / ".build-relocated"
+        build_dir.rename(relocated)
+        (self.root / ".build").symlink_to(relocated, target_is_directory=True)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "符号链接 \\.build 目录"):
+                self.emitter.build_plugin(self.root / ".build/azhou-dsh-plugin-x/azhou-agent-skin",
+                                          root=self.root)
+        finally:
+            (self.root / ".build").unlink()
+            relocated.rename(build_dir)
+
+        stage_parent = self.root / self.emitter.STAGE_PARENT
+        stage_parent.mkdir(parents=True)
+        (stage_parent / "azhou-payload").symlink_to(relocated / "azhou-dsh-plugin", target_is_directory=True)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "符号链接 staging 目录"):
+                self.emitter.build_plugin(self.root / ".build/azhou-dsh-plugin-y/azhou-agent-skin",
+                                          root=self.root)
+        finally:
+            (stage_parent / "azhou-payload").unlink()
+            stage_parent.rmdir()
+
+    def test_build_refuses_to_replace_a_symlinked_destination(self):
+        target = Path(self.temporary.name) / "symlink-target"
+        target.mkdir()
+        (target / "keep.txt").write_text("keep", encoding="utf-8")
+        destination = self.root / ".build/azhou-dsh-plugin-symlink/azhou-agent-skin"
+        destination.parent.mkdir(parents=True)
+        destination.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, "拒绝覆写符号链接"):
+            self.build_plugin(destination)
+        self.assertTrue(destination.is_symlink())
+        self.assertEqual([item.name for item in sorted(target.iterdir())], ["keep.txt"])
+
+    def test_rebuild_replaces_existing_destination_and_tolerates_stage_leftovers(self):
+        destination = self.root / ".build/azhou-dsh-plugin-rebuild/azhou-agent-skin"
+        stage_parent = self.root / self.emitter.STAGE_PARENT
+        stage_parent.mkdir(parents=True)
+        (stage_parent / "azhou-payload").mkdir()
+        (stage_parent / "azhou-payload" / "stale.txt").write_text("stale", encoding="utf-8")
+        leftover = stage_parent / "leftover.txt"
+        leftover.write_text("leftover", encoding="utf-8")
+        manifest = self.build_plugin(destination)
+        self.assertEqual(sorted(self.snapshot(destination)),
+                         sorted(self.artifacts.DSH_PLUGIN_PACKAGE_ENTRIES))
+        self.assertTrue(leftover.is_file(), "unrelated staging leftovers must survive cleanup")
+        self.assertFalse((stage_parent / "azhou-payload").exists())
+
+        argv = ["build-dsh-plugin.py", "--output", str(destination)]
+        with mock.patch.object(subprocess, "check_output", return_value="arm64\n"), \
+                mock.patch.object(subprocess, "run", side_effect=self.vision), \
+                mock.patch.object(sys, "argv", argv), \
+                contextlib.redirect_stdout(io.StringIO()) as captured:
+            with self.assertRaises(SystemExit) as caught:
+                load_module(self.root / "tools/build-dsh-plugin.py", "__main__")
+        self.assertEqual(caught.exception.code, 0)
+        summary = json.loads(captured.getvalue())
+        self.assertEqual((summary["kind"], summary["plugin"]), ("dshPlugin", self.emitter.PLUGIN_NAME))
+        self.assertEqual(summary["appVersion"], manifest["appVersion"])
+        self.assertEqual(summary["outputs"], len(manifest["outputs"]))
+        self.assertEqual(self.snapshot(destination), self.snapshot(self.destination),
+                         "a CLI rebuild over an existing destination must stay byte-identical")
+
+    def test_main_reports_build_failures_and_exits_nonzero(self):
+        with mock.patch.object(sys, "argv", ["build-dsh-plugin.py"]), \
+                mock.patch.object(self.emitter, "build_plugin", side_effect=RuntimeError("boom")), \
+                contextlib.redirect_stderr(io.StringIO()) as captured:
+            with self.assertRaises(SystemExit) as caught:
+                self.emitter.main()
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn("DSH 插件包构建失败：boom", captured.getvalue())
+
+    def test_verify_cli_entry_verifies_the_assembled_package(self):
+        with mock.patch.object(sys, "argv",
+                               ["verify-artifacts.py", "--verify-dsh-plugin", str(self.destination)]):
+            load_module(self.root / "tools/verify-artifacts.py", "__main__")
+
+        tampered = Path(self.temporary.name) / "dsh-verify-cli-tampered"
+        if tampered.exists():
+            shutil.rmtree(tampered)
+        shutil.copytree(self.destination, tampered)
+        (tampered / "index.js").unlink()
+        with mock.patch.object(sys, "argv",
+                               ["verify-artifacts.py", "--verify-dsh-plugin", str(tampered)]), \
+                contextlib.redirect_stderr(io.StringIO()) as captured:
+            with self.assertRaises(SystemExit) as caught:
+                load_module(self.root / "tools/verify-artifacts.py", "__main__")
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn("文件清单", captured.getvalue())
+
+    def test_check_reports_the_verified_dsh_plugin_payload(self):
+        staged, _ = self.helpers.build_staged_product(self.root, "dsh-check")
+        with mock.patch.object(self.artifacts.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0)), \
+                mock.patch.object(self.artifacts, "PAYLOAD", staged), \
+                contextlib.redirect_stdout(io.StringIO()) as captured:
+            self.artifacts.check()
+        report = json.loads(captured.getvalue())
+        self.assertEqual(report["kind"], "buildPayload")
+        self.assertEqual(report["dshPlugin"], str(self.destination))
+        self.assertEqual(report["version"], self.manifest["appVersion"])
 
     def test_frozen_codex_and_zcode_fixture_builds_still_verify(self):
         codex, artifacts = self.helpers.build_staged_product(self.root, "dsh-round-codex")
