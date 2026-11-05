@@ -36,5 +36,5 @@ Since commit `5b9ea50`, a page adapter declares host behavior instead of neutral
 ## Deliberate limits
 
 - No default wallpaper ships in the plugin. The neutral wallpaper path applies images from saved settings; embedding the private scene PNG in `client.js` would add multiple megabytes to every boot load. A follow-up can serve large artwork from a host-half `webServer` prefix route, the pattern both installed third-party skins use.
-- No live-host claim. The [receipt](../../../evidence/dsh-agent-skin-assembly-2026-11-05.md) records assembly evidence and names the install paths that a future host round must exercise.
+- No in-host rendering claim yet. The [assembly receipt](../../../evidence/dsh-agent-skin-assembly-2026-11-05.md) records assembly evidence, and the [live-install receipt](../../../evidence/live-dsh-plugin-install-2026-11-05.md) records the plugin-manager loop (install, list, remove, re-install, composed layer) on a throwaway profile through the bundled CLI. Booting the profile and observing the rendered surfaces is the remaining round.
 - No `dsh.compatibility.dshReleases` map. Compatibility declarations follow live-host receipts, and none exists yet.

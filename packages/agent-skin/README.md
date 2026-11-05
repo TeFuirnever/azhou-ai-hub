@@ -202,7 +202,7 @@ python3 tools/build-dsh-plugin.py
 python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
 ```
 
-构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。本地证据止于组装确定性、校验器与单元测试，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)；真实宿主内的渲染、入口、壁纸与插件管理页展示均未验收。
+构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试，以及在一次性 profile 上经官方插件管理器完成的安装、清单、移除与重装收敛和层栈组合；真实宿主内的渲染、入口、壁纸与插件管理页展示仍未验收，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)。
 
 ## 安装、升级与旧入口清理
 
