@@ -2,7 +2,8 @@
    Only this page's appearance is changed. No chat text, storage or network is read. */
 export async function installRenderer(payload) {
   'use strict';
-  const VERSION = '0.9.0', LEGACY_VERSIONS = new Set(['0.8.0', '0.7.1']), OWNER = 'azhou.codex-startup-animation';
+  const VERSION = '0.9.0', LEGACY_VERSIONS = new Set(['0.8.0', '0.7.1']);
+  let OWNER = 'azhou.codex-startup-animation';
   const STYLE_ID = 'azhou-wallpaper-style', ATTRIBUTE = 'data-azhou-wallpaper';
   const IMAGE_PROPERTY = '--azhou-wallpaper-image', WASH_PROPERTY = '--azhou-wallpaper-wash';
   const SURFACE_PROPERTY = '--azhou-wallpaper-surface';
@@ -113,9 +114,24 @@ export async function installRenderer(payload) {
     const descriptor = Object.getOwnPropertyDescriptor(object, name);
     return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
   };
-  const knownVersion = version => version === VERSION || LEGACY_VERSIONS.has(version);
+  const pageAdapter = ownValue(payload, 'pageAdapter');
+  const ports = ownValue(pageAdapter, 'wallpaper');
+  // The ports group is atomic: an adapter that declares it must supply every
+  // member, and the neutral renderer refuses the whole adapter otherwise.
+  const adapter = !!ports && typeof ports === 'object'
+    && typeof ownValue(ports, 'validPage') === 'function'
+    && typeof ownValue(ports, 'shellState') === 'function'
+    && typeof ownValue(ports, 'surfaces') === 'function'
+    && typeof ownValue(ports, 'css') === 'string' && typeof ownValue(ports, 'scope') === 'string'
+    && !!ownValue(ports, 'attributes') && typeof ownValue(ownValue(ports, 'attributes'), 'surfaceMarker') === 'string'
+    && Array.isArray(ownValue(ownValue(ports, 'attributes'), 'observeFilter'));
+  if (pageAdapter && !adapter) throw problem('invalid-host-adapter');
+  const surfaceMarker = adapter ? ports.attributes.surfaceMarker : null;
+  if (adapter) OWNER = ownValue(ownValue(pageAdapter, 'controllerWallpaper'), 'owner') ?? OWNER;
+  const knownVersion = version => version === VERSION || (!adapter && LEGACY_VERSIONS.has(version));
   function validPage() {
     if (window.top !== window) return false;
+    if (adapter) return ports.validPage(globalThis);
     const url = new URL(location.href), route = url.searchParams.get('initialRoute') || '/';
     if (url.protocol === 'app:' && url.hostname === '-' && url.pathname === '/index.html') {
       return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
@@ -142,11 +158,19 @@ export async function installRenderer(payload) {
     && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(payload.image);
   if (!imageMatch || payload.image.length > 16 * 1024 * 1024) throw problem('invalid-local-image');
   const applicationRoot = document.getElementById('root');
-  const currentSurfaces = () => applicationRoot
-    ? [...applicationRoot.querySelectorAll(surfaceSelector)] : [];
+  const currentSurfaces = () => {
+    if (!applicationRoot) return [];
+    if (!adapter) return [...applicationRoot.querySelectorAll(surfaceSelector)];
+    const nodes = ports.surfaces(globalThis);
+    return Array.isArray(nodes) && nodes.length === 1 && nodes.every(node => node?.isConnected
+      && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
+  };
+  const shellReady = () => adapter
+    ? ports.shellState(ownValue(payload, 'isCurrent'), globalThis) === 'ready' && currentSurfaces().length === 1
+    : !!applicationRoot?.querySelector('[data-app-shell-frame]')
+      && !!applicationRoot?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
   if (!document.body || !applicationRoot
-      || !applicationRoot.querySelector('[data-app-shell-frame]')
-      || !applicationRoot.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]')) {
+      || !shellReady()) {
     throw problem('unsupported-shell-no-surfaces');
   }
   const previousDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper');
@@ -157,6 +181,15 @@ export async function installRenderer(payload) {
       || typeof ownValue(previous, 'dispose') !== 'function' || typeof ownValue(previous, 'status') !== 'function')) {
     throw problem('namespace-conflict');
   }
+  const ownsSurfaceMarkers = current => {
+    if (!adapter) return true;
+    const recorded = ownValue(ownValue(current, BASELINE_KEY), 'zcodeAttributes');
+    return [applicationRoot, ...currentSurfaces()].every(node => {
+      const value = node.getAttribute(surfaceMarker);
+      return value === null || (value === 'active' && recorded instanceof Map && recorded.has(node));
+    });
+  };
+  if (!ownsSurfaceMarkers(previous)) throw problem('namespace-conflict');
   const existingStyle = document.getElementById(STYLE_ID);
   if (existingStyle && (!previous || existingStyle.getAttribute('data-azhou-owner') !== OWNER)) {
     throw problem('style-id-conflict');
@@ -181,8 +214,7 @@ export async function installRenderer(payload) {
 
   if ((typeof ownValue(payload, 'isCurrent') === 'function' && !ownValue(payload, 'isCurrent')())
       || !validPage() || !applicationRoot.isConnected
-      || !applicationRoot.querySelector('[data-app-shell-frame]')
-      || !applicationRoot.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]')) {
+      || !shellReady()) {
     URL.revokeObjectURL(imageURL); image.src = '';
     throw problem('page-changed-during-decode');
   }
@@ -196,6 +228,10 @@ export async function installRenderer(payload) {
     throw problem('namespace-changed-during-decode');
   }
   if (active !== previous) {
+    URL.revokeObjectURL(imageURL); image.src = '';
+    throw problem('namespace-changed-during-decode');
+  }
+  if (!ownsSurfaceMarkers(active)) {
     URL.revokeObjectURL(imageURL); image.src = '';
     throw problem('namespace-changed-during-decode');
   }
@@ -214,6 +250,9 @@ export async function installRenderer(payload) {
   }).join(',') + ')';
   const captureOriginal = () => ({
     attribute: root.getAttribute(ATTRIBUTE),
+    // The baseline key stays `zcodeAttributes` verbatim: live 0.9.0 ZCode
+    // installs must transfer their recorded baselines across a replacement.
+    zcodeAttributes: adapter ? new Map([applicationRoot, ...currentSurfaces()].map(node => [node, node.getAttribute(surfaceMarker)])) : undefined,
     properties: new Map([IMAGE_PROPERTY, WASH_PROPERTY, SURFACE_PROPERTY].map(name => [
       name, [root.style.getPropertyValue(name), root.style.getPropertyPriority(name)],
     ])),
@@ -223,6 +262,8 @@ export async function installRenderer(payload) {
   const transferredOriginal = {
     attribute: previousOriginal.attribute,
     properties: new Map(previousOriginal.properties),
+    zcodeAttributes: adapter ? new Map([...(previousOriginal.zcodeAttributes ?? []),
+      ...[...(rollbackOriginal.zcodeAttributes ?? [])].filter(([node]) => !previousOriginal.zcodeAttributes?.has(node))]) : undefined,
   };
   if (!transferredOriginal.properties.has(SURFACE_PROPERTY)) {
     transferredOriginal.properties.set(SURFACE_PROPERTY,
@@ -233,7 +274,7 @@ export async function installRenderer(payload) {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.setAttribute('data-azhou-owner', OWNER);
-  const styleText = payload.css;
+  const styleText = payload.css + (adapter ? ports.css : '');
   style.textContent = styleText;
   let disposed = false, committed = false, api;
   let original = rollbackOriginal;
@@ -356,7 +397,8 @@ export async function installRenderer(payload) {
         position: bodyStyle.backgroundPosition.split(',')[1]?.trim() },
       styleCount,
       persistentAnimation: false,
-      verificationScope: 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
+      verificationScope: adapter ? ports.scope
+        : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
     };
   }
   function dispose() {
@@ -364,6 +406,11 @@ export async function installRenderer(payload) {
     disposed = true;
     if (style.isConnected && style.parentNode === document.head && style.id === STYLE_ID && style.disabled === false
         && style.getAttribute('data-azhou-owner') === OWNER && style.textContent === styleText) style.remove();
+    for (const [node, value] of original.zcodeAttributes ?? []) {
+      if (node.getAttribute(surfaceMarker) !== 'active') continue;
+      if (value === null) node.removeAttribute(surfaceMarker);
+      else node.setAttribute(surfaceMarker, value);
+    }
     if (root.getAttribute(ATTRIBUTE) === 'active') {
       if (original.attribute === null) root.removeAttribute(ATTRIBUTE);
       else root.setAttribute(ATTRIBUTE, original.attribute);
@@ -413,6 +460,7 @@ export async function installRenderer(payload) {
     // Keep the old sheet attached, so a failed candidate can restore it without
     // re-inserting an inline stylesheet under a potentially stricter CSP.
     if (latestStyle) { latestStyle.disabled = true; latestStyle.removeAttribute('id'); }
+    for (const node of rollbackOriginal.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
     root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
     root.style.setProperty(WASH_PROPERTY, wash);
     if (surface !== null) writeSurface(surface);

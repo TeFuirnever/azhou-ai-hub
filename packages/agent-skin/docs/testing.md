@@ -8,7 +8,7 @@
 
 每种语言及整个包都须达到 **95% 行覆盖率**。判定使用原始计数，不以四舍五入后的百分比放行；分支和函数统计可用于诊断，但不代替行覆盖率。缺失报告、漏算生产文件、工具失败或 UT 失败均阻断。Node LCOV、Coverage.py、LLVM 和 Bash 覆盖率保留各自原始结果；不把浏览器 E2E、实机启动或人工审阅混入 UT。
 
-Swift 生成的 8 段 CDP JavaScript 另计为 `generated/Native-Wallpaper.<expression>.js`，由当前源码编译出的 UT 程序导出原始字符串，再由 Node VM 执行并测量。只执行 Swift 的字符串赋值不能算这些脚本的 UT。生成器、表达式和独立 JS 模块均不得漏算；缺少任何一段的执行报告会阻断。
+Swift 生成的固定 CDP JavaScript 也单独计量：既有 8 段为 `generated/Native-Wallpaper.<expression>.js`，ZCode 的状态与释放两段为 `generated/Native-ZCodeRuntime.<expression>.js`。前者由当前源码编译出的 UT 程序导出；后者从完整规范源码编译的测试程序发给自有合成 CDP 服务的 `Runtime.evaluate` 请求捕获原字节，绑定源码与输出 SHA，再由 Node VM 执行并测量。只执行 Swift 的字符串赋值不能算这些脚本的 UT。生成器、表达式和独立 JS 模块均不得漏算；缺少任何一段的执行报告会阻断。
 
 启动载荷中的工厂接线和只读属性安装使用规范模块 `extension/bootstrap.mjs`，由生成器原样嵌入，并独立执行 UT。素材数据与模块调用包装不重复统计；生成器内部不得隐藏未经测量的手写函数。
 

@@ -1837,3 +1837,81 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
   assert.equal(typeof entry.remove, 'function');
   assert.doesNotThrow(() => entry.remove());
 });
+
+
+test('explicit ZCode owner is independent and cannot adopt a Codex controller', () => {
+  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }),
+    controllerMetadata: { controllerInstanceID: '11111111-1111-4111-8111-111111111111', createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64), documentToken: 'synthetic-CDP-unique-context' } });
+  const host = controlledHost().host;
+  assert.equal(installStartup(function () {}, host, adapter).installed, true);
+  assert.equal(host.__azhouStartup.owner, 'azhou-zcode-startup');
+  assert.equal(host.__azhouStartup.status().owner, 'azhou-zcode-startup');
+  assert.equal(installStartup(function () {}, host, adapter).alreadyActive, true);
+  assert.equal(installStartup(function () {}, host, pageAdapter).reason, 'owner-conflict');
+  host.__azhouStartup.dispose();
+  assert.equal(installStartup(function () {}, host, pageAdapter).installed, true);
+  assert.equal(host.__azhouStartup.owner, 'azhou-codex-startup');
+  host.__azhouStartup.dispose();
+});
+
+test('unsupported or accessor controller owners refuse without page writes', () => {
+  for (const descriptor of [{ value: 'other' }, { get() { throw Error('must not read getter'); } }]) {
+    const controlled = controlledHost();
+    const adapter = { ...pageAdapter };
+    Object.defineProperty(adapter, 'controllerOwner', descriptor);
+    assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'owner-conflict');
+    assert.equal(controlled.frames.length, 0);
+    assert.equal(Object.hasOwn(controlled.host, '__azhouStartup'), false);
+  }
+});
+
+test('host settings namespace reaches the actual factory while legacy identity is unchanged', () => {
+  const namespace = Object.freeze({ databaseName: 'azhou-zcode-startup', databaseVersion: 1,
+    storeName: 'settings', settingsKey: 'images' });
+  for (const custom of [false, true]) {
+    const controlled = controlledHost();
+    const adapter = custom ? Object.freeze({ ...pageAdapter,
+      settingsEnvironment: source => ({ indexedDB: source.indexedDB, settingsNamespace: namespace }) }) : pageAdapter;
+    const factory = input => input;
+    let observed;
+    const payload = (...args) => { observed = args[15]; };
+    payload.createImageSettings = factory;
+    assert.equal(installStartup(payload, controlled.host, adapter).installed, true);
+    const input = { document: 'synthetic-document', indexedDB: 'synthetic-idb' };
+    assert.equal(controlled.frames[0].attributes.has('data-agent-skin-controller-instance'), false);
+    assert.equal(controlled.controls.some(node => node.attributes?.has('data-agent-skin-controller-instance')), false);
+    assert.equal(observed === factory, !custom);
+    const result = observed(input);
+    assert.equal(result.settingsNamespace, custom ? namespace : undefined);
+    assert.equal(result.indexedDB, input.indexedDB);
+    controlled.host.__azhouStartup.dispose();
+  }
+});
+
+
+test('ZCode metadata is validated before writes and retained by the actual controller', () => {
+  const metadata = { controllerInstanceID: '11111111-1111-4111-8111-111111111111',
+    createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64),
+    documentToken: 'synthetic-CDP-unique-context' };
+  for (const bad of [undefined, {}, { ...metadata, payloadSHA256: 'wrong' },
+    { ...metadata, documentToken: '' }, { ...metadata, payloadSHA256: metadata.payloadSHA256 + '\n' },
+    { ...metadata, controllerInstanceID: metadata.controllerInstanceID + '\n' }, { ...metadata, controllerInstanceID: 'legacy-v1-unreported' }]) {
+    const controlled = controlledHost();
+    const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+      controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: bad };
+    assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'controller-metadata-invalid');
+    assert.equal(controlled.frames.length, 0);
+  }
+  const controlled = controlledHost();
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: metadata };
+  assert.equal(installStartup(function () {}, controlled.host, adapter).installed, true);
+  assert.equal(controlled.frames[0].attributes.get('data-agent-skin-controller-instance'), metadata.controllerInstanceID);
+  assert.equal(controlled.controls.filter(node => node.attributes?.get('data-agent-skin-controller-instance') === metadata.controllerInstanceID).length, 1);
+  metadata.documentToken = 'changed-after-install';
+  assert.equal(controlled.host.__azhouStartup.status().documentToken, 'synthetic-CDP-unique-context');
+  assert.equal(controlled.host.__azhouStartup.controllerInstanceID, metadata.controllerInstanceID);
+  assert.equal(controlled.host.__azhouStartup.status().payloadSHA256, metadata.payloadSHA256);
+  controlled.host.__azhouStartup.dispose();
+});

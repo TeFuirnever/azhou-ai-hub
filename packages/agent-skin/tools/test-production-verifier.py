@@ -719,5 +719,195 @@ class VerifierApiTests(unittest.TestCase):
         self.assert_startup_rejected(bad_manifest_assets, "startup manifest 默认图像")
 
 
+class DshPluginVerifierContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_plugin_verifier")
+        cls.emitter = load_module(TOOLS / "build-dsh-plugin.py", "agent_skin_dsh_plugin_emitter_contract")
+        cls.helpers = load_module(TOOLS / "test-startup-build.py", "agent_skin_dsh_plugin_fixture_helpers")
+
+    def fabricate_plugin_package(self, base: Path, *, package_json=None, index_js=None,
+                                 client_js=None) -> Path:
+        """Assemble the minimal file set the DSH verifier expects before targeted mutations."""
+        package = base / "azhou-agent-skin"
+        package.mkdir(parents=True)
+        manifest = {
+            "name": self.emitter.PLUGIN_NAME,
+            "version": self.verifier.VERSION,
+            "private": True,
+            "description": self.emitter.LOCALES["en"]["meta"]["description"],
+            "type": "module",
+            "exports": {".": "./index.js", "./client": "./client.js",
+                        "./locale/*.json": "./locale/*.json", "./package.json": "./package.json"},
+            "files": ["client.js", "cordis.patch.yml", "icon.png", "index.js", "locale/*.json", "manifest.json"],
+            "icon": "icon.png",
+            "dsh": {"bundle": {"patch": "./cordis.patch.yml"},
+                    "client": {"platform": "web", "immediately": True, "inject": []}},
+        }
+        files = {
+            "package.json": (json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8"),
+            "cordis.patch.yml": self.verifier.DSH_PLUGIN_PATCH_YAML.encode("utf-8"),
+            "index.js": self.emitter.INDEX_JS.encode("utf-8"),
+            "client.js": b"/* synthetic client */\n",
+            "locale/en.json": b"{}",
+            "locale/zh.json": b"{}",
+            "icon.png": valid_png(),
+            "manifest.json": b"{}",
+        }
+        overrides = {"package.json": package_json, "index.js": index_js, "client.js": client_js}
+        for name, value in overrides.items():
+            if value is not None:
+                files[name] = value if isinstance(value, bytes) else value.encode("utf-8")
+        for name, data in files.items():
+            target = package / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        return package
+
+    def test_verify_dsh_plugin_rejects_malformed_package_files(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-package-") as temporary:
+            base = Path(temporary)
+            cases = (
+                ("package-json-broken", {"package_json": "{"}, "不是有效 JSON"),
+                ("package-json-binary", {"package_json": b"\xff\xfe"}, "不是有效 JSON"),
+                ("package-json-array", {"package_json": "[]\n"}, "必须是 JSON 对象"),
+                ("index-not-utf8", {"index_js": b"\xff\xfe\xfd"}, "index.js 必须是 UTF-8"),
+                ("index-foreign-template",
+                 {"index_js": "/** foreign host half */\nexport function apply() {}\n"}, "官方模板"),
+                ("client-empty", {"client_js": b""}, "非空"),
+                ("client-not-utf8", {"client_js": b"\xff\xfe\xfd\xfc"}, "client.js 必须是 UTF-8"),
+            )
+            for label, overrides, message in cases:
+                with self.subTest(case=label):
+                    package = self.fabricate_plugin_package(base / label, **overrides)
+                    with self.assertRaisesRegex(RuntimeError, message):
+                        self.verifier.verify_dsh_plugin(package)
+
+    def test_check_refuses_symlinked_build_tree_or_plugin_directory(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-check-") as temporary:
+            base = Path(temporary)
+            real_build = base / "build-real"
+            real_build.mkdir()
+            (base / ".build").symlink_to(real_build, target_is_directory=True)
+            try:
+                with mock.patch.object(self.verifier, "ROOT", base):
+                    with self.assertRaisesRegex(RuntimeError, "符号链接检查 \\.build"):
+                        self.verifier.check()
+            finally:
+                (base / ".build").unlink()
+
+            sandbox = base / "sandbox"
+            plugin = sandbox / ".build/azhou-dsh-plugin/azhou-agent-skin"
+            plugin.parent.mkdir(parents=True)
+            plugin.symlink_to(real_build, target_is_directory=True)
+            info = {"CFBundleIdentifier": "local.azhou.codex-startup",
+                    "CFBundleExecutable": "AzhouCodexStartup", "CFBundleDisplayName": "Azhou",
+                    "LSUIElement": True, "CFBundleIconFile": "AzhouAppIcon.icns"}
+            marker = {"version": self.verifier.VERSION, "build": self.verifier.BUILD,
+                      "inputSHA256": "0" * 64}
+            with mock.patch.object(self.verifier, "ROOT", sandbox), \
+                    mock.patch.object(self.verifier, "verify_product", return_value=info), \
+                    mock.patch.object(self.verifier, "read_marker", return_value=marker):
+                with self.assertRaisesRegex(RuntimeError, "符号链接检查 DSH 插件包"):
+                    self.verifier.check()
+
+    def test_check_reports_the_verified_dsh_plugin_path(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-check-report-") as temporary:
+            base = Path(temporary)
+            payload = base / "payload"
+            payload.mkdir()
+            (payload / "executable").write_bytes(b"x")
+            plugin = base / ".build/azhou-dsh-plugin/azhou-agent-skin"
+            plugin.mkdir(parents=True)
+            info = {"CFBundleIdentifier": "local.azhou.codex-startup",
+                    "CFBundleExecutable": "AzhouCodexStartup", "CFBundleDisplayName": "Azhou",
+                    "LSUIElement": True, "CFBundleIconFile": "AzhouAppIcon.icns"}
+            marker = {"version": self.verifier.VERSION, "build": self.verifier.BUILD,
+                      "inputSHA256": "0" * 64}
+            with mock.patch.object(self.verifier, "ROOT", base), \
+                    mock.patch.object(self.verifier, "PAYLOAD", payload), \
+                    mock.patch.object(self.verifier, "verify_product", return_value=info), \
+                    mock.patch.object(self.verifier, "read_marker", return_value=marker), \
+                    mock.patch.object(self.verifier, "verify_dsh_plugin",
+                                      return_value={"schema": 1}) as verify_dsh_plugin, \
+                    contextlib.redirect_stdout(io.StringIO()) as captured:
+                self.verifier.check()
+            verify_dsh_plugin.assert_called_once_with(plugin)
+            report = json.loads(captured.getvalue())
+            self.assertEqual(report["kind"], "buildPayload")
+            self.assertEqual(report["dshPlugin"], str(plugin))
+            self.assertEqual(report["version"], self.verifier.VERSION)
+
+    def test_cli_entry_dispatch_refuses_targets_outside_the_staging_contract(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-cli-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            self.helpers.clone_source_tree(root, private=False)
+            plain = Path(temporary) / "ordinary/azhou-payload"
+            plain.mkdir(parents=True)
+            cases = (
+                ("--publish", str(plain)),
+                ("--write-marker", str(plain)),
+                ("--write-bundle-info", str(plain)),
+                ("--check-inputs", str(plain)),
+                ("--verify-dsh-plugin", str(Path(temporary) / "absent")),
+            )
+            for flag, target in cases:
+                with self.subTest(flag=flag):
+                    with mock.patch.object(sys, "argv", ["verify-artifacts.py", flag, target]):
+                        with self.assertRaises(SystemExit) as caught:
+                            load_module(root / "tools/verify-artifacts.py", "__main__")
+                    self.assertEqual(caught.exception.code, 1)
+            with mock.patch.object(sys, "argv", ["verify-artifacts.py"]):
+                with self.assertRaises(SystemExit) as caught:
+                    load_module(root / "tools/verify-artifacts.py", "__main__")
+            self.assertEqual(caught.exception.code, 1)
+
+    def test_dsh_plugin_inputs_are_registered_and_historical_sets_stay_frozen(self):
+        verifier = self.verifier
+        self.assertEqual(verifier.DSH_PLUGIN_REQUIRED_INPUTS,
+                         (*verifier.STARTUP_REQUIRED_INPUTS,
+                          "extension/hosts/dsh.mjs", "tools/build-dsh-plugin.py"))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(verifier.INPUT_FILES))
+        self.assertEqual(verifier.DSH_PLUGIN_PACKAGE_ENTRIES,
+                         (*verifier.DSH_PLUGIN_OUTPUTS, "manifest.json"))
+        self.assertEqual(verifier.MAX_PLUGIN_ICON_BYTES, 256 * 1024)
+        package = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(package["build_inputs"]))
+        self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(package["runtime_paths"]))
+        for name in ("PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS",
+                     "PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS",
+                     "PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS",
+                     "LEGACY_STARTUP_REQUIRED_INPUTS"):
+            frozen = frozenset(getattr(verifier, name))
+            with self.subTest(input_set=name):
+                self.assertNotIn("extension/hosts/dsh.mjs", frozen)
+                self.assertNotIn("tools/build-dsh-plugin.py", frozen)
+
+    def test_verify_dsh_plugin_rejects_missing_foreign_or_linked_directories(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-verify-") as temporary:
+            base = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "缺失|实体目录"):
+                self.verifier.verify_dsh_plugin(base / "absent")
+            package = base / "azhou-agent-skin"
+            package.mkdir()
+            (package / "client.js").write_text("window.__ModuleLoader__.load({});\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "文件清单"):
+                self.verifier.verify_dsh_plugin(package)
+            linked = base / "linked-plugin"
+            linked.symlink_to(package)
+            try:
+                with self.assertRaisesRegex(RuntimeError, "符号链接"):
+                    self.verifier.verify_dsh_plugin(linked)
+            finally:
+                linked.unlink()
+            (package / "locale").mkdir()
+            (package / "locale/en.json").symlink_to(package / "client.js")
+            try:
+                with self.assertRaisesRegex(RuntimeError, "符号链接"):
+                    self.verifier.verify_dsh_plugin(package)
+            finally:
+                (package / "locale/en.json").unlink()
+
+
 if __name__ == "__main__":
     unittest.main()

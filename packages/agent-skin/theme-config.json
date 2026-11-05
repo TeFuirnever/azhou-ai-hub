@@ -33,5 +33,8 @@
     "strength": 42,
     "min": 0,
     "max": 75
+  },
+  "hostIcons": {
+    "zcode": "assets/private/app-icon/zcode.png"
   }
 }

@@ -1,3 +1,4 @@
+import CryptoKit
 import AppKit
 import WebKit
 import Darwin
@@ -308,6 +309,80 @@ final class NativeStartupEventStream: @unchecked Sendable {
         return resolved
     }
 
+    /// The ZCode driver confirms a typed controller receipt, not a Codex status
+    /// capture. Preserve that evidence without inventing a Codex phase, complete
+    /// event, or earlier open/install timestamps. The legacy resolver stays exact.
+    @discardableResult
+    func resolveZCode(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
+                      at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted else { return nil }
+        var fields: [String: Any] = ["host": "zcode", "evidence": "typed-controller-receipt",
+                                     "completion_not_inferred": true]
+        let resolved: NativeStartupFinalOutcome
+        if let pendingFailure {
+            resolved = .behaviorNotProven(reason: pendingFailure)
+        } else if let pendingInterruption {
+            resolved = .partial(reason: pendingInterruption)
+        } else if expectedApplication.host != .zcode {
+            resolved = .behaviorNotProven(reason: "target-identity")
+        } else {
+            switch result {
+            case .activated(let process):
+                if Self.validZCodeGeneration(process, expectedApplication) {
+                    fields["targetPID"] = Int(process.pid)
+                    resolved = .activated
+                } else { resolved = .behaviorNotProven(reason: "target-identity") }
+            case .ready(let receipt, let runID):
+                if runID > 0, let receiptFields = Self.zcodeReceiptFields(receipt, expectedApplication) {
+                    fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
+                    fields["runId"] = runID;fields["ready"] = true
+                    resolved = .ready
+                } else { resolved = .behaviorNotProven(reason: "protocol-error") }
+            case .skipped(let page, let runID, let beforeReady):
+                if runID > 0, case .present(.instance(let receipt), let acquisition) = page,
+                   let receiptFields = Self.zcodeReceiptFields(receipt, expectedApplication) {
+                    fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
+                    fields["runId"] = runID;fields["beforeReady"] = beforeReady
+                    fields["acquisition"] = acquisition == .created ? "created" : "alreadyActive"
+                    resolved = .skipped
+                } else { resolved = .behaviorNotProven(reason: "protocol-error") }
+            case .partial, .failed, .refused:
+                resolved = Self.finalOutcome(for: startupLegacyOutcome(from: result), observation: nil,
+                                             openedPID: nil, installedPID: nil, installedRunID: nil)
+            }
+        }
+        finalOutcome = resolved
+        if let reason = resolved.reason { fields["reason"] = reason }
+        writer.emit(resolved.event, fields: fields, at: uptime)
+        return resolved
+    }
+
+    private static func validZCodeGeneration(_ process: HostProcessGeneration,
+                                             _ expected: HostApplicationKey) -> Bool {
+        process.pid > 0 && process.launchTime.map { $0.isFinite && $0 > 0 } == true &&
+            process.executableURL == expected.executableURL
+    }
+
+    private static func zcodeReceiptFields(_ receipt: ControllerReceipt,
+                                           _ expected: HostApplicationKey) -> [String: Any]? {
+        guard receipt.location.application == expected,
+              validZCodeGeneration(receipt.location.process, expected),
+              receipt.owner == "azhou-zcode-startup", receipt.protocolVersion == 1,
+              receipt.controllerInstanceID.utf8.count == 36,
+              UUID(uuidString: receipt.controllerInstanceID) != nil,
+              receipt.payloadSHA256.utf8.count == 64,
+              receipt.payloadSHA256.allSatisfy({ "0123456789abcdef".contains($0) }),
+              !receipt.location.documentToken.isEmpty else { return nil }
+        return ["targetPID": Int(receipt.location.process.pid), "owner": receipt.owner,
+                "version": receipt.protocolVersion, "controllerInstanceID": receipt.controllerInstanceID,
+                "createdByOperationID": receipt.createdByOperationID.uuidString,
+                "payloadSHA256": receipt.payloadSHA256,
+                "documentTokenSHA256": SHA256.hash(data: Data(receipt.location.documentToken.utf8))
+                    .map { String(format: "%02x", $0) }.joined()]
+    }
+
     @discardableResult
     func finish(at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
         lock.lock()
@@ -494,7 +569,7 @@ enum NativeSmokeReportValidator {
     }
 }
 
-private final class StartupApplicationWaiter: @unchecked Sendable {
+final class StartupApplicationWaiter: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<any NativeApplication, Error>?
     private var completed = false
@@ -704,6 +779,8 @@ protocol NativeAppRuntime: AnyObject {
     func urlForApplication(bundleIdentifier: String) -> URL?
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void)
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void)
     func acquireInstanceLock(identifier: String) -> NativeLockAcquisition
     func allocateLoopbackPort() throws -> Int
     func makeStartupTargetSystem() -> any StartupTargetSystem
@@ -714,6 +791,18 @@ protocol NativeAppRuntime: AnyObject {
     func terminate()
     func exit(code: Int32)
     func writeStandardOutput(_ line: String)
+}
+
+extension NativeAppRuntime {
+    // Existing Codex runtimes/mocks retain the original API; a runtime without an
+    // explicit environment implementation must not silently discard isolation.
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        guard environment.isEmpty else {
+            completion(nil, NSError(domain: "local.azhou.zcode-startup", code: 1));return
+        }
+        openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
+    }
 }
 
 @MainActor
@@ -768,11 +857,20 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
     }
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        configuredOpen(at: url, debuggingPort: debuggingPort, environment: nil, completion: completion)
+    }
+    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
+                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
+        configuredOpen(at: url, debuggingPort: debuggingPort, environment: environment, completion: completion)
+    }
+    private func configuredOpen(at url: URL, debuggingPort: Int, environment: [String: String]?,
+                                completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false; configuration.hides = false; configuration.hidesOthers = false
+        configuration.activates = environment != nil; configuration.hides = false; configuration.hidesOthers = false
         configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
         configuration.addsToRecentItems = false
         configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(debuggingPort)"]
+        if let environment { configuration.environment = environment }
         openApplicationBody(url, configuration) { application, error in
             completion(application.map { SystemNativeApplication($0) }, error)
         }
@@ -978,9 +1076,28 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     }
 }
 
+enum NativeEntryIdentity {
+    static func host(bundleIdentifier: String?, declaredHost: Any?) -> SkinHostID? {
+        if bundleIdentifier == "local.azhou.zcode-startup" {
+            return declaredHost as? String == "zcode" ? .zcode : nil
+        }
+        guard let declaredHost else { return .codex } // Existing Codex/legacy entries.
+        return declaredHost as? String == "codex" && bundleIdentifier == "local.azhou.codex-startup" ? .codex : nil
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
-    private let launcherID = "local.azhou.codex-startup", targetID = "com.openai.codex"
+    private var launcherHost: SkinHostID? {
+        let bundle = Bundle(url: runtime.bundleURL)
+        return NativeEntryIdentity.host(bundleIdentifier: bundle?.bundleIdentifier,
+            declaredHost: bundle?.object(forInfoDictionaryKey: "AzhouTargetHost"))
+    }
+    private var launcherID: String {
+        guard let host = launcherHost else { return "local.azhou.invalid-entry" }
+        return host == .zcode ? "local.azhou.zcode-startup" : "local.azhou.codex-startup"
+    }
+    private var targetID: String { launcherHost == .zcode ? "dev.zcode.app" : "com.openai.codex" }
     private let runtime: any NativeAppRuntime
     private let args: [String]
     private let epoch: TimeInterval
@@ -1041,6 +1158,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         data["launcherPath"] = real(runtime.bundleURL).path
         writeLogRecord(data)
     }
+    // The runtime producer uses the same strict envelope as entry lifecycle
+    // events. Generic player/Codex diagnostics retain their existing log path.
+    func emitZCodeRuntimeEvent(_ fields: [String: Any]) {
+        nativeEventWriter.emit("zcode-runtime", fields: fields, at: runtime.uptime)
+    }
     private func writeLogRecord(_ data: [String: Any]) {
         logLock.lock()
         defer { logLock.unlock() }
@@ -1061,7 +1183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func validTarget(_ candidate: URL) -> URL? {
         let url = real(candidate)
-        guard url.pathExtension.lowercased() == "app", url != real(runtime.bundleURL),
+        guard launcherHost != nil, url.pathExtension.lowercased() == "app", url != real(runtime.bundleURL),
               !url.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }),
               let bundle = Bundle(url: url), bundle.bundleIdentifier == targetID,
               let executable = bundle.executableURL.map({ real($0) }),
@@ -1071,7 +1193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     private func resolveTarget() -> URL? {
         var candidates = runtime.runningApplications(bundleIdentifier: targetID).compactMap { $0.bundleURL }
-        candidates += [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
+        candidates += launcherHost == .zcode ? [URL(fileURLWithPath: "/Applications/ZCode.app")]
+            : [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
         if let url = runtime.urlForApplication(bundleIdentifier: targetID) { candidates.append(url) }
         return candidates.compactMap { validTarget($0) }.first
     }
@@ -1274,7 +1397,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             guard let self else { return }
             let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
             self.opening = false
-            self.finishStartup(startupLegacyOutcome(from: result), promoted: self.promoted)
+            if expectedApplication.host == .zcode {
+                self.finishZCodeStartup(result, expectedApplication: expectedApplication, promoted: self.promoted)
+            } else {
+                self.finishStartup(startupLegacyOutcome(from: result), promoted: self.promoted)
+            }
         }
     }
 
@@ -1287,12 +1414,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
               let executable = bundle.executableURL.map({ real($0) }),
               executable.path.hasPrefix(real(url).appendingPathComponent("Contents/MacOS").path + "/") else { return nil }
         let info = bundle.infoDictionary ?? [:]
+        guard let host = launcherHost else { return nil }
+        var executableHash = ""
+        if host == .zcode {
+            guard let bytes = try? Data(contentsOf: executable) else { return nil }
+            executableHash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        }
         return HostApplicationKey(
-            host: .codex, bundleURL: real(url), executableURL: executable,
+            host: host, bundleURL: real(url), executableURL: executable,
             bundleIdentifier: bundleID,
             version: (info["CFBundleShortVersionString"] as? String) ?? "",
             build: (info["CFBundleVersion"] as? String) ?? "",
-            executableSHA256: "")
+            executableSHA256: executableHash)
+    }
+
+    private func capabilityFindings(for key: HostApplicationKey, contractVersion: String) -> [CapabilityFinding] {
+        if key.host == .zcode { return ZCodeNativeRuntime.findings(for: key, resources: runtime.resourceURL) }
+        return codexCapabilityFindings(for: key, contractVersion: contractVersion)
     }
 
     /// Honest per-capability evidence for the shipped Codex chain. Each entry keeps
@@ -1403,7 +1541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     nextProbe: nil))
             },
             capabilityEvidence: { [weak self] evidence in
-                self?.codexCapabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []
+                self?.capabilityFindings(for: evidence.key, contractVersion: contractVersion) ?? []
             },
             makeCodexDriver: { inputs in
                 CodexSkinDriver(
@@ -1422,11 +1560,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     },
                     installObservation: installObservation, assembly: assembly)
             },
-            makeZCodeDriver: nil) // No verified ZCode entry exists; C0 never fakes one.
-        switch SkinHostFactory.make(host: .codex,
+            makeZCodeDriver: { [weak self] inputs in
+                let state = self?.option("--zcode-state-root").map { URL(fileURLWithPath: $0) }
+                    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Azhou AI Lab/ZCode")
+                let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: runtime, readPayload: { [weak self] in
+                    guard let self else { throw StartupFailure(reason: "asset-invalid", message: "启动入口已结束。") }
+                    return try self.startupPayload()
+                }, stateRoot: state, onEvent: { [weak self] fields in self?.emitZCodeRuntimeEvent(fields) })
+                return ZCodeSkinDriver(inputs: inputs, assembly: bridge.makeAssembly())
+            })
+        switch SkinHostFactory.make(host: expectedApplication.host,
                                     expectedApplication: expectedApplication,
                                     observed: observed,
-                                    findings: codexCapabilityFindings(for: expectedApplication,
+                                    findings: capabilityFindings(for: expectedApplication,
                                                                       contractVersion: contractVersion),
                                     contractVersion: contractVersion,
                                     dependencies: dependencies) {
@@ -1527,6 +1673,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard let final = startupEventStream?.resolve(
             outcome, observation: startupCapture?.snapshot(), at: runtime.uptime
         ) else { return }
+        finishResolvedStartup(final, promoted: promoted)
+    }
+
+    // Module-internal so lifecycle tests drive the real termination/exit path;
+    // no production CLI, environment switch, or injectable result source.
+    func finishZCodeStartup(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
+                                   promoted: Bool) {
+        beginStartupEvents()
+        guard let final = startupEventStream?.resolveZCode(result, expectedApplication: expectedApplication,
+                                                          at: runtime.uptime) else { return }
+        finishResolvedStartup(final, promoted: promoted)
+    }
+
+    private func finishResolvedStartup(_ final: NativeStartupFinalOutcome, promoted: Bool) {
         processExitCode = final.exitCode
         switch final {
         case .activated:

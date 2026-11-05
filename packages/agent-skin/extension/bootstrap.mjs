@@ -11,7 +11,9 @@ export function bootstrapStartup({
   host,
   pageAdapter,
 }) {
-  const applyWallpaper = createWallpaperApplicator(installRenderer, { version, css }, host);
+  const wallpaperOptions = { version, css };
+  if (pageAdapter?.wallpaper) wallpaperOptions.pageAdapter = pageAdapter;
+  const applyWallpaper = createWallpaperApplicator(installRenderer, wallpaperOptions, host);
   // Static properties below carry animation-owned factories only. The host page
   // strategy (pageAdapter) is passed explicitly to installStartup and must never
   // ride this static surface to bypass the verifier's entry predicate.
