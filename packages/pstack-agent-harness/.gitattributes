@@ -1,0 +1,8 @@
+# Immutable upstream import, literal quilt patches and deterministic generated
+# distributions. Retain their source bytes and whitespace exactly: the
+# 20-patch builder plus package/CI parity gates validate these directories.
+# All Hub-authored scripts, tests, adapters and other files retain Git's
+# default whitespace checks (no repository-wide exemption).
+pstack/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+patches/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+harness/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
