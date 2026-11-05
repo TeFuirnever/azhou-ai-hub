@@ -37,6 +37,11 @@ MARKETPLACE = "pstack-claude"
 PLUGIN = "pstack-azhouzhou@pstack-claude"
 PLUGIN_NAME = PLUGIN.split("@")[0]
 PLUGIN_ROOT = "harness/pstack/codex/"
+# A receipt written before the upstream-quilt migration may still own the
+# original native plugin. A removal must use the *snapshot's* identity, never
+# the current source-tree identity. These are the only two reviewed layouts.
+LEGACY_PLUGIN = "pstack@pstack-claude"
+LEGACY_PLUGIN_ROOT = "plugins/pstack/"
 RECEIPT_SCHEMA = "azhou-hub.pstack-install.v1"
 TRANSITION_SCHEMA = "azhou-hub.pstack-transition.v1"
 SHEET_NAME = "pstack-models.md"
@@ -382,7 +387,8 @@ def _registered(value: dict, name: str) -> bool:
     return any(row.get(field) == name for row in rows)
 
 
-def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | None = None) -> None:
+def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | None = None,
+                            *, plugin_id: str = PLUGIN, plugin_root: str = PLUGIN_ROOT) -> None:
     _registered(marketplaces, MARKETPLACE)
     entries = marketplaces.get("marketplaces", [])
     selected = [item for item in entries if item.get("name") == MARKETPLACE]
@@ -390,18 +396,40 @@ def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | 
     if len(selected) != 1 or selected[0].get("root") != str(snapshot) or selected[0].get("marketplaceSource") != expected_source:
         raise common.IntegrationError("native marketplace is not the selected pinned local pstack snapshot")
     if plugins is not None:
-        _registered(plugins, PLUGIN)
-        selected = [item for item in plugins.get("installed", []) if item.get("pluginId") == PLUGIN]
+        _registered(plugins, plugin_id)
+        selected = [item for item in plugins.get("installed", []) if item.get("pluginId") == plugin_id]
+        if len(plugins.get("installed", [])) != len(selected):
+            raise common.IntegrationError("native pstack marketplace contains another plugin; do not remove it")
         if len(selected) != 1 or not selected[0].get("installed") or not selected[0].get("enabled"):
             raise common.IntegrationError("native Codex does not report one enabled pstack installation")
-        if (selected[0].get("source") != {"source": "local", "path": str(snapshot / "harness/pstack/codex")}
+        if (selected[0].get("source") != {"source": "local", "path": str(snapshot / plugin_root.rstrip("/"))}
                 or selected[0].get("marketplaceSource") != expected_source):
             raise common.IntegrationError("native pstack plugin resolves to a different source")
 
 
-def _check_runtime_tree(root: Path, lock: dict, *, allow_dependencies: bool = False) -> dict:
+def _snapshot_plugin_identity(lock: dict) -> tuple[str, str]:
+    """Resolve a reviewed native identity from the receipt's immutable lock.
+
+    Requiring exactly one known manifest and refusing mixed layouts prevents
+    an old ownership receipt from authorizing deletion of the new plugin.
+    """
+    files = lock["files"]
+    layouts = ((PLUGIN, PLUGIN_ROOT), (LEGACY_PLUGIN, LEGACY_PLUGIN_ROOT))
+    selected = [(plugin_id, prefix) for plugin_id, prefix in layouts
+                if prefix + ".codex-plugin/plugin.json" in files]
+    if len(selected) != 1:
+        raise common.IntegrationError("owned pstack snapshot has an unknown or ambiguous native plugin identity")
+    plugin_id, prefix = selected[0]
+    other = LEGACY_PLUGIN_ROOT if prefix == PLUGIN_ROOT else PLUGIN_ROOT
+    if any(name.startswith(other) for name in files):
+        raise common.IntegrationError("owned pstack snapshot mixes old and new plugin layouts")
+    return plugin_id, prefix
+
+
+def _check_runtime_tree(root: Path, lock: dict, *, allow_dependencies: bool = False,
+                        plugin_root: str = PLUGIN_ROOT) -> dict:
     """The native installer copies a directory, so unlisted files matter too."""
-    expected = {name[len(PLUGIN_ROOT):] for name in lock["files"] if name.startswith(PLUGIN_ROOT)}
+    expected = {name[len(plugin_root):] for name in lock["files"] if name.startswith(plugin_root)}
     directories = {parent.as_posix() for name in expected for parent in Path(name).parents if parent != Path(".")}
     dependencies = "skills/poteto-mode/scripts/node_modules"
     dependency_files = 0
@@ -425,6 +453,8 @@ def _check_runtime_tree(root: Path, lock: dict, *, allow_dependencies: bool = Fa
 
 
 def _installed_copy(home: Path, lock: dict, *, allow_dependencies: bool = False) -> Path:
+    plugin_id, plugin_root = _snapshot_plugin_identity(lock)
+    expected_name = plugin_id.split("@", 1)[0]
     candidates = []
     for manifest in (home / "plugins").rglob(".codex-plugin/plugin.json"):
         if manifest.is_symlink():
@@ -433,16 +463,17 @@ def _installed_copy(home: Path, lock: dict, *, allow_dependencies: bool = False)
             metadata = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if metadata.get("name") == PLUGIN_NAME:
+        if metadata.get("name") == expected_name:
             candidates.append(manifest.parent.parent)
     if len(candidates) != 1:
         raise common.IntegrationError(f"expected exactly one native installed pstack copy; found {len(candidates)}")
     installed = candidates[0]
-    _check_runtime_tree(installed, lock, allow_dependencies=allow_dependencies)
+    _check_runtime_tree(installed, lock, allow_dependencies=allow_dependencies,
+                        plugin_root=plugin_root)
     for name, item in lock["files"].items():
-        if not name.startswith(PLUGIN_ROOT):
+        if not name.startswith(plugin_root):
             continue
-        relative = name[len(PLUGIN_ROOT):]
+        relative = name[len(plugin_root):]
         cursor = installed
         for part in Path(relative).parts:
             cursor /= part
@@ -547,9 +578,10 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         origin = {"commit": lock["commit"], "source_lock_sha256": common.plan_digest(lock)}
         snapshot = Path(receipt["snapshot"])
         common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
+        plugin_id, plugin_root = _snapshot_plugin_identity(lock)
         if receipt.get("state") == "installed" or (receipt.get("operation") == "install" and 1 in receipt.get("completed_steps", [])):
             _installed_copy(home, lock)
-        commands = [[str(binary), "plugin", "remove", PLUGIN, "--json"],
+        commands = [[str(binary), "plugin", "remove", plugin_id, "--json"],
                     [str(binary), "plugin", "marketplace", "remove", MARKETPLACE, "--json"]]
     else:
         raise common.IntegrationError("operation must be install or remove")
@@ -624,10 +656,12 @@ def doctor(*, workspace: Path, codex_home: Path, codex_bin: Path, hub_root: Path
     common.verify_snapshot(COMPONENT, Path(receipt["snapshot"]), hub_root=hub_root)
     lock = common.snapshot_lock(COMPONENT, Path(receipt["snapshot"]))
     installed = _installed_copy(home, lock, allow_dependencies=True)
-    dependencies = _check_runtime_tree(installed, lock, allow_dependencies=True)
+    plugin_id, plugin_root = _snapshot_plugin_identity(lock)
+    dependencies = _check_runtime_tree(installed, lock, allow_dependencies=True, plugin_root=plugin_root)
     marketplaces = _native(Path(codex_bin), home, ["marketplace", "list"])
     plugins = _native(Path(codex_bin), home, ["list", "--marketplace", MARKETPLACE])
-    _verify_registry_source(marketplaces, Path(receipt["snapshot"]), plugins)
+    _verify_registry_source(marketplaces, Path(receipt["snapshot"]), plugins,
+                            plugin_id=plugin_id, plugin_root=plugin_root)
     sheet = _sheet_bytes(home)
     hook = _sheet_hook(sheet)
     coexistence = {
@@ -1202,7 +1236,14 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
         if plan["operation"] == "install":
             snapshot = common.snapshot_source(COMPONENT, Path(plan["source"]["source"]), workspace, hub_root=hub_root,
                                               expected_digest=plan["source_lock_sha256"])
-            _check_runtime_tree(snapshot / "harness/pstack/codex", common.snapshot_lock(COMPONENT, snapshot))
+        snapshot_lock = common.snapshot_lock(COMPONENT, snapshot)
+        plugin_id, plugin_root = _snapshot_plugin_identity(snapshot_lock)
+        expected_command = ([str(binary), "plugin", "marketplace", "add", str(snapshot), "--json"]
+                            if plan["operation"] == "install" else
+                            [str(binary), "plugin", "remove", plugin_id, "--json"])
+        if plan["commands"][0] != expected_command:
+            raise common.IntegrationError("reviewed native plugin command differs from the frozen snapshot")
+        _check_runtime_tree(snapshot / plugin_root, snapshot_lock, plugin_root=plugin_root)
         receipt = {"schema": RECEIPT_SCHEMA, "codex_home": str(home), "snapshot": str(snapshot),
                    "source_lock_sha256": plan["source_lock_sha256"], "commit": plan["source"]["commit"],
                    "codex_bin": str(binary), "codex_bin_sha256": plan["codex_bin_sha256"],
@@ -1222,8 +1263,26 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                 if _registered(marketplaces, MARKETPLACE):
                     _verify_registry_source(marketplaces, snapshot)
                     plugins = _native(binary, home, ["list", "--marketplace", MARKETPLACE])
-                    if not _registered(plugins, PLUGIN):
+                    # Native JSON may be syntactically valid but missing required
+                    # registry fields. Never interpret a missing/invalid list as
+                    # no installed plugins and then remove the shared marketplace.
+                    is_registered = _registered(plugins, plugin_id)
+                    rows = plugins["installed"]
+                    if any(not isinstance(row.get("pluginId"), str) or not row["pluginId"]
+                           for row in rows):
+                        raise common.IntegrationError("native Codex plugin registry contains malformed plugin identity")
+                    selected = [row for row in rows if row["pluginId"] == plugin_id]
+                    if len(selected) != len(rows):
+                        raise common.IntegrationError("native pstack marketplace contains another plugin; preserve its registration")
+                    if not is_registered:
                         receipt["completed_steps"] = sorted(set(receipt["completed_steps"]) | {0})
+                    else:
+                        _verify_registry_source(marketplaces, snapshot, plugins,
+                                                plugin_id=plugin_id, plugin_root=plugin_root)
+                        # A failed-remove receipt is *not* a waiver of byte
+                        # verification: inspect the actual installed copy on
+                        # every retry before allowing the destructive CLI.
+                        _installed_copy(home, snapshot_lock)
                 elif old.get("operation") == "remove" and 0 in old.get("completed_steps", []):
                     receipt["completed_steps"] = [0, 1]
                 elif old.get("operation") == "install" and 0 not in old.get("completed_steps", []):
@@ -1235,7 +1294,21 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                     continue
                 if plan["operation"] == "install":
                     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
-                _check_runtime_tree(snapshot / "harness/pstack/codex", common.snapshot_lock(COMPONENT, snapshot))
+                _check_runtime_tree(snapshot / plugin_root, common.snapshot_lock(COMPONENT, snapshot),
+                                    plugin_root=plugin_root)
+                if plan["operation"] == "remove":
+                    if index == 0:
+                        # Recheck immediately before touching the owned copy.
+                        _installed_copy(home, snapshot_lock)
+                    elif index == 1:
+                        # The shared marketplace must be empty at the exact
+                        # point of removal, including on a resumed operation.
+                        current = _native(binary, home, ["list", "--marketplace", MARKETPLACE])
+                        _registered(current, plugin_id)  # validates registry shape
+                        rows = current["installed"]
+                        if rows:
+                            raise common.IntegrationError(
+                                "native pstack marketplace still contains installed plugins; preserve registration")
                 output = _native(binary, home, command[2:-1])
                 receipt["commands"].append({"argv": command, "result": output})
                 receipt["completed_steps"].append(index)
@@ -1250,7 +1323,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                 return {**doctor(workspace=workspace, codex_home=home, codex_bin=binary, hub_root=hub_root), "changed": True}
             remaining_marketplaces = _native(binary, home, ["marketplace", "list"])
             remaining_plugins = _native(binary, home, ["list"])
-            if _registered(remaining_marketplaces, MARKETPLACE) or _registered(remaining_plugins, PLUGIN):
+            if _registered(remaining_marketplaces, MARKETPLACE) or _registered(remaining_plugins, plugin_id):
                 raise common.IntegrationError("native removal returned success but pstack is still registered")
             return {"status": "removed", "changed": True, "native_owner": "Codex plugin manager", "snapshot_retained": str(snapshot),
                     "native_registry": {"marketplaces": remaining_marketplaces, "plugins": remaining_plugins}}

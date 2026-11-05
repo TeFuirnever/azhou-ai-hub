@@ -30,6 +30,13 @@ def skills_for(tree: str) -> set[str]:
 
 
 class PstackDistributionContractTest(unittest.TestCase):
+    def test_harness_ci_parity_detects_untracked_generator_outputs(self) -> None:
+        # A clean git diff alone does not notice a newly generated file.
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("git diff --exit-code -- harness/", workflow)
+        self.assertIn("git ls-files --others --exclude-standard -- harness/", workflow)
+        self.assertIn('if [ -n "$untracked" ]; then', workflow)
+
     def test_four_generated_skill_trees_share_the_same_full_inventory(self) -> None:
         by_host = {host: skills_for(host) for host in
                    ("claude-code", "codex", "zcode", "skills-root")}
@@ -113,6 +120,35 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertIn("zcode skills list", zcode)
         self.assertIn("/architect", zcode)
         self.assertNotIn("/pstack:<name>", zcode)
+
+    def test_hub_portable_orchestration_overlays_preserve_recovery_and_gates(self) -> None:
+        overlay = PACKAGE / "hub-skills/poteto-mode/playbooks"
+        pristine = PACKAGE / "pstack/skills/poteto-mode/playbooks"
+        for name in ("orchestrate.md", "autopilot-full.md"):
+            source = (overlay / name).read_bytes()
+            self.assertNotEqual(source, (pristine / name).read_bytes())
+            for host in ("claude-code", "codex", "zcode", "skills-root"):
+                with self.subTest(host=host, playbook=name):
+                    generated = HARNESS / host / "skills/poteto-mode/playbooks" / name
+                    self.assertEqual(generated.read_bytes(), source)
+            content = source.decode("utf-8")
+            self.assertIn("independent", content)
+            self.assertIn("head SHA", content)
+            self.assertIn("restart", content.lower())
+        plan = (overlay / "orchestrate.md").read_text(encoding="utf-8")
+        for term in ("no real Task", "local worktree", "standing orders",
+                     "bounded stuck threshold", "at most", "No invented scheduler"):
+            self.assertIn(term, plan)
+        auto = (overlay / "autopilot-full.md").read_text(encoding="utf-8")
+        self.assertIn("No auto-loop unless installed", auto)
+        self.assertIn("stop at merge-ready", auto)
+
+    def test_zcode_named_reviewer_uses_existing_agent_path(self) -> None:
+        tree = HARNESS / "zcode"
+        guide = (tree / "docs/harness/zcode.md").read_text(encoding="utf-8")
+        self.assertIn("<pstack>/agents/comment-sicko.md", guide)
+        self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", guide)
+        self.assertTrue((tree / "agents/comment-sicko.md").is_file())
 
     def test_zcode_commands_plugin_is_flat_and_has_no_skills_or_hooks(self) -> None:
         tree = HARNESS / "zcode-plugin"

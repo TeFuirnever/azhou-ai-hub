@@ -65,7 +65,13 @@ jobs:
         run: node tools/build-harness.mjs
       - name: Committed trees match a fresh build
         working-directory: packages/pstack-agent-harness
-        run: git diff --exit-code -- harness/
+        run: |
+          git diff --exit-code -- harness/
+          untracked="$(git ls-files --others --exclude-standard -- harness/)"
+          if [ -n "$untracked" ]; then
+            printf 'Untracked generated harness files:\n%s\n' "$untracked" >&2
+            exit 1
+          fi
       - name: Install built pstack test dependencies
         working-directory: packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/scripts
         run: bun install --frozen-lockfile
