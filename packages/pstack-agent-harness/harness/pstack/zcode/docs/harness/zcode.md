@@ -21,7 +21,7 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | Cursor | ZCode |
 | --- | --- |
 | `subagent_type: generalPurpose` | No named subagent types are recorded. Dispatch ad-hoc and put the role in the brief. |
-| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or `poteto-mode/references/agents/comment-sicko.md`, in full first. |
+| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or the plugin-root `agents/comment-sicko.md`, in full first. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | The same dispatch, one per worker, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |
 | `readonly: true` | No sandbox field is recorded. The brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | Same dispatch. |

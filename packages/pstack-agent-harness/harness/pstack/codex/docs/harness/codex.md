@@ -22,7 +22,7 @@ pstack skills use Cursor names. In Codex, read this file once per session, then 
 | Cursor | Codex |
 | --- | --- |
 | `subagent_type: generalPurpose` | Ad-hoc `spawn_agent`. Codex has no subagent types. |
-| `poteto-agent`, `comment-sicko` | Ad-hoc `spawn_agent` whose brief tells the worker to read `poteto-mode/SKILL.md`, or `poteto-mode/references/agents/comment-sicko.md`, in full first. |
+| `poteto-agent`, `comment-sicko` | Ad-hoc `spawn_agent` whose brief tells the worker to read `poteto-mode/SKILL.md`, or the plugin-root `agents/comment-sicko.md`, in full first. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | Two `spawn_agent` calls, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |
 | `readonly: true` | No sandbox field. The brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | Same dispatch. It keeps the session's MCP servers. |
