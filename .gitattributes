@@ -1,5 +1,6 @@
 * text=auto eol=lf
 
+packages/pstack-agent-harness/patches/*.patch -whitespace
 skills/excalidraw-diagram/references/vendor/** linguist-vendored -whitespace
 skills/excalidraw-diagram/references/fonts/** linguist-vendored
 skills/excalidraw-diagram/references/libraries/** linguist-vendored
