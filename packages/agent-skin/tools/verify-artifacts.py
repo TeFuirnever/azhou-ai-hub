@@ -225,8 +225,10 @@ INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
     'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift', 'Native/ZCodeSkinDriver.swift', 'Native/ZCodeSkinRuntime.swift',
     'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
+    'tools/build-dsh-plugin.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs', 'extension/bootstrap.mjs',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs',
+    'extension/hosts/dsh.mjs', 'extension/bootstrap.mjs',
     'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
     'wallpaper/renderer.js', 'wallpaper/apply.js',
@@ -241,6 +243,20 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
 ZCODE_STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/zcode.mjs')
+# A web plugin package, never a macOS bundle.
+DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs', 'tools/build-dsh-plugin.py')
+DSH_PLUGIN_PACKAGE_NAME = 'azhou-agent-skin'
+DSH_PLUGIN_OUTPUTS = (
+    'client.js', 'cordis.patch.yml', 'icon.png', 'index.js',
+    'locale/en.json', 'locale/zh.json', 'package.json',
+)
+DSH_PLUGIN_PACKAGE_ENTRIES = (*DSH_PLUGIN_OUTPUTS, 'manifest.json')
+MAX_PLUGIN_ICON_BYTES = 256 * 1024
+DSH_PLUGIN_LOCALE_TITLES = {
+    'zh': '阿舟 AI 实验室 for DeepSeek Harness',
+    'en': 'Azhou AI Lab for DeepSeek Harness',
+}
+DSH_PLUGIN_PATCH_YAML = "- insert:\n    - id: azhou-agent-skin\n      name: 'azhou-agent-skin'\n"
 
 # Exact pre-adapter startup source set, retained for installed local builds through 30.
 # C0 and the parallel Codex line used overlapping build numbers with distinct inputs.
@@ -548,6 +564,126 @@ def verify_wallpaper(path, info, marker):
             raise RuntimeError('ZCode wallpaper adapter/entry binding is invalid.')
     elif wallpaper_host != 'codex' or 'createZCodePageAdapter(' in wallpaper_script:
         raise RuntimeError('Wallpaper host label does not match its adapter entry.')
+
+
+def verify_dsh_plugin(path):
+    """Validate an assembled local DSH plugin package against the current sources.
+
+    Mirrors verify_wallpaper's manifest binding: the plugin manifest pins the
+    current build identity, the exact DSH source-input set, and the digest of
+    every shipped file, so any drift from this tree refuses verification.
+    """
+    package = Path(path)
+    if package.is_symlink():
+        raise RuntimeError(f'DSH 插件包含符号链接：{package}')
+    if not package.is_dir():
+        raise RuntimeError(f'DSH 插件包缺失或不是实体目录：{package}')
+    for item in package.rglob('*'):
+        if item.is_symlink():
+            raise RuntimeError(f'DSH 插件包含符号链接：{item}')
+    present = sorted(item.relative_to(package).as_posix() for item in package.rglob('*') if item.is_file())
+    if present != sorted(DSH_PLUGIN_PACKAGE_ENTRIES):
+        raise RuntimeError(f'DSH 插件包文件清单与固定集合不符：{package}')
+
+    def package_bytes(relative):
+        target = package / relative
+        if target.is_symlink() or not target.is_file():
+            raise RuntimeError(f'DSH 插件文件缺失或不是实体文件：{relative}')
+        return target.read_bytes()
+
+    def package_json_of(relative):
+        try:
+            value = json.loads(package_bytes(relative).decode('utf-8'))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f'DSH 插件文件不是有效 JSON：{relative}') from exc
+        if not isinstance(value, dict):
+            raise RuntimeError(f'DSH 插件文件必须是 JSON 对象：{relative}')
+        return value
+
+    manifest_json = package_json_of('package.json')
+    if (manifest_json.get('name') != DSH_PLUGIN_PACKAGE_NAME
+            or manifest_json.get('private') is not True
+            or manifest_json.get('type') != 'module'
+            or manifest_json.get('version') != VERSION
+            or manifest_json.get('icon') != 'icon.png'
+            or manifest_json.get('exports') != {
+                '.': './index.js', './client': './client.js',
+                './locale/*.json': './locale/*.json', './package.json': './package.json'}
+            or manifest_json.get('files') != ['client.js', 'cordis.patch.yml', 'icon.png', 'index.js',
+                                              'locale/*.json', 'manifest.json']
+            or manifest_json.get('dsh') != {
+                'bundle': {'patch': './cordis.patch.yml'},
+                'client': {'inject': [], 'immediately': True, 'platform': 'web'}}
+            or any(key in manifest_json for key in (
+                'dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'))):
+        raise RuntimeError('DSH 插件 package.json 不符合固定的本地 bundle 清单。')
+
+    if package_bytes('cordis.patch.yml').decode('utf-8') != DSH_PLUGIN_PATCH_YAML:
+        raise RuntimeError('DSH 插件 patch 必须是唯一的 azhou-agent-skin insert 行。')
+
+    try:
+        index_js = package_bytes('index.js').decode('utf-8')
+    except UnicodeError as exc:
+        raise RuntimeError('DSH 插件 index.js 必须是 UTF-8。') from exc
+    if index_js != '/** Host half of the Agent Skin bundle; the Client module owns the rendering. */\nexport function apply() {}\n':
+        raise RuntimeError('DSH 插件 index.js 必须保持官方模板的宿主侧 no-op 形态。')
+
+    client_data = package_bytes('client.js')
+    if not client_data or len(client_data) >= MAX_STARTUP_BYTES:
+        raise RuntimeError('DSH 插件 client.js 必须是小于 24 MiB 的非空文件。')
+    try:
+        client = client_data.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        raise RuntimeError('DSH 插件 client.js 必须是 UTF-8。') from exc
+    binding = ('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, buildNumber: '
+               + json.dumps(BUILD) + ' } }, {')
+    bound_once = (
+        'window.__ModuleLoader__.load({', "id: 'azhou-agent-skin',", 'factory(require) {',
+        'const runStartup = (registerCleanup) => {', 'function createDSHPageAdapter(', binding,
+        '    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });',
+        'return bootstrapStartup({', 'const inject = [];', 'function apply(ctx) {',
+        'module.exports = { apply, inject };', 'return module.exports;',
+        "controllerOwner: 'azhou-dsh-startup'", "owner: 'azhou.dsh-startup-animation'",
+        'const DEFAULT_ASSETS = Object.freeze(',
+    )
+    for needle in bound_once:
+        if client.count(needle) != 1:
+            raise RuntimeError(f'DSH 插件 client.js 必须恰好绑定一次：{needle!r}')
+    if ('createCodexPageAdapter(' in client or 'createZCodePageAdapter(' in client
+            or '((controllerMetadata) => {' in client
+            or re.search(r'^\s*(?:import|export)\s', client, re.M)
+            or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', client)
+            or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', client)
+            or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', client)):
+        raise RuntimeError('DSH 插件 client.js 含有外来适配器、模块导入或外部资源访问。')
+
+    for locale, title in DSH_PLUGIN_LOCALE_TITLES.items():
+        meta = package_json_of(f'locale/{locale}.json')
+        description = (meta.get('meta') or {}).get('description')
+        if (set(meta) != {'meta'} or set(meta['meta']) != {'title', 'description'}
+                or meta['meta'].get('title') != title
+                or not isinstance(description, str) or not description.strip()):
+            raise RuntimeError(f'DSH 插件 locale/{locale}.json 缺少固定的 meta 标题与描述。')
+
+    icon = package_bytes('icon.png')
+    if len(icon) > MAX_PLUGIN_ICON_BYTES:
+        raise RuntimeError('DSH 插件 icon.png 超出宿主 256 KiB 限制。')
+    png_details(icon, 'icon.png')
+
+    inputs = source_inputs()
+    manifest = package_json_of('manifest.json')
+    outputs = {relative: hashlib.sha256(package_bytes(relative)).hexdigest()
+               for relative in DSH_PLUGIN_OUTPUTS}
+    if (manifest.get('schema') != 1 or manifest.get('protocolVersion') != 1
+            or manifest.get('appVersion') != VERSION or str(manifest.get('appBuild')) != BUILD
+            or manifest.get('targetHost') != 'dsh'
+            or manifest.get('inputSHA256') != aggregate_inputs(inputs)
+            or manifest.get('sourceInputs') != {name: inputs[name] for name in DSH_PLUGIN_REQUIRED_INPUTS}
+            or manifest.get('outputs') != outputs
+            or not isinstance(manifest.get('scope'), str)
+            or 'no install or host writes' not in manifest['scope']):
+        raise RuntimeError('DSH 插件 manifest 未绑定当前构建输入与包内文件摘要。')
+    return manifest
 
 def png_details(data, label):
     """Validate a complete, non-interlaced 8-bit RGB/RGBA PNG without Pillow."""
@@ -959,6 +1095,13 @@ def check():
         raise RuntimeError('拒绝通过符号链接检查 .build。')
     info = verify_product(PAYLOAD)
     marker = read_marker(PAYLOAD, required=True)
+    dsh_plugin = ROOT / '.build/azhou-dsh-plugin' / DSH_PLUGIN_PACKAGE_NAME
+    dsh_plugin_path = None
+    if dsh_plugin.is_symlink():
+        raise RuntimeError('拒绝通过符号链接检查 DSH 插件包。')
+    if dsh_plugin.is_dir():
+        verify_dsh_plugin(dsh_plugin)
+        dsh_plugin_path = str(dsh_plugin)
     print(json.dumps({
         'kind': 'buildPayload', 'payload': str(PAYLOAD),
         'bundleID': info['CFBundleIdentifier'], 'executable': info['CFBundleExecutable'],
@@ -969,6 +1112,7 @@ def check():
         'startup': 'Contents/Resources/startup/install.js',
         'fingerprint': fingerprint(PAYLOAD), 'hasAppSuffix': PAYLOAD.suffix == '.app',
         'installation': str(Path.home() / 'Applications' / NAME),
+        'dshPlugin': dsh_plugin_path,
         'scope': 'build payload only; run tools/install-macos.py --check for installed-entry audit',
     }, ensure_ascii=False))
 
@@ -1021,6 +1165,7 @@ if __name__ == '__main__':
     actions.add_argument('--write-marker', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-bundle-info', metavar='STAGED_PAYLOAD')
     actions.add_argument('--check-inputs', metavar='STAGED_PAYLOAD')
+    actions.add_argument('--verify-dsh-plugin', metavar='DSH_PLUGIN_DIR')
     options = parser.parse_args()
     configure_build_host(options.host)
     try:
@@ -1032,6 +1177,8 @@ if __name__ == '__main__':
             write_bundle_info(options.write_bundle_info)
         elif options.check_inputs:
             check_inputs(options.check_inputs)
+        elif options.verify_dsh_plugin:
+            verify_dsh_plugin(options.verify_dsh_plugin)
         else:
             check()
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, plistlib.InvalidFileException) as error:

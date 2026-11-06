@@ -51,8 +51,11 @@ test('entry owns in-flow row, hides on overflow, removes listeners once',()=>{
 test('wallpaper shell refuses absent or ambiguous main and respects cancellation',()=>{
  const h=host();const main={closest:()=>null};let count=1;
  const root={querySelectorAll:s=>s==='main'?Array(count).fill(main):[{}]};h.document={getElementById:()=>root};
- const a=createZCodePageAdapter(h);assert.equal(a.wallpaperShellState(()=>false),'cancelled');assert.equal(a.wallpaperShellState(()=>true),'ready');assert.deepEqual(a.wallpaperSurfaces(),[main]);
- count=2;assert.equal(a.wallpaperShellState(()=>true),null);assert.deepEqual(a.wallpaperSurfaces(),[]);h.location.href='https://invalid/';assert.deepEqual(a.wallpaperSurfaces(),[]);
+ const a=createZCodePageAdapter(h);
+ assert.deepEqual(a.controllerWallpaper,{owner:'azhou.zcode-startup-animation',requiresControllerMetadata:true});
+ assert(Object.isFrozen(a.controllerWallpaper));assert(Object.isFrozen(a.wallpaper));assert(Object.isFrozen(a.wallpaper.attributes));
+ assert.equal(a.wallpaper.validPage(h),true);assert.equal(a.wallpaper.shellState(()=>false),'cancelled');assert.equal(a.wallpaper.shellState(()=>true),'ready');assert.deepEqual(a.wallpaper.surfaces(h),[main]);
+ count=2;assert.equal(a.wallpaper.shellState(()=>true),null);assert.deepEqual(a.wallpaper.surfaces(h),[]);h.location.href='https://invalid/';assert.deepEqual(a.wallpaper.surfaces(h),[]);assert.equal(a.wallpaper.validPage(h),false);
 });
 
 test('native metadata token never echoes URL bootstrap values',()=>{

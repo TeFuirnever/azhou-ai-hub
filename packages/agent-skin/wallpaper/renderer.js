@@ -115,16 +115,24 @@ export async function installRenderer(payload) {
     return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
   };
   const pageAdapter = ownValue(payload, 'pageAdapter');
-  const zcode = ownValue(pageAdapter, 'controllerOwner') === 'azhou-zcode-startup';
-  if (pageAdapter && !zcode) throw problem('invalid-host-adapter');
-  if (zcode) OWNER = 'azhou.zcode-startup-animation';
-  const knownVersion = version => version === VERSION || (!zcode && LEGACY_VERSIONS.has(version));
+  const ports = ownValue(pageAdapter, 'wallpaper');
+  // The ports group is atomic: an adapter that declares it must supply every
+  // member, and the neutral renderer refuses the whole adapter otherwise.
+  const adapter = !!ports && typeof ports === 'object'
+    && typeof ownValue(ports, 'validPage') === 'function'
+    && typeof ownValue(ports, 'shellState') === 'function'
+    && typeof ownValue(ports, 'surfaces') === 'function'
+    && typeof ownValue(ports, 'css') === 'string' && typeof ownValue(ports, 'scope') === 'string'
+    && !!ownValue(ports, 'attributes') && typeof ownValue(ownValue(ports, 'attributes'), 'surfaceMarker') === 'string'
+    && Array.isArray(ownValue(ownValue(ports, 'attributes'), 'observeFilter'));
+  if (pageAdapter && !adapter) throw problem('invalid-host-adapter');
+  const surfaceMarker = adapter ? ports.attributes.surfaceMarker : null;
+  if (adapter) OWNER = ownValue(ownValue(pageAdapter, 'controllerWallpaper'), 'owner') ?? OWNER;
+  const knownVersion = version => version === VERSION || (!adapter && LEGACY_VERSIONS.has(version));
   function validPage() {
     if (window.top !== window) return false;
+    if (adapter) return ports.validPage(globalThis);
     const url = new URL(location.href), route = url.searchParams.get('initialRoute') || '/';
-    if (zcode) return url.protocol === 'file:' && !url.hostname && !url.username && !url.password && !url.hash
-      && decodeURIComponent(url.pathname) === '/Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html'
-      && typeof ownValue(pageAdapter, 'identify') === 'function' && pageAdapter.identify(globalThis).kind === 'matched';
     if (url.protocol === 'app:' && url.hostname === '-' && url.pathname === '/index.html') {
       return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
     }
@@ -152,16 +160,13 @@ export async function installRenderer(payload) {
   const applicationRoot = document.getElementById('root');
   const currentSurfaces = () => {
     if (!applicationRoot) return [];
-    if (!zcode) return [...applicationRoot.querySelectorAll(surfaceSelector)];
-    const discover = ownValue(pageAdapter, 'wallpaperSurfaces');
-    if (typeof discover !== 'function') return [];
-    const nodes = discover(globalThis);
-    return Array.isArray(nodes) && nodes.length === 1 && nodes.every(node => node?.tagName === 'MAIN'
-      && node.isConnected && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
+    if (!adapter) return [...applicationRoot.querySelectorAll(surfaceSelector)];
+    const nodes = ports.surfaces(globalThis);
+    return Array.isArray(nodes) && nodes.length === 1 && nodes.every(node => node?.isConnected
+      && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
   };
-  const shellReady = () => zcode
-    ? typeof ownValue(pageAdapter, 'wallpaperShellState') === 'function'
-      && pageAdapter.wallpaperShellState(ownValue(payload, 'isCurrent'), globalThis) === 'ready' && currentSurfaces().length === 1
+  const shellReady = () => adapter
+    ? ports.shellState(ownValue(payload, 'isCurrent'), globalThis) === 'ready' && currentSurfaces().length === 1
     : !!applicationRoot?.querySelector('[data-app-shell-frame]')
       && !!applicationRoot?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
   if (!document.body || !applicationRoot
@@ -177,10 +182,10 @@ export async function installRenderer(payload) {
     throw problem('namespace-conflict');
   }
   const ownsSurfaceMarkers = current => {
-    if (!zcode) return true;
+    if (!adapter) return true;
     const recorded = ownValue(ownValue(current, BASELINE_KEY), 'zcodeAttributes');
     return [applicationRoot, ...currentSurfaces()].every(node => {
-      const value = node.getAttribute('data-azhou-zcode-wallpaper-surface');
+      const value = node.getAttribute(surfaceMarker);
       return value === null || (value === 'active' && recorded instanceof Map && recorded.has(node));
     });
   };
@@ -245,7 +250,9 @@ export async function installRenderer(payload) {
   }).join(',') + ')';
   const captureOriginal = () => ({
     attribute: root.getAttribute(ATTRIBUTE),
-    zcodeAttributes: zcode ? new Map([applicationRoot, ...currentSurfaces()].map(node => [node, node.getAttribute('data-azhou-zcode-wallpaper-surface')])) : undefined,
+    // The baseline key stays `zcodeAttributes` verbatim: live 0.9.0 ZCode
+    // installs must transfer their recorded baselines across a replacement.
+    zcodeAttributes: adapter ? new Map([applicationRoot, ...currentSurfaces()].map(node => [node, node.getAttribute(surfaceMarker)])) : undefined,
     properties: new Map([IMAGE_PROPERTY, WASH_PROPERTY, SURFACE_PROPERTY].map(name => [
       name, [root.style.getPropertyValue(name), root.style.getPropertyPriority(name)],
     ])),
@@ -255,7 +262,7 @@ export async function installRenderer(payload) {
   const transferredOriginal = {
     attribute: previousOriginal.attribute,
     properties: new Map(previousOriginal.properties),
-    zcodeAttributes: zcode ? new Map([...(previousOriginal.zcodeAttributes ?? []),
+    zcodeAttributes: adapter ? new Map([...(previousOriginal.zcodeAttributes ?? []),
       ...[...(rollbackOriginal.zcodeAttributes ?? [])].filter(([node]) => !previousOriginal.zcodeAttributes?.has(node))]) : undefined,
   };
   if (!transferredOriginal.properties.has(SURFACE_PROPERTY)) {
@@ -267,7 +274,7 @@ export async function installRenderer(payload) {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.setAttribute('data-azhou-owner', OWNER);
-  const styleText = payload.css + (zcode ? '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}' : '');
+  const styleText = payload.css + (adapter ? ports.css : '');
   style.textContent = styleText;
   let disposed = false, committed = false, api;
   let original = rollbackOriginal;
@@ -390,7 +397,7 @@ export async function installRenderer(payload) {
         position: bodyStyle.backgroundPosition.split(',')[1]?.trim() },
       styleCount,
       persistentAnimation: false,
-      verificationScope: zcode ? 'decoded image, viewport cover, unique validated ZCode main and root surfaces; deeper content layers and visual inspection are separate'
+      verificationScope: adapter ? ports.scope
         : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
     };
   }
@@ -400,9 +407,9 @@ export async function installRenderer(payload) {
     if (style.isConnected && style.parentNode === document.head && style.id === STYLE_ID && style.disabled === false
         && style.getAttribute('data-azhou-owner') === OWNER && style.textContent === styleText) style.remove();
     for (const [node, value] of original.zcodeAttributes ?? []) {
-      if (node.getAttribute('data-azhou-zcode-wallpaper-surface') !== 'active') continue;
-      if (value === null) node.removeAttribute('data-azhou-zcode-wallpaper-surface');
-      else node.setAttribute('data-azhou-zcode-wallpaper-surface', value);
+      if (node.getAttribute(surfaceMarker) !== 'active') continue;
+      if (value === null) node.removeAttribute(surfaceMarker);
+      else node.setAttribute(surfaceMarker, value);
     }
     if (root.getAttribute(ATTRIBUTE) === 'active') {
       if (original.attribute === null) root.removeAttribute(ATTRIBUTE);
@@ -453,7 +460,7 @@ export async function installRenderer(payload) {
     // Keep the old sheet attached, so a failed candidate can restore it without
     // re-inserting an inline stylesheet under a potentially stricter CSP.
     if (latestStyle) { latestStyle.disabled = true; latestStyle.removeAttribute('id'); }
-    for (const node of rollbackOriginal.zcodeAttributes?.keys() ?? []) node.setAttribute('data-azhou-zcode-wallpaper-surface', 'active');
+    for (const node of rollbackOriginal.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
     root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
     root.style.setProperty(WASH_PROPERTY, wash);
     if (surface !== null) writeSurface(surface);

@@ -4,6 +4,9 @@ const OWNER = 'azhou-codex-startup';
 const VERSION = 1;
 const LEGACY_WALLPAPER_OWNER = 'azhou.codex-startup-animation';
 const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0', '0.9.0']);
+// The controller-owner allowlist is the anti-hijack boundary for the startup
+// global; it stays explicit here and is never derived from adapters.
+const CONTROLLER_OWNERS = new Set(['azhou-codex-startup', 'azhou-zcode-startup', 'azhou-dsh-startup']);
 const PAGE_REASON = 'page-unsupported';
 const ASSET_REASON = 'asset-invalid';
 const FIXED_PAGE_REASONS = new Set(['asset-invalid', 'storage-unavailable']);
@@ -166,7 +169,8 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 class PageController {
   constructor(host, payload, pageAdapter, owner, metadata) {
     this.owner = owner;
-    this.wallpaperOwner = owner === 'azhou-zcode-startup' ? 'azhou.zcode-startup-animation' : LEGACY_WALLPAPER_OWNER;
+    this.wallpaperOwner = dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'owner')
+      ?? LEGACY_WALLPAPER_OWNER;
     this.metadata = metadata;
     this.host = host;
     this.document = host.document;
@@ -1021,11 +1025,11 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
   }
   const ownerDescriptor = Object.getOwnPropertyDescriptor(pageAdapter, 'controllerOwner');
   const owner = ownerDescriptor ? dataProperty(pageAdapter, 'controllerOwner') : OWNER;
-  if (owner !== OWNER && owner !== 'azhou-zcode-startup') {
+  if (!CONTROLLER_OWNERS.has(owner)) {
     return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
   let metadata;
-  if (owner === 'azhou-zcode-startup') {
+  if (dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'requiresControllerMetadata') === true) {
     metadata = controllerMetadataSnapshot(dataProperty(pageAdapter, 'controllerMetadata'));
     if (!metadata) return { installed: false, alreadyActive: false, reason: 'controller-metadata-invalid' };
   }

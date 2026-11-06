@@ -23,12 +23,14 @@
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/build-startup.py",
+    "tools/build-dsh-plugin.py",
     "tools/build-startup-assets.swift",
     "tools/verify-artifacts.py",
     "hub-package.json",
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/zcode.mjs",
+    "extension/hosts/dsh.mjs",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -64,6 +66,7 @@
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/zcode.mjs",
+    "extension/hosts/dsh.mjs",
     "extension/bootstrap.mjs",
     "localization.js",
     "image-metadata-reader.js",
@@ -152,6 +155,9 @@
     "Native/ZCodeTransportTests.swift",
     "tools/test-zcode-transport.py",
     "tools/test-zcode-runtime.py",
-    "tools/native-zcode-expressions.unit.test.mjs"
+    "tools/native-zcode-expressions.unit.test.mjs",
+    "tools/dsh-adapter.unit.test.mjs",
+    "tools/build-dsh-plugin.py",
+    "tools/test-dsh-build.py"
   ]
 }

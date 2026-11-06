@@ -109,6 +109,7 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
   return Object.freeze({
     controllerOwner: 'azhou-zcode-startup',
     controllerMetadata: configuration.controllerMetadata,
+    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }),
     identify(host = environment) { return identify(host); },
     observeAppearance(host = environment) { return appearance(host); },
     appearanceText: text,
@@ -121,17 +122,29 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
     },
     // Explicit ZCode source selectors for the shared wallpaper assembly port.
     // Live geometry/origin/atomic persistence remain 08 acceptance obligations.
-    wallpaperShellState(isCurrent, host = environment) {
-      if (typeof isCurrent === 'function' && !isCurrent()) return 'cancelled';
-      if (identify(host).kind !== 'matched') return null;
-      const root = host.document.getElementById('root');
-      if (!root || root.querySelectorAll('main').length !== 1 || root.querySelectorAll('aside[data-testid="sidebar"]').length !== 1) return null;
-      return 'ready';
-    },
-    wallpaperSurfaces(host = environment) {
-      if (identify(host).kind !== 'matched') return [];
-      const root = host.document.getElementById('root');
-      return root && root.querySelectorAll('main').length === 1 && root.querySelectorAll('aside[data-testid="sidebar"]').length === 1 ? Array.from(root.querySelectorAll('main')).filter(node => !node.closest('[role="dialog"],iframe,webview')) : [];
-    },
+    wallpaper: Object.freeze({
+      validPage(host = environment) {
+        if (host !== host.top) return false;
+        const url = new URL(host.location.href);
+        return url.protocol === 'file:' && !url.hostname && !url.username && !url.password && !url.hash
+          && decodeURIComponent(url.pathname) === path && identify(host).kind === 'matched';
+      },
+      shellState(isCurrent, host = environment) {
+        if (typeof isCurrent === 'function' && !isCurrent()) return 'cancelled';
+        if (identify(host).kind !== 'matched') return null;
+        const root = host.document.getElementById('root');
+        if (!root || root.querySelectorAll('main').length !== 1 || root.querySelectorAll('aside[data-testid="sidebar"]').length !== 1) return null;
+        return 'ready';
+      },
+      surfaces(host = environment) {
+        if (identify(host).kind !== 'matched') return [];
+        const root = host.document.getElementById('root');
+        return root && root.querySelectorAll('main').length === 1 && root.querySelectorAll('aside[data-testid="sidebar"]').length === 1 ? Array.from(root.querySelectorAll('main')).filter(node => !node.closest('[role="dialog"],iframe,webview')) : [];
+      },
+      attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
+        observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
+      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+      scope: 'decoded image, viewport cover, unique validated ZCode main and root surfaces; deeper content layers and visual inspection are separate',
+    }),
   });
 }
