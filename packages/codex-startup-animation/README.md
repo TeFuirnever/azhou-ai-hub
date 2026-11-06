@@ -1,5 +1,7 @@
 # 阿舟启动 Codex
 
+> 本目录是保留的旧包，其版本、入口及安装步骤描述该包自身的历史状态，不代表当前 Agent Skin 安装。当前 Codex 入口与维护步骤见 [Agent Skin](../agent-skin/README.md)；Pet 的维护归属须单独核查回执。
+
 本包 fork 自 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，基于 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` 的本地维护工作树，包含当时的未提交修改和新增维护文件。上游没有提供开源许可；用户正在联系维护者确认。此处仅授权本地迁移，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
 2026-10-26 已从最终 Hub 包路径在本机构建载荷，接管并复查唯一启动 App；同日将原生 Pet 安装归属切换到本包。没有启动或重启 Codex，也没有进行冷启动、壁纸实际应用或视觉验收。历史验收文档仍只记录原项目当时的结果。私有角色图、壁纸图、图标源图和本地证据只迁入 Git 忽略的本地目录，未随源码提交。

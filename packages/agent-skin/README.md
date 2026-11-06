@@ -6,7 +6,7 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
-2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录，因为现有安装标记和 Pet 回执仍绑定它；本次更名没有转移 App、Pet、`.build` 或 `.local` 所有权。历史验收仍只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
+2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
 原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
@@ -190,7 +190,7 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 重试不重建控制器、不重播动画、不访问偏好存储；健康壁纸直接复查。控制器内的重试最多等待 10 秒，同一时刻只执行一次；结果的 `retries` 保留已过滤的重试前失败信息。新一轮设置或控制器移除会取消旧请求，迟到回调不能重新应用。禁用背景、忙碌状态、缺少有效请求或所有权冲突会拒绝重试。旧控制器没有该 API 时返回 `retry-unavailable`，不会强行替换；下次从更新后的入口冷启动才会加载新控制器。重试可恢复已知失败状态，但不证明某次历史失效的触发原因已查明。
 
-当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟外观入口打开设置（[配置覆盖与保存边界](docs/theme-appearance.md)）；取消不保存，保存后应用背景并关闭设置，启动动画可单独预览草稿。设置和壁纸仍待真实宿主验收，不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
+当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟外观入口打开设置（[入口位置、运行版本与保存边界](docs/theme-appearance.md)）；取消不保存，保存后应用背景并关闭设置，启动动画可单独预览草稿。真实宿主、人工无障碍及安装恢复等验收分别留证，局部通过不代表完整验收通过；不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
 
 ## 安装、升级与旧入口清理
 

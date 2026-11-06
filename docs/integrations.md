@@ -4,7 +4,7 @@ The fourteen canonical Skills under `skills/` keep their existing independent in
 
 The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The existing local Codex App and Pet receipts still bind `packages/codex-startup-animation/`. That source directory remains intact until an explicitly reviewed handoff verifies each owner; the Agent Skin rename does not transfer either installation.
+The 2026-10-26 local App and Pet handoff receipts bind `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. Later installation ownership must be checked against the current App and Pet receipts separately. Keep any source root needed by those receipts and recovery until an explicitly reviewed handoff verifies each owner.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json

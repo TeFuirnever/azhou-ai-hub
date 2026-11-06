@@ -1,5 +1,7 @@
 # 生产操作：Agent Skin 首期 Codex 适配
 
+> 历史设计与更名前的操作计划；下文包名、命令和目标状态不是现役运行指引。当前入口、安装及验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)、[接入说明](../../integrations.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
+
 产品名为Agent Skin，目标包名为`agent-skin`，首期仅适配Codex。当前包目录和Hub组件仍分别为`codex-startup-animation`与`startup-animation`；下方命令是更名前的实际入口，不表示更名已经完成。前置单N落地时同步这些入口；Codex安装身份、旧snapshot来源与生产门保持。
 
 本文规定如何把[目标设计](detailed-design.md)推进到**本机日常使用**。目标实现尚未开始；操作和晋级门均为Planned。对外分发是额外门，不能由本机Production推导。用户已有授权持续有效，执行前核对其范围；仅在缺失真实操作授权时才请求补充，不重复索取已授予许可。

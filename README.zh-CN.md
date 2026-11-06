@@ -106,9 +106,9 @@ Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/RE
 
 pstack 统一从当前 Hub 维护的项目包安装，维护目标为 Codex、Claude Code、MiMo Code（`mimo`）和 zcode。[安装说明](packages/pstack-agent-harness/README.md#install)使用本地包来源；上游链接保留作署名和源码更新依据。Codex 的 `--codex-home` 决定插件装入哪份配置；自定义目录需要通过对应的 `CODEX_HOME` 启动 Codex，不会自动在默认桌面配置中启用插件。
 
-原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告只记录当时检查的输入和宿主。2026-10-26 本地交接使用当时 canonical 的 `codex-startup-animation` 源目录构建；当前已安装 App 与 Pet 属主仍指向该保留目录。本票未转移任一安装。新适配器合同只有合成事件测试；此次没有重启 Codex，冷启动宿主、壁纸实际应用、Pet 选择与播放、正式视觉审阅仍未验证。详见[本地接管记录](evidence/optional-integrations-local-handoff-2026-10-26.md)。
+原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告和 [2026-10-26 本地交接](evidence/optional-integrations-local-handoff-2026-10-26.md)只描述当时检查的输入与宿主，不代表当前安装归属；维护或迁移前须分别核查已安装 App 和 Pet 的回执。合成适配器测试及过去的宿主观察不能证明后续构建已完成完整冷启动、无障碍、视觉或用户验收。
 
-保留的 `codex-startup-animation` 源目录仍拥有已安装 Codex Pet 及其维护状态。Agent Skin 包含复制来的源码，但不取得 Pet 属主；在 App 和 Pet 的接管都经过明确审阅前，应保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+2026-10-26 的 Pet 回执指向保留的 `codex-startup-animation` 源目录；将源码复制到 Agent Skin 不会转移 Pet 属主。维护前核查当前 Pet 回执，并在必要的接管经过审阅前保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
 
 ## Skills
 
