@@ -10,9 +10,9 @@
 
 ## Current-work reconciliation
 
-Agent Skin 已有独立 implementation work，不能沿用早期 Draft 的“尚未实现”判断。2026-10-27 12:00 UTC 的 tracker handoff 报告 #352–358 completed、[#359](https://github.com/TeFuirnever/azhou-ai-hub/issues/359) ready-for-human/open、[#360](https://github.com/TeFuirnever/azhou-ai-hub/issues/360) open。本轮读取这两个 open tickets，并只读检查本地 `codex/agent-skin-integration` 的 `dc20829` 及该分支 support matrix，确认已有代码与隔离验证记录；这里不据 tracker status 推导 code、test、installed-state 或 host acceptance。
+Agent Skin 已在本仓库的 [canonical package](../packages/agent-skin/README.md) 实现，当前支持与验收边界以 [support matrix](support-matrix.md) 和该包文档为准。安装状态与实际宿主验收须分别核查；本地构建或 tracker 状态不能替代它们。
 
-本页所在基线仍保留原 `startup-animation` 入口；后续 integration branch 自己维护 `agent-skin` rename 与 source/receipt migration。本次仅链接既有工作，不复制另一套实现、覆盖并行文档，或宣布生产验收。#359 的固定官方版本真实宿主检查与 #360 的 visual/resource acceptance、日常入口切换继续使用其既有 ownership 和授权边界。历史 [local handoff](../evidence/optional-integrations-local-handoff-2026-10-26.md) 只证明当时的 inputs，不覆盖后续候选。
+2026-10-27 的 tracker handoff 曾报告 #352–358 completed、[#359](https://github.com/TeFuirnever/azhou-ai-hub/issues/359) ready-for-human/open、[#360](https://github.com/TeFuirnever/azhou-ai-hub/issues/360) open，并检查了当时的 `codex/agent-skin-integration` 分支；这些都是历史快照。历史 [local handoff](../evidence/optional-integrations-local-handoff-2026-10-26.md) 只证明当时的输入，不覆盖后续候选或当前安装归属。
 
 ## Maintenance decisions
 

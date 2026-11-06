@@ -146,7 +146,11 @@ def run(command: list[str], log: Path, *, environment: dict[str, str] | None = N
         completed = subprocess.run(command, cwd=ROOT, env=environment, stdout=stream,
                                    stderr=subprocess.STDOUT, check=False)
     if completed.returncode:
-        raise RuntimeError(f"unit command exited {completed.returncode}; see {log}")
+        try:
+            tail = "\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-60:])
+        except OSError:
+            tail = ""
+        raise RuntimeError(f"unit command exited {completed.returncode}; see {log}\n{tail}")
 
 
 def python_coverage(out: Path, sources: list[str]) -> dict:

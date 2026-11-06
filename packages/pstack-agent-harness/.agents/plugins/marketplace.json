@@ -1,14 +1,14 @@
 {
   "name": "pstack-claude",
   "interface": {
-    "displayName": "pstack"
+    "displayName": "pstack-azhouzhou"
   },
   "plugins": [
     {
-      "name": "pstack",
+      "name": "pstack-azhouzhou",
       "source": {
         "source": "local",
-        "path": "./plugins/pstack"
+        "path": "./harness/pstack/codex"
       },
       "policy": {
         "installation": "AVAILABLE",

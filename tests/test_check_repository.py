@@ -111,8 +111,8 @@ class SkillPlatformViewTest(unittest.TestCase):
             matrix = root / "docs" / "support-matrix.md"
             original = matrix.read_text(encoding="utf-8")
             mutated = original.replace(
-                "| Codex | Claude Code | MiMo Code | zcode | Other harnesses (unsupported) |",
-                "| Codex | Claude Code | Kimi Code | zcode | Other harnesses (unsupported) |",
+                "| Codex | Claude Code | MiMo Code | zcode | DeepSeek Harness | Other harnesses (unsupported) |",
+                "| Codex | Claude Code | Kimi Code | zcode | DeepSeek Harness | Other harnesses (unsupported) |",
                 1,
             )
             self.assertNotEqual(original, mutated)
@@ -205,12 +205,12 @@ class SkillPlatformViewTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             mutated = self.real_view().replace(
-                "(evidence/eli5-load-explain-zcode-2026-09-03.md) | unsupported",
-                "(evidence/retired-skill-fragment-2026-01-01.md) | unsupported",
+                "(evidence/eli5-load-explain-zcode-2026-09-03.md)",
+                "(evidence/retired-skill-fragment-2026-01-01.md)",
                 1,
             )
             self.assertNotIn(
-                "retired-skill-fragment-2026-01-01.md) | unsupported",
+                "retired-skill-fragment-2026-01-01.md)",
                 self.real_view(),
             )
             self.write_fixture(root, mutated)
@@ -682,7 +682,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [
-                root / "packages/pstack-agent-harness/plugins/pstack/skills/how/SKILL.md",
+                root / "packages/pstack-agent-harness/components/cursor-team-kit/skills/deslop/SKILL.md",
                 root / "packages/agent-orchestration-kit/profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery([*expected, *bundled], root))

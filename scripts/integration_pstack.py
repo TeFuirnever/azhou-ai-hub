@@ -34,8 +34,9 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = "pstack"
 MARKETPLACE = "pstack-claude"
-PLUGIN = "pstack@pstack-claude"
-PLUGIN_ROOT = "plugins/pstack/"
+PLUGIN = "pstack-azhouzhou@pstack-claude"
+PLUGIN_NAME = PLUGIN.split("@")[0]
+PLUGIN_ROOT = "harness/pstack/codex/"
 RECEIPT_SCHEMA = "azhou-hub.pstack-install.v1"
 TRANSITION_SCHEMA = "azhou-hub.pstack-transition.v1"
 SHEET_NAME = "pstack-models.md"
@@ -393,7 +394,7 @@ def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | 
         selected = [item for item in plugins.get("installed", []) if item.get("pluginId") == PLUGIN]
         if len(selected) != 1 or not selected[0].get("installed") or not selected[0].get("enabled"):
             raise common.IntegrationError("native Codex does not report one enabled pstack installation")
-        if (selected[0].get("source") != {"source": "local", "path": str(snapshot / "plugins/pstack")}
+        if (selected[0].get("source") != {"source": "local", "path": str(snapshot / "harness/pstack/codex")}
                 or selected[0].get("marketplaceSource") != expected_source):
             raise common.IntegrationError("native pstack plugin resolves to a different source")
 
@@ -432,7 +433,7 @@ def _installed_copy(home: Path, lock: dict, *, allow_dependencies: bool = False)
             metadata = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if metadata.get("name") == "pstack":
+        if metadata.get("name") == PLUGIN_NAME:
             candidates.append(manifest.parent.parent)
     if len(candidates) != 1:
         raise common.IntegrationError(f"expected exactly one native installed pstack copy; found {len(candidates)}")
@@ -520,7 +521,7 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
             verified = common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
             if verified["source_lock_sha256"] != common.plan_digest(lock):
                 raise common.IntegrationError("existing snapshot differs from the reviewed package inputs")
-            _check_runtime_tree(snapshot / "plugins/pstack", lock)
+            _check_runtime_tree(snapshot / "harness/pstack/codex", lock)
         commands = [[str(binary), "plugin", "marketplace", "add", str(snapshot), "--json"],
                     [str(binary), "plugin", "add", PLUGIN, "--json"]]
         sheet_change = None
@@ -670,7 +671,7 @@ def _plugin_copies(home: Path) -> tuple[list[Path], list[str]]:
         except (OSError, ValueError):
             anomalies.append("unreadable plugin manifest: " + name)
             continue
-        if metadata.get("name") == "pstack":
+        if metadata.get("name") in (PLUGIN_NAME, "pstack"):
             roots.append(manifest.parent.parent)
     return roots, anomalies
 
@@ -782,7 +783,7 @@ def _registry_sources(marketplaces: dict, plugins: dict) -> dict:
     selected = [row for row in (rows or []) if isinstance(row, dict) and row.get("name") == MARKETPLACE]
     installed_rows = plugins.get("installed") if isinstance(plugins, dict) else None
     pstack_rows = [row for row in (installed_rows or [])
-                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == "pstack")]
+                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == PLUGIN_NAME)]
     return {"marketplaces": selected, "installed_plugins": pstack_rows}
 
 
@@ -790,7 +791,7 @@ def _registry_row_resolves_to(row: dict, snapshot) -> bool:
     """Does one installed-registry row resolve back to the receipt's snapshot?"""
     if not isinstance(snapshot, str) or not snapshot:
         return False
-    expected = [snapshot, str(Path(snapshot) / "plugins/pstack")]
+    expected = [snapshot, str(Path(snapshot) / "harness/pstack/codex")]
     recorded: list[str] = []
     for group, key in ((row.get("marketplaceSource"), "source"), (row.get("source"), "path")):
         if isinstance(group, dict) and isinstance(group.get(key), str):
@@ -1201,7 +1202,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
         if plan["operation"] == "install":
             snapshot = common.snapshot_source(COMPONENT, Path(plan["source"]["source"]), workspace, hub_root=hub_root,
                                               expected_digest=plan["source_lock_sha256"])
-            _check_runtime_tree(snapshot / "plugins/pstack", common.snapshot_lock(COMPONENT, snapshot))
+            _check_runtime_tree(snapshot / "harness/pstack/codex", common.snapshot_lock(COMPONENT, snapshot))
         receipt = {"schema": RECEIPT_SCHEMA, "codex_home": str(home), "snapshot": str(snapshot),
                    "source_lock_sha256": plan["source_lock_sha256"], "commit": plan["source"]["commit"],
                    "codex_bin": str(binary), "codex_bin_sha256": plan["codex_bin_sha256"],
@@ -1234,7 +1235,7 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                     continue
                 if plan["operation"] == "install":
                     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
-                _check_runtime_tree(snapshot / "plugins/pstack", common.snapshot_lock(COMPONENT, snapshot))
+                _check_runtime_tree(snapshot / "harness/pstack/codex", common.snapshot_lock(COMPONENT, snapshot))
                 output = _native(binary, home, command[2:-1])
                 receipt["commands"].append({"argv": command, "result": output})
                 receipt["completed_steps"].append(index)

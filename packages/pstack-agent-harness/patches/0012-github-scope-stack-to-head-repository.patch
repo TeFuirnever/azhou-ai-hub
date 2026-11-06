@@ -1,0 +1,259 @@
+Description: scope stack ordering to branches of the stack's own repository
+Author: Azhou AI Hub
+Forwarded: no
+
+Stack edges were matched on bare branch name. gh answers --head and --base by
+name alone, so a fork pull request whose head branch shared a name with a real
+stack member was joined into the ordering as a sibling, and the watcher then
+drove a pull request nobody in this repository could merge as if it were part of
+the stack. The listing now reads headRepository and headRepositoryOwner and only
+a pull request whose head branch lives in the repository the stack belongs to
+takes part in the ordering.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index c8f2342..239940a 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -593,24 +593,27 @@ describe("context and stack discovery", () => {
+     expect(reader.calls).toEqual(["originRepo"]);
+   });
+ 
++  const local = { owner: "owner", repo: "repo" };
++  const fork = { owner: "contributor", repo: "repo" };
++
+   it("orders the connected stack bottom-to-top", () => {
+     const ordered = orderStack(context, [
+       {
+         number: parsePrNumber(41),
++        headRepository: local,
+         headRefName: "base-feature",
+-        isCrossRepository: false,
+         baseRefName: "main",
+       },
+       {
+         number: context.number,
++        headRepository: local,
+         headRefName: "feature",
+-        isCrossRepository: false,
+         baseRefName: "base-feature",
+       },
+       {
+         number: parsePrNumber(43),
++        headRepository: local,
+         headRefName: "upstack",
+-        isCrossRepository: false,
+         baseRefName: "feature",
+       },
+     ]);
+@@ -618,25 +621,75 @@ describe("context and stack discovery", () => {
+   });
+   it("does not use a fork's same-named head as a stack parent", () => {
+     const ordered = orderStack(context, [
+-      { number: parsePrNumber(41), headRefName: "base-feature", baseRefName: "main", isCrossRepository: true },
+-      { number: context.number, headRefName: "feature", baseRefName: "base-feature", isCrossRepository: false },
++      {
++        number: parsePrNumber(41),
++        headRepository: fork,
++        headRefName: "base-feature",
++        baseRefName: "main",
++      },
++      {
++        number: context.number,
++        headRepository: local,
++        headRefName: "feature",
++        baseRefName: "base-feature",
++      },
+     ]);
+     expect(ordered.map((item) => Number(item.number))).toEqual([42]);
+   });
+ 
+   it("does not attach upstream branch children to a fork head", () => {
+     const ordered = orderStack(context, [
+-      { number: context.number, headRefName: "feature", baseRefName: "main", isCrossRepository: true },
+-      { number: parsePrNumber(43), headRefName: "upstack", baseRefName: "feature", isCrossRepository: false },
++      {
++        number: context.number,
++        headRepository: fork,
++        headRefName: "feature",
++        baseRefName: "main",
++      },
++      {
++        number: parsePrNumber(43),
++        headRepository: local,
++        headRefName: "upstack",
++        baseRefName: "feature",
++      },
+     ]);
+     expect(ordered.map((item) => Number(item.number))).toEqual([42]);
+   });
+ 
++  it("keeps a fork pull request out of the stack when its branch name collides", () => {
++    const ordered = orderStack(context, [
++      {
++        number: parsePrNumber(41),
++        headRepository: local,
++        headRefName: "base-feature",
++        baseRefName: "main",
++      },
++      {
++        number: context.number,
++        headRepository: local,
++        headRefName: "feature",
++        baseRefName: "base-feature",
++      },
++      {
++        number: parsePrNumber(43),
++        headRepository: local,
++        headRefName: "upstack",
++        baseRefName: "feature",
++      },
++      {
++        number: parsePrNumber(44),
++        headRepository: fork,
++        headRefName: "upstack",
++        baseRefName: "feature",
++      },
++    ]);
++    expect(ordered.map((item) => Number(item.number))).toEqual([41, 42, 43]);
++  });
++
+   it("refuses a full open PR page instead of assuming it is the whole stack", async () => {
+     const open = (count: number) =>
+       Array.from({ length: count }, (_, index) => ({
+         number: parsePrNumber(index + 1),
+-        isCrossRepository: false,
++        headRepository: local,
+         headRefName: `branch-${index + 1}`,
+         baseRefName: "main",
+       }));
+@@ -654,8 +707,8 @@ describe("context and stack discovery", () => {
+     // Bound the subprocess so this regression reports a failure instead of hanging the suite.
+     const program = `import { orderStack } from ${JSON.stringify(import.meta.dir + "/github.ts")};
+       console.log(JSON.stringify(orderStack(${JSON.stringify(context)}, [
+-        { number: 41, headRefName: "main", baseRefName: "main", isCrossRepository: true },
+-        { number: 42, headRefName: "feature", baseRefName: "main", isCrossRepository: false }
++        { number: 41, headRefName: "main", baseRefName: "main", headRepository: { owner: "contributor", repo: "repo" } },
++        { number: 42, headRefName: "feature", baseRefName: "main", headRepository: { owner: "owner", repo: "repo" } }
+       ])));`;
+     const child = spawnSync(process.execPath, ["-e", program], { encoding: "utf8", timeout: 2000 });
+     expect(child.error).toBeUndefined();
+@@ -668,10 +721,10 @@ describe("context and stack discovery", () => {
+     try {
+       writeFileSync(join(directory, "gh"), `#!/bin/sh
+ case "$*" in
+-  *number,headRefName,baseRefName,isCrossRepository*) ;;
++  *number,headRefName,baseRefName,headRepository,headRepositoryOwner*) ;;
+   *) exit 2 ;;
+ esac
+-printf '%s\\n' '[{"number":42,"headRefName":"feature","baseRefName":"main","isCrossRepository":true}]'
++printf '%s\\n' '[{"number":42,"headRefName":"feature","baseRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":"contributor"}}]'
+ `, { mode: 0o755 });
+       const program = `import { GhGitHubReader } from ${JSON.stringify(import.meta.dir + "/github.ts")};
+         console.log(JSON.stringify(await new GhGitHubReader().openPullRequests({ owner: "owner", repo: "repo" })));`;
+@@ -682,7 +735,12 @@ printf '%s\\n' '[{"number":42,"headRefName":"feature","baseRefName":"main","isCr
+       expect(child.error).toBeUndefined();
+       expect(child.status).toBe(0);
+       expect(JSON.parse(child.stdout)).toEqual([
+-        { number: 42, headRefName: "feature", baseRefName: "main", isCrossRepository: true },
++        {
++          number: 42,
++          headRepository: { owner: "contributor", repo: "repo" },
++          headRefName: "feature",
++          baseRefName: "main",
++        },
+       ]);
+     } finally {
+       rmSync(directory, { recursive: true, force: true });
+@@ -705,7 +763,7 @@ i=1
+ printf '['
+ while [ "$i" -le "$limit" ]; do
+   if [ "$i" -gt 1 ]; then printf ','; fi
+-  printf '{"number":%s,"headRefName":"branch-%s","baseRefName":"main","isCrossRepository":false}' "$i" "$i"
++  printf '{"number":%s,"headRefName":"branch-%s","baseRefName":"main","headRepository":{"name":"repo"},"headRepositoryOwner":{"login":"owner"}}' "$i" "$i"
+   i=$((i + 1))
+ done
+ printf ']\\n'
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index 498d444..202121f 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -539,15 +539,28 @@ export class GhGitHubReader implements T.GitHubReader {
+       "--limit",
+       String(OPEN_PR_LIMIT),
+       "--json",
+-      "number,headRefName,baseRefName,isCrossRepository",
++      "number,headRefName,baseRefName,headRepository,headRepositoryOwner",
+     ]);
+     return list(value, "open PRs").map((item, index) => {
+       const object = record(item, `open PRs[${index}]`);
+-      if (typeof object.isCrossRepository !== "boolean")
+-        missing(`open PRs[${index}].isCrossRepository`, object.isCrossRepository);
++      const headRepository =
++        object.headRepository === null || object.headRepository === undefined
++          ? null
++          : record(object.headRepository, "headRepository");
++      const headOwner =
++        object.headRepositoryOwner === null ||
++        object.headRepositoryOwner === undefined
++          ? null
++          : record(object.headRepositoryOwner, "headRepositoryOwner");
+       return {
+-        isCrossRepository: object.isCrossRepository,
+         number: parsePrNumber(object.number, `open PRs[${index}].number`),
++        headRepository:
++          headRepository === null || headOwner === null
++            ? null
++            : {
++                owner: string(headOwner.login, "headRepositoryOwner.login"),
++                repo: string(headRepository.name, "headRepository.name"),
++              },
+         headRefName: string(
+           object.headRefName,
+           `open PRs[${index}].headRefName`
+@@ -707,14 +720,18 @@ export async function resolveContext(args: {
+ }
+ export function orderStack(
+   context: T.PrContext,
+-  open: readonly T.OpenPullRequest[]
++  everyOpen: readonly T.OpenPullRequest[]
+ ): T.NonEmpty<T.PrContext> {
++  // A stack edge is a branch of the repository the stack belongs to. Matching on
++  // branch name alone lets a fork branch with the same name claim the edge, so
++  // only a pull request whose head branch lives here takes part in the ordering.
++  const localHead = (pr: T.OpenPullRequest): boolean =>
++    pr.headRepository !== null &&
++    pr.headRepository.owner.toLowerCase() === context.owner.toLowerCase() &&
++    pr.headRepository.repo.toLowerCase() === context.repo.toLowerCase();
++  const open = everyOpen.filter(localHead);
+   const byNumber = new Map(open.map((pr) => [pr.number, pr]));
+-  // A base ref belongs to this repository. A fork head with the same name
+-  // cannot be its parent, even when that name is the default branch.
+-  const byHead = new Map(
+-    open.filter((pr) => !pr.isCrossRepository).map((pr) => [pr.headRefName, pr])
+-  );
++  const byHead = new Map(open.map((pr) => [pr.headRefName, pr]));
+   const children = new Map<string, T.OpenPullRequest[]>();
+   for (const pr of open)
+     children.set(pr.baseRefName, [...(children.get(pr.baseRefName) ?? []), pr]);
+@@ -736,7 +753,6 @@ export function orderStack(
+   ]);
+   const up: T.OpenPullRequest[] = [];
+   const visit = (parent: T.OpenPullRequest): void => {
+-    if (parent.isCrossRepository) return;
+     for (const child of children.get(parent.headRefName) ?? []) {
+       if (seen.has(child.number)) continue;
+       seen.add(child.number);
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 0b799f5..a865d2a 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -52,7 +52,8 @@ export interface PullRequestFacts {
+ }
+ export interface OpenPullRequest {
+   readonly number: PrNumber;
+-  readonly isCrossRepository: boolean;
++  /** The repository the head branch lives in, or null when GitHub no longer has it. */
++  readonly headRepository: Repository | null;
+   readonly headRefName: string;
+   readonly baseRefName: string;
+ }

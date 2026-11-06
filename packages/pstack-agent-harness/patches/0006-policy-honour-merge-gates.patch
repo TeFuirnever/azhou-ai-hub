@@ -1,0 +1,186 @@
+Description: block readiness on behind-base, missing review and branch protection
+Author: Azhou AI Hub
+Forwarded: no
+
+After the checks passed the only gates left were closed, draft and
+changes-requested. A pull request whose base requires an up-to-date head, one
+that still owes a required review, and one GitHub leaves BLOCKED under some other
+branch protection rule all produced a ready verdict, and the merge then failed
+for a reason the watcher had already declared clear. Those three gates now block
+a ready verdict, and behind-base is reported ahead of a required review because
+updating the branch restarts the checks and can dismiss the approval.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index 113df70..ce3296b 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -664,6 +664,65 @@ describe("ready proof rests on GitHub's mergeability reading", () => {
+   });
+ });
+ 
++describe("merge gates after the checks pass", () => {
++  const decided = (facts: Partial<PullRequestFacts>) =>
++    readSnapshot({
++      reader: fakeReader({ facts }),
++      context: context(1),
++      pendingHistory: "include",
++      allowDraft: false,
++    }).then(classifyPr);
++
++  it("blocks a pull request that is behind its base", async () => {
++    expect(await decided({ mergeStateStatus: "BEHIND" })).toMatchObject({
++      kind: "blocker",
++      blocker: { kind: "merge-gate", reason: "behind-base" },
++    });
++  });
++
++  it("blocks a pull request that still owes its required review", async () => {
++    expect(await decided({ reviewDecision: "REVIEW_REQUIRED" })).toMatchObject({
++      kind: "blocker",
++      blocker: { kind: "merge-gate", reason: "review-required" },
++    });
++  });
++
++  it("blocks the branch protection rule GitHub leaves the PR under", async () => {
++    expect(await decided({ mergeStateStatus: "BLOCKED" })).toMatchObject({
++      kind: "blocker",
++      blocker: { kind: "merge-gate", reason: "branch-protection" },
++    });
++  });
++
++  it("reports behind-base ahead of a required review", async () => {
++    expect(
++      await decided({
++        mergeStateStatus: "BEHIND",
++        reviewDecision: "REVIEW_REQUIRED",
++      })
++    ).toMatchObject({
++      kind: "blocker",
++      blocker: { kind: "merge-gate", reason: "behind-base" },
++    });
++  });
++
++  it("keeps reporting the wait while checks are still running", async () => {
++    const row = await readSnapshot({
++      reader: fakeReader({
++        facts: { reviewDecision: "REVIEW_REQUIRED" },
++        fastPath: { kind: "checks", checks: [pendingCheck("build")] },
++      }),
++      context: context(1),
++      pendingHistory: "include",
++      allowDraft: false,
++    });
++    expect(classifyPr(row)).toMatchObject({
++      kind: "waiting",
++      reason: { kind: "pending-checks" },
++    });
++  });
++});
++
+ describe("snapshot consistency between the two reads", () => {
+   const changing = (
+     options: Parameters<typeof fakeReader>[0],
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+index 816e981..217f638 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+@@ -264,19 +264,32 @@ function gateReason(
+   if (row.kind === "merged") return null;
+   if (row.kind === "closed") return "closed-without-merge";
+   if (row.facts.isDraft && !allowDraft) return "draft-pr";
+-  return row.facts.reviewDecision === "CHANGES_REQUESTED"
+-    ? "changes-requested"
+-    : null;
++  if (row.facts.reviewDecision === "CHANGES_REQUESTED")
++    return "changes-requested";
++  // BEHIND means the base requires an up-to-date head. Updating the branch
++  // restarts its checks and can dismiss an approval, so this outranks a required
++  // review and does not wait for the checks that update will throw away.
++  if (row.facts.mergeStateStatus === "BEHIND") return "behind-base";
++  if (row.facts.reviewDecision === "REVIEW_REQUIRED") return "review-required";
++  // BLOCKED with clean CI is some other branch protection rule, such as signed
++  // commits or a required check that never reported. GitHub will not merge it.
++  return row.facts.mergeStateStatus === "BLOCKED" ? "branch-protection" : null;
+ }
++// These gates the operator can clear while the watcher waits, so the wait is the
++// more useful thing to report first. behind-base is not one of them: it outranks
++// the rest and the update it demands restarts the checks either way.
++const DEFERRED_WHILE_WAITING: ReadonlySet<T.MergeGateReason> = new Set([
++  "draft-pr",
++  "review-required",
++  "branch-protection",
++]);
+ function gateBlocker(
+   row: T.PrSnapshot,
+   allowDraft: boolean
+ ): T.MergeBlocker | null {
+   const reason = gateReason(row, allowDraft);
+   return reason === null ||
+-    (reason === "draft-pr" &&
+-      row.kind === "open" &&
+-      row.ci.kind === "ci-pending")
++    (DEFERRED_WHILE_WAITING.has(reason) && waitReason(row) !== null)
+     ? null
+     : { kind: "merge-gate", pr: row.context, reason };
+ }
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+index a344e80..04d8cf3 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/render.ts
+@@ -1,6 +1,18 @@
+ import type * as T from "./types.ts";
+ export const renderJson = (verdict: T.WatcherVerdict): string =>
+   `${JSON.stringify(verdict)}\n`;
++const MERGE_GATE_ACTION: Record<T.MergeGateReason, string> = {
++  "closed-without-merge":
++    "restore or remove the closed PR from the queued stack",
++  "draft-pr": "mark the PR ready for review before waiting for the merge queue",
++  "changes-requested":
++    "resolve the changes-requested review before waiting for the merge queue",
++  "behind-base":
++    "update the branch against the base before merging; that restarts its checks",
++  "review-required": "collect the required review before merging",
++  "branch-protection":
++    "satisfy the branch protection rule that leaves the PR BLOCKED",
++};
+ function ciCell(row: T.PrSnapshot): string {
+   if (row.kind !== "open") return "\u2014";
+   const was = row.ci.hadPreviousPassingCi ? ", was ✅" : "";
+@@ -107,19 +119,12 @@ function renderBlocker(blocker: T.MergeBlocker | StatusQueryBlocker): string {
+         ...details,
+       ].join("\n");
+     }
+-    case "merge-gate": {
+-      const action =
+-        blocker.reason === "closed-without-merge"
+-          ? "restore or remove the closed PR from the queued stack"
+-          : blocker.reason === "draft-pr"
+-            ? "mark the PR ready for review before waiting for the merge queue"
+-            : "resolve the changes-requested review before waiting for the merge queue";
++    case "merge-gate":
+       return [
+         `BLOCKER: ${blocker.reason}`,
+         `pr=${blocker.pr.number}`,
+-        `action=${action}`,
++        `action=${MERGE_GATE_ACTION[blocker.reason]}`,
+       ].join("\n");
+-    }
+     case "status-query":
+       return [
+         "BLOCKER: status-query",
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+index 2518060..9e1e266 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/types.ts
+@@ -208,7 +208,10 @@ export interface MergedPr {
+ export type MergeGateReason =
+   | "closed-without-merge"
+   | "draft-pr"
+-  | "changes-requested";
++  | "changes-requested"
++  | "behind-base"
++  | "review-required"
++  | "branch-protection";
+ export type MergeBlocker =
+   | {
+       readonly kind: "merge-conflicts";

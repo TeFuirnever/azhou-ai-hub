@@ -1,0 +1,167 @@
+Description: treat an uncomputed mergeability as a wait instead of a query error
+Author: Azhou AI Hub
+Forwarded: no
+
+GitHub computes mergeable and mergeStateStatus on the first read that asks, and
+`gh pr view` reports a field it has not filled in as "" the same way it reports a
+missing review decision. parsePullRequest raised that as a missing-key query
+error, so the watcher backed off with exponential delay and exited 7 instead of
+looking again at the ordinary poll interval. An uncomputed mergeability is now
+read as UNKNOWN and holds the watcher on the polling interval until GitHub has
+an answer.
+
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+index ba416e9..b02448b 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -231,6 +231,23 @@ describe("closed enum parsing", () => {
+     ).toBeNull();
+   });
+ 
++  it("reads an uncomputed mergeability as UNKNOWN rather than a query error", () => {
++    for (const uncomputed of ["", null]) {
++      const facts = parsePullRequest(
++        { ...rawPullRequest, mergeable: uncomputed, mergeStateStatus: uncomputed },
++        context
++      );
++      expect(facts.mergeable).toBe("UNKNOWN");
++      expect(facts.mergeStateStatus).toBe("UNKNOWN");
++    }
++  });
++
++  it("still rejects a mergeability value it does not know", () => {
++    expect(() =>
++      parsePullRequest({ ...rawPullRequest, mergeable: "MAYBE" }, context)
++    ).toThrow(WatcherQueryError);
++  });
++
+   it("still rejects an unknown reviewDecision", () => {
+     expect(() =>
+       parsePullRequest({ ...rawPullRequest, reviewDecision: "MAYBE" }, context)
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+index f653f99..e99db7a 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.ts
+@@ -152,15 +152,11 @@ const REVIEW_DECISIONS = [
+   "CHANGES_REQUESTED",
+   "REVIEW_REQUIRED",
+ ] as const;
+-// `gh pr view` reports no review decision as "", not null. Only this field does
+-// it, so the normalization stays here rather than in nullableEnum, where it
+-// would stop a genuinely unexpected rollup state from failing closed.
++// `gh pr view` reports a nullable enum it has not filled in as "", not null.
++// Review decision and the two mergeability fields all do it.
++const unreported = (value: unknown): unknown => (value === "" ? null : value);
+ const reviewDecision = (value: unknown): T.ReviewDecision =>
+-  nullableEnum(
+-    value === "" ? null : value,
+-    REVIEW_DECISIONS,
+-    "pull request.reviewDecision"
+-  );
++  nullableEnum(unreported(value), REVIEW_DECISIONS, "pull request.reviewDecision");
+ function parseRemote(value: string): T.Repository | null {
+   let normalized = value.trim();
+   if (normalized.startsWith("git@github.com:"))
+@@ -413,16 +409,20 @@ export function parsePullRequest(
+     missing("pull request.isDraft", object.isDraft);
+   return {
+     context,
+-    mergeable: enumValue(
+-      object.mergeable,
+-      ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const,
+-      "pull request.mergeable"
+-    ),
+-    mergeStateStatus: enumValue(
+-      object.mergeStateStatus,
+-      MERGE_STATES,
+-      "pull request.mergeStateStatus"
+-    ),
++    // GitHub computes mergeability on demand. An unfilled value is "not
++    // computed yet", which waits for the next poll, not a query error.
++    mergeable:
++      nullableEnum(
++        unreported(object.mergeable),
++        ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const,
++        "pull request.mergeable"
++      ) ?? "UNKNOWN",
++    mergeStateStatus:
++      nullableEnum(
++        unreported(object.mergeStateStatus),
++        MERGE_STATES,
++        "pull request.mergeStateStatus"
++      ) ?? "UNKNOWN",
+     reviewDecision: reviewDecision(object.reviewDecision),
+     headRefOid: optionalString(object.headRefOid, "pull request.headRefOid"),
+     headRefName: string(object.headRefName, "pull request.headRefName"),
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+index c70ec20..113df70 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -622,6 +622,46 @@ describe("ready proof rests on GitHub's mergeability reading", () => {
+       reason: { kind: "mergeability-unknown" },
+     });
+   });
++
++  it("holds on the polling interval while GitHub has not computed mergeability", async () => {
++    for (const facts of [
++      { mergeable: "UNKNOWN" as const },
++      {
++        mergeable: "MERGEABLE" as const,
++        mergeStateStatus: "UNKNOWN" as const,
++      },
++    ]) {
++      const sleeps: number[] = [];
++      const seen: string[] = [];
++      let now = 0;
++      const running = runSimple({
++        dependencies: {
++          reader: fakeReader({ facts }),
++          clock: {
++            now: () => now,
++            observedAt: () => "2026-07-26T00:00:00.000Z",
++            async sleep(seconds) {
++              sleeps.push(seconds);
++              now += seconds;
++              throw new Error("stop after wait proof");
++            },
++          },
++          emit(verdict) {
++            seen.push(
++              verdict.kind === "WAITING" ? verdict.reason.kind : verdict.kind
++            );
++          },
++        },
++        contexts: [context(1)],
++        mode: "single",
++        statusOnly: false,
++        options: { ...options, interval: 45, timeout: 0 },
++      });
++      await expect(running).rejects.toThrow("stop after wait proof");
++      expect(seen).toEqual(["mergeability-unknown"]);
++      expect(sleeps).toEqual([45]);
++    }
++  });
+ });
+ 
+ describe("snapshot consistency between the two reads", () => {
+diff --git a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+index 509bd93..816e981 100644
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.ts
+@@ -285,11 +285,11 @@ function waitReason(row: T.PrSnapshot): T.WaitReason | null {
+   if (row.ci.kind === "ci-pending")
+     return { kind: "pending-checks", pending: row.ci.pending };
+   if (row.ci.kind === "ci-unreported") return { kind: "checks-unreported" };
+-  // GitHub computes mergeability on demand, so an unread value is a wait, not a
+-  // reading the ready proof can stand on.
+-  return row.facts.mergeable === "MERGEABLE"
+-    ? null
+-    : { kind: "mergeability-unknown" };
++  // GitHub computes mergeability on demand, so an unread value waits for the
++  // next poll rather than standing as a reading the ready proof can rest on.
++  return mergeabilityUnknown(row.facts)
++    ? { kind: "mergeability-unknown" }
++    : null;
+ }
+ // Indexed by the fact itself, so a proof compiles only where the guard below
+ // has narrowed mergeable to MERGEABLE.

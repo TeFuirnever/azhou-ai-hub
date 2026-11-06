@@ -4,7 +4,7 @@ The fourteen canonical Skills under `skills/` keep their existing independent in
 
 The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The existing local Codex App and Pet receipts still bind `packages/codex-startup-animation/`. That source directory remains intact until an explicitly reviewed handoff verifies each owner; the Agent Skin rename does not transfer either installation.
+The 2026-10-26 local App and Pet handoff receipts bind `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. Later installation ownership must be checked against the current App and Pet receipts separately. Keep any source root needed by those receipts and recovery until an explicitly reviewed handoff verifies each owner.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
@@ -29,7 +29,7 @@ The adapters do not modify package source files. Any runtime input change change
 
 ## pstack: local source to native plugin
 
-Use the maintained Hub package as the source for new pstack installations. Upstream repositories remain provenance and update inputs. The [package install guide](../packages/pstack-agent-harness/README.md#install) covers the maintained targets: native Codex and Claude Code formats, and skills-only zcode and MiMo Code. Only the Codex adapter below has a Hub-managed lifecycle; the other targets use native registration or an explicit Skills root. Imported formats for other harnesses remain source history, outside current support. Existing external installations require their native owner's removal or an explicitly reviewed source transition; copying the package into this repository does not adopt them.
+Use the maintained Hub package as the source for new pstack installations. Upstream repositories remain provenance and update inputs. The [package install guide](../packages/pstack-agent-harness/README.md#install) covers the maintained targets: native Codex and Claude Code formats, and skills-only zcode, MiMo Code and DeepSeek Harness. Only the Codex adapter below has a Hub-managed lifecycle; the other targets use native registration or an explicit Skills root. Imported formats for other harnesses remain source history, outside current support. Existing external installations require their native owner's removal or an explicitly reviewed source transition; copying the package into this repository does not adopt them.
 
 Set task-specific paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. The package source defaults to `packages/pstack-agent-harness`; `--source` is optional and only asserts that canonical path. For the installed runtime, `CODEX_HOME` below is set only for that one process.
 
@@ -51,7 +51,7 @@ python scripts/azhou_hub.py integrations pstack doctor \
 env CODEX_HOME="$PSTACK_HOME" "$CODEX_BIN" -C "$PSTACK_WORKSPACE"
 ```
 
-Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack@pstack-claude`. The marketplace name `pstack-claude` is retained for compatibility; the reviewed local source path determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
+Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack-azhouzhou@pstack-claude`. The marketplace name `pstack-claude` is retained for compatibility; the reviewed local source path determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
 
 After opening the dedicated session, inspect native Skills and invoke `pstack:how` or another selected workflow. `doctor` proves installed files and registration; it does not prove invocation. `/setup-pstack` owns model-sheet setup. On Codex the native sheet is `<codex-home>/pstack-models.md`; the upstream setup instructions also place model rows in the home `AGENTS.md`. Review the rows and available model aliases first. The Hub does not invent a universal model table.
 

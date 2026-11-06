@@ -1,0 +1,96 @@
+Description: append a decision log row with one write instead of several
+Author: Azhou AI Hub
+Forwarded: no
+
+The row is appended by a shell printf, which writes through stdio and hands a row
+longer than its buffer to the kernel in pieces. Two show-me-your-work writers
+running at the same time interleave those pieces, and the TSV no longer parses:
+in a run of eight concurrent writers writing a 200 KB cell, seven of the eight
+rows came out with the wrong number of columns. The row is now built first and
+appended with a single syswrite, with a printf fallback when perl cannot be run.
+
+diff --git a/pstack/skills/show-me-your-work/scripts/log.sh b/pstack/skills/show-me-your-work/scripts/log.sh
+index 723944d..b214eee 100755
+--- a/pstack/skills/show-me-your-work/scripts/log.sh
++++ b/pstack/skills/show-me-your-work/scripts/log.sh
+@@ -37,6 +37,22 @@ clean() {
+ 		*) printf '%s' "$v" ;;
+ 	esac
+ }
+-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+-	"$ts" "$(clean "$1")" "$(clean "$2")" "$(clean "$3")" "$(clean "$4")" "$(clean "$5")" \
+-	>> "$logfile"
++# Build the row before the append so the append is one write. A shell printf goes
++# through stdio, which hands a row longer than its buffer to the kernel in pieces
++# that parallel writers interleave, and the TSV no longer parses.
++printf -v row '%s\t%s\t%s\t%s\t%s\t%s\n' \
++	"$ts" "$(clean "$1")" "$(clean "$2")" "$(clean "$3")" "$(clean "$4")" "$(clean "$5")"
++# perl runs once before it sees the row, so a perl that is missing, shimmed or
++# broken by PERL5OPT cannot take the row with it. binmode drops the :utf8 layer
++# PERL_UNICODE adds: syswrite refuses that on STDOUT, and on STDIN it would
++# decode the row and corrupt non-ASCII bytes. A short write sets no $!, so it
++# reports the byte counts instead.
++if [ "$(perl -e 'print "ok"' 2>/dev/null </dev/null)" = ok ]; then
++	printf '%s' "$row" |
++		perl -e 'binmode STDIN; binmode STDOUT; local $/; $_ = <STDIN>;
++			my $n = syswrite(STDOUT, $_) // die "log.sh: $!\n";
++			$n == length or die "log.sh: short write, appended $n of ", length, " bytes of the row\n"' \
++			>> "$logfile"
++else
++	printf '%s' "$row" >> "$logfile"
++fi
+diff --git a/pstack/skills/show-me-your-work/scripts/log.test.ts b/pstack/skills/show-me-your-work/scripts/log.test.ts
+new file mode 100644
+index 0000000..5083142
+--- /dev/null
++++ b/pstack/skills/show-me-your-work/scripts/log.test.ts
+@@ -0,0 +1,49 @@
++import { describe, expect, it } from "bun:test";
++import { spawn } from "node:child_process";
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++
++const logScript = join(import.meta.dir, "log.sh");
++
++const append = (file: string, cells: readonly string[]): Promise<number> =>
++  new Promise((resolve, reject) => {
++    const child = spawn(logScript, [file, ...cells]);
++    child.on("error", reject);
++    child.on("close", (code) => resolve(code ?? -1));
++  });
++
++describe("decision log rows", () => {
++  it("keeps every row whole when writers append at the same time", async () => {
++    const directory = mkdtempSync(join(tmpdir(), "show-me-your-work-"));
++    try {
++      const file = join(directory, "decisions.tsv");
++      // Wide enough that stdio hands the row to the kernel in pieces.
++      const wide = "x".repeat(200_000);
++      const codes = await Promise.all(
++        Array.from({ length: 8 }, (_, index) =>
++          append(file, [
++            "phase",
++            `decision-${index}`,
++            wide,
++            "evidence",
++            "result",
++          ])
++        )
++      );
++      expect(codes).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
++
++      const rows = readFileSync(file, "utf8")
++        .split("\n")
++        .filter((line) => line !== "" && !line.startsWith("ts\t"))
++        .map((line) => line.split("\t"));
++      expect(rows.filter((cells) => cells.length !== 6)).toEqual([]);
++      expect(rows.map((cells) => cells[2]).sort()).toEqual(
++        Array.from({ length: 8 }, (_, index) => `decision-${index}`).sort()
++      );
++      expect(rows.filter((cells) => cells[3] !== wide)).toEqual([]);
++    } finally {
++      rmSync(directory, { recursive: true, force: true });
++    }
++  });
++});
