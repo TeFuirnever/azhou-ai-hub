@@ -93,6 +93,9 @@ benchmarks/excalidraw-diagram/workspace/
 /.agents/skills/
 /compact-adviser/
 
+# Agent Skin private artwork never enters Git; the flat assets/ path caught a
+# scratch-clone sweep in 46031a0, so the whole directory is ignored.
+packages/agent-skin/assets/
 # Local video-production configuration, runtime data and working assets.
 /hypit.runtime.json
 /.hypit/

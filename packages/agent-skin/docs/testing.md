@@ -46,6 +46,9 @@ python3 -B tools/test-unit-coverage.py
 | FT-SIDEBAR | 动画期间跳过，Home 导航可见或不可用；加载层覆盖页面控件；更新下载按钮、输入区或头像出现；侧栏滚动、窄窗或导航重建 | 宿主尚无可见且可命中的页面控件时，Appearance 保持隐藏。仅有几何可见但被加载层遮挡的控件不算就绪；覆盖层移除后重试。唯一可见的 Your dot 出现时（包括数字和无障碍未读提示出现、改变及清除），入口在 Home 导航正常流中紧随其后、位于 Pinned 前，并保留 6 像素上间距；Home 不可用但宿主控件可交互时，使用避开控件、输入区和 composer 的备用位置。无空位时暂时隐藏，空位恢复后重新显示 | `startup.test.mjs`、`test-startup-browser.mjs` 的直接按钮与列表包装结构、未读提示出现/清除、早期跳过、遮挡恢复、重复候选、导航重建、碰撞、入口点击和窄栏场景；合成场景不证明官方 DOM 或同一运行版本的真实宿主位置，须现场验收 |
 | FT-INSTALL | 旧名称升级、跨来源接管、失败中断后重试、未知同名应用 | 先验证新入口；保留归属与签名边界；唯一实体和登记；未知对象不被删除 | `test-install-macos.py`、构建 UT、实际 `install-macos.py --check` |
 | FT-ASSETS | 缺图、非法路径、符号链接、错误尺寸、旧构建输入 | 构建拒绝并保留原有效入口；私有素材不进入 Git | preflight、构建器、校验器、资源处理及 shell UT |
+| FT-ACCEPT-ARM | 宿主指纹漂移后重钉并挂机离线验收：逐文件核对全部钉点面（含探针 EXPECTED 等工具自带基线）、运行目录 0700、TCC 消毒（`env -i` 逐触面可读、监督链零 `~/Desktop` 依赖）、LaunchAgent 存活心跳 | 任一旧指纹字面量零命中；裸环境可读全部触面；心跳按周期跳动且存活超 2 分钟 | `acceptance-harness.test.mjs`；挂机清单按 [offline-acceptance-runbook.md](offline-acceptance-runbook.md) 逐项执行 |
+| FT-ACCEPT-RUN | 用户退出日常宿主后监督链自动执行：隔离实例 → 只读探针确认主页面 → CDP 页面截图（URL 带 `?locale=` 查询串）→ 生产 UI 十步 | 探针 exit 0 且唯一主页面；截图为有效 PNG；UI 十步全绿 exit 0 | `acceptance-harness.test.mjs` 的 E2E 切片（`/json` 带查询串端到端解析）；全链按 runbook 实机执行 |
+| FT-ACCEPT-CLOSEOUT | 验收失败路径：预检拒绝、UI 中途失败、宿主丢失 | 每次失败都落盘 STATUS/HOST-CLOSEOUT/PIPELINE-DONE 并自动重开宿主；退避在收尾之后；截图在盖章前必须经操作者事后审阅 | `acceptance-harness.test.mjs` 的幂等目录与错误码契约；closeout 语义按 runbook 复苏清单人工核对 |
 
 Finder/Dock 使用 **macOS 语言**；注入的动画和外观使用 **官方宿主页面语言**。这两条合同分别验收，不能用应用内按钮为英文推断 Finder/Dock 已通过。
 
