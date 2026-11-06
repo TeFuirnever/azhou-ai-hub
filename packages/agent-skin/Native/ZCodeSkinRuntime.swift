@@ -16,6 +16,9 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         case frame, context, bound
     }
     private(set) var attachmentStage = AttachmentStage.targetList
+    private(set) var discoveryAttempts = 0
+    private(set) var initialDiscoveryCounts: [String: Int]?
+    private(set) var latestDiscoveryCounts: [String: Int]?
     private let session: URLSession
     private var socket: URLSessionWebSocketTask?
     private var serial = 0
@@ -46,10 +49,20 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         session = URLSession(configuration: configuration, delegate: ZCodeRejectRedirect(), delegateQueue: nil)
     }
     func close() { socket?.cancel(with: .normalClosure, reason: nil); socket = nil; session.invalidateAndCancel() }
-    private func check(_ deadline: TimeInterval) throws {
+    static func normalizedBoundaryFailure(_ error: Error, deadline: TimeInterval, now: TimeInterval, cancelled: Bool) -> Error {
+        if cancelled { return Failure.cancelled }
+        if !deadline.isFinite || now >= deadline { return Failure.deadline }
+        return error
+    }
+    private func basicCheck(_ deadline: TimeInterval) throws {
         if Task.isCancelled { throw Failure.cancelled }
         guard deadline.isFinite, now() < deadline else { throw Failure.deadline }
-        try guardLive()
+    }
+    private func check(_ deadline: TimeInterval) throws {
+        try basicCheck(deadline)
+        do { try guardLive() }
+        catch { throw Self.normalizedBoundaryFailure(error, deadline: deadline, now: now(), cancelled: Task.isCancelled) }
+        try basicCheck(deadline)
     }
     private func validPage(_ raw: String) -> Bool {
         guard let u = URLComponents(string: raw), u.scheme == "file", (u.host ?? "").isEmpty,
@@ -62,7 +75,8 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         try check(deadline)
         guard let ws = socket else { throw Failure.unavailable }
         let seconds = min(4, deadline - now())
-        let message = try await withTaskCancellationHandler {
+        let message: URLSessionWebSocketTask.Message
+        do { message = try await withTaskCancellationHandler {
             try await withThrowingTaskGroup(of: URLSessionWebSocketTask.Message.self) { group in
                 group.addTask { try await ws.receive() }
                 group.addTask {
@@ -75,6 +89,8 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
                 return first
             }
         } onCancel: { ws.cancel(with: .goingAway, reason: nil) }
+        } catch { throw Self.normalizedBoundaryFailure(error, deadline: deadline, now: now(), cancelled: Task.isCancelled) }
+        try basicCheck(deadline)
         let bytes: Data
         switch message { case .data(let data): bytes = data; case .string(let text): bytes = Data(text.utf8); @unknown default: throw Failure.protocolError }
         guard bytes.count <= 1_048_576,
@@ -85,10 +101,14 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
         try check(deadline)
         guard let ws = socket else { throw Failure.unavailable }
         let seconds = max(0, deadline - now())
+        try basicCheck(deadline)
         willSend?()
-        try await withTaskCancellationHandler {
+        do { try await withTaskCancellationHandler {
             try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask { try await ws.send(message) }
+                group.addTask { @MainActor in
+                    try self.basicCheck(deadline)
+                    try await ws.send(message)
+                }
                 group.addTask {
                     try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                     ws.cancel(with: .goingAway, reason: nil)
@@ -98,6 +118,8 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
                 _ = try await group.next()
             }
         } onCancel: { ws.cancel(with: .goingAway, reason: nil) }
+        } catch { throw Self.normalizedBoundaryFailure(error, deadline: deadline, now: now(), cancelled: Task.isCancelled) }
+        try basicCheck(deadline)
     }
     private func call(_ method: String, _ params: [String: Any] = [:], deadline: TimeInterval, willSend: (() -> Void)? = nil) async throws -> [String: Any] {
         try check(deadline)
@@ -119,20 +141,57 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
             try check(deadline); return value
         }
     }
-    func attach(deadline: TimeInterval) async throws -> ZCodePageBinding {
-        attachmentStage = .targetList
-        try check(deadline)
-        var request = URLRequest(url: endpoint.appendingPathComponent("json/list"))
-        request.timeoutInterval = max(0.01, min(3, deadline - now())); request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (bytes, response) = try await session.data(for: request)
-        try check(deadline)
-        guard (response as? HTTPURLResponse)?.statusCode == 200, bytes.count <= 1_048_576,
-              let pages = try JSONSerialization.jsonObject(with: bytes) as? [[String: Any]] else { throw Failure.protocolError }
-        let candidates = pages.filter { $0["type"] as? String == "page" && validPage($0["url"] as? String ?? "") }
-        if candidates.count != 1 {
+    // Single snapshot remains the default for inspection/disposal. Only the
+    // first attachment after this runtime's successful cold open opts into wait.
+    private func discoverMain(deadline: TimeInterval, waitForInitialMain: Bool) async throws -> [[String: Any]] {
+        while true {
+            attachmentStage = .targetList
+            try check(deadline)
+            // guardLive can itself spend time. Never send after its deadline or
+            // cancellation check has become stale.
+            if Task.isCancelled { throw Failure.cancelled }
+            guard now() < deadline else { throw Failure.deadline }
+            var request = URLRequest(url: endpoint.appendingPathComponent("json/list"))
+            request.timeoutInterval = max(0.001, min(3, deadline - now()));request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (bytes, response) = try await session.data(for: request)
+            try check(deadline)
+            if Task.isCancelled { throw Failure.cancelled }
+            guard now() < deadline else { throw Failure.deadline }
+            guard (response as? HTTPURLResponse)?.statusCode == 200, bytes.count <= 1_048_576,
+                  let pages = try JSONSerialization.jsonObject(with: bytes) as? [[String: Any]] else { throw Failure.protocolError }
+            let pageRows = pages.filter { $0["type"] as? String == "page" }
+            let candidates = pageRows.filter { validPage($0["url"] as? String ?? "") }
+            var counts = ["empty": pageRows.isEmpty ? 1 : 0, "knownIndex": 0, "knownLogin": 0,
+                          "aboutBlank": 0, "other": 0, "accepted": candidates.count]
+            let loginPath = URL(fileURLWithPath: installedPage).deletingLastPathComponent().appendingPathComponent("login.html").path
+            for row in pageRows {
+                let raw = row["url"] as? String ?? ""
+                if raw == "about:blank" { counts["aboutBlank", default: 0] += 1 }
+                else if let u = URLComponents(string: raw), u.scheme == "file", (u.host ?? "").isEmpty, u.path == installedPage {
+                    counts["knownIndex", default: 0] += 1
+                } else if let u = URLComponents(string: raw), u.scheme == "file", (u.host ?? "").isEmpty, u.path == loginPath {
+                    counts["knownLogin", default: 0] += 1
+                } else { counts["other", default: 0] += 1 }
+            }
+            discoveryAttempts += 1
+            if initialDiscoveryCounts == nil { initialDiscoveryCounts = counts }
+            latestDiscoveryCounts = counts
+            if candidates.count == 1 { return candidates }
             attachmentStage = candidates.isEmpty ? .mainPageMissing : .mainPageAmbiguous
-            throw Failure.identity
+            guard candidates.isEmpty, waitForInitialMain, binding == nil,
+                  pageRows.allSatisfy({ $0["url"] as? String == "about:blank" }) else { throw Failure.identity }
+            // No page or only initial blank pages may become the verified main.
+            // Login, foreign paths and rejected queries are terminal, not retry.
+            try check(deadline)
+            if Task.isCancelled { throw Failure.cancelled }
+            let remaining = deadline - now()
+            guard remaining > 0 else { throw Failure.deadline }
+            try await Task.sleep(nanoseconds: UInt64(min(0.1, remaining) * 1_000_000_000))
         }
+    }
+    func attach(deadline: TimeInterval, waitForInitialMain: Bool = false) async throws -> ZCodePageBinding {
+        discoveryAttempts = 0;initialDiscoveryCounts = nil;latestDiscoveryCounts = nil
+        let candidates = try await discoverMain(deadline: deadline, waitForInitialMain: waitForInitialMain)
         attachmentStage = .targetEndpoint
         guard candidates.count == 1, let page = candidates.first,
               let id = page["id"] as? String, id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil,
@@ -140,7 +199,9 @@ private final class ZCodeRejectRedirect: NSObject, URLSessionTaskDelegate {
               wsURL.scheme == "ws", wsURL.host == "127.0.0.1", wsURL.port == endpoint.port,
               wsURL.user == nil, wsURL.password == nil, wsURL.query == nil, wsURL.fragment == nil,
               wsURL.path == "/devtools/page/" + id else { throw Failure.identity }
-        let ws = session.webSocketTask(with: wsURL); ws.maximumMessageSize = 1_048_576; socket = ws; ws.resume()
+        let ws = session.webSocketTask(with: wsURL); ws.maximumMessageSize = 1_048_576; socket = ws
+        try check(deadline)
+        ws.resume()
         attachmentStage = .frame
         let tree = try await call("Page.getFrameTree", deadline: deadline)
         guard let t = tree["frameTree"] as? [String: Any], let frame = t["frame"] as? [String: Any],
@@ -303,9 +364,9 @@ import Darwin
     private var openingToken: UUID?
     private var installation: [String: [FileAttributeKey: Any]] = [:]
     private let expectedFiles = [
-        "Contents/MacOS/ZCode": "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
-        "Contents/Info.plist": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-        "Contents/Resources/app.asar": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "Contents/MacOS/ZCode": "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d",
+        "Contents/Info.plist": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+        "Contents/Resources/app.asar": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
     ]
     init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
          stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil,
@@ -356,7 +417,7 @@ import Darwin
     }
     private func validateInstallation() throws {
         let key = inputs.identity.key
-        guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.1", key.build == "3.17.1.9553",
+        guard key.host == .zcode, key.bundleIdentifier == "dev.zcode.app", key.version == "3.17.2", key.build == "3.17.2.9661",
               key.bundleURL.path == "/Applications/ZCode.app", key.executableURL.path == "/Applications/ZCode.app/Contents/MacOS/ZCode",
               key.executableSHA256 == expectedFiles["Contents/MacOS/ZCode"] else { throw failure("target-identity") }
         if let installationProbe { try installationProbe();return }
@@ -530,17 +591,43 @@ import Darwin
               let port = record["port"] as? Int, (1...65535).contains(port) else { throw failure("endpoint-unavailable") }
         self.port = port;return port
     }
-    private func attach(_ process: HostProcessGeneration, deadline: TimeInterval) async throws -> ZCodePageBinding {
+    private func reportDiscovery(_ client: ZCodeBoundCDP) {
+        guard let initial = client.initialDiscoveryCounts, let latest = client.latestDiscoveryCounts else { return }
+        onEvent(["stage": "zcode-target-summary", "attempts": client.discoveryAttempts, "initial": initial, "latest": latest])
+    }
+    static func normalizedAttachFailure(_ error: Error, deadline: TimeInterval, now: TimeInterval, cancelled: Bool) -> Error {
+        if cancelled || error is CancellationError { return ZCodeAttachFailure.cancelled }
+        if !deadline.isFinite || now >= deadline { return ZCodeAttachFailure.deadline }
+        if let failure = error as? ZCodeBoundCDP.Failure {
+            switch failure {
+            case .deadline: return ZCodeAttachFailure.deadline
+            case .cancelled: return ZCodeAttachFailure.cancelled
+            default: break
+            }
+        }
+        if let failure = error as? StartupFailure, failure.reason == "attach-timeout" {
+            return ZCodeAttachFailure.deadline
+        }
+        return error
+    }
+    private func attach(_ process: HostProcessGeneration, deadline: TimeInterval, purpose: ZCodeAttachPurpose) async throws -> ZCodePageBinding {
+        let waitForInitialMain: Bool
+        switch purpose { case .coldLaunch: waitForInitialMain = true; case .existingPage: waitForInitialMain = false }
+        let attachDeadline = purpose.stageDeadline(caller: deadline, now: runtime.uptime)
         let chosen: Int
         do { chosen = try recordedPort(process) }
-        catch { reportFailure(error, point: .recordedPort);throw error }
+        catch { reportFailure(error, point: .recordedPort);throw Self.normalizedAttachFailure(error, deadline: attachDeadline, now: runtime.uptime, cancelled: Task.isCancelled) }
         do {
             while true {
-                try checkTime(deadline)
-                if try kernelReady(process, port: chosen) { break }
+                try checkTime(attachDeadline)
+                let ready: Bool
+                do { ready = try kernelReady(process, port: chosen) }
+                catch { try checkTime(attachDeadline); throw error }
+                try checkTime(attachDeadline)
+                if ready { break }
                 try await Task.sleep(nanoseconds: 100_000_000)
             }
-        } catch { reportFailure(error, point: .listener);throw error }
+        } catch { reportFailure(error, point: .listener);throw Self.normalizedAttachFailure(error, deadline: attachDeadline, now: runtime.uptime, cancelled: Task.isCancelled) }
         let client: ZCodeBoundCDP
         do { client = try ZCodeBoundCDP(process: process, endpoint: URL(string: "http://127.0.0.1:\(chosen)")!,
             installedPage: inputs.identity.key.bundleURL.appendingPathComponent("Contents/Resources/app.asar/out/renderer/index.html").path,
@@ -549,12 +636,13 @@ import Darwin
             }) } catch { reportFailure(error, point: .transportInit);throw error }
         connection?.close();connection = client
         do {
-            let binding = try await client.attach(deadline: deadline)
+            let binding = try await client.attach(deadline: attachDeadline, waitForInitialMain: waitForInitialMain)
+            reportDiscovery(client)
             onEvent(["stage": "zcode-page-bound", "hostPID": process.pid, "hostStartedAt": process.launchTime!,
                 "debuggingPort": chosen, "targetID": binding.targetID,
                 "documentTokenSHA256": digest(Data(binding.documentToken.utf8))])
             return binding
-        } catch { reportFailure(error, point: .pageAttach, attachment: client.attachmentStage);client.close();connection = nil;throw error }
+        } catch { reportDiscovery(client);reportFailure(error, point: .pageAttach, attachment: client.attachmentStage);client.close();connection = nil;throw Self.normalizedAttachFailure(error, deadline: attachDeadline, now: runtime.uptime, cancelled: Task.isCancelled) }
     }
     private func install(_ binding: ZCodePageBinding, request: SkinLaunchRequest, observation: ZCodeInstallObservation) async throws -> SkinLaunchResult {
         guard let client = connection else { throw failure("endpoint-unavailable") }
@@ -601,7 +689,7 @@ import Darwin
                 catch { self.reportFailure(error, point: .validateProcess);throw error }
             }, activateExisting: { process in
                 try self.validate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
-            }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1) },
+            }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1, purpose: $2) },
             install: { try await self.install($0, request: $1, observation: $2) }, inspectPage: { binding, deadline in
                 defer { self.connection?.close();self.connection = nil }
                 guard let client = self.connection else { throw self.failure("endpoint-unavailable") }
@@ -617,7 +705,13 @@ import Darwin
                 do {
                     let lock = try WallpaperOperationLock.acquire(pid: pid)
                     return ZCodeRuntimeLease { self.connection?.close();self.connection = nil;lock.release() }
-                } catch { self.reportFailure(error, point: .operationLock);throw error }
+                } catch {
+                    self.reportFailure(error, point: .operationLock)
+                    if let failure = error as? WallpaperFailure, failure.state == "busy" {
+                        throw ZCodeOperationLockFailure.busy
+                    }
+                    throw error
+                }
             })
     }
 }
@@ -644,10 +738,10 @@ extension ZCodeNativeRuntime {
               let recordSHA = value["recordSHA256"] as? String, recordSHA.utf8.count == 64,
               recordSHA.allSatisfy({ "0123456789abcdef".contains($0) }),
               let observedAt = value["observedAt"] as? String, evidenceTimeValid(observedAt),
-              value["infoSHA256"] as? String == "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-              value["version"] as? String == "3.17.1.9553",
-              value["executableSHA256"] as? String == "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8",
-              value["appAsarSHA256"] as? String == "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+              value["infoSHA256"] as? String == "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+              value["version"] as? String == "3.17.2.9661",
+              value["executableSHA256"] as? String == "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d",
+              value["appAsarSHA256"] as? String == "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
               let hash = value["payloadSHA256"] as? String, hash.utf8.count == 64,
               hash.allSatisfy({ "0123456789abcdef".contains($0) }),
               let ids = value["evidenceIDs"] as? [String], !ids.isEmpty,
@@ -663,7 +757,7 @@ extension ZCodeNativeRuntime {
             return CapabilityFinding(subject: CapabilityEvidenceSubject(application: key,
                 surface: SkinHostContract.surface(for: capability), contractVersion: SkinHostContract.version),
                 capability: capability, state: state,
-                evidenceIDs: isUI ? ids : ["fixed-3.17.1.9553-host-entry08-H1", "ZCode-native-contract-tests"],
+                evidenceIDs: isUI ? ids : ["fixed-3.17.2.9661-host-entry08-H1", "ZCode-native-contract-tests"],
                 reason: isUI ? "requires actual hash-bound ZCode UI evidence; fixtures do not fill this receipt"
                     : "host capability established by fixed-install H1 and contract tests; live identity/context rechecked per operation; Native entry acceptance remains separate")
         }

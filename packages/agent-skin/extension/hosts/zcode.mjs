@@ -1,4 +1,4 @@
-// ZCode 3.17.1 packaged renderer adapter. No Codex URL/DOM strategy is used.
+// ZCode 3.17.2 packaged renderer adapter. No Codex URL/DOM strategy is used.
 // Source anchors: desktopHostProcess Hc/loadFile, shared/test-ids sidebar and
 // task-settings-button, WorkspaceSidebarFooter and ProjectSidebar (versioned
 // source/install parity is local only; live capability evidence stays separate).
