@@ -29,7 +29,7 @@ The earlier package was a local fork of Michael Denyer's Claude Code port ([`356
 
 ### The installed object
 
-The native Codex marketplace name remains `pstack-claude`, and the plugin identifier remains `pstack@pstack-claude`. Those names are retained from the selected source; they are not sufficient to identify where the installed bytes came from.
+The native Codex marketplace name remains `pstack-claude`, and the plugin identifier is `pstack-azhouzhou@pstack-claude` (the earlier `pstack` name retired on 2026-11-04; see the [support matrix](support-matrix.md)). Those names are not sufficient to identify where the installed bytes came from.
 
 The Hub registers the **explicit absolute path of its private package snapshot**, whose `.agents/plugins/marketplace.json` resolves `pstack` from `./harness/pstack/codex`. User installation instructions select the maintained Hub package; upstream repositories remain source-update and attribution references. After installation, the adapter compares the native marketplace root and source, the plugin's local source path, and the installed runtime files with the selected snapshot and its per-plan fingerprint. This prevents a familiar plugin name from concealing installation of different bytes.
 

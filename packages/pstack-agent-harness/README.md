@@ -29,10 +29,10 @@ The build assembles the sources into a scratch tree, applies the patch queue, ru
 
 ```sh
 claude plugin marketplace add "$PWD"
-claude plugin install pstack@pstack-claude --scope user
+claude plugin install pstack-azhouzhou@pstack-claude --scope user
 ```
 
-Refresh after package updates with `claude plugin marketplace update pstack-claude` and `claude plugin update pstack@pstack-claude`; remove with `claude plugin uninstall pstack@pstack-claude`.
+Refresh after package updates with `claude plugin marketplace update pstack-claude` and `claude plugin update pstack-azhouzhou@pstack-claude`; remove with `claude plugin uninstall pstack-azhouzhou@pstack-claude`.
 
 **Codex** uses the Hub integration commands in [docs/integrations.md](../../docs/integrations.md), which install from `harness/pstack/codex` into a dedicated `CODEX_HOME`.
 
