@@ -1,0 +1,38 @@
+Description: bind Claude model sheet instructions to the SessionStart hook config root
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+Claude Code can auto-load rules files, but the generated session-start.sh
+reads pstack-models.md from CLAUDE_CONFIG_DIR (or the user .claude root).
+The pinned upstream adapter instructs setup to write a different path.
+Correct only the downstream quilt copy, retaining immutable upstream bytes.
+
+--- a/pstack/README.md
++++ b/pstack/README.md
+@@ -28,5 +28,5 @@
+ claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `pstack-claude`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack-azhouzhou@pstack-claude`.
+ 
+-claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack-azhouzhou:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack-azhouzhou:setup-pstack` writes your model choices to `~/.claude/rules/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
++claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack-azhouzhou:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack-azhouzhou:setup-pstack` writes your model choices to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
+ 
+ claude code installs a generated copy of pstack, including this readme and the guide, from [`harness/pstack/`](https://github.com/cursor/plugins/tree/main/harness/pstack) at the repository root. after you change pstack, run `node scripts/generate-pstack-harness-trees.mjs` from the repository root and commit the result. ci fails while the generated copy is out of date.
+--- a/pstack/docs/harness/claude-code.md
++++ b/pstack/docs/harness/claude-code.md
+@@ -35,14 +35,14 @@
+ | A `grok-*`, `gpt-*`, or other non-Claude slug | Omit `model` so the agent runs on the session model, and say so. |
+ | `auto` or `inherit-parent` | Omit `model`. |
+-| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | `~/.claude/rules/pstack-models.md`. Claude Code loads it into every new session, so its role lines are already in context. If they are not, read the file. If the file or the role's line is missing, use the skill's default slug. |
++| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | Use `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, the exact configuration-root sheet read by the shipped SessionStart hook. This file is NOT automatically loaded by the rules directory; read it when roles are needed. If a requested model is unavailable, use only a permitted, host-supported fallback and report it; otherwise block. |
+ | A role value `<model> <effort>`, such as `opus high` | `model: "opus"` and `effort: "high"`. |
+ 
+ ## setup-pstack
+ 
+-Claude Code loads every `.md` file in `~/.claude/rules/` into each new session, so `setup-pstack` writes its rule there. Follow its steps with these changes:
++Claude Code can load rules-directory markdown, but the pstack SessionStart reader uses the separate config-root sheet. For `setup-pstack` write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` (honoring CLAUDE_CONFIG_DIR), not the rules directory; trust and enablement of the hook remain separate user decisions. Follow its other steps with these changes:
+ 
+ - Detect. The detected models are the `model` values that the `Agent` tool schema lists, each with an effort from its `effort` values. Write a real model as `<model> <effort>`, such as `opus xhigh`. The effort is the last token, so the budget step works as written.
+ - Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `opus xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.
+-- Write. Write `~/.claude/rules/pstack-models.md` with no frontmatter, then the comment lines, the `# budget` line, and one line per role from step 5. Overwrite the whole file. Never put the role lines in `CLAUDE.md` or `AGENTS.md`.
++- Write. Write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` with no frontmatter, then the comment lines, budget and role rows from step 5. Overwrite this sheet only after checking the correct active config root. A `session hook: off` row disables automatic injection; never place role rows in `CLAUDE.md` or `AGENTS.md`.
+ 
+ ## Paths

@@ -34,16 +34,16 @@ pstack skills use Cursor names. In Claude Code, read this file once per session,
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | `model: "opus"` and `effort: "xhigh"`. `model` takes only `opus`, `sonnet`, `haiku`, `fable`. Drop `-fast`. |
 | A `grok-*`, `gpt-*`, or other non-Claude slug | Omit `model` so the agent runs on the session model, and say so. |
 | `auto` or `inherit-parent` | Omit `model`. |
-| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | `~/.claude/rules/pstack-models.md`. Claude Code loads it into every new session, so its role lines are already in context. If they are not, read the file. If the file or the role's line is missing, use the skill's default slug. |
+| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | Use `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, the exact configuration-root sheet read by the shipped SessionStart hook. This file is NOT automatically loaded by the rules directory; read it when roles are needed. If a requested model is unavailable, use only a permitted, host-supported fallback and report it; otherwise block. |
 | A role value `<model> <effort>`, such as `opus high` | `model: "opus"` and `effort: "high"`. |
 
 ## setup-pstack
 
-Claude Code loads every `.md` file in `~/.claude/rules/` into each new session, so `setup-pstack` writes its rule there. Follow its steps with these changes:
+Claude Code can load rules-directory markdown, but the pstack SessionStart reader uses the separate config-root sheet. For `setup-pstack` write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` (honoring CLAUDE_CONFIG_DIR), not the rules directory; trust and enablement of the hook remain separate user decisions. Follow its other steps with these changes:
 
 - Detect. The detected models are the `model` values that the `Agent` tool schema lists, each with an effort from its `effort` values. Write a real model as `<model> <effort>`, such as `opus xhigh`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `opus xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.
-- Write. Write `~/.claude/rules/pstack-models.md` with no frontmatter, then the comment lines, the `# budget` line, and one line per role from step 5. Overwrite the whole file. Never put the role lines in `CLAUDE.md` or `AGENTS.md`.
+- Write. Write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` with no frontmatter, then the comment lines, budget and role rows from step 5. Overwrite this sheet only after checking the correct active config root. A `session hook: off` row disables automatic injection; never place role rows in `CLAUDE.md` or `AGENTS.md`.
 
 ## Paths
 

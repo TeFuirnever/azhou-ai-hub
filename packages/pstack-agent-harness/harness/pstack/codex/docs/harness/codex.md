@@ -22,7 +22,7 @@ pstack skills use Cursor names. In Codex, read this file once per session, then 
 | Cursor | Codex |
 | --- | --- |
 | `subagent_type: generalPurpose` | Ad-hoc `spawn_agent`. Codex has no subagent types. |
-| `poteto-agent`, `comment-sicko` | Ad-hoc `spawn_agent` whose brief tells the worker to read `poteto-mode/SKILL.md`, or `poteto-mode/references/agents/comment-sicko.md`, in full first. |
+| `poteto-agent`, `comment-sicko` | Dispatch an ad-hoc `spawn_agent`; require the child to read `<pstack>/skills/poteto-mode/SKILL.md` or `<pstack>/agents/comment-sicko.md` in full. Resolve `<pstack>` to the absolute installed plugin root (the directory containing `skills/` and `agents/`) before dispatch, and block the required reviewer if the file is missing; never guess a path. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | Two `spawn_agent` calls, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |
 | `readonly: true` | No sandbox field. The brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | Same dispatch. It keeps the session's MCP servers. |
@@ -39,14 +39,14 @@ pstack skills use Cursor names. In Codex, read this file once per session, then 
 | Cursor | Codex |
 | --- | --- |
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | Your configured Codex slug, such as `gpt-6-sol`, and `reasoning_effort: "xhigh"`. Codex has no Claude slugs. Drop `-fast`. |
-| A `grok-*`, `gpt-*`, or other non-Claude slug | Use it when the session exposes it. Otherwise omit `model` so the agent runs on the session model, and say so. |
+| A `grok-*`, `gpt-*`, or other non-Claude slug | Use the requested slug only when the host exposes it. If unavailable, choose only a **sheet-declared, host-supported** alternative that the user's task permits; report the requested slug, the chosen fallback and the reason. Never silently inherit the session model by omitting `model`. If no authorized alternative exists, block dispatch and report the failure. A thread-capacity error is not a model rejection. |
 | `auto` or `inherit-parent` | Omit `model`. |
-| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | The sheet at the path setup-pstack names below. Codex never reads `.mdc`, and its role lines are not loaded into every session, so read the sheet when a skill needs a role. If the sheet or the role's line is missing, use the skill's default slug. |
+| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | Codex reads the model sheet at `${CODEX_HOME:-$HOME/.codex}/pstack-models.md` (expand to the active home). It never reads `.mdc`; read this sheet when a skill needs a role. A missing role uses a skill default **only when the host supports it**; if the requested/default model is unavailable and no sheet-declared, host-supported fallback is allowed, block dispatch. |
 | A role value `<model> <effort>`, such as `opus high` | `model: "<slug>"` and `reasoning_effort: "high"`. A value of `session` passes no `reasoning_effort`. |
 
 ## setup-pstack
 
-Codex loads no rules directory into every session, so `setup-pstack` writes its sheet at the path its Other runtimes table names. Follow its steps with these changes.
+Codex does not automatically load the upstream Cursor rules directory. On Codex, `setup-pstack` writes the model sheet to `${CODEX_HOME:-$HOME/.codex}/pstack-models.md` (resolve the active `CODEX_HOME` before writing), not the Cursor `.mdc` path. Follow the setup skill's role and budget steps with this Codex-specific output path.
 
 - Detect. The detected models are the slugs the session exposes, not `Agent` tool schema values. Write each as `<slug> <effort>`, such as `gpt-6-sol xhigh`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `gpt-6-sol xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.

@@ -182,7 +182,44 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertNotEqual(hub["version"], pinned["version"])
         self.assertEqual(native_marketplace["plugins"][0]["version"], EXPECTED_VERSION)
         series = (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
-        self.assertEqual(series[-1], "0021-hub-distribution-version-0.15.37.patch")
+        self.assertIn("0021-hub-distribution-version-0.15.37.patch", series)
+        self.assertIn("0022-hub-claude-sheet-hook-path.patch", series)
+        self.assertEqual(series[-1], "0023-hub-worktree-audit-preserve-untracked.patch")
+
+    def test_codex_adapter_model_and_agent_paths_match_native_hook(self) -> None:
+        source = (PACKAGE / "hub-adapters/codex.md").read_text(encoding="utf-8")
+        built = (HARNESS / "codex/docs/harness/codex.md").read_text(encoding="utf-8")
+        for label in ("sheet-declared", "host-supported", "Never silently inherit",
+                      "<pstack>/agents/comment-sicko.md", "CODEX_HOME", "pstack-models.md"):
+            self.assertIn(label, source)
+            self.assertIn(label, built)
+        self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", built)
+        self.assertNotIn("Other runtimes table", built)
+        notes = (HARNESS / "codex/skills/poteto-mode/references/codex-tools.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("CODEX_HOME", notes)
+        self.assertIn("pstack-models.md", notes)
+        self.assertNotIn("setup-pstack's runtime table", notes)
+        hook = (HARNESS / "codex/hooks/session-start.sh").read_text(encoding="utf-8")
+        self.assertIn("CODEX_HOME", hook)
+        self.assertIn("pstack-models.md", hook)
+        self.assertTrue((HARNESS / "codex/agents/comment-sicko.md").is_file())
+
+    def test_public_pstack_readmes_cover_five_maintained_harnesses(self) -> None:
+        matrix = (ROOT / "docs/support-matrix.md").read_text(encoding="utf-8")
+        self.assertIn("DeepSeek Harness", matrix)
+        for name in ("README.md", "README.zh-CN.md"):
+            content = (ROOT / name).read_text(encoding="utf-8")
+            with self.subTest(readme=name):
+                rows = [line for line in content.splitlines()
+                        if line.startswith("| `pstack` |")]
+                self.assertEqual(len(rows), 1)
+                for marker in ("pstack-azhouzhou", "0.15.37", "MiMo", "DeepSeek Harness"):
+                    self.assertIn(marker, rows[0])
+                self.assertTrue(any("DeepSeek Harness" in line and
+                                    "pstack-azhouzhou" in line
+                                    for line in content.splitlines() if "zcode" in line))
 
     def test_zcode_commands_plugin_is_flat_and_has_no_skills_or_hooks(self) -> None:
         tree = HARNESS / "zcode-plugin"
