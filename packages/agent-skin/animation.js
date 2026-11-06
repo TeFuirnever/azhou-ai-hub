@@ -726,7 +726,7 @@ function installAnimation(
     const stage = phaseAt(milliseconds);
     const isStatic = (stage === 'pulse' && reduced)
       || (stage === 'identity' && milliseconds >= 1650)
-      || stage === 'scattered'
+      || (stage === 'scattered' && artworkShiftX === 0)
       || (stage === 'portrait' && (reduced || milliseconds >= FINAL_PROGRESS_PLATEAU_MS));
     return isStatic
       ? `${stage}:${reduced ? 'reduced' : 'full'}:${appearanceRevision}:${layoutKey}`

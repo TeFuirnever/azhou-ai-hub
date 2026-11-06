@@ -355,6 +355,68 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "build inputs/runtime paths"):
             module._check_metadata(Path("."), artifacts, {"identity": {"version": "other", "build": "2"}})
 
+    def test_dsh_host_builds_the_codex_style_dsh_adapter_payload(self):
+        module = self.module
+        verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_boundary_verifier")
+        payload = module._build_script(PACKAGE, {}, "body{}", verifier, host="dsh")
+        self.assertTrue(payload.startswith("(() => {\n"))
+        self.assertTrue(payload.endswith("})()\n"))
+        self.assertEqual(payload.count("function createDSHPageAdapter("), 1)
+        self.assertNotIn("createCodexPageAdapter(", payload)
+        self.assertNotIn("createZCodePageAdapter(", payload)
+        self.assertFalse(payload.startswith("((controllerMetadata) => {"))
+        self.assertIn('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, '
+                      'buildNumber: "' + verifier.BUILD + '" } }, {', payload)
+        self.assertIn("    installRenderer,\n    createWallpaperApplicator,\n  });", payload)
+        self.assertIn("return bootstrapStartup({", payload)
+        adapter = (PACKAGE / "extension/hosts/dsh.mjs").read_text(encoding="utf-8")
+        self.assertIn(adapter.replace("export function createDSHPageAdapter(",
+                                      "function createDSHPageAdapter(", 1).strip(), payload)
+        with self.assertRaisesRegex(RuntimeError, "Unsupported startup host"):
+            module._build_script(PACKAGE, {}, "body{}", verifier, host="web")
+
+    def test_dsh_adapter_module_rejects_imports_and_unbound_entries(self):
+        module = self.module
+        verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_adapter_verifier")
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-adapter-negative-") as temporary:
+            root = Path(temporary) / "source"
+            for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs",
+                             "extension/codex-page-adapter.mjs", "extension/bootstrap.mjs",
+                             "extension/hosts/dsh.mjs", "wallpaper/renderer.js", "wallpaper/apply.js",
+                             "localization.js", "vendor/dream-image-metadata.mjs"):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(PACKAGE / relative, target)
+            adapter_path = root / "extension/hosts/dsh.mjs"
+            original = adapter_path.read_text(encoding="utf-8")
+            adapter_path.write_text(original + "\nimport x from 'y';\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "DSH page adapter"):
+                module._build_script(root, {}, "body{}", verifier, host="dsh")
+            adapter_path.write_text(original + "\nexport function createDSHPageAdapter() {}\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "DSH page adapter"):
+                module._build_script(root, {}, "body{}", verifier, host="dsh")
+            adapter_path.write_text(original, encoding="utf-8")
+            self.assertIn("function createDSHPageAdapter(",
+                          module._build_script(root, {}, "body{}", verifier, host="dsh"))
+
+    def test_dsh_required_inputs_and_historical_sets_stay_composed_and_frozen(self):
+        verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_inputs_verifier")
+        self.assertEqual(verifier.DSH_PLUGIN_REQUIRED_INPUTS,
+                         (*verifier.STARTUP_REQUIRED_INPUTS,
+                          "extension/hosts/dsh.mjs", "tools/build-dsh-plugin.py"))
+        self.assertIn("extension/hosts/dsh.mjs", verifier.INPUT_FILES)
+        self.assertIn("tools/build-dsh-plugin.py", verifier.INPUT_FILES)
+        for name in ("PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS",
+                     "PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS",
+                     "PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS",
+                     "LEGACY_STARTUP_REQUIRED_INPUTS",
+                     "STARTUP_REQUIRED_INPUTS",
+                     "ZCODE_STARTUP_REQUIRED_INPUTS"):
+            frozen = getattr(verifier, name)
+            with self.subTest(input_set=name):
+                self.assertNotIn("extension/hosts/dsh.mjs", frozen)
+                self.assertNotIn("tools/build-dsh-plugin.py", frozen)
+
     def test_script_builder_reports_missing_or_non_self_contained_sources_and_size_limit(self):
         module = self.module
         artifacts = mock.Mock(VERSION="0.5.1")
@@ -485,6 +547,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         class MissingInputArtifacts:
             STARTUP_REQUIRED_INPUTS = artifacts.STARTUP_REQUIRED_INPUTS
             INPUT_FILES = artifacts.STARTUP_REQUIRED_INPUTS
+            def configure_build_host(self, host): artifacts.configure_build_host(host)
             def staged_path(self, path): return Path(path)
             def load_theme_config(self, _root, require_inputs=False):
                 theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))

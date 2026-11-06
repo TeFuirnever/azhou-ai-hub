@@ -1,6 +1,6 @@
 # 生产操作：Agent Skin 首期 Codex 适配
 
-> 历史设计与更名前的操作计划；下文包名、命令和目标状态不是现役运行指引。当前入口、安装及验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)、[接入说明](../../integrations.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
+> 历史执行稿（2026-10-27）：本文中的路径、Planned 阶段和授权状态只反映当时的迁移基线；Agent Skin 已迁至 `packages/agent-skin/`。当前包入口、命令和验收边界以[包说明](../../../packages/agent-skin/README.md)、[接入操作说明](../../integrations.md)、[功能测试](../../../packages/agent-skin/docs/testing.md)和[支持矩阵](../../support-matrix.md)为准。本文不代表当前安装获准或真实宿主验收已通过。
 
 产品名为Agent Skin，目标包名为`agent-skin`，首期仅适配Codex。当前包目录和Hub组件仍分别为`codex-startup-animation`与`startup-animation`；下方命令是更名前的实际入口，不表示更名已经完成。前置单N落地时同步这些入口；Codex安装身份、旧snapshot来源与生产门保持。
 

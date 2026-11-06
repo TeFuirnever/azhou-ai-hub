@@ -4,6 +4,9 @@ const OWNER = 'azhou-codex-startup';
 const VERSION = 1;
 const LEGACY_WALLPAPER_OWNER = 'azhou.codex-startup-animation';
 const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0', '0.9.0']);
+// The controller-owner allowlist is the anti-hijack boundary for the startup
+// global; it stays explicit here and is never derived from adapters.
+const CONTROLLER_OWNERS = new Set(['azhou-codex-startup', 'azhou-zcode-startup', 'azhou-dsh-startup']);
 const PAGE_REASON = 'page-unsupported';
 const ASSET_REASON = 'asset-invalid';
 const FIXED_PAGE_REASONS = new Set(['asset-invalid', 'storage-unavailable']);
@@ -62,7 +65,18 @@ function wallpaperReason(value, fallback = 'wallpaper-unsupported') {
   }
 }
 
-function existingController(host) {
+function controllerMetadataSnapshot(source) {
+  const values = Object.fromEntries(['controllerInstanceID', 'createdByOperationID', 'payloadSHA256', 'documentToken']
+    .map(key => [key, dataProperty(source, key)]));
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  if (typeof values.controllerInstanceID !== 'string' || values.controllerInstanceID.length !== 36 || !uuid.test(values.controllerInstanceID)
+      || typeof values.createdByOperationID !== 'string' || values.createdByOperationID.length !== 36 || !uuid.test(values.createdByOperationID)
+      || typeof values.payloadSHA256 !== 'string' || values.payloadSHA256.length !== 64 || !/^[a-f0-9]{64}$/.test(values.payloadSHA256)
+      || typeof values.documentToken !== 'string' || !values.documentToken || values.documentToken.length > 256) return null;
+  return Object.freeze(values);
+}
+
+function existingController(host, owner = OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, GLOBAL_NAME);
   if (!descriptor) return { present: false };
   if (!Object.hasOwn(descriptor, 'value') || !descriptor.value || typeof descriptor.value !== 'object') {
@@ -71,7 +85,7 @@ function existingController(host) {
   const api = descriptor.value;
   return {
     present: true,
-    owned: dataProperty(api, 'owner') === OWNER
+    owned: dataProperty(api, 'owner') === owner
       && dataProperty(api, 'version') === VERSION
       && typeof dataProperty(api, 'status') === 'function'
       && typeof dataProperty(api, 'openSettings') === 'function'
@@ -79,21 +93,21 @@ function existingController(host) {
   };
 }
 
-function wallpaperRecord(host) {
+function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, WALLPAPER_GLOBAL);
   if (!descriptor) return { present: false, supported: false, api: null };
   if (!Object.hasOwn(descriptor, 'value') || !descriptor.value || typeof descriptor.value !== 'object') {
     return { present: true, supported: false, api: null };
   }
   const api = descriptor.value;
-  const supported = dataProperty(api, 'owner') === LEGACY_WALLPAPER_OWNER
+  const supported = dataProperty(api, 'owner') === owner
     && WALLPAPER_VERSIONS.has(dataProperty(api, 'version'))
     && typeof dataProperty(api, 'status') === 'function'
     && typeof dataProperty(api, 'dispose') === 'function';
   return { present: true, supported, api: supported ? api : null };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter) {
+function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -104,6 +118,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
   frame.setAttribute('aria-label', text.t('overlayLabel'));
   frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
   frame.src = 'about:blank';
+  if (controllerMetadata) frame.setAttribute('data-agent-skin-controller-instance', controllerMetadata.controllerInstanceID);
   const parent = typeof document.body.appendChild === 'function' ? document.body : document.documentElement;
   parent.appendChild(frame);
   const contentWindow = frame.contentWindow;
@@ -128,6 +143,10 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
     setTimeout: bind('setTimeout'),
     clearTimeout: bind('clearTimeout'),
   });
+  const settingsFactory = dataProperty(payload, 'createImageSettings');
+  // Preserve the exact legacy factory when no host namespace was supplied.
+  const createSettings = environment.settingsNamespace === undefined || typeof settingsFactory !== 'function'
+    ? settingsFactory : input => settingsFactory({ ...input, settingsNamespace: environment.settingsNamespace });
   const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance });
   // Preserve the result so the settings panel can report wallpaper failures.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
@@ -140,7 +159,7 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
         environment.performance, environment.indexedDB, environment.Image,
         environment.Path2D, environment.URL, environment.requestAnimationFrame,
         environment.cancelAnimationFrame, environment.setTimeout, environment.clearTimeout,
-        undefined, SEND, frameSpec, dataProperty(payload, 'createImageSettings'), dataProperty(payload, 'createLocalization'),
+        undefined, SEND, frameSpec, createSettings, dataProperty(payload, 'createLocalization'),
       );
     },
     remove: () => frame.remove(),
@@ -148,7 +167,11 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 }
 
 class PageController {
-  constructor(host, payload, pageAdapter) {
+  constructor(host, payload, pageAdapter, owner, metadata) {
+    this.owner = owner;
+    this.wallpaperOwner = dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'owner')
+      ?? LEGACY_WALLPAPER_OWNER;
+    this.metadata = metadata;
     this.host = host;
     this.document = host.document;
     this.payload = payload;
@@ -189,8 +212,9 @@ class PageController {
     };
     this.onMessage = (event) => this.#receive(event);
     this.api = Object.freeze({
-      owner: OWNER,
+      owner: this.owner,
       version: VERSION,
+      ...this.metadata,
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
       openSettings: () => this.#openSettings(),
@@ -205,7 +229,7 @@ class PageController {
         ? { installed: false, alreadyActive: false, reason: 'owner-conflict' }
         : { installed: false, alreadyActive: false, reason: ASSET_REASON };
     }
-    const wallpaper = wallpaperRecord(this.host);
+    const wallpaper = wallpaperRecord(this.host, this.wallpaperOwner);
     if (wallpaper.present && !wallpaper.supported) {
       return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
     }
@@ -283,9 +307,13 @@ class PageController {
       if (!this.appearanceEntry) this.appearanceEntry = this.pageAdapter.mountEntry(this.document, () => this.#openSettings(),
         this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host,
         () => this.#retryWallpaper(), () => { this.startupWallpaperNoticeDismissed = true; });
+      const entryElement = dataProperty(this.appearanceEntry, 'element');
+      if (this.metadata && typeof entryElement?.setAttribute === 'function') {
+        entryElement.setAttribute('data-agent-skin-controller-instance', this.metadata.controllerInstanceID);
+      }
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
-        this.pageAdapter,
+        this.pageAdapter, this.metadata,
       );
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
@@ -604,7 +632,7 @@ class PageController {
     }
     if (!this.wallpaperRequest) return Promise.resolve(this.#retryResult(false, previousFailure, 'no-request'));
 
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if ((current.present && (!current.supported || current.api !== this.wallpaperAPI))
       || (!current.present && this.wallpaperAPI)) {
       return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
@@ -714,7 +742,7 @@ class PageController {
       if (dataProperty(result, 'applied') === false) {
         const reason = wallpaperReason(result);
         const failure = wallpaperFailure(result) ?? wallpaperFailure({ failureCode: 'apply-failed' });
-        const current = wallpaperRecord(this.host);
+        const current = wallpaperRecord(this.host, this.wallpaperOwner);
         if (current.present && !current.supported) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
           if (this.intent === 'play') this.startupWallpaperFailure = null;
@@ -725,7 +753,7 @@ class PageController {
         const imageDecoded = dataProperty(result, 'imageDecoded') === true;
         return this.#setWallpaperFailure(failure.failureCode, reason, imageDecoded);
       }
-      const current = wallpaperRecord(this.host);
+      const current = wallpaperRecord(this.host, this.wallpaperOwner);
       if (!current.supported) {
         if (current.present) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
@@ -796,7 +824,7 @@ class PageController {
   }
 
   #refreshWallpaper() {
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if (!current.present) {
       if (this.state.wallpaper.applied) {
         this.state.wallpaper = { applied: false, reason: 'not-installed', imageDecoded: false };
@@ -936,8 +964,9 @@ class PageController {
   #status() {
     this.#refreshWallpaper();
     return {
-      owner: OWNER,
+      owner: this.owner,
       version: VERSION,
+      ...this.metadata,
       phase: this.state.phase,
       runId: this.state.runId,
       ready: this.state.ready,
@@ -950,7 +979,7 @@ class PageController {
   }
 
   #disposeWallpaper() {
-    const current = wallpaperRecord(this.host);
+    const current = wallpaperRecord(this.host, this.wallpaperOwner);
     if (!current.supported || !this.wallpaperAPI || current.api !== this.wallpaperAPI) return;
     try { dataProperty(current.api, 'dispose').call(current.api); } catch {}
     this.wallpaperAPI = null;
@@ -994,14 +1023,24 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
   if (!identification || identification.kind !== 'matched') {
     return { installed: false, alreadyActive: false, reason: PAGE_REASON };
   }
-  const current = existingController(host);
+  const ownerDescriptor = Object.getOwnPropertyDescriptor(pageAdapter, 'controllerOwner');
+  const owner = ownerDescriptor ? dataProperty(pageAdapter, 'controllerOwner') : OWNER;
+  if (!CONTROLLER_OWNERS.has(owner)) {
+    return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
+  }
+  let metadata;
+  if (dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'requiresControllerMetadata') === true) {
+    metadata = controllerMetadataSnapshot(dataProperty(pageAdapter, 'controllerMetadata'));
+    if (!metadata) return { installed: false, alreadyActive: false, reason: 'controller-metadata-invalid' };
+  }
+  const current = existingController(host, owner);
   if (current.present) {
     return current.owned
       ? { installed: true, alreadyActive: true }
       : { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
   if (typeof payload !== 'function') return { installed: false, alreadyActive: false, reason: ASSET_REASON };
-  const controller = new PageController(host, payload, pageAdapter);
+  const controller = new PageController(host, payload, pageAdapter, owner, metadata);
   try {
     Object.defineProperty(host, GLOBAL_NAME, {
       value: controller.api, configurable: true, enumerable: false, writable: false,

@@ -360,7 +360,11 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const isAppearanceNavigationNode = node => {
       const name = node.getAttribute?.('aria-label') ?? node.textContent ?? '';
-      if (!isAppearanceAnchorName(name)) return false;
+      // The host puts the stable label in its first child and the unread badge
+      // (including screen-reader text) in a separate sibling.
+      const label = node.getAttribute?.('aria-label') == null && tagName(node) === 'BUTTON'
+        ? node.firstElementChild?.textContent : null;
+      if (!isAppearanceAnchorName(name) && !isAppearanceAnchorName(label ?? '')) return false;
       return tagName(node) === 'A' ? Boolean(getNavAncestor(node)) : isHomeNavigationButton(node);
     };
     const isVisibleNavigation = node => {
@@ -440,7 +444,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const isAppearanceAnchorName = value => {
       const name = String(value).trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-      return name === 'your dot' || name === '你的 dot';
+      // The host appends the unread badge to the navigation button's text.
+      return /^(?:your dot|你的 dot)(?:\s*\d{1,3}\+?)?$/.test(name);
     };
     const findNavigationTarget = () => {
       if (typeof page.querySelectorAll !== 'function') return null;
@@ -547,6 +552,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const showFallback = () => {
       currentTarget = null;
+      element.style.marginTop = '';
       element.style.position = 'fixed';
       element.style.left = '10px';
       element.style.right = 'auto';
@@ -580,6 +586,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const showNavigationRow = target => {
       currentTarget = target;
+      element.style.marginTop = '6px';
       element.style.position = 'static';
       element.style.left = '';
       element.style.right = '';
@@ -600,6 +607,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     };
     const hideUntilHostIsUsable = () => {
       currentTarget = null;
+      element.style.marginTop = '';
       element.style.position = 'fixed';
       element.style.left = '10px';
       element.style.right = 'auto';

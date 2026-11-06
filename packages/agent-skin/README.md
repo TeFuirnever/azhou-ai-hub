@@ -1,12 +1,12 @@
 # 阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex
 
-本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 31**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；当前唯一实现的宿主适配器为 Codex。它包含同窗口 CDP 动画、壁纸及设置流程。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter；当前没有已核验的 ZCode driver 构造器，因此 ZCode 请求会以 `implementationUnavailable` fail closed。C0 不包含 ZCode driver。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。集成包尚无真实宿主验收。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
+本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 34**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；当前唯一实现的宿主适配器为 Codex。它包含同窗口 CDP 动画、壁纸及设置流程。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter；当前没有已核验的 ZCode driver 构造器，因此 ZCode 请求会以 `implementationUnavailable` fail closed。C0 不包含 ZCode driver。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。集成包尚无真实宿主验收。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
-2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
+2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名本身没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
 原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
@@ -129,7 +129,7 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.9.0 / build 31 |
+| 版本 | 0.9.0 / build 34 |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 
@@ -191,6 +191,18 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 重试不重建控制器、不重播动画、不访问偏好存储；健康壁纸直接复查。控制器内的重试最多等待 10 秒，同一时刻只执行一次；结果的 `retries` 保留已过滤的重试前失败信息。新一轮设置或控制器移除会取消旧请求，迟到回调不能重新应用。禁用背景、忙碌状态、缺少有效请求或所有权冲突会拒绝重试。旧控制器没有该 API 时返回 `retry-unavailable`，不会强行替换；下次从更新后的入口冷启动才会加载新控制器。重试可恢复已知失败状态，但不证明某次历史失效的触发原因已查明。
 
 当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟外观入口打开设置（[入口位置、运行版本与保存边界](docs/theme-appearance.md)）；取消不保存，保存后应用背景并关闭设置，启动动画可单独预览草稿。真实宿主、人工无障碍及安装恢复等验收分别留证，局部通过不代表完整验收通过；不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
+
+## DeepSeek Harness 插件包
+
+`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口落在稳定侧栏列，壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
+
+```sh
+cd packages/agent-skin
+python3 tools/build-dsh-plugin.py
+python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
+```
+
+构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试、一次性 profile 上的官方安装循环，以及在真实 DSH web 客户端上的机器级宿主验证（控制器注册、动画收束、侧栏入口、主题跟随、默认壁纸应用、设置浮层）；人工审美验收、壁纸导入对话框、插件管理页展示与生产 profile 安装仍开放，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](../../evidence/live-dsh-plugin-host-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)。
 
 ## 安装、升级与旧入口清理
 

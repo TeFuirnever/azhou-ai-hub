@@ -424,6 +424,44 @@ test('appearance entry follows the Home Your dot button, ignores a same-named ch
   }
 });
 
+test('appearance entry stays below Your dot when an unread count appears and disappears', () => {
+  const fixture = controlledHost();
+  const [{ list, listItem, yourDot }] = addAppearanceNavigation(fixture, { layout: 'wrapped' });
+  let runId;
+  installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+    runId = spec.runId;
+    send({ type: 'azhou-startup', action: 'ready', runId });
+  }, fixture.host, pageAdapter);
+  const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  assert.equal(list.children[1], entry);
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId, skipped: false }, fixture.frames[0].contentWindow);
+  const observer = fixture.observers.find(item => item.options?.childList && item.options?.attributes);
+  yourDot.textContent = 'Your dot1';
+  observer.trigger([{ target: yourDot, type: 'childList' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(list.children[0], listItem);
+  assert.equal(list.children[1], entry, 'unread badge must not dislodge the entry');
+  assert.equal(entry.style.position, 'static');
+  yourDot.textContent = 'Your dot';
+  observer.trigger([{ target: yourDot, type: 'childList' }]);
+  fixture.timers.at(-1).callback();
+  assert.equal(list.children[1], entry);
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('appearance recognizes initial numeric unread badges without matching unrelated labels', () => {
+  for (const [label, expected] of [['Your dot1', true], ['你的 Dot 99+', true], ['Your dot settings', false]]) {
+    const fixture = controlledHost();
+    const [{ list }] = addAppearanceNavigation(fixture, { label, layout: 'wrapped' });
+    installStartup((_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) => {
+      send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    }, fixture.host, pageAdapter);
+    const entry = fixture.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    assert.equal(entry.parentNode === list, expected, label);
+    fixture.host.__azhouStartup.dispose();
+  }
+});
+
 test('appearance entry uses wrapped Home list rows and refuses unsupported wrappers', () => {
   for (const valid of [true, false]) {
     const fixture = controlledHost();
@@ -1798,4 +1836,82 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
     adapter.observeAppearance(mounted.host), mounted.host, () => {}, () => {});
   assert.equal(typeof entry.remove, 'function');
   assert.doesNotThrow(() => entry.remove());
+});
+
+
+test('explicit ZCode owner is independent and cannot adopt a Codex controller', () => {
+  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }),
+    controllerMetadata: { controllerInstanceID: '11111111-1111-4111-8111-111111111111', createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64), documentToken: 'synthetic-CDP-unique-context' } });
+  const host = controlledHost().host;
+  assert.equal(installStartup(function () {}, host, adapter).installed, true);
+  assert.equal(host.__azhouStartup.owner, 'azhou-zcode-startup');
+  assert.equal(host.__azhouStartup.status().owner, 'azhou-zcode-startup');
+  assert.equal(installStartup(function () {}, host, adapter).alreadyActive, true);
+  assert.equal(installStartup(function () {}, host, pageAdapter).reason, 'owner-conflict');
+  host.__azhouStartup.dispose();
+  assert.equal(installStartup(function () {}, host, pageAdapter).installed, true);
+  assert.equal(host.__azhouStartup.owner, 'azhou-codex-startup');
+  host.__azhouStartup.dispose();
+});
+
+test('unsupported or accessor controller owners refuse without page writes', () => {
+  for (const descriptor of [{ value: 'other' }, { get() { throw Error('must not read getter'); } }]) {
+    const controlled = controlledHost();
+    const adapter = { ...pageAdapter };
+    Object.defineProperty(adapter, 'controllerOwner', descriptor);
+    assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'owner-conflict');
+    assert.equal(controlled.frames.length, 0);
+    assert.equal(Object.hasOwn(controlled.host, '__azhouStartup'), false);
+  }
+});
+
+test('host settings namespace reaches the actual factory while legacy identity is unchanged', () => {
+  const namespace = Object.freeze({ databaseName: 'azhou-zcode-startup', databaseVersion: 1,
+    storeName: 'settings', settingsKey: 'images' });
+  for (const custom of [false, true]) {
+    const controlled = controlledHost();
+    const adapter = custom ? Object.freeze({ ...pageAdapter,
+      settingsEnvironment: source => ({ indexedDB: source.indexedDB, settingsNamespace: namespace }) }) : pageAdapter;
+    const factory = input => input;
+    let observed;
+    const payload = (...args) => { observed = args[15]; };
+    payload.createImageSettings = factory;
+    assert.equal(installStartup(payload, controlled.host, adapter).installed, true);
+    const input = { document: 'synthetic-document', indexedDB: 'synthetic-idb' };
+    assert.equal(controlled.frames[0].attributes.has('data-agent-skin-controller-instance'), false);
+    assert.equal(controlled.controls.some(node => node.attributes?.has('data-agent-skin-controller-instance')), false);
+    assert.equal(observed === factory, !custom);
+    const result = observed(input);
+    assert.equal(result.settingsNamespace, custom ? namespace : undefined);
+    assert.equal(result.indexedDB, input.indexedDB);
+    controlled.host.__azhouStartup.dispose();
+  }
+});
+
+
+test('ZCode metadata is validated before writes and retained by the actual controller', () => {
+  const metadata = { controllerInstanceID: '11111111-1111-4111-8111-111111111111',
+    createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64),
+    documentToken: 'synthetic-CDP-unique-context' };
+  for (const bad of [undefined, {}, { ...metadata, payloadSHA256: 'wrong' },
+    { ...metadata, documentToken: '' }, { ...metadata, payloadSHA256: metadata.payloadSHA256 + '\n' },
+    { ...metadata, controllerInstanceID: metadata.controllerInstanceID + '\n' }, { ...metadata, controllerInstanceID: 'legacy-v1-unreported' }]) {
+    const controlled = controlledHost();
+    const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+      controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: bad };
+    assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'controller-metadata-invalid');
+    assert.equal(controlled.frames.length, 0);
+  }
+  const controlled = controlledHost();
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: metadata };
+  assert.equal(installStartup(function () {}, controlled.host, adapter).installed, true);
+  assert.equal(controlled.frames[0].attributes.get('data-agent-skin-controller-instance'), metadata.controllerInstanceID);
+  assert.equal(controlled.controls.filter(node => node.attributes?.get('data-agent-skin-controller-instance') === metadata.controllerInstanceID).length, 1);
+  metadata.documentToken = 'changed-after-install';
+  assert.equal(controlled.host.__azhouStartup.status().documentToken, 'synthetic-CDP-unique-context');
+  assert.equal(controlled.host.__azhouStartup.controllerInstanceID, metadata.controllerInstanceID);
+  assert.equal(controlled.host.__azhouStartup.status().payloadSHA256, metadata.payloadSHA256);
+  controlled.host.__azhouStartup.dispose();
 });

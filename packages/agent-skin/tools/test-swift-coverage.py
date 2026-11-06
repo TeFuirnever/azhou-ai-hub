@@ -136,11 +136,11 @@ def main() -> int:
     (out / "coverage.json").unlink(missing_ok=True)
     objects = [
         compile_binary(out, "startup-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift",
                        "Native/StartupNativeTests.swift"], frameworks=["AppKit", "WebKit"],
                       defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "wallpaper-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift",
                        "Native/WallpaperValidationTests.swift"], frameworks=["AppKit", "WebKit"],
                       defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "install-registry-tests", ["Native/InstallRegistryCore.swift",
@@ -148,15 +148,26 @@ def main() -> int:
         compile_binary(out, "install-registry-cli", ["Native/InstallRegistryCore.swift",
                        "Native/InstallRegistry.swift"], frameworks=["AppKit", "CoreServices"]),
         compile_binary(out, "startup-cli", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift"],
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift"],
                        frameworks=["AppKit", "WebKit"]),
     ]
+    objects.append(compile_binary(out, "zcode-driver-tests",
+        ["Native/SkinHostContract.swift", "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinDriverTests.swift"]))
+    run([sys.executable, "tools/test-zcode-runtime.py", "--binary", str(objects[0]),
+         "--out", str(out / "zcode-runtime"), "--profile-directory", str(raw_dir)],
+        cwd=ROOT, log=out / "logs/zcode-runtime.log")
+    transport_out = out / "zcode-transport"
+    run([sys.executable, "tools/test-zcode-transport.py", "--out", str(transport_out),
+         "--profile-directory", str(raw_dir)], cwd=ROOT, log=out / "logs/zcode-transport.log")
+    objects.append(transport_out / "transport-fixture")
     objects.append(asset_builder_checks(out, raw_dir))
 
     environment = os.environ.copy()
-    for name, binary in zip(["startup", "wallpaper", "registry-test", "registry-cli", "startup-cli"], objects[:5]):
+    for name, binary in zip(["startup", "wallpaper", "registry-test", "registry-cli", "startup-cli", "zcode-driver"], objects[:6]):
         environment["LLVM_PROFILE_FILE"] = str(raw_dir / f"{name}-%p.profraw")
-        if name == "startup":
+        if name == "zcode-driver":
+            run([str(binary)], cwd=ROOT, log=out / "logs" / "zcode-driver-tests.log", env=environment)
+        elif name == "startup":
             run([str(binary)], cwd=ROOT, log=out / "logs" / "startup-tests.log", env=environment)
         elif name == "wallpaper":
             run([str(binary)], cwd=ROOT, log=out / "logs" / "wallpaper-tests.log", env=environment)

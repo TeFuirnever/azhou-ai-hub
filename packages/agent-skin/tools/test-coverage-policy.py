@@ -37,12 +37,24 @@ class CoveragePolicyTests(unittest.TestCase):
             (root / "Native").mkdir()
             (root / "Native/Wallpaper.swift").write_text("production script producer\n")
             scope = gate.production_sources(root)
-            self.assertEqual(set(scope["javascript"]), set(gate.GENERATED_JAVASCRIPT))
+            self.assertEqual(set(scope["javascript"]), set(gate.WALLPAPER_GENERATED_JAVASCRIPT))
             result = gate.evaluate({"javascript": scope["javascript"]}, {"javascript": {}})
             self.assertFalse(result["passed"])
         source = ".build/unit-generated-sources/Native-Wallpaper.statusSource.js"
         self.assertEqual(gate.canonical_source(source), "generated/Native-Wallpaper.statusSource.js")
         self.assertIsNone(gate.canonical_source(".build/unit-generated-sources/arbitrary-test.js"))
+
+    def test_zcode_generated_status_and_disposal_are_required_production_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Native").mkdir()
+            (root / "Native/ZCodeSkinRuntime.swift").write_text("canonical script producer\n")
+            scope = gate.production_sources(root)
+            self.assertEqual(set(scope["javascript"]), set(gate.ZCODE_GENERATED_JAVASCRIPT))
+            self.assertFalse(gate.evaluate({"javascript": scope["javascript"]}, {"javascript": {}})["passed"])
+        for name in gate.ZCODE_NATIVE_EXPRESSIONS:
+            self.assertEqual(gate.canonical_source(f".build/unit-generated-sources/Native-ZCodeRuntime.{name}.js"),
+                             f"generated/Native-ZCodeRuntime.{name}.js")
 
     def test_missing_production_file_fails_instead_of_disappearing_from_denominator(self):
         result = gate.evaluate({"swift": ["App.swift", "Registry.swift"]}, {

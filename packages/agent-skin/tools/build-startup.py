@@ -57,16 +57,17 @@ def _require_private_inputs(root: Path, theme_config: dict) -> None:
             raise RuntimeError(f'缺少本地启动默认素材 {name}；source-only 构建失败。')
 
 
-def _check_metadata(root: Path, artifacts, theme_config: dict) -> dict:
-    missing = set(artifacts.STARTUP_REQUIRED_INPUTS) - set(artifacts.INPUT_FILES)
+def _check_metadata(root: Path, artifacts, theme_config: dict, required: tuple = ()) -> dict:
+    required = required or artifacts.STARTUP_REQUIRED_INPUTS
+    missing = set(required) - set(artifacts.INPUT_FILES)
     if missing:
         raise RuntimeError('startup builder source missing from verify-artifacts INPUT_FILES: '
                            + ', '.join(sorted(missing)))
     package = artifacts.load_package_metadata(root)
     if (package.get('runtime_version') != theme_config['identity']['version']
             or package.get('runtime_build') != theme_config['identity']['build']
-            or not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(package.get('build_inputs', []))
-            or not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(package.get('runtime_paths', []))):
+            or not set(required).issubset(package.get('build_inputs', []))
+            or not set(required).issubset(package.get('runtime_paths', []))):
         raise RuntimeError('Hub package build inputs/runtime paths do not match the startup builder sources and version.')
     return package
 
@@ -226,7 +227,13 @@ def _validate_contours(contours) -> tuple[int, int]:
     return len(contours), point_count
 
 
-def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> str:
+def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, host: str = 'codex') -> str:
+    if host not in ('codex', 'zcode', 'dsh'):
+        raise RuntimeError('Unsupported startup host.')
+    adapter_name = {'zcode': 'createZCodePageAdapter', 'dsh': 'createDSHPageAdapter'}.get(host, 'createCodexPageAdapter')
+    adapter_path = {'zcode': 'extension/hosts/zcode.mjs', 'dsh': 'extension/hosts/dsh.mjs'}.get(
+        host, 'extension/codex-page-adapter.mjs')
+    adapter_label = {'zcode': 'ZCode page adapter', 'dsh': 'DSH page adapter'}.get(host, 'Codex page adapter')
     try:
         animation = _extract_animation((root / 'animation.js').read_text(encoding='utf-8'))
         settings = (root / 'image-settings.js').read_text(encoding='utf-8').strip()
@@ -238,8 +245,8 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
             'export function installStartup(', 'function installStartup(', 'Page Controller',
         ).strip()
         page_adapter = _module_function(
-            (root / 'extension/codex-page-adapter.mjs').read_text(encoding='utf-8'),
-            'export function createCodexPageAdapter(', 'function createCodexPageAdapter(', 'Codex page adapter',
+            (root / adapter_path).read_text(encoding='utf-8'),
+            'export function ' + adapter_name + '(', 'function ' + adapter_name + '(', adapter_label,
         ).strip()
         wallpaper = _module_function(
             (root / 'wallpaper/renderer.js').read_text(encoding='utf-8'),
@@ -269,13 +276,24 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         raise RuntimeError('Image Settings source must contain its complete self-contained factory.')
     if (controller.count('function installStartup(') != 1
             or wallpaper.count('async function installRenderer(') != 1
-            or page_adapter.count('function createCodexPageAdapter(') != 1):
+            or page_adapter.count('function ' + adapter_name + '(') != 1):
         raise RuntimeError('Startup/controller, page adapter or wallpaper module has an unexpected entry count.')
     css_literal = json.dumps(wallpaper_css, ensure_ascii=True, separators=(',', ':'))
     version_literal = json.dumps(artifacts.VERSION)
+    if host == 'zcode':
+        adapter_configuration = '{ controllerMetadata }'
+    elif host == 'dsh':
+        # Emitter identity only: the DSH adapter accepts and ignores this
+        # configuration and never gates on controller metadata.
+        adapter_configuration = ('{ build: { version: APP_VERSION, buildNumber: '
+                                 + json.dumps(artifacts.BUILD) + ' } }')
+    else:
+        adapter_configuration = 'undefined'
     payload = '\n'.join((
-        '(() => {',
+        '((controllerMetadata) => {' if host == 'zcode' else '(() => {',
         "  'use strict';",
+        *(('  controllerMetadata = controllerMetadataSnapshot(controllerMetadata);',
+           "  if (!controllerMetadata) return { installed: false, alreadyActive: false, reason: 'controller-metadata-invalid' };") if host == 'zcode' else ()),
         f'  const APP_VERSION = {version_literal};',
         '  const DEFAULT_ASSETS = Object.freeze(' + _json_literal(assets) + ');',
         '  const WALLPAPER_CSS = ' + css_literal + ';',
@@ -289,7 +307,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
         bootstrap,
         animation,
         '''
-  const pageAdapter = createCodexPageAdapter(globalThis, undefined, {
+  const pageAdapter = ADAPTER_FACTORY(globalThis, ADAPTER_CONFIGURATION, {
     installRenderer,
     createWallpaperApplicator,
   });
@@ -306,8 +324,8 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
     host: globalThis,
     pageAdapter,
   });
-''',
-        '})()',
+'''.replace('ADAPTER_FACTORY', adapter_name).replace('ADAPTER_CONFIGURATION', adapter_configuration),
+        '})' if host == 'zcode' else '})()',
         '',
     ))
     if len(payload.encode('utf-8')) >= MAX_STARTUP_BYTES:
@@ -315,17 +333,26 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts) -> st
     return payload
 
 
-def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
+def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex') -> dict:
+    if host not in ('codex', 'zcode', 'dsh'):
+        raise RuntimeError('Unsupported startup host.')
     root = Path(root).resolve()
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
+    if host != 'dsh':
+        # DSH ships as a web plugin package, not a macOS bundle; configure_build_host
+        # is bundle-identity machinery and deliberately knows no dsh entry.
+        artifacts.configure_build_host(host)
     bundle = artifacts.staged_path(bundle)
     theme_config = artifacts.load_theme_config(root, require_inputs=True)
     _require_private_inputs(root, theme_config)
-    _check_metadata(root, artifacts, theme_config)
+    required_inputs = (artifacts.DSH_PLUGIN_REQUIRED_INPUTS if host == 'dsh'
+                       else artifacts.ZCODE_STARTUP_REQUIRED_INPUTS if host == 'zcode'
+                       else artifacts.STARTUP_REQUIRED_INPUTS)
+    _check_metadata(root, artifacts, theme_config, required_inputs)
     verify_image_metadata_reader(root)
     inputs = artifacts.source_inputs()
-    if not set(artifacts.STARTUP_REQUIRED_INPUTS).issubset(inputs):
+    if not set(required_inputs).issubset(inputs):
         raise RuntimeError('Startup manifest cannot bind every required source input.')
 
     resources = bundle / 'Contents/Resources'
@@ -405,7 +432,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
     )
     shutil.copyfile(entry_avatar_input, entry_avatar_path)
     wallpaper_css = (root / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
-    install_script = _build_script(root, assets, wallpaper_css, artifacts)
+    install_script = _build_script(root, assets, wallpaper_css, artifacts, host=host)
     install_path = startup_dir / 'install.js'
     install_path.write_text(install_script, encoding='utf-8')
 
@@ -416,7 +443,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
     outputs = {}
     for relative in output_paths:
         outputs[relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
-    source_inputs = {name: inputs[name] for name in artifacts.STARTUP_REQUIRED_INPUTS}
+    source_inputs = {name: inputs[name] for name in required_inputs}
     manifest = {
         'schema': 1,
         'protocolVersion': 1,
@@ -436,6 +463,10 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
             'contourArtworkSHA256': artwork_sha,
         },
     }
+    if host == 'zcode':
+        manifest.update(targetHost='zcode', entrypoint='controller-metadata-factory/v1')
+    elif host == 'dsh':
+        manifest.update(targetHost='dsh')
     manifest_path = startup_dir / 'manifest.json'
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
     return manifest
@@ -443,6 +474,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', choices=('codex', 'zcode', 'dsh'), default='codex')
     parser.add_argument('--bundle', type=Path,
                         help='staged .build/azhou-stage.*/azhou-payload bundle')
     parser.add_argument('--update-image-metadata-reader', action='store_true',
@@ -458,7 +490,7 @@ def main() -> int:
     if args.bundle is None:
         parser.error('--bundle is required unless --update-image-metadata-reader is used')
     try:
-        manifest = build_startup(args.bundle)
+        manifest = build_startup(args.bundle, host=args.host)
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
         parser.exit(1, f'启动载荷构建失败：{exc}\n')
     print(json.dumps({

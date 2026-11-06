@@ -968,6 +968,7 @@ function createImageSettings(environment) {
 
   function containPanelTab(event) {
     if (!panelOpen || event.key !== 'Tab' || !dialog) return;
+    syncPanelScrollPadding();
     const preview = dialog.querySelector('[data-agent-skin-settings-preview]');
     const scope = preview || dialog;
     const controls = Array.from(scope.querySelectorAll(
@@ -1058,7 +1059,8 @@ function createImageSettings(environment) {
     dialog = document.createElement('dialog');
     dialog.setAttribute('aria-labelledby', 'agent-skin-settings-title');
     dialog.setAttribute('data-agent-skin-settings', '');
-    dialog.style.cssText = 'box-sizing:border-box;color-scheme:inherit;width:min(780px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #0006;font:14px/1.5 system-ui,sans-serif';
+    // Keep keyboard-focused fields above the sticky action footer as it wraps on narrow screens.
+    dialog.style.cssText = 'box-sizing:border-box;color-scheme:inherit;width:min(780px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;scroll-padding-bottom:120px;padding:0;border:1px solid var(--agent-skin-border,CanvasText);border-radius:18px;background:var(--agent-skin-surface,Canvas);color:var(--agent-skin-text,CanvasText);box-shadow:0 24px 90px #0006;font:14px/1.5 system-ui,sans-serif';
     dialog.style.setProperty('color-scheme', 'inherit');
     dialog.style.setProperty('border-color', 'var(--agent-skin-border, CanvasText)');
     dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
@@ -1492,10 +1494,16 @@ function createImageSettings(environment) {
       controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
-      workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel,
+      workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
     };
     updatePanelText();
     return true;
+  }
+
+  function syncPanelScrollPadding() {
+    if (!panelOpen || !dialog || !panelControls?.footer) return;
+    const footerHeight = panelControls.footer.offsetHeight;
+    if (footerHeight > 0) dialog.style.setProperty('scroll-padding-bottom', footerHeight + 6 + 'px');
   }
 
   function openSettings(callbacks = {}) {
@@ -1519,6 +1527,7 @@ function createImageSettings(environment) {
       panelCallbacks = null;
       return false;
     }
+    syncPanelScrollPadding();
     updatePanelBusy();
     try { panelCallbacks.onOpen?.(); } catch {}
     return true;

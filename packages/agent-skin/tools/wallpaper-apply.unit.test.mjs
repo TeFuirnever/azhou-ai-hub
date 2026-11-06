@@ -272,3 +272,18 @@ test('invalid input is typed while digest and renderer failures stay at their or
     await assert.rejects(apply(VALUE), /renderer failed/);
   });
 });
+
+
+test('ZCode uses its explicit shell port and passes the same bound adapter to the renderer', async () => {
+  const fixture = createHost({ shell: false });
+  const renderer = rendererRecorder();
+  const adapter = Object.freeze({ wallpaper: Object.freeze({
+    shellState(isCurrent, host) { assert.equal(host, fixture.host);return isCurrent() ? 'ready' : 'cancelled'; },
+    attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
+      observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
+  }) });
+  const apply = createWallpaperApplicator(renderer.installRenderer, { version: '0.9.0', css: 'synthetic-css', pageAdapter: adapter }, fixture.host);
+  assert.equal((await apply(VALUE, () => true)).applied, true);
+  assert.equal(renderer.calls[0].pageAdapter, adapter);
+  assert.equal(fixture.observers.length, 0);
+});
