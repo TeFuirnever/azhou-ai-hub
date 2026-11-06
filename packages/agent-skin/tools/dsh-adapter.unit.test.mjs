@@ -245,6 +245,7 @@ test('wallpaper group is frozen, atomic, and keyed to the dsh marker', () => {
   assert.deepEqual(a.wallpaper.attributes.observeFilter,
     ['data-slot', 'data-phase', 'data-ds-dark-theme', 'hidden', 'aria-hidden', 'class', 'style']);
   assert(a.wallpaper.css.includes('[data-azhou-dsh-wallpaper-surface="active"]'));
+  assert(a.wallpaper.css.includes('[data-slot="root"] > *') && a.wallpaper.css.includes('[data-phase]'));
   assert(a.wallpaper.css.includes('background-color:transparent!important'));
   assert.equal(a.wallpaper.scope,
     'decoded image, viewport cover, unique validated DSH main surface; deeper layers separate');
