@@ -177,7 +177,7 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
       },
       attributes: Object.freeze({ surfaceMarker: 'data-azhou-dsh-wallpaper-surface',
         observeFilter: ['data-slot', 'data-phase', 'data-ds-dark-theme', 'hidden', 'aria-hidden', 'class', 'style'] }),
-      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] [data-slot="main"][data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root > [data-slot="root"],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > *,html[data-azhou-wallpaper="active"] #root [data-phase],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > *:has([data-slot="main"]){background-color:transparent!important;background-image:none!important}',
+      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] [data-slot="main"][data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root > [data-slot="root"],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > *,html[data-azhou-wallpaper="active"] #root [data-phase],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > * > *:has([data-slot="main"]){background-color:transparent!important;background-image:none!important}',
       scope: 'decoded image, viewport cover, unique validated DSH main surface; deeper layers separate',
     }),
   });
