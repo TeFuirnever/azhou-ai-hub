@@ -67,8 +67,9 @@ superseded fork-port directories (`plugins/`, `tests/`, `tla/` and
 `lean/`) have been removed; this `tools/` directory holds the quilt
 builder, not the old sync-based port.
 
-The quilt currently has 20 patches: one downstream TypeScript test
-type-narrowing correction and one Hub distribution namespace guide patch. The 17 `Forwarded: no` upstream-defect patches
+The quilt currently has 21 patches: 17 upstream-defect patches and four
+Hub-specific adjustments (distribution identity, test type-narrowing,
+command/agent namespace guides and the 0.15.37 version stamp). The 17 `Forwarded: no` upstream-defect patches
 still need upstream review/forwarding or replacement when upstream adopts a
 fix. The current pinned import is `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`;
 upstream revisions must be compared and re-validated, not pulled silently.

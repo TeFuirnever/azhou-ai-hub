@@ -7,6 +7,7 @@ to replace the removed old-port behavioral suite or real host invocation.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 import unittest
 
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "packages" / "pstack-agent-harness"
 HARNESS = PACKAGE / "harness" / "pstack"
 EXPECTED_PLUGIN = "pstack-azhouzhou"
-EXPECTED_VERSION = "0.15.36"
+EXPECTED_VERSION = "0.15.37"
 EXPECTED_SKILLS = 68
 EXPECTED_COMMANDS = 41
 
@@ -149,6 +150,39 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertIn("<pstack>/agents/comment-sicko.md", guide)
         self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", guide)
         self.assertTrue((tree / "agents/comment-sicko.md").is_file())
+
+    def test_statechart_scanner_helpers_remain_test_only_and_identical(self) -> None:
+        # Security-review boundary: these are test oracles, not HTML sanitizers.
+        # This asserts only static import separation, not arbitrary DOM safety.
+        source = PACKAGE / "pstack/skills/statechart/scripts"
+        flagged = ("labels.ts", "cli.test.ts", "differential.test.ts")
+        for host in ("claude-code", "codex", "zcode", "skills-root"):
+            generated = HARNESS / host / "skills/statechart/scripts"
+            with self.subTest(host=host):
+                for name in flagged:
+                    self.assertEqual((source / "test" / name).read_bytes(),
+                                     (generated / "test" / name).read_bytes())
+                production = [f for f in generated.rglob("*.ts")
+                              if "test" not in f.relative_to(generated).parts]
+                self.assertGreater(len(production), 20)
+                test_import = re.compile(
+                    r"""(?:\bfrom\s+|\bimport\s*\(|\brequire\s*\()"""
+                    r"""[\s'"]*[^'"]*(?:/test/|/test\.ts)"""
+                )
+                for file in production:
+                    self.assertIsNone(test_import.search(file.read_text(encoding="utf-8")),
+                                      f"{host}: production code imports test oracle {file}")
+
+    def test_hub_distribution_version_is_distinct_from_immutable_upstream(self) -> None:
+        pinned = json_file(PACKAGE / "pstack/plugin.json")
+        hub = json_file(PACKAGE / "hub-package.json")
+        native_marketplace = json_file(PACKAGE / ".claude-plugin/marketplace.json")
+        self.assertEqual(pinned["version"], "0.15.36")
+        self.assertEqual(hub["version"], EXPECTED_VERSION)
+        self.assertNotEqual(hub["version"], pinned["version"])
+        self.assertEqual(native_marketplace["plugins"][0]["version"], EXPECTED_VERSION)
+        series = (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(series[-1], "0021-hub-distribution-version-0.15.37.patch")
 
     def test_zcode_commands_plugin_is_flat_and_has_no_skills_or_hooks(self) -> None:
         tree = HARNESS / "zcode-plugin"
