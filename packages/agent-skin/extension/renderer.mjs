@@ -107,19 +107,23 @@ function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
   return { present: true, supported, api: supported ? api : null };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata) {
+// Shared panel construction for the startup overlay and the settings-section
+// embed: one frame document, one environment binding, one message channel.
+// Only the mounting parent, the frame styling and the accessibility label
+// differ; the overlay's full-viewport behavior is pinned by its tests.
+function buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter,
+  controllerMetadata, parent, cssText, labelKey = 'overlayLabel') {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
   }
   const frame = document.createElement('iframe');
   const text = pageAdapter.appearanceText(dataProperty(payload, 'createLocalization'), appearance);
-  frame.setAttribute('title', text.t('overlayLabel'));
-  frame.setAttribute('aria-label', text.t('overlayLabel'));
-  frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent';
+  frame.setAttribute('title', text.t(labelKey));
+  frame.setAttribute('aria-label', text.t(labelKey));
+  frame.style.cssText = cssText;
   frame.src = 'about:blank';
   if (controllerMetadata) frame.setAttribute('data-agent-skin-controller-instance', controllerMetadata.controllerInstanceID);
-  const parent = typeof document.body.appendChild === 'function' ? document.body : document.documentElement;
   parent.appendChild(frame);
   const contentWindow = frame.contentWindow;
   if (!contentWindow) {
@@ -166,6 +170,32 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
   };
 }
 
+function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata) {
+  const parent = typeof host.document?.body?.appendChild === 'function'
+    ? host.document.body : host.document?.documentElement;
+  return buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata,
+    parent, 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent');
+}
+
+// Settings-section embed: the same panel document placed inside a host-provided
+// element. The host modal owns Esc, the backdrop and the viewport, so the frame
+// only fills its container — no fixed positioning, no takeover of its own.
+function mountSettingsPanel(host, payload, runId, assets, receive, appearance, pageAdapter,
+  controllerMetadata, target) {
+  return buildPanel(host, payload, runId, 'settings', assets, receive, appearance, pageAdapter, controllerMetadata,
+    target, 'display:block;width:100%;height:100%;border:0;background:transparent', 'appearanceLabel');
+}
+
+// The settings embed is only exercised by adapter-driven hosts whose adapter
+// declares the atomic wallpaper ports group; adapters without it (Codex) keep
+// the overlay as their only settings UX and the method stays inert.
+function settingsEmbedAdmitted(pageAdapter) {
+  const ports = dataProperty(pageAdapter, 'wallpaper');
+  return !!ports && typeof ports === 'object'
+    && typeof dataProperty(ports, 'validPage') === 'function'
+    && typeof dataProperty(ports, 'surfaces') === 'function';
+}
+
 class PageController {
   constructor(host, payload, pageAdapter, owner, metadata) {
     this.owner = owner;
@@ -195,6 +225,8 @@ class PageController {
     this.modalIsolation = null;
     this.appearanceEntry = null;
     this.appearanceObserver = null;
+    this.settingsEmbedAdmitted = settingsEmbedAdmitted(pageAdapter);
+    this.settingsEmbeds = new Set();
     this.motionQuery = null;
     this.onMotionChange = () => this.#updateAppearance();
     this.appearance = this.pageAdapter.observeAppearance(host);
@@ -218,6 +250,7 @@ class PageController {
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
       openSettings: () => this.#openSettings(),
+      mountSettings: (target, options) => this.#mountSettings(target, options),
       retryWallpaper: () => this.#retryWallpaper(),
       dispose: () => this.#dispose(),
     });
@@ -356,6 +389,14 @@ class PageController {
     const update = dataProperty(this.frameHandle, 'updateAppearance');
     if (typeof update === 'function') {
       try { update.call(this.frameHandle, this.appearance); } catch {}
+    }
+    for (const mount of this.settingsEmbeds) {
+      mount.frame?.element.setAttribute('title', text.t('appearanceLabel'));
+      mount.frame?.element.setAttribute('aria-label', text.t('appearanceLabel'));
+      const embedUpdate = dataProperty(mount.handle, 'updateAppearance');
+      if (typeof embedUpdate === 'function') {
+        try { embedUpdate.call(mount.handle, this.appearance); } catch {}
+      }
     }
   }
 
@@ -576,6 +617,14 @@ class PageController {
       && this.state.phase === 'complete' && this.state.completed && this.#ownsStartupController();
   }
 
+  // Embed-sourced wallpaper applies stay current while the controller owns the
+  // global, even after the embed itself is disposed — the same grace the
+  // overlay's completed playback and settings-save paths get.
+  #isSettingsEmbed(runId, embed) {
+    return this.settingsEmbedAdmitted && !this.disposed && !!embed
+      && runId === embed.runId && this.#ownsStartupController();
+  }
+
   #setWallpaperFailure(code, reason = 'wallpaper-unsupported', imageDecoded = false) {
     const result = { applied: false, reason, imageDecoded };
     const failure = wallpaperFailure({ failureCode: code });
@@ -696,7 +745,7 @@ class PageController {
     return bounded;
   }
 
-  async #applyWallpaper(message, runId, frame, retry = false) {
+  async #applyWallpaper(message, runId, frame, retry = false, embed = null) {
     const generation = ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
@@ -726,9 +775,10 @@ class PageController {
     // disposal still cancel work, while completed playback or saving can finish.
     const isCurrent = () => generation === this.wallpaperGeneration
       && (retry ? this.#isCurrentRetry(runId, generation)
-        : this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
-          && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
-          && this.#ownsStartupController()));
+        : embed ? this.#isSettingsEmbed(runId, embed)
+          : this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
+            && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
+            && this.#ownsStartupController()));
     if (typeof this.wallpaperApply !== 'function') {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
@@ -961,6 +1011,84 @@ class PageController {
     return false;
   }
 
+  // Settings-section embed for host settings pages (DSH): mounts the same panel
+  // document into a caller-owned element with its own run id, message listener
+  // and lifecycle, entirely separate from the startup overlay run state.
+  // Returns null on any host gate; otherwise an idempotent disposer.
+  #mountSettings(target, options) {
+    if (!this.settingsEmbedAdmitted || this.disposed || !this.installed) return null;
+    if (!target || typeof target.appendChild !== 'function') return null;
+    const mount = {
+      alive: true, runId: nextRunId++, frame: null, handle: null,
+      onClose: options && typeof options.onClose === 'function' ? options.onClose : null,
+    };
+    mount.listener = (event) => {
+      if (!mount.alive || event.source !== mount.frame?.contentWindow) return;
+      this.#receiveSettingsMessage(mount, event);
+    };
+    try {
+      mount.frame = mountSettingsPanel(this.host, this.payload, mount.runId, this.assets,
+        (event) => this.#receiveSettingsMessage(mount, event),
+        this.appearance, this.pageAdapter, this.metadata, target);
+    } catch {
+      mount.alive = false;
+      return null;
+    }
+    this.settingsEmbeds.add(mount);
+    this.host.addEventListener('message', mount.listener);
+    const started = mount.frame.start();
+    if (started && typeof started.then === 'function') {
+      Promise.resolve(started).then(handle => {
+        if (!mount.alive) { try { handle?.dispose?.(); } catch {} return; }
+        mount.handle = handle;
+      }, () => {});
+    } else if (started && typeof started === 'object') {
+      mount.handle = started;
+    }
+    return () => this.#disposeSettingsEmbed(mount);
+  }
+
+  #receiveSettingsMessage(mount, event) {
+    if (mount.frame && event.source !== mount.frame.contentWindow) return;
+    const message = event.data;
+    if (!message || typeof message !== 'object' || Array.isArray(message)
+      || message.type !== 'azhou-startup' || message.runId !== mount.runId
+      || typeof message.action !== 'string') return;
+    if (message.action === 'ready') return; // handshake only; the panel owns its UI state
+    if (message.action === 'background') {
+      return this.#applyWallpaper(message, mount.runId, null, false, mount);
+    }
+    // Asset initialization failed (any reason, before or after the panel opens):
+    // a half-open embed with no way forward is worse than a closed one, so the
+    // embed tears itself down and lets the host section react via onClose.
+    if (message.action === 'assetError') {
+      const close = mount.onClose;
+      this.#disposeSettingsEmbed(mount);
+      try { close?.(); } catch {}
+      return;
+    }
+    // The panel finished its own settings UI (save or cancel): the host modal
+    // decides what closing means; the embed still tears itself down so an
+    // unresponsive host cannot leave a dead iframe behind.
+    if (message.action === 'settings-close'
+        || (message.action === 'complete' && message.skipped === true)) {
+      const close = mount.onClose;
+      this.#disposeSettingsEmbed(mount);
+      try { close?.(); } catch {}
+    }
+  }
+
+  #disposeSettingsEmbed(mount) {
+    if (!mount || !mount.alive) return;
+    mount.alive = false;
+    this.settingsEmbeds.delete(mount);
+    this.host.removeEventListener('message', mount.listener);
+    const frame = mount.frame;
+    mount.frame = null;
+    try { mount.handle?.dispose?.(); } catch {}
+    try { frame?.remove(); } catch {}
+  }
+
   #status() {
     this.#refreshWallpaper();
     return {
@@ -999,6 +1127,8 @@ class PageController {
     this.motionQuery = null;
     this.state.overlay = false;
     this.host.removeEventListener('message', this.onMessage);
+    for (const mount of [...this.settingsEmbeds]) this.#disposeSettingsEmbed(mount);
+    this.settingsEmbeds.clear();
     this.#stopFrame();
     this.#disposeWallpaper();
     this.appearanceEntry?.remove();

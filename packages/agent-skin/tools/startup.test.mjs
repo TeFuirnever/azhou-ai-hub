@@ -1915,3 +1915,181 @@ test('ZCode metadata is validated before writes and retained by the actual contr
   assert.equal(controlled.host.__azhouStartup.status().payloadSHA256, metadata.payloadSHA256);
   controlled.host.__azhouStartup.dispose();
 });
+
+test('mountSettings joins the controller api additively and stays inert without wallpaper ports', () => {
+  const controlled = controlledHost();
+  installStartup(function () {}, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  assert.deepEqual(Object.keys(api), ['owner', 'version', 'install', 'status', 'openSettings', 'mountSettings',
+    'retryWallpaper', 'dispose'], 'mountSettings is additive; the existing startup keys are untouched');
+  const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  assert.equal(api.mountSettings(target), null,
+    'adapters without wallpaper ports keep the overlay as their only settings UX');
+  assert.equal(target.children.length, 0, 'a gated-off mount never writes into the target');
+  api.dispose();
+});
+
+test('mountSettings embeds the same panel into a host element and its disposer unwires everything', () => {
+  const controlled = controlledHost();
+  controlled.host.document.documentElement.lang = 'zh-CN';
+  const specs = [];
+  const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+    specs.push({ spec, send });
+    if (spec.intent === 'settings') return { updateAppearance() {} };
+  };
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
+    wallpaper: Object.freeze({ validPage: () => true, shellState: () => 'ready', surfaces: () => [],
+      attributes: Object.freeze({ surfaceMarker: 'data-x', observeFilter: [] }), css: '', scope: 'test' }) };
+  installStartup(payload, controlled.host, adapter);
+  const api = controlled.host.__azhouStartup;
+  const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const listenersBefore = controlled.listenerCount();
+  let closed = 0;
+  const dispose = api.mountSettings(target, { onClose: () => { closed += 1; } });
+  assert.equal(typeof dispose, 'function', 'an admitted host gets a disposer');
+  assert.equal(target.children.length, 1, 'the embed mounts exactly one iframe into the target');
+  const embed = target.children[0];
+  assert.equal(embed.style.cssText, 'display:block;width:100%;height:100%;border:0;background:transparent',
+    'the embed fills its container without overlay positioning or backdrop');
+  assert.equal(embed.attributes.get('title'), '阿舟主题与外观', 'the embed carries the appearance label');
+  assert.equal(api.mountSettings(null), null, 'a missing target is refused');
+  assert.equal(api.mountSettings({ appendChild: 'not a function' }), null, 'a non-element target is refused');
+  assert.equal(specs.length, 2, 'one overlay run and one embed mount');
+  const mountSpec = specs[1].spec;
+  assert.equal(specs[0].spec.intent, 'play');
+  assert.equal(mountSpec.intent, 'settings', 'the embed starts straight in the settings intent');
+  assert.notEqual(mountSpec.runId, specs[0].spec.runId, 'the embed runs on its own run id');
+
+  // Overlay isolation: embed traffic never moves the startup state machine.
+  assert.equal(api.status().phase, 'loading');
+  controlled.host.send({ type: 'azhou-startup', action: 'ready', runId: mountSpec.runId }, embed.contentWindow);
+  assert.equal(api.status().phase, 'loading', 'an embed ready never completes the overlay run');
+  controlled.host.send({ type: 'azhou-startup', action: 'settings-close', runId: mountSpec.runId },
+    controlled.frames[0].contentWindow);
+  assert.equal(closed, 0, 'a foreign source cannot drive the embed close');
+
+  // The panel's wallpaper request flows through the shared wallpaper pipeline.
+  controlled.host.send({ type: 'azhou-startup', action: 'background', runId: mountSpec.runId,
+    image: 'data:image/png;base64,AAAA', strength: 42 }, embed.contentWindow);
+  assert.equal(api.status().wallpaper.failureCode, 'apply-unavailable',
+    'the embed background request reaches the wallpaper pipeline');
+  assert.equal(api.status().phase, 'loading', 'wallpaper application never moves the overlay run');
+
+  // Appearance propagation reaches live embeds.
+  controlled.setBody();
+  assert.equal(embed.attributes.get('title'), '阿舟主题与外观', 'appearance refresh keeps the embed labeled');
+
+  // Panel-driven close (save): host onClose fires once, frame removed, listener unwired.
+  controlled.host.send({ type: 'azhou-startup', action: 'settings-close', runId: mountSpec.runId }, embed.contentWindow);
+  assert.equal(closed, 1, 'the panel-driven close reaches the host onClose exactly once');
+  assert.equal(embed.removed, true, 'the embed iframe is removed on the panel close');
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the embed message listener is unwired');
+  dispose();
+  dispose();
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the disposer is idempotent after a panel close');
+
+  // A cancel (complete/skipped) closes the embed through the same path.
+  const secondTarget = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const secondDispose = api.mountSettings(secondTarget);
+  assert.equal(typeof secondDispose, 'function');
+  const secondEmbed = secondTarget.children[0];
+  const cancelSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: cancelSpec.runId, skipped: true },
+    secondEmbed.contentWindow);
+  assert.equal(secondEmbed.removed, true, 'a panel cancel removes the embed');
+  assert.equal(closed, 1, 'without an onClose the cancel still tears down silently');
+  secondDispose();
+
+  const savedBody = controlled.host.document.body;
+  controlled.host.document.body = null;
+  assert.equal(api.mountSettings(secondTarget), null, 'a host without a document body refuses the embed');
+  controlled.host.document.body = savedBody;
+  api.dispose();
+});
+
+test('an embed assetError tears the embed down and reaches the host onClose once', () => {
+  const controlled = controlledHost();
+  controlled.host.document.documentElement.lang = 'zh-CN';
+  const specs = [];
+  const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+    specs.push({ spec, send });
+    if (spec.intent === 'settings') return { updateAppearance() {} };
+  };
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
+    wallpaper: Object.freeze({ validPage: () => true, shellState: () => 'ready', surfaces: () => [],
+      attributes: Object.freeze({ surfaceMarker: 'data-x', observeFilter: [] }), css: '', scope: 'test' }) };
+  installStartup(payload, controlled.host, adapter);
+  const api = controlled.host.__azhouStartup;
+
+  // Pre-open failure: beginPrepare() can assetError before the panel opens
+  // (localization unavailable) — the embed must not stay half-open.
+  const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const listenersBefore = controlled.listenerCount();
+  let closed = 0;
+  const dispose = api.mountSettings(target, { onClose: () => { closed += 1; } });
+  assert.equal(typeof dispose, 'function');
+  const embed = target.children[0];
+  const mountSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: mountSpec.runId,
+    reason: 'localization-unavailable' }, embed.contentWindow);
+  assert.equal(embed.removed, true, 'a pre-open assetError removes the embed iframe');
+  assert.equal(closed, 1, 'the host onClose fires exactly once for a failed embed');
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the embed message listener is unwired');
+  dispose();
+  dispose();
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the disposer is idempotent after an assetError');
+
+  // Post-open failure: any reason counts, once the panel is already up.
+  const secondTarget = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const secondDispose = api.mountSettings(secondTarget);
+  const secondEmbed = secondTarget.children[0];
+  const secondSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'ready', runId: secondSpec.runId }, secondEmbed.contentWindow);
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: secondSpec.runId,
+    reason: 'asset-invalid' }, secondEmbed.contentWindow);
+  assert.equal(secondEmbed.removed, true, 'a post-open assetError with any reason removes the embed');
+  secondDispose();
+
+  // A foreign source (the overlay frame) cannot close an embed via assetError.
+  const thirdTarget = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const thirdDispose = api.mountSettings(thirdTarget);
+  const thirdEmbed = thirdTarget.children[0];
+  const thirdSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: thirdSpec.runId,
+    reason: 'localization-unavailable' }, controlled.frames[0].contentWindow);
+  assert.equal(thirdEmbed.removed, false, 'a foreign-source assetError never closes the embed');
+  thirdDispose();
+  api.dispose();
+});
+
+test('disposing the controller tears down live settings embeds and late frame handles still dispose', async () => {
+  const controlled = controlledHost();
+  let handleDisposed = 0;
+  let releaseHandle;
+  const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, _send, spec) {
+    if (spec.intent !== 'settings') return undefined;
+    return new Promise(resolve => { releaseHandle = resolve; });
+  };
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
+    wallpaper: Object.freeze({ validPage: () => true, shellState: () => 'ready', surfaces: () => [],
+      attributes: Object.freeze({ surfaceMarker: 'data-x', observeFilter: [] }), css: '', scope: 'test' }) };
+  installStartup(payload, controlled.host, adapter);
+  const api = controlled.host.__azhouStartup;
+  const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const before = controlled.listenerCount();
+  const dispose = api.mountSettings(target);
+  assert.equal(typeof dispose, 'function');
+  assert.equal(target.children.length, 1);
+  api.dispose();
+  assert.equal(target.children[0].removed, true, 'the embed iframe is removed by controller teardown');
+  assert.equal(controlled.listenerCount(), before - 1, 'the embed listener is unwired by controller teardown');
+  dispose();
+  releaseHandle({ dispose() { handleDisposed += 1; }, updateAppearance() {} });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(handleDisposed, 1, 'a handle resolving after disposal is still disposed, once');
+  assert.equal(api.mountSettings(target), null, 'a disposed controller never mounts new embeds');
+});

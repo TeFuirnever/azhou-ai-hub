@@ -642,6 +642,8 @@ def verify_dsh_plugin(path):
         'const runStartup = (registerCleanup) => {', 'function createDSHPageAdapter(', binding,
         '    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });',
         'return bootstrapStartup({', 'const inject = [];', 'function apply(ctx) {',
+        "slots.inject('settings.section', function* () {",
+        "name: 'settings.section', id: 'azhou-appearance', order: 40,",
         'module.exports = { apply, inject };', 'return module.exports;',
         "controllerOwner: 'azhou-dsh-startup'", "owner: 'azhou.dsh-startup-animation'",
         'const DEFAULT_ASSETS = Object.freeze(',

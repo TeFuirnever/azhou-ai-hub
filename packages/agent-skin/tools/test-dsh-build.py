@@ -99,6 +99,9 @@ class DshPluginBuildTests(unittest.TestCase):
             ("const DEFAULT_ASSETS = Object.freeze(", 1),
             ("function apply(ctx) {", 1),
             ("const inject = [];", 1),
+            ("slots.inject('settings.section', function* () {", 1),
+            ("name: 'settings.section', id: 'azhou-appearance', order: 40,", 1),
+            ("startup.mountSettings(node, { onClose: () => closeRef.current?.() })", 1),
             ("module.exports = { apply, inject };", 1),
         ):
             with self.subTest(needle=needle):
@@ -222,6 +225,86 @@ class DshPluginBuildTests(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("dsh-client-guard:ok", result.stdout)
+
+    def test_client_registers_the_settings_section_once_with_react_degrade(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("settings-section probe requires Node.js")
+        probe = (
+            "const fs = require('node:fs');\n"
+            "const vm = require('node:vm');\n"
+            "const effects = [];\n"
+            "const injections = [];\n"
+            "const registrations = [];\n"
+            "const requires = [];\n"
+            "const withReact = process.argv[2] === 'with-react';\n"
+            "const modules = withReact ? {\n"
+            "  react: { useState() {}, useEffect() {}, useRef() {} },\n"
+            "  'react/jsx-runtime': { jsx() {} },\n"
+            "} : {};\n"
+            "const loader = { load(spec) { sandbox.__spec = spec; } };\n"
+            "const sandbox = {\n"
+            "  window: {}, console,\n"
+            "  document: { readyState: 'loading', body: {}, documentElement: { lang: 'zh-CN' },\n"
+            "    addEventListener() {}, removeEventListener() {} },\n"
+            "  __DSH_BOOT__: { carrier: 'probe' },\n"
+            "  __ModuleLoader__: loader,\n"
+            "  effect(fn, label) { effects.push(label); fn(); return () => {}; },\n"
+            "};\n"
+            "sandbox.window.__ModuleLoader__ = loader;\n"
+            "sandbox.globalThis = sandbox;\n"
+            "sandbox.__spec = null;\n"
+            "vm.createContext(sandbox);\n"
+            "vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);\n"
+            "if (sandbox.__spec.id !== 'azhou-agent-skin') throw new Error('loader id');\n"
+            "const exported = sandbox.__spec.factory((name) => {\n"
+            "  if (!(name in modules)) throw new Error('unexpected require ' + name);\n"
+            "  requires.push(name);\n"
+            "  return modules[name];\n"
+            "});\n"
+            "const ctx = { effect: sandbox.effect,\n"
+            "  slots: { inject(name, factory) { injections.push({ name, factory }); },\n"
+            "    register(def, component) { registrations.push({ def, component }); } } };\n"
+            "const result = exported.apply(ctx);\n"
+            "if (result.installed !== false || result.reason !== 'dom-loading') {\n"
+            "  throw new Error('dom-loading result ' + JSON.stringify(result));\n"
+            "}\n"
+            "if (!effects.includes('azhou-agent-skin: settings-section')) throw new Error('effect label');\n"
+            "if (withReact) {\n"
+            "  if (injections.length !== 1 || injections[0].name !== 'settings.section') {\n"
+            "    throw new Error('slot inject ' + JSON.stringify(injections));\n"
+            "  }\n"
+            "  if (injections[0].factory?.constructor?.name !== 'GeneratorFunction') {\n"
+            "    throw new Error('inject takes a registration generator');\n"
+            "  }\n"
+            "  let yields = 0;\n"
+            "  for (const yielded of injections[0].factory()) { yields += 1; }\n"
+            "  if (yields !== 1 || registrations.length !== 1) throw new Error('register exactly once');\n"
+            "  const def = registrations[0].def;\n"
+            "  if (def.name !== 'settings.section' || def.id !== 'azhou-appearance' || def.order !== 40) {\n"
+            "    throw new Error('slot definition ' + JSON.stringify(def));\n"
+            "  }\n"
+            "  if (def.label() !== '阿舟主题与外观') throw new Error('zh label ' + def.label());\n"
+            "  sandbox.document.documentElement.lang = 'en-US';\n"
+            "  if (def.label() !== 'Azhou appearance') throw new Error('en label ' + def.label());\n"
+            "  if (typeof registrations[0].component !== 'function') throw new Error('section component');\n"
+            "  if (JSON.stringify(requires) !== JSON.stringify(['react', 'react/jsx-runtime'])) {\n"
+            "    throw new Error('platform requires ' + JSON.stringify(requires));\n"
+            "  }\n"
+            "  console.log('dsh-client-settings-section:ok');\n"
+            "} else {\n"
+            "  if (requires.length !== 0) throw new Error('degraded require ' + JSON.stringify(requires));\n"
+            "  if (injections.length !== 0 || registrations.length !== 0) throw new Error('degrade kept the slot quiet');\n"
+            "  if (!effects.includes('azhou-agent-skin: document-ready')) throw new Error('bootstrap still armed');\n"
+            "  console.log('dsh-client-settings-section-degrade:ok');\n"
+            "}\n"
+        )
+        for variant, marker in (("with-react", "dsh-client-settings-section:ok"),
+                                ("without-react", "dsh-client-settings-section-degrade:ok")):
+            result = subprocess.run([node, "-e", probe, str(self.destination / "client.js"), variant],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn(marker, result.stdout)
 
     def test_local_build_path_leak_refuses_before_any_destination_write(self):
         destination = self.root / ".build/azhou-dsh-plugin-leak/azhou-agent-skin"
