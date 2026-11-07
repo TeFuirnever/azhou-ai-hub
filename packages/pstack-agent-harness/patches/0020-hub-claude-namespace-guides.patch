@@ -1,0 +1,56 @@
+Description: use the Hub distribution identity in Claude-facing pstack guides
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+The immutable upstream import describes the upstream cursor-plugins
+marketplace as pstack. Our Hub distributes the generated plugin as
+pstack-azhouzhou from marketplace pstack-claude. Patch the installed copy
+of the upstream README, poteto-help and Claude Code adaptation rather
+than writing to the pristine pinned upstream source. The replacement
+references the local Hub package directory, not the upstream marketplace.
+
+--- a/pstack/README.md
++++ b/pstack/README.md
+@@ -23,9 +23,9 @@
+ ```bash
+-/plugin marketplace add cursor/plugins
+-/plugin install pstack@cursor-plugins
+-```
+-
+-claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `cursor-plugins`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack@cursor-plugins`.
+-
+-claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack:setup-pstack` writes your model choices to `~/.claude/rules/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
++/plugin marketplace add <absolute-Hub-package-directory>
++/plugin install pstack-azhouzhou@pstack-claude
++```
++
++claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `pstack-claude`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack-azhouzhou@pstack-claude`.
++
++claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack-azhouzhou:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack-azhouzhou:setup-pstack` writes your model choices to `~/.claude/rules/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
+
+--- a/pstack/skills/poteto-help/SKILL.md
++++ b/pstack/skills/poteto-help/SKILL.md
+@@ -45,3 +45,3 @@
+
+-pstack is built for Cursor, and it also installs in Claude Code with `/plugin marketplace add cursor/plugins`, then `/plugin install pstack@cursor-plugins`. There, each command takes a `pstack:` prefix, such as `/pstack:poteto-mode`. The [Claude Code adapter](../../docs/harness/claude-code.md) maps the Cursor names, and a step that needs a Cursor-only feature, such as Bugbot or Automations, is skipped with a one-line note.
++pstack is built for Cursor, and it also installs in Claude Code with `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@pstack-claude`. There, each command takes a `pstack-azhouzhou:` prefix, such as `/pstack-azhouzhou:poteto-mode`. The [Claude Code adapter](../../docs/harness/claude-code.md) maps the Cursor names, and a step that needs a Cursor-only feature, such as Bugbot or Automations, is skipped with a one-line note.
+
+--- a/pstack/docs/guide/01-setup.md
++++ b/pstack/docs/guide/01-setup.md
+@@ -14,3 +14,3 @@
+
+-In Claude Code, run `/plugin marketplace add cursor/plugins`, then `/plugin install pstack@cursor-plugins`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack:` prefix there, such as `/pstack:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](../harness/claude-code.md) covers the other differences.
++In Claude Code, run `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@pstack-claude`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack-azhouzhou:` prefix there, such as `/pstack-azhouzhou:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](../harness/claude-code.md) covers the other differences.
+
+--- a/pstack/docs/harness/claude-code.md
++++ b/pstack/docs/harness/claude-code.md
+@@ -11,3 +11,3 @@
+ | Open a todolist | Use `TodoWrite` if the session offers it. Otherwise keep the list in your reply and update it at each phase. |
+-| Run another pstack skill (`/name` or "the **name** skill") | `Read` `<pstack>/skills/<name>/SKILL.md` and follow it. The `Skill` tool refuses most pstack skills. When you tell the user to type it, write `/pstack:<name>`. |
++| Run another pstack skill (`/name` or "the **name** skill") | `Read` `<pstack>/skills/<name>/SKILL.md` and follow it. The `Skill` tool refuses most pstack skills. When you tell the user to type it, write `/pstack-azhouzhou:<name>`. |
+ | `Grep`, `Glob` | `Bash` with `rg` when the session has no `Grep` or `Glob`. |
+@@ -19,3 +19,3 @@
+ | `subagent_type: generalPurpose` | `subagent_type: "general-purpose"` |
+-| `poteto-agent`, `comment-sicko` | `pstack:poteto-agent`, `pstack:comment-sicko` |
++| `poteto-agent`, `comment-sicko` | `pstack-azhouzhou:poteto-agent`, `pstack-azhouzhou:comment-sicko` |
+ | `readonly: true` | `subagent_type: "Explore"`. It keeps `Bash`, so the brief also says "do not edit files", and you check `git status` afterward. |

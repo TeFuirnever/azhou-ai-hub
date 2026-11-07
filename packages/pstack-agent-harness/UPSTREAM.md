@@ -56,16 +56,30 @@ looks like.
 without running a build. Re-run the generator after editing any source or
 patch, and commit the result.
 
-## Pending
+## Current distribution and remaining validation
 
-The Codex and ZCode harness targets are not built yet. Upstream's generator
-emits one tree, `harness/pstack/claude-code/`, from `pstack/docs/harness/claude-code.md`.
-A Codex or ZCode target needs its own adapter document and its own generation
-step, which is the remaining harness-adaptation work.
+The generator now emits four committed trees from the source and adapter
+documents: `harness/pstack/claude-code/`, `codex/`, `zcode/` and
+`skills-root/`. Each carries 68 skills; the additional `zcode-plugin/`
+surface holds 41 commands, and the Codex native plugin holds 41 prompts.
+`scripts/integration_pstack.py` reads `harness/pstack/codex/`. The
+superseded fork-port directories (`plugins/`, `tests/`, `tla/` and
+`lean/`) have been removed; this `tools/` directory holds the quilt
+builder, not the old sync-based port.
 
-`plugins/`, `tools/`, `tests/`, `tla/` and `lean/` still hold the previous
-port of this package, which maintained divergence with a sync tool and a fork
-register rather than a patch queue. They are superseded and pending removal.
-The Codex install adapter in `scripts/integration_pstack.py` still reads
-`plugins/pstack/`, so that directory is kept until a Codex harness target
-exists to repoint it at.
+The quilt currently has 23 patches: 17 upstream-defect patches and six
+Hub-specific adjustments (distribution identity, test type-narrowing,
+command/agent namespace guides, the 0.15.37 version stamp, Claude
+model-sheet alignment, and conservative worktree-audit classification). The 17 `Forwarded: no` upstream-defect patches
+still need upstream review/forwarding or replacement when upstream adopts a
+fix. The current pinned import is `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`;
+upstream revisions must be compared and re-validated, not pulled silently.
+
+The Hub-owned worktree-cleanup playbook overrides the pinned upstream
+cleanup instructions to protect untracked, ignored and lease-owned files.
+No safe/scratch classification authorizes force removal or recursive deletion.
+
+Remaining acceptance is behavioral: real workflows and model dispatch on
+each relevant host, lifecycle trust and host-specific invocation, plus
+documented update/rollback. A registered plugin, readable skill or passing
+generated-tree test is not sufficient evidence of a live workflow.

@@ -25,21 +25,49 @@ The build assembles the sources into a scratch tree, applies the patch queue, ru
 
 ## Install
 
+Set `PSTACK_PACKAGE` to the **absolute path** of this package before
+running the host-specific commands.
+
 **Claude Code** (2.1.292 or later):
 
 ```sh
-claude plugin marketplace add "$PWD"
+: "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
+claude plugin marketplace add "$PSTACK_PACKAGE"
 claude plugin install pstack-azhouzhou@pstack-claude --scope user
 ```
 
-Refresh after package updates with `claude plugin marketplace update pstack-claude` and `claude plugin update pstack-azhouzhou@pstack-claude`; remove with `claude plugin uninstall pstack-azhouzhou@pstack-claude`.
+Refresh with `claude plugin marketplace update pstack-claude` and
+`claude plugin update pstack-azhouzhou@pstack-claude`; remove with
+`claude plugin uninstall pstack-azhouzhou@pstack-claude`.
 
-**Codex** uses the Hub integration commands in [docs/integrations.md](../../docs/integrations.md), which install from `harness/pstack/codex` into a dedicated `CODEX_HOME`.
+**Codex** uses the Hub integration commands in
+[docs/integrations.md](../../docs/integrations.md), which install from
+`harness/pstack/codex` into a **dedicated** `CODEX_HOME`. The live
+ChatGPT Desktop default `~/.codex` contains native-owned data that the Hub
+installer deliberately refuses to adopt. Use that Codex build's native
+plugin manager for such a home; see the
+[measured Desktop receipt](../../evidence/chatgpt-desktop-native-plugin-install-2026-11-04.md).
+A successful plugin listing is not a live invocation or hook trust receipt.
 
-**ZCode** links the skills into a project's `.agents/skills/` root; no plugin or hook installs. Run from the project root, with `PSTACK_PACKAGE` set to this package's absolute path. Existing files, directories and links stay untouched:
+**ZCode** uses two different surfaces. The generated `zcode-plugin/`
+marketplace contains 41 commands and **no skills or hooks**. With the
+ZCode CLI on PATH, install that commands-only plugin through the native
+manager:
 
-```shell
+```sh
 : "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
+zcode plugins marketplace add "$PSTACK_PACKAGE/harness/pstack/zcode-plugin"
+zcode plugins install pstack-azhouzhou@azhou-hub
+zcode commands list
+```
+
+The 68 skills are supplied separately by the shared user root
+`~/.agents/skills`, or by project-scoped links when an isolated
+project requires them. The plugin must not duplicate those skills.
+For a project-local install, from that project root, preserve any existing
+entry (file, directory or symlink):
+
+```sh
 SRC="$PSTACK_PACKAGE/harness/pstack/zcode/skills"
 test -d "$SRC" || { printf '%s\n' "no zcode skills at $SRC" >&2; exit 2; }
 mkdir -p .agents/skills
@@ -50,6 +78,7 @@ done
 zcode skills list --cwd "$(pwd -P)"
 ```
 
-The final command needs a `zcode` CLI on PATH; it is what proves the host discovered the links.
+Native command listing and skill discovery do not yet prove GUI invocation;
+ZCode plugin SessionStart hook delivery is not claimed.
 
 Configure per-role models with `/setup-pstack`; the sheet lives at `~/.claude/pstack-models.md` on Claude Code and `<codex-home>/pstack-models.md` on Codex. All licenses are MIT; the notices under `NOTICE*.md` and `LICENSE-*` cover the three upstream sources.

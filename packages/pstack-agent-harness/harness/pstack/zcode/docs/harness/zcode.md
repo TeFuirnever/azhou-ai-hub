@@ -9,7 +9,7 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | `Task` | Dispatch a child through the session's own dispatch, when it has one. ZCode types those children `subagent_child`. With no dispatch, run the step yourself and say so. |
 | `AskQuestion` | Ask in plain text and let the user answer. No structured-choice tool is recorded. |
 | Open a todolist | No todolist tool is recorded. Keep the list in your reply and update it at each phase. |
-| Run another pstack skill (`/name` or "the **name** skill") | Invoke the project skill explicitly. ZCode discovers skills at `.agents/skills/`, so read `<pstack>/skills/<name>/SKILL.md` and follow it. When you tell the user to type it, write `/pstack:<name>`. |
+| Run another pstack skill (`/name` or "the **name** skill") | Invoke the project skill explicitly. ZCode discovers skills at `.agents/skills/`, so read `<pstack>/skills/<name>/SKILL.md` and follow it. Tell the user to invoke the Skill by its discovered ZCode name; use `zcode skills list` to verify it, rather than assuming a Claude Code namespaced slash command. The separate commands-only plugin exposes commands such as `/architect`. |
 | `Grep`, `Glob` | The session's shell tool with `rg`, `find`, `ls`. |
 | Read a file | The session's file-read tool. |
 | Edit or delete a file | The session's file-edit tool. |
@@ -21,7 +21,9 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | Cursor | ZCode |
 | --- | --- |
 | `subagent_type: generalPurpose` | No named subagent types are recorded. Dispatch ad-hoc and put the role in the brief. |
-| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or the plugin-root `agents/comment-sicko.md`, in full first. |
+| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or the resolved `<pstack>/agents/comment-sicko.md` file from the
+installed skill tree (when present), in full first. Never infer a file
+that is not there; an unavailable required reviewer remains blocked. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | The same dispatch, one per worker, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |
 | `readonly: true` | No sandbox field is recorded. The brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | Same dispatch. |
@@ -40,16 +42,16 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | No Claude slugs. Take the model from `ListModels` and pass its full id, such as `account:<plan>/<model>`. Pass a reasoning level only when the session's model field accepts one. Drop `-fast`. |
 | A `grok-*`, `gpt-*`, or other non-ZCode slug | Omit `model` so the run uses the session model, and say so. |
 | `auto` or `inherit-parent` | Omit `model`. |
-| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | The sheet under `~/.zcode/` at the path setup-pstack names below. ZCode never reads `.mdc`, and its role lines are not loaded into every session, so read the sheet when a skill needs a role. If the sheet or the role's line is missing, use the skill's default slug mapped through the rows above. |
+| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | The ZCode sheet is `~/.zcode/pstack-models.md`. ZCode never reads `.mdc`, and its role lines are not loaded into every session, so read the sheet when a skill needs a role. If the sheet or the role's line is missing, use the skill's default slug mapped through the rows above. |
 | A role value `<model> <effort>`, such as `opus high` | The sheet's full model id and its reasoning level. A value of `session` passes no level. |
 
 ## setup-pstack
 
-ZCode loads no rules directory into every session, so `setup-pstack` writes its sheet under `~/.zcode/`, at the path its Other runtimes table names. Follow its steps with these changes.
+ZCode loads no rules directory into every session, so `setup-pstack` writes its sheet at `~/.zcode/pstack-models.md`. Follow its steps with these changes.
 
 - Detect. Ask `ListModels` for the models the current session can use and write each full id, such as `account:<plan>/<model>`, as `<id> <effort>`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above. A default with no ZCode model is `inherit-parent`.
-- Write. Overwrite the whole sheet. Never put the role lines in `AGENTS.md`. A `session hook: off` line stops routing. ZCode registers hooks in `<scope-root>/.zcode/cli/config.json`. A probe at zcode 0.16.5 on macOS saw `SessionStart` fire in the GUI host and fire zero markers across a completed headless `--prompt` run, so do not rely on it outside the GUI host.
+- Write. Read and preserve the existing `session hook` setting when rewriting the sheet unless the user explicitly changes it; stop on duplicate or ambiguous settings. Leave an absent setting absent unless the user chooses one. Never put role lines in `AGENTS.md`. A `session hook: off` line stops routing. ZCode registers hooks in `<scope-root>/.zcode/cli/config.json`. A probe at zcode 0.16.5 on macOS saw `SessionStart` fire in the GUI host and fire zero markers across a completed headless `--prompt` run, so do not rely on it outside the GUI host.
 
 ## Paths
 
