@@ -43,6 +43,9 @@ python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-mark
 python3 tools/build-wallpaper.py ${host_args[@]+"${host_args[@]}"} --bundle "$bundle"
 python3 tools/build-startup.py ${host_args[@]+"${host_args[@]}"} --bundle "$bundle"
 icon_source="$PWD/$theme_icon_input"
+if [[ -n "${AZHOU_APPROVED_ICON_SHA256:-}" ]]; then
+  icon_source="$stage_root/approved-icon.png"
+fi
 iconset="$stage_root/AzhouAppIcon.iconset"
 mkdir -p "$iconset"
 for icon_size in 16 32 128 256 512; do

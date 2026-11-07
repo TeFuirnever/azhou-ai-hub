@@ -27,7 +27,7 @@
 
 ## 评估结论(2026-10-07 当日深查,只读)
 
-**T1 super-caveman 上游(caveman 11ddc0c9→HEAD、i-have-adhd b42a45a0→HEAD)**:三条字节一致条目中,caveman-commit 语义零变化(仅 Claude `.md` 命令格式迁移为 `.toml` 包装),caveman-review 的 prompt 文本逐字未变,cavecrew 只有措辞级漂移(voice 描述改写、加 "if installed" 限定词)。**唯一实质变更:i-have-adhd 行为合同规则 9**——pin 时"Cap lists at 5 items"(硬性截断/拆分)在上游已改为"Cap lists to 5 items"的新语义:仅约束最终响应的呈现层(分组+排序,每组 ≤5),明确"Never omit relevant items when completeness matters…must not limit analysis, search, tool results, candidate generation, or retained information"。这是对 44 条输出行为判据中至少 1 条的语义反转,采纳与否是行为决策;任何采纳都改 skill-tree digest,必须走完整晋级骑行(19 案例 + 3 judge + exact-diff P0)。
+**T1 super-caveman 上游（2026-10-07 原始扫描，规则 9 结论见下方更正）**：当时发现 i-have-adhd 规则 9 增加完整性表述。原扫描误将 pin 描述为硬截断，并误判为行为反转；原合同已要求把长列表拆分为分组。
 
 **T2 super-lavish CLI(lavish-axi 0.1.47→0.1.83)**:37 个版本全部 0.1.x;整份 CHANGELOG(688 行)**零 BREAKING CHANGES 标记**;近期版本(0.1.72–0.1.83)的功能/修复行没有触及 relay 面词汇(spec/relay/export/init/serve/feedback/ledger/revision)。初步判定升级风险低;但 provenance 的 npm integrity + CLI baseline 是硬 pin,任何升级都要在新 CLI 上重跑 relay 契约回归(optimistic revision guards、stale-revision rejection、exact visible-state projection)后才能改 pin。
 
@@ -35,15 +35,15 @@
 
 **无需动作项(维持现状)**:eli5(行为句未动,仅上游 LICENSE 变更)、autoresearch(逐字节一致)、excalidraw 引擎(npm 最新仍 0.18.1,主线 430 commits 未发布)、ask-azhou(仅 pattern 参考,生成式路由表已结构性解决上游过时问题)。
 
-### Decision (2026-10-07): keep the pinned hard cap
+### Decision (2026-10-07): retain the pinned grouped-list contract
 
-T1 决定(2026-10-07,workspace-owner 委托执行):**保留 pinned 硬截断合同,不采纳上游 i-have-adhd 规则 9 的呈现层放宽**。pin `b42a45a0`(ayghri/i-have-adhd,全 SHA `b42a45a068e080294924bfba19a7a2e8944c48ff`)与 super-caveman 的 44 条输出行为判据保持不变;本次决定不改任何 skill 文件、不改 pin。
+更正：原记录将 pin 的规则 9 描述为“硬截断”、将上游变化描述为行为反转，均不准确。历史 pin `b42a45a068e080294924bfba19a7a2e8944c48ff` 要求长列表拆分并排序；当时的 `references/modes.md` 同样要求分组，`response-cases.json` 的 complex-plan 用例要求七项全部保留。上游新增完整性表述加强了措辞，未发现与这些判据冲突。
 
-理由:现行 "Cap lists at 5 items" 硬截断是人工 P0 批准过的合同行为——现行 19/19 晋级案例与 44 条输出行为判据是在该合同上批准的;上游新语义(仅约束呈现层:分组+排序、每组 ≤5、"Never omit relevant items when completeness matters…")是对其中至少 1 条判据的行为反转,不是缺陷修复;采纳的确定成本是一轮完整晋级骑行(19 案例 + 3 judge + exact-diff P0),而收益未经请求评估;vendored-material 规则下 pin 在无回据支持前保持 immutable。
+当时的决定是保持该 pin 和行为判据，不改 skill 或 pin；是否采纳上游措辞应按当时的晋级和来源规则另行评估。
 
-采纳路径:采纳即改 skill-tree digest,必须先由维护者点名启动完整晋级骑行(19 案例 + 3 judge + exact-diff P0),骑行通过后再按 vendored-material 规则(immutable source、license、retained notice、reproducible update path)更新 pin 与本笔记。触发条件:维护者明确点名采纳上游规则 9 放宽;在此之前本决定持续有效,例行扫描只需复查上游是否再次触及引入面。
+历史状态：此条决策描述 2026-10-07 的包与晋级流程。该仓库后来退役了 canonical `super-caveman`（见 [CHANGELOG](../../CHANGELOG.md)）；本记录不是当前安装、支持或晋级指令。
 
-同步:同一决定的英文版见 issue #272 的 T1 项。
+历史英文决策见 issue #272 的 T1 项；该外部记录未在本次修改中更新。
 
 ## 方法与边界
 

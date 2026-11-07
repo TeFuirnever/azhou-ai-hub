@@ -3443,13 +3443,14 @@ private final class ZCodeRuntimeFixture {
         if let override = self.listenerOverride { return try override(pid) }
         return .init(status: 0, stdout: Data("p\(pid)\nn127.0.0.1:\(self.port)\n".utf8), stderr: Data())
     })
-    init(port: Int, pid: Int32 = 654321) throws {
+    init(port: Int, pid: Int32 = 654321, version: String = "3.17.2", build: String = "3.17.2.9661",
+         executableSHA256: String = "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d") throws {
         self.port = port
         root = FileManager.default.temporaryDirectory.appendingPathComponent("zcode-runtime-unit-" + UUID().uuidString, isDirectory: true).resolvingSymlinksInPath()
         state = root.appendingPathComponent("state", isDirectory: true)
         resources = root.appendingPathComponent("resources", isDirectory: true)
         try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.2", build: "3.17.2.9661", executableSHA256: "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d")
+        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: version, build: build, executableSHA256: executableSHA256)
         inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic-only"), findings: [], contractVersion: SkinHostContract.version)
         fake = FakeNativeAppRuntime(arguments: ["SYNTHETIC-ONLY"], resourceURL: resources)
         fake.allocatedPort = port
@@ -3610,6 +3611,23 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let probe = try make();probe.probeFailure = true
     do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
     expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
+
+    let driftedHosts = try [
+        ZCodeRuntimeFixture(port: port, version: "3.17.1", build: "3.17.1.9553"),
+        ZCodeRuntimeFixture(port: port, executableSHA256: String(repeating: "f", count: 64)),
+    ]
+    fixtures.append(contentsOf: driftedHosts)
+    for drifted in driftedHosts {
+        do {
+            _ = try await drifted.assembly.openApplication(160)
+            fatalError("unpinned ZCode identity opened the host")
+        } catch let error as StartupFailure {
+            expect(error.reason == "target-identity", "ZCode version or executable drift reports an identity refusal")
+        }
+        expect(drifted.payloadReads == 0 && drifted.fake.openCount == 0 && drifted.fake.allocationCount == 0
+            && drifted.listenerPIDs.isEmpty && !FileManager.default.fileExists(atPath: drifted.state.path),
+            "ZCode identity drift refuses before payload, port, process or profile side effects")
+    }
 
     func checkOpenFailure(_ f: ZCodeRuntimeFixture, points: [(String, String)], selected: Bool, _ label: String) {
         let failures = f.events.filter { $0["stage"] as? String == "zcode-runtime-failed" }
