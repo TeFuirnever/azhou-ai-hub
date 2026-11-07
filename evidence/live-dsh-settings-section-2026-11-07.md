@@ -71,4 +71,3 @@ CI note: one coverage run failed on `ZCodeSkinDriverTests.swift:87`
 rerun passed — timing flake, not a regression. Candidate rebuilt from
 merged main as 0.9.0 build 35; the capsule disappears after the next app
 restart.
-
