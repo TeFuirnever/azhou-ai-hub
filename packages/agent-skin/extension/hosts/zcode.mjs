@@ -51,7 +51,8 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
   function text(factory, value, themeConfig) {
     if (typeof factory === 'function') return factory({ locale: value.locale, themeConfig });
     const zh = value.locale === 'zh-CN';
-    const messages = { openAppearance: zh ? '打开主题与外观' : 'Open appearance settings',
+    const messages = { characterName: zh ? '阿舟' : 'Azhou',
+      openAppearance: zh ? '打开主题与外观' : 'Open appearance settings',
       appearanceLabel: zh ? '阿舟主题与外观' : 'Azhou appearance settings',
       overlayLabel: zh ? '阿舟启动动画' : 'Azhou startup animation',
       'appearance.wallpaper.failure.retry': zh ? '重试背景' : 'Retry wallpaper',
@@ -64,16 +65,16 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
     element.style.cssText = 'display:none;flex:none;position:relative;box-sizing:border-box;app-region:no-drag';
     const shadow = element.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
-    // ChatGPT-desktop entry style scaled to the ZCode sidebar row rhythm:
-    // avatar chip + label, surface background, no hard border.
-    style.textContent = ':host{all:initial}button{all:initial;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:32px;padding:4px 10px 4px 4px;cursor:pointer;border-radius:8px;background:var(--entry-bg,transparent);color:var(--entry-fg,#111);font:13px/16px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;text-align:left}button:hover{filter:brightness(1.18)}button:focus-visible{outline:2px solid currentColor;outline-offset:1px}img{display:block;width:22px;height:22px;border-radius:6px;object-fit:cover;flex:none}.lbl{overflow:hidden;text-overflow:ellipsis}[hidden]{display:none!important}';
-    const button = document.createElement('button');button.type = 'button';
+    // Mirror the ChatGPT-desktop (Codex host) entry chrome exactly — same
+    // avatar/label proportions, surface chip and shadow — per the maintainer's
+    // style-parity call; only the CSS variable names differ per host.
+    style.textContent = ':host{all:initial}button{all:initial;display:flex;align-items:center;justify-content:flex-start;gap:7px;width:100%;box-sizing:border-box;min-height:44px;padding:5px 9px 5px 5px;cursor:pointer;border:1px solid var(--entry-border,transparent);border-radius:14px;background:var(--entry-bg,transparent);color:var(--entry-fg,#111);box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;text-align:left;outline:2px solid transparent;outline-offset:3px}button:focus-visible{outline-color:currentColor}img{display:block;width:32px;height:32px;border-radius:10px;object-fit:cover;flex:none}.lbl{overflow:hidden;text-overflow:ellipsis}[hidden]{display:none!important}';
+    const button = document.createElement('button');button.type = 'button';button.style.minWidth = '44px';
     const label = document.createElement('span');label.className = 'lbl';
-    let avatarImage = null;
     const avatar = assets?.entryAvatar;
     if (typeof avatar === 'string' && avatar.length <= 2 * 1024 * 1024
       && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
-      avatarImage = document.createElement('img');avatarImage.alt = '';
+      const avatarImage = document.createElement('img');avatarImage.alt = '';
       avatarImage.src = avatar;button.append(avatarImage);
     }
     button.append(label);
@@ -84,7 +85,11 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
     let visible = false, removed = false, timer, failure = null;
     const setAppearance = next => {
       current = next;const t = text(factory, current);
-      const labelText = t.t('openAppearance');label.textContent = labelText;button.setAttribute('aria-label', labelText);
+      // Same label formula as the ChatGPT-desktop entry: character name plus
+      // the locale-specific Appearance suffix.
+      const entryLabel = `${t.t('characterName')}${current.locale === 'zh-CN' ? '外观' : ' Appearance'}`;
+      label.textContent = entryLabel;button.setAttribute('aria-label', entryLabel);
+      button.title = t.t('openAppearance');
       retry.textContent = t.t('appearance.wallpaper.failure.retry');close.textContent = t.t('appearance.wallpaper.failure.close');
       for (const [key, value] of Object.entries({ '--entry-bg': current.colors.surface, '--entry-fg': current.colors.text,
         '--entry-border': current.colors.border })) if (value) element.style.setProperty(key, value);
