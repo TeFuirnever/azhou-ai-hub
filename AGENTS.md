@@ -32,6 +32,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 ## Git and GitHub
 
 - Use `type(scope): imperative summary`. One commit answers one reason; code, its test and necessary contract update may stay together.
+- Merging to `main` is squash-only and stays blocked until the ruleset's required checks pass and every review thread (including CodeQL and bot comments) is resolved.
 - Do not rewrite public default-branch history or let bots create statistics-only commits.
 - GitHub Actions use least privilege, full commit-SHA action pins, bounded timeouts and no untrusted `pull_request_target` checkout.
 - Keep versioned docs in the repository rather than a competing Wiki. Security reports use private advisories, never public issues.
