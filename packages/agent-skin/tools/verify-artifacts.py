@@ -424,12 +424,23 @@ def read_marker(path, required=False):
     return marker
 
 
-def write_marker(path):
+def write_marker(path, *, approved_icon_sha256=None):
     path = staged_path(path)
     actual, info = identity(path)
     if actual != IDENTITY or (info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != (VERSION, BUILD):
         raise RuntimeError('只能为当前版本、本项目身份的构建载荷写入来源标记。')
     inputs = source_inputs()
+    if approved_icon_sha256 is not None:
+        approved = approved_icon_sha256.lower()
+        icon_input = load_theme_config(ROOT)['identity']['iconInput']
+        if inputs.get(icon_input) != approved:
+            raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
+        # Render from the verified copy even if the original changes after recording inputs.
+        icon_snapshot = path.parent / 'approved-icon.png'
+        shutil.copyfile(ROOT / icon_input, icon_snapshot)
+        with icon_snapshot.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != approved:
+                raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
     marker = {
         'schema': 1, 'projectID': PROJECT_ID, 'projectRoot': str(ROOT),
         'bundleID': IDENTITY[0], 'executable': IDENTITY[1],
@@ -1174,7 +1185,7 @@ if __name__ == '__main__':
         if options.publish:
             publish(options.publish)
         elif options.write_marker:
-            write_marker(options.write_marker)
+            write_marker(options.write_marker, approved_icon_sha256=os.environ.get('AZHOU_APPROVED_ICON_SHA256'))
         elif options.write_bundle_info:
             write_bundle_info(options.write_bundle_info)
         elif options.check_inputs:

@@ -35,6 +35,7 @@ python3 -B tools/test-unit-coverage.py
 | FT-LOCALE | 官方页面英文、浏览器语言中文；切换官方页面语言 | 页面语言优先；文案、bot、设置和动画同步，不新增语言偏好 | `localization.test.mjs`、`startup.test.mjs`、生成载荷浏览器测试；实机观察官方界面 |
 | FT-FINDER | 按当前 macOS 语言查看已安装应用；检查中英资源 | 英文显示 `Azhou AI Lab for Codex`，中文显示主题指定名称；真实安装文件名不充当本地化结论 | `test-startup-build.py` 的 Bundle 回退名与本地化资源；`test-installed-acceptance.py` 的 Finder API；真实 Finder 窗口检查 |
 | FT-DOCK | 将旧版固定到 Dock，升级后再查看标签和启动目标 | 标签符合 macOS 语言，只启动唯一新入口；旧固定项或缓存不能算新版本已通过 | 安装归属 UT；Dock 实际标签与目标需现场验收。没有入口时保留 pending，不能以空列表通过 |
+| FT-ICON-IDENTITY | 使用该宿主已批准的源图 SHA-256 构建，分别在预检前和预检后换入同尺寸的图，并用 Codex 摘要启动 ZCode 构建 | 正确摘要生成经校验的暂存图，替换图或宿主串图被拒绝，原载荷保留 | preflight UT 与真实构建命令的隔离用例。实际 Dock 图案、标签和点击按 FT-DOCK 现场核对 |
 | FT-COLD | 用户完整退出官方宿主，再从阿舟入口启动 | 恰好一次冷启动、控制器就绪、动画结束和壁纸生效；没有第二个宿主 | 原生协议 UT、生成载荷测试；`test-installed-acceptance.py --cold-start` 加视觉审阅 |
 | FT-HOT | 官方宿主保持运行，再打开阿舟入口 | 激活同一 PID；不重播、不覆盖控制器、不退出宿主 | 原生事件 UT；实机对照前后 PID、事件和页面 |
 | FT-LATE-SHELL | 页面外壳晚于 12 秒动画出现 | 动画准时结束，壁纸继续等待并生效，不重播动画 | `startup.test.mjs`、`test-startup-browser.mjs` 的生成载荷延迟场景 |
