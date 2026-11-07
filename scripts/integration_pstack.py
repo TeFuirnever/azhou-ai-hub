@@ -631,6 +631,12 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         "activation": "plugin installation does not prove skill invocation or hook trust; review /hooks in a new session",
         "recovery": "failed native steps retain a receipt; plan and apply again to resume, or plan remove to use native cleanup",
     }
+    if operation == "remove":
+        payload["native_concurrency"] = {
+            "required": "keep this CODEX_HOME free of concurrent native plugin or marketplace changes throughout removal",
+            "verified": False,
+            "reason": "the Hub lock cannot coordinate other workspaces or the native Codex plugin manager",
+        }
     return {**payload, "plan_id": common.plan_digest(payload)}
 
 

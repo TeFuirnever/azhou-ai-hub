@@ -143,6 +143,8 @@ class PstackIntegrationTest(unittest.TestCase):
         plan = self.plan("remove")
         self.assertEqual(plan["commands"][0][3], "pstack@pstack-claude")
         self.assertEqual(plan["commands"][1][4], "pstack-claude")
+        self.assertFalse(plan["native_concurrency"]["verified"])
+        self.assertIn("concurrent native plugin or marketplace changes", plan["native_concurrency"]["required"])
         result = self.apply("remove")
         self.assertEqual(result["status"], "removed")
         self.assertTrue(snapshot.is_dir())
