@@ -29,6 +29,24 @@ python scripts/azhou_hub.py verify
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate.
 - `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, and Git whitespace without private evidence.
 
+### Experimental change scope
+
+For planning or review with an explicit baseline, inspect the four Git layers:
+
+~~~bash
+python scripts/azhou_hub.py scope --project /absolute/path/to/worktree --base <base-commit> --head <head-commit>
+~~~
+
+The `azhou-ai-hub.change-scope.v1` result separates commits since the unique merge base, staged changes, unstaged changes and non-ignored untracked files. It includes resolved commits, the raw index and index-entry hashes, effective tracked attributes, selected Git settings and hashes of affected worktree bytes. Paths are leads for impact analysis, not a semantic consumer graph. Git failures, ambiguous refs and unsupported index or configuration states return an error. Clean filters, submodules, split indexes, intent-to-add and hidden index flags are currently unsupported.
+
+This observation is not an atomic snapshot or a lock. Ignore rules and all possible Git inputs are not bound by its identity; ignored files are excluded. Before using a result to bind a review or execution, rerun the full command and compare the complete output, and stop if the project can change concurrently. A repeated result cannot rule out a change immediately afterward. The temporary directory must be outside Git worktrees and Git directories; the command does not fetch, stash or change the target index.
+
+### Record semantic impact
+
+When interfaces, state, receipts, generation, installation or verification entry points change, attach an impact record to the task evidence. Start from affected consumers and trace back to the actual entry, defaults, rejection point and commit point. Identify authoritative and derived state, compatibility aliases, dynamic routing, isolation boundaries, and the source-to-generated-to-installed chain where applicable. Record the owner, required scenarios and gates for each affected surface, and disclose unresolved consumers instead of assuming the path list is complete. Reuse current machine-readable registries as the authority for their sets.
+
+### Treehouse diagnostics
+
 When a task is running inside a Treehouse pool, the doctor can also verify the explicit pool without changing its lease:
 
 ~~~bash

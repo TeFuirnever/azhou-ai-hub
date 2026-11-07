@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -1447,6 +1448,259 @@ def run_verifier(root: Path, python: str) -> int:
     return result.returncode
 
 
+class ScopeError(RuntimeError):
+    """A revision or working-tree scope could not be determined safely."""
+
+
+def change_scope(project: Path, base: str, head: str) -> dict[str, Any]:
+    """Report committed and current-worktree path sets without changing Git state."""
+    project = project.resolve(strict=True)
+    environment = os.environ.copy()
+    for name in tuple(environment):
+        if name.startswith("GIT_"):
+            environment.pop(name, None)
+    environment.update(GIT_OPTIONAL_LOCKS="0", GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    isolated_environment: dict[str, str] | None = None
+
+    def git(*arguments: str, input_bytes: bytes | None = None, isolated: bool = False,
+            allowed_codes: tuple[int, ...] = (0,)) -> bytes:
+        try:
+            result = subprocess.run(
+                ["git", "-c", "core.fsmonitor=false", "-c", "core.warnAmbiguousRefs=true", *arguments],
+                cwd=project, env=isolated_environment if isolated else environment,
+                input=input_bytes, capture_output=True, timeout=30, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ScopeError(f"Git unavailable: {exc}") from exc
+        diagnostic = result.stderr.decode("utf-8", errors="replace").strip()
+        if result.returncode not in allowed_codes:
+            raise ScopeError(f"Git failed ({result.returncode}): {diagnostic}")
+        if "ambiguous" in diagnostic.lower():
+            raise ScopeError(f"ambiguous revision: {diagnostic}")
+        return result.stdout
+
+    def commit(ref: str) -> str:
+        try:
+            value = git("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}").decode("ascii").strip()
+        except UnicodeDecodeError as exc:
+            raise ScopeError("Git returned a non-ASCII commit identifier") from exc
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value):
+            raise ScopeError("Git returned an invalid commit identifier")
+        return value
+
+    def paths(*arguments: str, isolated: bool = False) -> list[str]:
+        raw = git(*arguments, isolated=isolated)
+        if raw and not raw.endswith(b"\0"):
+            raise ScopeError("Git returned an incomplete path list")
+        try:
+            return sorted(set(item.decode("utf-8") for item in raw.split(b"\0") if item))
+        except UnicodeDecodeError as exc:
+            raise ScopeError("Git returned a path that is not valid UTF-8") from exc
+
+    actual_root = Path(os.fsdecode(git("rev-parse", "--show-toplevel").rstrip(b"\n"))).resolve()
+    if actual_root != project:
+        raise ScopeError("project must be the Git worktree root")
+    base_sha, head_sha, worktree_head = commit(base), commit(head), commit("HEAD")
+    tracked = git("ls-files", "--cached", "-z", "--")
+    attributes_raw = git("check-attr", "-z", "--stdin", "filter", input_bytes=tracked) if tracked else b""
+    all_attributes = git("check-attr", "-z", "--stdin", "--all", input_bytes=tracked) if tracked else b""
+    if tracked:
+        attributes = attributes_raw.split(b"\0")
+        if attributes[-1:] != [b""] or (len(attributes) - 1) % 3:
+            raise ScopeError("Git returned an incomplete filter-attribute list")
+        for index in range(0, len(attributes) - 1, 3):
+            if attributes[index + 2] not in {b"unspecified", b"unset"}:
+                raise ScopeError("tracked files have Git clean filters; safe scope is unavailable")
+    index_entries = git("ls-files", "--stage", "-z", "--")
+    staged_entries = index_entries.split(b"\0")
+    if any(entry.startswith(b"160000 ") for entry in staged_entries):
+        raise ScopeError("submodule worktree scope is not supported")
+    try:
+        merge_bases = git("merge-base", "--all", base_sha, head_sha).decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise ScopeError("Git returned an invalid merge base") from exc
+    if len(merge_bases) != 1:
+        raise ScopeError(f"expected one merge base, found {len(merge_bases)}")
+    diff = ("diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+            "--ignore-submodules=none", "--name-only", "-z")
+    if paths(*diff, "--cached", worktree_head, "--") != paths(
+        *diff, "--cached", "--ita-visible-in-index", worktree_head, "--"
+    ):
+        raise ScopeError("intent-to-add index entries are not supported")
+    def fingerprint(relative: str) -> dict[str, Any]:
+        candidate = project / relative
+        if Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise ScopeError("Git returned a path outside the worktree")
+        cursor = project
+        for part in Path(relative).parts[:-1]:
+            cursor /= part
+            if cursor.is_symlink():
+                raise ScopeError(f"worktree path has a symlink ancestor: {relative}")
+        try:
+            before = candidate.lstat()
+        except FileNotFoundError:
+            return {"path": relative, "kind": "missing"}
+        identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
+                                 item.st_mtime_ns, item.st_ctime_ns)
+        if stat.S_ISLNK(before.st_mode):
+            content_digest = hashlib.sha256(os.fsencode(os.readlink(candidate))).hexdigest()
+            kind = "symlink"
+        elif stat.S_ISREG(before.st_mode):
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(candidate, flags)
+            with os.fdopen(descriptor, "rb") as stream:
+                if identity(os.fstat(stream.fileno())) != identity(before):
+                    raise ScopeError(f"worktree file changed during inspection: {relative}")
+                content_digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                if identity(os.fstat(stream.fileno())) != identity(before):
+                    raise ScopeError(f"worktree file changed during inspection: {relative}")
+            kind = "file"
+        else:
+            raise ScopeError(f"unsupported worktree object: {relative}")
+        if identity(candidate.lstat()) != identity(before):
+            raise ScopeError(f"worktree file changed during inspection: {relative}")
+        return {"path": relative, "kind": kind, "mode": stat.S_IMODE(before.st_mode),
+                "sha256": content_digest}
+
+    def snapshot() -> dict[str, Any]:
+        flags = git("ls-files", "-v", "-z", "--")
+        for entry in flags.split(b"\0"):
+            if entry and (entry[:1].islower() or entry[:1] == b"S"):
+                raise ScopeError("assume-unchanged or skip-worktree index flags hide worktree changes")
+        index = git("ls-files", "--stage", "-z", "--")
+        for entry in index.split(b"\0"):
+            if not entry:
+                continue
+            header, separator, _ = entry.partition(b"\t")
+            fields = header.split(b" ")
+            if not separator or len(fields) != 3 or fields[2] != b"0":
+                raise ScopeError("unmerged or malformed Git index is not supported")
+            if fields[0] == b"160000":
+                raise ScopeError("submodule worktree scope is not supported")
+        result_paths = {
+            "committed": paths(*diff, merge_bases[0], head_sha, "--", isolated=True),
+            "staged": paths(*diff, "--cached", worktree_head, "--", isolated=True),
+            "unstaged": paths(*diff, "--", isolated=True),
+            "untracked": paths("ls-files", "--others", "--exclude-standard", "-z", "--"),
+        }
+        affected = sorted(set(result_paths["staged"] + result_paths["unstaged"] + result_paths["untracked"]))
+        return {"paths": result_paths, "index_entries_sha256": hashlib.sha256(index).hexdigest(),
+                "worktree": [fingerprint(name) for name in affected]}
+
+    config_data = git(
+        "config", "--null", "--get-regexp",
+        r"^core\.(filemode|autocrlf|eol|safecrlf|ignorecase|symlinks|attributesfile)$",
+        allowed_codes=(0, 1),
+    )
+    supported_values = {
+        "core.filemode": {"true", "false"},
+        "core.ignorecase": {"true", "false"},
+        "core.symlinks": {"true", "false"},
+        "core.autocrlf": {"true", "false", "input"},
+        "core.safecrlf": {"true", "false", "warn"},
+        "core.eol": {"lf", "crlf", "native"},
+    }
+    core_settings: dict[str, str] = {}
+    for record in config_data.split(b"\0"):
+        if not record:
+            continue
+        key_bytes, separator, value_bytes = record.partition(b"\n")
+        try:
+            key, value = key_bytes.decode("ascii"), value_bytes.decode("ascii").lower()
+        except UnicodeDecodeError as exc:
+            raise ScopeError("unsupported Git core configuration") from exc
+        if not separator or key not in supported_values or value not in supported_values[key]:
+            raise ScopeError(f"unsupported Git configuration for safe scope: {key}")
+        core_settings[key.removeprefix("core.")] = value
+
+    def git_path(*args: str) -> Path:
+        return Path(os.fsdecode(git("rev-parse", "--path-format=absolute", *args)).rstrip("\n"))
+
+    if git("rev-parse", "--shared-index-path").strip():
+        raise ScopeError("split Git index is not supported")
+    original_index = git_path("--git-path", "index")
+    common_dir = git_path("--git-common-dir")
+    original_attributes = git_path("--git-path", "info/attributes")
+    if original_attributes.is_symlink():
+        raise ScopeError("Git info attributes cannot be a symlink")
+    attribute_bytes = original_attributes.read_bytes() if original_attributes.exists() else None
+    index_bytes = original_index.read_bytes()
+    object_format = git("rev-parse", "--show-object-format").decode("ascii").strip()
+    if object_format not in {"sha1", "sha256"}:
+        raise ScopeError("unsupported Git object format")
+    # Do not call gettempdir(): its writable-directory probe creates a file
+    # before we have established that the candidate is outside every repo.
+    temp_setting = next((os.environ[name] for name in ("TMPDIR", "TEMP", "TMP") if os.environ.get(name)), None)
+    if temp_setting is None:
+        if os.name == "nt":
+            raise ScopeError("set TMPDIR, TEMP or TMP to a dedicated temporary directory")
+        temp_setting = "/tmp"
+    temporary_root = Path(temp_setting).resolve(strict=True)
+    worktree_records = git("worktree", "list", "--porcelain", "-z").split(b"\0")
+    worktree_roots = [Path(os.fsdecode(row[len(b"worktree "):])).resolve()
+                      for row in worktree_records if row.startswith(b"worktree ")]
+    if (temporary_root.is_relative_to(common_dir)
+            or any(temporary_root.is_relative_to(worktree) for worktree in worktree_roots)
+            or any((ancestor / ".git").exists() or
+                   ((ancestor / "HEAD").is_file() and (ancestor / "objects").is_dir())
+                   for ancestor in (temporary_root, *temporary_root.parents))):
+        raise ScopeError("temporary directory must be outside all worktrees and the Git common directory")
+    with tempfile.TemporaryDirectory(prefix="azhou-scope-", dir=temporary_root) as temporary:
+        scratch = Path(temporary)
+        isolated_git = scratch / "git"
+        (isolated_git / "objects").mkdir(parents=True)
+        (isolated_git / "refs").mkdir()
+        (isolated_git / "info").mkdir()
+        (isolated_git / "HEAD").write_text(worktree_head + "\n", encoding="ascii")
+        settings = ["[core]", f"repositoryformatversion = {1 if object_format == 'sha256' else 0}",
+                    "bare = false"]
+        settings.extend(f"{key} = {value}" for key, value in core_settings.items())
+        if object_format == "sha256":
+            settings.extend(["[extensions]", "objectformat = sha256"])
+        (isolated_git / "config").write_text("\n".join(settings) + "\n", encoding="ascii")
+        if attribute_bytes is not None:
+            (isolated_git / "info" / "attributes").write_bytes(attribute_bytes)
+        isolated_index = scratch / "index"
+        isolated_index.write_bytes(index_bytes)
+        isolated_environment = {
+            **environment,
+            "GIT_DIR": str(isolated_git),
+            "GIT_WORK_TREE": str(project),
+            "GIT_INDEX_FILE": str(isolated_index),
+            "GIT_OBJECT_DIRECTORY": str(common_dir / "objects"),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        }
+        # Recreate the isolated index entries so copied stat-cache timestamps cannot hide edits.
+        git("update-index", "-z", "--index-info", input_bytes=index_entries, isolated=True)
+        first = snapshot()
+        second = snapshot()
+        current_attributes = git("check-attr", "-z", "--stdin", "filter", input_bytes=tracked) if tracked else b""
+        current_info = original_attributes.read_bytes() if original_attributes.exists() else None
+        current_all_attributes = git("check-attr", "-z", "--stdin", "--all", input_bytes=tracked) if tracked else b""
+        current_config = git("config", "--null", "--get-regexp",
+                             r"^core\.(filemode|autocrlf|eol|safecrlf|ignorecase|symlinks|attributesfile)$",
+                             allowed_codes=(0, 1))
+        if (first != second or commit("HEAD") != worktree_head or original_index.read_bytes() != index_bytes
+                or current_attributes != attributes_raw or current_info != attribute_bytes
+                or current_all_attributes != all_attributes or current_config != config_data):
+            raise ScopeError("worktree, index or attributes changed during scope inspection")
+        return {
+            "schema_version": "azhou-ai-hub.change-scope.v1",
+            "project": str(project),
+            "input": {"base": base, "head": head},
+            "resolved": {"base": base_sha, "head": head_sha, "merge_base": merge_bases[0],
+                         "worktree_head": worktree_head},
+            "paths": first["paths"],
+            "identity": {"index_entries_sha256": first["index_entries_sha256"],
+                         "index_file_sha256": hashlib.sha256(index_bytes).hexdigest(),
+                         "effective_attributes_sha256": hashlib.sha256(all_attributes).hexdigest(),
+                         "info_attributes_sha256": hashlib.sha256(attribute_bytes).hexdigest() if attribute_bytes is not None else None,
+                         "core_settings": core_settings, "worktree": first["worktree"]},
+        }
+
+
 def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     skill_names = canonical_skills(root)
     parser = argparse.ArgumentParser(
@@ -1505,6 +1759,11 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     integrations = subcommands.add_parser("integrations", help="Discover or explicitly select one of three optional integrations", add_help=False)
     integrations.add_argument("integration_args", nargs=argparse.REMAINDER)
 
+    scope = subcommands.add_parser("scope", help="Report explicit committed and worktree change paths")
+    scope.add_argument("--project", type=Path, default=root, help="Git worktree root (default: this checkout)")
+    scope.add_argument("--base", required=True, help="Explicit base commit or unambiguous ref")
+    scope.add_argument("--head", required=True, help="Explicit candidate commit or unambiguous ref")
+
     verify = subcommands.add_parser("verify", help="Run the authoritative repository verification gate")
     verify.add_argument("--python", default=sys.executable, help="Python interpreter for all Python gates")
     return parser
@@ -1521,6 +1780,15 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         return azhou_integrations.main(argv[1:], hub_root=root)
     args = build_parser(root).parse_args(argv)
     skills = args.skill if getattr(args, "skill", None) else canonical_skills(root)
+
+    if args.command == "scope":
+        try:
+            payload = change_scope(args.project, args.base, args.head)
+        except (ScopeError, OSError, RuntimeError) as exc:
+            print(f"scope: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(payload, ensure_ascii=True, indent=2))
+        return 0
 
     if args.command == "info":
         payload = info_payload(root)

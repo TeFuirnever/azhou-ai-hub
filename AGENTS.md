@@ -30,6 +30,10 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 - Adapted or vendored material requires an immutable source, license, retained notice, local boundary and reproducible update path. Public code without a license is not reusable source.
 - Long-range plans and ticket drafts live under `.planning/`, which is git-ignored and therefore absent from Treehouse worktrees; read them from the maintainer checkout by absolute path whenever a task references them.
 
+## Change scope
+
+For change planning or review with an explicit base and head, use the experimental [Foundation scope command](docs/foundations.md#experimental-change-scope) to separate committed, staged, unstaged and non-ignored untracked paths. Recheck the complete result before relying on it and stop if concurrent changes cannot be excluded. Trace owners and consumers in the [semantic impact record](docs/foundations.md#record-semantic-impact); path lists are not semantic closure or proof of an atomic snapshot.
+
 ## Git and GitHub
 
 - Use `type(scope): imperative summary`. One commit answers one reason; code, its test and necessary contract update may stay together.

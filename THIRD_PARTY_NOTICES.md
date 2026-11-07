@@ -14,6 +14,14 @@ The three entries under `integrations/` contain source-lock metadata, not redist
 
 Animation character art, scene data, wallpaper and icon source are separate private runtime inputs, supplied explicitly. Generated bundles and visual evidence containing those inputs remain private; no material is generated or promoted into public brand assets by this integration. A successful hash check is not a rights grant or formal visual approval.
 
+## Change scope
+
+`scripts/azhou_hub.py` adapts the four-layer change-scope method and Git failure controls from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) at commit [`fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159), specifically `scripts/change-scope.ts` and its tests. The Hub implementation uses Python, a separate worktree-head identity and its own CLI; it does not bundle the DSH runtime.
+
+- Copyright: DeepSeek, 2026
+- License: [MIT](LICENSES/DeepSeek-Harness-MIT.txt)
+- Update path: compare the pinned source and tests at an immutable revision, review changed behavior and notices, adapt only compatible changes, and run the Hub scope and repository gates.
+
 ## Azhou brand assets
 
 `assets/github/social-preview.png` is an Azhou-maintained brand asset generated in-house on 2026-08-23 with Codex image generation and resized to 1280×640 for GitHub previews. This version intentionally contains no third-party logos or copied assets. When replacing it, repeat visual and rights review, keep the file below GitHub's 1 MB limit, and verify the separate GitHub Social Preview setting; the README reference is not that platform receipt.
