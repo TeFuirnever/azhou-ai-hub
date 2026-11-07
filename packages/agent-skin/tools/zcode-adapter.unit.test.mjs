@@ -27,6 +27,7 @@ class Element {
  setAttribute(k,v){this.attrs[k]=v}getAttribute(k){return this.attrs[k]}
  append(...nodes){for(const n of nodes)this.appendChild(n)}
  appendChild(n){if(n.parentElement)n.remove();this.children.push(n);n.parentElement=this;return n}
+ get nextSibling(){const p=this.parentElement;if(!p)return null;return p.children[p.children.indexOf(this)+1]||null}
  remove(){if(this.parentElement){this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.parentElement=null}}
  attachShadow(){this.shadowRoot=new Element('shadow');return this.shadowRoot}
  contains(n){return this===n||this.children.some(c=>c.contains(n))}
@@ -61,6 +62,24 @@ test('entry anchors beneath the marketplace row when the sidebar supports lookup
  assert.notEqual(e.element.parentElement,account,'entry never lands after the account row');
  assert.equal(e.element.style.display,'block');
  e.remove();assert.equal(d.sidebar.children.length,2);
+});
+test('entry anchors inside a nested marketplace group and placement is idempotent',()=>{
+ const d=dom();const group=new Element('div');d.sidebar.appendChild(group);
+ const market=new Element('button');market.textContent='Plugin Marketplace';group.appendChild(market);
+ const account=new Element('button');account.textContent='nscdeclsr';d.sidebar.appendChild(account);
+ d.sidebar.querySelectorAll=selector=>selector.includes('button')?[market,account]:[];
+ market.insertAdjacentElement=function(pos,el){this.parentElement.children.splice(this.parentElement.children.indexOf(this)+1,0,el);el.parentElement=this.parentElement;return el;};
+ let mutations=0;const record=()=>{mutations++;};
+ const originalInsert=market.insertAdjacentElement;market.insertAdjacentElement=function(pos,el){record();return originalInsert.call(this,pos,el);};
+ const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ assert.equal(e.element.parentElement,group,'entry lives in the marketplace group, not the sidebar tail');
+ assert.ok(group.children.indexOf(e.element)===group.children.indexOf(market)+1,'directly beneath the marketplace row');
+ e.update(true);e.update(true);
+ assert.equal(mutations,1,'a settled entry never re-inserts — no self-sustaining position loop');
+ assert.deepEqual([...d.sidebar.children],[group,account],'the sidebar gains no direct children from the entry');
+ e.remove();
 });
 test('entry falls back to the sidebar tail without a findable marketplace row',()=>{
  const d=dom();const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();

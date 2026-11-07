@@ -114,11 +114,15 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
       const sides = document.querySelectorAll('aside[data-testid="sidebar"]');
       if (!visible || sides.length !== 1) { element.style.display = 'none';return; }
       // Own in-flow row: consumes layout space instead of covering controls.
-      if (element.parentElement !== sides[0]) {
-        const anchor = marketAnchor(sides[0]);
-        if (anchor && typeof anchor.insertAdjacentElement === 'function') anchor.insertAdjacentElement('afterend', element);
-        else sides[0].appendChild(element);
-      }
+      // Placement is idempotent against the anchor's actual parent (the
+      // marketplace row may live inside a nested action group), so a settled
+      // entry never re-inserts and never feeds the document observer its own
+      // mutation — the self-sustaining position loop the rc38 review caught.
+      const anchor = marketAnchor(sides[0]);
+      const anchorParent = anchor ? anchor.parentElement : null;
+      if (anchor && anchorParent && typeof anchor.insertAdjacentElement === 'function') {
+        if (element.parentElement !== anchorParent || anchor.nextSibling !== element) anchor.insertAdjacentElement('afterend', element);
+      } else if (element.parentElement !== sides[0]) sides[0].appendChild(element);
       element.style.display = 'block';
       const rect = element.getBoundingClientRect(), side = sides[0].getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || rect.left < side.left || rect.right > side.right
