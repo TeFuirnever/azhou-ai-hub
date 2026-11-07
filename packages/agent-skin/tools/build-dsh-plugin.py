@@ -76,6 +76,7 @@ _CLIENT_SETTINGS_REGISTER = (
     "      // 注册「阿舟主题与外观」设置页：settings.section 插槽一次注册；ctx.effect\n"
     "      // 立即执行回调，插件停用时随 cordis 一并回收。React 从模块加载器平台表取。\n"
     "      const zhLocale = () => /^zh/i.test(document.documentElement?.lang || host.navigator?.language || '');\n"
+    "      try {\n"
     "      ctx.effect(() => {\n"
     "        const slots = ctx.slots;\n"
     "        if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {\n"
@@ -100,10 +101,15 @@ _CLIENT_SETTINGS_REGISTER = (
     "        });\n"
     "        return () => {};\n"
     "      }, 'azhou-agent-skin: settings-section');\n"
+    "      } catch {\n"
+    "        // 设置页注册失败时退化为纯 overlay：激活永不因它失败。\n"
+    "      }\n"
 )
 _CLIENT_CLOSE = (
     "    };\n"
-    "    const inject = [];\n"
+    # The settings-section registration reads ctx.slots, a cordis service;
+    # an undeclared service access throws and fails activation, so declare it.
+    "    const inject = ['slots'];\n"
     + _CLIENT_SECTION_FACTORY
     + "    function apply(ctx) {\n"
     "      const host = globalThis;\n"

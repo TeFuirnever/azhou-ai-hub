@@ -652,7 +652,7 @@ def verify_dsh_plugin(path):
         'window.__ModuleLoader__.load({', "id: 'azhou-agent-skin',", 'factory(require) {',
         'const runStartup = (registerCleanup) => {', 'function createDSHPageAdapter(', binding,
         '    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });',
-        'return bootstrapStartup({', 'const inject = [];', 'function apply(ctx) {',
+        'return bootstrapStartup({', "const inject = ['slots'];", 'function apply(ctx) {',
         "slots.inject('settings.section', function* () {",
         "name: 'settings.section', id: 'azhou-appearance', order: 40,",
         'module.exports = { apply, inject };', 'return module.exports;',
