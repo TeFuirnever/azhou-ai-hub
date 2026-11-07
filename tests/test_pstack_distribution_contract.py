@@ -93,6 +93,19 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertIn("if the required file is absent, block that reviewer", adapter)
         self.assertTrue((tree / "agents/comment-sicko.md").is_file())
 
+    def test_muse_skills_fallback_uses_shipped_agent_or_blocks(self) -> None:
+        source = PACKAGE / "hub-skills/poteto-mode/references/muse-tools.md"
+        for host in ("claude-code", "codex", "zcode", "skills-root"):
+            with self.subTest(host=host):
+                tree = HARNESS / host
+                adapter = tree / "skills/poteto-mode/references/muse-tools.md"
+                guidance = adapter.read_text(encoding="utf-8")
+                self.assertEqual(guidance, source.read_text(encoding="utf-8"))
+                self.assertIn("`agents/comment-sicko.md` from the installed distribution root", guidance)
+                self.assertIn("block the reviewer and report the missing file", guidance)
+                self.assertNotIn("poteto-mode/references/agents/", guidance)
+                self.assertTrue((adapter.parent / "../../../agents/comment-sicko.md").resolve().is_file())
+
     def test_distributed_namespace_instructions_match_native_registration(self) -> None:
         for host in ("claude-code", "codex", "zcode", "skills-root"):
             tree = HARNESS / host
