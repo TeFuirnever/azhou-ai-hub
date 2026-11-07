@@ -42,16 +42,16 @@ that is not there; an unavailable required reviewer remains blocked. |
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | No Claude slugs. Take the model from `ListModels` and pass its full id, such as `account:<plan>/<model>`. Pass a reasoning level only when the session's model field accepts one. Drop `-fast`. |
 | A `grok-*`, `gpt-*`, or other non-ZCode slug | Omit `model` so the run uses the session model, and say so. |
 | `auto` or `inherit-parent` | Omit `model`. |
-| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | The sheet under `~/.zcode/` at the path setup-pstack names below. ZCode never reads `.mdc`, and its role lines are not loaded into every session, so read the sheet when a skill needs a role. If the sheet or the role's line is missing, use the skill's default slug mapped through the rows above. |
+| The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | The ZCode sheet is `~/.zcode/pstack-models.md`. ZCode never reads `.mdc`, and its role lines are not loaded into every session, so read the sheet when a skill needs a role. If the sheet or the role's line is missing, use the skill's default slug mapped through the rows above. |
 | A role value `<model> <effort>`, such as `opus high` | The sheet's full model id and its reasoning level. A value of `session` passes no level. |
 
 ## setup-pstack
 
-ZCode loads no rules directory into every session, so `setup-pstack` writes its sheet under `~/.zcode/`, at the path its Other runtimes table names. Follow its steps with these changes.
+ZCode loads no rules directory into every session, so `setup-pstack` writes its sheet at `~/.zcode/pstack-models.md`. Follow its steps with these changes.
 
 - Detect. Ask `ListModels` for the models the current session can use and write each full id, such as `account:<plan>/<model>`, as `<id> <effort>`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above. A default with no ZCode model is `inherit-parent`.
-- Write. Overwrite the whole sheet. Never put the role lines in `AGENTS.md`. A `session hook: off` line stops routing. ZCode registers hooks in `<scope-root>/.zcode/cli/config.json`. A probe at zcode 0.16.5 on macOS saw `SessionStart` fire in the GUI host and fire zero markers across a completed headless `--prompt` run, so do not rely on it outside the GUI host.
+- Write. Read and preserve the existing `session hook` setting when rewriting the sheet unless the user explicitly changes it; stop on duplicate or ambiguous settings. Leave an absent setting absent unless the user chooses one. Never put role lines in `AGENTS.md`. A `session hook: off` line stops routing. ZCode registers hooks in `<scope-root>/.zcode/cli/config.json`. A probe at zcode 0.16.5 on macOS saw `SessionStart` fire in the GUI host and fire zero markers across a completed headless `--prompt` run, so do not rely on it outside the GUI host.
 
 ## Paths
 

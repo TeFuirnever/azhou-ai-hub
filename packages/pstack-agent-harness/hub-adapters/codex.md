@@ -50,7 +50,7 @@ Codex does not automatically load the upstream Cursor rules directory. On Codex,
 
 - Detect. The detected models are the slugs the session exposes, not `Agent` tool schema values. Write each as `<slug> <effort>`, such as `gpt-6-sol xhigh`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `gpt-6-sol xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.
-- Write. Overwrite the whole sheet. Never put the role lines in `AGENTS.md` or `CLAUDE.md`. A `session hook: off` line stops the `SessionStart` routing hook.
+- Write. Before rewriting the sheet, read its existing `session hook` setting and preserve it unchanged unless the user explicitly requests a change. If the setting is ambiguous or duplicated, stop and ask rather than enabling the hook. An absent setting stays absent unless the user chooses one. Never put role lines in `AGENTS.md` or `CLAUDE.md`. A `session hook: off` line stops the `SessionStart` routing hook.
 
 ## Paths
 

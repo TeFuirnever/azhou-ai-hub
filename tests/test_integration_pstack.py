@@ -20,6 +20,20 @@ from scripts import integration_pstack as pstack
 
 
 class PstackSessionStartTest(unittest.TestCase):
+    def test_setup_guidance_retains_routing_setting_and_uses_host_sheet(self):
+        package = pstack.ROOT / "packages/pstack-agent-harness"
+        adapters = package / "harness/pstack"
+        for host in ("codex", "claude-code", "zcode", "skills-root"):
+            with self.subTest(host=host):
+                guidance = (adapters / host / "docs/harness" / (host + ".md")).read_text(encoding="utf-8")
+                write = next(line for line in guidance.splitlines() if line.startswith("- Write."))
+                self.assertIn("`session hook`", write)
+                self.assertRegex(write, r"(?i)preserve")
+                self.assertIn("unless the user", write)
+                self.assertIn("ambiguous", write)
+        zcode = (adapters / "zcode/docs/harness/zcode.md").read_text(encoding="utf-8")
+        self.assertIn("`~/.zcode/pstack-models.md`", zcode)
+
     def test_canonical_codex_hook_routes_to_registered_skills(self):
         package = pstack.ROOT / "packages/pstack-agent-harness"
         marketplace = json.loads((package / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))

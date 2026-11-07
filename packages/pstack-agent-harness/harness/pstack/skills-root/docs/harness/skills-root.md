@@ -49,7 +49,7 @@ No host here loads a rules directory into every session, so `setup-pstack` write
 
 - Detect. Ask the host's model-list surface for the models the current session can use, and write each as `<id> <effort>`. The effort is the last token, so the budget step works as written.
 - Defaults. Map each default slug with the rows above. A default the host cannot name is `inherit-parent`.
-- Write. Overwrite the whole sheet for that host. Never put the role lines in `AGENTS.md`. A `session hook: off` line stops routing on the hosts that register one.
+- Write. Preserve the existing `session hook` setting when rewriting the host sheet unless the user explicitly changes it; stop on duplicate or ambiguous settings. Leave an absent setting absent unless the user chooses one. Never put role lines in `AGENTS.md`. A `session hook: off` line stops routing on hosts that register one.
 
 ## Paths
 
