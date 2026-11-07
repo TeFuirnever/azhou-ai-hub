@@ -92,7 +92,7 @@ class DshPluginBuildTests(unittest.TestCase):
             ("const runStartup = (registerCleanup) => {", 1),
             ("function createDSHPageAdapter(", 1),
             ("const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, buildNumber: "
-             + json.dumps(APP_BUILD) + " } }, {", 1),
+             + json.dumps(APP_BUILD) + ", sidebarEntry: false } }, {", 1),
             ("    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });", 1),
             ("controllerOwner: 'azhou-dsh-startup'", 1),
             ("owner: 'azhou.dsh-startup-animation'", 1),
