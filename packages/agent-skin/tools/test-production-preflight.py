@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import runpy
 import shutil
@@ -133,6 +135,49 @@ class BuildPreflightTests(unittest.TestCase):
         artifacts.configure_build_host("codex")
         self.assertEqual(artifacts.load_theme_config(self.root)["identity"]["iconInput"],
                          self.icon_source.relative_to(self.root).as_posix())
+
+    def test_approved_digest_is_checked_against_the_selected_host_icon(self):
+        self.zcode_icon.write_bytes(self.zcode_icon.read_bytes() + b"zcode fixture")
+        for host, icon in (("codex", self.icon_source), ("zcode", self.zcode_icon)):
+            with self.subTest(host=host):
+                digest = hashlib.sha256(icon.read_bytes()).hexdigest()
+                run_patch, output_patch = self.fake_git()
+                stdout = io.StringIO()
+                with run_patch, output_patch, contextlib.redirect_stdout(stdout), \
+                        mock.patch.dict(os.environ, {"AZHOU_APPROVED_ICON_SHA256": digest.upper()}):
+                    self.assertEqual(self.module.main(self.root, argv=["--host", host]), 0)
+                self.assertEqual(json.loads(stdout.getvalue())["identity"]["iconInput"],
+                                 icon.relative_to(self.root).as_posix())
+                self.assertNotIn(digest, stdout.getvalue().lower())
+
+    def test_rejects_invalid_approved_digest(self):
+        for digest in ("", "not-a-digest"):
+            with self.subTest(digest=digest):
+                run_patch, output_patch = self.fake_git()
+                with run_patch, output_patch, mock.patch.dict(
+                    os.environ, {"AZHOU_APPROVED_ICON_SHA256": digest},
+                ):
+                    with self.assertRaisesRegex(SystemExit, "AZHOU_APPROVED_ICON_SHA256"):
+                        self.module.main(self.root, argv=[])
+
+    def test_build_rejects_a_swapped_icon_before_staging(self):
+        shutil.copy2(TOOLS / "build-macos.sh", self.root / "tools/build-macos.sh")
+        shutil.copy2(PACKAGE / ".gitignore", self.root / ".gitignore")
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        payload = self.root / ".build/azhou-payload"
+        payload.mkdir()
+        receipt = payload / "fixture-receipt"
+        receipt.write_bytes(b"existing payload")
+        approved_digest = hashlib.sha256(self.icon_source.read_bytes()).hexdigest()
+        self.icon_source.write_bytes(png_header(1024, 1024) + b"unapproved fixture")
+        result = subprocess.run(
+            ["bash", "tools/build-macos.sh"], cwd=self.root, capture_output=True, text=True,
+            env={**os.environ, "AZHOU_APPROVED_ICON_SHA256": approved_digest}, timeout=30,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("图标源图与已批准的 SHA-256 不符", result.stderr)
+        self.assertEqual(receipt.read_bytes(), b"existing payload")
+        self.assertEqual(list((self.root / ".build").iterdir()), [payload])
 
     def test_legacy_codex_config_is_valid_but_zcode_requires_its_own_input(self):
         path = self.root / "theme-config.json"
