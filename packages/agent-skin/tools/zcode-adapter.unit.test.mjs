@@ -48,6 +48,27 @@ test('entry owns in-flow row, hides on overflow, removes listeners once',()=>{
  e.element.rect={left:0,right:300,top:0,bottom:30,width:300,height:30};e.update(true);assert.equal(e.element.style.display,'none');
  e.update(false);assert(e.button.disabled);e.remove();e.remove();assert.equal(d.disconnected,1);assert.equal(d.sidebar.children.length,0);assert.equal(e.button.events.size,0);
 });
+test('entry anchors beneath the marketplace row when the sidebar supports lookup',()=>{
+ const d=dom();const market=new Element('button');market.textContent='Plugin Marketplace';d.sidebar.appendChild(market);
+ const account=new Element('button');account.textContent='nscdeclsr';d.sidebar.appendChild(account);
+ d.sidebar.querySelectorAll=selector=>selector.includes('button')?[market,account]:[];
+ market.insertAdjacentElement=function(pos,el){this.parentElement.children.splice(this.parentElement.children.indexOf(this)+1,0,el);el.parentElement=this.parentElement;return el;};
+ const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ const index=d.sidebar.children.indexOf(e.element);
+ assert.ok(index===d.sidebar.children.indexOf(market)+1,'entry sits directly beneath the marketplace row');
+ assert.notEqual(e.element.parentElement,account,'entry never lands after the account row');
+ assert.equal(e.element.style.display,'inline-flex');
+ e.remove();assert.equal(d.sidebar.children.length,2);
+});
+test('entry falls back to the sidebar tail without a findable marketplace row',()=>{
+ const d=dom();const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ assert.equal(e.element.parentElement,d.sidebar);assert.equal(d.sidebar.children[d.sidebar.children.length-1],e.element);
+ e.remove();
+});
 test('wallpaper shell refuses absent or ambiguous main and respects cancellation',()=>{
  const h=host();const main={closest:()=>null};let count=1;
  const root={querySelectorAll:s=>s==='main'?Array(count).fill(main):[{}]};h.document={getElementById:()=>root};

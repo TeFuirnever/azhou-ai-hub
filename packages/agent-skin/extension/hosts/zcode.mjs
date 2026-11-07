@@ -78,12 +78,31 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
       for (const [key, value] of Object.entries({ '--entry-bg': current.colors.surface, '--entry-fg': current.colors.text,
         '--entry-border': current.colors.border })) if (value) element.style.setProperty(key, value);
     };
+    // Stable navigation-label anchor: the entry sits directly beneath the
+    // marketplace row in the sidebar's top action group (the placement approved
+    // for the ZCode host), never over the account row at the tail. When the
+    // label cannot be found — renamed host, other locale, mock DOM without the
+    // lookup — the entry falls back to the sidebar tail.
+    function marketAnchor(side) {
+      const labels = ['Plugin Marketplace', '插件市场'];
+      let items;
+      try { items = side.querySelectorAll('button, a, [role="button"], [role="menuitem"]'); } catch { return null; }
+      for (const node of items) {
+        const text = String(node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (labels.some(label => text === label || text.includes(label))) return node;
+      }
+      return null;
+    }
     function position() {
       timer = undefined;if (removed) return;
       const sides = document.querySelectorAll('aside[data-testid="sidebar"]');
       if (!visible || sides.length !== 1) { element.style.display = 'none';return; }
-      // Own in-flow bottom row: consumes layout space instead of covering controls.
-      if (element.parentElement !== sides[0]) sides[0].appendChild(element);
+      // Own in-flow row: consumes layout space instead of covering controls.
+      if (element.parentElement !== sides[0]) {
+        const anchor = marketAnchor(sides[0]);
+        if (anchor && typeof anchor.insertAdjacentElement === 'function') anchor.insertAdjacentElement('afterend', element);
+        else sides[0].appendChild(element);
+      }
       element.style.display = 'inline-flex';
       const rect = element.getBoundingClientRect(), side = sides[0].getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || rect.left < side.left || rect.right > side.right
