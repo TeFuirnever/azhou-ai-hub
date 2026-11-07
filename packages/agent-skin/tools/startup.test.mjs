@@ -2008,6 +2008,62 @@ test('mountSettings embeds the same panel into a host element and its disposer u
   api.dispose();
 });
 
+test('an embed assetError tears the embed down and reaches the host onClose once', () => {
+  const controlled = controlledHost();
+  controlled.host.document.documentElement.lang = 'zh-CN';
+  const specs = [];
+  const payload = function (_w, _d, _l, _p, _i, _img, _path, _url, _raf, _caf, _set, _clear, _module, send, spec) {
+    specs.push({ spec, send });
+    if (spec.intent === 'settings') return { updateAppearance() {} };
+  };
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
+    wallpaper: Object.freeze({ validPage: () => true, shellState: () => 'ready', surfaces: () => [],
+      attributes: Object.freeze({ surfaceMarker: 'data-x', observeFilter: [] }), css: '', scope: 'test' }) };
+  installStartup(payload, controlled.host, adapter);
+  const api = controlled.host.__azhouStartup;
+
+  // Pre-open failure: beginPrepare() can assetError before the panel opens
+  // (localization unavailable) — the embed must not stay half-open.
+  const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const listenersBefore = controlled.listenerCount();
+  let closed = 0;
+  const dispose = api.mountSettings(target, { onClose: () => { closed += 1; } });
+  assert.equal(typeof dispose, 'function');
+  const embed = target.children[0];
+  const mountSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: mountSpec.runId,
+    reason: 'localization-unavailable' }, embed.contentWindow);
+  assert.equal(embed.removed, true, 'a pre-open assetError removes the embed iframe');
+  assert.equal(closed, 1, 'the host onClose fires exactly once for a failed embed');
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the embed message listener is unwired');
+  dispose();
+  dispose();
+  assert.equal(controlled.listenerCount(), listenersBefore, 'the disposer is idempotent after an assetError');
+
+  // Post-open failure: any reason counts, once the panel is already up.
+  const secondTarget = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const secondDispose = api.mountSettings(secondTarget);
+  const secondEmbed = secondTarget.children[0];
+  const secondSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'ready', runId: secondSpec.runId }, secondEmbed.contentWindow);
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: secondSpec.runId,
+    reason: 'asset-invalid' }, secondEmbed.contentWindow);
+  assert.equal(secondEmbed.removed, true, 'a post-open assetError with any reason removes the embed');
+  secondDispose();
+
+  // A foreign source (the overlay frame) cannot close an embed via assetError.
+  const thirdTarget = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
+  const thirdDispose = api.mountSettings(thirdTarget);
+  const thirdEmbed = thirdTarget.children[0];
+  const thirdSpec = specs[specs.length - 1].spec;
+  controlled.host.send({ type: 'azhou-startup', action: 'assetError', runId: thirdSpec.runId,
+    reason: 'localization-unavailable' }, controlled.frames[0].contentWindow);
+  assert.equal(thirdEmbed.removed, false, 'a foreign-source assetError never closes the embed');
+  thirdDispose();
+  api.dispose();
+});
+
 test('disposing the controller tears down live settings embeds and late frame handles still dispose', async () => {
   const controlled = controlledHost();
   let handleDisposed = 0;

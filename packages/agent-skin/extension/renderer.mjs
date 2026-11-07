@@ -1058,6 +1058,15 @@ class PageController {
     if (message.action === 'background') {
       return this.#applyWallpaper(message, mount.runId, null, false, mount);
     }
+    // Asset initialization failed (any reason, before or after the panel opens):
+    // a half-open embed with no way forward is worse than a closed one, so the
+    // embed tears itself down and lets the host section react via onClose.
+    if (message.action === 'assetError') {
+      const close = mount.onClose;
+      this.#disposeSettingsEmbed(mount);
+      try { close?.(); } catch {}
+      return;
+    }
     // The panel finished its own settings UI (save or cancel): the host modal
     // decides what closing means; the embed still tears itself down so an
     // unresponsive host cannot leave a dead iframe behind.
