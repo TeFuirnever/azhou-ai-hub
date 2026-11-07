@@ -21,7 +21,7 @@ pstack skills use Cursor names. This tree installs into an explicit skills root 
 | Cursor | skills-root host |
 | --- | --- |
 | `subagent_type: generalPurpose` | No shared named subagent types. Dispatch ad-hoc and put the role in the brief. |
-| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or `poteto-mode/references/agents/comment-sicko.md`, in full first. |
+| `poteto-agent`, `comment-sicko` | Dispatch with a brief requiring the worker to read `<pstack>/skills/poteto-mode/SKILL.md` or `<pstack>/agents/comment-sicko.md` in full. Resolve `<pstack>` to the installed distribution root before dispatch. A skills-only copy may omit `agents/`; if the required file is absent, block that reviewer and report the missing file rather than guessing or silently substituting a role. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | The same dispatch, one per worker, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |
 | `readonly: true` | No shared sandbox field. The brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | Same dispatch. |

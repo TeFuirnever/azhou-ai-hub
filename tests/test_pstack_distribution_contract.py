@@ -85,6 +85,14 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertEqual(resolved, tree / "agents/comment-sicko.md")
         self.assertTrue(resolved.is_file())
 
+    def test_shared_skills_reviewer_uses_present_agent_or_blocks(self) -> None:
+        tree = HARNESS / "skills-root"
+        adapter = (tree / "docs/harness/skills-root.md").read_text(encoding="utf-8")
+        self.assertIn("<pstack>/agents/comment-sicko.md", adapter)
+        self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", adapter)
+        self.assertIn("if the required file is absent, block that reviewer", adapter)
+        self.assertTrue((tree / "agents/comment-sicko.md").is_file())
+
     def test_distributed_namespace_instructions_match_native_registration(self) -> None:
         for host in ("claude-code", "codex", "zcode", "skills-root"):
             tree = HARNESS / host
