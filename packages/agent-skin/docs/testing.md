@@ -24,7 +24,7 @@ python3 -B tools/test-functional-verdict.py
 python3 -B tools/test-unit-coverage.py
 ```
 
-需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24；Pet UT 还需 `Pillow==12.3.0`。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。总报告在 `.build/unit-coverage/report.json`；报告为失败时不得写“UT 95% 已完成”。
+需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24；Pet UT 还需 `Pillow==12.3.0`。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。最新报告在 `.build/unit-coverage/report.json`，每次运行的报告和证据保存在 `.build/unit-coverage/runs/` 下；报告为失败时不得写“UT 95% 已完成”。
 
 ## 功能用例
 

@@ -108,11 +108,17 @@ import Foundation
   var simulated=start
   let process=HostProcessGeneration(pid:123,launchTime:50,executableURL:URL(fileURLWithPath:"/fixture/ZCode"))
   var guards=0
+  let guardEntered = DispatchSemaphore(value: 0)
+  let cancellationIssued = DispatchSemaphore(value: 0)
   let client=try ZCodeBoundCDP(process:process,endpoint:URL(string:"http://127.0.0.1:\(port)")!,installedPage:"/fixture/index.html",now:{mode.hasPrefix("guard-") ? simulated : ProcessInfo.processInfo.systemUptime},guardLive:{
    guards += 1
    if mode=="guard-error-late" { simulated=start+2;throw NSError(domain:"fixture-identity",code:1) }
    if mode=="guard-return-late" { simulated=start+2 }
-   if mode=="guard-cancel-late" { Thread.sleep(forTimeInterval:0.15);throw NSError(domain:"fixture-identity",code:2) }
+   if mode=="guard-cancel-late" {
+    guardEntered.signal()
+    _ = cancellationIssued.wait(timeout: .now() + 5)
+    throw NSError(domain:"fixture-identity",code:2)
+   }
   })
   defer{client.close()}
   let deadline=start+(mode.hasPrefix("guard-") ? 1.0 : 0.20)
@@ -131,7 +137,11 @@ import Foundation
     do {_ = try await client.attach(deadline:deadline,waitForInitialMain:true);return "unexpected-success"}
     catch {return describe(error,cancelled:Task.isCancelled)}
    }
-   Task.detached { try? await Task.sleep(nanoseconds:50_000_000);task.cancel() }
+   Task.detached {
+    guard guardEntered.wait(timeout: .now() + 5) == .success else { return }
+    task.cancel()
+    cancellationIssued.signal()
+   }
    outcome=await task.value
   } else {
    do {_ = try await client.attach(deadline:deadline,waitForInitialMain:true);outcome="unexpected-success"}
