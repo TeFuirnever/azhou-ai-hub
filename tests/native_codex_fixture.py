@@ -50,7 +50,7 @@ elif a == ['list', '--marketplace', 'pstack-claude'] or a == ['list']:
         print(json.dumps({'available':[]}))
         sys.exit(0)
     selected_name, selected_root = variant()
-    entries = [{'pluginId':selected_name+'@pstack-claude','name':selected_name,'marketplaceName':'pstack-claude','installed':True,'enabled':True,'source':{'source':'local','path':str(pathlib.Path(source())/selected_root)},'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() and installed().exists() else []
+    entries = [{'pluginId':selected_name+'@pstack-claude','name':selected_name,'marketplaceName':'pstack-claude','installed':True,'enabled':not bool(os.environ.get('PSTACK_TEST_DISABLED_PLUGIN')),'source':{'source':'local','path':str(pathlib.Path(source())/selected_root)},'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() and installed().exists() else []
     if os.environ.get('PSTACK_TEST_FOREIGN_PLUGIN'):
         entries.append({'pluginId':'foreign@pstack-claude','name':'foreign','installed':True,'enabled':True})
     print(json.dumps({'installed':entries,'available':[]}))

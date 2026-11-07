@@ -166,6 +166,24 @@ class PstackIntegrationTest(unittest.TestCase):
         self.assertEqual(self.apply("remove")["status"], "removed")
         self.assertFalse(installed.exists())
 
+    def test_disabled_owned_legacy_plugin_is_unhealthy_but_can_be_removed(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_DISABLED_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "enabled"):
+                self.doctor()
+            self.assertEqual(self.apply("remove")["status"], "removed")
+        self.assertFalse(installed.exists())
+        self.assertIn(["remove", "pstack@pstack-claude"], self.calls())
+
+    def test_disabled_modified_plugin_is_not_removed(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        (installed / "skills/poteto-mode/SKILL.md").write_text("local edit", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_DISABLED_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "content missing or changed"):
+                self.apply("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertNotIn(["remove", "pstack@pstack-claude"], self.calls())
+
     def test_failed_legacy_removal_retry_rechecks_installed_byte_hashes(self):
         _snapshot, installed = self._install_owned_legacy_fixture()
         with mock.patch.dict(os.environ, {"PSTACK_TEST_FOREIGN_PLUGIN": "1"}):

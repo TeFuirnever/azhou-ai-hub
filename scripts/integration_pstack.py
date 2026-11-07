@@ -388,7 +388,8 @@ def _registered(value: dict, name: str) -> bool:
 
 
 def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | None = None,
-                            *, plugin_id: str = PLUGIN, plugin_root: str = PLUGIN_ROOT) -> None:
+                            *, plugin_id: str = PLUGIN, plugin_root: str = PLUGIN_ROOT,
+                            require_enabled: bool = True) -> None:
     _registered(marketplaces, MARKETPLACE)
     entries = marketplaces.get("marketplaces", [])
     selected = [item for item in entries if item.get("name") == MARKETPLACE]
@@ -400,8 +401,11 @@ def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | 
         selected = [item for item in plugins.get("installed", []) if item.get("pluginId") == plugin_id]
         if len(plugins.get("installed", [])) != len(selected):
             raise common.IntegrationError("native pstack marketplace contains another plugin; do not remove it")
-        if len(selected) != 1 or not selected[0].get("installed") or not selected[0].get("enabled"):
-            raise common.IntegrationError("native Codex does not report one enabled pstack installation")
+        if (len(selected) != 1 or selected[0].get("installed") is not True
+                or not isinstance(selected[0].get("enabled"), bool)
+                or (require_enabled and selected[0]["enabled"] is not True)):
+            raise common.IntegrationError("native Codex does not report one valid pstack installation" +
+                                          (" enabled" if require_enabled else ""))
         if (selected[0].get("source") != {"source": "local", "path": str(snapshot / plugin_root.rstrip("/"))}
                 or selected[0].get("marketplaceSource") != expected_source):
             raise common.IntegrationError("native pstack plugin resolves to a different source")
@@ -1278,7 +1282,8 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
                         receipt["completed_steps"] = sorted(set(receipt["completed_steps"]) | {0})
                     else:
                         _verify_registry_source(marketplaces, snapshot, plugins,
-                                                plugin_id=plugin_id, plugin_root=plugin_root)
+                                                plugin_id=plugin_id, plugin_root=plugin_root,
+                                                require_enabled=False)
                         # A failed-remove receipt is *not* a waiver of byte
                         # verification: inspect the actual installed copy on
                         # every retry before allowing the destructive CLI.
