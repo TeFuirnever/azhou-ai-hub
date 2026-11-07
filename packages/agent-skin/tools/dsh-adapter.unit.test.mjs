@@ -160,6 +160,27 @@ test('entry mounts into the stable column and honors the full handle contract', 
   assert.equal(e.button.events.size, 0);assert.equal(recovery.children[0].events.size, 0);
   d.flush();assert.equal(d.timers.size, 0);
 });
+test('sidebarEntry:false returns one inert frozen handle and never touches the DOM', () => {
+  const d = dom();const a = createDSHPageAdapter(d.h, { sidebarEntry: false });
+  let opened = 0, retried = 0, dismissed = 0;
+  const e = a.mountEntry(d.h.document, () => opened++, {}, null, a.observeAppearance(), d.h, () => retried++, () => dismissed++);
+  assert.equal(e.element, null);assert.equal(e.button, null);assert(Object.isFrozen(e));
+  assert.equal(d.observers.length, 0, 'no body observer without a real entry');
+  e.update(true);e.update(false);
+  e.setAppearance(a.observeAppearance());
+  e.setWallpaperFailure({ retrying: true });e.setWallpaperFailure(null);
+  e.remove();e.remove();
+  assert.equal(opened, 0);assert.equal(retried, 0);assert.equal(dismissed, 0);
+  assert.equal(d.timers.size, 0);assert.equal(d.disconnected, 0);
+  const again = a.mountEntry(d.h.document, () => {}, {}, null, a.observeAppearance(), d.h, () => {}, () => {});
+  assert.equal(again, e, 'repeated mounts reuse the same inert handle');
+});
+test('default configuration keeps mounting the real sidebar entry', () => {
+  const d = dom();const a = createDSHPageAdapter(d.h, { build: { version: '0.9.0', buildNumber: 35 } });
+  const e = a.mountEntry(d.h.document, () => {}, {}, null, a.observeAppearance(), d.h, () => {}, () => {});
+  e.update(true);assert.equal(e.element.parentElement, d.column);
+  e.remove();assert.equal(d.disconnected, 1);
+});
 test('adapter observer re-appends after a container swap and refreshes appearance', () => {
   const d = dom();const a = createDSHPageAdapter(d.h);
   const e = a.mountEntry(d.h.document, () => {}, {}, null, a.observeAppearance(), d.h, () => {}, () => {});

@@ -196,7 +196,7 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 ## DeepSeek Harness 插件包
 
-`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口落在稳定侧栏列，壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
+`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口是宿主设置弹窗里的 `settings.section` 行（`sidebarEntry: false`，不挂侧栏胶囊；动画预览在面板启动页，壁纸重试走面板保存路径），壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
 
 ```sh
 cd packages/agent-skin

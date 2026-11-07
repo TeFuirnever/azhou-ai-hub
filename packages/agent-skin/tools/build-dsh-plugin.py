@@ -28,10 +28,10 @@ INDEX_JS = (
 PATCH_YAML = "- insert:\n    - id: azhou-agent-skin\n      name: 'azhou-agent-skin'\n"
 LOCALES = {
     'zh': {'meta': {'title': '阿舟 AI 实验室 for DeepSeek Harness',
-                    'description': '为 DeepSeek Harness 带来阿舟启动动画、侧栏外观入口与主区壁纸皮肤。'}},
+                    'description': '为 DeepSeek Harness 带来阿舟启动动画、设置中的外观面板与主区壁纸皮肤。'}},
     'en': {'meta': {'title': 'Azhou AI Lab for DeepSeek Harness',
-                    'description': ('Brings the Azhou startup animation, sidebar appearance entry, '
-                                    'and main-surface wallpaper skin to DeepSeek Harness.')}},
+                    'description': ('Brings the Azhou startup animation, the settings appearance panel, '
+                                    'and the main-surface wallpaper skin to DeepSeek Harness.')}},
 }
 MANIFEST_SCOPE = ('local assembly only; installing into a DSH profile is a separate manual step; '
                   'no install or host writes')

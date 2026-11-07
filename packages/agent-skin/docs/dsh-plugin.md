@@ -20,15 +20,15 @@ The emitter reuses `build_startup(host='dsh')` from `tools/build-startup.py` for
 
 ## Client module behavior
 
-`client.js` registers one factory whose module exports `{apply, inject}` with an empty `inject` list. `apply(ctx)` does the following, in order:
+`client.js` registers one factory whose module exports `{apply, inject}` with `inject: ['slots']` — the cordis service the settings-section registration reads; an undeclared access would throw and fail activation. `apply(ctx)` does the following, in order:
 
 1. Returns `{installed:false, reason:'page-unsupported'}` unless the page shows the DSH boot graph, a top-level window with `__ModuleLoader__` and an own `__DSH_BOOT__` data property.
 2. If the document is still loading, waits for `DOMContentLoaded` and returns `{installed:false, reason:'dom-loading'}`; the wait listener is registered through `ctx.effect` and returns its own disposer.
 3. Creates the page adapter with one disposal sink. The sink wraps each disposal function as `ctx.effect(() => () => fn(), label)`, because cordis runs an effect callback immediately and uses its return value as the disposer. The adapter's `registerCleanup` and the controller's owner-checked `__azhouStartup` disposal both route through the sink, so deactivating the plugin removes the entry, observers, overlay, and wallpaper.
 4. Registers the settings section once through `ctx.effect` (see "Settings page" below).
-5. Runs the bootstrap tail. Animation and entry visibility follow the controller's existing flow; the plugin adds no new trigger policy.
+5. Runs the bootstrap tail with the page adapter configured `sidebarEntry: false`. The host Settings modal is the only appearance entry on this carrier; the adapter returns one inert frozen handle so the controller's optional entry calls stay safe with no DOM node, observer, or timer. Animation visibility follows the controller's existing flow; the plugin adds no new trigger policy.
 
-The wallpaper surface is the unique `[data-slot='main']` element. The appearance entry is an imperative handle appended to the stable sidebar column beside the `[data-slot='sidebar.footer.action']` container, never inside the React-rendered slot list. Theme comes from `data-ds-dark-theme` on `body` and the `--dsw-*` token variables the host writes inline on `body`. Settings persist in IndexedDB under the `azhou-dsh-startup` namespace, separate from the Codex and ZCode databases.
+The wallpaper surface is the unique `[data-slot='main']` element. The page adapter still implements the full imperative entry handle (stable sidebar column beside the `[data-slot='sidebar.footer.action']` container, never inside the React-rendered slot list) for builds that pass `sidebarEntry: true`; the emitted payloads pass `false` because the settings-section slot replaced the capsule's two instant actions — animation replay lives in the panel's Startup animation tab (preview), wallpaper retry in the panel's apply/save path. Theme comes from `data-ds-dark-theme` on `body` and the `--dsw-*` token variables the host writes inline on `body`. Settings persist in IndexedDB under the `azhou-dsh-startup` namespace, separate from the Codex and ZCode databases.
 
 ## Settings page
 
