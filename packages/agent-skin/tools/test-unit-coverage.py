@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MINIMUM = 95
@@ -197,12 +198,16 @@ def main() -> int:
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
+    runs = out / "runs"
+    runs.mkdir(exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(prefix="run-", dir=runs))
+    (out / "report.json").unlink(missing_ok=True)
     scope = production_sources()
     if args.language != "all":
         scope = {args.language: scope[args.language]}
     measured, errors = {}, {}
     for language, sources in scope.items():
-        directory = out / language
+        directory = run_dir / language
         directory.mkdir(parents=True, exist_ok=True)
         try:
             if language == "python":
@@ -236,13 +241,16 @@ def main() -> int:
                   collection="isolated unit suites only; E2E and manual evidence are excluded")
     if errors:
         result["passed"] = False
-    (out / "report.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    (run_dir / "report.json").write_text(report, encoding="utf-8")
+    (out / "report.json").write_text(report, encoding="utf-8")
     for language, group in result["languages"].items():
         percent = "incomplete" if group["percent"] is None else f"{group['percent']:.2f}%"
         print(f"{language}: {percent} ({group['covered']}/{group['count']}); required >=95%")
     for language, error in errors.items():
         print(f"FAILED {language}: {error}", file=sys.stderr)
     print(f"Report: {out / 'report.json'}")
+    print(f"Run evidence: {run_dir}")
     print("unit coverage passed" if result["passed"] else "unit coverage FAILED")
     return 0 if result["passed"] else 1
 
