@@ -93,6 +93,8 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 构建会拒绝缺失图标、非方形PNG或小于1024×1024的源图。
 
+本机如果保留了某个宿主已批准图标的 SHA-256，可从批准记录取出摘要，再运行 `AZHOU_APPROVED_ICON_SHA256="$approved_icon_digest" bash tools/build-macos.sh`。构建 ZCode 时追加 `--host zcode`，并使用 ZCode 图标的摘要。预检先核对该宿主选中的源图，构建再用核对过的暂存副本生成图标。更新图标时重新审阅并记录摘要。保留批准记录与私有素材在 Git 之外。
+
 实际系统读取、Finder显示与升级验证见 [图标验收](docs/app-icon-0.5.2-verification.md)。
 
 ## 角色、配色与动作
@@ -194,7 +196,7 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 ## DeepSeek Harness 插件包
 
-`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口落在稳定侧栏列，壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
+`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口是宿主设置弹窗里的 `settings.section` 行（`sidebarEntry: false`，不挂侧栏胶囊；动画预览在面板启动页，壁纸重试走面板保存路径），壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
 
 ```sh
 cd packages/agent-skin
@@ -202,7 +204,7 @@ python3 tools/build-dsh-plugin.py
 python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
 ```
 
-构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试、一次性 profile 上的官方安装循环，以及在真实 DSH web 客户端上的机器级宿主验证（控制器注册、动画收束、侧栏入口、主题跟随、默认壁纸应用、设置浮层）；人工审美验收、壁纸导入对话框、插件管理页展示与生产 profile 安装仍开放，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](../../evidence/live-dsh-plugin-host-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)。
+构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试、一次性 profile 上的官方安装循环、真实 DSH web 客户端上的机器级宿主验证（控制器注册、动画收束、侧栏入口、主题跟随、默认壁纸应用、设置浮层），以及 2026-11-07 真实桌面 carrier 上的设置行与嵌入面板验证（同轮移除侧栏胶囊）；壁纸导入对话框与插件管理页展示仍开放，壁纸已由用户验收，生产 desktop profile 经 workspace 符号链接实时运行，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](../../evidence/live-dsh-plugin-host-2026-11-05.md)、[设置行回执](../../evidence/live-dsh-settings-section-2026-11-07.md)与[插件合同](docs/dsh-plugin.md)。
 
 ## 安装、升级与旧入口清理
 

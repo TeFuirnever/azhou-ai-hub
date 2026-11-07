@@ -31,6 +31,7 @@ from scripts.check_repository import (
     check_treehouse_config,
     public_files,
     relative_markdown_targets,
+    run_checks,
 )
 
 
@@ -512,6 +513,39 @@ class LocalSkillInstallationTest(unittest.TestCase):
 
 
 class RepositoryPolicyTest(unittest.TestCase):
+    def test_rejects_forced_publication_of_private_startup_artwork(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            for relative in (".gitignore", "packages/codex-startup-animation/.gitignore"):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+
+            private_assets = (
+                "packages/agent-skin/assets/fixture.png",
+                "packages/agent-skin/assets/private/fixture.png",
+                "packages/codex-startup-animation/assets/private/fixture.png",
+            )
+            public_fixture = "packages/agent-skin/docs/fixtures/icon.png"
+            for relative in (*private_assets, public_fixture):
+                asset = root / relative
+                asset.parent.mkdir(parents=True, exist_ok=True)
+                asset.write_bytes(b"synthetic artwork")
+
+            def artwork_errors() -> list[str]:
+                return [error for error in run_checks(root) if "private startup artwork" in error]
+
+            self.assertEqual([], artwork_errors())
+            subprocess.run(["git", "add", "-f", "--", *private_assets], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", public_fixture], cwd=root, check=True)
+            # A worktree deletion does not remove a previously staged entry.
+            (root / private_assets[1]).unlink()
+            self.assertCountEqual(
+                [f"private startup artwork is public: {name}" for name in private_assets],
+                artwork_errors(),
+            )
+
     def test_all_canonical_skills_follow_the_shared_brand_contract(self) -> None:
         self.assertEqual([], check_skill_brand_contract(ROOT))
 

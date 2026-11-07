@@ -70,9 +70,10 @@ import Foundation
             self.calls.append("lock")
             if self.mode == "lock-failed" { throw NSError(domain:"synthetic",code:9) }
             if self.mode == "lock-expired-busy" { self.clock = 201;throw ZCodeOperationLockFailure.busy }
-            if self.mode == "lock-cancel-busy" { Thread.sleep(forTimeInterval:0.12);throw ZCodeOperationLockFailure.busy }
+            // Cancel this operation at the lock boundary; elapsed sleeps do not guarantee task ordering.
+            if self.mode == "lock-cancel-busy" { withUnsafeCurrentTask { $0?.cancel() };throw ZCodeOperationLockFailure.busy }
             if self.mode == "lock-expired-success" { self.clock = 201;self.lockHeld = true;return Lease(self) }
-            if self.mode == "lock-cancel-success" { Thread.sleep(forTimeInterval:0.12);self.lockHeld = true;return Lease(self) }
+            if self.mode == "lock-cancel-success" { withUnsafeCurrentTask { $0?.cancel() };self.lockHeld = true;return Lease(self) }
             if self.enforceLock && self.lockHeld { throw ZCodeOperationLockFailure.busy }
             self.lockHeld = true
             return Lease(self)
@@ -171,7 +172,6 @@ import Foundation
         do {
             let f=Fixture();f.processes=[f.process];f.mode="lock-cancel-busy"
             let task=Task { await f.driver().inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
-            Task.detached { try? await Task.sleep(nanoseconds:20_000_000);task.cancel() }
             if case .staleTarget(let failure)=await task.value { expect(failure.reason == .operationCancelled && !f.calls.contains("attach"),"cancellation takes precedence over late busy lock") } else { fatalError("cancelled busy lock accepted") }
         }
         do {
@@ -184,7 +184,6 @@ import Foundation
         do {
             let f=Fixture();f.processes=[f.process];f.mode="lock-cancel-success";let driver=f.driver()
             let task=Task { await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) }
-            Task.detached { try? await Task.sleep(nanoseconds:20_000_000);task.cancel() }
             if case .staleTarget(let failure)=await task.value { expect(failure.reason == .operationCancelled && !f.calls.contains("attach") && f.calls.filter{$0=="release"}.count == 1,"successful lock after cancellation releases once without attach") } else { fatalError("cancelled acquired lock accepted") }
             f.mode="ready"
             if case .observed = await driver.inspect(SkinInspectRequest(expectedApplication:f.key,operationID:UUID(),deadline:200,includePage:true,previousObservation:nil)) { expect(f.calls.filter{$0=="release"}.count == 2,"inspect reusable after cancelled lock") } else { fatalError("cancelled lock did not release") }

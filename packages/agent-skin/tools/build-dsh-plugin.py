@@ -28,10 +28,10 @@ INDEX_JS = (
 PATCH_YAML = "- insert:\n    - id: azhou-agent-skin\n      name: 'azhou-agent-skin'\n"
 LOCALES = {
     'zh': {'meta': {'title': '阿舟 AI 实验室 for DeepSeek Harness',
-                    'description': '为 DeepSeek Harness 带来阿舟启动动画、侧栏外观入口与主区壁纸皮肤。'}},
+                    'description': '为 DeepSeek Harness 带来阿舟启动动画、设置中的外观面板与主区壁纸皮肤。'}},
     'en': {'meta': {'title': 'Azhou AI Lab for DeepSeek Harness',
-                    'description': ('Brings the Azhou startup animation, sidebar appearance entry, '
-                                    'and main-surface wallpaper skin to DeepSeek Harness.')}},
+                    'description': ('Brings the Azhou startup animation, the settings appearance panel, '
+                                    'and the main-surface wallpaper skin to DeepSeek Harness.')}},
 }
 MANIFEST_SCOPE = ('local assembly only; installing into a DSH profile is a separate manual step; '
                   'no install or host writes')
@@ -76,6 +76,7 @@ _CLIENT_SETTINGS_REGISTER = (
     "      // 注册「阿舟主题与外观」设置页：settings.section 插槽一次注册；ctx.effect\n"
     "      // 立即执行回调，插件停用时随 cordis 一并回收。React 从模块加载器平台表取。\n"
     "      const zhLocale = () => /^zh/i.test(document.documentElement?.lang || host.navigator?.language || '');\n"
+    "      try {\n"
     "      ctx.effect(() => {\n"
     "        const slots = ctx.slots;\n"
     "        if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {\n"
@@ -100,10 +101,15 @@ _CLIENT_SETTINGS_REGISTER = (
     "        });\n"
     "        return () => {};\n"
     "      }, 'azhou-agent-skin: settings-section');\n"
+    "      } catch {\n"
+    "        // 设置页注册失败时退化为纯 overlay：激活永不因它失败。\n"
+    "      }\n"
 )
 _CLIENT_CLOSE = (
     "    };\n"
-    "    const inject = [];\n"
+    # The settings-section registration reads ctx.slots, a cordis service;
+    # an undeclared service access throws and fails activation, so declare it.
+    "    const inject = ['slots'];\n"
     + _CLIENT_SECTION_FACTORY
     + "    function apply(ctx) {\n"
     "      const host = globalThis;\n"

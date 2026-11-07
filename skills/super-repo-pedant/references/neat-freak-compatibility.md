@@ -13,6 +13,8 @@ Lineage: the package was absorbed from upstream `neat-freak` at pre-v3 commit `b
 - Upstream-additive capabilities (12, e.g. completion fact-face matrix, lightweight path, release-closeout state machine, cleanup confirmation gate, governance rule-chain audit, generated-memory read-only boundary, eval surface) are recorded with dispositions in the audit document; they are observations, not new mandatory rows. Adopting any of them changes skill behavior and requires its own evidence path through this repository's gates and tests.
 - Monitoring: the next routine upstream freshness scan re-runs the v3→HEAD compare and re-judges this baseline; any future upstream change to `neat-freak/SKILL.md` or `evals/` triggers a same-shaped re-audit before any baseline or contract move.
 
+The 2026-10-07 audit did not fetch the 11 eval fixture sets, so its capability comparison does not establish their contents. Its A6 prompt-injection row is partial: the local history and evidence contracts treat specified material as untrusted, but do not explicitly state the same rule for every inventoried file. A6 is an upstream-additive observation, not one of the 28 baseline rows. The current runnable-stage validator does require both README and a rule surface; see `scripts/inventory_knowledge.py`.
+
 ## Classification
 
 | Status | Meaning |

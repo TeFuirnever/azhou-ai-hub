@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("unit_coverage_gate", Path(__file__).with_name("test-unit-coverage.py"))
 gate = importlib.util.module_from_spec(SPEC)
@@ -11,6 +12,27 @@ SPEC.loader.exec_module(gate)
 
 
 class CoveragePolicyTests(unittest.TestCase):
+    def test_repeated_runs_preserve_distinct_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def fake_run(command, log):
+                output = Path(command[command.index("--out") + 1])
+                fixture = output / "zcode-runtime"
+                fixture.mkdir()
+                (output / "coverage.json").write_text('{"fixture": true}')
+
+            with mock.patch.object(gate, "production_sources", return_value={"swift": ["App.swift"]}), \
+                 mock.patch.object(gate, "run", side_effect=fake_run), \
+                 mock.patch.object(gate, "parse_native", return_value={"App.swift": {"count": 100, "covered": 100}}), \
+                 mock.patch("sys.argv", ["coverage", "--language", "swift", "--out", str(root)]):
+                self.assertEqual(gate.main(), 0)
+                self.assertEqual(gate.main(), 0)
+
+            reports = list((root / "runs").glob("*/report.json"))
+            self.assertEqual(len(reports), 2)
+            self.assertTrue((root / "report.json").is_file())
+            self.assertTrue(all(path.parent.joinpath("swift/zcode-runtime").is_dir() for path in reports))
+
     def test_scope_discovers_unlisted_production_and_excludes_only_test_material(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

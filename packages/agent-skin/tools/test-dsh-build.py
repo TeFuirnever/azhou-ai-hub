@@ -92,13 +92,13 @@ class DshPluginBuildTests(unittest.TestCase):
             ("const runStartup = (registerCleanup) => {", 1),
             ("function createDSHPageAdapter(", 1),
             ("const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, buildNumber: "
-             + json.dumps(APP_BUILD) + " } }, {", 1),
+             + json.dumps(APP_BUILD) + " }, sidebarEntry: false }, {", 1),
             ("    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });", 1),
             ("controllerOwner: 'azhou-dsh-startup'", 1),
             ("owner: 'azhou.dsh-startup-animation'", 1),
             ("const DEFAULT_ASSETS = Object.freeze(", 1),
             ("function apply(ctx) {", 1),
-            ("const inject = [];", 1),
+            ("const inject = ['slots'];", 1),
             ("slots.inject('settings.section', function* () {", 1),
             ("name: 'settings.section', id: 'azhou-appearance', order: 40,", 1),
             ("startup.mountSettings(node, { onClose: () => closeRef.current?.() })", 1),
@@ -168,7 +168,7 @@ class DshPluginBuildTests(unittest.TestCase):
             (mutate_client(lambda text: text + "\nexport function leak() {}\n"), "模块导入|external"),
             (mutate_client(lambda text: text + "\nfetch('https://example.invalid/x');\n"), "外部资源|external"),
             (mutate_client(lambda text: text.replace(
-                "const inject = [];", "const inject = [];\n    const inject = [];")), "恰好绑定一次|exactly once"),
+                "const inject = ['slots'];", "const inject = ['slots'];\n    const inject = ['slots'];")), "恰好绑定一次|exactly once"),
             (lambda path: (path / "manifest.json").write_text(json.dumps({
                 **json.loads((path / "manifest.json").read_text(encoding="utf-8")), "appVersion": "99.0.0"}),
                 encoding="utf-8"), "manifest"),

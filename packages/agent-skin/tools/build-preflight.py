@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 
@@ -29,7 +32,7 @@ def load_theme(root: Path, *, host: str = "codex") -> dict:
     return artifacts.load_theme_config(root, require_inputs=True)
 
 
-def preflight(root: Path = ROOT, *, host: str = "codex") -> dict:
+def preflight(root: Path = ROOT, *, host: str = "codex", approved_icon_sha256: str | None = None) -> dict:
     """Return the validated theme after checking private paths and Git state."""
     root = Path(root).resolve()
     theme = load_theme(root, host=host)
@@ -60,6 +63,13 @@ def preflight(root: Path = ROOT, *, host: str = "codex") -> dict:
     icon_width, icon_height = struct.unpack(">II", header[16:24])
     if icon_width != icon_height or icon_width < 1024:
         raise SystemExit(f"图标源图须为至少 1024×1024 的方形 PNG，实际 {icon_width}×{icon_height}。")
+    if approved_icon_sha256 is not None:
+        if re.fullmatch(r"[0-9a-fA-F]{64}", approved_icon_sha256) is None:
+            raise SystemExit("AZHOU_APPROVED_ICON_SHA256 必须是 64 位十六进制 SHA-256。")
+        with icon_source.open("rb") as stream:
+            actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        if actual != approved_icon_sha256.lower():
+            raise SystemExit(f"{host} 图标源图与已批准的 SHA-256 不符，未开始构建。")
     return theme
 
 
@@ -67,7 +77,7 @@ def main(root: Path = ROOT, *, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("codex", "zcode"), default="codex")
     args = parser.parse_args(argv)
-    theme = preflight(root, host=args.host)
+    theme = preflight(root, host=args.host, approved_icon_sha256=os.environ.get("AZHOU_APPROVED_ICON_SHA256"))
     print(json.dumps(theme, ensure_ascii=False, separators=(",", ":")))
     return 0
 
