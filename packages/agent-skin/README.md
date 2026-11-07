@@ -93,7 +93,7 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 构建会拒绝缺失图标、非方形PNG或小于1024×1024的源图。
 
-本机如果保留了某个宿主已批准图标的 SHA-256，可从批准记录取出摘要，再运行 `AZHOU_APPROVED_ICON_SHA256="$approved_icon_digest" bash tools/build-macos.sh`。构建 ZCode 时追加 `--host zcode`，并使用 ZCode 图标的摘要。预检会在创建构建暂存目录前核对该宿主选中的源图。更新图标时重新审阅并记录摘要。保留批准记录与私有素材在 Git 之外。
+本机如果保留了某个宿主已批准图标的 SHA-256，可从批准记录取出摘要，再运行 `AZHOU_APPROVED_ICON_SHA256="$approved_icon_digest" bash tools/build-macos.sh`。构建 ZCode 时追加 `--host zcode`，并使用 ZCode 图标的摘要。预检先核对该宿主选中的源图，构建再用核对过的暂存副本生成图标。更新图标时重新审阅并记录摘要。保留批准记录与私有素材在 Git 之外。
 
 实际系统读取、Finder显示与升级验证见 [图标验收](docs/app-icon-0.5.2-verification.md)。
 

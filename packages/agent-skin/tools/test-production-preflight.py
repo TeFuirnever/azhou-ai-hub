@@ -160,24 +160,84 @@ class BuildPreflightTests(unittest.TestCase):
                     with self.assertRaisesRegex(SystemExit, "AZHOU_APPROVED_ICON_SHA256"):
                         self.module.main(self.root, argv=[])
 
-    def test_build_rejects_a_swapped_icon_before_staging(self):
+    def prepare_build(self):
         shutil.copy2(TOOLS / "build-macos.sh", self.root / "tools/build-macos.sh")
         shutil.copy2(PACKAGE / ".gitignore", self.root / ".gitignore")
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+
+    def test_build_rejects_a_swapped_icon_before_staging(self):
+        self.prepare_build()
+        approved_digest = hashlib.sha256(self.icon_source.read_bytes()).hexdigest()
+        self.icon_source.write_bytes(png_header(1024, 1024) + b"unapproved fixture")
+        self.zcode_icon.write_bytes(png_header(1024, 1024) + b"ZCode fixture")
+        payloads = []
+        for host, args, name in (
+            ("codex", [], "azhou-payload"),
+            ("zcode", ["--host", "zcode"], "azhou-zcode-payload"),
+        ):
+            with self.subTest(host=host):
+                payload = self.root / ".build" / name
+                payload.mkdir()
+                payloads.append(payload)
+                receipt = payload / "fixture-receipt"
+                receipt.write_bytes(b"existing payload")
+                result = subprocess.run(
+                    ["bash", "tools/build-macos.sh", *args], cwd=self.root, capture_output=True, text=True,
+                    env={**os.environ, "AZHOU_APPROVED_ICON_SHA256": approved_digest}, timeout=30,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{host} 图标源图与已批准的 SHA-256 不符", result.stderr)
+                self.assertEqual(receipt.read_bytes(), b"existing payload")
+                self.assertCountEqual((self.root / ".build").iterdir(), payloads)
+
+    def test_build_binds_the_staged_icon_to_the_approval_after_preflight(self):
+        self.prepare_build()
+        artifacts = load_module(self.root / "tools/verify-artifacts.py", "icon_snapshot_fixture")
+        for name in artifacts.INPUT_FILES:
+            path = self.root / name
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
         payload = self.root / ".build/azhou-payload"
         payload.mkdir()
         receipt = payload / "fixture-receipt"
         receipt.write_bytes(b"existing payload")
-        approved_digest = hashlib.sha256(self.icon_source.read_bytes()).hexdigest()
-        self.icon_source.write_bytes(png_header(1024, 1024) + b"unapproved fixture")
-        result = subprocess.run(
-            ["bash", "tools/build-macos.sh"], cwd=self.root, capture_output=True, text=True,
-            env={**os.environ, "AZHOU_APPROVED_ICON_SHA256": approved_digest}, timeout=30,
+        original_icon = self.icon_source.read_bytes()
+        system_bin = self.root / "system-bin"
+        system_bin.mkdir()
+        compiler = system_bin / "xcrun"
+        compiler.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+        compiler.chmod(0o755)
+        converter = system_bin / "sips"
+        converter.write_text(
+            '#!/bin/bash\nset -eu\n'
+            'test "${4##*/}" = approved-icon.png\n'
+            'cmp "$APPROVED_FIXTURE_ICON" "$4"\n'
+            'printf "%s\\n" "approved snapshot reached converter" >&2\nexit 73\n',
+            encoding="utf-8",
         )
+        converter.chmod(0o755)
+        env = {**os.environ, "AZHOU_APPROVED_ICON_SHA256": hashlib.sha256(original_icon).hexdigest().upper(),
+               "AZHOU_BUILD_SYSTEM_BIN": str(system_bin), "APPROVED_FIXTURE_ICON": str(self.icon_source)}
+        command = ["bash", "tools/build-macos.sh"]
+        success = subprocess.run(command, cwd=self.root, capture_output=True, text=True, env=env, timeout=30)
+        self.assertEqual(success.returncode, 73, success.stderr)
+        self.assertIn("approved snapshot reached converter", success.stderr)
+
+        preflight = self.root / "tools/build-preflight.py"
+        source = preflight.read_text(encoding="utf-8")
+        preflight.write_text(source.replace(
+            "    raise SystemExit(main())",
+            '    main()\n'
+            f'    (ROOT / {self.icon_source.relative_to(self.root).as_posix()!r})'
+            '.write_bytes(bytes.fromhex('
+            f'{(original_icon + b"replacement after preflight").hex()!r}))',
+        ), encoding="utf-8")
+        result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, env=env, timeout=30)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("图标源图与已批准的 SHA-256 不符", result.stderr)
         self.assertEqual(receipt.read_bytes(), b"existing payload")
-        self.assertEqual(list((self.root / ".build").iterdir()), [payload])
+        self.assertFalse(list((self.root / ".build").glob("azhou-stage.*")))
 
     def test_legacy_codex_config_is_valid_but_zcode_requires_its_own_input(self):
         path = self.root / "theme-config.json"
