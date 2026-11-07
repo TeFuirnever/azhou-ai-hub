@@ -10,7 +10,7 @@
       "name": "pstack-azhouzhou",
       "source": "./harness/pstack/claude-code",
       "description": "If you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence. Original pstack by Lauren Tan (poteto).",
-      "version": "0.15.36"
+      "version": "0.15.37"
     }
   ]
 }

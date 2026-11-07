@@ -35,3 +35,8 @@
 0016-logsh-append-row-with-one-write.patch
 0017-generator-per-target-harness-trees.patch
 0018-rename-distribution-identity.patch
+0019-downstream-watch-pr-typecheck.patch
+0020-hub-claude-namespace-guides.patch
+0021-hub-distribution-version-0.15.37.patch
+0022-hub-claude-sheet-hook-path.patch
+0023-hub-worktree-audit-preserve-untracked.patch
