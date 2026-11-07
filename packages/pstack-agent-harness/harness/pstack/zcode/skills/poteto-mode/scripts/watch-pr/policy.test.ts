@@ -615,7 +615,7 @@ describe("ready proof rests on GitHub's mergeability reading", () => {
   });
 
   it("holds the whole stack back on the same unproven reading", async () => {
-    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)];
+    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)] as const;
     expect(selectTierMajorStackDecision(rows)).toMatchObject({
       kind: "waiting",
       frontier: { number: 2 },

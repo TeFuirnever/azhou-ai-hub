@@ -1,5 +1,11 @@
 ### Autopilot-full
 
+> **Hub host-portable execution rule:** "Cursor cloud agent" and
+> "/loop" below are examples of a host capability. If unavailable, assign
+> an owner to an isolated local worktree/branch with a real verifier, or
+> block the corresponding gate; never fabricate a cloud VM, scheduler
+> notification or autonomous continuation. Follow the per-host adapter.
+
 **You own the verdicts, never the PRs. One owner carries each PR from build to merge, and nothing merges until your swarm, which never wrote the code, has proven the code that lands.**
 
 A verdict covers one patch and green CI covers one head. Step 4 runs a full swarm once, and again only for a major change. The patch-id rule in `playbooks/shipping.md` can carry a lane's result, and every new head needs its own green CI.
@@ -23,3 +29,21 @@ A verdict covers one patch and green CI covers one head. Step 4 runs a full swar
 7. **Stand down at once on the operator's stop.** A hold reaches every owner as a zero-writes order. Each reports where it stands and keeps its brief until the operator releases it.
 
 **Reply:** catch the operator up per the **ketchup** skill, covering each PR's state and verdict, what merged, countersigns and why, open operator gates, and parked follow-ups, with links to each PR and the trails.
+
+
+#### Hub cross-host handoff and fallback
+
+- **Owner capacity:** every PR still has one writer and a separate
+  author-free verifier. Without native cloud owners, use a bounded local
+  writer in its own worktree/lease. The branch, SHA, ownership and test
+  receipt must be recoverable by the next authorized session.
+- **No auto-loop unless installed:** if the host lacks /loop or scheduled
+  tasks, inspect state during explicit active checkpoints. Record the
+  monitoring gap and do not claim ongoing unattended supervision.
+- **Recovery:** persist standing orders, individual PR/current head SHA verdicts,
+  unfinished children and pending human approvals in an owner-controlled
+  trail. After restart, reconstruct from the remote forge and actual
+  branches, never trust process IDs or old agent status messages.
+- **Do not weaken gates:** a missing cloud VM, verifier, protected merge
+  permission or host UI driver is a blocking observation. Report the
+  missing capability and stop at merge-ready rather than self-approving.

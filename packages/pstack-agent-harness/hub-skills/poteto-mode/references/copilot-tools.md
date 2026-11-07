@@ -13,7 +13,7 @@ pstack skills are written in Claude Code tool language (the `Skill` tool, the `A
 | Search file contents / find files | `grep` / `glob` |
 | Fetch a URL | `web_fetch` |
 | Search the web | `web_search` |
-| Invoke a skill (the `Skill` tool, `/command`, `pstack:<skill>`) | The `skill` tool with the bare skill name (`poteto-mode`, not `pstack:poteto-mode`). A user types `/pstack:<skill>` in the CLI prompt; on CLI 1.0.89 a bare `/<skill>` reports an unknown command for a plugin skill. Copilot's prompt lists only part of a large plugin's skills (a character budget cuts the alphabetical tail); a skill missing from that list still loads by name. |
+| Invoke a skill (the `Skill` tool, `/command`, `pstack-azhouzhou:<skill>`) | The `skill` tool with the bare skill name (`poteto-mode`, not `pstack-azhouzhou:poteto-mode`). A user types `/pstack-azhouzhou:<skill>` in the CLI prompt; on CLI 1.0.89 a bare `/<skill>` reports an unknown command for a plugin skill. Copilot's prompt lists only part of a large plugin's skills (a character budget cuts the alphabetical tail); a skill missing from that list still loads by name. |
 | Dispatch a subagent (the `Agent`/`Task` tool) | The `task` tool: `agent_type`, `model`, `mode`, `name`, `prompt`. |
 | Dispatch N parallel subagents in one turn | N `task` calls in one response. |
 | Background subagent (`run_in_background: true`) | `task` with `mode: "background"`; you are notified when it finishes. |
@@ -24,12 +24,12 @@ pstack skills are written in Claude Code tool language (the `Skill` tool, the `A
 
 ## Subagent policy
 
-poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "pstack:poteto-agent"`, `run_in_background: true`). On GitHub Copilot:
+poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "pstack-azhouzhou:poteto-agent"`, `run_in_background: true`). On GitHub Copilot:
 
-- The plugin's agents load as `task` agent types under their namespaced names, `pstack:poteto-agent`, `pstack:comment-sicko`, `pstack:thermo-nuclear-review-subagent`, and `pstack:thermo-nuclear-code-quality-review-subagent`. Pass the skill's `subagent_type` as `agent_type` unchanged.
-- `subagent_type: "general-purpose"` maps to `agent_type: "general-purpose"`. Where a skill leaves the type unset, use `pstack:poteto-agent`.
+- The plugin's agents load as `task` agent types under their namespaced names, `pstack-azhouzhou:poteto-agent`, `pstack-azhouzhou:comment-sicko`, `pstack-azhouzhou:thermo-nuclear-review-subagent`, and `pstack-azhouzhou:thermo-nuclear-code-quality-review-subagent`. Pass the skill's `subagent_type` as `agent_type` unchanged.
+- `subagent_type: "general-purpose"` maps to `agent_type: "general-purpose"`. Where a skill leaves the type unset, use `pstack-azhouzhou:poteto-agent`.
 - `readonly: true` (reviewers, explorers, critics) maps to a read-only agent type: `explore` for code reading, `code-review` for diff review. When a read-only role must run commands or reach MCP tools, use `general-purpose` and tell it in the prompt not to write files; review its diff anyway.
-- `readonly: false`, or a role that needs MCP tools, maps to `general-purpose` or `pstack:poteto-agent`.
+- `readonly: false`, or a role that needs MCP tools, maps to `general-purpose` or `pstack-azhouzhou:poteto-agent`.
 - Reasoning effort maps to `task`'s `reasoning_effort`. Pass a role value's `@<level>` suffix, or else the sheet's `default effort` level, as `reasoning_effort`; `session` omits it.
 - `run_in_background: true` maps to `mode: "background"`. `mode: "sync"` blocks your turn; use it only when the next step needs the result.
 - A model a skill states for a role (its Models section, an `Agent` call's `model`, or the user's sheet line) is an explicit model instruction, so pass it as `task`'s `model`. A role with no configured model omits `model`. See Model names below for how a Claude default resolves.
@@ -44,7 +44,7 @@ Skills name Claude Code model aliases in their Models sections. Those aliases ar
 - Read the sheet only when that block and the hook's `sheet invalid` or no-sheet note are all missing, as in a skills-only install with no hook. `view`, `create`, and `edit` take literal paths and expand neither `~` nor `$COPILOT_HOME`, so print the sheet's absolute path with `bash` first (`echo "${COPILOT_HOME:-$HOME/.copilot}/pstack-models.md"`) and read and write exactly that path; do not append `.copilot` or any other segment to it. A session with its own `COPILOT_HOME` then never touches `~/.copilot`.
 - No sheet, or the hook reports `sheet invalid`: before a skill that needs a role model (`architect`, `arena`, `how`, `interrogate`, `poteto-mode`, `reflect`, `swarm`, `why`), stop, load `setup-pstack` with the `skill` tool, and finish it first. In that same session, use the values it just wrote; later sessions get them from the hook. Do not ask again on later runs.
 - A role line in the sheet is the user's explicit model instruction, so pass it as the `task` tool's `model` parameter. `inherit-parent` or `auto` omits `model`.
-- The plugin's `PreToolUse` hook enforces this for pstack agents. While the sheet is valid, it denies a `task` call whose `agent_type` starts with `pstack:` and whose `model` is not one of the sheet's values, and its reason lists the saved IDs. Retry with the role's saved model; never retry on another unsaved model. It leaves calls with no `model` and other agent types alone.
+- The plugin's `PreToolUse` hook enforces this for pstack agents. While the sheet is valid, it denies a `task` call whose `agent_type` starts with `pstack-azhouzhou:` and whose `model` is not one of the sheet's values, and its reason lists the saved IDs. Retry with the role's saved model; never retry on another unsaved model. It leaves calls with no `model` and other agent types alone.
 - Roles that default to the worker model (`feature, refactoring`): the worker model the user chose.
 - Roles that default to the strongest model (`strongest judgment`): the strongest model the user chose.
 - Diverse-model panels (`arena`, `architect`, `interrogate`, `how` critics, `reflect`): the adversarial signal comes from model diversity, so fill a panel from distinct vendors in the `task` tool's `model` list (Claude, GPT, Gemini, Grok, and so on). pstack ships no default Copilot panel. If only one vendor is reachable, vary reasoning effort and note in the verdict that diversity was reduced.
@@ -55,7 +55,7 @@ Run `setup-pstack`, and the parent session that orchestrates a panel, on a model
 
 ## Session routing hook
 
-The plugin's `SessionStart` hook runs on the Copilot CLI and in the Copilot app. Copilot loads the plugin through its own Copilot manifest and hook file, not the Claude Code ones. The hook prints the routing mandate as the `additionalContext` JSON Copilot injects. It reads `${COPILOT_HOME:-~/.copilot}/pstack-models.md`, which the session itself cannot read without a path-access prompt. `session hook: off` disables injection. When the sheet passes the checks `check-sheet.sh` applies, the injected context ends with one line per role, rebuilt from the checked values; no other sheet text reaches the context. When it fails them, the context says `sheet invalid` and names each problem. With no sheet, it says so. Either way it tells the session to run `setup-pstack` before the first skill that dispatches on role models. The mandate names skills as `pstack:<skill>`; on Copilot load them by bare name.
+The plugin's `SessionStart` hook runs on the Copilot CLI and in the Copilot app. Copilot loads the plugin through its own Copilot manifest and hook file, not the Claude Code ones. The hook prints the routing mandate as the `additionalContext` JSON Copilot injects. It reads `${COPILOT_HOME:-~/.copilot}/pstack-models.md`, which the session itself cannot read without a path-access prompt. `session hook: off` disables injection. When the sheet passes the checks `check-sheet.sh` applies, the injected context ends with one line per role, rebuilt from the checked values; no other sheet text reaches the context. When it fails them, the context says `sheet invalid` and names each problem. With no sheet, it says so. Either way it tells the session to run `setup-pstack` before the first skill that dispatches on role models. The mandate names skills as `pstack-azhouzhou:<skill>`; on Copilot load them by bare name.
 
 If the mandate is missing from a session (a skills-only install, a Copilot version that drops plugin hook context, or another plugin's hook replacing it), add the standing instruction `setup-pstack` describes to `~/.copilot/copilot-instructions.md`, or request `poteto-mode` explicitly.
 
@@ -115,8 +115,8 @@ Affected skill entry points point here. Most skills need only the tables above. 
 | `architect` | The runner panel goes through the **arena** skill: one `task` per runner, each with a model from the sheet's `architect runners` line. |
 | `how` | The explorers and the explainer are `task` calls with the sheet's `how` role models; critics use a read-only agent type (see Subagent policy). |
 | `arena` | Runners and the cross-judge pool come from the sheet's panel lines; pick the cross-judge from a different vendor than the candidate it grades. |
-| `no-comments` | Dispatch `task` with `agent_type: "pstack:comment-sicko"`. |
-| `thermos` | Dispatch two `task` calls with `mode: "background"`, `agent_type: "pstack:thermo-nuclear-review-subagent"` and `agent_type: "pstack:thermo-nuclear-code-quality-review-subagent"`, each with the same diff and file contents in its prompt. |
+| `no-comments` | Dispatch `task` with `agent_type: "pstack-azhouzhou:comment-sicko"`. |
+| `thermos` | Dispatch two `task` calls with `mode: "background"`, `agent_type: "pstack-azhouzhou:thermo-nuclear-review-subagent"` and `agent_type: "pstack-azhouzhou:thermo-nuclear-code-quality-review-subagent"`, each with the same diff and file contents in its prompt. |
 | `swarm` | Workers are `task` calls with `mode: "background"`, each on its own worktree; in the app, `create_session` per worker. |
 | `teach` | Running `how` and `why` in parallel maps to `task` fan-out; image generation uses whatever image tool you have, or skip it and say so. |
 | `why` | Available MCP servers appear in your tool list; there is no `mcp__` prefix convention to scan for. |

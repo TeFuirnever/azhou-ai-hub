@@ -1,0 +1,19 @@
+Description: version the Hub-native pstack distribution separately from pinned upstream
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+The upstream pstack tree remains pinned at 0.15.36 and byte-immutable.
+The Hub's updated Claude/Codex/ZCode plugin distribution contains different
+runtime and adapter bytes, so it must not reuse the installed 0.15.36 cache key.
+Apply the release version only to the quilt scratch tree before generating
+native manifests. No pristine upstream file is edited.
+
+--- a/pstack/plugin.json
++++ b/pstack/plugin.json
+@@ -2,5 +2,5 @@
+   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+   "name": "pstack-azhouzhou",
+-  "version": "0.15.36",
++  "version": "0.15.37",
+   "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
+   "author": {
