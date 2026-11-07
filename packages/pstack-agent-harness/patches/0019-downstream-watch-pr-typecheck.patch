@@ -1,0 +1,36 @@
+Description: narrow downstream watcher fixture unions for strict TypeScript checks
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+This patch repairs the test type contracts introduced by our quilt's
+no-checks and stack-shape follow-ups. It changes no runtime behavior:
+tests must explicitly refuse a no-checks result before reading source or
+checks, and a two-row stack is declared as a non-empty tuple. These
+adjustments follow the downstream patched API rather than pristine upstream.
+
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/github.test.ts
+@@ -41,2 +41,3 @@
+     const read = await resolveChecks(reader, context);
++    if (read.kind !== "reported") throw new Error("expected resolved checks");
+     expect(read.source).toBe("gh-pr-checks");
+@@ -59,2 +60,3 @@
+     const read = await resolveChecks(reader, context);
++    if (read.kind !== "reported") throw new Error("expected resolved checks");
+     expect(read.source).toBe("graphql-rollup");
+@@ -79,5 +81,5 @@
+     });
+-    expect((await resolveChecks(reader, context)).checks[0].name).toBe(
+-      "fallback"
+-    );
++    const read = await resolveChecks(reader, context);
++    if (read.kind !== "reported") throw new Error("expected resolved checks");
++    expect(read.checks[0].name).toBe("fallback");
+     expect(reader.calls).toEqual(["checksFastPath", "checkRollupPage:null"]);
+--- a/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
++++ b/pstack/skills/poteto-mode/scripts/watch-pr/policy.test.ts
+@@ -617,3 +617,3 @@
+   it("holds the whole stack back on the same unproven reading", async () => {
+-    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)];
++    const rows = [await snapshot("MERGEABLE", 1), await snapshot("UNKNOWN", 2)] as const;
+     expect(selectTierMajorStackDecision(rows)).toMatchObject({

@@ -14,7 +14,7 @@ pstack skills are written in Claude Code tool language (the `Skill` tool, the `A
 | Search file contents / find files | `search`, otherwise `bash` (`rg`, `grep`, `find`, `ls`) |
 | Fetch a URL | `web_fetch` |
 | Search the web | `web_search` |
-| Invoke a skill (the `Skill` tool, `/command`) | `read_skill` with the plugin skill id (`plugin:pstack:poteto-mode`), then follow its body. Muse lists each user-invocable skill as `/<name>` itself. |
+| Invoke a skill (the `Skill` tool, `/command`) | `read_skill` with the plugin skill id (`plugin:pstack-azhouzhou:poteto-mode`), then follow its body. Muse lists each user-invocable skill as `/<name>` itself. |
 | Dispatch a subagent (the `Agent`/`Task` tool) | `subagent_spawn` (one child agent with a role and objective), or a Workflow child when the step needs model control or many parallel workers |
 | Dispatch N parallel subagents in one turn | N `subagent_spawn` calls in one response, or one Workflow run fanning out over its items |
 | Wait for a subagent result | `subagent_wait`, or end the turn: finished results arrive on their own. `subagent_read_result` reads a finished result again. |
@@ -29,9 +29,9 @@ A skills-only setup (the skills without the plugin) still has every tool above, 
 
 ## Subagent policy
 
-poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "pstack:poteto-agent"`, `run_in_background: true`). On Muse:
+poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "pstack-azhouzhou:poteto-agent"`, `run_in_background: true`). On Muse:
 
-- The plugin's four agent files register as agent definitions with scoped ids: `pstack/poteto-agent`, `pstack/comment-sicko`, `pstack/thermo-nuclear-review-subagent`, and `pstack/thermo-nuclear-code-quality-review-subagent`. Pass the scoped id as `subagent_spawn`'s `subagent_type`, or as a Workflow child's `agentType`. Map a skill's `pstack:poteto-agent`, and each other `pstack:<name>` dispatch, to `pstack/<name>` unchanged otherwise. `general-purpose`, or no type, runs the built-in general agent. In a skills-only setup none of these definitions exist: route an ad-hoc subagent through poteto-mode's style by telling it to read the `poteto-mode` skill in full first, and a `comment-sicko` dispatch to read the plugin-root `agents/comment-sicko.md` first.
+- The plugin's four agent files register as agent definitions with scoped ids: `pstack-azhouzhou/poteto-agent`, `pstack-azhouzhou/comment-sicko`, `pstack-azhouzhou/thermo-nuclear-review-subagent`, and `pstack-azhouzhou/thermo-nuclear-code-quality-review-subagent`. Pass the scoped id as `subagent_spawn`'s `subagent_type`, or as a Workflow child's `agentType`. Map a skill's `pstack-azhouzhou:poteto-agent`, and each other `pstack-azhouzhou:<name>` dispatch, to `pstack-azhouzhou/<name>` unchanged otherwise. `general-purpose`, or no type, runs the built-in general agent. In a skills-only setup none of these definitions exist: route an ad-hoc subagent through poteto-mode's style by telling it to read the `poteto-mode` skill in full first, and a `comment-sicko` dispatch to read `agents/comment-sicko.md` from the installed distribution root (the directory containing `skills/` and `agents/`) first. If a skills-only copy omits that file, block the reviewer and report the missing file; do not guess or substitute a role.
 - `subagent_spawn` children already run alongside your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue; the result arrives when the child finishes.
 - `readonly: true` (reviewers, explorers, critics) has no flag. Say in the objective that the child must not change files, and review its diff anyway.
 - A role value's `@<level>`, or the `default effort` line, passes as the dispatch's effort field: `effort` on a Workflow child. `subagent_spawn` has no effort field and keeps the session's effort, so name the level it needs in the objective when the job turns on it. `session` sets nothing.
@@ -54,7 +54,7 @@ Pass a role's model where the dispatch takes one: a Workflow child's `model`, or
 
 ## Session routing hook
 
-The native pstack Muse plugin bundles a `SessionStart` hook that injects the poteto-mode mandate in Muse wording, plus the saved role lines from the Muse sheet when the sheet has any. Muse runs plugin hooks only after the user approves them (`muse plugins approve pstack`), so a fresh install routes nothing until then. The hook reads `session hook` from the Muse sheet, at the path in [setup-pstack's runtime table](../../setup-pstack/SKILL.md#other-runtimes); `session hook: off` disables injection.
+The native pstack Muse plugin bundles a `SessionStart` hook that injects the poteto-mode mandate in Muse wording, plus the saved role lines from the Muse sheet when the sheet has any. Muse runs plugin hooks only after the user approves them (`muse plugins approve pstack-azhouzhou`), so a fresh install routes nothing until then. The hook reads `session hook` from the Muse sheet, at the path in the setup-pstack Skill's Other runtimes table; `session hook: off` disables injection.
 
 A skills-only installation does not include the hook. Request `poteto-mode` explicitly or add a standing instruction to `AGENTS.md` in that case.
 

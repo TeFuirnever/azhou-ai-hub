@@ -81,8 +81,8 @@ For the rest of this session, use the values you just wrote; do not read the she
 
 ## Wire it in
 
-Add no include line: Copilot does not expand `@~/` paths in user instructions, and the plugin hook injects the sheet's role lines at session start. If the hook is on but this session's context lacks the routing mandate (the block that opens `You have pstack.`), another hook or a skills-only install has displaced it. Offer to append this standing instruction to `~/.copilot/copilot-instructions.md` instead:
+Add no include line: Copilot does not expand `@~/` paths in user instructions, and the plugin hook injects the sheet's role lines at session start. If the hook is on but this session's context lacks the routing mandate (the block that opens `You have pstack-azhouzhou.`), another hook or a skills-only install has displaced it. Offer to append this standing instruction to `~/.copilot/copilot-instructions.md` instead:
 
 ```text
-pstack: for a task that touches more than one file, changes a signature other files call, involves a design choice, or is a bug with an unknown cause or a performance issue, load the poteto-mode skill and follow it. Resolve Claude tool and model names through poteto-mode's references/copilot-tools.md; role models are in ~/.copilot/pstack-models.md.
+pstack-azhouzhou: for a task that touches more than one file, changes a signature other files call, involves a design choice, or is a bug with an unknown cause or a performance issue, load the poteto-mode skill and follow it. Resolve Claude tool and model names through poteto-mode's references/copilot-tools.md; role models are in ~/.copilot/pstack-models.md.
 ```

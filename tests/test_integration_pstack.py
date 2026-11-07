@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -19,6 +20,20 @@ from scripts import integration_pstack as pstack
 
 
 class PstackSessionStartTest(unittest.TestCase):
+    def test_setup_guidance_retains_routing_setting_and_uses_host_sheet(self):
+        package = pstack.ROOT / "packages/pstack-agent-harness"
+        adapters = package / "harness/pstack"
+        for host in ("codex", "claude-code", "zcode", "skills-root"):
+            with self.subTest(host=host):
+                guidance = (adapters / host / "docs/harness" / (host + ".md")).read_text(encoding="utf-8")
+                write = next(line for line in guidance.splitlines() if line.startswith("- Write."))
+                self.assertIn("`session hook`", write)
+                self.assertRegex(write, r"(?i)preserve")
+                self.assertIn("unless the user", write)
+                self.assertIn("ambiguous", write)
+        zcode = (adapters / "zcode/docs/harness/zcode.md").read_text(encoding="utf-8")
+        self.assertIn("`~/.zcode/pstack-models.md`", zcode)
+
     def test_canonical_codex_hook_routes_to_registered_skills(self):
         package = pstack.ROOT / "packages/pstack-agent-harness"
         marketplace = json.loads((package / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
@@ -84,6 +99,136 @@ class PstackIntegrationTest(unittest.TestCase):
 
     def calls(self):
         return [json.loads(line) for line in (self.home / "native-operations.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    def _install_owned_legacy_fixture(self):
+        """Build an actual old-layout frozen snapshot and native install.
+
+        The historical receipt and snapshot remain the only ownership basis:
+        there is no access to a real user Codex home.
+        """
+        current = self.source / "harness/pstack/codex"
+        legacy = self.source / "plugins/pstack"
+        shutil.copytree(current, legacy)
+        (legacy / ".codex-plugin/plugin.json").write_text(
+            json.dumps({"name": "pstack", "version": "0.9.102"}), encoding="utf-8"
+        )
+        metadata_path = self.source / "hub-package.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["runtime_paths"] = [
+            "hub-package.json", ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE"
+        ]
+        metadata_path.write_text(json.dumps(metadata, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        snapshot = common.snapshot_source("pstack", self.source, self.workspace, hub_root=self.hub)
+        lock = common.snapshot_lock("pstack", snapshot)
+        self.assertEqual(pstack._snapshot_plugin_identity(lock),
+                         ("pstack@pstack-claude", "plugins/pstack/"))
+        pstack._native(self.binary, self.home, ["marketplace", "add", str(snapshot)])
+        pstack._native(self.binary, self.home, ["add", "pstack@pstack-claude"])
+        receipt = {
+            "schema": pstack.RECEIPT_SCHEMA, "codex_home": str(self.home),
+            "snapshot": str(snapshot), "source_lock_sha256": common.plan_digest(lock),
+            "commit": lock["commit"], "codex_bin": str(self.binary),
+            "codex_bin_sha256": pstack._digest(self.binary), "state": "installed",
+            "operation": "install", "commands": [], "completed_steps": [0, 1],
+            "coexistence": None,
+        }
+        common.write_receipt(pstack._receipt_path(self.workspace, self.home), receipt)
+        return snapshot, self.home / "plugins/cache/pstack-claude/pstack/0.9.102"
+
+    def test_owned_legacy_receipt_preserves_old_identity_and_removes_only_old_plugin(self):
+        snapshot, installed = self._install_owned_legacy_fixture()
+        self.assertTrue(installed.is_dir())
+        report = self.doctor()
+        self.assertEqual(report["status"], "installation-verified")
+        plan = self.plan("remove")
+        self.assertEqual(plan["commands"][0][3], "pstack@pstack-claude")
+        self.assertEqual(plan["commands"][1][4], "pstack-claude")
+        self.assertFalse(plan["native_concurrency"]["verified"])
+        self.assertIn("concurrent native plugin or marketplace changes", plan["native_concurrency"]["required"])
+        result = self.apply("remove")
+        self.assertEqual(result["status"], "removed")
+        self.assertTrue(snapshot.is_dir())
+        self.assertFalse(installed.exists())
+        calls = self.calls()
+        self.assertIn(["remove", "pstack@pstack-claude"], calls)
+        self.assertIn(["marketplace", "remove", "pstack-claude"], calls)
+        self.assertLess(calls.index(["remove", "pstack@pstack-claude"]),
+                        calls.index(["marketplace", "remove", "pstack-claude"]))
+        self.assertNotIn(["remove", pstack.PLUGIN], calls)
+
+    def test_other_plugin_on_same_marketplace_blocks_owned_legacy_removal(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_FOREIGN_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "contains another plugin"):
+                self.apply("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertNotIn(["remove", "pstack@pstack-claude"], self.calls())
+        self.assertNotIn(["marketplace", "remove", "pstack-claude"], self.calls())
+        # The owned state can be recovered once an external plugin is gone.
+        self.assertEqual(self.apply("remove")["status"], "removed")
+        self.assertFalse(installed.exists())
+
+    def test_disabled_owned_legacy_plugin_is_unhealthy_but_can_be_removed(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_DISABLED_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "enabled"):
+                self.doctor()
+            self.assertEqual(self.apply("remove")["status"], "removed")
+        self.assertFalse(installed.exists())
+        self.assertIn(["remove", "pstack@pstack-claude"], self.calls())
+
+    def test_disabled_modified_plugin_is_not_removed(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        (installed / "skills/poteto-mode/SKILL.md").write_text("local edit", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_DISABLED_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "content missing or changed"):
+                self.apply("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertNotIn(["remove", "pstack@pstack-claude"], self.calls())
+
+    def test_failed_legacy_removal_retry_rechecks_installed_byte_hashes(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_FOREIGN_PLUGIN": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "contains another plugin"):
+                self.apply("remove")
+        manifest = installed / "skills/poteto-mode/SKILL.md"
+        manifest.write_text("user changed this file after failed remove", encoding="utf-8")
+        with self.assertRaisesRegex(common.IntegrationError, "content missing or changed"):
+            self.apply("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertEqual(manifest.read_text(encoding="utf-8"),
+                         "user changed this file after failed remove")
+        self.assertNotIn(["remove", "pstack@pstack-claude"], self.calls())
+        self.assertNotIn(["marketplace", "remove", "pstack-claude"], self.calls())
+
+    def test_malformed_native_registry_never_authorizes_marketplace_removal(self):
+        result = self.apply()
+        installed = Path(result["installed_path"])
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_MALFORMED_REGISTRY": "1"}):
+            with self.assertRaisesRegex(common.IntegrationError, "missing installed"):
+                self.apply("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertNotIn(["remove", pstack.PLUGIN], self.calls())
+        self.assertNotIn(["marketplace", "remove", "pstack-claude"], self.calls())
+        self.assertEqual(self.apply("remove")["status"], "removed")
+
+    def test_owned_legacy_modified_install_is_preserved_and_removal_refused(self):
+        _snapshot, installed = self._install_owned_legacy_fixture()
+        skill = installed / "skills/poteto-mode/SKILL.md"
+        skill.write_text("local edit - preserve", encoding="utf-8")
+        with self.assertRaisesRegex(common.IntegrationError, "content missing or changed"):
+            self.plan("remove")
+        self.assertTrue(installed.is_dir())
+        self.assertEqual(skill.read_text(encoding="utf-8"), "local edit - preserve")
+        self.assertNotIn(["remove", "pstack@pstack-claude"], self.calls())
+
+    def test_mixed_new_and_legacy_snapshot_identity_is_never_adopted(self):
+        lock = {"files": {
+            "plugins/pstack/.codex-plugin/plugin.json": {},
+            "harness/pstack/codex/.codex-plugin/plugin.json": {},
+        }}
+        with self.assertRaisesRegex(common.IntegrationError, "ambiguous native plugin identity"):
+            pstack._snapshot_plugin_identity(lock)
 
     def test_plan_defaults_to_canonical_package_and_cli_needs_no_source_flag(self):
         plan = self.plan()
