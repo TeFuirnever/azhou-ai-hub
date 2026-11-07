@@ -9,7 +9,7 @@ import platform,argparse,base64,datetime,hashlib,json,os,socket,socketserver,str
 PAGE='file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
 MODES={'ready','complete','before-ready','already-active','badreceipt','absent','late','readylost','dispose-failed'}
 class Fixture:
- def __init__(self):self.lock=threading.Lock();self.log=[];self.captured={};self.capture_metadata=None;self.reset('ready')
+ def __init__(self):self.lock=threading.Lock();self.log=[];self.captured={};self.capture_metadata=None;self.frame_entered=threading.Event();self.frame_release=threading.Event();self.frame_gated=False;self.interleave_enabled=False;self.reset('ready')
  def reset(self,mode):
   if mode not in MODES:raise ValueError('unknown fixture mode')
   self.mode=mode;self.metadata=None;self.present=False;self.status_reads=0;self.disposed=False
@@ -105,6 +105,8 @@ class Handler(socketserver.BaseRequestHandler):
      if length>4096:raise ValueError('fixture-control-too-large')
      if len(body)<length:body+=exact(c,length-len(body))
      result=self.server.fixture.control(json.loads(body[:length]))
+    elif path=='/fixture/frame-entered' and method=='GET':result={'entered':self.server.fixture.frame_entered.is_set()}
+    elif path=='/fixture/release-frame' and method=='POST':self.server.fixture.frame_release.set();result={'released':True}
     elif path=='/fixture/state' and method=='GET':
      f=self.server.fixture
      with f.lock:result={'mode':f.mode,'present':f.present,'status_reads':f.status_reads,'disposed':f.disposed,'metadata':f.metadata,'synthetic':True}
@@ -119,6 +121,13 @@ class Handler(socketserver.BaseRequestHandler):
     if opcode==8:return
     if opcode==9:c.sendall(bytes([138,len(data)])+data);continue
     request=json.loads(data)
+    if self.server.fixture.interleave_enabled and request['method']=='Page.getFrameTree':
+     with self.server.fixture.lock:
+      first=not self.server.fixture.frame_gated
+      if first:self.server.fixture.frame_gated=True
+     if first:
+      self.server.fixture.frame_entered.set()
+      if not self.server.fixture.frame_release.wait(8):raise TimeoutError('gate-not-released')
     if request['method']=='Runtime.enable':send(c,{'method':'Runtime.executionContextCreated','params':{'context':{'id':1,'uniqueId':'context-1','auxData':{'isDefault':True,'frameId':'FRAME1'}}}})
     result=self.server.fixture.rpc(request)
     if result.get('_close'):return
@@ -152,7 +161,7 @@ def selftest():
  print(json.dumps({'server_only_synthetic_modes':count,'passed':True,'native_runtime_not_tested':True,'host':False}))
 
 def main():
- parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--binary',type=Path);parser.add_argument('--build-canonical',action='store_true');parser.add_argument('--out',type=Path);parser.add_argument('--profile-directory',type=Path);parser.add_argument('--timeout',type=float,default=90);parser.add_argument('--self-test',action='store_true');args=parser.parse_args()
+ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--binary',type=Path);parser.add_argument('--build-canonical',action='store_true');parser.add_argument('--out',type=Path);parser.add_argument('--profile-directory',type=Path);parser.add_argument('--timeout',type=float,default=90);parser.add_argument('--self-test',action='store_true');parser.add_argument('--interleave-test',action='store_true');args=parser.parse_args()
  if args.self_test:selftest();return 0
  if not args.out or (bool(args.binary)==bool(args.build_canonical)):parser.error('--out and exactly one of --binary/--build-canonical are required')
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
@@ -169,12 +178,13 @@ def main():
   (out/'COMPILE-C.json').write_text(json.dumps(compile_receipt,indent=2)+'\n')
   if compiled.returncode:print(json.dumps(compile_receipt));return 1
   args.binary=binary
- server=Server();thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+ server=Server();server.fixture.interleave_enabled=args.interleave_test;thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
  env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin'}
  if args.profile_directory:args.profile_directory.mkdir(parents=True,exist_ok=True);env['LLVM_PROFILE_FILE']=str(args.profile_directory.resolve()/'zcode-runtime-fixture-%p.profraw')
+ native_flag='--zcode-driver-interleave' if args.interleave_test else '--zcode-runtime-fixture'
  start=datetime.datetime.now(datetime.timezone.utc).isoformat();timed_out=False
  try:
-  try:r=subprocess.run([str(args.binary.resolve()),'--zcode-runtime-fixture',str(server.server_address[1])],capture_output=True,timeout=args.timeout,env=env);code=r.returncode;stdout=r.stdout;stderr=r.stderr
+  try:r=subprocess.run([str(args.binary.resolve()),native_flag,str(server.server_address[1])],capture_output=True,timeout=args.timeout,env=env);code=r.returncode;stdout=r.stdout;stderr=r.stderr
   except subprocess.TimeoutExpired as e:timed_out=True;code=None;stdout=e.stdout or b'';stderr=e.stderr or b''
  finally:server.shutdown();server.server_close();thread.join(timeout=2)
  (out/'stdout.bin').write_bytes(stdout);(out/'stderr.bin').write_bytes(stderr);(out/'mock-protocol.json').write_text(json.dumps(server.fixture.log,indent=2)+'\n')
@@ -191,6 +201,12 @@ def main():
    'canonical_source_sha256':source_sha,'canonical_source_bytes_unchanged_after':unchanged,'compile_receipt':compile_receipt,'binary_sha256':hashlib.sha256(args.binary.read_bytes()).hexdigest(),
    'native_fixture_exit':code,'native_fixture_timed_out':timed_out,'host':False,'factory_captured':False,'App_user_data_captured':False}
   (out/'EXPRESSION-BINDINGS.json').open('x').write(json.dumps(binding,indent=2)+'\n')
- result={'argv':[str(args.binary.resolve()),'--zcode-runtime-fixture','<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':True,'OS_query_scope':'native test binary self-PID listener metadata only','expression_count':len(captures),'same_ready_instance_pair':capture_complete,'expression_sha256':expression_sha,'passed':code==0 and exercised and capture_complete}
+ interleave_asserted=False
+ if args.interleave_test:
+  try:
+   value=json.loads(stdout)
+   interleave_asserted=value=={'variant':'safe','inspectBusy':True,'launchReady':True,'lockReacquired':True,'realHost':False}
+  except (ValueError,TypeError):pass
+ result={'argv':[str(args.binary.resolve()),native_flag,'<owned-port>'],'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'native_exit':code,'timed_out':timed_out,'runtime_protocol_exercised':exercised,'server_closed':True,'host_executed':False,'real_OS_queries':not args.interleave_test,'OS_query_scope':('injected fake listener; actual synthetic temp file lock' if args.interleave_test else 'native test binary self-PID listener metadata only'),'expression_count':len(captures),'same_ready_instance_pair':capture_complete,'expression_sha256':expression_sha,'interleave_asserted':interleave_asserted,'passed':(code==0 and not timed_out and interleave_asserted) if args.interleave_test else (code==0 and exercised and capture_complete)}
  (out/'report.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 0 if result['passed'] else 1
 if __name__=='__main__':raise SystemExit(main())

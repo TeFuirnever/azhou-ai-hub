@@ -1,12 +1,12 @@
 # 功能详细设计：Agent Skin 首期 Codex 适配
 
-2026-10-27 实机反馈后的设置入口与验收变更见[冷启动验收修订](host-acceptance-fixes.md)；其中的点击入口替代本文历史的 Command-Option-B 约定。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
 
 ## 0. 文档控制与阅读入口
 
 | 字段 | 内容 |
 |---|---|
-| Detail ID / 版本 | `DETAIL-2026-001` / `0.5` |
+| Detail ID / 版本 | `DETAIL-2026-001` / `0.4` |
 | 状态 / 日期 | Draft / 2026-10-27 |
 | 产品 / 包名 | Agent Skin / `agent-skin`；名称与首期范围已经用户确认，更名尚未实施 |
 | 产品范围 / 首期宿主 | 面向 AI 工具的启动动画、壁纸与外观设置；本轮只实现 Codex 适配 |
@@ -14,9 +14,9 @@
 | 当前阶段 | Agent实施基线；目标代码为Planned，实际验证记录与生产门分别见下方链接 |
 | 文档剖面 | Baseline；模板符合性映射见 §17 |
 | 模板来源 | [feature-detailed-design v2.3](../../../skills/super-arch-doc/references/templates/feature-detailed-design.md)，按 [design-doc](../../../skills/super-arch-doc/references/templates/design-doc.md) 受控剪裁 |
-| 写作依据 | `writing-for-agents` 的信息层级、按分支披露、单一真源和逐步完成判据；本机规范来源为 `writing-for-agents/SKILL.md（本机安装的写作规范）` |
+| 写作依据 | `writing-for-agents` 的信息层级、按分支披露、单一真源和逐步完成判据；本机规范来源为 `/Users/guanxueliang/.agents/skills/writing-for-agents/SKILL.md` |
 | 设计 / 实现 Owner | 本文由 Codex 编写；未来实现 Owner 由维护者指定 |
-| 决策 / 视觉 / 发布 Owner | 仓库维护者；已确认产品名、包名、首期宿主与9票粒度/依赖，其余设计及视觉/生产门仍按各自判据批准 |
+| 决策 / 视觉 / 发布 Owner | 仓库维护者；已确认产品名、包名与首期宿主范围，其余设计、票据及视觉产物尚待批准 |
 | 关联 PRD / 上位架构 | 无独立 PRD/ARCH；需求来自本次用户指令，约束来自 [AGENTS.md](../../../AGENTS.md)、[集成约定](../../integrations.md)、[安装生命周期](../../../packages/codex-startup-animation/docs/installation-lifecycle.md) |
 | 源基线 | [研读 §1](source-analysis.md#1-证据身份与读取范围)；S 与 H 分别固定，不以共同导入 commit 推定相同 |
 | 实现 / 测试结果 | 目标实现尚未开始；各轮文档及基线验证见[交付记录](acceptance.md)和[评审记录](REVIEW.md)，生产晋级规则见[生产操作](production-runbook.md) |
@@ -322,7 +322,7 @@ Codex 专用的 Bundle ID、主可执行文件、唯一安装入口、安装器�
 
 ## 14. 实施顺序与文件变更
 
-前置命名/迁移工作与A–F的输入、文件Owner、依赖和完成判据维护在[执行指南§3](implementation-guide.md#3-agent工作单)；构建资源和所有消费方的同步改动见[执行指南§2](implementation-guide.md#2-构建与集成衔接)。用户于2026-10-27确认9票粒度及00→01→02→03→04→05→06→07→08完成依赖；票据编号和执行状态以GitHub为准，映射见执行指南§3。选择下一单前核对依赖和当前回执，按该单列出的完整T范围验收。
+前置命名/迁移工作与A–F的输入、文件Owner、依赖和完成判据维护在[执行指南§3](implementation-guide.md#3-agent工作单)；构建资源和所有消费方的同步改动见[执行指南§2](implementation-guide.md#2-构建与集成衔接)。Tracker票据已于2026-10-27创建为 #352–360（2026-11-06核验：#352–358已关闭，#359–360开放），实时状态以GitHub为准；后续粒度调整不把本页草案当成新的已批准issues。选择下一单前核对依赖和当前回执，按该单列出的完整T范围验收。
 
 §5的Module表定义职责与调用表面，不代替工作单的文件归属和测试要求。集成先证明可信接入与页面清理，再接动画、设置和构建；可并行部分以执行指南列出的真实依赖边为准。进入真实宿主和日常入口前，转到[生产操作](production-runbook.md)核对相应门与当前授权。
 
@@ -361,7 +361,6 @@ Codex 专用的 Bundle ID、主可执行文件、唯一安装入口、安装器�
 
 - [ ] 维护者批准字段、状态、资源预算与替换范围。
 - [x] 用户确认 Agent Skin / agent-skin 面向 AI 工具，首期只完成 Codex 适配；此确认不代替其他设计、票据或生产门批准。
-- [x] 用户确认9票粒度与完成依赖，授权创建GitHub issues；此确认不授权实现、真实宿主操作、安装或发布。
 - [ ] 目标支持版本和授权默认素材已明确。
 - [x] PlantUML 已真实渲染检查，图文一致（本机已有@plantuml/core，4张；不是CLI gate运行）。
 - [ ] 每项 Must 需求有实现及本轮验证证据。
@@ -375,4 +374,3 @@ Codex 专用的 Bundle ID、主可执行文件、唯一安装入口、安装器�
 | 0.2 | 2026-10-26 | 生产校准：原生/页面schema、早退/跳过、构建/adapter衔接、agent工作单及生产操作；修订图2并补设置时序 | 用户要求补到可指导agent进入生产；实现与人工门仍分开 |
 | 0.3 | 2026-10-26 | writing-for-agents终检：先读契约再实现、修正章节指针、统一工作单真源、消除状态和busy措辞歧义；图与技术契约未改 | 用户要求最后检查agent可执行性 |
 | 0.4 | 2026-10-27 | 明确 Agent Skin / agent-skin 产品定位和 Codex 首期范围；补包更名、旧安装及快照衔接边界，保持宿主运行协议与图不变 | 用户已确认名称与首期范围；更名未实施，票据粒度和依赖待确认 |
-| 0.5 | 2026-10-27 | 记录用户批准9票粒度和完成依赖，补唯一工作单映射；公开设计副本去除本机路径，运行契约与图不变 | 仅授权立票；更名、代码和生产操作未实施 |

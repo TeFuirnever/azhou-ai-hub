@@ -24,7 +24,7 @@ python3 -B tools/test-functional-verdict.py
 python3 -B tools/test-unit-coverage.py
 ```
 
-需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24；Pet UT 还需 `Pillow==12.3.0`。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。总报告在 `.build/unit-coverage/report.json`；报告为失败时不得写“UT 95% 已完成”。
+需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24；Pet UT 还需 `Pillow==12.3.0`。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。最新报告在 `.build/unit-coverage/report.json`，每次运行的报告和证据保存在 `.build/unit-coverage/runs/` 下；报告为失败时不得写“UT 95% 已完成”。
 
 ## 功能用例
 
@@ -35,6 +35,7 @@ python3 -B tools/test-unit-coverage.py
 | FT-LOCALE | 官方页面英文、浏览器语言中文；切换官方页面语言 | 页面语言优先；文案、bot、设置和动画同步，不新增语言偏好 | `localization.test.mjs`、`startup.test.mjs`、生成载荷浏览器测试；实机观察官方界面 |
 | FT-FINDER | 按当前 macOS 语言查看已安装应用；检查中英资源 | 英文显示 `Azhou AI Lab for Codex`，中文显示主题指定名称；真实安装文件名不充当本地化结论 | `test-startup-build.py` 的 Bundle 回退名与本地化资源；`test-installed-acceptance.py` 的 Finder API；真实 Finder 窗口检查 |
 | FT-DOCK | 将旧版固定到 Dock，升级后再查看标签和启动目标 | 标签符合 macOS 语言，只启动唯一新入口；旧固定项或缓存不能算新版本已通过 | 安装归属 UT；Dock 实际标签与目标需现场验收。没有入口时保留 pending，不能以空列表通过 |
+| FT-ICON-IDENTITY | 使用该宿主已批准的源图 SHA-256 构建，分别在预检前和预检后换入同尺寸的图，并用 Codex 摘要启动 ZCode 构建 | 正确摘要生成经校验的暂存图，替换图或宿主串图被拒绝，原载荷保留 | preflight UT 与真实构建命令的隔离用例。实际 Dock 图案、标签和点击按 FT-DOCK 现场核对 |
 | FT-COLD | 用户完整退出官方宿主，再从阿舟入口启动 | 恰好一次冷启动、控制器就绪、动画结束和壁纸生效；没有第二个宿主 | 原生协议 UT、生成载荷测试；`test-installed-acceptance.py --cold-start` 加视觉审阅 |
 | FT-HOT | 官方宿主保持运行，再打开阿舟入口 | 激活同一 PID；不重播、不覆盖控制器、不退出宿主 | 原生事件 UT；实机对照前后 PID、事件和页面 |
 | FT-LATE-SHELL | 页面外壳晚于 12 秒动画出现 | 动画准时结束，壁纸继续等待并生效，不重播动画 | `startup.test.mjs`、`test-startup-browser.mjs` 的生成载荷延迟场景 |
@@ -43,9 +44,12 @@ python3 -B tools/test-unit-coverage.py
 | FT-RETRY | 壁纸失败后重试；并发重试；健康状态重复调用 | 最多一个尝试、10 秒上限；保留已过滤的先前原因；不重播动画；健康状态只复查 | 控制器及编译后的 helper 表达式测试 |
 | FT-SURFACES | 深浅色、窄窗、CSP 拒绝图片或样式、未知遮罩 | 真实图片解码；保留输入框、菜单和代码块；失败可见；未知层不被擅自清除 | 渲染器 UT、CSP/布局浏览器测试；实机检查裁切、人物及文字可读性 |
 | FT-SETTINGS | 保存/取消/恢复草稿、并发冲突、配额或超时、强度为零；查看运行版本；窄窗、短窗用 Tab 遍历设置 | 保存成功才应用；取消保留旧值；失败可恢复；零强度关闭背景；标题下版本与运行载荷一致；键盘焦点环可见且不被底部操作栏遮挡 | `image-settings.test.mjs`、存储浏览器测试、保存与草稿预览及生成载荷版本显示场景、`test-startup-browser.mjs` 的受限视口设置键盘矩阵 |
-| FT-SIDEBAR | 动画期间跳过，Home 导航可见或不可用；加载层覆盖页面控件；更新下载按钮、输入区或头像出现；侧栏滚动、窄窗或导航重建 | 宿主尚无可见且可命中的页面控件时，Appearance 保持隐藏。仅有几何可见但被加载层遮挡的控件不算就绪；覆盖层移除后重试。唯一可见的 Your dot 出现时（包括数字和无障碍未读提示出现、改变及清除），入口在 Home 导航正常流中紧随其后、位于 Pinned 前，并保留 6 像素上间距；Home 不可用但宿主控件可交互时，使用避开控件、输入区和 composer 的备用位置。无空位时暂时隐藏，空位恢复后重新显示 | `startup.test.mjs`、`test-startup-browser.mjs` 的未读提示出现/清除、导航重建、早期跳过与延迟 shell、加载层遮挡负例和移除后恢复、控件到达后的 fallback 恢复、导航回迁、碰撞、入口点击、窄栏和动态控件场景；合成 loading overlay 不证明官方 loading DOM 的具体形态，同一运行版本的真实宿主位置需现场验收 |
+| FT-SIDEBAR | 动画期间跳过，Home 导航可见或不可用；加载层覆盖页面控件；更新下载按钮、输入区或头像出现；侧栏滚动、窄窗或导航重建 | 宿主尚无可见且可命中的页面控件时，Appearance 保持隐藏。仅有几何可见但被加载层遮挡的控件不算就绪；覆盖层移除后重试。唯一可见的 Your dot 出现时（包括数字和无障碍未读提示出现、改变及清除），入口在 Home 导航正常流中紧随其后、位于 Pinned 前，并保留 6 像素上间距；Home 不可用但宿主控件可交互时，使用避开控件、输入区和 composer 的备用位置。无空位时暂时隐藏，空位恢复后重新显示 | `startup.test.mjs`、`test-startup-browser.mjs` 的直接按钮与列表包装结构、未读提示出现/清除、早期跳过、遮挡恢复、重复候选、导航重建、碰撞、入口点击和窄栏场景；合成场景不证明官方 DOM 或同一运行版本的真实宿主位置，须现场验收 |
 | FT-INSTALL | 旧名称升级、跨来源接管、失败中断后重试、未知同名应用 | 先验证新入口；保留归属与签名边界；唯一实体和登记；未知对象不被删除 | `test-install-macos.py`、构建 UT、实际 `install-macos.py --check` |
 | FT-ASSETS | 缺图、非法路径、符号链接、错误尺寸、旧构建输入 | 构建拒绝并保留原有效入口；私有素材不进入 Git | preflight、构建器、校验器、资源处理及 shell UT |
+| FT-ACCEPT-ARM | 宿主指纹漂移后重钉并挂机离线验收：逐文件核对全部钉点面（含探针 EXPECTED 等工具自带基线）、运行目录 0700、TCC 消毒（`env -i` 逐触面可读、监督链零 `~/Desktop` 依赖）、LaunchAgent 存活心跳 | 任一旧指纹字面量零命中；裸环境可读全部触面；心跳按周期跳动且存活超 2 分钟 | `acceptance-harness.test.mjs`；挂机清单按 [offline-acceptance-runbook.md](offline-acceptance-runbook.md) 逐项执行 |
+| FT-ACCEPT-RUN | 用户退出日常宿主后监督链自动执行：隔离实例 → 只读探针确认主页面 → CDP 页面截图（URL 带 `?locale=` 查询串）→ 生产 UI 十步 | 探针 exit 0 且唯一主页面；截图为有效 PNG；UI 十步全绿 exit 0 | `acceptance-harness.test.mjs` 的 E2E 切片（`/json` 带查询串端到端解析）；全链按 runbook 实机执行 |
+| FT-ACCEPT-CLOSEOUT | 验收失败路径：预检拒绝、UI 中途失败、宿主丢失 | 每次失败都落盘 STATUS/HOST-CLOSEOUT/PIPELINE-DONE 并自动重开宿主；退避在收尾之后；截图在盖章前必须经操作者事后审阅 | `acceptance-harness.test.mjs` 的幂等目录与错误码契约；closeout 语义按 runbook 复苏清单人工核对 |
 
 Finder/Dock 使用 **macOS 语言**；注入的动画和外观使用 **官方宿主页面语言**。这两条合同分别验收，不能用应用内按钮为英文推断 Finder/Dock 已通过。
 

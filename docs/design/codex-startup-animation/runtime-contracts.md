@@ -1,8 +1,6 @@
 # CDP 同窗口启动：运行契约
 
-2026-10-27 验收修订：设置入口以[冷启动验收修订](host-acceptance-fixes.md)为准，替代下文历史的 Command-Option-B 约定；其余运行协议保持有效。
-
-2026-10-28 体验修订：保存设置后应用工作区背景并结束设置，不自动重播；动画预览独立使用草稿。以下保存状态和消息规则已相应更新。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
 
 本文所有 MUST 均是 `DETAIL-2026-001` 的 **Planned（目标态）** 契约，不是 H 当前实现声明。S 参数快照和出处见[研读](source-analysis.md)；本文选择在 H 重实现的值以此处为准。入口、步骤和追溯见[详细设计](detailed-design.md)。
 
@@ -23,7 +21,7 @@
 
 `status()` 的必需字段：`owner`、`version`、`phase`、`runId`、`ready`、`completed`、`overlay`、`wallpaper`、`reason`。`phase` 为 `loading|playing|settings|complete|failed|timeout|disposed`；reason 成功时为空串，失败时为固定错误分类。wallpaper 是对象，含 `applied`、`reason`、`imageDecoded` 及 H 现有实际样式核查结果，不用单个 true 遮蔽部分失败。清理后可由 dispose 的返回值报告 disposed；全局已删除时，外部查询应识别“未安装”，不访问旧闭包。
 
-补齐字段类型：owner为上文固定string，version为整数1，runId为本页正整数，ready/completed/overlay为boolean，reason为RC6固定string；增加`completion:null|{cause:"natural"|"skip"|"settings-cancel"|"settings-save",beforeReady:boolean}`，每轮开始置null。wallpaper至少含`{applied:boolean,reason:string,imageDecoded:boolean}`；图片、轮廓和用户文字不进入status。只允许unknown optional字段前向扩展，必需字段缺失/类型错误不能当作旧版本成功。
+补齐字段类型：owner为上文固定string，version为整数1，runId为本页正整数，ready/completed/overlay为boolean，reason为RC6固定string；增加`completion:null|{cause:"natural"|"skip"|"settings-cancel",beforeReady:boolean}`，每轮开始置null。wallpaper至少含`{applied:boolean,reason:string,imageDecoded:boolean}`；图片、轮廓和用户文字不进入status。只允许unknown optional字段前向扩展，必需字段缺失/类型错误不能当作旧版本成功。
 
 每次创建iframe传入`{runId,intent:"play"|"settings",protocolVersion:1,assets}`。首次冷启动intent=play；完成后打开设置intent=settings。settings意图也要载入有效资源再开放交互，但不自动播放。ready只在loading接受一次：play进入playing，settings进入settings并取消watchdog；settings-open仅在resourcesReady且已ready的playing/settings接受。父与iframe都必须在resourcesReady=false时忽略⌘⌥B，避免子页绕过父端loading守卫。
 
@@ -40,10 +38,10 @@ CDP `Runtime.evaluate` 必须使用 `returnByValue=true`；安装可 `awaitPromi
 | `complete` | 播完、skip，或settings的×/Esc取消 | `skipped:boolean`；settings取消必须为true | loading/playing的skip与settings取消均可接受；记录completion，completed=true并删除iframe；取消不写库、不重播 |
 | `assetError` | 解码或默认路径不可用 | 固定 `reason` | 标失败并清理覆盖层；若该runId已终结则忽略迟到消息；不输出图像字节 |
 | `settings-open` | 设置框打开成功 | 无 | 暂停动画，取消本轮 watchdog |
-| `settings-close` | 保存已提交，背景应用流程结束或用户关闭提示 | 无 | 结束当前设置 iframe，记录 `settings-save` 完成状态；不创建新播放轮次 |
+| `settings-close` | 保存提交成功，需要重播 | 无 | 结束旧设置 iframe，新建播放 iframe并传入新 runId；重置 ready/completed；重新进入 loading |
 | `restore` | 用户点击恢复外观 | 无 | dispose；不等待 complete |
 
-保存成功的 iframe 发出 `settings-close` 后必须停止自己的工作，不在旧 iframe 上调用 replay。预览使用隔离的草稿副本，不保存设置或修改工作区背景。S 的 `reveal` 是旧原生预览交接动作；同窗口正式运行不隐藏应用，也不需要 reveal。未知 action 忽略并在测试断言无副作用；不把 action 字符串用作原生命令或 JS 源码。
+保存成功的旧 iframe 发出 `settings-close` 后必须停止自己的工作，不在旧 iframe 上调用 replay。新 iframe 重新读取 committed、解码、预热并发 ready；消息不需要临时换 runId 的隐含双向握手。S 的 `reveal` 是旧原生预览交接动作；同窗口正式运行不隐藏应用，也不需要 reveal。未知 action 忽略并在测试断言无副作用；不把 action 字符串用作原生命令或 JS 源码。
 
 `⌘⌥B` **同时在父页面和当前iframe的window注册**；键盘事件不会跨文档冒泡。父页面处理器调用Page Controller的openSettings；iframe处理器调用同一个面板的本地openSettings，再发settings-open；两处均preventDefault且不重复打开。完整结束后只保留父页面监听。动画开始后默认隐藏设置按钮，允许快捷键打开。设置面板通过dialog焦点约束；进入前记住activeElement。删除iframe时，只在原元素仍连接且用户焦点仍在owned iframe/文档失焦时归还，避免抢走用户后来选择的官方输入焦点。
 
@@ -54,8 +52,6 @@ CDP `Runtime.evaluate` 必须使用 `returnByValue=true`；安装可 `awaitPromi
 使用 `about:blank` 临时 iframe、父 realm 编译的闭包和显式绑定的 iframe `document/performance/indexedDB/Image/Path2D/URL/requestAnimationFrame/cancelAnimationFrame`，避免删除 iframe 后动画仍在父 realm 调度。闭包 bridge 为当前 iframe 附加 source 身份；真实 `message` 监听也执行相同检查。不得仅凭 type、origin 字符串或 runId 信任消息。
 
 生产采用S同类闭包bridge：父端在mount时绑定`SEND(data)`，由该闭包补入source=currentFrame.contentWindow并调用统一handler；不依赖跨文档冒泡，也不接受data自报source。预览Adapter才用postMessage，必须仍以event.source核对其测试iframe；两条transport共享同一action/schema校验。mount显式设置`module=undefined`，绑定`window/document/location/performance/indexedDB/Image/Path2D/URL/requestAnimationFrame/cancelAnimationFrame/setTimeout/clearTimeout`；timer、事件监听及临时对象均登记在当前iframe清理域。这个同源about:blank是受信任载荷的执行环境，不是安全沙箱，禁止在其中运行用户脚本或任意HTML。
-
-生产闭包的`SEND(data)`保留统一handler的返回值；`background`返回当前父端核验后的壁纸结果，已提交设置的子页据此显示“已保存、壁纸未应用”等部分成功状态。该返回值沿用原bridge和source/runId校验，不新增消息通道；旧run或非当前frame的结果不得更新状态。
 
 在发ready前验证动画样式哨兵computedStyle、非零可视尺寸及两图实际解码；data图片或iframe样式被官方CSP阻断时返回page-unsupported/asset-invalid并清层。Blob壁纸的CSP/样式阻断只报告wallpaper-unsupported，不把它伪装成动画不可用。控制器可监听securitypolicyviolation作为诊断补充，但不能靠“未收到事件”判成功，不修改/放松宿主策略。生产验收同时检查这些策略在真实支持版本有效。
 
@@ -189,15 +185,14 @@ end
 | 身份位图、Path2D、粒子 | Animation | 释放全部动画引用 | 释放 |
 | input Blob URL | Image Settings | 导入结束已撤销 | 仍有的撤销 |
 | wallpaper Blob URL、样式表 | Wallpaper | 保留一份静态已提交图 | 撤销/移除 |
-| message、外观入口及其事件 | Page Controller | 移除消息监听；保留点击入口与焦点反馈，不拦截设置快捷键 | 移除入口及事件 |
-| 有界 shell observer/timer | Builder wrapper / 当前轮次 | 已完成等待或随本轮 iframe 拆除取消 | 断开观察器、清除 timer，禁止迟到应用 |
+| source/message/keydown 监听 | Page Controller | 保留设置所需监听，不保留轮询 | 移除 |
 | owned 全局 | Page Controller | 保留 status/openSettings/dispose | 仅 identity 仍匹配时删除 |
 | 原始宿主属性/内联样式值及优先级 | Wallpaper | 保留 owned 快照 | 条件恢复，不覆盖宿主后来变更 |
 | IndexedDB | Image Settings | 保留 | 保留 |
 | CDP WebSocket、pending | 原生 Session | ready 后已关闭 | 接入失败时关闭 |
 | 官方进程 CDP 监听端口 | 官方进程 | 仍存在 | 仍存在，完整退出官方进程才关闭 |
 
-settings 状态没有持续动画，不运行常驻扫描。壁纸 status 在调用时核查 DOM。允许两类有界临时观察器：首次 document.body 尚未出现时等待 body，从安装开始计入 25 秒 watchdog，body 出现、超时或 dispose 时立即断开；本轮壁纸请求在 body 已存在但受支持 shell 尚未挂载时，最多等待 5 秒，继续沿用 renderer 的 root/frame/main-or-page 校验。shell 就绪或等待超时后断开并清 timer；skip、expire、dispose 拆除本轮 iframe 时，在该 DOM 变更回调中取消等待并清理。每个回调与委托 renderer 前均核验本轮仍有效，不得读取聊天文本、触发原生重注入或在后来挂载的页面上复活。
+settings 状态没有持续动画，不运行常驻扫描。H 壁纸当前没有 MutationObserver，status在被调用时核查DOM；目标也不增加持续DOM扫描。仅在首次document.body尚未出现时允许临时观察器等待body；从安装开始计入25秒watchdog，body出现、超时或dispose时立即断开。任何回调均不得读取聊天文本或触发原生重注入。
 
 首次加载、保存后重播和设置资源准备共用一个`expire(runId)`转换：先设置phase=timeout/reason=overlay-timeout、终结本轮并使generation失效，再清理iframe与临时资源。禁止只删除iframe却让status仍报playing；settings已成功打开后没有播放watchdog，设置内部操作使用RC4各自预算。没有新增轮询来代替这些事件和timer。
 

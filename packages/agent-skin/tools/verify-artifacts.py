@@ -424,12 +424,23 @@ def read_marker(path, required=False):
     return marker
 
 
-def write_marker(path):
+def write_marker(path, *, approved_icon_sha256=None):
     path = staged_path(path)
     actual, info = identity(path)
     if actual != IDENTITY or (info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != (VERSION, BUILD):
         raise RuntimeError('只能为当前版本、本项目身份的构建载荷写入来源标记。')
     inputs = source_inputs()
+    if approved_icon_sha256 is not None:
+        approved = approved_icon_sha256.lower()
+        icon_input = load_theme_config(ROOT)['identity']['iconInput']
+        if inputs.get(icon_input) != approved:
+            raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
+        # Render from the verified copy even if the original changes after recording inputs.
+        icon_snapshot = path.parent / 'approved-icon.png'
+        shutil.copyfile(ROOT / icon_input, icon_snapshot)
+        with icon_snapshot.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != approved:
+                raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
     marker = {
         'schema': 1, 'projectID': PROJECT_ID, 'projectRoot': str(ROOT),
         'bundleID': IDENTITY[0], 'executable': IDENTITY[1],
@@ -636,12 +647,14 @@ def verify_dsh_plugin(path):
     except UnicodeDecodeError as exc:
         raise RuntimeError('DSH 插件 client.js 必须是 UTF-8。') from exc
     binding = ('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, buildNumber: '
-               + json.dumps(BUILD) + ' } }, {')
+               + json.dumps(BUILD) + ' }, sidebarEntry: false }, {')
     bound_once = (
         'window.__ModuleLoader__.load({', "id: 'azhou-agent-skin',", 'factory(require) {',
         'const runStartup = (registerCleanup) => {', 'function createDSHPageAdapter(', binding,
         '    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });',
-        'return bootstrapStartup({', 'const inject = [];', 'function apply(ctx) {',
+        'return bootstrapStartup({', "const inject = ['slots'];", 'function apply(ctx) {',
+        "slots.inject('settings.section', function* () {",
+        "name: 'settings.section', id: 'azhou-appearance', order: 40,",
         'module.exports = { apply, inject };', 'return module.exports;',
         "controllerOwner: 'azhou-dsh-startup'", "owner: 'azhou.dsh-startup-animation'",
         'const DEFAULT_ASSETS = Object.freeze(',
@@ -1172,7 +1185,7 @@ if __name__ == '__main__':
         if options.publish:
             publish(options.publish)
         elif options.write_marker:
-            write_marker(options.write_marker)
+            write_marker(options.write_marker, approved_icon_sha256=os.environ.get('AZHOU_APPROVED_ICON_SHA256'))
         elif options.write_bundle_info:
             write_bundle_info(options.write_bundle_info)
         elif options.check_inputs:

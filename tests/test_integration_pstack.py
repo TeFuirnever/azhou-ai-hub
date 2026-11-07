@@ -6,7 +6,9 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -15,6 +17,32 @@ from package_fixture import configure_package
 from native_codex_fixture import install_fake_codex
 from scripts import integration_common as common
 from scripts import integration_pstack as pstack
+
+
+class PstackSessionStartTest(unittest.TestCase):
+    def test_canonical_codex_hook_routes_to_registered_skills(self):
+        package = pstack.ROOT / "packages/pstack-agent-harness"
+        marketplace = json.loads((package / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+        plugin, marketplace_name = pstack.PLUGIN.split("@")
+        self.assertEqual(marketplace["name"], marketplace_name)
+        entry = next(item for item in marketplace["plugins"] if item["name"] == plugin)
+        plugin_root = package / entry["source"]["path"]
+        manifest = json.loads((plugin_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["name"], plugin)
+
+        with tempfile.TemporaryDirectory() as codex_home:
+            command = ["sh", str(plugin_root / "hooks/session-start.sh"), "codex"]
+            env = {**os.environ, "CODEX_HOME": codex_home, "CLAUDE_PLUGIN_ROOT": str(plugin_root)}
+            output = subprocess.check_output(command, env=env, encoding="utf-8", timeout=10)
+            routes = re.findall(r"`([\w-]+):([\w-]+)`", output)
+            self.assertIn((plugin, "poteto-mode"), routes)
+            for namespace, skill in routes:
+                with self.subTest(route=f"{namespace}:{skill}"):
+                    self.assertEqual(namespace, plugin)
+                    self.assertTrue((plugin_root / manifest["skills"] / skill / "SKILL.md").is_file())
+
+            (Path(codex_home) / pstack.SHEET_NAME).write_text(pstack.HOOK_OFF + "\n", encoding="utf-8")
+            self.assertEqual("", subprocess.check_output(command, env=env, encoding="utf-8", timeout=10))
 
 
 class PstackIntegrationTest(unittest.TestCase):

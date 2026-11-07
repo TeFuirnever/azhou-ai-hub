@@ -1,6 +1,6 @@
 # 验收设计与本次文档交付记录
 
-2026-10-27 更新：T08/T26 的设置入口按[冷启动验收修订](host-acceptance-fixes.md)执行，旧快捷键不再拦截；其余适用验收仍需分别留证。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。下文原本机渲染截图路径已不可用，不作为当前证据。
 
 本文分开记录未来实现的验收计划和本次实际执行结果。需求入口见[详细设计](detailed-design.md)，具体字段见[运行契约](runtime-contracts.md)。未经实际执行的项目均为 Planned。
 
@@ -42,21 +42,19 @@
 
 ## 2. 执行入口与分层
 
-下文`SOURCE_CHECKOUT`和`HUB_CHECKOUT`分别为实施者已按source-analysis§1核验的S源仓与Hub绝对根目录；执行前在本机设置并核对，不使用维护者个人路径。
-
 命名/迁移前置单N复用现有验收ID，增加以下隔离场景：T21验证新`agent-skin`入口、canonical路径与manifest一致，旧输入plan在更名后不得继续授权；T22验证现有安装source标记的保留/接管顺序，无法证明来源时保持拒绝；T23验证公开说明、组件名与实际支持范围一致；T28验证更名后旧Hub-owned测试安装仍由原snapshot/receipt及核验器清理；T29验证更名不绕过版本检查。前置单完成不替代G5日常安装或真实宿主验收，更不表示其他AI工具已支持。
 
 以下前两组是**现有**命令；新增测试路径在实现切片中建立后，再将真实命令补入回执，本文不伪造可执行入口。
 
 ```sh
 # 源项目：三个既有Node行为测试，不启动真实官方应用
-cd "$SOURCE_CHECKOUT"
+cd /Users/guanxueliang/Desktop/oh-my-ai/codex-startup-animation
 node --test tools/extension.test.mjs
 ```
 
 ```sh
 # Hub：全仓交接门
-cd "$HUB_CHECKOUT"
+cd /Users/guanxueliang/Desktop/oh-my-ai/azhou-ai-hub
 python scripts/verify.py
 
 # 安装器和Pet既有隔离回归；实际代码变更按适用性运行
@@ -117,7 +115,7 @@ python -B packages/codex-startup-animation/tools/test-import-codex-pet.py
 | 只读宿主元数据 | Info.plist和codesign描述读取：官方26.1021.31345/build21828，Team2DC432GLL2；未深验签名、启动、连接或注入真实Codex |
 | 文档确定性门 | 7份文档的verify_doc.py配平/链接/图注入账/变更记录/空白检查通过；最终结果以此节后实际校验为准 |
 | 真实PlantUML渲染 | 复用本机已有@plantuml/core1.2026.6和其Viz引擎，在chrome-devtools-axi隔离Chrome中渲染4/4，无错误，截图目检无截断或重叠；未安装CLI或修改系统配置 |
-| 渲染定位 | 截图留于维护者本地证据目录，不进入Git；SVG仅为临时校验，权威图仍为Markdown内PlantUML |
+| 渲染定位 | 本机截图位于`/Users/guanxueliang/.codex/visualizations/2026/10/26/01a1789b-52c0-7280-b449-d8d533bd3437/cdp-design-v0.2.png`，不进入Git；SVG仅为临时校验，权威图仍为Markdown内PlantUML |
 | 本轮全仓门 | 本机Python3执行scripts/verify.py，退出0，8/8 gate通过：repository policy1578文件、584单元、42 router、26 installer及benchmark wiring/whitespace；均为现有代码/隔离测试，不证明新设计已实现 |
 | 未重复项 | S三个Node测试代码未变，引用v0.1结果；Pet运行时未变，不扩大本轮专项；未作真实宿主、视觉资产或生产安装验收 |
 | 独立复核 | 源行为explorer+生产契约reviewer；结构5/5、技术4/5；已报P1/P2/P3修订后定向复核全部闭合，见REVIEW§5 |

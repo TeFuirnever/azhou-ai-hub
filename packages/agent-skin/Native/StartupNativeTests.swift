@@ -337,6 +337,11 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--zcode-driver-interleave"),
+           index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
+            try await zcodeDriverInterleave(port: port)
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--zcode-runtime-fixture"),
            index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
             let checks = try await zcodeRuntimeFixtureChecks(port: port)
@@ -402,6 +407,36 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        if let failure = ZCodeNativeRuntime.normalizedAttachFailure(ZCodeBoundCDP.Failure.deadline, deadline: 110, now: 105, cancelled: false) as? ZCodeAttachFailure {
+            if case .deadline = failure { expect(true, "CDP deadline maps to typed attach deadline") } else { fatalError("wrong CDP deadline mapping") }
+        } else { fatalError("missing CDP deadline mapping") }
+        if let failure = ZCodeNativeRuntime.normalizedAttachFailure(CancellationError(), deadline: 110, now: 105, cancelled: false) as? ZCodeAttachFailure {
+            if case .cancelled = failure { expect(true, "cancellation maps to typed attach cancellation") } else { fatalError("wrong cancellation mapping") }
+        } else { fatalError("missing cancellation mapping") }
+        if let failure = ZCodeNativeRuntime.normalizedAttachFailure(StartupFailure(reason: "attach-timeout", message: "fixture"), deadline: 110, now: 110, cancelled: false) as? ZCodeAttachFailure {
+            if case .deadline = failure { expect(true, "listener deadline maps to typed attach deadline") } else { fatalError("wrong listener deadline mapping") }
+        } else { fatalError("missing listener deadline mapping") }
+        if let failure = ZCodeNativeRuntime.normalizedAttachFailure(URLError(.timedOut), deadline: 110, now: 110, cancelled: false) as? ZCodeAttachFailure {
+            if case .deadline = failure { expect(true, "URL timeout at deadline maps to timeout") } else { fatalError("wrong URL timeout mapping") }
+        } else { fatalError("missing expired URL timeout mapping") }
+        expect(ZCodeNativeRuntime.normalizedAttachFailure(URLError(.timedOut), deadline: 110, now: 105, cancelled: false) is URLError,
+               "early URL timeout remains a transport error")
+        if let failure = ZCodeNativeRuntime.normalizedAttachFailure(URLError(.cancelled), deadline: 110, now: 105, cancelled: true) as? ZCodeAttachFailure {
+            if case .cancelled = failure { expect(true, "cancelled task maps URL cancellation to cancellation") } else { fatalError("wrong cancelled URL mapping") }
+        } else { fatalError("missing cancelled URL mapping") }
+        expect(ZCodeNativeRuntime.normalizedAttachFailure(URLError(.cancelled), deadline: 110, now: 105, cancelled: false) is URLError,
+               "URL cancellation without task cancellation remains transport error")
+        if let failure = ZCodeBoundCDP.normalizedBoundaryFailure(URLError(.cancelled), deadline: 110, now: 110, cancelled: false) as? ZCodeBoundCDP.Failure {
+            if case .deadline = failure { expect(true, "socket cancellation at RPC deadline maps to deadline") } else { fatalError("socket race misclassified") }
+        } else { fatalError("socket race lost deadline type") }
+        if let failure = ZCodeBoundCDP.normalizedBoundaryFailure(URLError(.cancelled), deadline: 110, now: 110, cancelled: true) as? ZCodeBoundCDP.Failure {
+            if case .cancelled = failure { expect(true, "task cancellation takes precedence at deadline") } else { fatalError("task cancel misclassified") }
+        } else { fatalError("socket race lost cancel type") }
+        expect(ZCodeBoundCDP.normalizedBoundaryFailure(URLError(.cancelled), deadline: 110, now: 105, cancelled: false) is URLError,
+               "early unsolicited socket cancellation remains transport error")
+        if let failure = ZCodeBoundCDP.normalizedBoundaryFailure(NSError(domain: "fixture", code: 1), deadline: 110, now: 111, cancelled: false) as? ZCodeBoundCDP.Failure {
+            if case .deadline = failure { expect(true, "guard error after deadline maps to deadline") } else { fatalError("guard race misclassified") }
+        } else { fatalError("guard race lost deadline type") }
         let failureDiagnostic = WallpaperValidation.diagnostic([
             "failureCode": "shell-timeout", "failureStage": "private renderer text",
         ], index: 0, version: nil)
@@ -3245,12 +3280,12 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     defer { try? FileManager.default.removeItem(at: temporary) }
     let key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"),
         executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app",
-        version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        version: "3.17.2", build: "3.17.2.9661", executableSHA256: "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d")
     let proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
         "recordID": "SYNTHETIC-only", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T14:00:00Z",
-        "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4",
-        "version": "3.17.1.9553", "executableSHA256": key.executableSHA256,
-        "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+        "infoSHA256": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593",
+        "version": "3.17.2.9661", "executableSHA256": key.executableSHA256,
+        "appAsarSHA256": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
         "payloadSHA256": String(repeating: "a", count: 64), "evidenceIDs": ["SYNTHETIC-fixture-not-host"],
         "ownedAppearanceSurface": true, "persistentSettings": true]
     try JSONSerialization.data(withJSONObject: proof).write(to: temporary.appendingPathComponent("zcode-validation.json"))
@@ -3333,7 +3368,7 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
         var listenerFailureEvents: [[String: Any]] = []
         let checked = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
             onEvent: { listenerFailureEvents.append($0) }, installationProbe: {}, listenerCommand: { pid in calls.append(pid);return result })
-        do { _ = try await checked.makeAssembly().attach(process, 110);preconditionFailure("invalid listener evidence accepted") }
+        do { _ = try await checked.makeAssembly().attach(process, 110, .existingPage);preconditionFailure("invalid listener evidence accepted") }
         catch { checks += 1 }
         expect(calls == [process.pid], "only the bound synthetic process is queried once before refusal")
         expect(listenerFailureEvents.count == 1 && Set(listenerFailureEvents[0].keys) == ["stage", "point", "reason"]
@@ -3348,7 +3383,7 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
             cleanNotReadyCalls += 1;fake.uptime = 111
             return .init(status: 1, stdout: Data(), stderr: Data())
         })
-    do { _ = try await notReady.makeAssembly().attach(process, 110);preconditionFailure("clean empty inspection cannot mean ready") }
+    do { _ = try await notReady.makeAssembly().attach(process, 110, .existingPage);preconditionFailure("clean empty inspection cannot mean ready") }
     catch { checks += 1 }
     expect(cleanNotReadyCalls == 1, "empty successful query remains not-ready until bounded deadline")
     fake.uptime = 101
@@ -3366,7 +3401,7 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     for invalidState in [symbolicState, publicState] {
         let rejected = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: invalidState,
             onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("invalid directory must refuse before process query") })
-        do { _ = try await rejected.makeAssembly().attach(process, 110);preconditionFailure("invalid directory accepted") }
+        do { _ = try await rejected.makeAssembly().attach(process, 110, .existingPage);preconditionFailure("invalid directory accepted") }
         catch let error as StartupFailure { expect(error.reason == "profile-isolation-unproven", "directory hint normalization preserves symlink and private-permission guards") }
     }
     var captured: NSWorkspace.OpenConfiguration?
@@ -3408,13 +3443,14 @@ private final class ZCodeRuntimeFixture {
         if let override = self.listenerOverride { return try override(pid) }
         return .init(status: 0, stdout: Data("p\(pid)\nn127.0.0.1:\(self.port)\n".utf8), stderr: Data())
     })
-    init(port: Int, pid: Int32 = 654321) throws {
+    init(port: Int, pid: Int32 = 654321, version: String = "3.17.2", build: String = "3.17.2.9661",
+         executableSHA256: String = "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d") throws {
         self.port = port
         root = FileManager.default.temporaryDirectory.appendingPathComponent("zcode-runtime-unit-" + UUID().uuidString, isDirectory: true).resolvingSymlinksInPath()
         state = root.appendingPathComponent("state", isDirectory: true)
         resources = root.appendingPathComponent("resources", isDirectory: true)
         try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: "3.17.1", build: "3.17.1.9553", executableSHA256: "4dc1fcfa2d4f852bff29feb9b877f73e1b3392f39de0f33ca9e79ab4bee5f6b8")
+        key = HostApplicationKey(host: .zcode, bundleURL: URL(fileURLWithPath: "/Applications/ZCode.app"), executableURL: URL(fileURLWithPath: "/Applications/ZCode.app/Contents/MacOS/ZCode"), bundleIdentifier: "dev.zcode.app", version: version, build: build, executableSHA256: executableSHA256)
         inputs = BoundHostInputs(identity: HostIdentityEvidence(key: key, signingIdentity: "synthetic", evidenceID: "synthetic-only"), findings: [], contractVersion: SkinHostContract.version)
         fake = FakeNativeAppRuntime(arguments: ["SYNTHETIC-ONLY"], resourceURL: resources)
         fake.allocatedPort = port
@@ -3430,8 +3466,8 @@ private final class ZCodeRuntimeFixture {
     func writeProof(_ overrides: [String: Any] = [:]) throws {
         var proof: [String: Any] = ["schema": "agent-skin-zcode-ui-evidence/v1", "contractVersion": SkinHostContract.version,
             "recordID": "SYNTHETIC-NOT-HOST", "recordSHA256": String(repeating: "b", count: 64), "observedAt": "2026-11-02T15:00:00.123Z",
-            "infoSHA256": "4da616bb343d9f86cf2f6bf0f53bcf83d96020cf8bc1080d30302cb681a8b2c4", "version": "3.17.1.9553",
-            "executableSHA256": key.executableSHA256, "appAsarSHA256": "87d5f4cc3e8de078ec0e7699d7a50b3d82034c2219b922906eaca12d42b96501",
+            "infoSHA256": "aa29610c3c02fb37416d8a12322adf58bf1a27270718f07bbbc5ea3efe77c593", "version": "3.17.2.9661",
+            "executableSHA256": key.executableSHA256, "appAsarSHA256": "12a2fc939df2fcb4188699772590f5151f1f2b90556bd34ecb6d44cf0d793cc6",
             "payloadSHA256": hash, "evidenceIDs": ["SYNTHETIC-ONLY-NOT-ACCEPTANCE"], "ownedAppearanceSurface": true, "persistentSettings": true]
         proof.merge(overrides) { _, replacement in replacement }
         try JSONSerialization.data(withJSONObject: proof).write(to: resources.appendingPathComponent("zcode-validation.json"))
@@ -3460,7 +3496,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
         let observed = try await f.assembly.openApplication(160)
         expect(observed == f.process, "cold callback retains exact generation")
         try f.acquire()
-        return try await f.assembly.attach(observed, 160)
+        return try await f.assembly.attach(observed, 160, .existingPage)
     }
     let capabilityFixture = try make()
     let validFindings = ZCodeNativeRuntime.findings(for: capabilityFixture.key, resources: capabilityFixture.resources)
@@ -3489,8 +3525,9 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let realListener = ZCodeNativeRuntime(inputs: selfListener.inputs, runtime: selfListener.fake, readPayload: { "unused" },
         stateRoot: selfListener.state, onEvent: { _ in }, installationProbe: {})
     let expireOwnRead = Task { try? await Task.sleep(nanoseconds: 100_000_000);selfListener.fake.uptime = 111 }
-    do { _ = try await realListener.makeAssembly().attach(selfListener.process, 110);fatalError("test binary cannot own the separate fixture server port") }
-    catch let error as StartupFailure { expect(["attach-timeout", "listener-mismatch"].contains(error.reason), "default self-PID inspection refuses an unowned port, not an inspection error") }
+    do { _ = try await realListener.makeAssembly().attach(selfListener.process, 110, .existingPage);fatalError("test binary cannot own the separate fixture server port") }
+    catch ZCodeAttachFailure.deadline { expect(true, "unowned listener respects the bounded deadline") }
+    catch let error as StartupFailure { expect(error.reason == "listener-mismatch", "default self-PID inspection refuses an unowned port, not an inspection error") }
     expireOwnRead.cancel()
     expect(selfListener.fake.openCount == 0, "self-listener unit probe opens no host application")
 
@@ -3521,11 +3558,11 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
             "inspect reads every exact current owned receipt field")
     } else { fatalError("synthetic inspect lost receipt") }
     do { _ = try await ready.assembly.inspectPage(binding, 160);fatalError("closed connection must not inspect") } catch { checks += 1 }
-    let disposeBinding = try await ready.assembly.attach(ready.process, 160)
+    let disposeBinding = try await ready.assembly.attach(ready.process, 160, .existingPage)
     expect(try await ready.assembly.dispose(disposeBinding, receipt, 160), "dispose acknowledges matching owner instance")
-    let repeatBinding = try await ready.assembly.attach(ready.process, 160)
+    let repeatBinding = try await ready.assembly.attach(ready.process, 160, .existingPage)
     expect(try await ready.assembly.dispose(repeatBinding, receipt, 160), "repeat dispose confirms already absent")
-    let absentBinding = try await ready.assembly.attach(ready.process, 160)
+    let absentBinding = try await ready.assembly.attach(ready.process, 160, .existingPage)
     ready.payloadReadFailure = true
     if case .absent(let location) = try await ready.assembly.inspectPage(absentBinding, 160) { expect(location.process == ready.process, "absence is exact and does not read payload") }
     else { fatalError("disposed controller not absent") }
@@ -3576,6 +3613,23 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let probe = try make();probe.probeFailure = true
     do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
     expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
+
+    let driftedHosts = try [
+        ZCodeRuntimeFixture(port: port, version: "3.17.1", build: "3.17.1.9553"),
+        ZCodeRuntimeFixture(port: port, executableSHA256: String(repeating: "f", count: 64)),
+    ]
+    fixtures.append(contentsOf: driftedHosts)
+    for drifted in driftedHosts {
+        do {
+            _ = try await drifted.assembly.openApplication(160)
+            fatalError("unpinned ZCode identity opened the host")
+        } catch let error as StartupFailure {
+            expect(error.reason == "target-identity", "ZCode version or executable drift reports an identity refusal")
+        }
+        expect(drifted.payloadReads == 0 && drifted.fake.openCount == 0 && drifted.fake.allocationCount == 0
+            && drifted.listenerPIDs.isEmpty && !FileManager.default.fileExists(atPath: drifted.state.path),
+            "ZCode identity drift refuses before payload, port, process or profile side effects")
+    }
 
     func checkOpenFailure(_ f: ZCodeRuntimeFixture, points: [(String, String)], selected: Bool, _ label: String) {
         let failures = f.events.filter { $0["stage"] as? String == "zcode-runtime-failed" }
@@ -4179,4 +4233,45 @@ private func zcodeRuntimeEventEnvelopeChecks() -> Int {
            && finalRecords[1]["reason"] as? String == "protocol-error",
            "the final generic failure remains sanitized and emits a nonzero exit")
     return checks
+}
+
+@MainActor
+private func zcodeDriverInterleave(port: Int) async throws {
+    let fixture = try ZCodeRuntimeFixture(port: port, pid: 987654319)
+    defer { fixture.cleanup() }
+    let capabilities = SkinCapability.allCases.map {
+        CapabilityFinding(subject: CapabilityEvidenceSubject(application: fixture.key, surface: SkinHostContract.surface(for: $0), contractVersion: SkinHostContract.version),
+            capability: $0, state: .verified, evidenceIDs: ["synthetic-only"], reason: "fixture")
+    }
+    let inputs = BoundHostInputs(identity: HostIdentityEvidence(key: fixture.key, signingIdentity: "synthetic", evidenceID: "synthetic-only"),
+        findings: capabilities, contractVersion: SkinHostContract.version)
+    let driver = ZCodeSkinDriver(inputs: inputs, assembly: fixture.assembly)
+    func control(_ path: String, post: Bool = false) async throws -> [String:Any] {
+        let cfg = URLSessionConfiguration.ephemeral;cfg.httpCookieStorage = nil;cfg.urlCredentialStorage = nil
+        let session = URLSession(configuration: cfg);defer { session.invalidateAndCancel() }
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/fixture/" + path)!)
+        req.httpMethod = post ? "POST" : "GET";req.timeoutInterval = 2
+        let (data, response) = try await session.data(for: req)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, let value = try JSONSerialization.jsonObject(with: data) as? [String:Any] else { fatalError("synthetic gate failed") }
+        return value
+    }
+    let launch = Task { await driver.launch(fixture.request) }
+    let end = ProcessInfo.processInfo.systemUptime + 5
+    while true {
+        if try await control("frame-entered")["entered"] as? Bool == true { break }
+        precondition(ProcessInfo.processInfo.systemUptime < end, "first attach did not reach gate")
+        try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    let inspect = await driver.inspect(SkinInspectRequest(expectedApplication: fixture.key, operationID: UUID(), deadline: 160, includePage: true, previousObservation: nil))
+    var inspectBusy = false
+    if case .staleTarget(let e) = inspect { inspectBusy = e.reason == .operationBusy }
+    _ = try await control("release-frame", post: true)
+    let launchResult = await launch.value
+    var launchReady = false
+    if case .ready = launchResult { launchReady = true }
+    let checkLock = try fixture.assembly.acquireOperation(fixture.process.pid);checkLock.release()
+    let expected = "safe"
+    precondition(expected == "safe" ? (inspectBusy && launchReady) : (!inspectBusy && !launchReady), "interleaving did not match expected driver behavior")
+    let output: [String:Any] = ["variant":expected,"inspectBusy":inspectBusy,"launchReady":launchReady,"lockReacquired":true,"realHost":false]
+    print(String(decoding: try JSONSerialization.data(withJSONObject: output,options:.sortedKeys),as:UTF8.self))
 }

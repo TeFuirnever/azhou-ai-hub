@@ -16,6 +16,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 ## Repository shape
 
 - Follow [product principles](docs/principles.md) and the [roadmap](docs/roadmap.md) for direction; they do not override current runtime contracts, support evidence or legal grants.
+- Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
 
 - [`docs/skill-standard.md`](docs/skill-standard.md) is the project authority for every skill's package, setup, brand lifecycle, evidence, evaluation, evolution, and closeout.
 - [`docs/integrations.md`](docs/integrations.md) governs the three optional projects under `packages/`. Maintain their canonical package sources, preserve original-import provenance, and fingerprint current `runtime_paths` inputs for each plan. Keep native installation ownership and installation/discovery/invocation evidence distinct. They do not become canonical Skills or bypass the orchestrator composition rule.
@@ -31,6 +32,7 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 ## Git and GitHub
 
 - Use `type(scope): imperative summary`. One commit answers one reason; code, its test and necessary contract update may stay together.
+- Merging to `main` is squash-only and stays blocked until the ruleset's required checks pass and every review thread (including CodeQL and bot comments) is resolved.
 - Do not rewrite public default-branch history or let bots create statistics-only commits.
 - GitHub Actions use least privilege, full commit-SHA action pins, bounded timeouts and no untrusted `pull_request_target` checkout.
 - Keep versioned docs in the repository rather than a competing Wiki. Security reports use private advisories, never public issues.

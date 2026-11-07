@@ -20,13 +20,27 @@ struct ZCodePageBinding: Sendable {
     let validateProcess: (HostProcessGeneration) throws -> Void
     let activateExisting: (HostProcessGeneration) throws -> Bool
     let openApplication: (TimeInterval) async throws -> HostProcessGeneration
-    let attach: (HostProcessGeneration, TimeInterval) async throws -> ZCodePageBinding
+    let attach: (HostProcessGeneration, TimeInterval, ZCodeAttachPurpose) async throws -> ZCodePageBinding
     // markSent() immediately before the first page-changing install send.
     let install: (ZCodePageBinding, SkinLaunchRequest, ZCodeInstallObservation) async throws -> SkinLaunchResult
     let inspectPage: (ZCodePageBinding, TimeInterval) async throws -> PageEffect
     let dispose: (ZCodePageBinding, ControllerReceipt, TimeInterval) async throws -> Bool
     let acquireOperation: (Int32) throws -> any ZCodeOperationLease
 }
+enum ZCodeAttachPurpose: Equatable {
+    case coldLaunch, existingPage
+
+    func stageDeadline(caller: TimeInterval, now: TimeInterval) -> TimeInterval {
+        switch self {
+        case .coldLaunch: return min(caller, now + 45)
+        case .existingPage: return caller
+        }
+    }
+}
+
+enum ZCodeAttachFailure: Error { case deadline, cancelled }
+enum ZCodeOperationLockFailure: Error { case busy }
+
 @MainActor final class ZCodeSkinDriver: SkinHostDriver {
     static let owner = "azhou-zcode-startup"
     private let inputs: BoundHostInputs
@@ -40,6 +54,17 @@ struct ZCodePageBinding: Sendable {
         if Task.isCancelled { throw Stop(reason: .operationCancelled, detail: "operation-cancelled") }
         guard deadline.isFinite, assembly.now() < deadline else {
             throw Stop(reason: .operationTimeout, detail: "operation-deadline")
+        }
+    }
+    private func acquireOperation(_ pid: Int32, deadline: TimeInterval) throws -> any ZCodeOperationLease {
+        do {
+            let lease = try assembly.acquireOperation(pid)
+            do { try checkTime(deadline) }
+            catch { lease.release();throw error }
+            return lease
+        } catch {
+            try checkTime(deadline)
+            throw error
         }
     }
     private func refusal(_ key: HostApplicationKey) -> HostRefusal? {
@@ -107,7 +132,15 @@ struct ZCodePageBinding: Sendable {
     }
     private func errorReason(_ error: Error) -> SkinOperationFailure {
         if let e = error as? Stop { return SkinOperationFailure(reason: e.reason, detail: e.detail) }
-        return SkinOperationFailure(reason: Task.isCancelled ? .operationCancelled : .protocolError,
+        if Task.isCancelled || error is CancellationError { return SkinOperationFailure(reason: .operationCancelled, detail: "operation-cancelled") }
+        if error is ZCodeOperationLockFailure { return SkinOperationFailure(reason: .operationBusy, detail: "page-operation-in-flight") }
+        if let e = error as? ZCodeAttachFailure {
+            switch e {
+            case .deadline: return SkinOperationFailure(reason: .operationTimeout, detail: "attach-deadline")
+            case .cancelled: return SkinOperationFailure(reason: .operationCancelled, detail: "attach-cancelled")
+            }
+        }
+        return SkinOperationFailure(reason: .protocolError,
                                     detail: "ZCode-operation-unconfirmed")
     }
     private func failed(_ error: Error, _ request: SkinLaunchRequest, sent: Bool) -> SkinLaunchResult {
@@ -137,8 +170,8 @@ struct ZCodePageBinding: Sendable {
             }
             let process = try await assembly.openApplication(deadline)
             try validate(process); try checkTime(deadline)
-            let lease = try assembly.acquireOperation(process.pid); defer { lease.release() }
-            let binding = try await assembly.attach(process, deadline)
+            let lease = try acquireOperation(process.pid, deadline: deadline); defer { lease.release() }
+            let binding = try await assembly.attach(process, deadline, .coldLaunch)
             try validate(binding, process: process); try checkTime(deadline)
             let bounded = SkinLaunchRequest(expectedApplication: request.expectedApplication, operationID: request.operationID, startedAt: request.startedAt, deadline: deadline)
             let result = try await assembly.install(binding, bounded, observation)
@@ -204,6 +237,11 @@ struct ZCodePageBinding: Sendable {
     func inspect(_ request: SkinInspectRequest) async -> SkinInspectResult {
         if let r = refusal(request.expectedApplication) { return .unavailable(r) }
         if let r = capabilityRefusal(for: request.includePage ? .inspectPage : .inspectApplication, inputs: inputs) { return .unavailable(r) }
+        if request.includePage {
+            guard !busy else { return .staleTarget(SkinOperationFailure(reason: .operationBusy, detail: "page-operation-in-flight")) }
+            busy = true
+        }
+        defer { if request.includePage { busy = false } }
         do {
             try checkTime(request.deadline)
             let running = try assembly.runningProcesses()
@@ -211,7 +249,9 @@ struct ZCodePageBinding: Sendable {
             guard let process = running.first else { return .observed(process: nil, page: .notObserved(reason: "application-not-running")) }
             try validate(process)
             if !request.includePage { return .observed(process: process, page: .notObserved(reason: "application-only")) }
-            let b = try await assembly.attach(process, request.deadline); try validate(b, process: process)
+            let lease = try acquireOperation(process.pid, deadline: request.deadline); defer { lease.release() }
+            try checkTime(request.deadline)
+            let b = try await assembly.attach(process, request.deadline, .existingPage); try validate(b, process: process)
             if let previous = request.previousObservation, !sameLocation(location(previous), PageLocation(application: inputs.identity.key, process: process, documentToken: b.documentToken)) { throw Stop(reason: .targetStale, detail: "document-generation-changed") }
             let page = try await assembly.inspectPage(b, request.deadline)
             try validate(b, process: process); try checkTime(request.deadline)
@@ -242,8 +282,9 @@ struct ZCodePageBinding: Sendable {
             guard let process = running.first else { return .alreadyAbsent(receipt.location) }
             guard process == receipt.location.process else { throw Stop(reason: .targetStale, detail: "process-generation-changed") }
             try validate(process)
-            let lease = try assembly.acquireOperation(process.pid); defer { lease.release() }
-            let b = try await assembly.attach(process, request.deadline); try validate(b, process: process)
+            let lease = try acquireOperation(process.pid, deadline: request.deadline); defer { lease.release() }
+            try checkTime(request.deadline)
+            let b = try await assembly.attach(process, request.deadline, .existingPage); try validate(b, process: process)
             guard validReceipt(receipt, b) else { throw Stop(reason: .targetStale, detail: "controller-generation-changed") }
             try checkTime(request.deadline); sent = true
             guard try await assembly.dispose(b, receipt, request.deadline) else { throw Stop(reason: .protocolError, detail: "dispose-unconfirmed") }

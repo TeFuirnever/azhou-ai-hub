@@ -55,7 +55,7 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     return { t: key => messages[key] ?? String(key) };
   }
   const entries = new Set();
-  let bodyObserver, observerHost, refreshTimer;
+  let inertEntry = null, bodyObserver, observerHost, refreshTimer;
   function releaseEntries() {
     if (refreshTimer !== undefined) observerHost?.clearTimeout?.(refreshTimer);
     refreshTimer = undefined;bodyObserver?.disconnect();bodyObserver = null;
@@ -80,6 +80,14 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
       attributeFilter: ['data-slot', 'data-phase', 'data-ds-dark-theme', 'class', 'hidden', 'aria-hidden', 'role'] });
   }
   function mountEntry(document, openSettings, assets, factory, current, host, retryWallpaper, dismissFailure) {
+    // sidebarEntry:false keeps every host surface (settings modal) as the only
+    // appearance entry on this carrier; the inert handle satisfies the
+    // controller's optional entry calls without touching the DOM.
+    if (configuration.sidebarEntry === false) {
+      inertEntry ??= Object.freeze({ element: null, button: null,
+        setAppearance() {}, setWallpaperFailure() {}, update() {}, remove() {} });
+      return inertEntry;
+    }
     const element = document.createElement('span');
     element.setAttribute('data-agent-skin-entry', 'appearance');
     element.style.cssText = 'display:none;flex:none;position:relative;padding:4px;box-sizing:border-box;app-region:no-drag';
@@ -177,7 +185,7 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
       },
       attributes: Object.freeze({ surfaceMarker: 'data-azhou-dsh-wallpaper-surface',
         observeFilter: ['data-slot', 'data-phase', 'data-ds-dark-theme', 'hidden', 'aria-hidden', 'class', 'style'] }),
-      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] [data-slot="main"][data-azhou-dsh-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] [data-slot="main"][data-azhou-dsh-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root > [data-slot="root"],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > *,html[data-azhou-wallpaper="active"] #root [data-phase],html[data-azhou-wallpaper="active"] #root [data-slot="root"] > * > *:has([data-slot="main"]){background-color:transparent!important;background-image:none!important}',
       scope: 'decoded image, viewport cover, unique validated DSH main surface; deeper layers separate',
     }),
   });

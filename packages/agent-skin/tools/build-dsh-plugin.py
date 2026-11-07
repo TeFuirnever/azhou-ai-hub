@@ -28,10 +28,10 @@ INDEX_JS = (
 PATCH_YAML = "- insert:\n    - id: azhou-agent-skin\n      name: 'azhou-agent-skin'\n"
 LOCALES = {
     'zh': {'meta': {'title': '阿舟 AI 实验室 for DeepSeek Harness',
-                    'description': '为 DeepSeek Harness 带来阿舟启动动画、侧栏外观入口与主区壁纸皮肤。'}},
+                    'description': '为 DeepSeek Harness 带来阿舟启动动画、设置中的外观面板与主区壁纸皮肤。'}},
     'en': {'meta': {'title': 'Azhou AI Lab for DeepSeek Harness',
-                    'description': ('Brings the Azhou startup animation, sidebar appearance entry, '
-                                    'and main-surface wallpaper skin to DeepSeek Harness.')}},
+                    'description': ('Brings the Azhou startup animation, the settings appearance panel, '
+                                    'and the main-surface wallpaper skin to DeepSeek Harness.')}},
 }
 MANIFEST_SCOPE = ('local assembly only; installing into a DSH profile is a separate manual step; '
                   'no install or host writes')
@@ -47,10 +47,71 @@ _CLIENT_OPEN = (
     "    const module = { exports: {} };\n"
     "    const runStartup = (registerCleanup) => {\n"
 )
+_CLIENT_SECTION_FACTORY = (
+    "    // 「阿舟主题与外观」设置页组件（settings.section 插槽，对齐 dsh-pet 的 pet-config\n"
+    "    // 形态）：容器 div 里由控制器的 mountSettings 挂面板 iframe。宿主设置弹窗拥有\n"
+    "    // Esc 与遮罩，本组件只负责挂载/卸载时的装拆，不引入自己的关闭层。\n"
+    "    const SECTION_STYLE = Object.freeze({\n"
+    "      position: 'relative', boxSizing: 'border-box', width: '100%', maxWidth: '720px',\n"
+    "      height: '100%', minHeight: '0', background: 'transparent',\n"
+    "      color: 'var(--dsw-alias-label-primary)', fontFamily: 'inherit', fontSize: '13px', lineHeight: '20px',\n"
+    "    });\n"
+    "    function makeAzhouAppearanceSection({ h, useEffect, useRef }) {\n"
+    "      return function AzhouAppearanceSection(props) {\n"
+    "        const container = useRef(null);\n"
+    "        const closeRef = useRef(null);\n"
+    "        useEffect(() => { closeRef.current = typeof props?.close === 'function' ? props.close : null; });\n"
+    "        useEffect(() => {\n"
+    "          const node = container.current;\n"
+    "          const startup = globalThis.__azhouStartup;\n"
+    "          if (!node || !startup || typeof startup.mountSettings !== 'function') return undefined;\n"
+    "          const dispose = startup.mountSettings(node, { onClose: () => closeRef.current?.() });\n"
+    "          return () => { try { dispose?.(); } catch {} };\n"
+    "        }, []);\n"
+    "        return h('div', { ref: container, style: SECTION_STYLE, 'data-agent-skin-settings-mount': '' });\n"
+    "      };\n"
+    "    }\n"
+)
+_CLIENT_SETTINGS_REGISTER = (
+    "      // 注册「阿舟主题与外观」设置页：settings.section 插槽一次注册；ctx.effect\n"
+    "      // 立即执行回调，插件停用时随 cordis 一并回收。React 从模块加载器平台表取。\n"
+    "      const zhLocale = () => /^zh/i.test(document.documentElement?.lang || host.navigator?.language || '');\n"
+    "      try {\n"
+    "      ctx.effect(() => {\n"
+    "        const slots = ctx.slots;\n"
+    "        if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {\n"
+    "          return () => {};\n"
+    "        }\n"
+    "        let section = null;\n"
+    "        try {\n"
+    "          const react = require('react');\n"
+    "          section = makeAzhouAppearanceSection({\n"
+    "            h: require('react/jsx-runtime').jsx,\n"
+    "            useEffect: react.useEffect, useRef: react.useRef,\n"
+    "          });\n"
+    "        } catch {\n"
+    "          // 平台表缺 react 时退化为纯 overlay：启动动画不受设置页影响。\n"
+    "          return () => {};\n"
+    "        }\n"
+    "        slots.inject('settings.section', function* () {\n"
+    "          yield slots.register({\n"
+    "            name: 'settings.section', id: 'azhou-appearance', order: 40,\n"
+    "            label: () => (zhLocale() ? '阿舟主题与外观' : 'Azhou appearance'),\n"
+    "          }, section);\n"
+    "        });\n"
+    "        return () => {};\n"
+    "      }, 'azhou-agent-skin: settings-section');\n"
+    "      } catch {\n"
+    "        // 设置页注册失败时退化为纯 overlay：激活永不因它失败。\n"
+    "      }\n"
+)
 _CLIENT_CLOSE = (
     "    };\n"
-    "    const inject = [];\n"
-    "    function apply(ctx) {\n"
+    # The settings-section registration reads ctx.slots, a cordis service;
+    # an undeclared service access throws and fails activation, so declare it.
+    "    const inject = ['slots'];\n"
+    + _CLIENT_SECTION_FACTORY
+    + "    function apply(ctx) {\n"
     "      const host = globalThis;\n"
     "      const document = host.document;\n"
     "      const boot = Object.getOwnPropertyDescriptor(host, '__DSH_BOOT__');\n"
@@ -67,7 +128,8 @@ _CLIENT_CLOSE = (
     "        const startup = host.__azhouStartup;\n"
     "        if (startup?.owner === 'azhou-dsh-startup') startup.dispose();\n"
     "      }, 'startup-controller');\n"
-    "      const adapterCleanup = (resource) => {\n"
+    + _CLIENT_SETTINGS_REGISTER
+    + "      const adapterCleanup = (resource) => {\n"
     "        if (!resource || typeof resource.key !== 'string' || typeof resource.dispose !== 'function') return;\n"
     "        dispose(resource.dispose, 'adapter-' + resource.key);\n"
     "      };\n"

@@ -1172,6 +1172,22 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+def check_private_startup_artwork(root: Path) -> list[str]:
+    """Check the index even when a staged file is absent from the worktree."""
+    result = subprocess.run(
+        [
+            "git", "ls-files", "-z", "--cached", "--",
+            ":(icase)packages/agent-skin/assets/",
+            ":(icase)packages/codex-startup-animation/assets/private/",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    paths = sorted(set(result.stdout.decode("utf-8", errors="backslashreplace").split("\0")) - {""})
+    return [f"private startup artwork is public: {path}" for path in paths]
+
+
 def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
     ignore = root / ".gitignore"
@@ -1264,6 +1280,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_command_surface(files, root))
     errors.extend(check_action_pins(files, root))
     errors.extend(check_public_boundaries(files, root))
+    errors.extend(check_private_startup_artwork(root))
     errors.extend(check_runtime_state_contract(files, root))
     errors.extend(check_secret_patterns(files, root))
     errors.extend(check_provenance(root))
