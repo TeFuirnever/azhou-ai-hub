@@ -51,7 +51,8 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
   function text(factory, value, themeConfig) {
     if (typeof factory === 'function') return factory({ locale: value.locale, themeConfig });
     const zh = value.locale === 'zh-CN';
-    const messages = { openAppearance: zh ? '打开主题与外观' : 'Open appearance settings',
+    const messages = { characterName: zh ? '阿舟' : 'Azhou',
+      openAppearance: zh ? '打开主题与外观' : 'Open appearance settings',
       appearanceLabel: zh ? '阿舟主题与外观' : 'Azhou appearance settings',
       overlayLabel: zh ? '阿舟启动动画' : 'Azhou startup animation',
       'appearance.wallpaper.failure.retry': zh ? '重试背景' : 'Retry wallpaper',
@@ -61,11 +62,22 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
   function mountEntry(document, openSettings, assets, factory, current, host, retryWallpaper, dismissFailure) {
     const element = document.createElement('span');
     element.setAttribute('data-agent-skin-entry', 'appearance');
-    element.style.cssText = 'display:none;flex:none;position:relative;padding:4px;box-sizing:border-box;app-region:no-drag';
+    element.style.cssText = 'display:none;flex:none;position:relative;box-sizing:border-box;app-region:no-drag';
     const shadow = element.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
-    style.textContent = ':host{all:initial}button{font:12px system-ui;cursor:pointer;border:1px solid var(--entry-border,#888);border-radius:7px;padding:5px 8px;background:var(--entry-bg,#fff);color:var(--entry-fg,#111)}button:focus-visible{outline:2px solid currentColor;outline-offset:2px}[hidden]{display:none!important}';
-    const button = document.createElement('button');button.type = 'button';
+    // Mirror the ChatGPT-desktop (Codex host) entry chrome exactly — same
+    // avatar/label proportions, surface chip and shadow — per the maintainer's
+    // style-parity call; only the CSS variable names differ per host.
+    style.textContent = ':host{all:initial}button{all:initial;display:flex;align-items:center;justify-content:flex-start;gap:7px;width:100%;box-sizing:border-box;min-height:44px;padding:5px 9px 5px 5px;cursor:pointer;border:1px solid var(--entry-border,transparent);border-radius:14px;background:var(--entry-bg,transparent);color:var(--entry-fg,#111);box-shadow:0 2px 8px #0002;font:12px/18px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;text-align:left;outline:2px solid transparent;outline-offset:3px}button:focus-visible{outline-color:currentColor}img{display:block;width:32px;height:32px;border-radius:10px;object-fit:cover;flex:none}.lbl{overflow:hidden;text-overflow:ellipsis}[hidden]{display:none!important}';
+    const button = document.createElement('button');button.type = 'button';button.style.minWidth = '44px';
+    const label = document.createElement('span');label.className = 'lbl';
+    const avatar = assets?.entryAvatar;
+    if (typeof avatar === 'string' && avatar.length <= 2 * 1024 * 1024
+      && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
+      const avatarImage = document.createElement('img');avatarImage.alt = '';
+      avatarImage.src = avatar;button.append(avatarImage);
+    }
+    button.append(label);
     const recovery = document.createElement('span');recovery.hidden = true;recovery.setAttribute('role', 'status');
     const retry = document.createElement('button');retry.type = 'button';
     const close = document.createElement('button');close.type = 'button';
@@ -73,18 +85,45 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
     let visible = false, removed = false, timer, failure = null;
     const setAppearance = next => {
       current = next;const t = text(factory, current);
-      button.textContent = '阿舟';button.setAttribute('aria-label', t.t('openAppearance'));
+      // Same label formula as the ChatGPT-desktop entry: character name plus
+      // the locale-specific Appearance suffix.
+      const entryLabel = `${t.t('characterName')}${current.locale === 'zh-CN' ? '外观' : ' Appearance'}`;
+      label.textContent = entryLabel;button.setAttribute('aria-label', entryLabel);
+      button.title = t.t('openAppearance');
       retry.textContent = t.t('appearance.wallpaper.failure.retry');close.textContent = t.t('appearance.wallpaper.failure.close');
       for (const [key, value] of Object.entries({ '--entry-bg': current.colors.surface, '--entry-fg': current.colors.text,
         '--entry-border': current.colors.border })) if (value) element.style.setProperty(key, value);
     };
+    // Stable navigation-label anchor: the entry sits directly beneath the
+    // marketplace row in the sidebar's top action group (the placement approved
+    // for the ZCode host), never over the account row at the tail. When the
+    // label cannot be found — renamed host, other locale, mock DOM without the
+    // lookup — the entry falls back to the sidebar tail.
+    function marketAnchor(side) {
+      const labels = ['Plugin Marketplace', '插件市场'];
+      let items;
+      try { items = side.querySelectorAll('button, a, [role="button"], [role="menuitem"]'); } catch { return null; }
+      for (const node of items) {
+        const text = String(node.textContent || '').replace(/\s+/g, ' ').trim();
+        if (labels.some(label => text === label || text.includes(label))) return node;
+      }
+      return null;
+    }
     function position() {
       timer = undefined;if (removed) return;
       const sides = document.querySelectorAll('aside[data-testid="sidebar"]');
       if (!visible || sides.length !== 1) { element.style.display = 'none';return; }
-      // Own in-flow bottom row: consumes layout space instead of covering controls.
-      if (element.parentElement !== sides[0]) sides[0].appendChild(element);
-      element.style.display = 'inline-flex';
+      // Own in-flow row: consumes layout space instead of covering controls.
+      // Placement is idempotent against the anchor's actual parent (the
+      // marketplace row may live inside a nested action group), so a settled
+      // entry never re-inserts and never feeds the document observer its own
+      // mutation — the self-sustaining position loop the rc38 review caught.
+      const anchor = marketAnchor(sides[0]);
+      const anchorParent = anchor ? anchor.parentElement : null;
+      if (anchor && anchorParent && typeof anchor.insertAdjacentElement === 'function') {
+        if (element.parentElement !== anchorParent || anchor.nextSibling !== element) anchor.insertAdjacentElement('afterend', element);
+      } else if (element.parentElement !== sides[0]) sides[0].appendChild(element);
+      element.style.display = 'block';
       const rect = element.getBoundingClientRect(), side = sides[0].getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || rect.left < side.left || rect.right > side.right
         || rect.top < side.top || rect.bottom > side.bottom) element.style.display = 'none';
@@ -143,7 +182,7 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
       },
       attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
         observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
-      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root :has(main){background-color:transparent!important;background-image:none!important}',
       scope: 'decoded image, viewport cover, unique validated ZCode main and root surfaces; deeper content layers and visual inspection are separate',
     }),
   });

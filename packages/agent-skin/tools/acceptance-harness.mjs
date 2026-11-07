@@ -37,3 +37,24 @@ export function singleMainPage(targets) {
 export function ensureDir(path) {
   fs.mkdirSync(path, { mode: 0o700, recursive: true });
 }
+
+// Alpha of a computed CSS color, or null when it carries no alpha channel.
+export function colorAlpha(color) {
+  const m = String(color ?? '').match(/rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/);
+  if (!m) return null;
+  return m[4] === undefined ? 1 : parseFloat(m[4]);
+}
+
+// Chain entries (innermost first) that paint an opaque background over the
+// wallpaper layer. The 2026-11-07 rc36 round found the real-workspace main
+// pane hidden behind an opaque ancestor <section> the controller-state checks
+// never see; this is the decision core of the pixel-protection assertion.
+export function wallpaperBlockers(chain) {
+  if (!Array.isArray(chain)) return [];
+  return chain.filter(entry => {
+    if (!entry || typeof entry !== 'object') return false;
+    if (entry.tag === 'MAIN') return false; // main itself is marker-controlled
+    const alpha = colorAlpha(entry.bg);
+    return alpha !== null && alpha > 0.5;
+  });
+}
