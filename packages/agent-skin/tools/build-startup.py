@@ -285,9 +285,10 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
     elif host == 'dsh':
         # The DSH carrier opens appearance through the host settings modal
         # (the settings.section slot), so the sidebar entry stays off; the
-        # adapter honors sidebarEntry:true if a build wants the capsule back.
+        # adapter reads sidebarEntry at the configuration's top level, next
+        # to the emitter-identity build stamp.
         adapter_configuration = ('{ build: { version: APP_VERSION, buildNumber: '
-                                 + json.dumps(artifacts.BUILD) + ', sidebarEntry: false } }')
+                                 + json.dumps(artifacts.BUILD) + ' }, sidebarEntry: false }')
     else:
         adapter_configuration = 'undefined'
     payload = '\n'.join((

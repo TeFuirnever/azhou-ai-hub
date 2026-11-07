@@ -366,7 +366,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         self.assertNotIn("createZCodePageAdapter(", payload)
         self.assertFalse(payload.startswith("((controllerMetadata) => {"))
         self.assertIn('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, '
-                      'buildNumber: "' + verifier.BUILD + '", sidebarEntry: false } }, {', payload)
+                      'buildNumber: "' + verifier.BUILD + '" }, sidebarEntry: false }, {', payload)
         self.assertIn("    installRenderer,\n    createWallpaperApplicator,\n  });", payload)
         self.assertIn("return bootstrapStartup({", payload)
         adapter = (PACKAGE / "extension/hosts/dsh.mjs").read_text(encoding="utf-8")

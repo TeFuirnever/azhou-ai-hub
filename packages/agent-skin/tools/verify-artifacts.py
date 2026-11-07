@@ -647,7 +647,7 @@ def verify_dsh_plugin(path):
     except UnicodeDecodeError as exc:
         raise RuntimeError('DSH 插件 client.js 必须是 UTF-8。') from exc
     binding = ('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, buildNumber: '
-               + json.dumps(BUILD) + ', sidebarEntry: false } }, {')
+               + json.dumps(BUILD) + ' }, sidebarEntry: false }, {')
     bound_once = (
         'window.__ModuleLoader__.load({', "id: 'azhou-agent-skin',", 'factory(require) {',
         'const runStartup = (registerCleanup) => {', 'function createDSHPageAdapter(', binding,
