@@ -299,6 +299,91 @@ class StaleReceiptTests(TransitionTestCase):
     applies, on both the transition entry and the install entry itself.
     """
 
+    def test_owned_legacy_registration_is_reported_with_its_frozen_identity(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        metadata_path = self.pstack_source / "hub-package.json"
+        original = metadata_path.read_bytes()
+        legacy = self.pstack_source / "plugins/pstack"
+        shutil.copytree(self.pstack_source / "harness/pstack/codex", legacy)
+        (legacy / ".codex-plugin/plugin.json").write_text(
+            json.dumps({"name": "pstack", "version": "0.9.102"}), encoding="utf-8")
+        metadata = json.loads(original)
+        metadata["runtime_paths"] = ["hub-package.json", ".agents/plugins/marketplace.json", "plugins/pstack", "LICENSE"]
+        metadata_path.write_text(json.dumps(metadata, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        snapshot = common.snapshot_source("pstack", self.pstack_source, self.workspace, hub_root=self.hub)
+        lock = common.snapshot_lock("pstack", snapshot)
+        metadata_path.write_bytes(original)
+        pstack._native(self.binary, self.home, ["marketplace", "add", str(snapshot)])
+        pstack._native(self.binary, self.home, ["add", pstack.LEGACY_PLUGIN])
+        common.write_receipt(pstack._receipt_path(self.workspace, self.home), {
+            "schema": pstack.RECEIPT_SCHEMA, "codex_home": str(self.home), "snapshot": str(snapshot),
+            "source_lock_sha256": common.plan_digest(lock), "commit": lock["commit"],
+            "codex_bin": str(self.binary), "codex_bin_sha256": pstack._digest(self.binary),
+            "state": "installed", "operation": "install", "commands": [], "completed_steps": [0, 1],
+            "coexistence": None,
+        })
+        report = self.transition()
+        reconciliation = report["facets"]["hub_receipt"]["registration_reconciliation"]
+        self.assertEqual(reconciliation["status"], "receipt-confirmed")
+        self.assertEqual(report["transitions"][1]["status"], "owned")
+        self.assertTrue(report["transitions"][1]["pinned_source_changed"])
+        # Ownership does not waive the install plan's changed-source guard.
+        self.assertEqual(report["transitions"][0]["status"], "blocked")
+        self.assertIn("remove the prior owned package version", report["transitions"][0]["reason"])
+        self.assertEqual(self.sheet(), ARMED_SHEET.encode())
+
+    def test_same_marketplace_with_different_plugin_source_is_not_adopted(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()
+        native = pstack._native
+
+        def substituted(binary, home, arguments):
+            result = native(binary, home, arguments)
+            if arguments == ["list"]:
+                result["installed"][0]["source"]["path"] += "-foreign"
+            return result
+
+        with patch.object(pstack, "_native", side_effect=substituted):
+            report = self.transition()
+        self.assertEqual(report["facets"]["hub_receipt"]["registration_reconciliation"]["status"],
+                         "source-mismatch")
+        self.assertEqual(report["transitions"][0]["status"], "blocked")
+        self.assertEqual(report["transitions"][1]["status"], "not-adopted")
+        self.assertEqual(self.sheet(), ARMED_SHEET.encode())
+
+    def test_receipt_snapshot_digest_mismatch_never_claims_ownership(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()
+        receipt_path = pstack._receipt_path(self.workspace, self.home)
+        receipt = common.read_receipt(receipt_path)
+        receipt["source_lock_sha256"] = "0" * 64
+        common.write_receipt(receipt_path, receipt)
+        report = self.transition()
+        self.assertEqual(report["facets"]["hub_receipt"]["registration_reconciliation"]["status"],
+                         "snapshot-unverified")
+        self.assertEqual(report["transitions"][0]["status"], "blocked")
+        self.assertEqual(report["transitions"][1]["status"], "ownership-unverified")
+        self.assertEqual(self.sheet(), ARMED_SHEET.encode())
+
+    def test_wrong_plugin_identity_in_same_marketplace_is_not_adopted(self):
+        self.put("pstack-models.md", ARMED_SHEET)
+        self.pstack_apply()
+        native = pstack._native
+
+        def substituted(binary, home, arguments):
+            result = native(binary, home, arguments)
+            if arguments == ["list"]:
+                result["installed"][0]["pluginId"] = pstack.LEGACY_PLUGIN
+                result["installed"][0]["name"] = "pstack"
+            return result
+
+        with patch.object(pstack, "_native", side_effect=substituted):
+            report = self.transition()
+        self.assertEqual(report["facets"]["hub_receipt"]["registration_reconciliation"]["status"],
+                         "source-mismatch")
+        self.assertEqual(report["transitions"][0]["status"], "blocked")
+        self.assertEqual(report["transitions"][1]["status"], "not-adopted")
+
     def test_removed_receipt_then_foreign_install_is_blocked_not_applicable(self):
         self.put("pstack-models.md", ARMED_SHEET)
         self.pstack_apply()                      # Hub standalone install

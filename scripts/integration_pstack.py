@@ -821,29 +821,16 @@ def _registry_sources(marketplaces: dict, plugins: dict) -> dict:
     selected = [row for row in (rows or []) if isinstance(row, dict) and row.get("name") == MARKETPLACE]
     installed_rows = plugins.get("installed") if isinstance(plugins, dict) else None
     pstack_rows = [row for row in (installed_rows or [])
-                   if isinstance(row, dict) and (row.get("pluginId") == PLUGIN or row.get("name") == PLUGIN_NAME)]
+                   if isinstance(row, dict) and (row.get("pluginId") in (PLUGIN, LEGACY_PLUGIN)
+                                                  or row.get("name") in (PLUGIN_NAME, "pstack"))]
     return {"marketplaces": selected, "installed_plugins": pstack_rows}
 
 
-def _registry_row_resolves_to(row: dict, snapshot) -> bool:
-    """Does one installed-registry row resolve back to the receipt's snapshot?"""
-    if not isinstance(snapshot, str) or not snapshot:
-        return False
-    expected = [snapshot, str(Path(snapshot) / "harness/pstack/codex")]
-    recorded: list[str] = []
-    for group, key in ((row.get("marketplaceSource"), "source"), (row.get("source"), "path")):
-        if isinstance(group, dict) and isinstance(group.get(key), str):
-            recorded.append(group[key])
-    for value in recorded:
-        for name in expected:
-            if value == name:
-                return True
-            try:
-                if Path(value).resolve() == Path(name).resolve():
-                    return True
-            except OSError:
-                continue
-    return False
+def _registry_row_resolves_to(row: dict, snapshot: str, plugin_id: str, plugin_root: str) -> bool:
+    """Match the frozen plugin identity and both native source records."""
+    return (row.get("pluginId") == plugin_id and row.get("installed") is True
+            and row.get("marketplaceSource") == {"sourceType": "local", "source": snapshot}
+            and row.get("source") == {"source": "local", "path": str(Path(snapshot) / plugin_root.rstrip("/"))})
 
 
 def _receipt_registration(receipt: dict | None, registry: dict) -> dict:
@@ -872,11 +859,28 @@ def _receipt_registration(receipt: dict | None, registry: dict) -> dict:
         return {"status": "no-registry-record", **detail,
                 "explanation": ("the native registry lists no installed pstack, so the receipt's installation "
                                 "cannot be confirmed in this target")}
+    try:
+        snapshot = receipt.get("snapshot")
+        if not isinstance(snapshot, str) or not snapshot:
+            raise common.IntegrationError("receipt has no snapshot path")
+        lock = common.snapshot_lock(COMPONENT, Path(snapshot))
+        if receipt.get("source_lock_sha256") != common.plan_digest(lock):
+            raise common.IntegrationError("receipt snapshot digest does not match")
+        plugin_id, plugin_root = _snapshot_plugin_identity(lock)
+    except (common.IntegrationError, OSError, ValueError) as exc:
+        return {"status": "snapshot-unverified", **detail, "explanation": str(exc)}
+    marketplaces = registry.get("marketplaces")
+    if (not isinstance(marketplaces, list) or len(marketplaces) != 1
+            or marketplaces[0].get("root") != snapshot
+            or marketplaces[0].get("marketplaceSource") != {"sourceType": "local", "source": snapshot}):
+        return {"status": "source-mismatch", **detail,
+                "explanation": "the native marketplace does not resolve to the receipt's snapshot"}
     for row in rows:
-        if _registry_row_resolves_to(row, receipt.get("snapshot")):
+        if _registry_row_resolves_to(row, snapshot, plugin_id, plugin_root):
             return {"status": "receipt-confirmed", **detail}
     return {"status": "source-mismatch", **detail,
-            "actual_source": json.dumps(rows[0].get("marketplaceSource") or rows[0].get("source"), sort_keys=True),
+            "actual_source": json.dumps({"marketplaceSource": rows[0].get("marketplaceSource"),
+                                         "source": rows[0].get("source")}, sort_keys=True),
             "explanation": "the registered installation resolves to a different source than the receipt's snapshot"}
 
 
@@ -1043,6 +1047,8 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                                "conversion it cannot attribute"),
         "registry-unavailable": ("the native registry could not be read, so ownership of the armed registration "
                                  "cannot be established; the Hub offers no conversion it cannot attribute"),
+        "snapshot-unverified": ("the receipt's snapshot identity or digest could not be verified, so ownership "
+                                "cannot be established; the Hub offers no conversion it cannot attribute"),
     }
 
     routing: dict = {"goal": "let this Codex home share the Kit's host defaults with an on-demand pstack workflow",
@@ -1123,12 +1129,12 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                          "receipt_reconciliation": reconciled,
                          "next": "a fresh plan/apply resumes the recorded operation, or 'plan --operation remove' "
                                  "cleans up only what the receipt records"}
-        elif reconciled["status"] == "registry-unavailable":
+        elif reconciled["status"] in ("registry-unavailable", "snapshot-unverified"):
             ownership = {"goal": "keep the native installation under one named owner",
                          "status": "ownership-unverified", "receipt_state": receipt.get("state"),
                          "receipt_reconciliation": reconciled,
-                         "next": "the native registry could not be read; run doctor with a working codex binary "
-                                 "before any Hub operation here"}
+                         "next": "verify the native registry and receipt snapshot with doctor before any Hub "
+                                 "operation here"}
         else:
             installed_rows = registry.get("installed_plugins") or []
             actual = reconciled.get("actual_source")
