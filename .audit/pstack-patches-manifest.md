@@ -1,14 +1,20 @@
 # pstack downstream patch manifest
 
-One upstream defect per patch over the pristine snapshot in
-`packages/pstack-agent-harness/pstack/`. The queue is `patches/series`, applied in
-order by `node tools/build-harness.mjs`, which reports **16 patches applied** and
-writes `harness/`. `pstack/` is never written.
+This audit records the original 16-patch queue as of 2026-11-06; the table is
+historical and is not a complete current queue. The maintained
+[`patches/series`](../packages/pstack-agent-harness/patches/series) is the
+current authority: on 2026-11-07 it contains 23 patches, including Hub-specific
+adjustments documented in [UPSTREAM.md](../packages/pstack-agent-harness/UPSTREAM.md).
+`node tools/build-harness.mjs` applies the queue in order and writes `harness/`;
+the pristine `pstack/` source is never written.
 
-Test column: a test rides in the same patch. The watch-pr tests live next to the
-sources under `pstack/skills/poteto-mode/scripts/watch-pr/`; the log.sh test is
-`pstack/skills/show-me-your-work/scripts/log.test.ts`. Run them with `bun test`
-from their own directory.
+The table's test column describes the original audit. The following paths are
+relative to `packages/pstack-agent-harness/`. Patch-carried tests appear in the
+generated trees, not in the pristine source: CI runs the watcher suite
+from `harness/pstack/claude-code/skills/poteto-mode/scripts/` after a frozen Bun
+install. The log test is at
+`harness/pstack/claude-code/skills/show-me-your-work/scripts/log.test.ts`; run it
+from its generated directory with `bun test`.
 
 | patch | defect | failure scenario | test |
 | --- | --- | --- | --- |
