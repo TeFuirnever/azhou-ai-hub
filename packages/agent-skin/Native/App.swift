@@ -870,7 +870,9 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
         configuration.createsNewApplicationInstance = false; configuration.allowsRunningApplicationSubstitution = false
         configuration.addsToRecentItems = false
         configuration.arguments = ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=\(debuggingPort)"]
-        if let environment { configuration.environment = environment }
+        // An empty override dictionary means the daily launch keeps the
+        // inherited environment; only explicit overrides reach NSWorkspace.
+        if let environment, !environment.isEmpty { configuration.environment = environment }
         openApplicationBody(url, configuration) { application, error in
             completion(application.map { SystemNativeApplication($0) }, error)
         }
