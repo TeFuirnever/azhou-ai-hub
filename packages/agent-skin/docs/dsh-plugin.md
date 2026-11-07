@@ -25,9 +25,14 @@ The emitter reuses `build_startup(host='dsh')` from `tools/build-startup.py` for
 1. Returns `{installed:false, reason:'page-unsupported'}` unless the page shows the DSH boot graph, a top-level window with `__ModuleLoader__` and an own `__DSH_BOOT__` data property.
 2. If the document is still loading, waits for `DOMContentLoaded` and returns `{installed:false, reason:'dom-loading'}`; the wait listener is registered through `ctx.effect` and returns its own disposer.
 3. Creates the page adapter with one disposal sink. The sink wraps each disposal function as `ctx.effect(() => () => fn(), label)`, because cordis runs an effect callback immediately and uses its return value as the disposer. The adapter's `registerCleanup` and the controller's owner-checked `__azhouStartup` disposal both route through the sink, so deactivating the plugin removes the entry, observers, overlay, and wallpaper.
-4. Runs the bootstrap tail. Animation and entry visibility follow the controller's existing flow; the plugin adds no new trigger policy.
+4. Registers the settings section once through `ctx.effect` (see "Settings page" below).
+5. Runs the bootstrap tail. Animation and entry visibility follow the controller's existing flow; the plugin adds no new trigger policy.
 
 The wallpaper surface is the unique `[data-slot='main']` element. The appearance entry is an imperative handle appended to the stable sidebar column beside the `[data-slot='sidebar.footer.action']` container, never inside the React-rendered slot list. Theme comes from `data-ds-dark-theme` on `body` and the `--dsw-*` token variables the host writes inline on `body`. Settings persist in IndexedDB under the `azhou-dsh-startup` namespace, separate from the Codex and ZCode databases.
+
+## Settings page
+
+The client also registers one `settings.section` slot row — `id: azhou-appearance`, `order: 40`, label 阿舟主题与外观 / Azhou appearance — the same slot contract dsh-pet uses for `pet-config`. React comes from the module loader's platform table (`require('react')`, `require('react/jsx-runtime')`); when that table lacks React the registration degrades silently and the overlay stays the settings UX. The section renders a transparent container capped at 720px with `--dsw-alias-*` tokens and, on mount, calls `mountSettings(container, { onClose })` on the `window.__azhouStartup` controller, which places the same panel iframe the overlay uses — same payload document, same settings namespace, same message channel — sized to fill the container with no fixed positioning, backdrop, or Esc takeover: the host settings modal owns those. The controller admits the method only on hosts whose page adapter declares the wallpaper ports group, so on Codex it stays inert. Mounting returns a disposer; the section calls it on unmount, the disposer is idempotent, and a panel-driven `settings-close` (or cancel) notifies `onClose` — wired to the shell-provided `close` prop — and tears the embed down itself, so settings-modal open/close cycles mount and dispose cleanly with no duplicate iframes or leaked message listeners.
 
 ## Adapter capability groups
 
