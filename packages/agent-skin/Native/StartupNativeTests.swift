@@ -3535,11 +3535,9 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     try await mode("ready")
     let ready = try make();let binding = try await open(ready)
     expect(ready.fake.openCount == 1 && ready.fake.allocationCount == 1, "cold path opens and allocates once")
-    let expectedKeys: Set<String> = ["PATH", "LANG", "HOME", "TMPDIR", "ZCODE_DESKTOP_HOME_DIR", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_USER_DATA_DIR", "ZCODE_DESKTOP_SESSION_DATA_DIR"]
-    expect(ready.fake.openedEnvironments.count == 1 && Set(ready.fake.openedEnvironments[0].keys) == expectedKeys, "cold environment has only explicit isolation keys")
+    expect(ready.fake.openedEnvironments.count == 1 && ready.fake.openedEnvironments[0].isEmpty, "daily cold launch passes no profile overrides so the user's own profile stays in effect")
     for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
-        let attributes = try FileManager.default.attributesOfItem(atPath: ready.state.appendingPathComponent(name).path)
-        expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700, "each isolated directory is private")
+        expect(!FileManager.default.fileExists(atPath: ready.state.appendingPathComponent(name).path), "daily launch creates no isolated profile directories")
     }
     let record = try JSONSerialization.jsonObject(with: Data(contentsOf: ready.state.appendingPathComponent("launch-receipt.json"))) as! [String: Any]
     expect(record["pid"] as? Int32 == ready.process.pid && record["launchTime"] as? Double == 50 && record["port"] as? Int == port, "owned launch record preserves exact generation and port")
@@ -3684,10 +3682,6 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
 
     let blockedReceipt = try make()
     try FileManager.default.createDirectory(at: blockedReceipt.state, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
-        try FileManager.default.createDirectory(at: blockedReceipt.state.appendingPathComponent(name),
-            withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-    }
     let receiptDirectory = blockedReceipt.state.appendingPathComponent("launch-receipt.json", isDirectory: true)
     try FileManager.default.createDirectory(at: receiptDirectory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
     do { _ = try await blockedReceipt.assembly.openApplication(160);fatalError("receipt write into existing directory was accepted") }
