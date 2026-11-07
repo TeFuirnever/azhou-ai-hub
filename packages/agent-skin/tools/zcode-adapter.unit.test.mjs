@@ -27,6 +27,7 @@ class Element {
  setAttribute(k,v){this.attrs[k]=v}getAttribute(k){return this.attrs[k]}
  append(...nodes){for(const n of nodes)this.appendChild(n)}
  appendChild(n){if(n.parentElement)n.remove();this.children.push(n);n.parentElement=this;return n}
+ get nextSibling(){const p=this.parentElement;if(!p)return null;return p.children[p.children.indexOf(this)+1]||null}
  remove(){if(this.parentElement){this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.parentElement=null}}
  attachShadow(){this.shadowRoot=new Element('shadow');return this.shadowRoot}
  contains(n){return this===n||this.children.some(c=>c.contains(n))}
@@ -43,10 +44,49 @@ function dom(){
 test('entry owns in-flow row, hides on overflow, removes listeners once',()=>{
  const d=dom();const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();assert.equal(appearance.theme,'dark');assert.equal(appearance.colors.surface,'#161616');
  let opened=0,retried=0;const e=a.mountEntry(d.h.document,()=>opened++,{},null,appearance,d.h,()=>retried++,()=>{});
- assert.equal(d.sidebar.children.length,0);e.update(true);assert.equal(e.element.parentElement,d.sidebar);assert.equal(e.element.style.display,'inline-flex');
+ assert.equal(d.sidebar.children.length,0);e.update(true);assert.equal(e.element.parentElement,d.sidebar);assert.equal(e.element.style.display,'block');
  e.button.events.get('click')();assert.equal(opened,1);e.setWallpaperFailure({retrying:true});assert.equal(e.element.shadowRoot.children[2].hidden,false);
  e.element.rect={left:0,right:300,top:0,bottom:30,width:300,height:30};e.update(true);assert.equal(e.element.style.display,'none');
  e.update(false);assert(e.button.disabled);e.remove();e.remove();assert.equal(d.disconnected,1);assert.equal(d.sidebar.children.length,0);assert.equal(e.button.events.size,0);
+});
+test('entry anchors beneath the marketplace row when the sidebar supports lookup',()=>{
+ const d=dom();const market=new Element('button');market.textContent='Plugin Marketplace';d.sidebar.appendChild(market);
+ const account=new Element('button');account.textContent='nscdeclsr';d.sidebar.appendChild(account);
+ d.sidebar.querySelectorAll=selector=>selector.includes('button')?[market,account]:[];
+ market.insertAdjacentElement=function(pos,el){this.parentElement.children.splice(this.parentElement.children.indexOf(this)+1,0,el);el.parentElement=this.parentElement;return el;};
+ const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ const index=d.sidebar.children.indexOf(e.element);
+ assert.ok(index===d.sidebar.children.indexOf(market)+1,'entry sits directly beneath the marketplace row');
+ assert.notEqual(e.element.parentElement,account,'entry never lands after the account row');
+ assert.equal(e.element.style.display,'block');
+ e.remove();assert.equal(d.sidebar.children.length,2);
+});
+test('entry anchors inside a nested marketplace group and placement is idempotent',()=>{
+ const d=dom();const group=new Element('div');d.sidebar.appendChild(group);
+ const market=new Element('button');market.textContent='Plugin Marketplace';group.appendChild(market);
+ const account=new Element('button');account.textContent='nscdeclsr';d.sidebar.appendChild(account);
+ d.sidebar.querySelectorAll=selector=>selector.includes('button')?[market,account]:[];
+ market.insertAdjacentElement=function(pos,el){this.parentElement.children.splice(this.parentElement.children.indexOf(this)+1,0,el);el.parentElement=this.parentElement;return el;};
+ let mutations=0;const record=()=>{mutations++;};
+ const originalInsert=market.insertAdjacentElement;market.insertAdjacentElement=function(pos,el){record();return originalInsert.call(this,pos,el);};
+ const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ assert.equal(e.element.parentElement,group,'entry lives in the marketplace group, not the sidebar tail');
+ assert.ok(group.children.indexOf(e.element)===group.children.indexOf(market)+1,'directly beneath the marketplace row');
+ e.update(true);e.update(true);
+ assert.equal(mutations,1,'a settled entry never re-inserts — no self-sustaining position loop');
+ assert.deepEqual([...d.sidebar.children],[group,account],'the sidebar gains no direct children from the entry');
+ e.remove();
+});
+test('entry falls back to the sidebar tail without a findable marketplace row',()=>{
+ const d=dom();const a=createZCodePageAdapter(d.h);const appearance=a.observeAppearance();
+ const e=a.mountEntry(d.h.document,()=>{},{},null,appearance,d.h,()=>{},()=>{});
+ e.update(true);
+ assert.equal(e.element.parentElement,d.sidebar);assert.equal(d.sidebar.children[d.sidebar.children.length-1],e.element);
+ e.remove();
 });
 test('wallpaper shell refuses absent or ambiguous main and respects cancellation',()=>{
  const h=host();const main={closest:()=>null};let count=1;

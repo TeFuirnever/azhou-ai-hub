@@ -8,7 +8,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ensureDir, mainPageTargets, parseTargets, singleMainPage, stripUrlForMatch } from './acceptance-harness.mjs';
+import { colorAlpha, ensureDir, mainPageTargets, parseTargets, singleMainPage, stripUrlForMatch, wallpaperBlockers } from './acceptance-harness.mjs';
 
 const RENDERER = 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html';
 
@@ -58,6 +58,26 @@ test('ensureDir creates 0o700 and tolerates an existing directory', () => {
   ensureDir(fresh);
   ensureDir(base);
   fs.rmSync(base, { recursive: true, force: true });
+});
+
+test('colorAlpha parses rgb/rgba and reports null for non-colors', () => {
+  assert.equal(colorAlpha('rgb(22, 22, 22)'), 1);
+  assert.equal(colorAlpha('rgba(0, 0, 0, 0)'), 0);
+  assert.equal(colorAlpha('rgba(255, 255, 255, 0.05)'), 0.05);
+  assert.equal(colorAlpha('transparent'), null);
+  assert.equal(colorAlpha(undefined), null);
+});
+
+test('wallpaperBlockers flags opaque non-main layers and tolerates malformed input', () => {
+  const section = { tag: 'SECTION', bg: 'rgb(22, 22, 22)' };
+  const composer = { tag: 'DIV', bg: 'rgb(43, 43, 43)' };
+  const transparent = { tag: 'DIV', bg: 'rgba(0, 0, 0, 0)' };
+  const faint = { tag: 'DIV', bg: 'rgba(255, 255, 255, 0.05)' };
+  const main = { tag: 'MAIN', bg: 'rgb(22, 22, 22)' };
+  assert.deepEqual(wallpaperBlockers([composer, transparent, faint, section]), [composer, section]);
+  assert.deepEqual(wallpaperBlockers([main]), [], 'main itself is marker-controlled, never a blocker');
+  assert.deepEqual(wallpaperBlockers('garbage'), []);
+  assert.deepEqual(wallpaperBlockers([null, 7]), []);
 });
 
 test('E2E slice: /json with ?locale=en-GB resolves through http to one main page', async () => {

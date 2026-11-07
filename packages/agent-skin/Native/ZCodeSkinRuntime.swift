@@ -473,15 +473,14 @@ import Darwin
               ((attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0o777) & 0o077 == 0 else { throw failure("profile-isolation-unproven") }
     }
     private func environment() throws -> [String: String] {
+        // Daily-profile cold launch (build 36): the entry adds only the loopback
+        // debugging arguments; every profile variable stays the user's own, so
+        // the cold-launched ZCode opens with the user's real conversations and
+        // account. An empty dictionary routes through the no-override open path
+        // and leaves the inherited environment untouched. The state root stays
+        // driver-owned and private for launch receipts only.
         try directory(stateRoot, create: true)
-        var paths: [String: String] = [:]
-        for name in ["home", "tmp", "business", "electron-user", "electron-session"] {
-            let child = stateRoot.appendingPathComponent(name);try directory(child, create: true);paths[name] = child.path
-        }
-        return ["PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
-            "HOME": paths["home"]!, "ZCODE_DESKTOP_HOME_DIR": paths["home"]!, "TMPDIR": paths["tmp"]!,
-            "ZCODE_DATA_BASE_DIR": paths["business"]!, "ZCODE_DESKTOP_USER_DATA_DIR": paths["electron-user"]!,
-            "ZCODE_DESKTOP_SESSION_DATA_DIR": paths["electron-session"]!]
+        return [:]
     }
     private func open(_ deadline: TimeInterval) async throws -> HostProcessGeneration {
         var point = DiagnosticPoint.openPreflight
