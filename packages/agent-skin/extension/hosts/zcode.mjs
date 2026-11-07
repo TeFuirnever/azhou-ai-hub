@@ -61,11 +61,22 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
   function mountEntry(document, openSettings, assets, factory, current, host, retryWallpaper, dismissFailure) {
     const element = document.createElement('span');
     element.setAttribute('data-agent-skin-entry', 'appearance');
-    element.style.cssText = 'display:none;flex:none;position:relative;padding:4px;box-sizing:border-box;app-region:no-drag';
+    element.style.cssText = 'display:none;flex:none;position:relative;box-sizing:border-box;app-region:no-drag';
     const shadow = element.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
-    style.textContent = ':host{all:initial}button{font:12px system-ui;cursor:pointer;border:1px solid var(--entry-border,#888);border-radius:7px;padding:5px 8px;background:var(--entry-bg,#fff);color:var(--entry-fg,#111)}button:focus-visible{outline:2px solid currentColor;outline-offset:2px}[hidden]{display:none!important}';
+    // ChatGPT-desktop entry style scaled to the ZCode sidebar row rhythm:
+    // avatar chip + label, surface background, no hard border.
+    style.textContent = ':host{all:initial}button{all:initial;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:32px;padding:4px 10px 4px 4px;cursor:pointer;border-radius:8px;background:var(--entry-bg,transparent);color:var(--entry-fg,#111);font:13px/16px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;text-align:left}button:hover{filter:brightness(1.18)}button:focus-visible{outline:2px solid currentColor;outline-offset:1px}img{display:block;width:22px;height:22px;border-radius:6px;object-fit:cover;flex:none}.lbl{overflow:hidden;text-overflow:ellipsis}[hidden]{display:none!important}';
     const button = document.createElement('button');button.type = 'button';
+    const label = document.createElement('span');label.className = 'lbl';
+    let avatarImage = null;
+    const avatar = assets?.entryAvatar;
+    if (typeof avatar === 'string' && avatar.length <= 2 * 1024 * 1024
+      && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
+      avatarImage = document.createElement('img');avatarImage.alt = '';
+      avatarImage.src = avatar;button.append(avatarImage);
+    }
+    button.append(label);
     const recovery = document.createElement('span');recovery.hidden = true;recovery.setAttribute('role', 'status');
     const retry = document.createElement('button');retry.type = 'button';
     const close = document.createElement('button');close.type = 'button';
@@ -73,7 +84,7 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
     let visible = false, removed = false, timer, failure = null;
     const setAppearance = next => {
       current = next;const t = text(factory, current);
-      button.textContent = '阿舟';button.setAttribute('aria-label', t.t('openAppearance'));
+      const labelText = t.t('openAppearance');label.textContent = labelText;button.setAttribute('aria-label', labelText);
       retry.textContent = t.t('appearance.wallpaper.failure.retry');close.textContent = t.t('appearance.wallpaper.failure.close');
       for (const [key, value] of Object.entries({ '--entry-bg': current.colors.surface, '--entry-fg': current.colors.text,
         '--entry-border': current.colors.border })) if (value) element.style.setProperty(key, value);
@@ -103,7 +114,7 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
         if (anchor && typeof anchor.insertAdjacentElement === 'function') anchor.insertAdjacentElement('afterend', element);
         else sides[0].appendChild(element);
       }
-      element.style.display = 'inline-flex';
+      element.style.display = 'block';
       const rect = element.getBoundingClientRect(), side = sides[0].getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || rect.left < side.left || rect.right > side.right
         || rect.top < side.top || rect.bottom > side.bottom) element.style.display = 'none';
@@ -162,7 +173,7 @@ export function createZCodePageAdapter(environment = globalThis, configuration =
       },
       attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
         observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
-      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+      css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root :has(main){background-color:transparent!important;background-image:none!important}',
       scope: 'decoded image, viewport cover, unique validated ZCode main and root surfaces; deeper content layers and visual inspection are separate',
     }),
   });
