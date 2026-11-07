@@ -204,7 +204,7 @@ python3 tools/build-dsh-plugin.py
 python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
 ```
 
-构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试、一次性 profile 上的官方安装循环，以及在真实 DSH web 客户端上的机器级宿主验证（控制器注册、动画收束、侧栏入口、主题跟随、默认壁纸应用、设置浮层）；人工审美验收、壁纸导入对话框、插件管理页展示与生产 profile 安装仍开放，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](../../evidence/live-dsh-plugin-host-2026-11-05.md)与[插件合同](docs/dsh-plugin.md)。
+构建只做本地组装；把包安装进某个 DSH profile 是单独的手工步骤（`dsh plugin --profile <name> add <绝对路径>`，或宿主会话内的 `plugin_manager` install_bundle），本仓库不代替执行。CLI 随应用打包但没有 PATH 链接，可用 `ELECTRON_RUN_AS_NODE=1` 加 Electron 二进制与 asar 内的 `@deepseek-ai/dsh/lib/bin.js` 调用（完整命令见[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)）。本地证据覆盖组装确定性、校验器、单元测试、一次性 profile 上的官方安装循环、真实 DSH web 客户端上的机器级宿主验证（控制器注册、动画收束、侧栏入口、主题跟随、默认壁纸应用、设置浮层），以及 2026-11-07 真实桌面 carrier 上的设置行与嵌入面板验证（同轮移除侧栏胶囊）；壁纸导入对话框与插件管理页展示仍开放，壁纸已由用户验收，生产 desktop profile 经 workspace 符号链接实时运行，见[组装回执](../../evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](../../evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](../../evidence/live-dsh-plugin-host-2026-11-05.md)、[设置行回执](../../evidence/live-dsh-settings-section-2026-11-07.md)与[插件合同](docs/dsh-plugin.md)。
 
 ## 安装、升级与旧入口清理
 
