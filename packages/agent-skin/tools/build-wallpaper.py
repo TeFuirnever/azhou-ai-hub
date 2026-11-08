@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Package the project-private Azhou derivative for a one-shot renderer wallpaper.
+"""Package local private wallpaper into a staged payload; never commit generated artwork."""
 
-The generated script contains private artwork and belongs only in an ignored
-build payload or local preview directory, never in the tracked source tree.
-"""
 import argparse
 import base64
 import hashlib
@@ -11,75 +8,135 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import runpy
 import struct
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+ASSET = 'assets/private/wallpaper-scene-q-v3.png'
+DATA_PREFIX = 'data:image/png;base64,'
+MAX_IMAGE_BYTES = ((16 * 1024 * 1024 - len(DATA_PREFIX)) // 4) * 3
+
+
+def snapshot_image(path, output):
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError('Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.')
+    digest = hashlib.sha256()
+    header = b''
+    size = 0
+    with path.open('rb') as source:
+        while chunk := source.read(48 * 1024):
+            size += len(chunk)
+            header += chunk[:max(0, 26 - len(header))]
+            digest.update(chunk)
+            if size <= MAX_IMAGE_BYTES:
+                output.write(chunk)
+    if (len(header) < 26 or header[:8] != b'\x89PNG\r\n\x1a\n'
+            or header[12:16] != b'IHDR' or header[24] != 8 or header[25] not in (2, 6)):
+        raise RuntimeError('Wallpaper requires the private 8-bit RGB/RGBA PNG Q-style Azhou panorama.')
+    width, height = struct.unpack('>II', header[16:24])
+    if not (1024 <= width <= 8192 and 512 <= height <= 8192 and 1.4 <= width / height <= 2.5):
+        raise RuntimeError('Wallpaper artwork must be a landscape PNG, 1024–8192px wide, 512–8192px high, aspect 1.4–2.5.')
+    if len(DATA_PREFIX) + 4 * ((size + 2) // 3) > 16 * 1024 * 1024:
+        raise RuntimeError('Wallpaper image exceeds the renderer local-image limit.')
+    return digest.hexdigest(), width, height, header[24], header[25]
+
+
+def as_classic_module(source, exported, local, error_message):
+    if source.count(exported) != 1:
+        raise RuntimeError(error_message)
+    text = source.replace(exported, local, 1)
+    if re.search(r'^\s*import\s', text, re.MULTILINE):
+        raise RuntimeError(error_message)
+    return text
+
+
+def write_script(path, renderer, adapter, image, payload):
+    marker = '__AZHOU_IMAGE_STREAM__'
+    data = dict(payload)
+    data['image'] = marker
+    encoded = json.dumps(data, ensure_ascii=False)
+    before, after = encoded.split(json.dumps(marker), 1)
+    digest = hashlib.sha256()
+    with path.open('wb') as stream:
+        def emit(text):
+            chunk = text.encode('utf-8') if isinstance(text, str) else text
+            stream.write(chunk)
+            digest.update(chunk)
+
+        emit('(async () => {\n' + renderer + '\n')
+        if adapter is not None:
+            emit(adapter + '\nconst pageAdapter = createZCodePageAdapter(globalThis);\nconst wallpaperPayload = ')
+        else:
+            emit('return await installRenderer(')
+        emit(before + '"' + DATA_PREFIX)
+        image.seek(0)
+        carry = b''
+        while chunk := image.read(48 * 1024):
+            data_chunk = carry + chunk
+            full = len(data_chunk) - len(data_chunk) % 3
+            emit(base64.b64encode(data_chunk[:full]))
+            carry = data_chunk[full:]
+        emit(base64.b64encode(carry))
+        emit('"' + after)
+        if adapter is None:
+            emit(');\n})()\n')
+        else:
+            emit(';\nwallpaperPayload.pageAdapter = pageAdapter;\nreturn await installRenderer(wallpaperPayload);\n})()\n')
+    return digest.hexdigest()
 
 
 def package(bundle, *, host='codex'):
     if host not in ('codex', 'zcode'):
         raise RuntimeError('Unsupported wallpaper host.')
-    spec = importlib.util.spec_from_file_location('azhou_artifacts', ROOT / 'tools/verify-artifacts.py')
-    artifacts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(artifacts)
-    artifacts.configure_build_host(host)
-    bundle = artifacts.staged_path(bundle)
-    theme = artifacts.load_theme_config(ROOT)
-    source = ROOT / 'assets/private/wallpaper-scene-q-v3.png'
-    if source.is_symlink() or not source.is_file():
-        raise RuntimeError('Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.')
-    data = source.read_bytes()
-    if (len(data) < 26 or data[:8] != b'\x89PNG\r\n\x1a\n'
-            or data[12:16] != b'IHDR'
-            or data[24] != 8 or data[25] not in (2, 6)):
-        raise RuntimeError('Wallpaper requires the private 8-bit RGB/RGBA PNG Q-style Azhou panorama.')
-    width, height = struct.unpack('>II', data[16:24])
-    if not (1024 <= width <= 8192 and 512 <= height <= 8192 and 1.4 <= width / height <= 2.5):
-        raise RuntimeError('Wallpaper artwork must be a landscape PNG, 1024–8192px wide, 512–8192px high, aspect 1.4–2.5.')
-    if ((len(data) + 2) // 3) * 4 + 22 > 16 * 1024 * 1024:
-        raise RuntimeError('Wallpaper image exceeds the renderer local-image limit.')
-    renderer = (ROOT / 'wallpaper/renderer.js').read_text()
-    prefix = 'export async function installRenderer('
-    if renderer.count(prefix) != 1 or re.search(r'^\s*import\s', renderer, re.M):
-        raise RuntimeError('Wallpaper renderer must export one self-contained installRenderer function.')
-    css = (ROOT / 'wallpaper/wallpaper.css').read_text()
-    payload = {'version': artifacts.VERSION,
-               'image': 'data:image/png;base64,' + base64.b64encode(data).decode('ascii'),
-               'imageSHA256': hashlib.sha256(data).hexdigest(), 'css': css,
-               'strength': theme['wallpaper']['strength']}
-    expression = '(async () => {\n' + renderer.replace(prefix, 'async function installRenderer(', 1)
+    helper = runpy.run_path(str(ROOT / 'tools/verify-artifacts.py'))
+    helper['configure_build_host'](host)
+    bundle = helper['staged_path'](bundle)
+    theme = helper['load_theme_config'](ROOT)
+    version = helper['VERSION']
+    with tempfile.TemporaryFile(mode='w+b') as image:
+        image_hash, width, height, depth, color = snapshot_image(ROOT / ASSET, image)
+        renderer_text = (ROOT / 'wallpaper/renderer.js').read_text(encoding='utf-8')
+        css = (ROOT / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
+        renderer = as_classic_module(renderer_text, 'export async function installRenderer(',
+                                     'async function installRenderer(', 'Wallpaper renderer must export one self-contained installRenderer function.')
+        adapter = None
+        adapter_hash = None
+        if host == 'zcode':
+            raw = (ROOT / 'extension/hosts/zcode.mjs').read_bytes()
+            adapter_hash = hashlib.sha256(raw).hexdigest()
+            spec = importlib.util.spec_from_file_location('wallpaper_startup_builder', ROOT / 'tools/build-startup.py')
+            builder = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(builder)
+            adapter = builder._module_function(raw.decode('utf-8'), 'export function createZCodePageAdapter(',
+                                               'function createZCodePageAdapter(', 'ZCode page adapter')
+        payload = {'version': version, 'image': '', 'imageSHA256': image_hash,
+                   'css': css, 'strength': theme['wallpaper']['strength']}
+        output = bundle / 'Contents/Resources/wallpaper'
+        output.mkdir(parents=True, exist_ok=True)
+        script_hash = write_script(output / 'install.js', renderer, adapter, image, payload)
+    manifest = {
+        'version': version, 'imageSHA256': image_hash, 'asset': ASSET,
+        'width': width, 'height': height, 'alpha': color == 6,
+        'bitDepth': depth, 'colorType': color, 'displayMode': 'cover',
+        'rendererSHA256': hashlib.sha256(renderer_text.encode('utf-8')).hexdigest(),
+        'cssSHA256': hashlib.sha256(css.encode('utf-8')).hexdigest(),
+        'scriptSHA256': script_hash,
+        'scope': ('ZCode' if host == 'zcode' else 'Codex') + ' renderer only; no desktop image or official bundle writes',
+    }
     if host == 'zcode':
-        builder_spec = importlib.util.spec_from_file_location('azhou_zcode_builder', ROOT / 'tools/build-startup.py')
-        builder = importlib.util.module_from_spec(builder_spec)
-        builder_spec.loader.exec_module(builder)
-        adapter = builder._module_function((ROOT / 'extension/hosts/zcode.mjs').read_text(),
-            'export function createZCodePageAdapter(', 'function createZCodePageAdapter(', 'ZCode page adapter')
-        expression += '\n' + adapter + '\nconst pageAdapter = createZCodePageAdapter(globalThis);\n'
-        expression += 'const wallpaperPayload = ' + json.dumps(payload, ensure_ascii=False) + ';\n'
-        expression += 'wallpaperPayload.pageAdapter = pageAdapter;\nreturn await installRenderer(wallpaperPayload);\n})()\n'
-    else:
-        expression += '\nreturn await installRenderer(' + json.dumps(payload, ensure_ascii=False) + ');\n})()\n'
-    target = bundle / 'Contents/Resources/wallpaper'
-    target.mkdir(parents=True, exist_ok=True)
-    (target / 'install.js').write_text(expression, encoding='utf-8')
-    manifest = {'version': artifacts.VERSION, 'imageSHA256': payload['imageSHA256'],
-                'asset': 'assets/private/wallpaper-scene-q-v3.png',
-                'width': width, 'height': height, 'alpha': data[25] == 6,
-                'bitDepth': data[24], 'colorType': data[25], 'displayMode': 'cover',
-                'rendererSHA256': hashlib.sha256(renderer.encode()).hexdigest(),
-                'cssSHA256': hashlib.sha256(css.encode()).hexdigest(),
-                'scriptSHA256': hashlib.sha256(expression.encode()).hexdigest(),
-                'scope': 'Codex renderer only; no desktop image or official bundle writes'}
-    if host == 'zcode':
-        manifest.update(targetHost='zcode', adapterSHA256=hashlib.sha256((ROOT / 'extension/hosts/zcode.mjs').read_bytes()).hexdigest(),
-                        scope='ZCode renderer only; no desktop image or official bundle writes')
-    (target / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
-    print('Packaged private Azhou wallpaper:', target)
+        manifest.update({'targetHost': 'zcode', 'adapterSHA256': adapter_hash})
+    (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print('Packaged private Azhou wallpaper:', output)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--host', choices=('codex', 'zcode'), default='codex')
     args = parser.parse_args()
     package(args.bundle, host=args.host)
+
+
+if __name__ == '__main__':
+    main()

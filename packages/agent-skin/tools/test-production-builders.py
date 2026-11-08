@@ -115,6 +115,21 @@ class WallpaperPackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Missing private wallpaper artwork"):
                 self.module.package(self.stage)
 
+    def test_package_preserves_artwork_across_encoding_boundaries(self):
+        header = png_header(1400, 1000)
+        for length in (49151, 49152, 49153, 98305):
+            with self.subTest(length=length):
+                image = header + b"x" * (length - len(header))
+                self.image.write_bytes(image)
+                self.package()
+                output = self.stage / "Contents/Resources/wallpaper"
+                script = (output / "install.js").read_text(encoding="utf-8")
+                payload = json.loads(script.rsplit("return await installRenderer(", 1)[1].removesuffix(");\n})()\n"))
+                prefix = "data:image/png;base64,"
+                self.assertTrue(payload["image"].startswith(prefix))
+                self.assertEqual(base64.b64decode(payload["image"][len(prefix):], validate=True), image)
+                self.assertEqual(payload["imageSHA256"], hashlib.sha256(image).hexdigest())
+
     def test_package_rejects_bad_png_depth_color_and_dimensions(self):
         with mock.patch.object(self.module, "ROOT", self.root):
             cases = (
@@ -146,6 +161,40 @@ class WallpaperPackageTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(RuntimeError, "one self-contained"):
                 self.module.package(self.stage)
+
+    def test_oversized_artwork_is_rejected_with_bounded_temporary_storage(self):
+        self.image.write_bytes(png_header(1400, 1000, padding=13 * 1024 * 1024))
+        limit = ((16 * 1024 * 1024 - len("data:image/png;base64,")) // 4) * 3
+        original_temporary = tempfile.TemporaryFile
+
+        class LimitedTemporary:
+            def __init__(self, stream):
+                self.stream = stream
+                self.total = 0
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def write(self, data):
+                self.total += len(data)
+                if self.total > limit:
+                    raise OSError("synthetic temporary storage exhausted")
+                return self.stream.write(data)
+
+            def __getattr__(self, name):
+                return getattr(self.stream, name)
+
+        def limited(*args, **kwargs):
+            return LimitedTemporary(original_temporary(*args, **kwargs))
+
+        with mock.patch.object(tempfile, "TemporaryFile", side_effect=limited):
+            with mock.patch.object(self.module, "ROOT", self.root):
+                with self.assertRaisesRegex(RuntimeError, "renderer local-image limit"):
+                    self.module.package(self.stage)
 
     def test_cli_packages_the_requested_stage(self):
         script = self.root / "tools/build-wallpaper.py"
