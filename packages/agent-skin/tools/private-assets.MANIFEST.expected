@@ -1,0 +1,25 @@
+# Expected private build assets (design doc L0, incident families P3.4/P10.1).
+# One entry per line: "<path relative to the package root>" optionally followed
+# by a 64-hex sha256 baseline. Existence is always required; a recorded hash is
+# verified when present. The artwork stays out of Git by design; this manifest
+# ships in Git so every checkout can run tools/check-private-assets.py. An
+# artwork-free checkout (CI shape) is green with an explicit fresh-checkout
+# note; any artwork present puts the gate in strict mode, so a partial or
+# drifted maintainer copy fails red at layer 0.
+#
+# Requirement provenance (checked against the actual tool logic):
+#   working.png, wallpaper-scene-q-v3.png, scene.js
+#     tools/build-macos.sh asset guard; working/wallpaper also in
+#     tools/build-startup.py PRIVATE_STARTUP_INPUTS; wallpaper also in
+#     tools/build-wallpaper.py.
+#   app-icon/source.png, entry-avatar.png
+#     theme-config.json identity.iconInput / identity.entryAvatarInput, enforced
+#     by tools/build-startup.py _require_private_inputs and tools/build-preflight.py.
+#   app-icon/zcode.png
+#     theme-config.json hostIcons.zcode, enforced by tools/verify-artifacts.py.
+assets/private/app-icon/source.png fd0d4bfd7b394f45c8724436e765be5ecfa9f675a2a9214619a65e32eebbf21d
+assets/private/app-icon/zcode.png e0fd017f82caa8258e6bc784398afa8521fd06676c0baffbda13acdc579bdbdf
+assets/private/entry-avatar.png fd0d4bfd7b394f45c8724436e765be5ecfa9f675a2a9214619a65e32eebbf21d
+assets/private/scene.js 6368a43150e2b75d0077a26bb698407c2eed6424fd960520398535ee2d0c92e0
+assets/private/wallpaper-scene-q-v3.png 566eee5034343bb8463fa684dc0b90fe3d2c5d8f2adde1c9d71356bf192acbcb
+assets/private/working.png 34dc9a8e9c06c226ec0cc80878548f118ff4a23b4a87d160674e66db4a905e58

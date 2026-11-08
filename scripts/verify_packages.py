@@ -114,6 +114,11 @@ def main() -> int:
             packages["agent-skin"],
             ["tools/test-install-macos.py"],
         ),
+        run_suite(
+            "agent-skin e2e quick layer",
+            packages["agent-skin"],
+            ["tools/e2e.py", "--layer", "quick"],
+        ),
     ]
     return next((code for code in results if code), 0)
 
