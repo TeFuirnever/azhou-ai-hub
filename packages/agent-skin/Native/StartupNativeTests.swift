@@ -683,6 +683,49 @@ struct StartupNativeTests {
         expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"]) == "/tmp/startup.jsonl",
                "non-probe modes keep their requested log file")
 
+        let dailyEvents = URL(fileURLWithPath: "/tmp/daily")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"],
+                                         dailyEventDirectory: dailyEvents) == "/tmp/startup.jsonl",
+               "explicit --log keeps priority over the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin"],
+                                         dailyEventDirectory: dailyEvents) == "/tmp/daily/events.jsonl",
+               "plain launches fall back to the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--preview"], dailyEventDirectory: dailyEvents) == nil,
+               "preview does not open the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--smoke-test"], dailyEventDirectory: dailyEvents) == nil,
+               "smoke tests do not open the daily event sink")
+        expect(StartupEventJournal.directory(host: .zcode).lastPathComponent == "AzhouZCodeStartup",
+               "ZCode daily events land in the ZCode log directory")
+        expect(StartupEventJournal.directory(host: nil).lastPathComponent == "AzhouCodexStartup",
+               "an unknown host falls back to the Codex log directory")
+
+        do {
+            let journal = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("azhou-startup-journal-\(getuid())-\(UUID().uuidString)", isDirectory: true)
+            let path = journal.appendingPathComponent("events.jsonl").path
+            if let first = StartupEventJournal.appendHandle(path: path) {
+                try? first.write(contentsOf: Data("first\n".utf8)); try? first.close()
+            }
+            if let second = StartupEventJournal.appendHandle(path: path) {
+                try? second.write(contentsOf: Data("second\n".utf8)); try? second.close()
+            }
+            expect((try? String(contentsOfFile: path, encoding: .utf8)) == "first\nsecond\n",
+                   "the daily event sink appends across launches instead of truncating")
+            if let big = StartupEventJournal.appendHandle(path: path) {
+                try? big.truncate(atOffset: 2 * 1024 * 1024 + 1); try? big.close()
+            }
+            if let capped = StartupEventJournal.appendHandle(path: path) {
+                expect((try? capped.seekToEnd()) == 0,
+                       "the daily event sink truncates itself once it exceeds the 2 MiB bound")
+                try? capped.close()
+            }
+            let link = journal.appendingPathComponent("linked-events.jsonl")
+            try? FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/etc/passwd")
+            expect(StartupEventJournal.appendHandle(path: link.path) == nil,
+                   "the daily event sink refuses a symlinked sink path")
+            try? FileManager.default.removeItem(atPath: journal.path)
+        }
+
         let discoveredTarget = URL(fileURLWithPath: "/Applications/Codex.app")
         var targetLookupCalls = 0
         func targetLookup(arguments: [String], promoted: Bool = false) -> URL? {
