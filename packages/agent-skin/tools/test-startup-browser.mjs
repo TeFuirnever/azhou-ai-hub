@@ -788,6 +788,8 @@ try {
     ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
     ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
+    ['/extension/hosts/dsh.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/dsh.mjs'), 'utf8')]],
+    ['/extension/hosts/zcode.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/zcode.mjs'), 'utf8')]],
   ]);
   if (generatedPayloadRoute !== null) {
     routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);
@@ -6271,6 +6273,125 @@ try {
     }
   });
 
+
+  await check('detached startup overlay invalidates playback readiness', async () => {
+    await navigate('/fixture.html?animation=1');
+    await awaitGeneratedReady('actual animation playing');
+    const after = await cdp.evaluate(`(() => {
+      document.body.replaceChildren();
+      return window.__startupAPI.status();
+    })()`);
+    assert.equal(after.ready, false);
+    assert.equal(after.phase, 'failed');
+    assert.equal(after.overlay, false);
+    assert.equal(after.reason, 'startup-interrupted');
+  });
+
+  async function startLifecycleFixture(kind) {
+    await navigate('/fixture.html?legacy-only=1');
+    const installed = await cdp.evaluate(`(async kind => {
+      const {installStartup} = await import('/extension/renderer.mjs');
+      let host = window;
+      let adapter;
+      if (kind === 'dsh') {
+        const {createDSHPageAdapter} = await import('/extension/hosts/dsh.mjs');
+        window.__ModuleLoader__ = {load() {}};
+        window.__DSH_BOOT__ = {};
+        adapter = createDSHPageAdapter(host, {sidebarEntry:false});
+      } else {
+        const href = kind === 'zcode'
+          ? 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
+          : 'app://-/index.html?initialRoute=%2F';
+        host = new Proxy(window, {get(target, name) {
+          if (name === 'top') return host;
+          if (name === 'location') return new URL(href);
+          const value = Reflect.get(target, name, target);
+          return ['addEventListener','removeEventListener','setTimeout','clearTimeout','getComputedStyle','matchMedia'].includes(name)
+            ? value.bind(target) : value;
+        }});
+        if (kind === 'zcode') {
+          const {createZCodePageAdapter} = await import('/extension/hosts/zcode.mjs');
+          adapter = createZCodePageAdapter(host, {controllerMetadata:{
+            controllerInstanceID:crypto.randomUUID(), createdByOperationID:crypto.randomUUID(),
+            payloadSHA256:'a'.repeat(64), documentToken:'fixture-document',
+          }});
+        } else {
+          const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+          adapter = createCodexPageAdapter(host);
+        }
+      }
+      const evidence = window.lifecycleFixture = {disposed:0,closed:0};
+      const payload = (_win, _doc, _location, _performance, _indexedDB, _Image, _Path2D, _URL,
+        _raf, _cancelRaf, _setTimeout, _clearTimeout, _module, send, spec) => {
+        const emit = (action, fields={}) => send({type:'azhou-startup', action, runId:spec.runId, ...fields});
+        if (spec.intent === 'play') {
+          evidence.ready = () => emit('ready');
+          evidence.complete = () => emit('complete', {skipped:false});
+        } else queueMicrotask(() => emit('ready'));
+        return {openSettings() { emit('settings-open'); return true; },
+          dispose() { if (spec.intent === 'settings') evidence.disposed++; }};
+      };
+      return installStartup(payload, host, adapter);
+    })(${JSON.stringify(kind)})`);
+    assert.equal(installed.installed, true, kind + ' fixture installed');
+    const state = await cdp.evaluate('window.__azhouStartup.status()');
+    assert.equal(state.owner, 'azhou-' + kind + '-startup');
+    assert.equal(state.phase, 'loading');
+  }
+
+  for (const kind of ['codex', 'zcode', 'dsh']) {
+    await check(kind + ' startup and settings lifecycle contract', async () => {
+      await startLifecycleFixture(kind);
+      const completed = await cdp.evaluate(`(() => {
+        lifecycleFixture.ready();
+        lifecycleFixture.complete();
+        return __azhouStartup.status();
+      })()`);
+      assert.equal(completed.phase, 'complete');
+      assert.equal(completed.ready, true);
+      assert.equal(completed.overlay, false);
+      for (const ready of [false, true]) {
+        await startLifecycleFixture(kind);
+        if (ready) await cdp.evaluate('lifecycleFixture.ready()');
+        const state = await cdp.evaluate(`(() => {
+          document.body.replaceChildren();
+          const {phase,ready,overlay,reason} = __azhouStartup.status();
+          return {phase,ready,overlay,reason};
+        })()`);
+        assert.deepEqual(state, {phase:'failed',ready:false,overlay:false,reason:'startup-interrupted'},
+          ready ? 'overlay lost after ready' : 'overlay lost before ready');
+      }
+      await startLifecycleFixture(kind);
+      await cdp.evaluate('lifecycleFixture.ready()');
+      assert.equal(await cdp.evaluate('__azhouStartup.openSettings()'), true);
+      assert.equal(await cdp.evaluate('document.querySelector("#root").inert'), true);
+      await cdp.evaluate('document.querySelector("iframe[aria-label]").remove()');
+      await until(() => cdp.evaluate('document.querySelector("#root").inert === false'),
+        1000, 'host unlocked without a status request');
+      assert.equal(await cdp.evaluate('__azhouStartup.status().reason'), 'startup-interrupted');
+    });
+  }
+
+  await check('DSH settings panel releases its resources when its iframe is removed', async () => {
+    await startLifecycleFixture('dsh');
+    const mounted = await cdp.evaluate(`(() => {
+      lifecycleFixture.ready();
+      const target = document.body.appendChild(document.createElement('div'));
+      lifecycleFixture.dispose = __azhouStartup.mountSettings(target, {onClose:()=>lifecycleFixture.closed++});
+      if (typeof lifecycleFixture.dispose !== 'function' || target.querySelectorAll('iframe').length !== 1) return false;
+      target.querySelector('iframe').remove();
+      return true;
+    })()`);
+    assert.equal(mounted, true, 'DSH controller mounted one embedded settings frame');
+    await until(() => cdp.evaluate('lifecycleFixture.disposed === 1 && lifecycleFixture.closed === 1'),
+      1000, 'detached DSH settings panel released and host notified');
+    const state = await cdp.evaluate(`(() => {
+      lifecycleFixture.dispose();
+      return {disposed:lifecycleFixture.disposed,closed:lifecycleFixture.closed,
+        phase:__azhouStartup.status().phase};
+    })()`);
+    assert.deepEqual(state, {disposed:1,closed:1,phase:'playing'});
+  });
 
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;

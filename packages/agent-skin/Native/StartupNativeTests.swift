@@ -3657,7 +3657,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     ready.close();ready.close()
     expect(ready.events.contains { $0["stage"] as? String == "zcode-open-selected-process" && $0["native_child_wait_claim"] as? Bool == false }, "NSWorkspace selected host never fabricates native child wait")
 
-    for value in ["complete", "before-ready", "already-active", "readylost", "badreceipt", "absent", "dispose-failed", "late"] {
+    for value in ["complete", "before-ready", "already-active", "readylost", "badreceipt", "absent", "dispose-failed", "late", "interrupted"] {
         try await mode(value);let f = try make();let b = try await open(f);let observed = ZCodeInstallObservation();let req = f.request
         var expiry: Task<Void, Never>?
         if value == "late" { expiry = Task { try? await Task.sleep(nanoseconds: 150_000_000);f.fake.uptime = 161 } }
@@ -3674,6 +3674,12 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
             case "readylost", "late":
                 guard case .partial(_, .present(.instance(let r), .created), let cleanup) = outcome else { fatalError("confirmed receipt erased after interruption") }
                 expect(r.createdByOperationID == req.operationID && cleanup.state == .unknown, "later interruption preserves confirmed effect and unknown cleanup")
+            case "interrupted":
+                guard case .partial(let failure, .present(.instance(let r), .created), _) = outcome else {
+                    fatalError("ZCode polled past terminal failure and accepted a later ready")
+                }
+                expect(failure.detail == "startup-interrupted" && r.createdByOperationID == req.operationID,
+                       "terminal controller failure promptly reports interruption with its acknowledged receipt")
             case "dispose-failed":
                 guard case .ready(let r, _) = outcome else { fatalError("dispose fixture not ready") }
                 expect(try await f.assembly.dispose(b, r, 160) == false, "unconfirmed dispose cannot claim clean")

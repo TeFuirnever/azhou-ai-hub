@@ -94,6 +94,13 @@ unitTest('exact status bytes expose only a verified controller and bind status r
   }
 });
 
+unitTest('status exposes the fixed interruption reason only for a failed run', () => {
+  const read = (phase, reason) => status(controller({ status: () => state({ phase, reason, ready: false }) }));
+  assert.equal(read('failed', 'startup-interrupted').reason, 'startup-interrupted');
+  assert.equal(Object.hasOwn(read('failed', 'untrusted page text'), 'reason'), false);
+  assert.equal(Object.hasOwn(read('playing', 'startup-interrupted'), 'reason'), false);
+});
+
 unitTest('global startup accessor is present and unconfirmed without invoking its getter (regression)', () => {
   const page = context(); const count = { calls: 0 };
   accessor(page, '__azhouStartup', controller(), count);
