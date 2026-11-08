@@ -294,6 +294,8 @@ The same command checks repository policy, all unit tests, three public benchmar
 
 Agent Skin also has a package gate: `python packages/agent-skin/tools/test-unit-coverage.py` on macOS requires at least 95% unit-test line coverage for every production language and the complete package. Its Required CI job is separate from browser functional tests and installed-app acceptance. See [Agent Skin testing and acceptance](packages/agent-skin/docs/testing.md) for the full scope, dependencies and Finder/Dock, cold-start, wallpaper and installation cases.
 
+Agent Skin's ZCode end-to-end test system is landed behind one entry, `python packages/agent-skin/tools/e2e.py --layer quick|cold|daily|all`: the runner pins the working directory to its own worktree, passes child exit codes through untouched and journals its own runs. The quick layer — the L0 private-asset manifest gate plus the E2E-family unit suites — is the per-PR gate tier: it runs inside `python scripts/verify.py` as an agent-skin suite of `scripts/verify_packages.py`, so the same quick layer gates every PR locally and in CI, and the tracked manifest `packages/agent-skin/tools/private-assets.MANIFEST.expected` keeps its L0 gate runnable on artwork-free checkouts (strict wherever the private artwork is present). The real-host layers (disposable-profile cold start and the daily double-click) stay manual: they default to `--plan` and only execute with an explicit `--execute`. The ten incident families and their guard landings are indexed in [the E2E regression index](packages/agent-skin/evidence/e2e-regression-index.md).
+
 - [Roadmap](docs/roadmap.md)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)

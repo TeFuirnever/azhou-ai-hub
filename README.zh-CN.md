@@ -294,6 +294,8 @@ python scripts/verify.py
 
 Agent Skin 另有包级门禁：在 macOS 执行 `python packages/agent-skin/tools/test-unit-coverage.py`，要求每种生产语言及完整包的 UT 行覆盖率至少 95%。该 Required CI 作业与浏览器功能回归、已安装应用验收分别判定。完整统计范围、依赖及 Finder/Dock、冷启动、壁纸、安装升级用例见 [Agent Skin 测试与验收](packages/agent-skin/docs/testing.md)。
 
+Agent Skin 的 ZCode 端到端测试系统已落地，唯一入口为 `python packages/agent-skin/tools/e2e.py --layer quick|cold|daily|all`：runner 启动即校验工作目录属于自身 worktree，子命令 exit code 原样透传，并记录自身运行日志。quick 层（L0 私有资产清单门禁加 E2E 家族单测）定位为每 PR 门禁层：它作为 `scripts/verify_packages.py` 的 agent-skin 套件在 `python scripts/verify.py` 内运行，本地与 CI 每 PR 走同一条 quick 层；清单文件 `packages/agent-skin/tools/private-assets.MANIFEST.expected` 随仓库提供（不进被政策整体禁跟踪的 assets 树），无素材的 checkout 也能运行该门禁，存在私有素材时一律严格校验。真实宿主层（一次性 profile 冷启动、日用双击路径）保持手动，默认 `--plan` 演练，仅在显式 `--execute` 下运行。十族事故（F1–F10）与守卫落点见 [E2E 事故回归索引](packages/agent-skin/evidence/e2e-regression-index.md)。
+
 - [路线图](docs/roadmap.md)
 - [变更记录](CHANGELOG.md)
 - [安全政策](SECURITY.md)
