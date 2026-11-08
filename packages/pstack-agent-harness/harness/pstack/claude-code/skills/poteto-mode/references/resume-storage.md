@@ -1,5 +1,7 @@
 # Resume storage
 
+> **Design only:** `resume.mjs` is not shipped in this package. The commands and behavior below describe a proposed interface; do not invoke them or assume a checkpoint is available. Use the existing session pickup playbook and preserve the task's worktree until a verified recovery point exists.
+
 Pause and pickup share one project locator. The `resume.mjs` command under `skills/poteto-mode/scripts/` resolves the project's Git common directory and stores checkpoints under its `pstack/resume/` directory. `latest.json` points to the latest complete checkpoint and records the worktree, branch, timestamp, note, and requested artifacts with content hashes.
 
 Claude Code, Codex, and other runtimes use this same command and location. Runtime-specific home directories and transcript encodings do not affect lookup. Git worktrees of the same repository share the locator, and Git excludes its contents from commits. This requires a local Git checkout whose common directory survives the interruption. It does not survive deleting or recloning the repository; transfer the complete checkpoint to durable storage before that happens and give the resumed session its locator.
