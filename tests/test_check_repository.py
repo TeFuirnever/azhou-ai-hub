@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts.check_repository import (
     MEMORY_CREDIT_SURFACES,
@@ -571,10 +572,10 @@ class RepositoryPolicyTest(unittest.TestCase):
             )
 
     def test_skill_brand_contract_rejects_missing_required_markers(self) -> None:
-        relative = "skills/super-llm-wiki/SKILL.md"
+        relative = "skills/super-repo-pedant/SKILL.md"
         contract = SKILL_BRAND_CONTRACTS[relative]
         cases = (
-            ("identity", ("🦊 阿舟 · Super LLM Wiki",), "identity missing"),
+            ("identity", ("🦊 阿舟 · Super Repo Pedant",), "identity missing"),
             ("motto", (contract["motto"],), "motto missing"),
             ("success", ("✅ 验证通过",), "success marker missing"),
             ("failure", ("❌ 验证失败",), "failure marker missing"),
@@ -608,7 +609,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 )
 
     def test_skill_brand_contract_rejects_a_missing_brand_layer(self) -> None:
-        relative = "skills/super-llm-wiki/SKILL.md"
+        relative = "skills/super-repo-pedant/SKILL.md"
         contract = SKILL_BRAND_CONTRACTS[relative]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -938,6 +939,17 @@ class ChatPresentationTest(unittest.TestCase):
             path.write_text("# empty\n", encoding="utf-8")
             errors = check_chat_presentation_examples(root)
             self.assertIn("chat presentation marker missing: docs/skill-standard.md", errors)
+
+
+class PublicFilesWorktreeTest(unittest.TestCase):
+    def test_public_files_excludes_tracked_paths_deleted_in_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            present = root / "present.md"
+            present.write_text("current\n", encoding="utf-8")
+            result = mock.Mock(stdout=b"present.md\0deleted.md\0")
+            with mock.patch("scripts.check_repository.subprocess.run", return_value=result):
+                self.assertEqual([present], public_files(root))
 
 
 if __name__ == "__main__":
