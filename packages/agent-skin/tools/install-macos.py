@@ -2,6 +2,8 @@
 """Install one Azhou app from an unregistered payload; retire proven project copies."""
 import argparse
 import contextlib
+import ctypes
+import errno
 import fcntl
 import json
 import os
@@ -26,6 +28,19 @@ LEGACY_SHA256 = '7a39526e155c2b1fd06d1f60dc74f3d6cf3e85a7bdf3d5e86b0e1381828fc68
 LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 fingerprint = HELPERS['fingerprint']
 swap = HELPERS['swap']
+
+
+def publish_exclusive(source, destination):
+    rename_excl = 0x00000004
+    libc = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
+    rename = libc.renamex_np
+    rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(os.fsencode(source), os.fsencode(destination), rename_excl) != 0:
+        error = ctypes.get_errno()
+        if error == errno.EEXIST:
+            raise RuntimeError('规范入口被其他操作创建，未覆盖。')
+        raise OSError(error, os.strerror(error), str(destination))
 
 
 def version_key(info):
@@ -400,7 +415,7 @@ def install_payload(source_hash, original, before_swap=None):
                 raise RuntimeError('规范入口被其他操作创建，未覆盖。')
             if before_swap is not None:
                 before_swap()
-            os.rename(staged, DESTINATION)
+            publish_exclusive(staged, DESTINATION)
             try:
                 verify(DESTINATION)
                 if fingerprint(DESTINATION) != source_hash:

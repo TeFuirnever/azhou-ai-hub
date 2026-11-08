@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated installer regression tests; macOS commands are mocked, not validated."""
+"""Isolated installer regressions; native exclusive rename is exercised on macOS."""
 import contextlib
 import importlib.util
 import io
@@ -57,6 +57,8 @@ class InstallerTests(unittest.TestCase):
         patch.object(subprocess, 'run', self.run_command).start()
         patch.object(subprocess, 'check_output', self.check_output).start()
         patch.object(m, 'swap', self.exchange).start()
+        self.native_publish_exclusive = m.publish_exclusive
+        patch.object(m, 'publish_exclusive', self.publish_exclusive).start()
         self.output = contextlib.redirect_stdout(self.capture)
         self.output.__enter__()
         self.addCleanup(self.output.__exit__, None, None, None)
@@ -194,6 +196,11 @@ class InstallerTests(unittest.TestCase):
         os.rename(left, temporary)
         os.rename(right, left)
         os.rename(temporary, right)
+
+    def publish_exclusive(self, source, destination):
+        if destination.exists() or destination.is_symlink():
+            raise RuntimeError('规范入口被其他操作创建，未覆盖。')
+        os.rename(source, destination)
 
     def assert_clean(self):
         m = self.module
@@ -673,6 +680,41 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(m.fingerprint(m.DESTINATION), before)
         self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
 
+    def test_first_install_verification_failure_retracts_new_entry(self):
+        m = self.module
+        real_verify = m.verify
+
+        def verify(path):
+            if Path(path) == m.DESTINATION:
+                raise RuntimeError('injected installed verification failure')
+            return real_verify(path)
+
+        with patch.object(m, 'verify', side_effect=verify):
+            with self.assertRaisesRegex(RuntimeError, 'injected installed verification failure'):
+                m.install()
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
+    def test_first_install_retraction_failure_preserves_recovery_directory(self):
+        m = self.module
+        real_verify, real_rename = m.verify, os.rename
+
+        def verify(path):
+            if Path(path) == m.DESTINATION:
+                raise RuntimeError('injected installed verification failure')
+            return real_verify(path)
+
+        def rename(source, destination):
+            if Path(source) == m.DESTINATION and Path(destination).name == 'payload':
+                raise OSError('injected retract failure')
+            return real_rename(source, destination)
+
+        with patch.object(m, 'verify', side_effect=verify), patch.object(m.os, 'rename', side_effect=rename):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
+                m.install()
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertEqual(len(list(m.DESTINATION.parent.glob('.azhou-install-*'))), 1)
+
     def test_rollback_failure_keeps_original_without_app_suffix(self):
         m = self.module
         self.old_pair(installed_path=m.DESTINATION)
@@ -895,6 +937,56 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '归属在交换前发生变化'):
             m.recheck_handoff(old_root, expected)
 
+    def test_new_entry_arriving_before_publication_is_preserved(self):
+        m = self.module
+        source_hash = m.fingerprint(m.SOURCE)
+        created = {}
+
+        def create_competing_entry():
+            m.DESTINATION.mkdir()
+            created['inode'] = m.DESTINATION.stat().st_ino
+
+        with self.assertRaisesRegex(RuntimeError, '规范入口被其他操作创建'):
+            m.install_payload(source_hash, None, before_swap=create_competing_entry)
+        self.assertEqual(m.DESTINATION.stat().st_ino, created['inode'])
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'renamex_np is a macOS API')
+    def test_native_publication_preserves_entry_created_before_rename(self):
+        m = self.module
+        source_hash = m.fingerprint(m.SOURCE)
+        created = {}
+
+        def create_competing_entry():
+            m.DESTINATION.mkdir()
+            created['inode'] = m.DESTINATION.stat().st_ino
+
+        with patch.object(m, 'publish_exclusive', self.native_publish_exclusive):
+            with self.assertRaisesRegex(RuntimeError, '规范入口被其他操作创建'):
+                m.install_payload(source_hash, None, before_swap=create_competing_entry)
+        self.assertEqual(m.DESTINATION.stat().st_ino, created['inode'])
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'renamex_np is a macOS API')
+    def test_native_publication_refuses_existing_directory_and_symlink(self):
+        source, destination = self.base / 'source', self.base / 'destination'
+        source.mkdir()
+        destination.mkdir()
+        with self.assertRaisesRegex(RuntimeError, '规范入口被其他操作创建'):
+            self.native_publish_exclusive(source, destination)
+        self.assertTrue(source.is_dir())
+        self.assertTrue(destination.is_dir())
+        destination.rmdir()
+        destination.symlink_to(self.base / 'missing')
+        with self.assertRaisesRegex(RuntimeError, '规范入口被其他操作创建'):
+            self.native_publish_exclusive(source, destination)
+        self.assertTrue(source.is_dir())
+        self.assertTrue(destination.is_symlink())
+        destination.unlink()
+        self.native_publish_exclusive(source, destination)
+        self.assertFalse(source.exists())
+        self.assertTrue(destination.is_dir())
+
     def test_new_install_payload_rolls_back_or_preserves_temporary_after_failed_retraction(self):
         m = self.module
         source_hash = m.fingerprint(m.SOURCE)
@@ -930,5 +1022,5 @@ class InstallerTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print('Scope: isolated filesystem tests; codesign, ditto, NSWorkspace registry and atomic syscall are mocked.')
+    print('Scope: isolated filesystem tests; exclusive rename is native on macOS; codesign, ditto, registry and atomic swap are mocked.')
     unittest.main(verbosity=2)
