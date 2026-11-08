@@ -52,7 +52,6 @@ REQUIRED_PATHS = (
     "LICENSE",
     "README.md",
     "README.zh-CN.md",
-    "assets/skills/super-llm-wiki-effect.png",
     "SECURITY.md",
     "SUPPORT.md",
     "THIRD_PARTY_NOTICES.md",
@@ -62,7 +61,6 @@ REQUIRED_PATHS = (
     "docs/foundations.md",
     "scripts/azhou_hub.py",
     "skills/super-excalidraw-diagram/SKILL.md",
-    "skills/super-llm-wiki/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-lavish/SKILL.md",
 )
@@ -82,9 +80,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-session-insights/SKILL.md",
 }
-REPOSITORY_EXTENSION_SKILL_PATHS = {
-    "skills/super-llm-wiki/SKILL.md",
-}
+REPOSITORY_EXTENSION_SKILL_PATHS = set()
 INVOCATION_CLASSES = (
     "user-invoked orchestrator",
     "model-invoked discipline",
@@ -134,12 +130,6 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "把复杂结果变成可审阅的界面。",
         "startup": "🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）",
         "brand_path": "skills/super-lavish/references/brand-layer.md",
-    },
-    "skills/super-llm-wiki/SKILL.md": {
-        "display_name": "Super LLM Wiki",
-        "motto": "知识要留得住，也要经得起查证。",
-        "startup": "🦊 阿舟 · Super LLM Wiki 启动（operation=<operation>, scope=<project-root>）",
-        "brand_path": "skills/super-llm-wiki/references/brand-layer.md",
     },
     "skills/super-repo-pedant/SKILL.md": {
         "display_name": "Super Repo Pedant",
@@ -607,7 +597,7 @@ RENAMED_AWAY_SKILLS = {
 # A hit anywhere else is residue from an incomplete rename.
 RESIDUE_COMPATIBILITY_TRIGGER_PATHS = {
     relative for relative in INSTALLABLE_SKILL_PATHS | REPOSITORY_EXTENSION_SKILL_PATHS
-} | {"skills/super-llm-wiki/assets/host/commands/wiki.md"}
+}
 RESIDUE_MIGRATION_SOURCE_PATHS = {
     ".gitignore",
     "scripts/azhou_hub.py",
@@ -615,7 +605,6 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
     "scripts/migrate_canonical_super_prefix.py",
     "docs/skill-standard.md",
     "skills/super-repo-pedant/scripts/migrate_state.py",
-    "skills/super-llm-wiki/scripts/llm_wiki.py",
 }
 RESIDUE_PROVENANCE_PATH_PATTERNS = (
     re.compile(r"^skills/[^/]+/references/(provenance|upstream-compatibility|neat-freak-compatibility)\.md$"),
@@ -827,7 +816,6 @@ def peel_chat_presentation(line: str) -> str:
 
 MEMORY_CREDIT_SURFACES = (
     "docs/skill-standard.md",
-    "skills/super-llm-wiki/references/brand-layer.md",
     "skills/super-repo-pedant/references/brand-layer.md",
 )
 LEGACY_BROADCAST_PATTERN = re.compile(

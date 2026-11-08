@@ -28,16 +28,6 @@ Animation character art, scene data, wallpaper and icon source are separate priv
 
 `skills/super-repo-pedant/` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
 
-## LLM Wiki
-
-`skills/super-llm-wiki/` is a Python standard-library adaptation of the LLM Wiki implementation in [Yeachan-Heo/oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) at commit [`deee3a446dadc9bfea31cdc8b19b00b16718082e`](https://github.com/Yeachan-Heo/oh-my-claudecode/commit/deee3a446dadc9bfea31cdc8b19b00b16718082e), audited as package version `4.14.6`.
-
-- Copyright: Yeachan Heo
-- License: [MIT](LICENSES/llm-wiki-source-MIT.txt)
-- Adaptation boundary: Markdown page schema, seven wiki operations, keyword/CJK search, append merge, lint, catalog, operation log, locking and lifecycle concepts. Current product integration uses a neutral CLI, stdio MCP server, lifecycle adapter, and a single private store.
-
-The upstream comments credit the persistent self-maintained wiki concept to Andrej Karpathy. This repository does not redistribute Karpathy-authored code or text.
-
 ## Lavish Editor (Spec Relay relay mode)
 
 `skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`232972beba9e0e4e75682c98f2aeb2cf01532122`](https://github.com/kunchenguid/lavish-axi/commit/232972beba9e0e4e75682c98f2aeb2cf01532122). The unmodified upstream baseline is hash-locked for reproducibility; the local Skill intentionally diverges by adding the documented Spec Relay relay mode on top of the upstream review runtime.
