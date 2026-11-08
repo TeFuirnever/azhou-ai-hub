@@ -14,14 +14,14 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TeFuirnever/azhou-ai-hub)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 14 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 13 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
 
 
 https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
 
-> 🦊 Hero generated under the `github_readme_image_16_9` profile contract (1280×720, lossless PNG): the Azhou fox (canonical reference) stamping an approval seal, rendered by the local Azhou imagegen pipeline (Qwen-Image-2.1 edit, seed 7 of the 2026-10-25 batch) with the claim lines overlaid deterministically. Reviewed at 120/240/360 px; maintainer (IP owner) visual approval recorded 2026-10-25.
+> 🦊 Hero generated under the `github_readme_image_16_9` profile contract (1280×720, lossless PNG): the Azhou fox (canonical reference) stamping an approval seal, rendered by the local Azhou imagegen pipeline (Qwen-Image-2.1 edit, seed 7 of the 2026-10-25 batch) with the claim lines overlaid deterministically. After the super-llm-wiki retirement the four-line text layer was re-rendered deterministically in place (Arial Rounded Bold; artwork pixels unchanged; batch `hub-hero-13-retext-001`, 2026-11-08). Reviewed at 120/240/360 px; maintainer (IP owner) visual approval recorded 2026-10-25 and re-confirmed for the thirteen-package overlay on 2026-11-08.
 
 Product direction: [Myself first, community-ready](docs/principles.md), with human-facing Skills, harness-respecting UI personalization and quality-constrained Orchestrator Kit efficiency. See the [roadmap](docs/roadmap.md) for planned work; principles do not extend support or change existing licenses.
 
