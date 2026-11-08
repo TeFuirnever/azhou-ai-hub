@@ -326,12 +326,19 @@ def identity(path):
     return (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')), info
 
 
+def checked_descendants(path):
+    def fail_scan(error):
+        raise error
+    for directory, subdirectories, files in os.walk(path, followlinks=False, onerror=fail_scan):
+        yield from (Path(directory) / name for name in (*subdirectories, *files))
+
+
 def require(path, expected):
     path = Path(path)
     actual, info = identity(path)
     if actual != expected:
         raise RuntimeError(f'身份不符，保留未处理：{path}；实际 {actual!r}，预期 {expected!r}')
-    if any(item.is_symlink() for item in path.rglob('*')):
+    if any(item.is_symlink() for item in checked_descendants(path)):
         raise RuntimeError(f'拒绝处理含符号链接的启动器：{path}')
     executable = path / 'Contents/MacOS' / expected[1]
     if not executable.is_file() or not os.access(executable, os.X_OK):
@@ -345,7 +352,7 @@ def fingerprint(path):
     if path.is_symlink() or not path.is_dir():
         raise RuntimeError(f'拒绝计算非实体目录的指纹：{path}')
     digest = hashlib.sha256()
-    for item in sorted(path.rglob('*')):
+    for item in sorted(checked_descendants(path)):
         if item.is_symlink():
             raise RuntimeError(f'拒绝含符号链接的启动器：{item}')
         if item.is_file():
@@ -373,7 +380,7 @@ def source_inputs():
     private = ROOT / 'assets/private'
     if private.is_symlink() or not private.is_dir():
         raise RuntimeError('缺少实体私有素材目录 assets/private。')
-    for item in private.rglob('*'):
+    for item in checked_descendants(private):
         if item.is_symlink():
             raise RuntimeError(f'拒绝通过符号链接构建素材：{item}')
         if item.is_file():
@@ -589,10 +596,10 @@ def verify_dsh_plugin(path):
         raise RuntimeError(f'DSH 插件包含符号链接：{package}')
     if not package.is_dir():
         raise RuntimeError(f'DSH 插件包缺失或不是实体目录：{package}')
-    for item in package.rglob('*'):
+    for item in checked_descendants(package):
         if item.is_symlink():
             raise RuntimeError(f'DSH 插件包含符号链接：{item}')
-    present = sorted(item.relative_to(package).as_posix() for item in package.rglob('*') if item.is_file())
+    present = sorted(item.relative_to(package).as_posix() for item in checked_descendants(package) if item.is_file())
     if present != sorted(DSH_PLUGIN_PACKAGE_ENTRIES):
         raise RuntimeError(f'DSH 插件包文件清单与固定集合不符：{package}')
 
