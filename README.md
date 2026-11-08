@@ -82,7 +82,7 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 
 ## Optional integrations
 
-Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The fourteen canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
+Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The thirteen canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|

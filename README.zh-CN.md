@@ -82,7 +82,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 ## 可选能力接入
 
-三个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十四个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
+三个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十三个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
