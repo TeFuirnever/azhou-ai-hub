@@ -3435,7 +3435,7 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
         onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("stale process must refuse before listener query") },
         identityWaitBudget: 0.2)
     fake.applications = []
-    do { try await absent.makeAssembly().validateProcess(process);preconditionFailure("missing process accepted") }
+    do { try await absent.makeAssembly().validateProcess(process, 999);preconditionFailure("missing process accepted") }
     catch { checks += 1 }
     fake.applications = [listenerApp]
 
@@ -3452,7 +3452,7 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     }
     let lateIdentity = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
         onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("identity wait must not query the listener") })
-    try await lateIdentity.makeAssembly().validateProcess(lateProcess)
+    try await lateIdentity.makeAssembly().validateProcess(lateProcess, 999)
     expect(lateCalls >= 2, "an unregistered fresh host is awaited, not refused")
     fake.applicationOverride = nil
 
@@ -3461,17 +3461,24 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     fake.applications = [impostor]
     let impostorRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
         onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("wrong bundle must refuse before listener query") })
-    do { try await impostorRuntime.makeAssembly().validateProcess(lateProcess);preconditionFailure("wrong-bundle identity accepted") } catch { checks += 1 }
+    do { try await impostorRuntime.makeAssembly().validateProcess(lateProcess, 999);preconditionFailure("wrong-bundle identity accepted") } catch { checks += 1 }
     fake.applications = []
 
     var refusedEvents: [[String: Any]] = []
     let missingRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
         onEvent: { refusedEvents.append($0) }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("missing host must not reach the listener") },
         identityWaitBudget: 0.3)
-    do { try await missingRuntime.makeAssembly().validateProcess(lateProcess);preconditionFailure("missing host accepted") } catch { checks += 1 }
+    do { try await missingRuntime.makeAssembly().validateProcess(lateProcess, 999);preconditionFailure("missing host accepted") } catch { checks += 1 }
     expect(refusedEvents.contains { $0["stage"] as? String == "zcode-validate-identity-refused" && $0["observed"] as? String == "missing" },
            "identity wait reports its final observed state before refusing")
     fake.uptime = 101
+
+    var exhaustedEvents: [[String: Any]] = []
+    let exhaustedRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { exhaustedEvents.append($0) }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("deadline-exhausted validate must not query the listener") })
+    do { try await exhaustedRuntime.makeAssembly().validateProcess(lateProcess, fake.uptime);preconditionFailure("exhausted deadline accepted") } catch { checks += 1 }
+    expect(exhaustedEvents.contains { $0["stage"] as? String == "zcode-validate-identity-refused" && $0["observed"] as? String == "deadline-exhausted" },
+           "an exhausted operation deadline refuses immediately without starting the identity wait")
     let symbolicState = temporary.appendingPathComponent("symbolic-listener")
     try FileManager.default.createSymbolicLink(at: symbolicState, withDestinationURL: listenerState)
     let publicState = temporary.appendingPathComponent("too-wide-listener")
@@ -3624,7 +3631,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let record = try JSONSerialization.jsonObject(with: Data(contentsOf: ready.state.appendingPathComponent("launch-receipt.json"))) as! [String: Any]
     expect(record["pid"] as? Int32 == ready.process.pid && record["launchTime"] as? Double == 50 && record["port"] as? Int == port, "owned launch record preserves exact generation and port")
     expect(try ready.assembly.runningProcesses() == [ready.process], "running inspection returns exact known generation")
-    expect(try await ready.assembly.activateExisting(ready.process), "hot activation uses validated existing generation")
+    expect(try await ready.assembly.activateExisting(ready.process, 999), "hot activation uses validated existing generation")
     let observation = ZCodeInstallObservation();let request = ready.request
     let result = try await ready.assembly.install(binding, request, observation)
     guard case .ready(let receipt, let runID) = result else { fatalError("synthetic ready assembly did not acknowledge") }
@@ -3689,7 +3696,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     do { _ = try await existing.assembly.openApplication(160);fatalError("cold path ignored running process") } catch { checks += 1 }
     expect(existing.payloadReads == 0 && existing.fake.openCount == 0, "existing process refuses cold before payload access")
     let invalidProcess = try make(identityWaitBudget: 0.2);invalidProcess.fake.applications = [FakeNativeApplication(pid: invalidProcess.process.pid, bundleIdentifier: invalidProcess.key.bundleIdentifier, bundleURL: invalidProcess.key.bundleURL, executableURL: invalidProcess.key.executableURL, launchTime: nil)]
-    do { try await invalidProcess.assembly.validateProcess(invalidProcess.process);fatalError("missing process birth accepted") } catch { checks += 1 }
+    do { try await invalidProcess.assembly.validateProcess(invalidProcess.process, 999);fatalError("missing process birth accepted") } catch { checks += 1 }
     let probe = try make();probe.probeFailure = true
     do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
     expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")

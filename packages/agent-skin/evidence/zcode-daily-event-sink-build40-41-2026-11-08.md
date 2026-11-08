@@ -70,6 +70,17 @@ Probe-tooling note: the entry lives in a shadow root, so `textContent`/`innerHTM
 `.local/zcode-rc35-20261105/probe-live-dom.mjs`) are blind to it — query
 `[data-agent-skin-entry]` + `shadowRoot` instead.
 
+## Post-acceptance commit: deadline-bounded identity wait
+
+The PR review (P2) noted the readiness wait started a fresh 8 s budget regardless of the caller's
+operation deadline, so the hot branch could wait past its deadline and still activate. The follow-up
+commit threads the operation deadline through `validateProcess`/`activateExisting`, caps the identity
+wait to the remaining budget (`deadline-exhausted` refuses immediately with its own diagnostic event),
+and re-checks the deadline before the hot branch returns `.activated`. Gates re-run after the commit:
+`test-startup-native.py` 699 checks, `test-zcode-native.py` passed, `scripts/verify.py` exit 0. The
+installed build 41 predates this cap (a rare, bounded overshoot inside the unregistered window only);
+the cap ships with the branch and rides the next stamped build.
+
 ## Known leftovers
 
 - The retired build-39 app is preserved at

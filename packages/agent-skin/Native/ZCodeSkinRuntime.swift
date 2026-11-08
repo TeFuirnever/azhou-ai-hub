@@ -466,10 +466,18 @@ import Darwin
     // yet (2026-11-08 16:44: the same binary passed on the next attempt). Wait
     // out that unregistered window instead of failing on a point-in-time
     // snapshot; a confirmed different identity still fails fast.
-    private func settledValidate(_ process: HostProcessGeneration) async throws {
+    private func settledValidate(_ process: HostProcessGeneration, deadline: TimeInterval) async throws {
         try validateInstallation()
-        let deadline = runtime.uptime + identityWaitBudget
+        // The wait never outlives the caller's operation deadline: the identity
+        // budget only narrows whatever time the operation still has left.
+        let remaining = deadline - runtime.uptime
         var observed = "missing"
+        guard remaining > 0 else {
+            onEvent(["stage": "zcode-validate-identity-refused", "observed": "deadline-exhausted",
+                     "expectedPID": Int(process.pid), "expectedLaunchTime": process.launchTime ?? -1])
+            throw failure("attach-timeout")
+        }
+        let waitDeadline = runtime.uptime + min(identityWaitBudget, remaining)
         var attempts = 0
         while true {
             attempts += 1
@@ -485,7 +493,7 @@ import Darwin
             }
             // The attempt cap bounds a static clock (unit fakes); the budget
             // bounds real time. Either one alone must end the wait.
-            guard runtime.uptime < deadline, attempts < 80 else { break }
+            guard runtime.uptime < waitDeadline, attempts < 80 else { break }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         onEvent(["stage": "zcode-validate-identity-refused", "observed": observed,
@@ -716,11 +724,11 @@ import Darwin
     }
     func makeAssembly() -> ZCodeSkinAssembly {
         ZCodeSkinAssembly(now: { [runtime] in runtime.uptime }, runningProcesses: { try self.running() },
-            validateProcess: { process in
-                do { try await self.settledValidate(process) }
+            validateProcess: { process, deadline in
+                do { try await self.settledValidate(process, deadline: deadline) }
                 catch { self.reportFailure(error, point: .validateProcess);throw error }
-            }, activateExisting: { process in
-                try await self.settledValidate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
+            }, activateExisting: { process, deadline in
+                try await self.settledValidate(process, deadline: deadline);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
             }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1, purpose: $2) },
             install: { try await self.install($0, request: $1, observation: $2) }, inspectPage: { binding, deadline in
                 defer { self.connection?.close();self.connection = nil }
