@@ -207,6 +207,53 @@ class PrepareAzhouAssetTests(unittest.TestCase):
         self.assertIn("original approved source", self.stderr.getvalue())
         self.assertFalse((destination.parent / "provenance.json").exists())
 
+    def test_prepares_large_images_without_corrupting_the_data_url(self):
+        header = png_header(1254, 1254)
+        for length in (49151, 49152, 49153, 98305):
+            with self.subTest(length=length):
+                image = header + b"x" * (length - len(header))
+                self.source.write_bytes(image)
+                self.invoke()
+                destination = self.root / "assets/private"
+                self.assertEqual((destination / "working.png").read_bytes(), image)
+                expected = 'window.AZHOU_WORKING_IMAGE = "data:image/png;base64,' + base64.b64encode(image).decode("ascii") + '";\n'
+                self.assertEqual((destination / "scene.js").read_text(encoding="utf-8"), expected)
+                provenance = json.loads((destination / "provenance.json").read_text(encoding="utf-8"))
+                self.assertEqual(provenance["sha256"], hashlib.sha256(image).hexdigest())
+
+    def test_prepares_complete_image_when_source_reads_are_fragmented(self):
+        image = png_header(1254, 1254, padding=1000)
+        self.source.write_bytes(image)
+        original_open = Path.open
+        source = self.source.resolve()
+
+        class Fragmented:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def read(self, size=-1):
+                return self.stream.read(size if size < 0 else min(size, 7))
+
+        def open_fragmented(path, *args, **kwargs):
+            stream = original_open(path, *args, **kwargs)
+            if path.resolve() == source and args and args[0] == "rb":
+                return Fragmented(stream)
+            return stream
+
+        with mock.patch.object(Path, "open", new=open_fragmented):
+            self.invoke()
+        destination = self.root / "assets/private"
+        self.assertEqual((destination / "working.png").read_bytes(), image)
+        expected = 'window.AZHOU_WORKING_IMAGE = "data:image/png;base64,' + base64.b64encode(image).decode("ascii") + '";\n'
+        self.assertEqual((destination / "scene.js").read_text(encoding="utf-8"), expected)
+
     def test_rejects_non_png_and_unreviewed_dimensions_or_color(self):
         cases = (
             (b"not a PNG", "must be a PNG"),
