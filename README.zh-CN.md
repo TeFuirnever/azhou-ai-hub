@@ -14,14 +14,14 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TeFuirnever/azhou-ai-hub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TeFuirnever/azhou-ai-hub)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸旁边写着三条主张——14 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸旁边写着三条主张——13 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 
 https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
 
-> 🦊 主视觉按 `github_readme_image_16_9` profile 合同生成（1280×720，无损 PNG）：阿舟狐狸（canonical 参考）盖章批准的画面由本地 Azhou imagegen 流水线生成（Qwen-Image-2.1 edit，2026-10-25 批次 seed 7），三条主张文字为确定性叠加。120/240/360 px 缩略图已复核；维护者（IP 权利人）视觉批准记录于 2026-10-25。
+> 🦊 主视觉按 `github_readme_image_16_9` profile 合同生成（1280×720，无损 PNG）：阿舟狐狸（canonical 参考）盖章批准的画面由本地 Azhou imagegen 流水线生成（Qwen-Image-2.1 edit，2026-10-25 批次 seed 7），三条主张文字为确定性叠加。super-llm-wiki 退役后，四行文字层已于 2026-11-08 就地确定性重绘（Arial Rounded Bold；画面像素不变；批次 `hub-hero-13-retext-001`）。120/240/360 px 缩略图已复核；维护者（IP 权利人）视觉批准记录于 2026-10-25，并于 2026-11-08 为十三包文字层重新确认。
 
 很多 skill 仓库停在提示词。Azhou AI Hub 把每个 skill 当成产品：触发准确、运行包可移植、依赖可复现、检查可执行、评测不造假、来源可追踪、演化受人类控制。
 
