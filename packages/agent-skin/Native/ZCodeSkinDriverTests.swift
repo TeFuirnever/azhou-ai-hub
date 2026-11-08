@@ -24,7 +24,7 @@ import Foundation
     }
     var binding: ZCodePageBinding { ZCodePageBinding(process:process,endpoint:URL(string:endpoint)!,pageURL:URL(string:page)!,targetID:"target1",documentToken:"context1") }
     func assembly() -> ZCodeSkinAssembly {
-        ZCodeSkinAssembly(now:{self.clock},runningProcesses:{self.calls.append("running");return self.processes},validateProcess:{p in self.calls.append("validate");if self.expired { throw NSError(domain:"synthetic",code:1) }},activateExisting:{_ in self.calls.append("activate");return true},openApplication:{_ in self.calls.append("open");return self.process},attach:{_,deadline,purpose in
+        ZCodeSkinAssembly(now:{self.clock},runningProcesses:{self.calls.append("running");return self.processes},validateProcess:{p,deadline in self.calls.append("validate");_ = deadline;if self.expired { throw NSError(domain:"synthetic",code:1) }},activateExisting:{_,deadline in self.calls.append("activate");_ = deadline;return true},openApplication:{_ in self.calls.append("open");return self.process},attach:{_,deadline,purpose in
             self.calls.append("attach");self.purposes.append(purpose)
             if self.mode == "listener-46" {
                 let limit=purpose.stageDeadline(caller:deadline,now:self.clock)

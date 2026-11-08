@@ -1225,13 +1225,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
         runtime.setAccessoryPolicy()
-        if let path = StartupLogPolicy.filePath(arguments: args) {
-            do {
-                let url = URL(fileURLWithPath: path)
-                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
-                logFile = try FileHandle(forWritingTo: url); try logFile?.seekToEnd()
-            } catch { print("LOG ERROR: \(error.localizedDescription)") }
+        if let path = StartupLogPolicy.filePath(arguments: args,
+                                                dailyEventDirectory: StartupEventJournal.directory(host: launcherHost)) {
+            logFile = StartupEventJournal.appendHandle(path: path)
+            if logFile == nil { print("LOG ERROR: startup event sink unavailable at \(path)") }
         }
         if args.contains("--probe") {
             targetURL = targetForCurrentMode()

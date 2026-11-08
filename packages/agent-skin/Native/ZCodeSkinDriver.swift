@@ -17,8 +17,8 @@ struct ZCodePageBinding: Sendable {
 @MainActor struct ZCodeSkinAssembly {
     let now: () -> TimeInterval
     let runningProcesses: () throws -> [HostProcessGeneration]
-    let validateProcess: (HostProcessGeneration) throws -> Void
-    let activateExisting: (HostProcessGeneration) throws -> Bool
+    let validateProcess: (HostProcessGeneration, TimeInterval) async throws -> Void
+    let activateExisting: (HostProcessGeneration, TimeInterval) async throws -> Bool
     let openApplication: (TimeInterval) async throws -> HostProcessGeneration
     let attach: (HostProcessGeneration, TimeInterval, ZCodeAttachPurpose) async throws -> ZCodePageBinding
     // markSent() immediately before the first page-changing install send.
@@ -86,15 +86,15 @@ enum ZCodeOperationLockFailure: Error { case busy }
         }
         return nil
     }
-    private func validate(_ process: HostProcessGeneration) throws {
+    private func validate(_ process: HostProcessGeneration, deadline: TimeInterval) async throws {
         guard process.pid > 0, let birth = process.launchTime, birth.isFinite, birth > 0,
               process.executableURL == inputs.identity.key.executableURL else {
             throw Stop(reason: .targetIdentity, detail: "process-generation-incomplete")
         }
-        try assembly.validateProcess(process)
+        try await assembly.validateProcess(process, deadline)
     }
-    private func validate(_ binding: ZCodePageBinding, process: HostProcessGeneration) throws {
-        try validate(process)
+    private func validateBinding(_ binding: ZCodePageBinding, process: HostProcessGeneration, deadline: TimeInterval) async throws {
+        try await validate(process, deadline: deadline)
         guard binding.process == process, !binding.targetID.isEmpty, !binding.documentToken.isEmpty,
               let endpoint = URLComponents(url: binding.endpoint, resolvingAgainstBaseURL: false),
               endpoint.scheme == "http", ["127.0.0.1", "::1", "[::1]"].contains(endpoint.host ?? ""),
@@ -163,16 +163,16 @@ enum ZCodeOperationLockFailure: Error { case busy }
             if let r = capabilityRefusal(for: stage, inputs: inputs) { return .refused(r) }
             busy = true; defer { busy = false }
             if let process = running.first {
-                try validate(process); try checkTime(deadline)
-                guard try assembly.activateExisting(process) else { throw Stop(reason: .targetStale, detail: "activation-unconfirmed") }
-                try validate(process)
+                try await validate(process, deadline: deadline); try checkTime(deadline)
+                guard try await assembly.activateExisting(process, deadline) else { throw Stop(reason: .targetStale, detail: "activation-unconfirmed") }
+                try await validate(process, deadline: deadline); try checkTime(deadline)
                 return .activated(process) // No port, attach, payload, replay or restart.
             }
             let process = try await assembly.openApplication(deadline)
-            try validate(process); try checkTime(deadline)
+            try await validate(process, deadline: deadline); try checkTime(deadline)
             let lease = try acquireOperation(process.pid, deadline: deadline); defer { lease.release() }
             let binding = try await assembly.attach(process, deadline, .coldLaunch)
-            try validate(binding, process: process); try checkTime(deadline)
+            try await validateBinding(binding, process: process, deadline: deadline); try checkTime(deadline)
             let bounded = SkinLaunchRequest(expectedApplication: request.expectedApplication, operationID: request.operationID, startedAt: request.startedAt, deadline: deadline)
             let result = try await assembly.install(binding, bounded, observation)
             // Every result can carry a confirmed page, including partial failure
@@ -201,7 +201,7 @@ enum ZCodeOperationLockFailure: Error { case busy }
                 }
                 committed = (receipt, acquisition, confirmedCleanup)
             }
-            try validate(binding, process: process); try checkTime(deadline)
+            try await validateBinding(binding, process: process, deadline: deadline); try checkTime(deadline)
             switch result {
             case .ready(let r, let runID):
                 guard validReceipt(r, binding), r.createdByOperationID == request.operationID else { throw Stop(reason: .protocolError, detail: "controller-receipt-mismatch") }
@@ -247,14 +247,14 @@ enum ZCodeOperationLockFailure: Error { case busy }
             let running = try assembly.runningProcesses()
             guard running.count <= 1 else { throw Stop(reason: .targetIdentity, detail: "ambiguous-running-instance") }
             guard let process = running.first else { return .observed(process: nil, page: .notObserved(reason: "application-not-running")) }
-            try validate(process)
+            try await validate(process, deadline: request.deadline)
             if !request.includePage { return .observed(process: process, page: .notObserved(reason: "application-only")) }
             let lease = try acquireOperation(process.pid, deadline: request.deadline); defer { lease.release() }
             try checkTime(request.deadline)
-            let b = try await assembly.attach(process, request.deadline, .existingPage); try validate(b, process: process)
+            let b = try await assembly.attach(process, request.deadline, .existingPage); try await validateBinding(b, process: process, deadline: request.deadline)
             if let previous = request.previousObservation, !sameLocation(location(previous), PageLocation(application: inputs.identity.key, process: process, documentToken: b.documentToken)) { throw Stop(reason: .targetStale, detail: "document-generation-changed") }
             let page = try await assembly.inspectPage(b, request.deadline)
-            try validate(b, process: process); try checkTime(request.deadline)
+            try await validateBinding(b, process: process, deadline: request.deadline); try checkTime(request.deadline)
             switch page {
             case .present(.instance(let r), _): guard validReceipt(r, b) else { throw Stop(reason: .ownerConflict, detail: "controller-receipt-mismatch") }
             case .absent(let l): guard sameLocation(l, PageLocation(application: inputs.identity.key, process: process, documentToken: b.documentToken)) else { throw Stop(reason: .targetStale, detail: "absence-location-mismatch") }
@@ -281,14 +281,14 @@ enum ZCodeOperationLockFailure: Error { case busy }
             guard running.count <= 1 else { throw Stop(reason: .targetIdentity, detail: "ambiguous-running-instance") }
             guard let process = running.first else { return .alreadyAbsent(receipt.location) }
             guard process == receipt.location.process else { throw Stop(reason: .targetStale, detail: "process-generation-changed") }
-            try validate(process)
+            try await validate(process, deadline: request.deadline)
             let lease = try acquireOperation(process.pid, deadline: request.deadline); defer { lease.release() }
             try checkTime(request.deadline)
-            let b = try await assembly.attach(process, request.deadline, .existingPage); try validate(b, process: process)
+            let b = try await assembly.attach(process, request.deadline, .existingPage); try await validateBinding(b, process: process, deadline: request.deadline)
             guard validReceipt(receipt, b) else { throw Stop(reason: .targetStale, detail: "controller-generation-changed") }
             try checkTime(request.deadline); sent = true
             guard try await assembly.dispose(b, receipt, request.deadline) else { throw Stop(reason: .protocolError, detail: "dispose-unconfirmed") }
-            try validate(b, process: process); try checkTime(request.deadline)
+            try await validateBinding(b, process: process, deadline: request.deadline); try checkTime(request.deadline)
             return .removed(CleanupReport(state: .complete, released: ["ZCode-page-controller"], intentionallyRetained: [], unconfirmed: []))
         } catch {
             if !sent { return .refused(errorReason(error), page: effect) }

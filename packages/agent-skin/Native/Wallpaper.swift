@@ -439,10 +439,43 @@ struct StartupBudget {
 }
 
 enum StartupLogPolicy {
-    static func filePath(arguments: [String]) -> String? {
-        guard !arguments.contains("--probe"),
-              let index = arguments.firstIndex(of: "--log"), index + 1 < arguments.count else { return nil }
-        return arguments[index + 1]
+    static func filePath(arguments: [String], dailyEventDirectory: URL? = nil) -> String? {
+        if !arguments.contains("--probe"),
+           let index = arguments.firstIndex(of: "--log"), index + 1 < arguments.count {
+            return arguments[index + 1]
+        }
+        // A plain double-click launch has no console and no --log target, so its
+        // startup events would otherwise be discarded together with stdout.
+        guard !arguments.contains("--probe"), !arguments.contains("--preview"), !arguments.contains("--smoke-test"),
+              let directory = dailyEventDirectory else { return nil }
+        return directory.appendingPathComponent("events.jsonl").path
+    }
+}
+
+/// Append-only daily sink for launcher startup events, mirroring WallpaperJournal's
+/// bounded and symlink-safe JSONL handling. A logging failure never blocks startup.
+enum StartupEventJournal {
+    static func directory(host: SkinHostID?) -> URL {
+        let name = host == .zcode ? "AzhouZCodeStartup" : "AzhouCodexStartup"
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/\(name)", isDirectory: true)
+    }
+
+    private static func isLink(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
+    }
+
+    static func appendHandle(path: String) -> FileHandle? {
+        let url = URL(fileURLWithPath: path)
+        let directory = url.deletingLastPathComponent()
+        guard !isLink(directory), !isLink(url) else { return nil }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        let descriptor = Darwin.open(path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { return nil }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        if ((try? handle.seekToEnd()) ?? 0) > 2 * 1024 * 1024 { try? handle.truncate(atOffset: 0) }
+        return handle
     }
 }
 

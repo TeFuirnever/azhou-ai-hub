@@ -77,8 +77,9 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     func runningApplications(bundleIdentifier: String) -> [any NativeApplication] {
         applications.filter { $0.bundleIdentifier == bundleIdentifier }
     }
+    var applicationOverride: ((Int32) -> (any NativeApplication)?)?
     func application(processIdentifier: Int32) -> (any NativeApplication)? {
-        applications.first { $0.processIdentifier == processIdentifier }
+        applicationOverride?(processIdentifier) ?? applications.first { $0.processIdentifier == processIdentifier }
     }
     func urlForApplication(bundleIdentifier: String) -> URL? { installedTargetURL }
     func openApplication(at url: URL, debuggingPort: Int,
@@ -682,6 +683,49 @@ struct StartupNativeTests {
                "probe mode does not initialize a requested log file")
         expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"]) == "/tmp/startup.jsonl",
                "non-probe modes keep their requested log file")
+
+        let dailyEvents = URL(fileURLWithPath: "/tmp/daily")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--log", "/tmp/startup.jsonl"],
+                                         dailyEventDirectory: dailyEvents) == "/tmp/startup.jsonl",
+               "explicit --log keeps priority over the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin"],
+                                         dailyEventDirectory: dailyEvents) == "/tmp/daily/events.jsonl",
+               "plain launches fall back to the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--preview"], dailyEventDirectory: dailyEvents) == nil,
+               "preview does not open the daily event sink")
+        expect(StartupLogPolicy.filePath(arguments: ["Agent Skin", "--smoke-test"], dailyEventDirectory: dailyEvents) == nil,
+               "smoke tests do not open the daily event sink")
+        expect(StartupEventJournal.directory(host: .zcode).lastPathComponent == "AzhouZCodeStartup",
+               "ZCode daily events land in the ZCode log directory")
+        expect(StartupEventJournal.directory(host: nil).lastPathComponent == "AzhouCodexStartup",
+               "an unknown host falls back to the Codex log directory")
+
+        do {
+            let journal = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("azhou-startup-journal-\(getuid())-\(UUID().uuidString)", isDirectory: true)
+            let path = journal.appendingPathComponent("events.jsonl").path
+            if let first = StartupEventJournal.appendHandle(path: path) {
+                try? first.write(contentsOf: Data("first\n".utf8)); try? first.close()
+            }
+            if let second = StartupEventJournal.appendHandle(path: path) {
+                try? second.write(contentsOf: Data("second\n".utf8)); try? second.close()
+            }
+            expect((try? String(contentsOfFile: path, encoding: .utf8)) == "first\nsecond\n",
+                   "the daily event sink appends across launches instead of truncating")
+            if let big = StartupEventJournal.appendHandle(path: path) {
+                try? big.truncate(atOffset: 2 * 1024 * 1024 + 1); try? big.close()
+            }
+            if let capped = StartupEventJournal.appendHandle(path: path) {
+                expect((try? capped.seekToEnd()) == 0,
+                       "the daily event sink truncates itself once it exceeds the 2 MiB bound")
+                try? capped.close()
+            }
+            let link = journal.appendingPathComponent("linked-events.jsonl")
+            try? FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/etc/passwd")
+            expect(StartupEventJournal.appendHandle(path: link.path) == nil,
+                   "the daily event sink refuses a symlinked sink path")
+            try? FileManager.default.removeItem(atPath: journal.path)
+        }
 
         let discoveredTarget = URL(fileURLWithPath: "/Applications/Codex.app")
         var targetLookupCalls = 0
@@ -3388,11 +3432,53 @@ private func zcodeRuntimeReviewChecks() async throws -> Int {
     expect(cleanNotReadyCalls == 1, "empty successful query remains not-ready until bounded deadline")
     fake.uptime = 101
     let absent = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
-        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("stale process must refuse before listener query") })
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("stale process must refuse before listener query") },
+        identityWaitBudget: 0.2)
     fake.applications = []
-    do { try absent.makeAssembly().validateProcess(process);preconditionFailure("missing process accepted") }
+    do { try await absent.makeAssembly().validateProcess(process, 999);preconditionFailure("missing process accepted") }
     catch { checks += 1 }
     fake.applications = [listenerApp]
+
+    // A freshly opened host may still be completing its LaunchServices
+    // registration when the assembly re-queries it (the 2026-11-08 16:44
+    // transient); the identity wait rides out that window instead of failing
+    // on the first snapshot, while a confirmed mismatch still refuses fast.
+    let lateProcess = HostProcessGeneration(pid: listenerApp.processIdentifier, launchTime: 50, executableURL: key.executableURL)
+    var lateCalls = 0
+    fake.applications = []
+    fake.applicationOverride = { _ in
+        lateCalls += 1
+        return lateCalls >= 2 ? listenerApp : nil
+    }
+    let lateIdentity = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("identity wait must not query the listener") })
+    try await lateIdentity.makeAssembly().validateProcess(lateProcess, 999)
+    expect(lateCalls >= 2, "an unregistered fresh host is awaited, not refused")
+    fake.applicationOverride = nil
+
+    let impostor = FakeNativeApplication(pid: listenerApp.processIdentifier, bundleIdentifier: "com.other.impostor",
+        bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
+    fake.applications = [impostor]
+    let impostorRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { _ in }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("wrong bundle must refuse before listener query") })
+    do { try await impostorRuntime.makeAssembly().validateProcess(lateProcess, 999);preconditionFailure("wrong-bundle identity accepted") } catch { checks += 1 }
+    fake.applications = []
+
+    var refusedEvents: [[String: Any]] = []
+    let missingRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { refusedEvents.append($0) }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("missing host must not reach the listener") },
+        identityWaitBudget: 0.3)
+    do { try await missingRuntime.makeAssembly().validateProcess(lateProcess, 999);preconditionFailure("missing host accepted") } catch { checks += 1 }
+    expect(refusedEvents.contains { $0["stage"] as? String == "zcode-validate-identity-refused" && $0["observed"] as? String == "missing" },
+           "identity wait reports its final observed state before refusing")
+    fake.uptime = 101
+
+    var exhaustedEvents: [[String: Any]] = []
+    let exhaustedRuntime = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { "unused" }, stateRoot: listenerState,
+        onEvent: { exhaustedEvents.append($0) }, installationProbe: {}, listenerCommand: { _ in preconditionFailure("deadline-exhausted validate must not query the listener") })
+    do { try await exhaustedRuntime.makeAssembly().validateProcess(lateProcess, fake.uptime);preconditionFailure("exhausted deadline accepted") } catch { checks += 1 }
+    expect(exhaustedEvents.contains { $0["stage"] as? String == "zcode-validate-identity-refused" && $0["observed"] as? String == "deadline-exhausted" },
+           "an exhausted operation deadline refuses immediately without starting the identity wait")
     let symbolicState = temporary.appendingPathComponent("symbolic-listener")
     try FileManager.default.createSymbolicLink(at: symbolicState, withDestinationURL: listenerState)
     let publicState = temporary.appendingPathComponent("too-wide-listener")
@@ -3431,6 +3517,7 @@ private final class ZCodeRuntimeFixture {
     var events: [[String: Any]] = []
     var listenerPIDs: [Int32] = []
     var listenerOverride: ((Int32) throws -> ZCodeNativeRuntime.ListenerCommandResult)?
+    let identityWaitBudget: TimeInterval?
     var held: [any ZCodeOperationLease] = []
     lazy var bridge = ZCodeNativeRuntime(inputs: inputs, runtime: fake, readPayload: { [weak self] in
         guard let self, !self.payloadReadFailure else { throw StartupFailure(reason: "asset-invalid", message: "synthetic payload failure") }
@@ -3442,9 +3529,10 @@ private final class ZCodeRuntimeFixture {
         self.listenerPIDs.append(pid)
         if let override = self.listenerOverride { return try override(pid) }
         return .init(status: 0, stdout: Data("p\(pid)\nn127.0.0.1:\(self.port)\n".utf8), stderr: Data())
-    })
+    }, identityWaitBudget: identityWaitBudget ?? 8)
     init(port: Int, pid: Int32 = 654321, version: String = "3.17.2", build: String = "3.17.2.9661",
-         executableSHA256: String = "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d") throws {
+         executableSHA256: String = "a9279c2cb198fa58efe564b417ff6717cff388c5fa391c17fc2766a6b1b2121d",
+         identityWaitBudget: TimeInterval? = nil) throws {
         self.port = port
         root = FileManager.default.temporaryDirectory.appendingPathComponent("zcode-runtime-unit-" + UUID().uuidString, isDirectory: true).resolvingSymlinksInPath()
         state = root.appendingPathComponent("state", isDirectory: true)
@@ -3457,6 +3545,7 @@ private final class ZCodeRuntimeFixture {
         app = FakeNativeApplication(pid: pid, bundleIdentifier: key.bundleIdentifier, bundleURL: key.bundleURL, executableURL: key.executableURL, launchTime: 50)
         fake.openedApplication = app
         fake.beforeOpenCompletion = { [weak fake, weak app] in if let app { fake?.applications = [app] } }
+        self.identityWaitBudget = identityWaitBudget
         try writeProof()
     }
     var hash: String { SHA256.hash(data: Data(payload.utf8)).map { String(format: "%02x", $0) }.joined() }
@@ -3482,7 +3571,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     var checks = 0
     var fixtures: [ZCodeRuntimeFixture] = []
     func expect(_ value: Bool, _ label: String) { precondition(value, label);checks += 1 }
-    func make() throws -> ZCodeRuntimeFixture { let f = try ZCodeRuntimeFixture(port: port);fixtures.append(f);return f }
+    func make(identityWaitBudget: TimeInterval? = nil) throws -> ZCodeRuntimeFixture { let f = try ZCodeRuntimeFixture(port: port, identityWaitBudget: identityWaitBudget);fixtures.append(f);return f }
     defer { fixtures.forEach { $0.cleanup() } }
     func mode(_ value: String, reset: Bool = true) async throws {
         let configuration = URLSessionConfiguration.ephemeral;configuration.httpCookieStorage = nil;configuration.urlCredentialStorage = nil
@@ -3542,7 +3631,7 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let record = try JSONSerialization.jsonObject(with: Data(contentsOf: ready.state.appendingPathComponent("launch-receipt.json"))) as! [String: Any]
     expect(record["pid"] as? Int32 == ready.process.pid && record["launchTime"] as? Double == 50 && record["port"] as? Int == port, "owned launch record preserves exact generation and port")
     expect(try ready.assembly.runningProcesses() == [ready.process], "running inspection returns exact known generation")
-    expect(try ready.assembly.activateExisting(ready.process), "hot activation uses validated existing generation")
+    expect(try await ready.assembly.activateExisting(ready.process, 999), "hot activation uses validated existing generation")
     let observation = ZCodeInstallObservation();let request = ready.request
     let result = try await ready.assembly.install(binding, request, observation)
     guard case .ready(let receipt, let runID) = result else { fatalError("synthetic ready assembly did not acknowledge") }
@@ -3606,8 +3695,8 @@ private func zcodeRuntimeFixtureChecks(port: Int) async throws -> Int {
     let existing = try make();existing.fake.applications = [existing.app]
     do { _ = try await existing.assembly.openApplication(160);fatalError("cold path ignored running process") } catch { checks += 1 }
     expect(existing.payloadReads == 0 && existing.fake.openCount == 0, "existing process refuses cold before payload access")
-    let invalidProcess = try make();invalidProcess.fake.applications = [FakeNativeApplication(pid: invalidProcess.process.pid, bundleIdentifier: invalidProcess.key.bundleIdentifier, bundleURL: invalidProcess.key.bundleURL, executableURL: invalidProcess.key.executableURL, launchTime: nil)]
-    do { try invalidProcess.assembly.validateProcess(invalidProcess.process);fatalError("missing process birth accepted") } catch { checks += 1 }
+    let invalidProcess = try make(identityWaitBudget: 0.2);invalidProcess.fake.applications = [FakeNativeApplication(pid: invalidProcess.process.pid, bundleIdentifier: invalidProcess.key.bundleIdentifier, bundleURL: invalidProcess.key.bundleURL, executableURL: invalidProcess.key.executableURL, launchTime: nil)]
+    do { try await invalidProcess.assembly.validateProcess(invalidProcess.process, 999);fatalError("missing process birth accepted") } catch { checks += 1 }
     let probe = try make();probe.probeFailure = true
     do { _ = try probe.assembly.runningProcesses();fatalError("failed installation probe ignored") } catch { checks += 1 }
     expect(probe.fake.openCount == 0 && probe.listenerPIDs.isEmpty, "installation failure precedes all host and listener effects")
