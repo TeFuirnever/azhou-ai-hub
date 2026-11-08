@@ -186,6 +186,20 @@ function mountSettingsPanel(host, payload, runId, assets, receive, appearance, p
     target, 'display:block;width:100%;height:100%;border:0;background:transparent', 'appearanceLabel');
 }
 
+function panelDisconnected({ element, contentWindow }) {
+  return element.isConnected === false || element.contentWindow !== contentWindow;
+}
+
+function observePanelConnection(host, { element }, checkConnection) {
+  if (!element.ownerDocument || typeof host.MutationObserver !== 'function') return null;
+  const observer = new host.MutationObserver(checkConnection);
+  // Track the panel's ancestors without observing unrelated subtree changes.
+  for (let parent = element.parentNode; parent; parent = parent.parentNode) {
+    observer.observe(parent, { childList: true });
+  }
+  return observer;
+}
+
 // The settings embed is only exercised by adapter-driven hosts whose adapter
 // declares the atomic wallpaper ports group; adapters without it (Codex) keep
 // the overlay as their only settings UX and the method stays inert.
@@ -210,6 +224,7 @@ class PageController {
     this.wallpaperApply = dataProperty(payload, 'applyWallpaper');
     this.frame = null;
     this.frameHandle = null;
+    this.frameObserver = null;
     this.wallpaperAPI = null;
     this.wallpaperGeneration = 0;
     this.wallpaperRequest = null;
@@ -348,6 +363,7 @@ class PageController {
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
         this.pageAdapter, this.metadata,
       );
+      this.frameObserver = observePanelConnection(this.host, this.frame, () => this.#checkFrameConnection());
       const instance = this.frame.start();
       if (instance && typeof instance.then === 'function') {
         Promise.resolve(instance).then(
@@ -536,6 +552,14 @@ class PageController {
   #isCurrentFrame(runId, frame = this.frame) {
     return !this.disposed && runId === this.state.runId && frame !== null
       && frame === this.frame && !['complete', 'failed', 'timeout', 'disposed'].includes(this.state.phase);
+  }
+
+  #checkFrameConnection() {
+    const frame = this.frame;
+    if (frame && panelDisconnected(frame)) {
+      this.state.ready = false;
+      this.#fail('startup-interrupted');
+    }
   }
 
   #receive(event) {
@@ -964,6 +988,8 @@ class PageController {
     const ownedFocus = Boolean(frame) && this.document?.activeElement === frame.element;
     this.frame = null;
     this.frameHandle = null;
+    this.frameObserver?.disconnect();
+    this.frameObserver = null;
     this.#releaseHostPage();
     if (!frame) return { frame: null, ownedFocus: false };
     try { handle?.dispose?.(); } catch {}
@@ -1030,8 +1056,11 @@ class PageController {
       mount.frame = mountSettingsPanel(this.host, this.payload, mount.runId, this.assets,
         (event) => this.#receiveSettingsMessage(mount, event),
         this.appearance, this.pageAdapter, this.metadata, target);
+      mount.observer = observePanelConnection(this.host, mount.frame, () => {
+        if (mount.alive && panelDisconnected(mount.frame)) this.#closeSettingsEmbed(mount);
+      });
     } catch {
-      mount.alive = false;
+      this.#disposeSettingsEmbed(mount);
       return null;
     }
     this.settingsEmbeds.add(mount);
@@ -1058,38 +1087,36 @@ class PageController {
     if (message.action === 'background') {
       return this.#applyWallpaper(message, mount.runId, null, false, mount);
     }
-    // Asset initialization failed (any reason, before or after the panel opens):
-    // a half-open embed with no way forward is worse than a closed one, so the
-    // embed tears itself down and lets the host section react via onClose.
-    if (message.action === 'assetError') {
-      const close = mount.onClose;
-      this.#disposeSettingsEmbed(mount);
-      try { close?.(); } catch {}
-      return;
-    }
-    // The panel finished its own settings UI (save or cancel): the host modal
-    // decides what closing means; the embed still tears itself down so an
-    // unresponsive host cannot leave a dead iframe behind.
-    if (message.action === 'settings-close'
+    // The embed releases its panel even if the host does not close the modal.
+    if (message.action === 'assetError' || message.action === 'settings-close'
         || (message.action === 'complete' && message.skipped === true)) {
-      const close = mount.onClose;
-      this.#disposeSettingsEmbed(mount);
-      try { close?.(); } catch {}
+      this.#closeSettingsEmbed(mount);
     }
+  }
+
+  #closeSettingsEmbed(mount) {
+    const close = mount.onClose;
+    this.#disposeSettingsEmbed(mount);
+    try { close?.(); } catch {}
   }
 
   #disposeSettingsEmbed(mount) {
     if (!mount || !mount.alive) return;
     mount.alive = false;
     this.settingsEmbeds.delete(mount);
+    mount.observer?.disconnect();
+    mount.observer = null;
     this.host.removeEventListener('message', mount.listener);
     const frame = mount.frame;
+    const handle = mount.handle;
     mount.frame = null;
-    try { mount.handle?.dispose?.(); } catch {}
+    mount.handle = null;
+    try { handle?.dispose?.(); } catch {}
     try { frame?.remove(); } catch {}
   }
 
   #status() {
+    this.#checkFrameConnection();
     this.#refreshWallpaper();
     return {
       owner: this.owner,

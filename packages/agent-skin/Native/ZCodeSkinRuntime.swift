@@ -278,6 +278,7 @@ extension ZCodeBoundCDP {
           const s=status.call(c);
           return {present:true,owner:value(c,'owner'),version:value(c,'version'),...snapshot,
             ready:value(s,'ready')===true,completed:value(s,'completed')===true,
+            ...(value(s,'phase')==='failed' && value(s,'reason')==='startup-interrupted' ? {reason:'startup-interrupted'} : {}),
             runId:Number.isSafeInteger(value(s,'runId')) ? value(s,'runId') : null,
             completion:{skipped:value(value(s,'completion'),'skipped')===true,beforeReady:value(value(s,'completion'),'beforeReady')===true},
             phase:['loading','playing','complete','settings','disposed','failed'].includes(value(s,'phase')) ? value(s,'phase') : 'unconfirmed'};
@@ -700,6 +701,9 @@ import Darwin
                 let status = try await client.safeStatus(deadline: request.deadline)
                 receipt = try client.acknowledgedReceipt(status, key: inputs.identity.key, payloadSHA256: hash, acquisition: acquisition)
                 if already { return .skipped(.present(.instance(receipt!), acquisition: .alreadyActive), runID: status["runId"] as? Int ?? 0, beforeReady: false) }
+                if status["phase"] as? String == "failed" {
+                    throw failure(status["reason"] as? String == "startup-interrupted" ? "startup-interrupted" : "protocol-error")
+                }
                 if status["ready"] as? Bool == true {
                     onEvent(["stage": "zcode-controller-ready", "operationID": request.operationID.uuidString,
                         "hostPID": binding.process.pid, "payloadSHA256": hash,
@@ -716,8 +720,9 @@ import Darwin
             }
         } catch {
             guard let receipt else { throw error }
-            return .partial(SkinOperationFailure(reason: Task.isCancelled ? .operationCancelled : .protocolError,
-                detail: "ZCode controller confirmed before later interruption"),
+            let interrupted = (error as? StartupFailure)?.reason == "startup-interrupted"
+            return .partial(SkinOperationFailure(reason: Task.isCancelled ? .operationCancelled : (interrupted ? .startupInterrupted : .protocolError),
+                detail: interrupted ? "startup-interrupted" : "ZCode controller confirmed before later interruption"),
                 page: .present(.instance(receipt), acquisition: acquisition),
                 cleanup: CleanupReport(state: .unknown, released: [], intentionallyRetained: ["confirmed-ZCode-page-controller"], unconfirmed: ["current-page-controller"]))
         }

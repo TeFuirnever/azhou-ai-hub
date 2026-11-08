@@ -7,7 +7,7 @@ with --zcode-runtime-fixture PORT. REST POST /fixture/mode {mode,reset:true}.
 from pathlib import Path
 import platform,argparse,base64,datetime,hashlib,json,os,socket,socketserver,struct,subprocess,threading,time,uuid
 PAGE='file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
-MODES={'ready','complete','before-ready','already-active','badreceipt','absent','late','readylost','dispose-failed'}
+MODES={'ready','complete','before-ready','already-active','badreceipt','absent','late','readylost','dispose-failed','interrupted'}
 class Fixture:
  def __init__(self):self.lock=threading.Lock();self.log=[];self.captured={};self.capture_metadata=None;self.frame_entered=threading.Event();self.frame_release=threading.Event();self.frame_gated=False;self.interleave_enabled=False;self.reset('ready')
  def reset(self,mode):
@@ -59,10 +59,11 @@ class Fixture:
     if self.metadata is None:return {'result':{'value':{'present':True,'unconfirmed':True}}}
     snapshot=dict(self.metadata)
     if self.mode=='badreceipt':snapshot['controllerInstanceID']=str(uuid.uuid4())
-    ready=self.mode in {'ready','already-active','dispose-failed'}
+    ready=self.mode in {'ready','already-active','dispose-failed'} or (self.mode=='interrupted' and self.status_reads>1)
     complete=self.mode in {'complete','before-ready'}
     status={'present':True,'owner':'azhou-zcode-startup','version':1,**snapshot,'ready':ready,'completed':complete,'runId':1,
      'phase':'complete' if complete else 'playing','completion':{'skipped':complete,'beforeReady':self.mode=='before-ready'}}
+    if self.mode=='interrupted' and self.status_reads==1:status.update(phase='failed',reason='startup-interrupted')
     return {'result':{'value':status}}
    return {'_error':'unsupported-fixture-method'}
 

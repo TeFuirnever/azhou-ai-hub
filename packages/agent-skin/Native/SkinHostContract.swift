@@ -380,6 +380,7 @@ enum SkinFailureReason: String, Sendable {
     case operationTimeout
     case operationBusy
     case ownerConflict
+    case startupInterrupted
     case protocolError
 }
 
