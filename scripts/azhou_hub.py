@@ -320,13 +320,10 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
         "support_matrix": "docs/support-matrix.md",
         "runtime_state": {
             "root": ".azhou",
-            "namespaces": ["super-ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
+            "namespaces": ["super-ask-azhou", "hub", "super-repo-pedant"],
             "compatibility_sources": [
                 ".azhou-ai-hub/receipts",
-                ".azhou/llm-wiki",
                 ".azhou/repo-pedant",
-                ".llm-wiki",
-                ".omc/wiki",
                 ".repo-pedant",
             ],
         },

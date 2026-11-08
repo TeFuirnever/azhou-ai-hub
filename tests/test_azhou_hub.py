@@ -120,11 +120,11 @@ class AzhouHubCliTest(unittest.TestCase):
         self.assertEqual(["doctor", "info", "setup", "verify", "version"], payload["primary_commands"])
         self.assertEqual(payload["primary_commands"], payload["commands"])
         self.assertEqual(
-            ["super-ask-azhou", "hub", "super-llm-wiki", "super-repo-pedant"],
+            ["super-ask-azhou", "hub", "super-repo-pedant"],
             payload["runtime_state"]["namespaces"],
         )
         self.assertEqual(
-            [".azhou-ai-hub/receipts", ".azhou/llm-wiki", ".azhou/repo-pedant", ".llm-wiki", ".omc/wiki", ".repo-pedant"],
+            [".azhou-ai-hub/receipts", ".azhou/repo-pedant", ".repo-pedant"],
             payload["runtime_state"]["compatibility_sources"],
         )
         self.assertEqual(
@@ -137,7 +137,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-eli5",
                 "super-excalidraw-diagram",
                 "super-lavish",
-                "super-llm-wiki",
                 "super-repo-pedant",
                 "super-session-insights",
             ],
