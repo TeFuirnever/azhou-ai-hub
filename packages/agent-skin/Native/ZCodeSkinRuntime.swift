@@ -358,6 +358,7 @@ import Darwin
     }
     typealias ListenerCommandRunner = (Int32) throws -> ListenerCommandResult
     private let listenerCommand: ListenerCommandRunner
+    private let identityWaitBudget: TimeInterval
     private var port: Int?
     private var connection: ZCodeBoundCDP?
     private var opening: StartupApplicationWaiter?
@@ -370,10 +371,11 @@ import Darwin
     ]
     init(inputs: BoundHostInputs, runtime: any NativeAppRuntime, readPayload: @escaping () throws -> String,
          stateRoot: URL, onEvent: @escaping ([String: Any]) -> Void, installationProbe: (() throws -> Void)? = nil,
-         listenerCommand: ListenerCommandRunner? = nil) {
+         listenerCommand: ListenerCommandRunner? = nil, identityWaitBudget: TimeInterval? = nil) {
         self.inputs = inputs;self.runtime = runtime;self.readPayload = readPayload
         self.stateRoot = stateRoot;self.onEvent = onEvent;self.installationProbe = installationProbe
         self.listenerCommand = listenerCommand ?? { try Self.runListenerCommand($0) }
+        self.identityWaitBudget = identityWaitBudget ?? 8
     }
     private func failure(_ reason: String) -> StartupFailure { StartupFailure(reason: reason, message: "ZCode 接入未通过本次核验。") }
     private enum DiagnosticPoint: String {
@@ -458,6 +460,37 @@ import Darwin
     private func validate(_ process: HostProcessGeneration) throws {
         try validateInstallation()
         guard let app = runtime.application(processIdentifier: process.pid), try generation(app) == process else { throw failure("target-identity") }
+    }
+    // The assembly re-validates with a fresh NSRunningApplication query, and a
+    // freshly opened host may not have completed its LaunchServices registration
+    // yet (2026-11-08 16:44: the same binary passed on the next attempt). Wait
+    // out that unregistered window instead of failing on a point-in-time
+    // snapshot; a confirmed different identity still fails fast.
+    private func settledValidate(_ process: HostProcessGeneration) async throws {
+        try validateInstallation()
+        let deadline = runtime.uptime + identityWaitBudget
+        var observed = "missing"
+        var attempts = 0
+        while true {
+            attempts += 1
+            let app = runtime.application(processIdentifier: process.pid)
+            if let app, !app.isTerminated {
+                if let bundleID = app.bundleIdentifier, bundleID != inputs.identity.key.bundleIdentifier {
+                    throw failure("target-identity")
+                }
+                if let candidate = try? generation(app), candidate == process { return }
+                observed = app.bundleIdentifier == nil ? "unregistered" : "generation-mismatch"
+            } else if let app, app.isTerminated {
+                observed = "terminated";break
+            }
+            // The attempt cap bounds a static clock (unit fakes); the budget
+            // bounds real time. Either one alone must end the wait.
+            guard runtime.uptime < deadline, attempts < 80 else { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        onEvent(["stage": "zcode-validate-identity-refused", "observed": observed,
+                 "expectedPID": Int(process.pid), "expectedLaunchTime": process.launchTime ?? -1])
+        throw failure("target-identity")
     }
     private func directory(_ url: URL, create: Bool) throws {
         // Foundation discovers the directory hint after creation. Compare the
@@ -684,10 +717,10 @@ import Darwin
     func makeAssembly() -> ZCodeSkinAssembly {
         ZCodeSkinAssembly(now: { [runtime] in runtime.uptime }, runningProcesses: { try self.running() },
             validateProcess: { process in
-                do { try self.validate(process) }
+                do { try await self.settledValidate(process) }
                 catch { self.reportFailure(error, point: .validateProcess);throw error }
             }, activateExisting: { process in
-                try self.validate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
+                try await self.settledValidate(process);return self.runtime.application(processIdentifier: process.pid)?.activate() == true
             }, openApplication: { try await self.open($0) }, attach: { try await self.attach($0, deadline: $1, purpose: $2) },
             install: { try await self.install($0, request: $1, observation: $2) }, inspectPage: { binding, deadline in
                 defer { self.connection?.close();self.connection = nil }
