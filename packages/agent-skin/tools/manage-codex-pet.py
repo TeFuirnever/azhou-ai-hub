@@ -299,13 +299,20 @@ def prepare(project, operation_id=None):
         planned = {"inputs/" + name: data for name, data in blobs.items()}
         planned.update({"generation-brief.md": brief.encode("utf-8"),
                         "theme-snapshot.json": json_bytes(snapshot)})
-        journal = stage_journal(project, stage, "snapshot", planned, operation_id)
-        atomic_json(state / "package-journal.json", journal)
+        provisional = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
+                       "stage": stage.name, "phase": "allocating"}
+        if operation_id is not None:
+            provisional["operationId"] = operation_id
+        atomic_json(state / "package-journal.json", provisional)
         try:
             stage.mkdir(mode=0o700)
+            journal = stage_journal(project, stage, "snapshot", planned, operation_id)
+            atomic_json(state / "package-journal.json", journal)
             for relative, data in planned.items():
                 write_new(child(stage, relative), data)
+            require_stage_identity(stage, journal)
             fsync_tree(stage)
+            require_stage_identity(stage, journal)
             rename_exclusive(stage, directory)
             fsync_dir(directory.parent)
         finally:
@@ -543,17 +550,30 @@ def stage_file_names(kind):
     raise PetError("recovery-required", "未知暂存类型，拒绝自动清理")
 
 
-def stage_journal(project, stage, kind, files, operation_id):
+def stage_plan(kind, files):
     require(set(files) == stage_file_names(kind), "暂存计划文件集合无效", "recovery-required")
+    return {name: sha(data) for name, data in files.items()}
+
+
+def stage_journal(project, stage, kind, files, operation_id):
+    stage_identity = stage.lstat()
+    require(stat.S_ISDIR(stage_identity.st_mode), "暂存不是普通目录", "recovery-required")
     journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name,
-               "stageKind": kind, "stageFiles": {name: sha(data) for name, data in files.items()}}
+               "stageKind": kind, "stageFiles": stage_plan(kind, files),
+               "stageIdentity": {"device": stage_identity.st_dev, "inode": stage_identity.st_ino}}
     if operation_id is not None:
         journal["operationId"] = operation_id
     return journal
 
 
+def require_stage_identity(stage, journal):
+    require(package_directory_matches(stage, {"directoryIdentity": journal.get("stageIdentity")}),
+            "暂存缺少匹配的实体绑定，保留待核对", "recovery-required")
+
+
 def verify_stage_for_cleanup(stage, journal, expected_kinds):
     require(stage.is_dir() and not stage.is_symlink(), "暂存不是普通目录", "recovery-required")
+    require_stage_identity(stage, journal)
     kind, files = journal.get("stageKind"), journal.get("stageFiles")
     require(kind in expected_kinds, "暂存缺少已绑定类型，保留待核对", "recovery-required")
     require(isinstance(files, dict) and set(files) == stage_file_names(kind),
@@ -590,6 +610,7 @@ def verify_stage_for_cleanup(stage, journal, expected_kinds):
 
     inspect(stage)
     require(verified_files > 0, "空暂存缺少归属证据，保留待核对", "recovery-required")
+    require_stage_identity(stage, journal)
 
 
 def recover_package_stage(state, project, operation_id=None):
@@ -613,6 +634,7 @@ def recover_package_stage(state, project, operation_id=None):
         require(not stage.exists(), "预备阶段的目录归属未确认，保留待核对", "recovery-required")
     if stage.exists():
         verify_stage_for_cleanup(stage, data, {"snapshot", "package"})
+        require_stage_identity(stage, data)
         remove_tree(stage, allow_empty=True)
     journal.unlink()
     fsync_dir(state)
@@ -669,7 +691,9 @@ def package_run(project, run, snapshot_path, operation_id=None):
                 write_new(child(stage, relative), data)
             check_package(stage, project)
             require(package_directory_matches(stage, receipt), "候选暂存身份发生变化", "source-conflict")
+            require_stage_identity(stage, journal)
             fsync_tree(stage)
+            require_stage_identity(stage, journal)
             rename_exclusive(stage, destination)
             published_new = True
             fsync_dir(packages)
@@ -772,8 +796,15 @@ def recover_install(pets, project):
     # The host scans hidden directories under pets, so keep transaction copies outside it.
     stage = child(pets.parent, f".{PET_ID}.stage-{transaction}")
     backup = child(pets.parent, f".{PET_ID}.previous-{transaction}")
-    if stage.exists():
+    stage_present = stage.exists()
+    if stage_present:
         verify_stage_for_cleanup(stage, record, {"install"})
+
+    def check_stage_before_action():
+        if stage_present:
+            require_stage_identity(stage, record)
+        else:
+            require(not stage.exists() and not stage.is_symlink(), "恢复期间出现未知暂存，保留待核对", "recovery-required")
 
     def candidate_matches(current, message):
         expected = {"atlasSHA256": record["candidateAtlasSHA256"],
@@ -824,11 +855,13 @@ def recover_install(pets, project):
         outcome = "restored-pre-install-state"
 
     for action, source, destination in operations:
+        check_stage_before_action()
         if action == "remove":
             remove_tree(source)
         else:
             rename_exclusive(source, destination)
-    if stage.exists():
+    check_stage_before_action()
+    if stage_present:
         remove_tree(stage, allow_empty=True)
     fsync_dir(pets.parent)
     journal.unlink()
@@ -893,7 +926,7 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
                    "manifestSHA256": facts["manifestSHA256"]}
         planned = {"pet.json": manifest_raw, "spritesheet.webp": atlas,
                    ".azhou-pet-receipt.json": json_bytes(receipt)}
-        binding = stage_journal(project, stage, "install", planned, None)
+        planned_hashes = stage_plan("install", planned)
         journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "transaction": tx,
                    "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": bool(previous),
                    "previousAtlasSHA256": previous["atlasSHA256"] if previous else None,
@@ -901,7 +934,7 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
                    "previousManifestSHA256": previous["manifestSHA256"] if previous else None,
                    "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
                    "candidateManifestSHA256": facts["manifestSHA256"],
-                   "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]}
+                   "stageKind": "install", "stageFiles": planned_hashes}
         if previous_project is not None:
             journal.update({"previousProjectRoot": str(previous_project),
                             "previousThemeRevision": previous["themeRevision"],
@@ -909,14 +942,19 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
         atomic_json(journal_path(pets), journal)
         try:
             stage.mkdir(mode=0o700)
+            binding = stage_journal(project, stage, "install", planned, None)
+            journal["stageIdentity"] = binding["stageIdentity"]
+            atomic_json(journal_path(pets), journal)
             for relative, data in planned.items():
                 write_new(child(stage, relative), data)
             installed_facts(stage, project)
             # CAS on display inputs immediately before changing the installed target.
             require(theme_facts(project)[0]["themeRevision"] == facts["themeRevision"],
                     "安装前主题发生变化", "source-conflict")
+            require_stage_identity(stage, journal)
             fsync_dir(stage)
             fsync_dir(codex_home)
+            require_stage_identity(stage, journal)
             if previous:
                 current_target = installed_facts(target, previous_project or project)
                 require(same_installation(current_target, previous),
@@ -924,6 +962,7 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
                 rename_exclusive(target, backup)
                 fsync_dir(pets)
                 fsync_dir(codex_home)
+            require_stage_identity(stage, journal)
             rename_exclusive(stage, target)
             fsync_dir(pets)
             fsync_dir(codex_home)

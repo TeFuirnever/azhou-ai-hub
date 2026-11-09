@@ -554,7 +554,8 @@ class PetSafetyTests(unittest.TestCase):
                    "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
                    "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": facts["atlasSHA256"],
                    "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
-                   "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]}
+                   "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                   "stageIdentity": binding["stageIdentity"]}
         PET.atomic_json(PET.journal_path(pets), journal)
         before = {path.name: path.read_bytes() for path in target.iterdir()}
         self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
@@ -1402,7 +1403,8 @@ class PetSafetyTests(unittest.TestCase):
         }
         planned = {name: b"synthetic install evidence" for name in PET.stage_file_names("install")}
         binding = PET.stage_journal(self.project, stage, "install", planned, None)
-        journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]})
+        journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                   "stageIdentity": binding["stageIdentity"]})
         (stage / "pet.json").write_bytes(planned["pet.json"])
         journal_file = PET.journal_path(pets)
         PET.atomic_json(journal_file, journal)
@@ -1513,6 +1515,285 @@ class PetSafetyTests(unittest.TestCase):
         self.package()
         self.assertFalse(first_package.exists())
         self.assertTrue(PET.selected_package(self.project).is_dir())
+
+    def test_legacy_stage_with_matching_files_but_no_identity_is_preserved(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "d" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic frozen input" for name in PET.stage_file_names("snapshot")}
+        (stage / "generation-brief.md").write_bytes(planned["generation-brief.md"])
+        record = PET.stage_journal(self.project, stage, "snapshot", planned, None)
+        del record["stageIdentity"]
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, record)
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual((stage / "generation-brief.md").read_bytes(), planned["generation-brief.md"])
+        self.assertTrue(journal.is_file())
+
+    def test_snapshot_and_package_bind_failure_preserves_allocating_stage(self):
+        for kind in ("snapshot", "package"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory(dir=self.root) as tmp:
+                project = Path(tmp) / "project"
+                shutil.copytree(self.project, project, ignore=shutil.ignore_patterns('.local'))
+                prepared = PET.prepare(project)
+                snapshot = Path(prepared["snapshot"])
+                if kind == "snapshot":
+                    (project / "style.css").write_bytes(b"changed synthetic theme")
+                revision = json.loads(snapshot.read_bytes())["themeRevision"]
+                run = Path(tmp) / "run"
+                self.make_run(self.atlas_a, directory=run, revision=revision)
+                state = PET.state_dir(project)
+                actual = PET.atomic_json
+                def fail_binding(path, value):
+                    if Path(path).name == "package-journal.json" and value.get("stageIdentity"):
+                        raise OSError("injected binding failure")
+                    return actual(path, value)
+                with patch.object(PET, "atomic_json", side_effect=fail_binding):
+                    operation = (lambda: PET.prepare(project)) if kind == "snapshot" else (lambda: PET.package_run(project, run, snapshot))
+                    self.expect_error(operation, "recovery-required")
+                record = json.loads((state / "package-journal.json").read_bytes())
+                self.assertEqual(record["phase"], "allocating")
+                stage = state / record["stage"]
+                self.assertTrue(stage.is_dir())
+                self.assertEqual(list(stage.iterdir()), [])
+                self.assertTrue(snapshot.is_file())
+
+    def test_install_bind_failure_preserves_stage_before_target_change(self):
+        self.package()
+        actual = PET.atomic_json
+        def fail_binding(path, value):
+            if value.get("stageKind") == "install" and value.get("stageIdentity"):
+                raise OSError("injected install binding failure")
+            return actual(path, value)
+        with patch.object(PET, "atomic_json", side_effect=fail_binding):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        journal = PET.journal_path(self.codex / "pets")
+        record = json.loads(journal.read_bytes())
+        stage = self.codex / f".{PET.PET_ID}.stage-{record['transaction']}"
+        self.assertNotIn("stageIdentity", record)
+        self.assertTrue(stage.is_dir())
+        self.assertFalse((self.codex / "pets" / PET.PET_ID).exists())
+        self.assertTrue(journal.is_file())
+
+    def test_install_recovery_preserves_stage_that_appears_before_target_removal(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        before = {p.name: p.read_bytes() for p in target.iterdir()}
+        tx = "e" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": False,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": None,
+                  "previousThemeRevision": None, "previousManifestSHA256": None}
+        journal = PET.journal_path(pets)
+        PET.atomic_json(journal, record)
+        installed = PET.installed_facts
+        def create_stage_during_observation(path, project):
+            result = installed(path, project)
+            if path == target:
+                stage.mkdir()
+                (stage / "unknown.txt").write_bytes(b"keep")
+            return result
+        with patch.object(PET, "installed_facts", side_effect=create_stage_during_observation):
+            self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+        self.assertEqual((stage / "unknown.txt").read_bytes(), b"keep")
+        self.assertTrue(journal.is_file())
+
+    def test_snapshot_recovery_rechecks_stage_after_scan(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "d" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic frozen input" for name in PET.stage_file_names("snapshot")}
+        (stage / "generation-brief.md").write_bytes(planned["generation-brief.md"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "snapshot", planned, None))
+        verified = PET.verify_stage_for_cleanup
+        saved = self.root / "saved-snapshot-stage"
+        def replace_after_scan(path, data, kinds):
+            verified(path, data, kinds)
+            stage.rename(saved)
+            shutil.copytree(saved, stage)
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=replace_after_scan):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertTrue(stage.is_dir())
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(journal.is_file())
+
+    def test_install_recovery_rechecks_stage_before_target_removal(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        before = {p.name: p.read_bytes() for p in target.iterdir()}
+        tx = "e" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        planned = {name: b"synthetic install evidence" for name in PET.stage_file_names("install")}
+        (stage / "pet.json").write_bytes(planned["pet.json"])
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": False,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": None,
+                  "previousThemeRevision": None, "previousManifestSHA256": None,
+                  "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                  "stageIdentity": binding["stageIdentity"]}
+        journal = PET.journal_path(pets)
+        PET.atomic_json(journal, record)
+        verified = PET.verify_stage_for_cleanup
+        saved = self.root / "saved-stage-after-scan"
+        def replace_after_scan(path, data, kinds):
+            verified(path, data, kinds)
+            stage.rename(saved)
+            shutil.copytree(saved, stage)
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=replace_after_scan):
+            self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+        self.assertTrue(stage.is_dir())
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(journal.is_file())
+
+    def test_install_recovery_preserves_identical_stage_replacement_and_target(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        before = {p.name: p.read_bytes() for p in target.iterdir()}
+        tx = "a" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        planned = {name: b"synthetic install evidence" for name in PET.stage_file_names("install")}
+        (stage / "pet.json").write_bytes(planned["pet.json"])
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": True,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": facts["atlasSHA256"],
+                  "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                  "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                  "stageIdentity": binding["stageIdentity"]}
+        journal = PET.journal_path(pets)
+        PET.atomic_json(journal, record)
+        saved = self.root / "saved-install-stage"
+        stage.rename(saved)
+        shutil.copytree(saved, stage)
+        replacement_inode = stage.stat().st_ino
+        self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual(stage.stat().st_ino, replacement_inode)
+        self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(journal.is_file())
+
+    def test_snapshot_and_install_stage_collisions_preserve_unknown_objects(self):
+        token = "f" * 32
+        fixed_uuid = type("Token", (), {"hex": token})()
+        (self.project / "style.css").write_bytes(b"changed synthetic theme")
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + token)
+        stage.mkdir()
+        (stage / "unknown.txt").write_bytes(b"keep snapshot")
+        with patch.object(PET.uuid, "uuid4", return_value=fixed_uuid):
+            self.expect_error(lambda: PET.prepare(self.project), "recovery-required")
+        self.assertEqual((stage / "unknown.txt").read_bytes(), b"keep snapshot")
+        self.assertEqual(json.loads((state / "package-journal.json").read_bytes())["phase"], "allocating")
+
+        project = self.root / "other-project"
+        shutil.copytree(self.project, project, ignore=shutil.ignore_patterns('.local'))
+        self.make_package_for(project, self.atlas_a, "other-run")
+        home = self.root / "other-home"
+        home.mkdir()
+        install_stage = home / f".{PET.PET_ID}.stage-{token}"
+        install_stage.mkdir()
+        (install_stage / "unknown.txt").write_bytes(b"keep install")
+        with patch.object(PET.uuid, "uuid4", return_value=fixed_uuid):
+            self.expect_error(lambda: PET.install_package(project, home), "recovery-required")
+        self.assertEqual((install_stage / "unknown.txt").read_bytes(), b"keep install")
+        self.assertTrue(PET.journal_path(home / "pets").is_file())
+        self.assertFalse((home / "pets" / PET.PET_ID).exists())
+
+    def test_package_recovery_preserves_identical_replacement_directory(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "b" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic package" for name in PET.stage_file_names("package")}
+        (stage / "pet.json").write_bytes(planned["pet.json"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        original = self.root / "original-package-stage"
+        stage.rename(original)
+        shutil.copytree(original, stage)
+        replacement_inode = stage.stat().st_ino
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual(stage.stat().st_ino, replacement_inode)
+        self.assertEqual((stage / "pet.json").read_bytes(), planned["pet.json"])
+        self.assertTrue(original.is_dir())
+        self.assertTrue(journal.is_file())
+
+    def test_snapshot_publish_preserves_stage_replaced_after_fsync(self):
+        (self.project / "style.css").write_bytes(b"new synthetic theme")
+        state = PET.state_dir(self.project)
+        sync = PET.fsync_tree
+        saved = self.root / "snapshot-before-swap"
+        seen = {}
+        def replace_after_sync(stage):
+            sync(stage)
+            Path(stage).rename(saved)
+            shutil.copytree(saved, stage)
+            seen["stage"] = Path(stage)
+            seen["inode"] = Path(stage).stat().st_ino
+        with patch.object(PET, "fsync_tree", side_effect=replace_after_sync):
+            self.expect_error(lambda: PET.prepare(self.project), "recovery-required")
+        self.assertEqual(seen["stage"].stat().st_ino, seen["inode"])
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(self.snapshot.is_file())
+        self.assertTrue((state / "package-journal.json").is_file())
+
+    def test_install_preserves_previous_target_when_stage_replaced_after_fsync(self):
+        self.install()
+        target = self.codex / "pets" / PET.PET_ID
+        before = {p.name: p.read_bytes() for p in target.iterdir()}
+        self.make_run(self.atlas_b)
+        self.package()
+        sync = PET.fsync_dir
+        saved = self.root / "install-before-swap"
+        seen = {}
+        def replace_after_sync(path):
+            sync(path)
+            path = Path(path)
+            if path.name.startswith(f".{PET.PET_ID}.stage-") and not seen:
+                path.rename(saved)
+                shutil.copytree(saved, path)
+                seen["stage"] = path
+                seen["inode"] = path.stat().st_ino
+        with patch.object(PET, "fsync_dir", side_effect=replace_after_sync):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertEqual(seen["stage"].stat().st_ino, seen["inode"])
+        self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(PET.journal_path(self.codex / "pets").is_file())
+
+    def test_stage_recovery_preserves_identical_replacement_directory(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "a" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic frozen input" for name in PET.stage_file_names("snapshot")}
+        (stage / "inputs").mkdir()
+        (stage / "inputs/style.css").write_bytes(planned["inputs/style.css"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "snapshot", planned, None))
+        original = self.root / "original-stage"
+        stage.rename(original)
+        shutil.copytree(original, stage)
+        replacement_inode = stage.stat().st_ino
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual(stage.stat().st_ino, replacement_inode)
+        self.assertEqual((stage / "inputs/style.css").read_bytes(), planned["inputs/style.css"])
+        self.assertTrue(journal.is_file())
+        self.assertTrue(original.is_dir())
 
     def test_snapshot_staging_interruption_can_be_retried(self):
         state = PET.state_dir(self.project)
@@ -1713,7 +1994,8 @@ class PetSafetyTests(unittest.TestCase):
                     kind = "snapshot" if case == "wrong-kind" else "install"
                     planned = {name: b"synthetic" for name in PET.stage_file_names(kind)}
                     binding = PET.stage_journal(self.project, stage, kind, planned, None)
-                    journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]})
+                    journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                   "stageIdentity": binding["stageIdentity"]})
                 PET.atomic_json(PET.journal_path(pets), journal)
                 self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
                 self.assertEqual(PET.installed_facts(target, self.project)["atlasSHA256"], facts["atlasSHA256"])
