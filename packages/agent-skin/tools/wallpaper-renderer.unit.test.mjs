@@ -747,6 +747,53 @@ test('ZCode renderer uses only its validated main surface and restores owned att
   } finally { fixture.restore(); }
 });
 
+test('ZCode adapter capabilities stay bound during image decoding', async t => {
+  for (const field of ['css', 'validPage', 'shellState', 'surfaces']) {
+    await t.test(field, async () => {
+      const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+      try {
+        const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+        main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+        const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+        const originalCSS = ports.css, originalScope = ports.scope;
+        const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+        const decode = fixture.image.decode;
+        fixture.image.decode = async function () {
+          await decode.call(this);
+          if (field === 'css') { ports.css = '@import url(https://example.invalid/foreign.css);'; ports.scope = 'changed'; }
+          if (field === 'validPage') ports.validPage = () => false;
+          if (field === 'shellState') ports.shellState = () => 'unsupported';
+          if (field === 'surfaces') ports.surfaces = () => [];
+        };
+        const result = await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+        assert.equal(result.applied, true);
+        assert.equal(result.verificationScope, originalScope);
+        assert.equal(fixture.styleElements.find(style => style.isConnected).textContent, CSS + originalCSS);
+        globalThis.__azhouWallpaper.dispose();
+      } finally { fixture.restore(); }
+    });
+  }
+});
+
+test('bound adapter methods retain their receiver and recheck current page state', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    let pageAllowed = true;
+    const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+    ports.validPage = function () { assert.equal(this, ports); return pageAllowed; };
+    ports.shellState = function () { assert.equal(this, ports); return 'ready'; };
+    ports.surfaces = function () { assert.equal(this, ports); return [main]; };
+    for (const operation of [ports.validPage, ports.shellState, ports.surfaces]) operation.call = () => { throw new Error('not the callable operation'); };
+    const decode = fixture.image.decode;
+    fixture.image.decode = async function () { await decode.call(this); pageAllowed = false; };
+    const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+    await assert.rejects(installRenderer({ ...fixture.payload, pageAdapter: adapter }), { code: 'page-changed-during-decode' });
+    assert.equal(fixture.styleElements.filter(style => style.isConnected).length, 0);
+  } finally { fixture.restore(); }
+});
+
 test('ZCode refuses protected, ambiguous or foreign-marked surfaces before styling', async () => {
   for (const mode of ['protected', 'ambiguous', 'foreign']) {
     const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });

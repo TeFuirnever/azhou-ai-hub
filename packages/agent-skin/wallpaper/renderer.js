@@ -123,20 +123,24 @@ export async function installRenderer(payload) {
   const ports = ownValue(pageAdapter, 'wallpaper');
   // The ports group is atomic: an adapter that declares it must supply every
   // member, and the neutral renderer refuses the whole adapter otherwise.
+  const attributes = ownValue(ports, 'attributes');
+  const adapterPorts = {
+    validPage: ownValue(ports, 'validPage'), shellState: ownValue(ports, 'shellState'),
+    surfaces: ownValue(ports, 'surfaces'), css: ownValue(ports, 'css'), scope: ownValue(ports, 'scope'),
+    surfaceMarker: ownValue(attributes, 'surfaceMarker'), observeFilter: ownValue(attributes, 'observeFilter'),
+  };
   const adapter = !!ports && typeof ports === 'object'
-    && typeof ownValue(ports, 'validPage') === 'function'
-    && typeof ownValue(ports, 'shellState') === 'function'
-    && typeof ownValue(ports, 'surfaces') === 'function'
-    && typeof ownValue(ports, 'css') === 'string' && typeof ownValue(ports, 'scope') === 'string'
-    && !!ownValue(ports, 'attributes') && typeof ownValue(ownValue(ports, 'attributes'), 'surfaceMarker') === 'string'
-    && Array.isArray(ownValue(ownValue(ports, 'attributes'), 'observeFilter'));
+    && typeof adapterPorts.validPage === 'function' && typeof adapterPorts.shellState === 'function'
+    && typeof adapterPorts.surfaces === 'function' && typeof adapterPorts.css === 'string'
+    && typeof adapterPorts.scope === 'string' && !!attributes && typeof adapterPorts.surfaceMarker === 'string'
+    && Array.isArray(adapterPorts.observeFilter);
   if (pageAdapter && !adapter) throw problem('invalid-host-adapter');
-  const surfaceMarker = adapter ? ports.attributes.surfaceMarker : null;
+  const surfaceMarker = adapter ? adapterPorts.surfaceMarker : null;
   if (adapter) OWNER = ownValue(ownValue(pageAdapter, 'controllerWallpaper'), 'owner') ?? OWNER;
   const knownVersion = version => version === VERSION || (!adapter && LEGACY_VERSIONS.has(version));
   function validPage() {
     if (window.top !== window) return false;
-    if (adapter) return ports.validPage(globalThis);
+    if (adapter) return Reflect.apply(adapterPorts.validPage, ports, [globalThis]);
     const url = new URL(location.href), route = url.searchParams.get('initialRoute') || '/';
     if (url.protocol === 'app:' && url.hostname === '-' && url.pathname === '/index.html') {
       return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
@@ -170,12 +174,12 @@ export async function installRenderer(payload) {
   const currentSurfaces = () => {
     if (!applicationRoot) return [];
     if (!adapter) return [...applicationRoot.querySelectorAll(surfaceSelector)];
-    const nodes = ports.surfaces(globalThis);
+    const nodes = Reflect.apply(adapterPorts.surfaces, ports, [globalThis]);
     return Array.isArray(nodes) && nodes.length === 1 && nodes.every(node => node?.isConnected
       && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
   };
   const shellReady = () => adapter
-    ? ports.shellState(isCurrent, globalThis) === 'ready' && currentSurfaces().length === 1
+    ? Reflect.apply(adapterPorts.shellState, ports, [isCurrent, globalThis]) === 'ready' && currentSurfaces().length === 1
     : !!applicationRoot?.querySelector('[data-app-shell-frame]')
       && !!applicationRoot?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
   if (!document.body || !applicationRoot
@@ -283,7 +287,7 @@ export async function installRenderer(payload) {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.setAttribute('data-azhou-owner', OWNER);
-  const styleText = request.css + (adapter ? ports.css : '');
+  const styleText = request.css + (adapter ? adapterPorts.css : '');
   style.textContent = styleText;
   let disposed = false, committed = false, api;
   let original = rollbackOriginal;
@@ -406,7 +410,7 @@ export async function installRenderer(payload) {
         position: bodyStyle.backgroundPosition.split(',')[1]?.trim() },
       styleCount,
       persistentAnimation: false,
-      verificationScope: adapter ? ports.scope
+      verificationScope: adapter ? adapterPorts.scope
         : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
     };
   }
