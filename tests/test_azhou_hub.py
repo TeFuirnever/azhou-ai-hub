@@ -136,7 +136,6 @@ class AzhouHubCliTest(unittest.TestCase):
                 *AZHOU_SKILL_NAMES,
                 "super-eli5",
                 "super-excalidraw-diagram",
-                "super-lavish",
                 "super-repo-pedant",
                 "super-session-insights",
             ],
