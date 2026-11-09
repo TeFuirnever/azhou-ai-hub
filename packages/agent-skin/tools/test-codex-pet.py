@@ -134,6 +134,96 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, code)
         return str(raised.exception)
 
+    def test_read_regular_files_and_size_limit(self):
+        path = self.root / "bounded-input"
+        with patch.object(PET, "MAX_FILE_BYTES", 32):
+            for data in (b"", b"valid", b"x" * 32):
+                path.write_bytes(data)
+                self.assertEqual(PET.read(path), data)
+            path.write_bytes(b"x" * 33)
+            self.expect_error(lambda: PET.read(path))
+            self.assertEqual(path.read_bytes(), b"x" * 33)
+
+    def test_read_rejects_symlink_and_fifo_without_modification(self):
+        source = self.root / "source"
+        source.write_bytes(b"source")
+        link = self.root / "source-link"
+        link.symlink_to(source)
+        fifo = self.root / "unrelated-fifo"
+        os.mkfifo(fifo)
+        self.expect_error(lambda: PET.read(link))
+        self.expect_error(lambda: PET.read(fifo))
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(fifo.exists())
+        self.assertEqual(source.read_bytes(), b"source")
+
+    def test_read_detects_replacement_before_open(self):
+        path = self.root / "changing-input"
+        original = self.root / "original-input"
+        path.write_bytes(b"original")
+        open_file = PET.os.open
+        def replace_then_open(name, flags):
+            path.rename(original)
+            path.write_bytes(b"foreign")
+            return open_file(name, flags)
+        with patch.object(PET.os, "open", side_effect=replace_then_open):
+            self.expect_error(lambda: PET.read(path), "source-conflict")
+        self.assertEqual(original.read_bytes(), b"original")
+        self.assertEqual(path.read_bytes(), b"foreign")
+
+    def test_read_detects_replacement_after_open(self):
+        path = self.root / "changing-input"
+        original = self.root / "original-input"
+        path.write_bytes(b"original")
+        read_file = PET.os.read
+        changed = False
+        def replace_while_reading(fd, count):
+            nonlocal changed
+            if not changed:
+                changed = True
+                path.rename(original)
+                path.write_bytes(b"foreign")
+            return read_file(fd, count)
+        with patch.object(PET.os, "read", side_effect=replace_while_reading):
+            self.expect_error(lambda: PET.read(path), "source-conflict")
+        self.assertEqual(original.read_bytes(), b"original")
+        self.assertEqual(path.read_bytes(), b"foreign")
+
+    def test_read_handles_interrupted_short_reads_and_reports_io_failure(self):
+        path = self.root / "short-input"
+        expected = b"abcdefghijklmno"
+        path.write_bytes(expected)
+        read_file = PET.os.read
+        calls = 0
+        def short_or_interrupted(fd, count):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise InterruptedError()
+            return read_file(fd, min(count, 3))
+        with patch.object(PET.os, "read", side_effect=short_or_interrupted):
+            self.assertEqual(PET.read(path), expected)
+        self.assertGreater(calls, 2)
+        with patch.object(PET.os, "read", side_effect=OSError("injected read error")):
+            self.expect_error(lambda: PET.read(path))
+        self.assertEqual(path.read_bytes(), expected)
+
+    def test_read_detects_in_place_change(self):
+        path = self.root / "changing-input"
+        path.write_bytes(b"original")
+        read_file = PET.os.read
+        changed = False
+        def write_while_reading(fd, count):
+            nonlocal changed
+            data = read_file(fd, count)
+            if not changed:
+                changed = True
+                path.write_bytes(b"modified and longer")
+            return data
+        with patch.object(PET.os, "read", side_effect=write_while_reading):
+            self.expect_error(lambda: PET.read(path), "source-conflict")
+        self.assertEqual(path.read_bytes(), b"modified and longer")
+
     def test_snapshot_is_frozen_and_deterministic(self):
         again = PET.prepare(self.project)
         self.assertEqual(again["snapshot"], str(self.snapshot))

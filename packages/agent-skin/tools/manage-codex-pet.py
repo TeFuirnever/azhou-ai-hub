@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import sys
 import uuid
 
@@ -76,9 +77,46 @@ def child(root, relative):
 
 
 def read(path):
-    require(path.is_file() and not path.is_symlink(), f"缺少普通文件：{path}")
-    require(path.stat().st_size <= MAX_FILE_BYTES, f"文件超过 64 MiB：{path}")
-    return path.read_bytes()
+    path = Path(path)
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise PetError("invalid", f"缺少普通文件：{path}") from exc
+    require(stat.S_ISREG(before.st_mode), f"缺少普通文件：{path}")
+    require(before.st_size <= MAX_FILE_BYTES, f"文件超过 64 MiB：{path}")
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as exc:
+        raise PetError("invalid", f"无法安全读取文件：{path}") from exc
+    try:
+        opened = os.fstat(fd)
+        require(stat.S_ISREG(opened.st_mode) and (opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino),
+                f"读取前文件身份发生变化：{path}", "source-conflict")
+        require(opened.st_size <= MAX_FILE_BYTES, f"文件超过 64 MiB：{path}")
+        chunks, total = [], 0
+        while True:
+            try:
+                part = os.read(fd, min(1024 * 1024, MAX_FILE_BYTES + 1 - total))
+            except InterruptedError:
+                continue
+            except OSError as exc:
+                raise PetError("invalid", f"无法读取文件：{path}") from exc
+            if not part:
+                break
+            total += len(part)
+            require(total <= MAX_FILE_BYTES, f"文件超过 64 MiB：{path}")
+            chunks.append(part)
+        after = os.fstat(fd)
+        try:
+            current = path.lstat()
+        except OSError as exc:
+            raise PetError("source-conflict", f"读取期间文件已消失：{path}") from exc
+        identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        require(stat.S_ISREG(current.st_mode) and identity(before) == identity(opened) == identity(after) == identity(current)
+                and total == after.st_size, f"读取期间文件发生变化：{path}", "source-conflict")
+        return b"".join(chunks)
+    finally:
+        os.close(fd)
 
 
 def parse(data):
