@@ -399,22 +399,27 @@ export async function installRenderer(payload) {
       disposed = true;
       if (style.isConnected && style.parentNode === document.head && style.id === STYLE_ID && style.disabled === false
           && style.getAttribute('data-azhou-owner') === OWNER && style.textContent === styleText) style.remove();
+      const liveApplicationRoot = !adapter || (applicationRoot.isConnected && document.getElementById('root') === applicationRoot);
       for (const [node, value] of original.zcodeAttributes ?? []) {
-        if (node.getAttribute(surfaceMarker) !== 'active') continue;
+        if (!liveApplicationRoot || !node.isConnected
+            || (node !== applicationRoot && !applicationRoot.contains(node))
+            || node.getAttribute(surfaceMarker) !== 'active') continue;
         if (value === null) node.removeAttribute(surfaceMarker);
         else node.setAttribute(surfaceMarker, value);
       }
-      if (root.getAttribute(ATTRIBUTE) === 'active') {
-        if (original.attribute === null) root.removeAttribute(ATTRIBUTE);
-        else root.setAttribute(ATTRIBUTE, original.attribute);
-      }
-      for (const [name, [value, priority]] of original.properties) {
-        const writtenValue = name === IMAGE_PROPERTY ? 'url(' + JSON.stringify(imageURL) + ')'
-          : name === WASH_PROPERTY ? wash : surface;
-        if (typeof writtenValue !== 'string') continue;
-        if (root.style.getPropertyValue(name) !== writtenValue || root.style.getPropertyPriority(name) !== '') continue;
-        if (value) root.style.setProperty(name, value, priority);
-        else root.style.removeProperty(name);
+      if (document.documentElement === root) {
+        if (root.getAttribute(ATTRIBUTE) === 'active') {
+          if (original.attribute === null) root.removeAttribute(ATTRIBUTE);
+          else root.setAttribute(ATTRIBUTE, original.attribute);
+        }
+        for (const [name, [value, priority]] of original.properties) {
+          const writtenValue = name === IMAGE_PROPERTY ? 'url(' + JSON.stringify(imageURL) + ')'
+            : name === WASH_PROPERTY ? wash : surface;
+          if (typeof writtenValue !== 'string') continue;
+          if (root.style.getPropertyValue(name) !== writtenValue || root.style.getPropertyPriority(name) !== '') continue;
+          if (value) root.style.setProperty(name, value, priority);
+          else root.style.removeProperty(name);
+        }
       }
       releaseImage();
       if (globalThis.__azhouWallpaper === api) delete globalThis.__azhouWallpaper;

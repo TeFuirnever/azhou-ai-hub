@@ -1080,3 +1080,70 @@ test('failed release restores the original values and a working real controller'
   assert.equal(oldStyle.disabled, false);
   assert.deepEqual(page.revoked, ['blob:recovery-2']);
 }));
+
+test('ZCode dispose preserves markers on a surface moved outside the original root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; let inside = true;
+    fixture.applicationRoot.contains = node => node === main && inside;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    const style = fixture.document.getElementById(STYLE_ID);
+    inside = false;
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(style.isConnected, false);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});
+
+test('ZCode dispose leaves markers on a former application root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    const oldLookup = fixture.document.getElementById;
+    const foreignRoot = new Node('replacement-root');
+    fixture.document.getElementById = id => id === 'root' ? foreignRoot : oldLookup(id);
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(foreignRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});
+
+test('dispose does not restore styles on a former document root', async () => onPage({}, async page => {
+  await installRenderer(page.payload);
+  const oldRoot = page.root;
+  const image = oldRoot.style.getPropertyValue(PROPERTY_IMAGE);
+  const foreignRoot = new Node('replacement-html');
+  page.document.documentElement = foreignRoot;
+  globalThis.__azhouWallpaper.dispose();
+  assert.equal(oldRoot.getAttribute(ATTRIBUTE), 'active');
+  assert.equal(oldRoot.style.getPropertyValue(PROPERTY_IMAGE), image);
+  assert.equal(foreignRoot.getAttribute(ATTRIBUTE), null);
+  assert.equal(globalThis.__azhouWallpaper, undefined);
+}));
+
+test('ZCode dispose preserves a detached recorded surface', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    main.isConnected = false;
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});

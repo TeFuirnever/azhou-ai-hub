@@ -653,6 +653,31 @@ try {
     assert.deepEqual(result,{error:'synthetic release failure',same:true,applied:true,imageSame:true,styleSame:true,enabled:true});
     return result;
   });
+  await check('moved ZCode surface remains untouched during cleanup', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      globalThis.__azhouWallpaper?.dispose();
+      const root=document.getElementById('root'), main=root.querySelector('main');
+      const parent=main.parentNode, next=main.nextSibling, marker='data-azhou-zcode-wallpaper-surface';
+      const foreign=document.createElement('div');document.body.appendChild(foreign);
+      const ports={validPage:()=>true,shellState:()=> 'ready',surfaces:()=>[main],
+        attributes:{surfaceMarker:marker,observeFilter:['class','style']},
+        css:'html[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+        scope:'synthetic fixture'};
+      const adapter={controllerWallpaper:{owner:'azhou.zcode-startup-animation'},wallpaper:ports};
+      try {
+        const applied=await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,pageAdapter:adapter});
+        foreign.appendChild(main);
+        globalThis.__azhouWallpaper.dispose();
+        return {applied:applied.applied,movedMarker:main.getAttribute(marker),rootMarker:root.getAttribute(marker),
+          hasController:Object.hasOwn(globalThis,'__azhouWallpaper')};
+      } finally {
+        parent.insertBefore(main,next);main.removeAttribute(marker);root.removeAttribute(marker);foreign.remove();
+        globalThis.__azhouWallpaper?.dispose();await __wallpaperFixture.apply();
+      }
+    })()`);
+    assert.deepEqual(result,{applied:true,movedMarker:'active',rootMarker:null,hasController:false});
+    return result;
+  });
   await check('scoped surface tokens, composer, code and input remain intact', async () => {
     const result = await cdp.evaluate(`(async()=>{
       __azhouWallpaper.dispose();
