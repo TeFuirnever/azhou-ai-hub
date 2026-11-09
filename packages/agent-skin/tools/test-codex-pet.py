@@ -1080,6 +1080,79 @@ class PetSafetyTests(unittest.TestCase):
             PET.recover_install(pets, self.project)
         self.assertTrue(journal_file.exists())
 
+    def test_atomic_json_preserves_a_new_file_at_published_temporary_name(self):
+        path = self.root / "receipt.json"
+        replace = PET.os.replace
+        foreign = []
+        def publish_then_reuse(source, destination):
+            replace(source, destination)
+            Path(source).write_bytes(b"foreign after publication")
+            foreign.append(Path(source))
+        with patch.object(PET.os, "replace", side_effect=publish_then_reuse):
+            PET.atomic_json(path, {"fixture": True})
+        self.assertTrue(json.loads(path.read_text())["fixture"])
+        self.assertEqual(foreign[0].read_bytes(), b"foreign after publication")
+
+    def test_atomic_json_preserves_preexisting_and_replaced_temporary_files(self):
+        path = self.root / "receipt.json"
+        token = "1" * 32
+        temp = path.with_name(f".{path.name}.{token}.tmp")
+        temp.write_bytes(b"foreign collision")
+        with patch.object(PET.uuid, "uuid4", return_value=type("Token", (), {"hex": token})()):
+            with self.assertRaises(FileExistsError):
+                PET.atomic_json(path, {"fixture": True})
+        self.assertEqual(temp.read_bytes(), b"foreign collision")
+        temp.unlink()
+        foreign = []
+        def replace_source_then_fail(source, destination):
+            source = Path(source)
+            source.rename(source.with_suffix(".saved"))
+            source.write_bytes(b"foreign replacement")
+            foreign.append(source)
+            raise OSError("synthetic replace failure")
+        with patch.object(PET.os, "replace", side_effect=replace_source_then_fail):
+            with self.assertRaisesRegex(OSError, "synthetic replace failure"):
+                PET.atomic_json(path, {"fixture": True})
+        self.assertEqual(foreign[0].read_bytes(), b"foreign replacement")
+        self.assertFalse(path.exists())
+
+    def test_atomic_json_preserves_in_place_changed_temporary_file(self):
+        path = self.root / "receipt.json"
+        foreign = []
+        def modify_then_fail(source, destination):
+            source = Path(source)
+            source.write_bytes(b"changed contents")
+            foreign.append(source)
+            raise OSError("synthetic replace failure")
+        with patch.object(PET.os, "replace", side_effect=modify_then_fail):
+            with self.assertRaisesRegex(OSError, "synthetic replace failure"):
+                PET.atomic_json(path, {"fixture": True})
+        self.assertEqual(foreign[0].read_bytes(), b"changed contents")
+        self.assertFalse(path.exists())
+
+    def test_atomic_json_preserves_incomplete_write_and_prepublication_replacement(self):
+        path = self.root / "receipt.json"
+        left = []
+        def partial_write(temp, data):
+            temp.write_bytes(b"incomplete")
+            left.append(temp)
+            raise OSError("synthetic write failure")
+        with patch.object(PET, "write_new", side_effect=partial_write):
+            with self.assertRaisesRegex(OSError, "synthetic write failure"):
+                PET.atomic_json(path, {"fixture": True})
+        self.assertEqual(left[0].read_bytes(), b"incomplete")
+        write = PET.write_new
+        def replace_after_write(temp, data):
+            identity = write(temp, data)
+            temp.rename(temp.with_suffix(".saved"))
+            temp.write_bytes(b"foreign before publication")
+            left.append(temp)
+            return identity
+        with patch.object(PET, "write_new", side_effect=replace_after_write):
+            self.expect_error(lambda: PET.atomic_json(path, {"fixture": True}), "source-conflict")
+        self.assertEqual(left[1].read_bytes(), b"foreign before publication")
+        self.assertFalse(path.exists())
+
     def test_json_parser_cleanup_and_package_history_are_deterministic(self):
         with self.assertRaisesRegex(PET.PetError, "JSON 无效"):
             PET.parse(b"\xff")

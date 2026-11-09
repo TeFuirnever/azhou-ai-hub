@@ -117,7 +117,7 @@ The original startup-animation source has no recorded open-source license grant.
 
 The 2026-10-26 Pet receipt names the retained `codex-startup-animation` source; copying its files into Agent Skin does not transfer Pet ownership. Check the current Pet receipt before maintenance, and keep the legacy root until any required handoff has been reviewed. See [Pet maintenance](docs/integrations.md#pet-maintenance-after-the-import). Installed-byte checks do not prove host selection or playback.
 
-Pet publication uses exclusive filesystem renames on macOS and Linux when supported; unsupported systems stop safely. The Linux path has not yet been tested. A Pet with a matching atlas and theme but a different manifest is preserved for review. Pet recovery requires transaction-bound atlas, theme, and manifest evidence. Older incomplete journals and unverified staged contents are preserved for review; see the [Pet recovery contract](packages/agent-skin/docs/codex-pet.md#锁事务与恢复范围).
+Pet publication uses exclusive filesystem renames on macOS and Linux when supported; unsupported systems stop safely. The Linux path has not yet been tested. A Pet with a matching atlas and theme but a different manifest is preserved for review. Pet recovery requires transaction-bound atlas, theme, and manifest evidence. Older incomplete journals and unverified staged contents or temporary receipts are preserved for review; see the [Pet recovery contract](packages/agent-skin/docs/codex-pet.md#锁事务与恢复范围).
 
 ## Skills
 

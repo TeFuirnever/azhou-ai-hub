@@ -173,17 +173,34 @@ def write_new(path, data):
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
+        return os.fstat(stream.fileno())
 
 
 def atomic_json(path, value):
     require(not path.is_symlink(), f"拒绝符号链接：{path}")
     temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    data = json_bytes(value)
+    owned = None
+    published = False
+
+    def matches_owned():
+        if owned is None:
+            return False
+        try:
+            current = temp.lstat()
+            return (stat.S_ISREG(current.st_mode) and (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino)
+                    and read(temp) == data)
+        except (OSError, PetError):
+            return False
+
     try:
-        write_new(temp, json_bytes(value))
+        owned = write_new(temp, data)
+        require(matches_owned(), f"回执暂存内容发生变化，保留待核对：{temp}", "source-conflict")
         os.replace(temp, path)
+        published = True
         fsync_dir(path.parent)
     finally:
-        if temp.exists():
+        if not published and matches_owned():
             temp.unlink()
 
 
