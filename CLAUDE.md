@@ -1,6 +1,6 @@
 # Claude Code instructions
 
-Follow [AGENTS.md](AGENTS.md) as this repository's single maintained agent-rule source.
+Follow @AGENTS.md as this repository's single maintained agent-rule source.
 
 ## Agent skills
 
