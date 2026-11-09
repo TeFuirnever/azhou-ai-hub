@@ -232,6 +232,7 @@ def revision(records):
 def theme_facts(project):
     blobs = {name: read(child(project, name)) for name in INPUTS}
     config = parse(blobs["pet/theme.json"])
+    require(isinstance(config, dict), "theme.json 必须是 JSON 对象")
     require(config.get("id") == PET_ID and config.get("spriteVersionNumber") == 2,
             "theme.json 的 pet 身份或版本无效")
     require(config.get("displayName") == DISPLAY_NAME and config.get("themeInputs") == list(INPUTS),
@@ -250,7 +251,12 @@ def snapshot_metadata(snapshot):
     require(isinstance(snapshot, dict) and snapshot.get("petId") == PET_ID,
             "snapshot petId 不匹配")
     records = snapshot.get("inputs", [])
-    require([r.get("path") for r in records] == list(INPUTS), "snapshot 输入集合不匹配")
+    require(isinstance(records, list) and all(isinstance(record, dict) for record in records),
+            "snapshot 输入记录必须是对象列表")
+    require([record.get("path") for record in records] == list(INPUTS), "snapshot 输入集合不匹配")
+    require(all(isinstance(record.get("sha256"), str) and len(record["sha256"]) == 64
+                and all(char in "0123456789abcdef" for char in record["sha256"]) for record in records),
+            "snapshot 输入摘要无效")
     require(snapshot.get("themeRevision") == revision(records), "snapshot 修订摘要不匹配")
     return snapshot["themeRevision"]
 

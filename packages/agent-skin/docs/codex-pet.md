@@ -191,7 +191,7 @@ python3 -B tools/manage-codex-pet.py recover
 | `install-failed` | 安装失败并已给出具体恢复结果；检查随附分层状态 |
 | `recovery-required` | 仍有未完成事务或无法安全恢复，不能宣称全部恢复 |
 
-`status` 分别给出 source、package、installed、runtime。安装层另含 `bytesVerified`、`matchesCurrentTheme` 和 `matchesSelectedPackage`；相同主题修订不等于安装了相同图集。错误输出也尽可能附带只读状态快照。
+`status` 分别给出 source、package、installed、runtime。 主题或候选快照的结构、输入路径或摘要格式损坏时，相应状态报告 invalid 并保留数据。安装层另含 `bytesVerified`、`matchesCurrentTheme` 和 `matchesSelectedPackage`；相同主题修订不等于安装了相同图集。错误输出也尽可能附带只读状态快照。
 
 退出码：成功命令为 `0`，拒绝/校验/安装错误为 `2`，需要生成为 `3`，锁冲突为 `4`，需要恢复为 `5`。`prepare` 成功产生快照时返回 `0`，输出的业务状态仍是 `generation-required`，表示下一步需要生成。
 

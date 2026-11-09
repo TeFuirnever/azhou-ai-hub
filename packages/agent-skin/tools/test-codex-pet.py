@@ -651,6 +651,41 @@ class PetSafetyTests(unittest.TestCase):
         path.write_bytes(PET.json_bytes(original))
         self.assertTrue(PET.selected_package(self.project).is_dir())
 
+    def test_malformed_theme_is_reported_without_modification(self):
+        theme = self.project / "pet/theme.json"
+        data = b"[]"
+        theme.write_bytes(data)
+        self.expect_error(lambda: PET.theme_facts(self.project))
+        self.assertEqual(PET.status(self.project, self.codex)["source"]["status"], "invalid")
+        self.assertEqual(theme.read_bytes(), data)
+
+    def test_malformed_snapshot_records_are_reported_without_modification(self):
+        original = json.loads(self.snapshot.read_bytes())
+        for records in (None, {}, [None] * 4, [{"path": name} for name in PET.INPUTS],
+                        [{"path": name, "sha256": "bad"} for name in PET.INPUTS]):
+            with self.subTest(records=records):
+                snapshot = {**original, "inputs": records, "themeRevision": PET.revision(records)}
+                data = PET.json_bytes(snapshot)
+                self.snapshot.write_bytes(data)
+                self.expect_error(lambda: PET.load_snapshot(self.project, self.snapshot))
+                self.assertEqual(self.snapshot.read_bytes(), data)
+
+    def test_status_reports_malformed_selected_snapshot(self):
+        self.package()
+        directory = PET.selected_package(self.project)
+        path = directory / "theme-snapshot.json"
+        snapshot = json.loads(path.read_bytes())
+        snapshot["inputs"] = [None] * 4
+        data = PET.json_bytes(snapshot)
+        path.write_bytes(data)
+        self.assertEqual(PET.status(self.project, self.codex)["package"]["status"], "invalid")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = PET.main(["status", "--project-root", str(self.project), "--codex-home", str(self.codex)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output.getvalue())["package"]["status"], "invalid")
+        self.assertEqual(path.read_bytes(), data)
+
     def test_prepare_preserves_existing_invalid_or_missing_brief(self):
         brief = self.snapshot.parent / "generation-brief.md"
         original = brief.read_bytes()
