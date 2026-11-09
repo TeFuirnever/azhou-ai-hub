@@ -635,6 +635,24 @@ try {
   });
 
   await check('fixture built-in lifecycle/rollback checks', () => cdp.evaluate('__wallpaperFixture.runChecks()').then(result => { assert.equal(result.passed, true); return result; }));
+  await check('failed replacement keeps only a verified working previous controller', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      const current=globalThis.__azhouWallpaper, style=document.getElementById('azhou-wallpaper-style');
+      const before=document.documentElement.style.getPropertyValue('--azhou-wallpaper-image');
+      const previous={...current};
+      Object.defineProperty(previous,'__azhouWallpaperBaseline_071',{value:current.__azhouWallpaperBaseline_071});
+      Object.defineProperty(previous,'__azhouWallpaperRelease_071',{value(){throw new Error('synthetic release failure');}});
+      globalThis.__azhouWallpaper=previous;
+      let error='';try{await __wallpaperFixture.installRenderer(__wallpaperFixture.payload);}catch(value){error=String(value.message);}
+      const outcome={error,same:globalThis.__azhouWallpaper===previous,applied:previous.status().applied,
+        imageSame:document.documentElement.style.getPropertyValue('--azhou-wallpaper-image')===before,
+        styleSame:document.getElementById('azhou-wallpaper-style')===style,enabled:!style.disabled};
+      globalThis.__azhouWallpaper=current;
+      return outcome;
+    })()`);
+    assert.deepEqual(result,{error:'synthetic release failure',same:true,applied:true,imageSame:true,styleSame:true,enabled:true});
+    return result;
+  });
   await check('scoped surface tokens, composer, code and input remain intact', async () => {
     const result = await cdp.evaluate(`(async()=>{
       __azhouWallpaper.dispose();

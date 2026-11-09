@@ -964,3 +964,119 @@ test('ZCode does not overwrite a surface marker changed during decode or before 
     } finally { fixture.restore(); }
   }
 });
+
+test('replacement hook throwing before side effects keeps the previous wallpaper usable', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {}, status() { return { applied: true }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release failed before change'); } });
+  Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+  await assert.rejects(installRenderer(page.payload), /release failed before change/);
+  assert.equal(globalThis.__azhouWallpaper, old);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(oldStyle.disabled, false);
+  assert.equal(page.revoked.length, 1);
+}));
+
+test('recovered previous controller keeps its original property descriptor', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {}, status() { return { applied: true }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release failed'); } });
+  const before = { configurable: true, writable: true, enumerable: false, value: old };
+  Object.defineProperty(globalThis, '__azhouWallpaper', before);
+  await assert.rejects(installRenderer(page.payload), /release failed/);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper'), before);
+}));
+
+test('a failed release restores only a verifiably usable previous controller', async () => {
+  for (const mode of ['disposed', 'status-throws', 'style-removed', 'style-mutated', 'foreign-controller']) {
+    await onPage({}, async page => {
+      const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+      oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation');
+      oldStyle.textContent = 'old owned CSS'; page.head.appendChild(oldStyle);
+      const foreign = { foreign: true };
+      let oldUsable = true;
+      const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {},
+        status() { if (mode === 'status-throws') throw new Error('old status unavailable'); return { applied: oldUsable }; } };
+      Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() {
+        if (mode === 'disposed') oldUsable = false;
+        if (mode === 'style-removed') oldStyle.remove();
+        if (mode === 'style-mutated') oldStyle.textContent = 'foreign edit';
+        if (mode === 'foreign-controller') globalThis.__azhouWallpaper = foreign;
+        throw new Error('release interrupted');
+      } });
+      Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+      await assert.rejects(installRenderer(page.payload), /release interrupted/, mode);
+      assert.notEqual(globalThis.__azhouWallpaper, old, mode);
+      assert.equal(globalThis.__azhouWallpaper, mode === 'foreign-controller' ? foreign : undefined, mode);
+      assert.equal(page.revoked.length, 1, mode);
+      if (mode === 'style-mutated') assert.equal(oldStyle.textContent, 'foreign edit');
+      if (mode === 'disposed' || mode === 'status-throws') {
+        assert.equal(oldStyle.disabled, true, mode);
+        assert.equal(oldStyle.id, '', mode);
+      }
+    });
+  }
+});
+
+test('a real previous renderer disposed before its style removal fails is not restored', async () => onPage({}, async page => {
+  await installRenderer(page.payload);
+  const old = globalThis.__azhouWallpaper;
+  const oldStyle = page.document.getElementById(STYLE_ID);
+  oldStyle.remove = () => { throw new Error('old style removal failed'); };
+  await assert.rejects(installRenderer(page.payload), /old style removal failed/);
+  assert.equal(old.status().applied, false);
+  assert.equal(globalThis.__azhouWallpaper, undefined);
+  assert.equal(oldStyle.disabled, true);
+  assert.equal(oldStyle.id, '');
+  assert.equal(page.revoked.length, 1);
+}));
+
+
+test('recovery does not change an owner installed by the previous status callback', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const foreign = { foreign: true };
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {},
+    status() { globalThis.__azhouWallpaper = foreign; return { applied: false }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release interrupted'); } });
+  Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+  await assert.rejects(installRenderer(page.payload), /release interrupted/);
+  assert.equal(globalThis.__azhouWallpaper, foreign);
+  assert.equal(oldStyle.disabled, false);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(page.revoked.length, 1);
+}));
+
+test('failed release restores the original values and a working real controller', async () => onPage({}, async page => {
+  const fixtureImage = globalThis.Image;
+  const fixtureComputedStyle = globalThis.getComputedStyle;
+  let created = 0, urls = 0;
+  globalThis.Image = function Image() {
+    if (created++ === 0) return new fixtureImage();
+    return { complete: false, naturalWidth: 2048, naturalHeight: 1024, src: '',
+      async decode() { this.complete = true; } };
+  };
+  globalThis.URL.createObjectURL = () => `blob:recovery-${++urls}`;
+  globalThis.getComputedStyle = (node, pseudo) => {
+    const computed = fixtureComputedStyle(node, pseudo);
+    return node === page.document.body ? { ...computed,
+      backgroundImage: `linear-gradient(red,blue), ${page.root.style.getPropertyValue(PROPERTY_IMAGE)}` } : computed;
+  };
+  await installRenderer(page.payload);
+  const real = globalThis.__azhouWallpaper;
+  const oldStyle = page.document.getElementById(STYLE_ID);
+  const imageBefore = page.root.style.properties.get(PROPERTY_IMAGE);
+  const previous = { ...real };
+  Object.defineProperty(previous, '__azhouWallpaperBaseline_071', { value: real.__azhouWallpaperBaseline_071 });
+  Object.defineProperty(previous, '__azhouWallpaperRelease_071', { value() { throw new Error('release interrupted'); } });
+  globalThis.__azhouWallpaper = previous;
+  await assert.rejects(installRenderer(page.payload), /release interrupted/);
+  assert.equal(globalThis.__azhouWallpaper, previous);
+  assert.equal(previous.status().applied, true);
+  assert.deepEqual(page.root.style.properties.get(PROPERTY_IMAGE), imageBefore);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(oldStyle.disabled, false);
+  assert.deepEqual(page.revoked, ['blob:recovery-2']);
+}));

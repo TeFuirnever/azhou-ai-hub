@@ -263,12 +263,13 @@ export async function installRenderer(payload) {
     }
     const priorStyleID = latestStyle?.id;
     const priorStyleDisabled = latestStyle?.disabled;
+    const priorStyleText = latestStyle?.textContent;
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.setAttribute('data-azhou-owner', OWNER);
     const styleText = request.css + (adapter ? adapterPorts.css : '');
     style.textContent = styleText;
-    let disposed = false, api;
+    let disposed = false, api, releaseAttempted = false;
     let original = rollbackOriginal;
     const transparent = color => color === 'transparent'
       || /^rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color)
@@ -464,6 +465,7 @@ export async function installRenderer(payload) {
           original = transferredOriginal;
           Object.defineProperty(api, BASELINE_KEY, { value: original });
           globalThis.__azhouWallpaper = api;
+          releaseAttempted = true;
           release.call(active);
         } else {
           active.dispose();
@@ -491,8 +493,27 @@ export async function installRenderer(payload) {
       committed = true;
       return result;
     } catch (error) {
+      const recover = releaseAttempted && globalThis.__azhouWallpaper === api
+        && latestStyle?.isConnected && latestStyle.parentNode === document.head
+        && latestStyle.id === '' && latestStyle.disabled === true
+        && latestStyle.getAttribute('data-azhou-owner') === OWNER && latestStyle.textContent === priorStyleText;
+      if (recover) original = rollbackOriginal;
       dispose();
-      if (!committed && active && globalThis.__azhouWallpaper === active && latestStyle?.isConnected
+      if (recover && !Object.hasOwn(globalThis, '__azhouWallpaper')) {
+        latestStyle.id = priorStyleID;
+        latestStyle.disabled = priorStyleDisabled;
+        let usable = false;
+        try { usable = Reflect.apply(ownValue(active, 'status'), active, [])?.applied === true; } catch {}
+        if (usable && !Object.hasOwn(globalThis, '__azhouWallpaper')) {
+          Object.defineProperty(globalThis, '__azhouWallpaper', activeDescriptor);
+        } else if (!Object.hasOwn(globalThis, '__azhouWallpaper')
+            && latestStyle.isConnected && latestStyle.parentNode === document.head
+            && latestStyle.id === priorStyleID && latestStyle.disabled === priorStyleDisabled
+            && latestStyle.getAttribute('data-azhou-owner') === OWNER && latestStyle.textContent === priorStyleText) {
+          latestStyle.disabled = true;
+          latestStyle.removeAttribute('id');
+        }
+      } else if (!releaseAttempted && !committed && active && globalThis.__azhouWallpaper === active && latestStyle?.isConnected
           && latestStyle.id === '' && latestStyle.disabled === true) {
         latestStyle.id = priorStyleID;
         latestStyle.disabled = priorStyleDisabled;
