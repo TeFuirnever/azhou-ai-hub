@@ -1,18 +1,5 @@
 # Azhou AI Hub agent rules
 
-## Codebase discovery
-
-This project uses `codebase-memory-mcp`. Prefer graph evidence over grep/glob for structural code discovery:
-
-1. `search_graph` for symbols;
-2. `trace_path` for callers/callees;
-3. `get_code_snippet` for exact implementations;
-4. `check_index_coverage` for every relied-on path;
-5. `query_graph` for complex relationships;
-6. `get_architecture` for high-level structure.
-
-Use source search/read for literals, configs, non-code files, graph gaps, and every missed coverage range. At session start or after compaction, confirm project/generation and choose Scout, Verify, or Auditor evidence depth. A clean coverage result means no recorded gap, not proof of completeness.
-
 ## Repository shape
 
 - Follow [product principles](docs/principles.md) and the [roadmap](docs/roadmap.md) for direction; they do not override current runtime contracts, support evidence or legal grants.
