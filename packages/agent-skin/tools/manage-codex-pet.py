@@ -115,7 +115,7 @@ def read(path):
             current = path.lstat()
         except OSError as exc:
             raise PetError("source-conflict", f"读取期间文件已消失：{path}") from exc
-        identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
         require(stat.S_ISREG(current.st_mode) and identity(before) == identity(opened) == identity(after) == identity(current)
                 and total == after.st_size, f"读取期间文件发生变化：{path}", "source-conflict")
         return b"".join(chunks)

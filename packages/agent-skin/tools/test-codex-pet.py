@@ -426,6 +426,30 @@ class PetSafetyTests(unittest.TestCase):
         self.assertFalse(backups)
         self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.stage-*")))
 
+    def test_read_rejects_in_place_mutation_with_restored_mtime(self):
+        path = self.root / 'synthetic-changing-input'
+        original = b'a' * (1024 * 1024 + 32)
+        replacement = b'b' * len(original)
+        path.write_bytes(original)
+        before = path.stat()
+        original_read = os.read
+        changed = []
+        def mutate_after_first_chunk(fd, count):
+            data = original_read(fd, count)
+            if data and not changed:
+                path.write_bytes(replacement)
+                os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+                changed.append(path.stat())
+            return data
+        with patch.object(PET.os, 'read', side_effect=mutate_after_first_chunk):
+            self.expect_error(lambda: PET.read(path), 'source-conflict')
+        self.assertEqual(len(changed), 1)
+        after = changed[0]
+        self.assertEqual((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns),
+                         (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns))
+        self.assertNotEqual(before.st_ctime_ns, after.st_ctime_ns)
+        self.assertEqual(path.read_bytes(), replacement)
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):
