@@ -278,6 +278,8 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
+仓库在 [`.agents/skills/`](.agents/skills/) 中提供项目本地工程工作流。这些工作流只用于当前 checkout，保留上游来源记录，与 `skills/` 下可独立安装的包分开维护。各宿主的发现与调用能力可能不同；具体依赖见各工作流。GIF 编码器的媒体测试需要支持 `libvpx` 的 `ffmpeg` 和 `ffprobe`；工具不可用时测试会跳过。
+
 仓库级验证只需要 Python 3.11+：
 
 ~~~bash

@@ -278,6 +278,8 @@ Installable packages remain under `skills/`. Project-local Azhou runtime state u
 
 ## Develop
 
+The repository includes project-local engineering workflows in [`.agents/skills/`](.agents/skills/). They are scoped to this checkout, retain their upstream provenance, and are separate from the independently installable packages in `skills/`. Host discovery and invocation vary; see each workflow for its requirements. The GIF encoder's media tests require `ffmpeg` with `libvpx` and `ffprobe`; they skip when those tools are unavailable.
+
 Python 3.11+ is enough for the repository gate:
 
 ~~~bash
