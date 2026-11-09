@@ -68,7 +68,7 @@ python3 -B tools/manage-codex-pet.py prepare
 
 修订算法为：按上述固定顺序构造 `inputs=[{"path":...,"sha256":...}, ...]`，对 `{"schemaVersion":1,"inputs":inputs}` 的 UTF-8 规范 JSON 计算 SHA256。规范 JSON 使用 `sort_keys=True`、`ensure_ascii=False`、`separators=(",", ":")`。图片相同而 `style.css` 或 `theme.json` 变化，同样产生新修订。
 
-快照是事实记录，不代表已经生成或已经视觉验收。准备阶段不会安装任何 pet。
+快照是事实记录，不代表已经生成或已经视觉验收。准备阶段不会安装任何 pet。 返回前会重新核对冻结输入和当前主题，并检查任务说明是包含该主题修订的非空 UTF-8 普通文件。说明缺失、无法核验或修订不匹配时保留原文件并报冲突；发布后主题变化则保留快照并要求重新准备。
 
 ### 2. 由 ImageGen/hatch-pet 生成与审阅
 

@@ -651,6 +651,50 @@ class PetSafetyTests(unittest.TestCase):
         path.write_bytes(PET.json_bytes(original))
         self.assertTrue(PET.selected_package(self.project).is_dir())
 
+    def test_prepare_preserves_existing_invalid_or_missing_brief(self):
+        brief = self.snapshot.parent / "generation-brief.md"
+        original = brief.read_bytes()
+        frozen = self.snapshot.read_bytes()
+        outside = self.root / "outside-brief"
+        outside.write_bytes(b"outside")
+        for case in ("missing", "empty", "invalid-utf8", "wrong-revision", "symlink"):
+            with self.subTest(case=case):
+                brief.unlink()
+                try:
+                    if case == "empty": brief.write_bytes(b"")
+                    if case == "invalid-utf8": brief.write_bytes(b"\xff")
+                    if case == "wrong-revision": brief.write_bytes(b"revision not present")
+                    if case == "symlink": brief.symlink_to(outside)
+                    self.expect_error(lambda: PET.prepare(self.project), "source-conflict")
+                    self.assertEqual(self.snapshot.read_bytes(), frozen)
+                    self.assertEqual(outside.read_bytes(), b"outside")
+                    if case == "missing": self.assertFalse(brief.exists())
+                    elif case == "symlink": self.assertTrue(brief.is_symlink())
+                    else: self.assertTrue(brief.is_file())
+                finally:
+                    if brief.is_symlink() or brief.exists(): brief.unlink()
+                    brief.write_bytes(original)
+        custom = ("custom brief " + self.rev + "\n").encode()
+        brief.write_bytes(custom)
+        self.assertEqual(PET.prepare(self.project)["snapshot"], str(self.snapshot))
+        self.assertEqual(brief.read_bytes(), custom)
+
+    def test_prepare_rechecks_theme_after_snapshot_publication(self):
+        theme = self.project / "style.css"
+        theme.write_bytes(b"new synthetic theme")
+        expected_revision = PET.theme_facts(self.project)[0]["themeRevision"]
+        rename = PET.rename_exclusive
+        def change_after_publish(source, destination):
+            rename(source, destination)
+            if Path(destination).parent.name == "snapshots":
+                theme.write_bytes(b"changed during publication")
+        with patch.object(PET, "rename_exclusive", side_effect=change_after_publish):
+            self.expect_error(lambda: PET.prepare(self.project), "generation-required")
+        frozen = PET.state_dir(self.project) / "snapshots" / expected_revision / "theme-snapshot.json"
+        self.assertTrue(frozen.is_file())
+        self.assertTrue(self.snapshot.is_file())
+        self.assertEqual(theme.read_bytes(), b"changed during publication")
+
     def test_png_valid_header_but_corrupt_body_is_rejected(self):
         stream = io.BytesIO()
         Image.new("RGBA", (1536, 2288)).save(stream, "PNG")

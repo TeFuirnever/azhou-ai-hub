@@ -276,9 +276,7 @@ def prepare(project, operation_id=None):
     snapshot, blobs, _ = theme_facts(project)
     directory = child(state, "snapshots/" + snapshot["themeRevision"])
     snapshot_path = directory / "theme-snapshot.json"
-    if directory.exists():
-        load_snapshot(project, snapshot_path)
-    else:
+    if not directory.exists():
         directory.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         stage = child(state, ".stage-" + uuid.uuid4().hex)
         brief = (f"# 阿舟原生 Codex pet 生成任务\n\n主题修订：`{snapshot['themeRevision']}`\n\n"
@@ -306,8 +304,16 @@ def prepare(project, operation_id=None):
             fsync_dir(directory.parent)
         finally:
             recover_package_stage(state, project, operation_id)
+    load_snapshot(project, snapshot_path)
+    brief_path = directory / "generation-brief.md"
+    try:
+        brief_text = read(brief_path).decode("utf-8")
+    except (PetError, UnicodeError) as exc:
+        raise PetError("source-conflict", f"生成任务说明不可核验，保留待核对：{brief_path}") from exc
+    require(bool(brief_text.strip()) and snapshot["themeRevision"] in brief_text,
+            f"生成任务说明与快照不匹配，保留待核对：{brief_path}", "source-conflict")
     return {"status": "generation-required", "themeRevision": snapshot["themeRevision"],
-            "snapshot": str(snapshot_path), "brief": str(directory / "generation-brief.md"),
+            "snapshot": str(snapshot_path), "brief": str(brief_path),
             "next": "通过 ImageGen/hatch-pet 生成并审阅，然后 package --run RUN --snapshot SNAPSHOT"}
 
 
