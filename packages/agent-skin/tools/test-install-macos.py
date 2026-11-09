@@ -970,7 +970,7 @@ class InstallerTests(unittest.TestCase):
         with patch.object(m.os, 'fstat', side_effect=report_other_device):
             with patch.object(m, '_fingerprint_retirement_directory', side_effect=AssertionError('unexpected scan')):
                 with self.assertRaisesRegex(RuntimeError, '跨越文件系统边界'):
-                    m._clean_install_work(directory, expected)
+                    m._clean_install_work(directory, expected, directory.stat())
         self.assertEqual(content.read_text(), 'synthetic')
 
     def test_retirement_preserves_cross_device_payload(self):
@@ -1198,14 +1198,14 @@ class InstallerTests(unittest.TestCase):
         clean = m._clean_install_work
         observed = {}
 
-        def replace_before_cleanup(directory, expected_hash):
+        def replace_before_cleanup(directory, expected_hash, expected_root):
             payload = Path(directory) / 'payload'
             saved = payload.with_name('saved-original')
             payload.rename(saved)
             payload.mkdir()
             (payload / 'valuable-user-data.txt').write_text('keep')
             observed.update(payload=payload, saved=saved)
-            return clean(directory, expected_hash)
+            return clean(directory, expected_hash, expected_root)
 
         with patch.object(m, '_clean_install_work', side_effect=replace_before_cleanup):
             with self.assertRaisesRegex(RuntimeError, '临时'):
@@ -1527,6 +1527,118 @@ class InstallerTests(unittest.TestCase):
             m.install()
         self.assertTrue(payload.is_dir())
 
+    def test_retract_preserves_foreign_destination_in_place(self):
+        m = self.module
+        saved = m.DESTINATION.with_name('own-payload-saved')
+        real_verify = m.verify
+        def verify(path):
+            if Path(path) == m.DESTINATION:
+                m.DESTINATION.rename(saved)
+                m.DESTINATION.mkdir()
+                (m.DESTINATION / 'unknown.txt').write_text('keep')
+                raise RuntimeError('injected verification failure')
+            return real_verify(path)
+        with patch.object(m, 'verify', side_effect=verify):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
+                m.install_payload(m.fingerprint(m.SOURCE), None)
+        self.assertEqual((m.DESTINATION / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue(saved.is_dir())
+        self.assertEqual(len(list(m.DESTINATION.parent.glob('.azhou-install-*'))), 1)
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'renamex_np is a macOS API')
+    def test_retract_does_not_replace_foreign_empty_stage(self):
+        m = self.module
+        real_verify = m.verify
+        created = {}
+        def verify(path):
+            if Path(path) == m.DESTINATION:
+                stage = next(m.DESTINATION.parent.glob('.azhou-install-*')) / 'payload'
+                stage.mkdir()
+                created['path'] = stage
+                created['inode'] = stage.stat().st_ino
+                raise RuntimeError('injected verification failure')
+            return real_verify(path)
+        with patch.object(m, 'verify', side_effect=verify), patch.object(m, 'publish_exclusive', self.native_publish_exclusive):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
+                m.install_payload(m.fingerprint(m.SOURCE), None)
+        self.assertEqual(created['path'].stat().st_ino, created['inode'])
+        self.assertTrue(m.DESTINATION.is_dir())
+
+    def test_retract_preserves_replaced_temporary_root(self):
+        m = self.module
+        real_verify = m.verify
+        saved = {}
+        def verify(path):
+            if Path(path) == m.DESTINATION:
+                root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+                saved['old'] = root.with_name('original-transaction')
+                root.rename(saved['old'])
+                root.mkdir()
+                (root / 'unknown.txt').write_text('keep')
+                saved['new'] = root
+                raise RuntimeError('injected verification failure')
+            return real_verify(path)
+        with patch.object(m, 'verify', side_effect=verify):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
+                m.install_payload(m.fingerprint(m.SOURCE), None)
+        self.assertEqual((saved['new'] / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue(saved['old'].is_dir())
+        self.assertTrue(m.DESTINATION.is_dir())
+
+    def test_first_publication_preserves_replaced_stage_with_identical_contents(self):
+        m = self.module
+        saved = {}
+        def replace_stage():
+            root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+            stage = root / 'payload'
+            saved['original'] = root / 'saved-payload'
+            stage.rename(saved['original'])
+            shutil.copytree(saved['original'], stage)
+            saved['foreign'] = stage
+            saved['inode'] = stage.stat().st_ino
+        with self.assertRaisesRegex(RuntimeError, '暂存发生变化'):
+            m.install_payload(m.fingerprint(m.SOURCE), None, before_swap=replace_stage)
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertTrue(saved['original'].is_dir())
+        self.assertEqual(saved['foreign'].stat().st_ino, saved['inode'])
+
+    def test_cleanup_preserves_replaced_temporary_root(self):
+        m = self.module
+        saved = {}
+        def replace_root():
+            root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+            saved['original'] = root.with_name('original-transaction')
+            root.rename(saved['original'])
+            root.mkdir()
+            saved['foreign'] = root
+            saved['inode'] = root.stat().st_ino
+        with self.assertRaisesRegex(RuntimeError, '暂存发生变化'):
+            m.install_payload(m.fingerprint(m.SOURCE), None, before_swap=replace_root)
+        self.assertFalse(m.DESTINATION.exists())
+        self.assertTrue(saved['original'].is_dir())
+        self.assertEqual(saved['foreign'].stat().st_ino, saved['inode'])
+
+    def test_cleanup_preserves_empty_root_replaced_after_publication(self):
+        m = self.module
+        real_verify = m.verify
+        saved = {}
+        def verify(path):
+            result = real_verify(path)
+            if Path(path) == m.DESTINATION:
+                root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+                saved['original'] = root.with_name('original-transaction')
+                root.rename(saved['original'])
+                root.mkdir()
+                saved['foreign'] = root
+                saved['inode'] = root.stat().st_ino
+            return result
+        with patch.object(m, 'verify', side_effect=verify):
+            with self.assertRaisesRegex(RuntimeError, '安装临时内容未清理'):
+                m.install_payload(m.fingerprint(m.SOURCE), None)
+        self.assertTrue(m.DESTINATION.is_dir())
+        self.assertTrue(saved['original'].is_dir())
+        self.assertEqual(saved['foreign'].stat().st_ino, saved['inode'])
+
     def test_first_install_verification_failure_retracts_new_entry(self):
         m = self.module
         real_verify = m.verify
@@ -1556,28 +1668,27 @@ class InstallerTests(unittest.TestCase):
             return actual_verify(path)
 
         with patch.object(m, 'verify', side_effect=replace_during_verification):
-            with self.assertRaisesRegex(RuntimeError, '安装临时内容未清理'):
+            with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
                 m.install_payload(m.fingerprint(m.SOURCE), None)
-        retained = list(m.DESTINATION.parent.glob('.azhou-install-*/payload/valuable-user-data.txt'))
-        self.assertEqual(len(retained), 1)
-        self.assertEqual(retained[0].read_text(), 'keep')
+        self.assertEqual((m.DESTINATION / 'valuable-user-data.txt').read_text(), 'keep')
         self.assertTrue(saved.is_dir())
+        self.assertEqual(len(list(m.DESTINATION.parent.glob('.azhou-install-*'))), 1)
 
     def test_first_install_retraction_failure_preserves_recovery_directory(self):
         m = self.module
-        real_verify, real_rename = m.verify, os.rename
+        real_verify, real_publish = m.verify, m.publish_exclusive
 
         def verify(path):
             if Path(path) == m.DESTINATION:
                 raise RuntimeError('injected installed verification failure')
             return real_verify(path)
 
-        def rename(source, destination):
+        def publish(source, destination):
             if Path(source) == m.DESTINATION and Path(destination).name == 'payload':
                 raise OSError('injected retract failure')
-            return real_rename(source, destination)
+            return real_publish(source, destination)
 
-        with patch.object(m, 'verify', side_effect=verify), patch.object(m.os, 'rename', side_effect=rename):
+        with patch.object(m, 'verify', side_effect=verify), patch.object(m, 'publish_exclusive', side_effect=publish):
             with self.assertRaisesRegex(RuntimeError, '撤回未完成'):
                 m.install()
         self.assertTrue(m.DESTINATION.is_dir())

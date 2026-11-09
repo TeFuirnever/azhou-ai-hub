@@ -394,12 +394,13 @@ def _remove_retirement_contents(directory_fd, evidence, parts=(), guard=None):
             raise RuntimeError('隔离副本包含非普通文件，已停止清理。')
 
 
-def _clean_install_work(directory, expected_hash):
+def _clean_install_work(directory, expected_hash, expected_root):
     _require_retirement_fd_support()
     directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     descriptor = None
     try:
-        if not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+        if (not _same_inode(os.fstat(directory_fd), expected_root)
+                or not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))):
             raise RuntimeError('安装临时目录发生变化。')
         names = set(os.listdir(directory_fd))
         if names - {'payload'}:
@@ -755,6 +756,7 @@ def install_payload(source_hash, original, before_swap=None):
         _require_retirement_fd_support()
     DESTINATION.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix='.azhou-install-', dir=DESTINATION.parent))
+    temporary_identity = os.stat(temporary, follow_symlinks=False)
     staged = temporary / 'payload'  # Never create a second discoverable .app.
     cleanup = True
     cleanup_hash = source_hash
@@ -763,6 +765,7 @@ def install_payload(source_hash, original, before_swap=None):
         verify(staged)
         if fingerprint(staged) != source_hash or fingerprint(SOURCE) != source_hash:
             raise RuntimeError('构建载荷在复制期间发生变化，原入口未修改。')
+        staged_identity = os.stat(staged, follow_symlinks=False)
         require_stopped([DESTINATION])
         if original:
             unchanged(original)
@@ -794,22 +797,37 @@ def install_payload(source_hash, original, before_swap=None):
                 raise RuntimeError('规范入口被其他操作创建，未覆盖。')
             if before_swap is not None:
                 before_swap()
+            try:
+                current_root = os.stat(temporary, follow_symlinks=False)
+                current_stage = os.stat(staged, follow_symlinks=False)
+                if (not stat.S_ISDIR(current_root.st_mode) or not _same_inode(current_root, temporary_identity)
+                        or not stat.S_ISDIR(current_stage.st_mode) or not _same_inode(current_stage, staged_identity)):
+                    raise RuntimeError('入口暂存身份发生变化')
+            except (OSError, RuntimeError) as error:
+                cleanup = False
+                raise RuntimeError(f'安装暂存发生变化，已保留：{temporary}') from error
             publish_exclusive(staged, DESTINATION)
             try:
                 verify(DESTINATION)
                 if fingerprint(DESTINATION) != source_hash:
                     raise RuntimeError('安装后内容校验失败。')
             except BaseException:
+                cleanup = False
                 try:
-                    os.rename(DESTINATION, staged)
-                except OSError as error:
-                    cleanup = False
+                    current_root = os.stat(temporary, follow_symlinks=False)
+                    current_target = os.stat(DESTINATION, follow_symlinks=False)
+                    if (not stat.S_ISDIR(current_root.st_mode) or not _same_inode(current_root, temporary_identity)
+                            or not stat.S_ISDIR(current_target.st_mode) or not _same_inode(current_target, staged_identity)):
+                        raise RuntimeError('入口或临时目录身份发生变化')
+                    publish_exclusive(DESTINATION, staged)
+                except (OSError, RuntimeError) as error:
                     raise RuntimeError(f'新入口校验失败且撤回未完成；旧副本未清理，临时目录已保留：{temporary}') from error
+                cleanup = True
                 raise
     finally:
         if cleanup:
             try:
-                _clean_install_work(temporary, cleanup_hash)
+                _clean_install_work(temporary, cleanup_hash, temporary_identity)
             except BaseException as cleanup_error:
                 raise RuntimeError(f'安装临时内容未清理，已保留：{temporary}。') from cleanup_error
 
