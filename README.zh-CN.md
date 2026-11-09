@@ -103,7 +103,7 @@ Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/RE
 
 Agent Skin 会在清理旧入口前核验并隔离副本；如果清理部分文件后中断，剩余临时内容会保留，需人工处理。维护期间请避免其他进程同时改动安装目录。详见[安装说明](packages/agent-skin/README.md#安装升级与旧入口清理)。
 
-Agent Skin 构建发布会保留无法核验的注册工具和暂存目录，供核对。旧注册工具字节与权限完全一致时可原样复用，但不据此认领来源；内容不同且没有匹配回执时会阻止替换。请避免并发更改 `.build`；核验不能排除最后一次检查与文件操作之间的替换。详见[构建恢复说明](packages/agent-skin/docs/installation-lifecycle.md)。
+Agent Skin 构建发布会保留无法核验的注册工具、DSH 输出和暂存目录，供核对。旧产物完全一致时可原样复用，但不据此认领来源；内容不同且没有匹配回执时会阻止替换。请避免并发更改 `.build`；核验不能排除最后一次检查与文件操作之间的替换。详见[构建恢复说明](packages/agent-skin/docs/installation-lifecycle.md)和 [DSH 构建约定](packages/agent-skin/docs/dsh-plugin.md)。
 
 当前源码增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
 

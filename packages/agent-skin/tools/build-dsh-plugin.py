@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -280,9 +281,146 @@ def verified_startup_stage(stage_root: Path, artifacts, created):
     return receipt
 
 
+def verified_compose_work(work, initial, artifacts):
+    receipt = artifacts.tree_receipt(work)
+    if receipt[:2] != initial:
+        raise RuntimeError(f'DSH 组合暂存根已替换，保留：{work}')
+    files = {f'{side}/{PLUGIN_NAME}/{name}' for side in ('first', 'second')
+             for name in artifacts.DSH_PLUGIN_PACKAGE_ENTRIES}
+    directories = {parent.as_posix() for name in files for parent in Path(name).parents if parent != Path('.')}
+    expected = {**{name: 'file' for name in files}, **{name: 'directory' for name in directories}}
+    if {entry[0]: entry[1] for entry in receipt[3]} != expected:
+        raise RuntimeError(f'DSH 组合暂存含未知或缺失对象，保留：{work}')
+    return receipt
+
+
+def dsh_receipt_path(root, destination, tree):
+    identity = json.dumps({'destination': str(destination), 'tree': tree}, ensure_ascii=False, sort_keys=True)
+    digest = hashlib.sha256(identity.encode('utf-8')).hexdigest()
+    return root / '.build' / f'.azhou-dsh-{digest}.json'
+
+
+def verify_dsh_receipt(root, destination, tree):
+    path = dsh_receipt_path(root, destination, tree)
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f'DSH 旧输出缺少本项目回执，保留：{destination}')
+    with path.open('r', encoding='utf-8') as stream:
+        data = json.load(stream)
+    expected = {'projectRoot': str(root), 'destination': str(destination), 'tree': tree}
+    if json.dumps(data, ensure_ascii=False, sort_keys=True) != json.dumps(expected, ensure_ascii=False, sort_keys=True):
+        raise RuntimeError(f'DSH 输出回执不匹配，保留：{destination}')
+
+
+def create_dsh_receipt(root, destination, tree):
+    path = dsh_receipt_path(root, destination, tree)
+    data = {'projectRoot': str(root), 'destination': str(destination), 'tree': tree}
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(data, stream, ensure_ascii=False, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except FileExistsError:
+        verify_dsh_receipt(root, destination, tree)
+
+
+def dsh_tree_content(tree):
+    return (tree[2], [(item[0], item[1], item[4], item[5] if len(item) > 5 else None)
+                      for item in tree[3]])
+
+
+def publish_dsh_candidate(first, second, destination, work, initial, work_receipt, root, artifacts, lock, lock_fd):
+    def require_work():
+        current = work.lstat()
+        if (current.st_dev, current.st_ino) != initial:
+            raise RuntimeError(f'DSH 组合暂存已替换，保留：{work}')
+        lock.checked_lock_file(lock_fd)
+
+    require_work()
+    new_tree, second_tree = artifacts.tree_receipt(first), artifacts.tree_receipt(second)
+    artifacts.verify_dsh_plugin(first)
+    if destination.is_symlink():
+        raise RuntimeError(f'拒绝覆写符号链接 DSH 插件目录：{destination}')
+    old_tree = artifacts.tree_receipt(destination) if destination.exists() else None
+    reused = False
+    if old_tree is not None:
+        try:
+            verify_dsh_receipt(root, destination, old_tree)
+        except RuntimeError:
+            if dsh_tree_content(old_tree) != dsh_tree_content(new_tree):
+                raise
+            artifacts.verify_dsh_plugin(destination)
+            reused = True
+    artifacts.require_tree(work, work_receipt)
+    marker = work / '.dsh-transaction.json'
+    marker_info = None
+    if not reused:
+        create_dsh_receipt(root, destination, new_tree)
+        with marker.open('x', encoding='utf-8') as stream:
+            json.dump({'projectRoot': str(root), 'destination': str(destination),
+                       'new': new_tree, 'old': old_tree}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        marker_info = marker.lstat()
+        require_work()
+        artifacts.require_tree(first, new_tree)
+        if old_tree is None:
+            artifacts.rename_exclusive(first, destination)
+        else:
+            artifacts.require_tree(destination, old_tree)
+            artifacts.swap(first, destination)
+    try:
+        artifacts.require_tree(destination, old_tree if reused else new_tree)
+        if old_tree is not None and not reused:
+            artifacts.require_tree(first, old_tree)
+        artifacts.verify_dsh_plugin(destination)
+        require_work()
+    except BaseException as error:
+        if not reused:
+            try:
+                require_work()
+                artifacts.require_tree(destination, new_tree)
+                if old_tree is None:
+                    artifacts.rename_exclusive(destination, first)
+                else:
+                    artifacts.require_tree(first, old_tree)
+                    artifacts.swap(first, destination)
+                    artifacts.require_tree(destination, old_tree)
+                artifacts.require_tree(first, new_tree)
+            except BaseException as rollback_error:
+                raise RuntimeError(f'DSH 输出回滚未确认，保留待核对：{work}、{destination}') from rollback_error
+        raise error
+    if old_tree is not None:
+        artifacts.require_tree(first, new_tree if reused else old_tree)
+        require_work()
+        shutil.rmtree(first)
+    artifacts.require_tree(second, second_tree)
+    require_work()
+    shutil.rmtree(second)
+    first.parent.rmdir()
+    second.parent.rmdir()
+    if marker_info is not None:
+        current = marker.lstat()
+        if (current.st_dev, current.st_ino) != (marker_info.st_dev, marker_info.st_ino):
+            raise RuntimeError(f'DSH 恢复标记已变化，保留：{work}')
+        marker.unlink()
+    require_work()
+    work.rmdir()
+
+
 def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
     root = Path(root).resolve()
-    destination = Path(destination) if destination is not None else root / PLUGIN_OUTPUT_DIR / PLUGIN_NAME
+    spec = importlib.util.spec_from_file_location('agent_skin_build_lock', root / 'tools/build-lock.py')
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Missing build lock module.')
+    lock = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lock)
+    with lock.acquired() as lock_fd:
+        return _build_plugin_locked(destination, root=root, lock=lock, lock_fd=lock_fd)
+
+
+def _build_plugin_locked(destination: Path | None, *, root: Path, lock, lock_fd: int) -> dict:
+    destination = Path(destination).expanduser().absolute() if destination is not None else root / PLUGIN_OUTPUT_DIR / PLUGIN_NAME
     builder = load_builder(root)
     artifacts = builder.load_artifacts(root)
     theme = artifacts.load_theme_config(root, require_inputs=True)
@@ -306,8 +444,9 @@ def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
         body = _payload_body(payload)
         icon = _render_icon(root, artifacts, theme)
         inputs = artifacts.source_inputs()
-        with tempfile.TemporaryDirectory(prefix='azhou-dsh-compose-', dir=build_dir) as temporary:
-            work = Path(temporary)
+        work = Path(tempfile.mkdtemp(prefix='azhou-dsh-compose-', dir=build_dir))
+        initial_work = work.lstat()
+        try:
             first, second = work / 'first' / PLUGIN_NAME, work / 'second' / PLUGIN_NAME
             manifest = _compose_package(first, body=body, icon=icon, theme=theme,
                                         inputs=inputs, artifacts=artifacts)
@@ -315,18 +454,24 @@ def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
                              inputs=inputs, artifacts=artifacts)
             _assert_identical(first, second)
             _assert_no_path_leak(first, root)
+            work_identity = (initial_work.st_dev, initial_work.st_ino)
+            work_receipt = verified_compose_work(work, work_identity, artifacts)
             artifacts.require_tree(stage_root, stage_receipt)
-            if destination.is_symlink():
-                raise RuntimeError(f'拒绝覆写符号链接 DSH 插件目录：{destination}')
-            if destination.exists():
-                shutil.rmtree(destination)
+            lock.checked_lock_file(lock_fd)
+            if (destination.parent.resolve() != destination.parent or destination in (stage_root, work)
+                    or stage_root in destination.parents or work in destination.parents):
+                raise RuntimeError(f'DSH 输出路径含别名或嵌入暂存，保留未处理：{destination}')
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(first), str(destination))
-        artifacts.verify_dsh_plugin(destination)
+            publish_dsh_candidate(first, second, destination, work,
+                                  work_identity, work_receipt, root, artifacts, lock, lock_fd)
+        except BaseException:
+            print(f'DSH 组合暂存保留待核对：{work}', file=sys.stderr)
+            raise
         completed = True
     finally:
         if completed:
             try:
+                lock.checked_lock_file(lock_fd)
                 artifacts.require_tree(stage_root, stage_receipt)
                 shutil.rmtree(stage_root)
             except BaseException:

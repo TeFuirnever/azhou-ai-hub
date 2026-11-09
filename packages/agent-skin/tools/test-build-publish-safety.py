@@ -378,6 +378,19 @@ class StartupAssetsWorkTests(unittest.TestCase):
 
 
 class BuildLockTests(unittest.TestCase):
+    def test_lock_cli_routes_run_verify_and_reports_failure(self):
+        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run', 'zcode']),              mock.patch.object(build_lock, 'run', return_value=17) as run:
+            self.assertEqual(build_lock.main(), 17)
+            run.assert_called_once_with('zcode')
+        with mock.patch.object(sys, 'argv', ['build-lock.py', '--verify', '42']),              mock.patch.object(build_lock, 'checked_lock_file') as checked:
+            self.assertEqual(build_lock.main(), 0)
+            checked.assert_called_once_with(42)
+        output = io.StringIO()
+        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run', 'codex']),              mock.patch.object(build_lock, 'run', side_effect=RuntimeError('lock failed')),              contextlib.redirect_stderr(output), self.assertRaises(SystemExit) as failure:
+            build_lock.main()
+        self.assertEqual(failure.exception.code, 1)
+        self.assertIn('lock failed', output.getvalue())
+
     def test_inherited_lock_serializes_build_and_preserves_lock_file(self):
         with tempfile.TemporaryDirectory(prefix='agent-skin-lock-') as temp:
             root = Path(temp).resolve()

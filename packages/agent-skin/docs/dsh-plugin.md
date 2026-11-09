@@ -20,6 +20,10 @@ This page is reference for the `azhou-agent-skin` DSH plugin package. It records
 
 The emitter reuses `build_startup(host='dsh')` from `tools/build-startup.py` for the payload body, so the animation, settings, and wallpaper code is the same neutral core the Codex and ZCode payloads embed. The DSH page adapter is `extension/hosts/dsh.mjs`.
 
+Builds share the checkout's cooperative build lock with the Codex and ZCode builders. Each DSH build uses new staging and composition directories. Existing output is exchanged only when its project receipt matches its current identity and contents; identical unreceipted output is reused without claiming it. Different unreceipted output is preserved and the build stops. Receipts and failed-build work stay under the checkout's ignored `.build` directory; inspect a retained `.dsh-transaction.json`, the output, and both candidates before deciding how to recover. The older fixed DSH staging directory is left untouched.
+
+The lock coordinates cooperating builders, not arbitrary processes under the same user. Checks and the final filesystem calls are separate, and interruption or partial deletion may leave incomplete material. Avoid concurrent changes to `.build`; this local build does not install or validate a DSH profile.
+
 ## Client module behavior
 
 `client.js` registers one factory whose module exports `{apply, inject}` with `inject: ['slots']` — the cordis service the settings-section registration reads; an undeclared access would throw and fail activation. `apply(ctx)` does the following, in order:

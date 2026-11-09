@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import os
 from pathlib import Path
@@ -30,14 +31,22 @@ def checked_lock_file(fd):
         raise RuntimeError('另一个构建正在运行，请稍后重试。') from exc
 
 
-def run(host):
+@contextlib.contextmanager
+def acquired():
     if BUILD.is_symlink():
-        raise RuntimeError('拒绝通过符号链接构建。')
+        raise RuntimeError('拒绝通过符号链接 .build 目录构建。')
     BUILD.mkdir(parents=True, exist_ok=True)
     flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
     fd = os.open(LOCK, flags, 0o600)
     try:
         checked_lock_file(fd)
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def run(host):
+    with acquired() as fd:
         env = os.environ.copy()
         env[ENV_KEY] = str(fd)
         args = ['/bin/bash', str(ROOT / 'tools/build-macos.sh')]
@@ -45,8 +54,6 @@ def run(host):
             args.extend(('--host', 'zcode'))
         result = subprocess.run(args, env=env, pass_fds=(fd,), check=False)
         return result.returncode if result.returncode >= 0 else 128 - result.returncode
-    finally:
-        os.close(fd)
 
 
 def main():

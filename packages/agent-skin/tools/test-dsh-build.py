@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -426,6 +428,19 @@ class DshPluginBuildTests(unittest.TestCase):
         self.assertEqual(self.snapshot(destination), self.snapshot(self.destination),
                          "a CLI rebuild over an existing destination must stay byte-identical")
 
+    def test_dsh_build_respects_shared_build_lock(self):
+        lock_path = self.root / ".build/.agent-skin-build.lock"
+        fd = os.open(lock_path, os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            destination = self.root / ".build/azhou-dsh-plugin-locked/azhou-agent-skin"
+            with self.assertRaisesRegex(RuntimeError, "另一个构建"):
+                self.build_plugin(destination)
+            self.assertFalse(destination.exists())
+            self.assertTrue(lock_path.is_file())
+        finally:
+            os.close(fd)
+
     def test_unknown_content_added_to_new_stage_is_preserved_before_publish(self):
         destination = self.root / ".build/azhou-dsh-plugin-stage-race/azhou-agent-skin"
         observed = []
@@ -445,6 +460,137 @@ class DshPluginBuildTests(unittest.TestCase):
         self.assertEqual(observed[0].read_bytes(), b"unknown synthetic file")
         # This fixture owns the test-only stage; production does not remove it.
         shutil.rmtree(observed[0].parent)
+
+    def test_unknown_existing_output_is_preserved(self):
+        destination = self.root / ".build/azhou-dsh-unknown/azhou-agent-skin"
+        destination.mkdir(parents=True)
+        foreign = destination / "foreign.txt"
+        foreign.write_bytes(b"unknown synthetic output")
+        with self.assertRaisesRegex(RuntimeError, "回执"):
+            self.build_plugin(destination)
+        self.assertEqual(foreign.read_bytes(), b"unknown synthetic output")
+        self.assertEqual([p.name for p in destination.iterdir()], ["foreign.txt"])
+
+    def test_identical_unproven_output_is_reused_without_claiming_it(self):
+        destination = self.root / ".build/azhou-dsh-identical/azhou-agent-skin"
+        destination.parent.mkdir(parents=True)
+        shutil.copytree(self.destination, destination)
+        before = destination.stat().st_ino
+        before_bytes = self.snapshot(destination)
+        self.build_plugin(destination)
+        self.assertEqual(destination.stat().st_ino, before)
+        self.assertEqual(self.snapshot(destination), before_bytes)
+
+    def test_unknown_compose_file_stops_before_publishing(self):
+        destination = self.root / ".build/azhou-dsh-compose-race/azhou-agent-skin"
+        captured = []
+
+        def inject(first, _root):
+            foreign = first.parent.parent / "foreign.txt"
+            foreign.write_bytes(b"unknown compose data")
+            captured.append(foreign)
+
+        with mock.patch.object(self.emitter, "_assert_no_path_leak", side_effect=inject):
+            with self.assertRaisesRegex(RuntimeError, "保留"):
+                self.build_plugin(destination)
+        self.assertFalse(destination.exists())
+        self.assertEqual(captured[0].read_bytes(), b"unknown compose data")
+
+    def test_verified_output_is_restored_when_post_publish_verification_fails(self):
+        destination = self.root / ".build/azhou-dsh-rollback/azhou-agent-skin"
+        self.build_plugin(destination)
+        before_inode, before_bytes = destination.stat().st_ino, self.snapshot(destination)
+        publish = self.emitter.publish_dsh_candidate
+
+        def fail_verification(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd):
+            verify = artifacts.verify_dsh_plugin
+            def checked(path):
+                if Path(path) == dest:
+                    raise RuntimeError("injected verification failure")
+                return verify(path)
+            with mock.patch.object(artifacts, "verify_dsh_plugin", side_effect=checked):
+                return publish(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd)
+
+        with mock.patch.object(self.emitter, "publish_dsh_candidate", side_effect=fail_verification):
+            with self.assertRaisesRegex(RuntimeError, "injected verification failure"):
+                self.build_plugin(destination)
+        self.assertEqual(destination.stat().st_ino, before_inode)
+        self.assertEqual(self.snapshot(destination), before_bytes)
+
+    def test_failed_output_rollback_preserves_both_candidates(self):
+        destination = self.root / ".build/azhou-dsh-failed-rollback/azhou-agent-skin"
+        self.build_plugin(destination)
+        previous = self.snapshot(destination)
+        publish = self.emitter.publish_dsh_candidate
+        captured = []
+
+        def fail(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd):
+            swap, verify = artifacts.swap, artifacts.verify_dsh_plugin
+            calls = 0
+            def failing_swap(left, right):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("injected rollback failure")
+                return swap(left, right)
+            def failing_verify(path):
+                if Path(path) == dest:
+                    raise RuntimeError("injected verification failure")
+                return verify(path)
+            captured.append((first, work))
+            with mock.patch.object(artifacts, "swap", side_effect=failing_swap),                  mock.patch.object(artifacts, "verify_dsh_plugin", side_effect=failing_verify):
+                return publish(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd)
+
+        with mock.patch.object(self.emitter, "publish_dsh_candidate", side_effect=fail):
+            with self.assertRaisesRegex(RuntimeError, "回滚未确认"):
+                self.build_plugin(destination)
+        self.assertEqual(self.snapshot(captured[0][0]), previous)
+        self.assertTrue(destination.is_dir())
+        self.assertTrue((captured[0][1] / ".dsh-transaction.json").is_file())
+
+    def test_first_output_created_during_publish_is_not_overwritten(self):
+        destination = self.root / ".build/azhou-dsh-first-race/azhou-agent-skin"
+        publish = self.emitter.publish_dsh_candidate
+
+        def race(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd):
+            exclusive = artifacts.rename_exclusive
+            def create_then_publish(source, target):
+                target.mkdir()
+                (target / "foreign.txt").write_bytes(b"unknown first target")
+                exclusive(source, target)
+            with mock.patch.object(artifacts, "rename_exclusive", side_effect=create_then_publish):
+                return publish(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd)
+
+        with mock.patch.object(self.emitter, "publish_dsh_candidate", side_effect=race):
+            with self.assertRaises(OSError):
+                self.build_plugin(destination)
+        self.assertEqual((destination / "foreign.txt").read_bytes(), b"unknown first target")
+
+    def test_output_replaced_during_swap_is_preserved(self):
+        destination = self.root / ".build/azhou-dsh-swap-race/azhou-agent-skin"
+        self.build_plugin(destination)
+        before_bytes = self.snapshot(destination)
+        moved = destination.parent / "original-moved"
+        captured = []
+        publish = self.emitter.publish_dsh_candidate
+
+        def race(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd):
+            swap = artifacts.swap
+            def replace_then_swap(left, right):
+                right.rename(moved)
+                right.mkdir()
+                (right / "foreign.txt").write_bytes(b"unknown replacement")
+                swap(left, right)
+                captured.append(left)
+            with mock.patch.object(artifacts, "swap", side_effect=replace_then_swap):
+                return publish(first, second, dest, work, initial, work_receipt, root, artifacts, lock, lock_fd)
+
+        with mock.patch.object(self.emitter, "publish_dsh_candidate", side_effect=race):
+            with self.assertRaisesRegex(RuntimeError, "保留"):
+                self.build_plugin(destination)
+        self.assertEqual(self.snapshot(moved), before_bytes)
+        self.assertEqual((captured[0] / "foreign.txt").read_bytes(), b"unknown replacement")
+        self.assertTrue(destination.is_dir())
 
     def test_main_reports_build_failures_and_exits_nonzero(self):
         with mock.patch.object(sys, "argv", ["build-dsh-plugin.py"]), \
