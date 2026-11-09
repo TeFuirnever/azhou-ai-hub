@@ -1,6 +1,7 @@
 // Compile with Native/InstallRegistryCore.swift; production adapter and CLI stay separate.
 import Foundation
 import CoreServices
+import Darwin
 
 @main
 struct InstallRegistryTests {
@@ -38,7 +39,7 @@ struct InstallRegistryTests {
                "unknown commands return a bounded usage error")
 
         let relative = InstallRegistryCLI.execute(arguments: ["register", "relative.app"], platform: platform)
-        expect(relative.exitCode == 1
+        expect(relative.exitCode == 1 && platform.homeReadCount == 0
                && relative.output["error"] as? String == "register requires an absolute application path",
                "register rejects relative paths before platform access")
         let wrongPath = InstallRegistryCLI.execute(arguments: ["register", "/tmp/other.app"], platform: platform)
@@ -111,7 +112,7 @@ struct InstallRegistryTests {
             try JSONSerialization.data(withJSONObject: marker, options: [.sortedKeys]).write(to: markerURL)
         }
         for (key, invalid): (String, Any) in [
-            ("schema", 2), ("projectID", "other.project"), ("bundleID", "other.bundle"),
+            ("schema", 2), ("schema", true), ("projectID", "other.project"), ("bundleID", "other.bundle"),
             ("executable", "other"), ("projectRoot", "relative/path"), ("version", ""),
             ("build", ""), ("inputSHA256", String(repeating: "A", count: 64)),
         ] {
@@ -165,6 +166,130 @@ struct InstallRegistryTests {
         expect(mismatchedName.exitCode == 1 && platform.registeredPaths.count == registrationsBeforeMismatch,
                "register rejects a path that does not match the built bundle name")
 
+        let infoURL = application.appendingPathComponent("Contents/Info.plist")
+        let validInfo = try Data(contentsOf: infoURL)
+        let validMarker = try Data(contentsOf: markerURL)
+        let outside = root.appendingPathComponent("outside-marker.json")
+        try validMarker.write(to: outside)
+        try FileManager.default.removeItem(at: markerURL)
+        try FileManager.default.createSymbolicLink(at: markerURL, withDestinationURL: outside)
+        let beforeLinkedMarker = platform.registeredPaths.count
+        let linkedMarker = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(linkedMarker.exitCode == 1 && platform.registeredPaths.count == beforeLinkedMarker,
+               "registration refuses a linked marker without invoking the backend")
+        try FileManager.default.removeItem(at: markerURL)
+        try validMarker.write(to: markerURL)
+
+        let outsideInfo = root.appendingPathComponent("outside-info.plist")
+        try validInfo.write(to: outsideInfo)
+        try FileManager.default.removeItem(at: infoURL)
+        try FileManager.default.createSymbolicLink(at: infoURL, withDestinationURL: outsideInfo)
+        let beforeLinkedInfo = platform.registeredPaths.count
+        let linkedInfo = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(linkedInfo.exitCode == 1 && platform.registeredPaths.count == beforeLinkedInfo,
+               "registration refuses linked bundle metadata without invoking the backend")
+        try FileManager.default.removeItem(at: infoURL)
+        try validInfo.write(to: infoURL)
+
+        try FileManager.default.removeItem(at: markerURL)
+        guard mkfifo(markerURL.path, 0o600) == 0 else { throw NSError(domain: "fixture-fifo", code: Int(errno)) }
+        let beforeFIFO = platform.registeredPaths.count
+        let fifo = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(fifo.exitCode == 1 && platform.registeredPaths.count == beforeFIFO,
+               "a FIFO marker is rejected without registration")
+        try FileManager.default.removeItem(at: markerURL)
+        try validMarker.write(to: markerURL)
+
+        var oversized = validMarker
+        oversized.append(Data(repeating: 32, count: 1_048_577))
+        try oversized.write(to: markerURL)
+        let beforeOversized = platform.registeredPaths.count
+        let tooLarge = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(tooLarge.exitCode == 1 && platform.registeredPaths.count == beforeOversized,
+               "an oversized marker is rejected before registration")
+        try validMarker.write(to: markerURL)
+
+        try Data().write(to: markerURL)
+        let beforeEmpty = platform.registeredPaths.count
+        let emptyMarker = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(emptyMarker.exitCode == 1 && platform.registeredPaths.count == beforeEmpty,
+               "an empty marker cannot authorize registration")
+        try validMarker.write(to: markerURL)
+
+        var oversizedInfo = validInfo
+        oversizedInfo.append(Data(repeating: 32, count: 1_048_577))
+        try oversizedInfo.write(to: infoURL)
+        let beforeOversizedInfo = platform.registeredPaths.count
+        let tooLargeInfo = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(tooLargeInfo.exitCode == 1 && platform.registeredPaths.count == beforeOversizedInfo,
+               "oversized bundle metadata cannot authorize registration")
+        try validInfo.write(to: infoURL)
+
+        let binaryInfo = try PropertyListSerialization.data(fromPropertyList: infoValues, format: .binary, options: 0)
+        try binaryInfo.write(to: infoURL)
+        let binaryResult = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(binaryResult.exitCode == 0 && platform.registeredPaths.last == application.path,
+               "binary plist remains compatible with a valid build marker")
+        try validInfo.write(to: infoURL)
+
+        try FileManager.default.removeItem(at: infoURL)
+        guard mkfifo(infoURL.path, 0o600) == 0 else { throw NSError(domain: "fixture-fifo", code: Int(errno)) }
+        let beforeInfoFIFO = platform.registeredPaths.count
+        let infoFIFO = InstallRegistryCLI.execute(arguments: ["register", application.path], platform: platform)
+        expect(infoFIFO.exitCode == 1 && platform.registeredPaths.count == beforeInfoFIFO,
+               "a FIFO plist is rejected without registration")
+        try FileManager.default.removeItem(at: infoURL)
+        try validInfo.write(to: infoURL)
+
+        let inventoryInfo = inventoryBundle.appendingPathComponent("Contents/Info.plist")
+        try FileManager.default.removeItem(at: inventoryInfo)
+        try FileManager.default.createSymbolicLink(at: inventoryInfo, withDestinationURL: outsideInfo)
+        let linkedInventory = InstallRegistryCLI.execute(arguments: ["inventory"], platform: platform)
+        let linkedApplications = linkedInventory.output["applications"] as? [[String: Any]] ?? []
+        let linkedURLs = linkedApplications.first(where: { $0["bundleID"] as? String == "local.azhou.codex-startup" })?["urls"] as? [[String: Any]] ?? []
+        expect(linkedURLs.count == 1 && linkedURLs[0]["bundleID"] is NSNull && linkedURLs[0]["executable"] is NSNull,
+               "inventory keeps the path but does not trust linked metadata")
+
+        let capturedRegistration = try InstallRegistryCLI.inspect(application.path, home: root)
+        let beforeCaptureChange = platform.registeredPaths.count
+        expect(capturedRegistration.isCurrent(), "valid registration evidence remains current")
+        let heldMarker = root.appendingPathComponent("held-marker.json")
+        try FileManager.default.moveItem(at: markerURL, to: heldMarker)
+        try validMarker.write(to: markerURL)
+        expect(!capturedRegistration.isCurrent() && platform.registeredPaths.count == beforeCaptureChange,
+               "registration evidence rejects a same-byte marker replacement before backend use")
+        try FileManager.default.removeItem(at: markerURL)
+        try FileManager.default.moveItem(at: heldMarker, to: markerURL)
+        let capturedInfoRegistration = try InstallRegistryCLI.inspect(application.path, home: root)
+        try Data("changed".utf8).write(to: infoURL)
+        expect(!capturedInfoRegistration.isCurrent() && platform.registeredPaths.count == beforeCaptureChange,
+               "registration evidence rejects changed plist bytes before backend use")
+        try validInfo.write(to: infoURL)
+
+        do {
+            _ = try RegistryFileEvidence.capture(URL(string: "https://example.invalid/Info.plist")!)
+            fatalError("non-file URL unexpectedly accepted")
+        } catch {
+            expect(true, "file evidence rejects non-file URLs")
+        }
+        let boundaryFile = root.appendingPathComponent("boundary.bin")
+        try Data(repeating: 1, count: 1_048_576).write(to: boundaryFile)
+        let boundaryEvidence = try RegistryFileEvidence.capture(boundaryFile)
+        expect(boundaryEvidence.bytes.count == 1_048_576 && boundaryEvidence.matchesCurrent(),
+               "the documented exact size limit remains readable")
+
+        let evidenceFile = root.appendingPathComponent("evidence.txt")
+        let savedEvidence = root.appendingPathComponent("saved-evidence.txt")
+        try Data("first".utf8).write(to: evidenceFile)
+        let evidence = try RegistryFileEvidence.capture(evidenceFile)
+        expect(evidence.matchesCurrent(), "captured file evidence matches its original entity and bytes")
+        try Data("other".utf8).write(to: evidenceFile)
+        expect(!evidence.matchesCurrent(), "in-place evidence content changes are rejected")
+        try Data("first".utf8).write(to: evidenceFile)
+        try FileManager.default.moveItem(at: evidenceFile, to: savedEvidence)
+        try Data("first".utf8).write(to: evidenceFile)
+        expect(!evidence.matchesCurrent(), "identical replacement bytes cannot claim the captured entity")
+
         let output = root.appendingPathComponent("receipt.json")
         FileManager.default.createFile(atPath: output.path, contents: nil)
         let handle = try FileHandle(forWritingTo: output)
@@ -187,12 +312,14 @@ struct InstallRegistryTests {
 }
 
 private final class FakeInstallRegistryPlatform: InstallRegistryPlatform {
-    let homeDirectory: URL
+    private let home: URL
+    private(set) var homeReadCount = 0
+    var homeDirectory: URL { homeReadCount += 1; return home }
     var applications: [String: [URL]] = [:]
     var registerStatus: OSStatus = noErr
     private(set) var registeredPaths: [String] = []
 
-    init(homeDirectory: URL) { self.homeDirectory = homeDirectory }
+    init(homeDirectory: URL) { self.home = homeDirectory }
     func urlsForApplications(withBundleIdentifier identifier: String) -> [URL] {
         applications[identifier] ?? []
     }
