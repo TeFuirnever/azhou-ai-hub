@@ -2,8 +2,10 @@
 """Isolated build publication and cleanup safety checks; no installed app or private assets."""
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -21,6 +23,9 @@ spec.loader.exec_module(verifier)
 lock_spec = importlib.util.spec_from_file_location('build_lock', SOURCE.parent / 'build-lock.py')
 build_lock = importlib.util.module_from_spec(lock_spec)
 lock_spec.loader.exec_module(build_lock)
+startup_spec = importlib.util.spec_from_file_location('startup_builder', SOURCE.parent / 'build-startup.py')
+startup_builder = importlib.util.module_from_spec(startup_spec)
+startup_spec.loader.exec_module(startup_builder)
 
 
 def fake_swap(left, right):
@@ -340,6 +345,36 @@ class BuildSafetyTests(unittest.TestCase):
             verifier.cleanup_stage(self.stage_root, sealed)
         self.assertEqual((self.stage_root / 'foreign.txt').read_bytes(), b'unknown')
         self.assertTrue(moved.is_dir())
+
+
+class StartupAssetsWorkTests(unittest.TestCase):
+    def test_verified_generated_work_is_cleaned(self):
+        with tempfile.TemporaryDirectory(prefix='agent-skin-assets-work-') as temp:
+            with startup_builder.asset_work_directory(Path(temp), verifier) as work:
+                (work / 'contours.json').write_bytes(b'[]')
+                (work / 'build-startup-assets').write_bytes(b'synthetic executable')
+            self.assertFalse(work.exists())
+
+    def test_unknown_or_failed_work_is_preserved(self):
+        for case in ('unknown', 'failure', 'replacement'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(prefix='agent-skin-assets-work-') as temp:
+                moved = Path(temp) / 'moved-work'
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises((RuntimeError, OSError)):
+                    with startup_builder.asset_work_directory(Path(temp), verifier) as work:
+                        (work / 'contours.json').write_bytes(b'[]')
+                        if case == 'unknown':
+                            (work / 'unknown').write_bytes(b'preserve')
+                        elif case == 'failure':
+                            raise OSError('synthetic generation failure')
+                        else:
+                            work.rename(moved)
+                            work.mkdir()
+                            (work / 'unknown').write_bytes(b'preserve')
+                self.assertTrue(work.is_dir())
+                if case != 'failure':
+                    self.assertEqual((work / 'unknown').read_bytes(), b'preserve')
+                if case == 'replacement':
+                    self.assertTrue(moved.is_dir())
 
 
 class BuildLockTests(unittest.TestCase):

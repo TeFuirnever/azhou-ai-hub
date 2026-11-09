@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import importlib.util
 import json
 import math
 from pathlib import Path
 import shutil
+import stat
 import struct
 import subprocess
+import sys
 import tempfile
 import zlib
 
@@ -335,6 +338,33 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
     return payload
 
 
+@contextlib.contextmanager
+def asset_work_directory(parent, artifacts):
+    parent = Path(parent)
+    parent_info = parent.lstat()
+    if not stat.S_ISDIR(parent_info.st_mode):
+        raise RuntimeError(f'生成助手暂存父目录不是实体目录：{parent}')
+    work = Path(tempfile.mkdtemp(prefix='agent-skin-startup-assets-', dir=parent))
+    original = work.lstat()
+    try:
+        yield work
+        current_parent = parent.lstat()
+        receipt = artifacts.tree_receipt(work)
+        if ((current_parent.st_dev, current_parent.st_ino) != (parent_info.st_dev, parent_info.st_ino)
+                or receipt[:2] != (original.st_dev, original.st_ino)):
+            raise RuntimeError(f'生成助手暂存身份变化，保留：{work}')
+        entries = {entry[0]: entry[1] for entry in receipt[3]}
+        if (not set(entries).issubset({'build-startup-assets', 'contours.json'})
+                or entries.get('contours.json') != 'file'
+                or any(kind != 'file' for kind in entries.values())):
+            raise RuntimeError(f'生成助手暂存包含未知内容，保留：{work}')
+        artifacts.require_tree(work, receipt)
+        shutil.rmtree(work)
+    except BaseException:
+        print(f'生成助手暂存保留待核对：{work}', file=sys.stderr)
+        raise
+
+
 def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex') -> dict:
     if host not in ('codex', 'zcode', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
@@ -370,8 +400,7 @@ def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex') -> di
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
 
-    with tempfile.TemporaryDirectory(prefix='agent-skin-startup-assets-', dir=bundle.parent) as temporary:
-        work = Path(temporary)
+    with asset_work_directory(bundle.parent, artifacts) as work:
         executable = work / 'build-startup-assets'
         contours_path = work / 'contours.json'
         avatar_path = defaults_dir / 'avatar.png'
