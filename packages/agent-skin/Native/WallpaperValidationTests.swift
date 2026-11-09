@@ -520,6 +520,19 @@ private func wallpaperJournalChecks() throws -> Int {
     expect(boundedLog.count < 4_096 && String(decoding: boundedLog, as: UTF8.self).contains("bounded"),
            "an oversized journal log is truncated before appending")
 
+    let oversizedDirectory = root.appendingPathComponent("oversized-record", isDirectory: true)
+    let oversizedPayload: [String: Any] = ["requestID": "oversized", "padding": String(repeating: "x", count: 1024 * 1024 + 1024)]
+    expect(!WallpaperJournal.record(oversizedPayload, directory: oversizedDirectory),
+           "a record past the per-record write limit is refused")
+    expect(!FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("latest.json").path)
+           && !FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("wallpaper.jsonl").path),
+           "a refused oversized record leaves no journal files")
+    expect(WallpaperJournal.record(["requestID": "within-limit"], directory: oversizedDirectory),
+           "a record within the per-record write limit is still accepted")
+    expect(FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("latest.json").path)
+           && FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("wallpaper.jsonl").path),
+           "an accepted bounded record publishes the journal files")
+
     try Data("not-json".utf8).write(to: latestURL)
     expect(WallpaperJournal.latest(requestID: "bounded", directory: journal) == nil,
            "malformed journal JSON is ignored")
