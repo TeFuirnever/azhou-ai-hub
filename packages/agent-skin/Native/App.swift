@@ -234,32 +234,37 @@ enum NativeStartupFinalOutcome: Equatable {
 }
 
 final class NativeStartupEventStream: @unchecked Sendable {
+    private enum Lifecycle {
+        case initial
+        case active
+        case resolved(NativeStartupFinalOutcome)
+        case finished(NativeStartupFinalOutcome)
+    }
+
     private let lock = NSLock()
     private let writer: NativeEventWriter
-    private var begun = false
-    private var finalOutcome: NativeStartupFinalOutcome?
+    private var lifecycle: Lifecycle = .initial
     private var pendingFailure: String?
     private var pendingInterruption: String?
     private var openedPID: Int32?
     private var installedPID: Int32?
     private var installedRunID: Int?
     private var pageID: String?
-    private var exitEmitted = false
 
     init(writer: NativeEventWriter) { self.writer = writer }
 
     func begin(at uptime: TimeInterval) {
         lock.lock()
         defer { lock.unlock() }
-        guard !begun else { return }
-        begun = true
+        guard case .initial = lifecycle else { return }
+        lifecycle = .active
         writer.emit("launcher-start", at: uptime)
     }
 
     func targetOpened(pid: Int32, at uptime: TimeInterval) {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted, pid > 0 else { return }
+        guard case .active = lifecycle, pid > 0 else { return }
         if let openedPID {
             guard openedPID == pid else { return }
             return
@@ -271,7 +276,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     func bindPage(pid: Int32, pageID: String?) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted, openedPID == pid,
+        guard case .active = lifecycle, openedPID == pid,
               pendingFailure == nil, pendingInterruption == nil else { return false }
         self.pageID = pageID
         installedPID = nil; installedRunID = nil
@@ -281,7 +286,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval, pageID: String? = nil) {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted, pid > 0, runID > 0,
+        guard case .active = lifecycle, pid > 0, runID > 0,
               openedPID == pid, installedPID == nil, self.pageID == pageID else { return }
         installedPID = pid
         installedRunID = runID
@@ -293,7 +298,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     func portError(operation: String, errno: Int32, at uptime: TimeInterval) {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted else { return }
+        guard case .active = lifecycle else { return }
         pendingFailure = "listener-mismatch"
         writer.emit("startup-port-error", fields: ["reason": "listener-mismatch",
                                                      "operation": operation, "errno": Int(errno)], at: uptime)
@@ -302,28 +307,29 @@ final class NativeStartupEventStream: @unchecked Sendable {
     func latchFailure(_ reason: String) {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted, pendingFailure == nil else { return }
+        guard case .active = lifecycle, pendingFailure == nil else { return }
         pendingFailure = Self.fixedReason(reason)
     }
 
     func latchInterruption(_ reason: String = "startup-interrupted") {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted, pendingFailure == nil, pendingInterruption == nil else { return }
+        guard case .active = lifecycle, pendingFailure == nil, pendingInterruption == nil else { return }
         pendingInterruption = reason == "startup-interrupted" ? reason : "startup-interrupted"
     }
 
     var isPending: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return begun && finalOutcome == nil && !exitEmitted
+        if case .active = lifecycle { return true }
+        return false
     }
 
     @discardableResult
     func resolve(_ outcome: StartupOutcome, observation: NativeStartupObservation?, at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted else { return nil }
+        guard case .active = lifecycle else { return nil }
 
         let resolved: NativeStartupFinalOutcome
         if let pendingFailure {
@@ -335,7 +341,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
                                          openedPID: openedPID, installedPID: installedPID,
                                          installedRunID: installedRunID, pageID: pageID)
         }
-        finalOutcome = resolved
+        lifecycle = .resolved(resolved)
         emitFinal(resolved, outcome: outcome, observation: observation, at: uptime)
         return resolved
     }
@@ -348,7 +354,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
                       at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, finalOutcome == nil, !exitEmitted else { return nil }
+        guard case .active = lifecycle else { return nil }
         var fields: [String: Any] = ["host": "zcode", "evidence": "typed-controller-receipt",
                                      "completion_not_inferred": true]
         let resolved: NativeStartupFinalOutcome
@@ -384,7 +390,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
                                              openedPID: nil, installedPID: nil, installedRunID: nil)
             }
         }
-        finalOutcome = resolved
+        lifecycle = .resolved(resolved)
         if let reason = resolved.reason { fields["reason"] = reason }
         writer.emit(resolved.event, fields: fields, at: uptime)
         return resolved
@@ -418,21 +424,28 @@ final class NativeStartupEventStream: @unchecked Sendable {
     func finish(at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
         lock.lock()
         defer { lock.unlock() }
-        guard begun, !exitEmitted else { return finalOutcome }
-        if finalOutcome == nil {
+        let outcome: NativeStartupFinalOutcome
+        switch lifecycle {
+        case .initial:
+            return nil
+        case .finished(let final):
+            return final
+        case .resolved(let final):
+            outcome = final
+        case .active:
             if let pendingFailure {
-                finalOutcome = .behaviorNotProven(reason: pendingFailure)
+                outcome = .behaviorNotProven(reason: pendingFailure)
             } else if let pendingInterruption {
-                finalOutcome = .partial(reason: pendingInterruption)
+                outcome = .partial(reason: pendingInterruption)
             } else {
-                finalOutcome = .partial(reason: "startup-interrupted")
+                outcome = .partial(reason: "startup-interrupted")
             }
-            emitFinal(finalOutcome!, outcome: nil, observation: nil, at: uptime)
+            lifecycle = .resolved(outcome)
+            emitFinal(outcome, outcome: nil, observation: nil, at: uptime)
         }
-        guard let finalOutcome else { return nil }
-        writer.emit("launcher-exit", fields: ["outcome": finalOutcome.exitName, "exitCode": Int(finalOutcome.exitCode)], at: uptime)
-        exitEmitted = true
-        return finalOutcome
+        writer.emit("launcher-exit", fields: ["outcome": outcome.exitName, "exitCode": Int(outcome.exitCode)], at: uptime)
+        lifecycle = .finished(outcome)
+        return outcome
     }
 
     private func emitFinal(_ final: NativeStartupFinalOutcome, outcome: StartupOutcome?,

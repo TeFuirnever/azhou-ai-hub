@@ -1169,6 +1169,30 @@ private func nativeEventContractChecks() async throws -> Int {
          "completion": completion]
     }
 
+    var lifecycleRecords: [[String: Any]] = []
+    let lifecycle = NativeStartupEventStream(writer: NativeEventWriter(
+        startedAt: 0, launcherPID: 1, launcherPath: "/synthetic/launcher",
+        sink: { lifecycleRecords.append($0) }
+    ))
+    lifecycle.targetOpened(pid: 4040, at: 0)
+    expect(lifecycle.finish(at: 0) == nil && lifecycleRecords.isEmpty,
+           "pre-begin activity cannot emit events or prevent a later begin")
+    lifecycle.begin(at: 1)
+    lifecycle.begin(at: 2)
+    lifecycle.latchInterruption()
+    lifecycle.latchFailure("asset-invalid")
+    lifecycle.portError(operation: "bind-loopback", errno: 48, at: 3)
+    expect(lifecycle.resolve(.activated(pid: 4040), observation: nil, at: 4)
+           == .behaviorNotProven(reason: "listener-mismatch"),
+           "a later port error keeps its existing precedence over pending interruption and failure")
+    let lifecycleFinal = lifecycle.finish(at: 5)
+    lifecycle.begin(at: 6)
+    lifecycle.portError(operation: "late", errno: 49, at: 7)
+    expect(lifecycle.finish(at: 8) == lifecycleFinal
+           && lifecycleRecords.map { $0["event"] as? String ?? "" } == [
+               "launcher-start", "startup-port-error", "startup-failed", "launcher-exit"
+           ], "repeated begin, finish and late observations do not duplicate events")
+
     let observations = NativeStartupCapture(targetPID: 4040)
     let loading = validStatus(42, phase: "loading", ready: false, completed: false,
                               overlay: true, completion: NSNull())
