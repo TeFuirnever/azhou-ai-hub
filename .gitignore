@@ -89,7 +89,7 @@ benchmarks/excalidraw-diagram/workspace/
 /assets/_gen/
 /assets/*-effect-azhou-scenes/
 
-# Project-local tool skills are installations, not public skill packages.
+# Untracked local skill installations remain ignored; tracked project workflows are versioned.
 /.agents/skills/
 /compact-adviser/
 

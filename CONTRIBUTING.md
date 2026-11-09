@@ -21,7 +21,7 @@ Maintainer and coding-agent workflows that need parallel local checkouts follow 
 
 ## Local tools and production files
 
-Third-party tools installed in `.agents/skills/` are local installations, separate from the published packages in `skills/`. They may retain upstream metadata such as `agents/openai.yaml`. The directory is Git-ignored, along with `hypit.runtime.json`, `.hypit/` and `productions/`; keep these files on disk when running repository verification. Files forced into Git still undergo the public-package checks. See the [package boundary](docs/skill-standard.md#2-包结构与运行边界).
+Tracked project-local engineering workflows in `.agents/skills/` belong to the checkout and remain separate from the independently installable packages in `skills/`. Register new tracked workflows in the repository policy and retain their source and license records. Other local tool installations remain untracked and may retain upstream metadata such as `agents/openai.yaml`. The directory remains Git-ignored for untracked files, as do `hypit.runtime.json`, `.hypit/` and `productions/`; preserve existing local files when running repository verification. Tracked files undergo the public-repository checks. See the [package boundary](docs/skill-standard.md#2-包结构与运行边界).
 
 ## Choose the change type
 
