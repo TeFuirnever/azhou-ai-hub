@@ -4,6 +4,13 @@ Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack), shipp
 
 The proposed `resume.mjs` checkpoint helper is not shipped. Its [storage reference](hub-skills/poteto-mode/references/resume-storage.md) documents a design, not an available command.
 
+The [engineering references](ENGINEERING-SOURCES.md) connect eleven existing
+skill entries to impact analysis, failure ownership, reliable tests, case
+admission, independent review, model interfaces, performance and current docs.
+They are conditional workflow instructions. Their four generated distributions
+are mechanically checked; this does not establish model adherence or a new
+host acceptance result. No shared installation is updated by building them.
+
 ## Layout
 
 | Directory | What it is |
@@ -83,4 +90,4 @@ zcode skills list --cwd "$(pwd -P)"
 Native command listing and skill discovery do not yet prove GUI invocation;
 ZCode plugin SessionStart hook delivery is not claimed.
 
-Configure per-role models with `/setup-pstack`; the sheet lives at `~/.claude/pstack-models.md` on Claude Code and `<codex-home>/pstack-models.md` on Codex. All licenses are MIT; the notices under `NOTICE*.md` and `LICENSE-*` cover the three upstream sources.
+Configure per-role models with `/setup-pstack`; the sheet lives at `~/.claude/pstack-models.md` on Claude Code and `<codex-home>/pstack-models.md` on Codex. The bundle contains MIT and Apache-2.0 material; retain the notices under `NOTICE*.md`, `LICENSE-*` and [engineering provenance](ENGINEERING-SOURCES.md).

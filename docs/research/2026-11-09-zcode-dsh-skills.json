@@ -1,0 +1,952 @@
+{
+  "schema": "azhou-hub.skill-comparison.v1",
+  "sources": [
+    {
+      "name": "ZCode",
+      "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+      "count": 54,
+      "paths_sha256": "2ca53deeac72f2f3dc6c7f2a58192a037400f8d67d9095ae5dadbf16a8edef90"
+    },
+    {
+      "name": "deepseek-harness",
+      "commit": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+      "count": 38,
+      "paths_sha256": "928ca5ecff6c115aebdfd47954aefb25e0cb93f7109a6302d7576ce208bd6406"
+    }
+  ],
+  "routes": {
+    "blast-radius": "references/semantic-impact.md",
+    "architect": "../blast-radius/references/semantic-impact.md",
+    "principle-boundary-discipline": "references/failure-ownership.md",
+    "principle-test-behavior-not-implementation": "references/reliable-fixtures.md",
+    "create-verification-skill": "references/case-admission.md",
+    "maintain-verification-skill": "../create-verification-skill/references/case-admission.md",
+    "principle-prove-it-works": "../create-verification-skill/references/case-admission.md",
+    "interrogate": "references/independent-contracts.md",
+    "principle-guard-the-context-window": "references/model-interface.md",
+    "benchmark-checklist": "references/user-paths.md",
+    "technical-writing": "references/current-contracts.md"
+  },
+  "entries": [
+    {
+      "id": "Z01",
+      "source": "ZCode",
+      "path": ".agents/skills/agent-browser/SKILL.md",
+      "sha256": "c0428aedede3e47001cf520c939ba565be9d3e4020d4300446e794da253311ee",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Browser CLI integration is an external runtime; use mounted browser tools and package-owned verification, not a new required install.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z02",
+      "source": "ZCode",
+      "path": ".agents/skills/ai-elements/SKILL.md",
+      "sha256": "fcb3e87c9521cb956943de7531318dd0761bd31c04fca12099ce30021471c6f7",
+      "decision": "out-of-scope",
+      "target": "docs/principles.md",
+      "reason": "React chat component library guidance; this change adds engineering disciplines, not a chat frontend.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z03",
+      "source": "ZCode",
+      "path": ".agents/skills/architecture-governance/SKILL.md",
+      "sha256": "33fb5462d6d8b0d5b61897b75842c5233e245b1cc5c2dffb02689733acce51bc",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/blast-radius/references/semantic-impact.md",
+      "reason": "One owner, event order, managed-boundary coverage and legacy-baseline exceptions; no ZCode layer policy or automatic adoption.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "Z04",
+      "source": "ZCode",
+      "path": ".agents/skills/dep-refs/SKILL.md",
+      "sha256": "e65f7de06bde52ca238bbc803d40e731d052e149690222736916e37631db7d23",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/blast-radius/references/semantic-impact.md",
+      "reason": "Trace re-exports and dynamic consumers; use available indexing/search, not the source TypeScript CLI.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "Z05",
+      "source": "ZCode",
+      "path": ".agents/skills/dogfood/SKILL.md",
+      "sha256": "984bd5aa263aa91c818394459f90d46477ddfad07c49cc2f61db2ece3f626564",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/pstack/skills/create-verification-skill/SKILL.md",
+      "reason": "Existing feature-map and real journey evidence owner; case-admission adds UI and recording truth boundaries.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z06",
+      "source": "ZCode",
+      "path": ".agents/skills/e2e-case-lifecycle/SKILL.md",
+      "sha256": "d66e1f46a5af42914d596d4f2387836d579ae37331783c1b82fc7886a6d18e7a",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/create-verification-skill/references/case-admission.md",
+      "reason": "Per-assertion evidence, independent replay expectations and safe promotion; retain current case owner and approval rules.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "Z07",
+      "source": "ZCode",
+      "path": ".agents/skills/electron/SKILL.md",
+      "sha256": "989a15a88409e079d3dff3f9b7d41bf653e565a4f1e46854dac6669c116aecb4",
+      "decision": "host-specific",
+      "target": "packages/agent-skin/docs/local-install-sop.md",
+      "reason": "CDP automation and host permissions belong to actual host/tool owner; no blanket connection to user apps.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z08",
+      "source": "ZCode",
+      "path": ".agents/skills/feature-boundary-planner/SKILL.md",
+      "sha256": "8eb0f7c5881aa2cbd3f77bdd3d07f6dc3c603e2a77b0d0946759ce60fbd68e7d",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/blast-radius/references/semantic-impact.md",
+      "reason": "Trace distinct entries to validation and committed effects; classify and prune cases without a second feature graph.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "Z09",
+      "source": "ZCode",
+      "path": ".agents/skills/react-best-practices/SKILL.md",
+      "sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+      "decision": "out-of-scope",
+      "target": "docs/principles.md",
+      "reason": "Third-party React/Next optimization corpus; no affected React product or imported framework.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z10",
+      "source": "ZCode",
+      "path": ".agents/skills/session-management/SKILL.md",
+      "sha256": "90ed255117fbc2b193b27ff7874a5df6798f27add5ce1f1d4a29d27592609260",
+      "decision": "out-of-scope",
+      "target": "docs/integrations.md",
+      "reason": "ZCode task database, organization and CLI persistence invariants are product-specific; do not replace Hub task/runtime owners.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z11",
+      "source": "ZCode",
+      "path": ".agents/skills/zcode-large-task-fixture/SKILL.md",
+      "sha256": "850abebc4ed3b3cf156c6b330abdeaea53d9d9d6f1903b05bd756a7da39f612a",
+      "decision": "out-of-scope",
+      "target": "docs/skill-standard.md",
+      "reason": "Writes ZCode user databases; Hub benchmarks use synthetic isolated fixtures, not private host persistence.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z12",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/.agents/skills/opentui/SKILL.md",
+      "sha256": "0320841876aee8b563ee459cbab9a820a65058c681471e18308f9120b20c7a39",
+      "decision": "out-of-scope",
+      "target": "docs/principles.md",
+      "reason": "OpenTUI-specific API and terminal app development; no Hub runtime consumer.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z13",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/.agents/skills/vercel-react-best-practices/SKILL.md",
+      "sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+      "decision": "out-of-scope",
+      "target": "docs/principles.md",
+      "reason": "Vendored React/Next guidance, not imported under the parent repository license.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z14",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/.agents/skills/vercel-react-view-transitions/SKILL.md",
+      "sha256": "8c4c0f8b5581ef473fbf388b2df7d13e02d418ab2150a912b9b7eafdf4b76a01",
+      "decision": "out-of-scope",
+      "target": "docs/principles.md",
+      "reason": "React experimental transitions and Next integration; no corresponding change or runtime.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z15",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/android-emulator-plugin/skills/android-dev/SKILL.md",
+      "sha256": "4b57d8c5f2831df241cdbcc42e4895668a3193bb651b9329d64ba7ccd4723821",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Requires source emulator/simulator MCP tools absent from the Hub package; no native tool capability is inferred.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z16",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/browser-use-plugin/skills/control-browser/SKILL.md",
+      "sha256": "e726fbf72a2bbece6e024d8d7e2d71b54fddf0dda613dfcc91dffd849b7db4a8",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Requires mounted browser/native-control tools and their permissions; verification journeys use the active host capability.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z17",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/browser-use-plugin/skills/web-gui-tester/SKILL.md",
+      "sha256": "176eab41111d939d0668aa14623a5482496417e63e2fe452fd52da8de45a6307",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Requires mounted browser/native-control tools and their permissions; verification journeys use the active host capability.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z18",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/bundled-skills/skills/dynamic-workflows/SKILL.md",
+      "sha256": "7cd7ab415d1a94a0dc46fd20dc121008794426906f11aea65b40bd03946b37e1",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Requires CreateWorkflow/EvalWorkflowSnippet and source journal engine; existing orchestrator keeps task ownership.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z19",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/documents-plugin/skills/docx-viewer/SKILL.md",
+      "sha256": "695439c5e90063a7e1772684e85f6838cfd52d233ba28717e935870f11f68b89",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z20",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/documents-plugin/skills/docx/SKILL.md",
+      "sha256": "48b5737f2ffd30fdec1332f1b7183161d09a70ff0b19ba524356edaf78bd13c5",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z21",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/ios-simulator-plugin/skills/ios-dev/SKILL.md",
+      "sha256": "98f33b3367f762da85b59d485340f38e5a9fae53d620a6c6bfa385abb505c69e",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Requires source emulator/simulator MCP tools absent from the Hub package; no native tool capability is inferred.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z22",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/pdf-plugin/skills/pdf-viewer/SKILL.md",
+      "sha256": "0149a5f0b92348b184b6511f0222f7797bfdd2860ed8e6b7250d54451bb2c0b5",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z23",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/pdf-plugin/skills/pdf/SKILL.md",
+      "sha256": "4419d2ea33e7627f04f6defde3a83fa6664c886f6a5d1d7ea3fb70bba1ef8317",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z24",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/plugin-creator-plugin/skills/plugin-creator/SKILL.md",
+      "sha256": "a61df2ca55363fd67aa15e37555bbcbc6b54de7611f79e97e89d2a5038b8488f",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Native marketplace and plugin lifecycle remain with host-specific integration owner.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z25",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/presentations-plugin/skills/pptx-viewer/SKILL.md",
+      "sha256": "d63fb6aeeac83681cee7763401b007fddbbfa097ba104eb7a66be7cd2a7e6d92",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z26",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/presentations-plugin/skills/pptx/SKILL.md",
+      "sha256": "2413861abb79f6d30f03de24417af0ddcdadab024dfdb192352033111e17e6df",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z27",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/restore-legacy-sessions-plugin/skills/restore-legacy-sessions/SKILL.md",
+      "sha256": "c0b551a08e35e7f7c9195706b63554002d77d7bf6faed1d0658d8723e873bbcc",
+      "decision": "out-of-scope",
+      "target": "docs/integrations.md",
+      "reason": "Legacy ACP-to-ZCode database restoration is a product migration, not a portable Skill capability.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z28",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/skill-creator-plugin/skills/skill-creator/SKILL.md",
+      "sha256": "ff88909f5cda2cf4d16fc7622a74a2678e09ef350721d5e22fdeb23e17a13458",
+      "decision": "reuse",
+      "target": "docs/skill-standard.md",
+      "reason": "Existing package/evidence/evolution authority; retain neutral metadata and human promotion rules, no bundled creator import.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z29",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/spreadsheets-plugin/skills/xlsx-viewer/SKILL.md",
+      "sha256": "06a3f37c2d635d6d723d7ba4b520e421c36f8d83622ef29e9c0585e46246b72c",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z30",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/spreadsheets-plugin/skills/xlsx/SKILL.md",
+      "sha256": "1b21b9071a436151fdb3917ba7be900decc6443f3d86ef48301f2e442eabbaf8",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Office/document/viewer plugin requires its source runtime and may carry nested third-party grants; no content or runtime imported.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z31",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/brainstorming/SKILL.md",
+      "sha256": "bba47904a7f6bbee3bf8a107ebbe84e65d392be683bbb898ded736b29e415f90",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/architect/SKILL.md",
+      "reason": "Existing grounding/design owner; do not import a mandatory approval round for every authorized change.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z32",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/dispatching-parallel-agents/SKILL.md",
+      "sha256": "76806091c7f923ba2596546b19cccd98a08e57a68745df77c3a7b998fe838e2b",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/swarm/SKILL.md",
+      "reason": "Existing isolated task ownership; host/user delegation permission still applies.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z33",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/executing-plans/SKILL.md",
+      "sha256": "e2102f11631433939f162d383d769f8257d859d6639e0e14969cda3ef0a95eca",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/poteto-mode/SKILL.md",
+      "reason": "Existing task execution and recovery playbooks; checkpoint helper remains unshipped.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z34",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/finishing-a-development-branch/SKILL.md",
+      "sha256": "5c8d4b59aedb14c94e2f5d787a3265e858e8f53d4ceffe7ff1c15878a52b0e91",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/babysit/SKILL.md",
+      "reason": "Existing check/review/merge gates plus Treehouse lifecycle; no guessed base or local merge alternative.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z35",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/receiving-code-review/SKILL.md",
+      "sha256": "c9382e92b8f32363566068ecfed19d3b2651eaf40d3942b24840f839dedfc406",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/get-pr-comments/SKILL.md",
+      "reason": "Existing review intake, technical assessment and addressed-thread handling.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z36",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/requesting-code-review/SKILL.md",
+      "sha256": "5a3a44a3667800e2dc836829c6b92fada51e6dc58ac144ec05fe59f47d6bcd84",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/interrogate/SKILL.md",
+      "reason": "Existing explicit review owner; new independent-contract reference supplements it.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z37",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/subagent-driven-development/SKILL.md",
+      "sha256": "905a2b9be59b734dbe166525ad31dcaaf712a75926135adee1f554557aba5744",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/poteto-mode/SKILL.md",
+      "reason": "Existing orchestration owner; no second framework or unconditional subagents.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z38",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/systematic-debugging/SKILL.md",
+      "sha256": "4999cb851360485eca5074e727bbdd62ef20549c5d5b01216fcbf5831badb473",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/principle-fix-root-causes/SKILL.md",
+      "reason": "Existing hypothesis and root-cause discipline; no source-specific mandatory global workflow.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z39",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/test-driven-development/SKILL.md",
+      "sha256": "7dee67b4af6bdccc7a914ca34533184d64592d0f5b23aeae631538168db14994",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/tdd/SKILL.md",
+      "reason": "Existing explicit TDD owner; preserve destination invocation policy.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z40",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/using-git-worktrees/SKILL.md",
+      "sha256": "085a45ee3de432bdb2768011591d9a882cb6c759e2317f379226451c5618fe8e",
+      "decision": "reuse",
+      "target": "docs/worktree-policy.md",
+      "reason": "Existing durable Treehouse leases and guarded return; no implicit raw-git fallback.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z41",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/using-superpowers/SKILL.md",
+      "sha256": "316e29381219adf0cac62190c67aeabf427d6e6e5f2735541d502b3d339be7aa",
+      "decision": "out-of-scope",
+      "target": "docs/skill-standard.md",
+      "reason": "Always-on dispatcher duplicates orchestration and broadens invocation; preserve current composition rule.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z42",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/verification-before-completion/SKILL.md",
+      "sha256": "ea52d15aabaf72bc6b558efe2c126f161b53961090ddcd712000273bfe8c7b6c",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/principle-prove-it-works/SKILL.md",
+      "reason": "Existing real-output proof, supplemented by case-admission evidence.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z43",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/writing-plans/SKILL.md",
+      "sha256": "4fd4627d2c02367879c0307d7249270bed633317ff9be82e926a6d57bf5d331b",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/harness/pstack/skills-root/skills/architect/SKILL.md",
+      "reason": "Existing design and implementation planning; no duplicate task database.",
+      "review_depth": "entry-and-workflow-boundaries"
+    },
+    {
+      "id": "Z44",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/superpowers-plugin/skills/writing-skills/SKILL.md",
+      "sha256": "38ba648975ae6ba512d6695676f146163db61a496b867f716f4bdfb0ee3aca3e",
+      "decision": "reuse",
+      "target": "docs/skill-standard.md",
+      "reason": "Existing package-local workflow and regression/promotion authority; no mandatory second TDD orchestration chain.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z45",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/visualize-plugin/skills/visualize/SKILL.md",
+      "sha256": "a7bb0c49c46070c836a3f656f561a73605bcdc7254eaa2b7ee088e7cf6e00155",
+      "decision": "reuse",
+      "target": "skills/super-archify/SKILL.md",
+      "reason": "Existing diagrams owner for supported outputs; does not claim parity with ZCode inline visualization host.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z46",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-cua-plugin/skills/computer-use/SKILL.md",
+      "sha256": "851bf0010b193d5bf3e6bf83ce4be1cd2a8d3161d88d19eeac0f70c73e5b06df",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "Requires mounted browser/native-control tools and their permissions; verification journeys use the active host capability.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z47",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/diagnosing-commands/SKILL.md",
+      "sha256": "afae6c370ecb133e16562021e243d90896d8317d4cb6472fa2e611c986e8482b",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z48",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/diagnosing-hooks/SKILL.md",
+      "sha256": "ee09829dfe3df45d4ecf582f35d217b55536ea71f2ddc479e3d3721079260c8a",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z49",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/diagnosing-mcp/SKILL.md",
+      "sha256": "e92a2a14eaf79de0cb63f3f1ff5a954e37916b58dd65b899f3cd5b8e56e330d8",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z50",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/diagnosing-plugins/SKILL.md",
+      "sha256": "4ff859291b7a8fd32d9ea7b9e29a6a6c97f4d8927a90fa1337a9407eef4a4684",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z51",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/diagnosing-skills/SKILL.md",
+      "sha256": "cf3ddb6d103dbb54672fbe730e4e889e536fd15b0c57a43875ab01c8b52ede49",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z52",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-guide-plugin/skills/zcode-configuration-guide/SKILL.md",
+      "sha256": "93b627b6922cb149029fe2662bf4c1241b21ba816b448e8d8c58b1e965b66d6e",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode native configuration/discovery precedence and UI diagnostics; keep original host owner, not a portable policy claim.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "Z53",
+      "source": "ZCode",
+      "path": "apps/zcode-cli/packages/zcode-site-plugin/skills/site-deploy/SKILL.md",
+      "sha256": "c81e84bcaa5025dd64245818d42c2f895f388b49cba6332ea235a74e13e805f1",
+      "decision": "host-specific",
+      "target": "docs/support-matrix.md",
+      "reason": "ZCode Sites deployment API and publication authority are external, not part of Hub engineering adaptation.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "Z54",
+      "source": "ZCode",
+      "path": "packages/desktop/test/e2e/fixtures/plugin-mcp-skill/e2e-plugin-mcp-ping/skills/plugin-mcp-ping/SKILL.md",
+      "sha256": "c1cc4cfd0579892d23fc633486ae0e38450e6e7abb32dc5634fde6e3c2c5361f",
+      "decision": "fixture",
+      "target": "docs/skill-standard.md",
+      "reason": "Test-only discovery or replay input, not a deployable engineering capability.",
+      "review_depth": "entry-and-path"
+    },
+    {
+      "id": "D01",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/agent-experience/SKILL.md",
+      "sha256": "64db69fba1725d47528319dc4f704e8780ab1dcabf326c8cd93674aeb9fdd791",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/principle-guard-the-context-window/references/model-interface.md",
+      "reason": "Deferred discovery, parameter-local rules, omitted context and measured total work; development entry aliases preset source.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D02",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/cordis-styling-nitpicking/SKILL.md",
+      "sha256": "697bdf8aced2c680b74ceea93cb836d650c85f3f451618891d320327cd74d5b1",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/principle-boundary-discipline/references/failure-ownership.md",
+      "reason": "Resource ownership and consumer completion before releasing dependencies; do not import Cordis services or blanket P0 labels.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D03",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-archive-agent-notes/SKILL.md",
+      "sha256": "298e95629ade953ba5e0e4fd4c50e5205389ac6adc5d55dea1ef26617a323f84",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "Check full/partial supersession and durable rationale; no inherited deletion policy, notes store or memory writes.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D04",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-ci-test-reliability/SKILL.md",
+      "sha256": "6ed04407132759698e5e5e9684178f826b4c659e15e90e8e996141e5ad7edb4c",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/principle-test-behavior-not-implementation/references/reliable-fixtures.md",
+      "reason": "Atomic resources, exact global restoration, readiness barriers, platform semantics and quiescent teardown.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D05",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-client-ui-ux/SKILL.md",
+      "sha256": "5b73d58e2e5d47323a395065aa466e8950431fee3e177401b582683e3a1480cd",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/create-verification-skill/references/case-admission.md",
+      "reason": "Actual assembled-screen review and state/consumer scope; no import of source design tokens or full-audit quotas.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D06",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-code-review/SKILL.md",
+      "sha256": "0d33aa4a950d08a8be83af565cb2f0c8fa465702eda6aa461ca4485cc94949c4",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/interrogate/references/independent-contracts.md",
+      "reason": "Requirements independent of the diff, direct/alternate denial paths and actual shipped entries.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D07",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-create-upgrade-guide/SKILL.md",
+      "sha256": "0ee972372b3fa02c92736e39179940dfe3e8ff1141a95dceefd4fd864ff8963a",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "Explain externally visible break, affected release, migration, verification and recovery at existing owner.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D08",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-cua-macos-signing/SKILL.md",
+      "sha256": "e7988aa8566d27de3a71cdaa1f9410002039a5aa010044f2fa1dfdd9bb311cee",
+      "decision": "host-specific",
+      "target": "packages/agent-skin/docs/local-install-sop.md",
+      "reason": "Personal signing identity and macOS grants require the actual host installer and explicit scope; no key creation.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "D09",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-doc/SKILL.md",
+      "sha256": "a0f5a09bf759a75d63d145d64899c640dcc240845e15eb5b87a3a2ab2eda65de",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "One current owner, source-before-generated edits, consumer docs and migration guidance; no DSH taxonomy.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D10",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-error-handling/SKILL.md",
+      "sha256": "fcde7e278056263f7b93b6854fe05d0b492bdf09739f4f4f3537e8ffd30a1c2d",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/principle-boundary-discipline/references/failure-ownership.md",
+      "reason": "Typed errors, state guarantees, owned retries, visible unknown outcomes and independent reporting fallback.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D11",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-find-simplifications/SKILL.md",
+      "sha256": "0287165e16f482bc197bc36a40e66a2eee3d47479bb0dfc1836602a96052befe",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/interrogate/references/independent-contracts.md",
+      "reason": "Remove maintained obligations only after tracing consumers and preservation requirements; no autonomous deletion.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D12",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-merging-stacked-prs/SKILL.md",
+      "sha256": "d7b45f7c56f741e725d369887396f582f65d131c775ae58861d7835ca892bfcd",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/hub-skills/poteto-mode/references/merge-safety.md",
+      "reason": "Existing merge owner and exact-head gates; DSH native-stack merge-commit mandate conflicts with Hub squash-only policy.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "D13",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-official-plugin-artwork/SKILL.md",
+      "sha256": "f96a5435b2a065a127f2fa02f82b69f5b27e8fc6a59d7c6fd6f5e66161d20c7d",
+      "decision": "out-of-scope",
+      "target": "docs/skill-standard.md",
+      "reason": "Official DSH icon library/design approval and assets are not Hub brand assets; keep current brand/visual review ownership.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "D14",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-pr-description/SKILL.md",
+      "sha256": "bb5d25480625dfc3f14061e6f1eef1d99c9f2c45729c151199b4ef52581383ba",
+      "decision": "reuse",
+      "target": "packages/pstack-agent-harness/pstack/skills/poteto-mode/playbooks/opening-a-pr.md",
+      "reason": "Existing PR owner and evidence; source-specific AI percentage declaration/GIF upload policy not adopted.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "D15",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-pre-push-checks/SKILL.md",
+      "sha256": "8a4b78f71444be44bc2fcfab25f6b1553230bdb61433f1bd586f53f8429d17d7",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/interrogate/references/independent-contracts.md",
+      "reason": "Exact base/head and current evidence; Hub full verification remains mandatory; scope command already landed separately.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D16",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-prose-standard/SKILL.md",
+      "sha256": "63530dfc600b1be07b6f2c1d1a794a3ce0ef78f91d2c18b7b1303dce3b0d5e72",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "Preserve actors, timing, modality, exceptions, effects and failure consequences when trimming.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D17",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-responsive-ui/SKILL.md",
+      "sha256": "e6df843b5e06f78e2932727efd46781337a62861505a5d4b1db817d6f041565f",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/create-verification-skill/references/case-admission.md",
+      "reason": "Action access, wrapping, touch/hover/keyboard and focus preservation; target product owns viewport limits.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D18",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-session-projection/SKILL.md",
+      "sha256": "a99bf245906efb60a615b32111a75510eb708f38efff8286892db39382a9a0c9",
+      "decision": "out-of-scope",
+      "target": "docs/integrations.md",
+      "reason": "Session projection/reader/checkpoint ABI is DSH runtime-specific; no parallel Hub event-sourcing engine.",
+      "review_depth": "entry-and-applicability"
+    },
+    {
+      "id": "D19",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-speed-up-perf/SKILL.md",
+      "sha256": "8ffc5fed104ede34b27075145350b97489b45d394f9f13464bf2b605c66e2931",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/benchmark-checklist/references/user-paths.md",
+      "reason": "Realistic dimensions, production endpoint, retained memory, cold/warm parity and negative controls.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D20",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-translate-docs/SKILL.md",
+      "sha256": "a72d26e988a6f9be29a09d6776bda0539ead49c42a447d327636fe4de0da83e7",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "Keep bilingual meaning and terminology; no delegated translation, pairing hash scheme or global workflow invocation.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D21",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+      "sha256": "977eeb1dfe694e170ac36d9a61c2d9548a2547c3bc170c87e50033cc701d7c2e",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/technical-writing/references/current-contracts.md",
+      "reason": "Replace private session citations with current facts while preserving legitimate historical evidence.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D22",
+      "source": "deepseek-harness",
+      "path": ".agents/skills/record-browser-gif/SKILL.md",
+      "sha256": "baacaf5ca4591280a8d3e67f256b8e9beb6a89fe2dd5c0636086621146643806",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/create-verification-skill/references/case-admission.md",
+      "reason": "Bind recordings to actual revision/server and fixture/live conditions; no automatic upload or mandatory source encoder.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D23",
+      "source": "deepseek-harness",
+      "path": "packages/experimental/webworker-runtime/tests/fixtures/vfs-example/workspace/.agents/skills/preview-tour/SKILL.md",
+      "sha256": "4486d12747d1c0fd2d9987c01d576c91158971a1fe5213400513fd1f109a20b2",
+      "decision": "fixture",
+      "target": "docs/skill-standard.md",
+      "reason": "Test-only discovery or replay input, not a deployable engineering capability.",
+      "review_depth": "entry-and-path"
+    },
+    {
+      "id": "D24",
+      "source": "deepseek-harness",
+      "path": "packages/preset/agent-preset/skills/agent-experience/SKILL.md",
+      "sha256": "1244928710cb7e399325c416e80312037d4da249559a09fe289515cc66ee1752",
+      "decision": "adapt",
+      "target": "packages/pstack-agent-harness/hub-skills/principle-guard-the-context-window/references/model-interface.md",
+      "reason": "Deferred discovery, parameter-local rules, omitted context and measured total work; development entry aliases preset source.",
+      "review_depth": "relevant-body-and-owner"
+    },
+    {
+      "id": "D25",
+      "source": "deepseek-harness",
+      "path": "packages/preset/agent-preset/skills/cordis-composition-reference/SKILL.md",
+      "sha256": "6583a81d9f4de07032ebdee0d5ea1a925067277805798936a5297cf2bac4f5e3",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Cordis composition/plugin editing requires DSH runtime services and native permission checks; no second Hub installer.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D26",
+      "source": "deepseek-harness",
+      "path": "packages/preset/agent-preset/skills/cordis-plugin-development/SKILL.md",
+      "sha256": "314cb46e064e1aa4ecd9bffd9b0364eb3be7a3e8bd2678f06b0276bd88c09640",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Cordis composition/plugin editing requires DSH runtime services and native permission checks; no second Hub installer.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D27",
+      "source": "deepseek-harness",
+      "path": "packages/preset/agent-preset/skills/editing-cordis-compositions/SKILL.md",
+      "sha256": "974cc1e115bf07a8de7229c20a7e7aa7fa5cc5bfe0fbc22f86b5bc776a7298e6",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Cordis composition/plugin editing requires DSH runtime services and native permission checks; no second Hub installer.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D28",
+      "source": "deepseek-harness",
+      "path": "packages/sandbox/sandbox-windows-acl/assets/diagnose-windows-sandbox-acl/SKILL.md",
+      "sha256": "9c616c78892daeaea864a9b2d6baaea91ff133cf83cde0b725c6caee2d4933cb",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Windows ACL diagnosis is bound to the DSH sandbox owner; Hub does not ship that subsystem.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D29",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-docx/SKILL.md",
+      "sha256": "e549651654c9aa7dfcb46cd9b9c6e44b6433f48581eb903c75dff1688f41c818",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D30",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-export-pdf/SKILL.md",
+      "sha256": "f474f6e2daa61875f4a1e346a83bf566e934ef9469de7b04ca2d137b66630723",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D31",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-pptx/SKILL.md",
+      "sha256": "3d2f09443f4ac82b4989ff100fc095c7b3e518dbb606df1c260ea1175eca056f",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D32",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-recalculate/SKILL.md",
+      "sha256": "acc3729600af3660348944f0145f36359d60dabd349660947d6740d73feaceaf",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D33",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-render/SKILL.md",
+      "sha256": "7ad77f63958bc5e69b1d5b2ebd2dac36eeaa4737563f72c7a941c2e22bfd551c",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D34",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office-xlsx/SKILL.md",
+      "sha256": "5b16d47b06d0b545c99c72f25ba6bd7063843adf2d487b1b0aee5b1f0d6db80e",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D35",
+      "source": "deepseek-harness",
+      "path": "packages/skill/skill-office/assets/office/SKILL.md",
+      "sha256": "d5b9c95af707c95ca5d2d92cd7af21d04811dd8e88b99518947bdde11f2d9885",
+      "decision": "host-specific",
+      "target": "docs/integrations.md",
+      "reason": "Office tool APIs and document runtimes belong to the DSH plugin; not needed for engineering skill adaptation.",
+      "review_depth": "entry-and-tool-contract"
+    },
+    {
+      "id": "D36",
+      "source": "deepseek-harness",
+      "path": "snapshots/session/skill-load/workspace/.dsh/skills/model-only-skill/SKILL.md",
+      "sha256": "31e6bdfb0801cf9af7d899c0274b1bd51a055fdcb4d3222eea33bc98c696d167",
+      "decision": "fixture",
+      "target": "docs/skill-standard.md",
+      "reason": "Test-only discovery or replay input, not a deployable engineering capability.",
+      "review_depth": "entry-and-path"
+    },
+    {
+      "id": "D37",
+      "source": "deepseek-harness",
+      "path": "snapshots/session/skill-load/workspace/.dsh/skills/snapshot-skill/SKILL.md",
+      "sha256": "cb5ce673849933c462c377c38b565836c35fa8d5bd5a86424e63c70da961bd28",
+      "decision": "fixture",
+      "target": "docs/skill-standard.md",
+      "reason": "Test-only discovery or replay input, not a deployable engineering capability.",
+      "review_depth": "entry-and-path"
+    },
+    {
+      "id": "D38",
+      "source": "deepseek-harness",
+      "path": "snapshots/session/skill-load/workspace/.dsh/skills/user-only-skill/SKILL.md",
+      "sha256": "ea2cbfb074a307ce8707104431a52e4637885b7104a031eefd3fda7b6e5b8bc7",
+      "decision": "fixture",
+      "target": "docs/skill-standard.md",
+      "reason": "Test-only discovery or replay input, not a deployable engineering capability.",
+      "review_depth": "entry-and-path"
+    }
+  ]
+}

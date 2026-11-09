@@ -19,6 +19,8 @@
 
 ## Change scope
 
+For interface/state changes, async tests, verification cases, review, performance, tool definitions or public docs, read the matching row in [engineering guidance](docs/agents/engineering.md). It routes to the existing owner; do not load unrelated references.
+
 For change planning or review with an explicit base and head, use the experimental [Foundation scope command](docs/foundations.md#experimental-change-scope) to separate committed, staged, unstaged and non-ignored untracked paths. Recheck the complete result before relying on it and stop if concurrent changes cannot be excluded. Trace owners and consumers in the [semantic impact record](docs/foundations.md#record-semantic-impact); path lists are not semantic closure or proof of an atomic snapshot.
 
 ## Git and GitHub

@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 In skills-root hosts, read [the skills-root hosts adapter](../../docs/harness/skills-root.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to skills-root hosts.
 
+Before sketching a stateful or cross-module change, read [Semantic impact](../blast-radius/references/semantic-impact.md) and name its owners and event order.
+
 Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across multiple model perspectives, then fill in code against the chosen sketch.
 
 ## Start

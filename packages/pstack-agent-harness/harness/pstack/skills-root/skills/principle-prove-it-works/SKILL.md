@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 In skills-root hosts, read [the skills-root hosts adapter](../../docs/harness/skills-root.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to skills-root hosts.
 
+For coverage, replay or UI acceptance claims, read [Case admission](../create-verification-skill/references/case-admission.md) before reporting success.
+
 Verify every task output by checking the real thing directly. Do not infer from proxies, self-reports, or "it compiles."
 
 **Why:** Unverified work has unknown correctness. Indirect verification (file mtimes, output freshness, agent self-reports, cached screenshots) feels cheaper than direct observation. Acting on a wrong inference costs far more than checking the source.

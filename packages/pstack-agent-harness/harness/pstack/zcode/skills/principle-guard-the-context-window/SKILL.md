@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Guard the Context Window
 
+When changing tools, skill triggers or contextual output, read [Model interface](references/model-interface.md) to preserve discoverability and measure total work.
+
 **Why:** Context overflow degrades reasoning quality, creates compression artifacts, and halts progress.
 
 **Pattern:**
