@@ -23,6 +23,7 @@ from scripts.check_repository import (
     peel_chat_presentation,
     check_public_boundaries,
     check_reference_script_paths,
+    check_required,
     check_rename_residue,
     check_secret_patterns,
     check_skill_brand_contract,
@@ -726,6 +727,31 @@ class RepositoryPolicyTest(unittest.TestCase):
             legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
             errors = check_skill_discovery([*expected, legacy], root)
             self.assertEqual(["unexpected installable skill: benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.md"], errors)
+
+            local = root / ".agents/skills/dep-refs/SKILL.md"
+            local.parent.mkdir(parents=True)
+            local.write_text("project workflow", encoding="utf-8")
+            self.assertEqual([], check_skill_discovery([*expected, local], root))
+            stray_local = root / ".agents/skills/unknown/SKILL.md"
+            self.assertIn("unexpected installable skill: .agents/skills/unknown/SKILL.md",
+                          check_skill_discovery([*expected, local, stray_local], root))
+
+    def test_pinned_upstream_notice_is_verified_before_ignoring_its_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = Path(".agents/skills/dep-refs/NOTICE-ZCode.md")
+            notice = root / relative
+            notice.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / relative, notice)
+            self.assertEqual([], check_markdown_links([notice], root))
+            notice.write_text("[changed](missing.md)", encoding="utf-8")
+            self.assertEqual([f"upstream notice changed: {relative}"],
+                             check_markdown_links([notice], root))
+
+    def test_project_local_workflows_are_required_public_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            errors = check_required(Path(directory))
+            self.assertIn("required public file missing: .agents/skills/dep-refs/SKILL.md", errors)
 
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"

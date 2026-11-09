@@ -22,6 +22,10 @@ Animation character art, scene data, wallpaper and icon source are separate priv
 - License: [MIT](LICENSES/DeepSeek-Harness-MIT.txt)
 - Update path: compare the pinned source and tests at an immutable revision, review changed behavior and notices, adapt only compatible changes, and run the Hub scope and repository gates.
 
+## Project-local engineering workflows
+
+The tracked workflows under `.agents/skills/` adapt [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159) (MIT) and [ZCode](https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9) (Apache-2.0). Each workflow retains its upstream license, applicable notice, source pin and adaptation boundary. The GIF encoder and its regression tests are derived from the DeepSeek Harness source at that pin. To update, compare the pinned source and its license to the proposed revision, review the local adaptation and run the relevant checks.
+
 ## Azhou brand assets
 
 `assets/github/social-preview.png` is an Azhou-maintained brand asset generated in-house on 2026-08-23 with Codex image generation and resized to 1280×640 for GitHub previews. This version intentionally contains no third-party logos or copied assets. When replacing it, repeat visual and rights review, keep the file below GitHub's 1 MB limit, and verify the separate GitHub Social Preview setting; the README reference is not that platform receipt.

@@ -79,6 +79,33 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = set()
+PROJECT_LOCAL_SKILL_PATHS = {
+    ".agents/skills/agent-experience/SKILL.md",
+    ".agents/skills/architecture-governance/SKILL.md",
+    ".agents/skills/cordis-styling-nitpicking/SKILL.md",
+    ".agents/skills/dep-refs/SKILL.md",
+    ".agents/skills/dsh-archive-agent-notes/SKILL.md",
+    ".agents/skills/dsh-ci-test-reliability/SKILL.md",
+    ".agents/skills/dsh-client-ui-ux/SKILL.md",
+    ".agents/skills/dsh-code-review/SKILL.md",
+    ".agents/skills/dsh-create-upgrade-guide/SKILL.md",
+    ".agents/skills/dsh-doc/SKILL.md",
+    ".agents/skills/dsh-error-handling/SKILL.md",
+    ".agents/skills/dsh-find-simplifications/SKILL.md",
+    ".agents/skills/dsh-pre-push-checks/SKILL.md",
+    ".agents/skills/dsh-prose-standard/SKILL.md",
+    ".agents/skills/dsh-responsive-ui/SKILL.md",
+    ".agents/skills/dsh-speed-up-perf/SKILL.md",
+    ".agents/skills/dsh-translate-docs/SKILL.md",
+    ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+    ".agents/skills/e2e-case-lifecycle/SKILL.md",
+    ".agents/skills/feature-boundary-planner/SKILL.md",
+    ".agents/skills/record-browser-gif/SKILL.md",
+}
+ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
+ZCODE_NOTICES = {f".agents/skills/{name}/NOTICE-ZCode.md" for name in (
+    "architecture-governance", "dep-refs", "e2e-case-lifecycle", "feature-boundary-planner"
+)}
 INVOCATION_CLASSES = (
     "user-invoked orchestrator",
     "model-invoked discipline",
@@ -176,7 +203,7 @@ def public_files(root: Path = ROOT) -> list[Path]:
 
 
 def check_required(root: Path) -> list[str]:
-    return [f"required public file missing: {name}" for name in REQUIRED_PATHS if not (root / name).is_file()]
+    return [f"required public file missing: {name}" for name in (*REQUIRED_PATHS, *sorted(PROJECT_LOCAL_SKILL_PATHS)) if not (root / name).is_file()]
 
 
 def check_treehouse_config(root: Path) -> list[str]:
@@ -258,7 +285,9 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     repository_extensions = {
         path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
     }
-    expected = INSTALLABLE_SKILL_PATHS | repository_extensions
+    expected = INSTALLABLE_SKILL_PATHS | repository_extensions | {
+        path for path in PROJECT_LOCAL_SKILL_PATHS if (root / path).is_file()
+    }
     errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
     errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
     return errors
@@ -975,6 +1004,10 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
             continue
         relative = path.relative_to(root).as_posix()
         if relative.startswith(VENDORED_ROOTS):
+            continue
+        if relative in ZCODE_NOTICES:
+            if hashlib.sha256(path.read_bytes()).hexdigest() != ZCODE_NOTICE_SHA256:
+                errors.append(f"upstream notice changed: {relative}")
             continue
         # An overlay file reads as if it sat at its shipped location, so a link
         # written against that layout is checked there and not in the source tree.
