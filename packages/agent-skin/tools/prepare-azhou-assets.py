@@ -8,20 +8,52 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import struct
 import subprocess
 import tempfile
 
 
+MAX_SOURCE_BYTES = 64 * 1024 * 1024
+
+
 def capture(source, snapshot):
-    header = b''
-    digest = hashlib.sha256()
-    with source.open('rb') as stream:
-        while chunk := stream.read(48 * 1024):
-            header += chunk[:max(0, 26 - len(header))]
-            digest.update(chunk)
-            snapshot.write(chunk)
-    return header, digest.hexdigest()
+    before = source.lstat()
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError('The source must be a regular file.')
+    if before.st_size > MAX_SOURCE_BYTES:
+        raise ValueError('The source must not exceed 64 MiB.')
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    fd = os.open(source, flags)
+    try:
+        def identity(info):
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or identity(before) != identity(opened):
+            raise ValueError('The source changed before it could be captured.')
+        header, digest, total = bytearray(), hashlib.sha256(), 0
+        while True:
+            try:
+                data = os.read(fd, min(48 * 1024, MAX_SOURCE_BYTES + 1 - total))
+            except InterruptedError:
+                continue
+            if not data:
+                break
+            total += len(data)
+            if total > MAX_SOURCE_BYTES:
+                raise ValueError('The source must not exceed 64 MiB.')
+            if len(header) < 26:
+                header.extend(data[:26 - len(header)])
+            digest.update(data)
+            snapshot.write(data)
+        after = os.fstat(fd)
+        current = source.lstat()
+        if (not stat.S_ISREG(current.st_mode) or identity(before) != identity(after)
+                or identity(after) != identity(current) or total != after.st_size):
+            raise ValueError('The source changed while it was being captured.')
+        return bytes(header), digest.hexdigest()
+    finally:
+        os.close(fd)
 
 
 def emit_scene(snapshot, destination):
@@ -50,8 +82,11 @@ def main():
         parser.error('Use the original approved source file, not the output copy.')
 
     with tempfile.TemporaryFile(mode='w+b') as snapshot:
-        header, digest = capture(source, snapshot)
-        if header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
+        try:
+            header, digest = capture(source, snapshot)
+        except (OSError, ValueError) as exc:
+            parser.error(f'Cannot capture source: {exc}')
+        if len(header) < 26 or header[:8] != b'\x89PNG\r\n\x1a\n' or header[12:16] != b'IHDR':
             parser.error('The approved working pose must be a PNG.')
         width, height, _, color = struct.unpack('>IIBB', header[16:26])
         if (width, height, color) != (1254, 1254, 6):

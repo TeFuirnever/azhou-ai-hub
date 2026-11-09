@@ -247,6 +247,155 @@ class PrepareAzhouAssetTests(unittest.TestCase):
         self.assertEqual(run_call.kwargs["cwd"], self.root)
         self.assertEqual(check_call.kwargs["cwd"], self.root)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO")
+    def test_fifo_source_is_rejected_without_waiting_for_writer(self):
+        fifo = Path(self.temporary.name) / "source-fifo"
+        os.mkfifo(fifo)
+        try:
+            completed = subprocess.run([sys.executable, "-B", str(self.script), "--source", str(fifo)],
+                                       capture_output=True, text=True, timeout=2)
+        except subprocess.TimeoutExpired:
+            self.fail("FIFO source blocked while waiting for a writer")
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("regular file", completed.stderr)
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_short_png_header_is_a_controlled_input_error(self):
+        self.source.write_bytes(b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + b"xx")
+        with self.assertRaises(SystemExit):
+            self.invoke()
+        self.assertIn("must be a PNG", self.stderr.getvalue())
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_source_path_replaced_during_capture_is_rejected(self):
+        self.source.write_bytes(png_header(1254, 1254, padding=200))
+        original = self.source.read_bytes()
+        replacement = png_header(1254, 1254, padding=201)
+        original_info = self.source.stat()
+        saved = Path(self.temporary.name) / "original-saved.png"
+        opened = Path.open
+        os_read = os.read
+        changed = []
+        def replace_source():
+            if not changed:
+                self.source.rename(saved)
+                self.source.write_bytes(replacement)
+                changed.append(True)
+        class SourceReader:
+            def __init__(self, wrapped): self.wrapped = wrapped
+            def __enter__(self): self.wrapped.__enter__(); return self
+            def __exit__(self, *args): return self.wrapped.__exit__(*args)
+            def read(self, size=-1):
+                data = self.wrapped.read(size)
+                if data: replace_source()
+                return data
+        def instrumented_open(path, *args, **kwargs):
+            stream = opened(path, *args, **kwargs)
+            return SourceReader(stream) if path == self.source.resolve() and args and args[0] == "rb" else stream
+        def instrumented_read(fd, size):
+            info = os.fstat(fd)
+            data = os_read(fd, size)
+            if (info.st_dev, info.st_ino) == (original_info.st_dev, original_info.st_ino) and data: replace_source()
+            return data
+        with mock.patch.object(Path, "open", new=instrumented_open), mock.patch.object(os, "read", side_effect=instrumented_read):
+            with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual(changed, [True])
+        self.assertEqual(saved.read_bytes(), original)
+        self.assertEqual(self.source.read_bytes(), replacement)
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_empty_and_oversize_sources_leave_no_private_output(self):
+        for mode in ("empty", "oversize"):
+            with self.subTest(mode=mode):
+                self.source.write_bytes(b"" if mode == "empty" else png_header(1254, 1254))
+                if mode == "oversize":
+                    with self.source.open("r+b") as stream: stream.truncate(64 * 1024 * 1024 + 1)
+                with self.assertRaises(SystemExit): self.invoke()
+                self.assertIn("must be a PNG" if mode == "empty" else "64 MiB", self.stderr.getvalue())
+                self.assertFalse((self.root / "assets/private").exists())
+
+    def test_source_symlink_to_regular_approved_file_is_supported(self):
+        alias = Path(self.temporary.name) / "approved-alias.png"
+        alias.symlink_to(self.source)
+        self.invoke(alias)
+        destination = self.root / "assets/private"
+        self.assertEqual((destination / "working.png").read_bytes(), self.source.read_bytes())
+        self.assertEqual(json.loads((destination / "provenance.json").read_text())["source"], str(self.source.resolve()))
+
+    def test_source_capture_retries_interrupted_read(self):
+        original_read = os.read
+        info = self.source.stat()
+        interrupted = []
+        def read_once(fd, size):
+            now = os.fstat(fd)
+            if (now.st_dev, now.st_ino) == (info.st_dev, info.st_ino) and not interrupted:
+                interrupted.append(True)
+                raise InterruptedError()
+            return original_read(fd, size)
+        with mock.patch.object(os, "read", side_effect=read_once): self.invoke()
+        self.assertEqual(interrupted, [True])
+        self.assertEqual((self.root / "assets/private/working.png").read_bytes(), self.source.read_bytes())
+
+    def test_source_changed_in_place_during_capture_is_rejected(self):
+        original_read = os.read
+        info = self.source.stat()
+        changed = []
+        def mutate(fd, size):
+            now = os.fstat(fd)
+            data = original_read(fd, size)
+            if (now.st_dev, now.st_ino) == (info.st_dev, info.st_ino) and data and not changed:
+                with self.source.open("ab") as stream: stream.write(b"changed")
+                changed.append(True)
+            return data
+        with mock.patch.object(os, "read", side_effect=mutate):
+            with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual(changed, [True])
+        self.assertTrue(self.source.read_bytes().endswith(b"changed"))
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_source_replaced_by_symlink_before_open_is_rejected(self):
+        original_open = os.open
+        saved = Path(self.temporary.name) / "saved.png"
+        outside = Path(self.temporary.name) / "outside.png"
+        outside.write_bytes(b"do not touch")
+        changed = []
+        def replace_before_open(path, *args, **kwargs):
+            if Path(path) == self.source.resolve() and not changed:
+                self.source.rename(saved)
+                self.source.symlink_to(outside)
+                changed.append(True)
+            return original_open(path, *args, **kwargs)
+        with mock.patch.object(os, "open", side_effect=replace_before_open):
+            with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual(changed, [True])
+        self.assertEqual(outside.read_bytes(), b"do not touch")
+        self.assertTrue(self.source.is_symlink())
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_invalid_source_preserves_all_existing_outputs(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        before = {path.name: path.read_bytes() for path in destination.iterdir()}
+        self.source.write_bytes(b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + b"xx")
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual({path.name: path.read_bytes() for path in destination.iterdir()}, before)
+
+    def test_capture_accepts_limit_and_refuses_one_byte_more(self):
+        module = load_module(self.script, "synthetic_bounded_asset_capture")
+        module.MAX_SOURCE_BYTES = 32
+        self.source.write_bytes(png_header(1254, 1254) + b"x" * 6)
+        with tempfile.TemporaryFile(mode="w+b") as snapshot:
+            header, digest = module.capture(self.source.resolve(), snapshot)
+            snapshot.seek(0)
+            self.assertEqual(snapshot.read(), self.source.read_bytes())
+            self.assertEqual(digest, hashlib.sha256(self.source.read_bytes()).hexdigest())
+            self.assertEqual(len(header), 26)
+        with self.source.open("ab") as stream: stream.write(b"x")
+        with tempfile.TemporaryFile(mode="w+b") as snapshot:
+            with self.assertRaisesRegex(ValueError, "64 MiB"):
+                module.capture(self.source.resolve(), snapshot)
+            self.assertEqual(snapshot.tell(), 0)
+
     def test_rejects_using_the_output_copy_as_source(self):
         destination = self.root / "assets/private/working.png"
         destination.parent.mkdir(parents=True)
@@ -273,31 +422,18 @@ class PrepareAzhouAssetTests(unittest.TestCase):
     def test_prepares_complete_image_when_source_reads_are_fragmented(self):
         image = png_header(1254, 1254, padding=1000)
         self.source.write_bytes(image)
-        original_open = Path.open
-        source = self.source.resolve()
-
-        class Fragmented:
-            def __init__(self, stream):
-                self.stream = stream
-
-            def __enter__(self):
-                self.stream.__enter__()
-                return self
-
-            def __exit__(self, *args):
-                return self.stream.__exit__(*args)
-
-            def read(self, size=-1):
-                return self.stream.read(size if size < 0 else min(size, 7))
-
-        def open_fragmented(path, *args, **kwargs):
-            stream = original_open(path, *args, **kwargs)
-            if path.resolve() == source and args and args[0] == "rb":
-                return Fragmented(stream)
-            return stream
-
-        with mock.patch.object(Path, "open", new=open_fragmented):
+        original_read = os.read
+        source_info = self.source.stat()
+        fragmented = []
+        def read_fragment(fd, size):
+            info = os.fstat(fd)
+            if (info.st_dev, info.st_ino) == (source_info.st_dev, source_info.st_ino):
+                fragmented.append(True)
+                return original_read(fd, min(size, 7))
+            return original_read(fd, size)
+        with mock.patch.object(os, "read", side_effect=read_fragment):
             self.invoke()
+        self.assertGreater(len(fragmented), 1)
         destination = self.root / "assets/private"
         self.assertEqual((destination / "working.png").read_bytes(), image)
         expected = 'window.AZHOU_WORKING_IMAGE = "data:image/png;base64,' + base64.b64encode(image).decode("ascii") + '";\n'
