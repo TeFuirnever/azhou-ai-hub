@@ -210,6 +210,359 @@ def retired_records(record):
     return accepted
 
 
+import hashlib
+import stat
+
+
+def _same_inode(first, second):
+    return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+
+
+def _require_retirement_fd_support():
+    required = {os.open, os.stat, os.unlink, os.rmdir, os.access}
+    if (not required.issubset(os.supports_dir_fd) or not {os.scandir, os.listdir}.issubset(os.supports_fd)
+            or not {os.stat, os.access}.issubset(os.supports_follow_symlinks)):
+        raise RuntimeError('系统缺少安全清理所需的目录描述符支持。')
+    if any(not hasattr(os, name) for name in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK')):
+        raise RuntimeError('系统缺少安全清理所需的目录打开标志。')
+
+
+def _require_retirement_identity(directory_fd, expected):
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    identity, info = HELPERS['identity_at_fd'](directory_fd)
+    if identity != expected:
+        raise RuntimeError('隔离包身份不匹配。')
+    contents = os.open('Contents', flags | os.O_DIRECTORY, dir_fd=directory_fd)
+    try:
+        executable_dir = os.open('MacOS', flags | os.O_DIRECTORY, dir_fd=contents)
+        try:
+            executable = os.open(expected[1], flags | os.O_NONBLOCK, dir_fd=executable_dir)
+            try:
+                metadata = os.fstat(executable)
+                if (not stat.S_ISREG(metadata.st_mode)
+                        or not _same_inode(metadata, os.stat(expected[1], dir_fd=executable_dir, follow_symlinks=False))
+                        or not os.access(expected[1], os.X_OK, dir_fd=executable_dir, follow_symlinks=False)):
+                    raise RuntimeError('隔离包缺少有效的可执行文件。')
+            finally:
+                os.close(executable)
+        finally:
+            os.close(executable_dir)
+        if not _same_inode(os.fstat(contents), os.stat('Contents', dir_fd=directory_fd, follow_symlinks=False)):
+            raise RuntimeError('隔离包目录在核验期间发生变化。')
+        return info
+    finally:
+        os.close(contents)
+
+
+def _fingerprint_retirement_directory(directory_fd, with_evidence=False):
+    files = []
+    evidence = {}
+    root_device = os.fstat(directory_fd).st_dev
+
+    def collect(parent_fd, parts):
+        with os.scandir(parent_fd) as entries:
+            names = sorted(entry.name for entry in entries)
+        for name in names:
+            observed = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if observed.st_dev != root_device:
+                raise RuntimeError('隔离副本跨越文件系统边界，已停止核验。')
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+            if stat.S_ISDIR(observed.st_mode):
+                child = os.open(name, flags | os.O_DIRECTORY, dir_fd=parent_fd)
+                try:
+                    if not _same_inode(observed, os.fstat(child)):
+                        raise RuntimeError('隔离目录在核验期间发生变化。')
+                    evidence[(*parts, name)] = ('directory', observed.st_dev, observed.st_ino, observed.st_mode)
+                    collect(child, (*parts, name))
+                    if not _same_inode(os.fstat(child), os.stat(name, dir_fd=parent_fd, follow_symlinks=False)):
+                        raise RuntimeError('隔离目录在核验期间发生变化。')
+                finally:
+                    os.close(child)
+            elif stat.S_ISREG(observed.st_mode):
+                child = os.open(name, flags | os.O_NONBLOCK, dir_fd=parent_fd)
+                try:
+                    before = os.fstat(child)
+                    if not _same_inode(observed, before):
+                        raise RuntimeError('隔离文件在核验期间发生变化。')
+                    digest = hashlib.sha256()
+                    while chunk := os.read(child, 64 * 1024):
+                        digest.update(chunk)
+                    after = os.fstat(child)
+                    fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_mode')
+                    if (any(getattr(before, key) != getattr(after, key) for key in fields)
+                            or not _same_inode(after, os.stat(name, dir_fd=parent_fd, follow_symlinks=False))):
+                        raise RuntimeError('隔离文件在核验期间发生变化。')
+                    evidence[(*parts, name)] = ('file', *(getattr(after, key) for key in fields))
+                    files.append(((*parts, name), before.st_mode & 0o777, digest.digest()))
+                finally:
+                    os.close(child)
+            else:
+                raise RuntimeError('隔离副本包含非普通文件，已停止核验。')
+
+    collect(directory_fd, ())
+    result = hashlib.sha256()
+    for parts, mode, digest in sorted(files):
+        result.update('/'.join(parts).encode())
+        result.update(b'\0')
+        result.update(str(mode).encode())
+        result.update(b'\0')
+        result.update(digest)
+    return (result.hexdigest(), evidence) if with_evidence else result.hexdigest()
+
+
+def _verify_displaced_entry(entry, path):
+    descriptor = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        info = _require_retirement_identity(descriptor, entry['identity'])
+        if (version_key(info) != entry['versionKey']
+                or _fingerprint_retirement_directory(descriptor) != entry['sha256Tree']
+                or not _same_inode(os.fstat(descriptor), os.stat(path, follow_symlinks=False))):
+            raise RuntimeError('隔离副本与原候选不一致。')
+    except Exception as error:
+        raise RuntimeError(f'候选在核查后发生变化，未替换或删除：{path}') from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _remove_retirement_contents(directory_fd, evidence, parts=(), guard=None):
+    if guard is not None:
+        guard()
+    with os.scandir(directory_fd) as entries:
+        names = sorted(entry.name for entry in entries)
+    expected_names = {path[-1] for path in evidence if len(path) == len(parts) + 1 and path[:-1] == parts}
+    if set(names) != expected_names:
+        raise RuntimeError('隔离目录内容在清理期间发生变化。')
+    for name in names:
+        if guard is not None:
+            guard()
+        observed = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        expected = evidence[(*parts, name)]
+        if stat.S_ISDIR(observed.st_mode):
+            if expected != ('directory', observed.st_dev, observed.st_ino, observed.st_mode):
+                raise RuntimeError('隔离目录在清理期间发生变化。')
+            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory_fd)
+            try:
+                if not _same_inode(observed, os.fstat(child)):
+                    raise RuntimeError('隔离目录在清理期间发生变化。')
+                _remove_retirement_contents(child, evidence, (*parts, name), guard)
+                if not _same_inode(os.fstat(child), os.stat(name, dir_fd=directory_fd, follow_symlinks=False)):
+                    raise RuntimeError('隔离目录在清理期间发生变化。')
+                if guard is not None:
+                    guard()
+                os.rmdir(name, dir_fd=directory_fd)
+            finally:
+                os.close(child)
+        elif stat.S_ISREG(observed.st_mode):
+            fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_mode')
+            if expected != ('file', *(getattr(observed, key) for key in fields)):
+                raise RuntimeError('隔离文件在清理期间发生变化。')
+            child = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=directory_fd)
+            try:
+                current = os.fstat(child)
+                final = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                if (expected != ('file', *(getattr(current, key) for key in fields))
+                        or expected != ('file', *(getattr(final, key) for key in fields))):
+                    raise RuntimeError('隔离文件在清理期间发生变化。')
+                if guard is not None:
+                    guard()
+                os.unlink(name, dir_fd=directory_fd)
+            finally:
+                os.close(child)
+        else:
+            raise RuntimeError('隔离副本包含非普通文件，已停止清理。')
+
+
+def _clean_install_work(directory, expected_hash):
+    _require_retirement_fd_support()
+    directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    descriptor = None
+    try:
+        if not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+            raise RuntimeError('安装临时目录发生变化。')
+        names = set(os.listdir(directory_fd))
+        if names - {'payload'}:
+            raise RuntimeError('安装临时目录包含未识别内容。')
+        if 'payload' in names:
+            _require_retirement_fd_support()
+            descriptor = os.open('payload', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory_fd)
+            if os.fstat(descriptor).st_dev != os.fstat(directory_fd).st_dev:
+                raise RuntimeError('隔离副本跨越文件系统边界，已停止清理。')
+            digest, evidence = _fingerprint_retirement_directory(descriptor, with_evidence=True)
+            if digest != expected_hash:
+                raise RuntimeError('安装临时副本与已验证内容不一致。')
+
+            def guard():
+                if (not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))
+                        or not _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False))):
+                    raise RuntimeError('安装临时位置发生变化。')
+
+            guard()
+            _remove_retirement_contents(descriptor, evidence, guard=guard)
+            guard()
+            os.rmdir('payload', dir_fd=directory_fd)
+        if os.listdir(directory_fd) or not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+            raise RuntimeError('安装临时目录发生变化。')
+        os.rmdir(directory)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        os.close(directory_fd)
+
+
+def recover_retirement(record, read_only=False):
+    pending = record.get('retirementPending')
+    if pending is None:
+        return record
+    if read_only:
+        raise RuntimeError('旧入口清理尚未恢复，请先完成安装恢复。')
+    if not trusted_receipt(record) or not isinstance(pending, dict):
+        raise RuntimeError('待恢复的旧入口记录无效，未进行任何清理。')
+    original, stage = pending.get('path'), pending.get('stage')
+    retired = {item['path']: item for item in retired_records(record)}
+    if not isinstance(original, str) or original not in retired or not isinstance(stage, str):
+        raise RuntimeError('待恢复的旧入口记录无效，未进行任何清理。')
+    target, payload = Path(original), Path(stage)
+    directory = payload.parent
+    if (str(target) != original or str(payload) != stage or payload.name != 'payload'
+            or directory.parent != target.parent or not directory.name.startswith('.azhou-retire-')
+            or target.parent.is_symlink() or not target.parent.is_dir() or directory.is_symlink()):
+        raise RuntimeError('待恢复的旧入口路径无效，未进行任何清理。')
+    item = retired[original]
+    _require_retirement_fd_support()
+    if payload.exists() or payload.is_symlink():
+        if target.exists() or target.is_symlink():
+            raise RuntimeError(f'旧入口恢复受阻，临时副本保留在 {payload}。')
+        descriptor = None
+        try:
+            try:
+                descriptor = os.open(payload, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                _require_retirement_identity(descriptor, (item['bundleID'], item['executable']))
+                if (not _same_inode(os.fstat(descriptor), os.stat(payload, follow_symlinks=False))
+                        or _fingerprint_retirement_directory(descriptor) != item['sha256Tree']):
+                    raise RuntimeError('隔离副本内容发生变化')
+            except Exception as error:
+                raise RuntimeError(f'隔离副本无法验证，已保留：{payload}。') from error
+            publish_exclusive(payload, target)
+            try:
+                if (not _same_inode(os.fstat(descriptor), os.stat(target, follow_symlinks=False))
+                        or _fingerprint_retirement_directory(descriptor) != item['sha256Tree']):
+                    raise RuntimeError('恢复时隔离副本发生变化')
+            except Exception as error:
+                raise RuntimeError(f'旧入口恢复期间发生变化，临时目录已保留：{directory}。') from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+    elif target.exists() or target.is_symlink():
+        descriptor = None
+        try:
+            descriptor = os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            _require_retirement_identity(descriptor, (item['bundleID'], item['executable']))
+            if (_fingerprint_retirement_directory(descriptor) != item['sha256Tree']
+                    or not _same_inode(os.fstat(descriptor), os.stat(target, follow_symlinks=False))):
+                raise RuntimeError('原路径内容发生变化')
+        except Exception as error:
+            raise RuntimeError(f'旧入口恢复受阻，原位置已变化并保留：{target}。') from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+    if directory.exists():
+        try:
+            directory.rmdir()
+        except OSError as error:
+            raise RuntimeError(f'旧入口临时目录未清空，已保留：{directory}。') from error
+    record = {key: value for key, value in record.items() if key != 'retirementPending'}
+    save_receipt(record)
+    return record
+
+
+def retire_entry(entry, record):
+    _require_retirement_fd_support()
+    target = entry['path']
+    directory = Path(tempfile.mkdtemp(prefix='.azhou-retire-', dir=target.parent))
+    payload = directory / 'payload'
+    record['retirementPending'] = {'path': str(target), 'stage': str(payload)}
+    descriptor = None
+    directory_fd = None
+    try:
+        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        if not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+            raise RuntimeError(f'隔离目录发生变化，已保留：{directory}。')
+        save_receipt(record)
+        publish_exclusive(target, payload)
+        try:
+            if not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+                raise RuntimeError('隔离目录在移动期间发生变化。')
+            descriptor = os.open('payload', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory_fd)
+            if os.fstat(descriptor).st_dev != os.fstat(directory_fd).st_dev:
+                raise RuntimeError('隔离副本跨越文件系统边界，已停止清理。')
+            info = _require_retirement_identity(descriptor, entry['identity'])
+            if version_key(info) != entry['versionKey']:
+                raise RuntimeError('隔离包版本发生变化。')
+            if not _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False)):
+                raise RuntimeError('隔离目录在核验期间发生变化。')
+            digest, evidence = _fingerprint_retirement_directory(descriptor, with_evidence=True)
+            if digest != entry['sha256Tree']:
+                raise RuntimeError('隔离副本内容在核验期间发生变化。')
+            if (not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))
+                    or not _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False))):
+                raise RuntimeError('隔离目录在核验期间发生变化。')
+        except BaseException as error:
+            try:
+                unchanged_directory = _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))
+            except OSError:
+                unchanged_directory = False
+            if not unchanged_directory:
+                raise RuntimeError(f'隔离位置发生变化，临时目录已保留：{directory}。') from error
+            if descriptor is not None:
+                try:
+                    unchanged_path = _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False))
+                except OSError:
+                    unchanged_path = False
+                if not unchanged_path:
+                    raise RuntimeError(f'隔离位置发生变化，临时目录已保留：{directory}。') from error
+            if isinstance(error, Exception):
+                raise RuntimeError(f'隔离副本无法验证，已保留：{payload}。') from error
+            raise
+        try:
+            def guard():
+                if (not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))
+                        or not _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False))):
+                    raise RuntimeError('隔离目录在清理期间发生变化。')
+            _remove_retirement_contents(descriptor, evidence, guard=guard)
+            guard()
+            os.rmdir('payload', dir_fd=directory_fd)
+        except BaseException as removal_error:
+            try:
+                if (not _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False))
+                        or not _same_inode(os.fstat(descriptor), os.stat('payload', dir_fd=directory_fd, follow_symlinks=False))):
+                    raise RuntimeError('隔离位置发生变化')
+                info = _require_retirement_identity(descriptor, entry['identity'])
+                if (version_key(info) != entry['versionKey']
+                        or _fingerprint_retirement_directory(descriptor) != entry['sha256Tree']):
+                    raise RuntimeError('隔离副本内容发生变化。')
+                publish_exclusive(payload, target)
+            except BaseException as recovery_error:
+                raise RuntimeError(f'旧入口清理未完成，临时副本保留在 {payload}。') from recovery_error
+            record.pop('retirementPending')
+            save_receipt(record)
+            raise removal_error
+        record.pop('retirementPending')
+        save_receipt(record)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            if directory_fd is not None and _same_inode(os.fstat(directory_fd), os.stat(directory, follow_symlinks=False)):
+                directory.rmdir()
+        except OSError:
+            pass
+        finally:
+            if directory_fd is not None:
+                os.close(directory_fd)
+
+
 def pending_legacy_handoff(old_root, source_hash, record):
     if not trusted_receipt(record) or record.get('status') not in ('source-handoff-pending', 'cleanup-pending'):
         return None
@@ -378,10 +731,13 @@ def unchanged(entry):
 
 
 def install_payload(source_hash, original, before_swap=None):
+    if original:
+        _require_retirement_fd_support()
     DESTINATION.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix='.azhou-install-', dir=DESTINATION.parent))
     staged = temporary / 'payload'  # Never create a second discoverable .app.
     cleanup = True
+    cleanup_hash = source_hash
     try:
         subprocess.run(['/usr/bin/ditto', str(SOURCE), str(staged)], check=True)
         verify(staged)
@@ -395,16 +751,19 @@ def install_payload(source_hash, original, before_swap=None):
             cleanup = False
             try:
                 swap(staged, DESTINATION)
+                cleanup_hash = original['sha256Tree']
             except BaseException:
                 cleanup = True
                 raise
             try:
+                _verify_displaced_entry(original, staged)
                 verify(DESTINATION)
                 if fingerprint(DESTINATION) != source_hash:
                     raise RuntimeError('安装后内容校验失败。')
             except BaseException as verification_error:
                 try:
                     swap(staged, DESTINATION)
+                    cleanup_hash = source_hash
                 except BaseException as rollback_error:
                     raise RuntimeError(f'安装校验失败且回滚未完成；原包保留在 {staged}，请保留该临时目录。') from rollback_error
                 cleanup = True
@@ -429,7 +788,10 @@ def install_payload(source_hash, original, before_swap=None):
                 raise
     finally:
         if cleanup:
-            shutil.rmtree(temporary)
+            try:
+                _clean_install_work(temporary, cleanup_hash)
+            except BaseException as cleanup_error:
+                raise RuntimeError(f'安装临时内容未清理，已保留：{temporary}。') from cleanup_error
 
 
 def unique_state(source_info, source_hash, record):
@@ -459,7 +821,7 @@ def install(check_only=False, migrate_from=None):
         HELPERS['check_inputs'](SOURCE)
         if fingerprint(SOURCE) != source_hash:
             raise RuntimeError('构建载荷在核查期间发生变化，请待构建结束后重试。')
-        record = read_receipt()
+        record = recover_retirement(read_receipt(), check_only)
         already_current = False
         if old_root is not None and DESTINATION.is_dir() and not DESTINATION.is_symlink():
             try:
@@ -494,6 +856,8 @@ def install(check_only=False, migrate_from=None):
             print(json.dumps(result, ensure_ascii=False))
             return result
         retire = [entry for entry in candidates if entry['path'] != DESTINATION]
+        if retire:
+            _require_retirement_fd_support()
         if not current or retire:
             require_stopped([entry['path'] for entry in candidates])
         if not current:
@@ -544,7 +908,7 @@ def install(check_only=False, migrate_from=None):
             subprocess.run([LSREGISTER, '-u', str(entry['path'])], check=True)
             unregistered.add(entry['path'])
             unchanged(entry)
-            shutil.rmtree(entry['path'])
+            retire_entry(entry, result)
             print(json.dumps({'retiredPath': str(entry['path']), 'bundleID': entry['identity'][0],
                               'sha256Tree': entry['sha256Tree'], 'proof': entry['proof']}, ensure_ascii=False))
         # A prior attempt may have deleted the package but left a stale record.

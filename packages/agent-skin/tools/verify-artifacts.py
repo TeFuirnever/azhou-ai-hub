@@ -317,13 +317,65 @@ MAX_ENTRY_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
 MAX_ARTWORK_DATA_URL_BYTES = 12 * 1024 * 1024
 
 
+import stat
+
+
+def _require_identity_fd_support():
+    if (not {os.open, os.stat}.issubset(os.supports_dir_fd) or os.stat not in os.supports_follow_symlinks
+            or any(not hasattr(os, name) for name in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK'))):
+        raise RuntimeError('系统缺少安全读取应用身份所需的目录描述符支持。')
+
+
+def identity_at_fd(root_fd):
+    _require_identity_fd_support()
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    contents = os.open('Contents', flags | os.O_DIRECTORY, dir_fd=root_fd)
+    try:
+        info_fd = os.open('Info.plist', flags | os.O_NONBLOCK, dir_fd=contents)
+        try:
+            before = os.fstat(info_fd)
+            if not stat.S_ISREG(before.st_mode):
+                raise RuntimeError('应用 Info.plist 不是普通文件。')
+            data = bytearray()
+            remaining = before.st_size + 1
+            while remaining:
+                chunk = os.read(info_fd, min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                data.extend(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(info_fd)
+            current = os.stat('Info.plist', dir_fd=contents, follow_symlinks=False)
+            fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_mode')
+            if (any(getattr(before, key) != getattr(after, key) for key in fields)
+                    or any(getattr(after, key) != getattr(current, key) for key in fields)):
+                raise RuntimeError('应用 Info.plist 在核验期间发生变化。')
+            info = plistlib.loads(data)
+        finally:
+            os.close(info_fd)
+        current = os.stat('Contents', dir_fd=root_fd, follow_symlinks=False)
+        actual = os.fstat(contents)
+        if (current.st_dev, current.st_ino) != (actual.st_dev, actual.st_ino):
+            raise RuntimeError('应用 Contents 目录在核验期间发生变化。')
+        return (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')), info
+    finally:
+        os.close(contents)
+
+
 def identity(path):
     path = Path(path)
     if path.is_symlink() or not path.is_dir():
         raise RuntimeError(f'拒绝处理非实体应用目录：{path}')
-    with (path / 'Contents/Info.plist').open('rb') as stream:
-        info = plistlib.load(stream)
-    return (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')), info
+    _require_identity_fd_support()
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        result = identity_at_fd(descriptor)
+        actual, current = os.fstat(descriptor), os.stat(path, follow_symlinks=False)
+        if (actual.st_dev, actual.st_ino) != (current.st_dev, current.st_ino):
+            raise RuntimeError(f'应用目录在核验期间发生变化：{path}')
+        return result
+    finally:
+        os.close(descriptor)
 
 
 def checked_descendants(path):

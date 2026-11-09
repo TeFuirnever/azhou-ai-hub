@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import signal
 import struct
 import subprocess
 import sys
@@ -351,6 +352,25 @@ class VerifierApiTests(unittest.TestCase):
                         with self.assertRaises(OSError) as raised:
                             operation()
                     self.assertEqual(raised.exception.errno, code)
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'requires POSIX FIFO support')
+    def test_identity_refuses_fifo_info_plist_without_blocking(self):
+        app = self.case_dir / 'fifo-identity.app'
+        contents = app / 'Contents'
+        contents.mkdir(parents=True)
+        os.mkfifo(contents / 'Info.plist')
+
+        def timed_out(_signal, _frame):
+            raise TimeoutError('identity validation blocked on FIFO')
+
+        previous = signal.signal(signal.SIGALRM, timed_out)
+        signal.alarm(3)
+        try:
+            with self.assertRaisesRegex(RuntimeError, '不是普通文件'):
+                self.verifier.identity(app)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, previous)
 
     def test_package_identity_fingerprint_and_icon_boundaries(self):
         with self.assertRaisesRegex(RuntimeError, "非实体应用目录"):
