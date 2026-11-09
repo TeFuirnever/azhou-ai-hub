@@ -243,7 +243,7 @@ try {
     readFile(join(ROOT, 'localization.js'), 'utf8'),
     options.legacyFixture === 'synthetic' ? Promise.resolve('/* synthetic fixture */')
       : readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
-    readFile(join(ROOT, options.legacyFixture === 'synthetic' ? 'tools/synthetic-legacy-wallpaper.mjs'
+    readFile(join(ROOT, options.legacyFixture === 'synthetic' ? 'tools/test-synthetic-legacy-wallpaper.mjs'
       : '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
     options.generatedPayload ? readFile(options.generatedPayload, 'utf8') : Promise.resolve(null),
