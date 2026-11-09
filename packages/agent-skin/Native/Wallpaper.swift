@@ -1286,7 +1286,11 @@ private final class StartupTimeoutFlag {
     func get() -> Bool { lock.lock(); defer { lock.unlock() }; return expired }
 }
 
-private struct StartupStatus {
+struct NativeStartupStatus {
+    private enum Phase: String {
+        case loading, playing, settings, complete, failed, timeout, disposed
+    }
+
     let runID: Int
     let phase: String
     let ready: Bool
@@ -1296,32 +1300,38 @@ private struct StartupStatus {
     let completionCause: String?
     let completionBeforeReady: Bool?
 
-    static func parse(_ value: Any?) -> StartupStatus? {
+    init(runID: Int, phase: String, ready: Bool, completed: Bool, overlay: Bool, reason: String = "",
+         completionCause: String?, completionBeforeReady: Bool?) {
+        self.runID = runID
+        self.phase = phase
+        self.ready = ready
+        self.completed = completed
+        self.overlay = overlay
+        self.reason = reason
+        self.completionCause = completionCause
+        self.completionBeforeReady = completionBeforeReady
+    }
+
+    static func parse(_ value: Any?) -> NativeStartupStatus? {
         guard let raw = value as? [String: Any],
-              raw["owner"] as? String == "azhou-codex-startup",
-              integer(raw["version"]) == 1,
-              let phase = raw["phase"] as? String,
-              ["loading", "playing", "settings", "complete", "failed", "timeout", "disposed"].contains(phase),
+              raw["owner"] as? String == "azhou-codex-startup", integer(raw["version"]) == 1,
+              let phaseName = raw["phase"] as? String, let phase = Phase(rawValue: phaseName),
               let runID = integer(raw["runId"]), runID > 0,
-              let ready = boolean(raw["ready"]),
-              let completed = boolean(raw["completed"]),
-              let overlay = boolean(raw["overlay"]),
-              let reason = raw["reason"] as? String,
+              let ready = boolean(raw["ready"]), let completed = boolean(raw["completed"]),
+              let overlay = boolean(raw["overlay"]), let reason = raw["reason"] as? String,
               reason.isEmpty || validReasons.contains(reason),
-              let wallpaper = raw["wallpaper"] as? [String: Any],
-              boolean(wallpaper["applied"]) != nil,
+              let wallpaper = raw["wallpaper"] as? [String: Any], boolean(wallpaper["applied"]) != nil,
               let wallpaperReason = wallpaper["reason"] as? String,
               wallpaperReason.isEmpty || wallpaperReason == "disabled" || validReasons.contains(wallpaperReason),
-              boolean(wallpaper["imageDecoded"]) != nil,
-              let completionRaw = raw["completion"] else { return nil }
+              boolean(wallpaper["imageDecoded"]) != nil, let completionRaw = raw["completion"] else { return nil }
+
         let completionCause: String?
         let completionBeforeReady: Bool?
         if completionRaw is NSNull {
             completionCause = nil
             completionBeforeReady = nil
         } else {
-            guard let completion = completionRaw as? [String: Any],
-                  let cause = completion["cause"] as? String,
+            guard let completion = completionRaw as? [String: Any], let cause = completion["cause"] as? String,
                   ["natural", "skip", "settings-cancel", "settings-save"].contains(cause),
                   let beforeReady = boolean(completion["beforeReady"]) else { return nil }
             completionCause = cause
@@ -1329,17 +1339,20 @@ private struct StartupStatus {
         }
         guard completed == (completionCause != nil) else { return nil }
         switch phase {
-        case "loading": guard !ready, !completed, overlay else { return nil }
-        case "playing": guard ready, !completed, overlay else { return nil }
-        case "settings": guard ready, !completed, overlay else { return nil }
-        case "complete": guard completed, !overlay else { return nil }
-        case "failed", "timeout": guard !overlay, !reason.isEmpty else { return nil }
-        case "disposed": guard !overlay else { return nil }
-        default: return nil
+        case .loading: guard !ready, !completed, overlay else { return nil }
+        case .playing, .settings: guard ready, !completed, overlay else { return nil }
+        case .complete: guard completed, !overlay else { return nil }
+        case .failed, .timeout: guard !overlay, !reason.isEmpty else { return nil }
+        case .disposed: guard !overlay else { return nil }
         }
-        return StartupStatus(runID: runID, phase: phase, ready: ready, completed: completed,
-                             overlay: overlay, reason: reason, completionCause: completionCause,
-                             completionBeforeReady: completionBeforeReady)
+        return NativeStartupStatus(runID: runID, phase: phase.rawValue, ready: ready, completed: completed,
+                                   overlay: overlay, reason: reason, completionCause: completionCause,
+                                   completionBeforeReady: completionBeforeReady)
+    }
+
+    static func boolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
     }
 
     private static let validReasons: Set<String> = [
@@ -1354,11 +1367,6 @@ private struct StartupStatus {
         let value = number.doubleValue
         guard value.isFinite, value.rounded() == value, value >= 0, value <= Double(Int.max) else { return nil }
         return number.intValue
-    }
-
-    private static func boolean(_ value: Any?) -> Bool? {
-        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
-        return number.boolValue
     }
 }
 
@@ -1632,7 +1640,7 @@ struct StartupConnector {
                     throw StartupFailure(reason: "protocol-error", message: "页面没有返回有效的控制器状态标记。")
                 }
                 if missing { return .partial(reason: "startup-interrupted") }
-                guard let status = StartupStatus.parse(response["status"]) else {
+                guard let status = NativeStartupStatus.parse(response["status"]) else {
                     throw StartupFailure(reason: "protocol-error", message: "启动控制器状态不符合协议 Schema。")
                 }
                 if let runID, status.runID != runID { return .partial(reason: "startup-interrupted") }

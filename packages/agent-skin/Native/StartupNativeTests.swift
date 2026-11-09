@@ -1232,6 +1232,15 @@ private func nativeEventContractChecks() async throws -> Int {
            && combined.snapshot().targetPID == 4041 && combined.snapshot().statusAt == 9,
            "one response can confirm the install and bind its status")
 
+    var failedProtocolStatus = validStatus(2, phase: "failed", ready: false, completed: false,
+                                           overlay: false, completion: NSNull())
+    failedProtocolStatus["reason"] = "asset-invalid"
+    expect(NativeStartupStatus.parse(failedProtocolStatus)?.reason == "asset-invalid",
+           "the shared startup protocol preserves the bounded failure reason")
+    failedProtocolStatus["reason"] = "unknown-reason"
+    expect(NativeStartupStatus.parse(failedProtocolStatus) == nil,
+           "the shared startup protocol rejects an unknown failure reason")
+
     var disabledWallpaper = validStatus(1, phase: "playing", ready: true, completed: false,
                                         overlay: true, completion: NSNull())
     disabledWallpaper["wallpaper"] = ["applied": false, "reason": "disabled", "imageDecoded": false]
