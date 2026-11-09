@@ -572,29 +572,34 @@ enum NativeSmokeReportValidator {
 }
 
 final class StartupApplicationWaiter: @unchecked Sendable {
+    private enum State {
+        case waiting(CheckedContinuation<any NativeApplication, Error>, DispatchWorkItem?)
+        case finished
+    }
+
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<any NativeApplication, Error>?
-    private var completed = false
-    private var timeout: DispatchWorkItem?
+    private var state: State
 
     init(_ continuation: CheckedContinuation<any NativeApplication, Error>) {
-        self.continuation = continuation
+        state = .waiting(continuation, nil)
     }
 
     func setTimeout(_ timeout: DispatchWorkItem) {
         lock.lock()
-        if completed { lock.unlock(); timeout.cancel(); return }
-        self.timeout = timeout
-        lock.unlock()
+        switch state {
+        case .waiting(let continuation, _):
+            state = .waiting(continuation, timeout)
+            lock.unlock()
+        case .finished:
+            lock.unlock()
+            timeout.cancel()
+        }
     }
 
     func finish(_ result: Result<any NativeApplication, Error>) {
         lock.lock()
-        guard !completed, let continuation else { lock.unlock(); return }
-        completed = true
-        self.continuation = nil
-        let timeout = self.timeout
-        self.timeout = nil
+        guard case .waiting(let continuation, let timeout) = state else { lock.unlock(); return }
+        state = .finished
         lock.unlock()
         timeout?.cancel()
         continuation.resume(with: result)

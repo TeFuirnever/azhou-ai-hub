@@ -158,6 +158,10 @@ private final class LegacyOnlyNativeRuntime: NativeAppRuntime {
     func writeStandardOutput(_ line: String) { base.writeStandardOutput(line) }
 }
 
+private final class ConcurrentTimeoutFixture: @unchecked Sendable {
+    let item = DispatchWorkItem {}
+}
+
 @MainActor
 private final class FakeScheduledAction: NativeScheduledAction {
     let delay: TimeInterval
@@ -437,6 +441,79 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        let registeredTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.setTimeout(registeredTimeout)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 1)))
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 2)))
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.domain == "waiter-fixture" && error.code == 1 && registeredTimeout.isCancelled,
+                   "first waiter result wins and cancels an existing timeout")
+        }
+        let lateTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 3)))
+                waiter.setTimeout(lateTimeout)
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.domain == "waiter-fixture" && error.code == 3 && lateTimeout.isCancelled,
+                   "a timeout registered after completion is immediately canceled")
+        }
+        let firstTimeout = DispatchWorkItem {}
+        let replacementTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.setTimeout(firstTimeout)
+                waiter.setTimeout(replacementTimeout)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 4)))
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.code == 4 && !firstTimeout.isCancelled && replacementTimeout.isCancelled,
+                   "the latest registered timeout retains the existing replacement semantics")
+        }
+        var canceledDuringRace = 0
+        for _ in 0..<40 {
+            let timeout = ConcurrentTimeoutFixture()
+            do {
+                let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                    let waiter = StartupApplicationWaiter(continuation)
+                    DispatchQueue.concurrentPerform(iterations: 2) { index in
+                        if index == 0 { waiter.setTimeout(timeout.item) }
+                        else { waiter.finish(.failure(NSError(domain: "waiter-race", code: 1))) }
+                    }
+                }
+                fatalError("waiter fixture unexpectedly succeeded")
+            } catch {
+                if timeout.item.isCancelled { canceledDuringRace += 1 }
+            }
+        }
+        expect(canceledDuringRace == 40, "registration racing completion always cancels the registered timeout")
+        var concurrentFailures = 0
+        for _ in 0..<40 {
+            do {
+                let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                    let waiter = StartupApplicationWaiter(continuation)
+                    DispatchQueue.concurrentPerform(iterations: 16) { index in
+                        waiter.finish(.failure(NSError(domain: "concurrent-waiter-fixture", code: index)))
+                    }
+                }
+                fatalError("waiter fixture unexpectedly succeeded")
+            } catch let error as NSError {
+                if error.domain == "concurrent-waiter-fixture" && (0..<16).contains(error.code) {
+                    concurrentFailures += 1
+                }
+            }
+        }
+        expect(concurrentFailures == 40, "concurrent waiter completions resume exactly once per operation")
         if let failure = ZCodeNativeRuntime.normalizedAttachFailure(ZCodeBoundCDP.Failure.deadline, deadline: 110, now: 105, cancelled: false) as? ZCodeAttachFailure {
             if case .deadline = failure { expect(true, "CDP deadline maps to typed attach deadline") } else { fatalError("wrong CDP deadline mapping") }
         } else { fatalError("missing CDP deadline mapping") }
