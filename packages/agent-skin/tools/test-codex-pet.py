@@ -9,6 +9,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import runpy
 import shutil
@@ -783,11 +784,100 @@ class PetSafetyTests(unittest.TestCase):
         state = PET.state_dir(self.project)
         stage = state / (".stage-" + "a" * 32)
         stage.mkdir()
-        (stage / "partial.txt").write_text("partial frozen input")
-        PET.atomic_json(state / "package-journal.json", {"owner": PET.OWNER, "petId": PET.PET_ID,
-                        "projectRoot": str(self.project), "stage": stage.name})
+        planned = {name: b"synthetic frozen input" for name in PET.stage_file_names("snapshot")}
+        (stage / "inputs").mkdir()
+        (stage / "inputs/style.css").write_bytes(planned["inputs/style.css"])
+        PET.atomic_json(state / "package-journal.json",
+                        PET.stage_journal(self.project, stage, "snapshot", planned, None))
         self.assertEqual(PET.prepare(self.project)["themeRevision"], self.rev)
         self.assertFalse(stage.exists())
+
+    def test_stage_recovery_preserves_unbound_unknown_and_changed_contents(self):
+        for case in ("legacy", "extra-file", "extra-directory", "symlink", "fifo", "changed", "bad-digest", "scan-error"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(dir=self.root) as temp:
+                state = Path(temp)
+                stage = state / (".stage-" + "b" * 32)
+                stage.mkdir()
+                planned = {name: b"expected synthetic bytes" for name in PET.stage_file_names("snapshot")}
+                journal = PET.stage_journal(self.project, stage, "snapshot", planned, None)
+                if case == "legacy":
+                    journal.pop("stageKind")
+                    journal.pop("stageFiles")
+                    (stage / "foreign.txt").write_bytes(b"unknown")
+                elif case == "extra-file":
+                    (stage / "foreign.txt").write_bytes(b"unknown")
+                elif case == "extra-directory":
+                    (stage / "foreign").mkdir()
+                elif case == "symlink":
+                    (stage / "generation-brief.md").symlink_to(self.project / "style.css")
+                elif case == "fifo":
+                    os.mkfifo(stage / "foreign")
+                elif case == "changed":
+                    (stage / "generation-brief.md").write_bytes(b"not the recorded content")
+                elif case == "bad-digest":
+                    journal["stageFiles"]["generation-brief.md"] = "not-a-digest"
+                PET.atomic_json(state / "package-journal.json", journal)
+                failure = patch.object(PET.os, "scandir", side_effect=OSError("injected scan failure")) if case == "scan-error" else contextlib.nullcontext()
+                with failure, self.assertRaises(PET.PetError) as raised:
+                    PET.recover_package_stage(state, self.project)
+                self.assertEqual(raised.exception.code, "recovery-required")
+                self.assertTrue(stage.is_dir())
+                self.assertTrue((state / "package-journal.json").is_file())
+                if case == "legacy":
+                    self.assertEqual((stage / "foreign.txt").read_bytes(), b"unknown")
+
+    def test_snapshot_interrupted_at_file_boundary_cleans_and_retries(self):
+        (self.project / "style.css").write_bytes(b"new synthetic theme")
+        state = PET.state_dir(self.project)
+        write = PET.write_new
+
+        def fail_before_file(path, data):
+            if ".stage-" in str(path) and Path(path).name == "style.css":
+                raise OSError("injected boundary interruption")
+            return write(path, data)
+
+        with patch.object(PET, "write_new", side_effect=fail_before_file):
+            with self.assertRaisesRegex(OSError, "injected boundary"):
+                PET.prepare(self.project)
+        self.assertTrue(self.snapshot.is_file())
+        self.assertFalse((state / "package-journal.json").exists())
+        self.assertFalse(list(state.glob(".stage-*")))
+        self.assertNotEqual(PET.prepare(self.project)["themeRevision"], self.rev)
+
+    def test_snapshot_partial_file_is_preserved_for_review(self):
+        (self.project / "style.css").write_bytes(b"new synthetic theme")
+        state = PET.state_dir(self.project)
+        write = PET.write_new
+
+        def fail_during_file(path, data):
+            if ".stage-" in str(path) and Path(path).name == "style.css":
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_bytes(b"partial")
+                raise OSError("injected partial write")
+            return write(path, data)
+
+        with patch.object(PET, "write_new", side_effect=fail_during_file):
+            with self.assertRaises(PET.PetError) as raised:
+                PET.prepare(self.project)
+        self.assertEqual(raised.exception.code, "recovery-required")
+        self.assertTrue(self.snapshot.is_file())
+        self.assertTrue((state / "package-journal.json").is_file())
+        stages = list(state.glob(".stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "inputs/style.css").read_bytes(), b"partial")
+
+    def test_legacy_empty_or_absent_stage_can_clear_without_claiming_files(self):
+        for exists in (False, True):
+            with self.subTest(exists=exists), tempfile.TemporaryDirectory(dir=self.root) as temp:
+                state = Path(temp)
+                stage = state / (".stage-" + "c" * 32)
+                if exists:
+                    stage.mkdir()
+                PET.atomic_json(state / "package-journal.json", {"owner": PET.OWNER, "petId": PET.PET_ID,
+                                "projectRoot": str(self.project), "stage": stage.name})
+                PET.recover_package_stage(state, self.project)
+                self.assertFalse(stage.exists())
+                self.assertFalse((state / "package-journal.json").exists())
 
 
 if __name__ == "__main__":

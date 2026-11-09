@@ -302,10 +302,10 @@ class CandidateImportTests(unittest.TestCase):
         matching_name = ".stage-" + "b" * 32
         matching_stage = state / matching_name
         matching_stage.mkdir()
-        (matching_stage / "partial-package-file").write_text("owned by this plan")
+        planned = {name: b"synthetic plan file" for name in PET.stage_file_names("package")}
+        (matching_stage / "pet.json").write_bytes(planned["pet.json"])
         PET.atomic_json(state / "package-journal.json",
-                        {"owner": PET.OWNER, "projectRoot": str(self.target), "petId": PET.PET_ID,
-                         "stage": matching_name, "operationId": plan_id})
+                        PET.stage_journal(self.target, matching_stage, "package", planned, plan_id))
 
         resumed = IMPORT.apply_import(self.source, self.target, plan_id)
         self.assertEqual(resumed["status"], "imported")

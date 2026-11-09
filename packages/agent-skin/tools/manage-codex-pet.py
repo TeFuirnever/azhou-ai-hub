@@ -201,27 +201,26 @@ def prepare(project, operation_id=None):
     else:
         directory.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         stage = child(state, ".stage-" + uuid.uuid4().hex)
-        journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name}
-        if operation_id is not None:
-            journal["operationId"] = operation_id
+        brief = (f"# 阿舟原生 Codex pet 生成任务\n\n主题修订：`{snapshot['themeRevision']}`\n\n"
+                 "使用本目录 inputs/ 下的冻结素材进行 ImageGen + 原生 hatch-pet v2 生成。"
+                 "不得重新读取已变化的项目素材，不得把已有图集复制为新生成结果。\n\n"
+                 "保持女性 Q 版阿舟的大头、小身体、短四肢和暖橙/奶白/棕主题；"
+                 "正式 Q 版主形象仅作已授权来源参考，不修改原 IP 库。\n\n"
+                 "交付 1536×2288、8×11、每格 192×208 的透明 WebP 图集，"
+                 "前九行使用帧数 6/8/8/4/5/8/6/6/6，后两行包含顺时针 16 个 look 方向。"
+                 "工具链保留格 row0/col6 使用经原生流程处理的 neutral 参考；其余 14 个未用格完全透明。"
+                 "保留格不计入动画帧数；逐项完成 hatch-pet 的解码、去色溢、动画与方向 QA。\n\n"
+                 "最终 visual-qa.json 必须记录本 themeRevision、实际图集 atlasSHA256 和明确 pass。"
+                 "准备快照不等于已经生成，也不等于视觉通过。\n")
+        planned = {"inputs/" + name: data for name, data in blobs.items()}
+        planned.update({"generation-brief.md": brief.encode("utf-8"),
+                        "theme-snapshot.json": json_bytes(snapshot)})
+        journal = stage_journal(project, stage, "snapshot", planned, operation_id)
         atomic_json(state / "package-journal.json", journal)
         try:
             stage.mkdir(mode=0o700)
-            for name, data in blobs.items():
-                write_new(child(stage, "inputs/" + name), data)
-            brief = (f"# 阿舟原生 Codex pet 生成任务\n\n主题修订：`{snapshot['themeRevision']}`\n\n"
-                     "使用本目录 inputs/ 下的冻结素材进行 ImageGen + 原生 hatch-pet v2 生成。"
-                     "不得重新读取已变化的项目素材，不得把已有图集复制为新生成结果。\n\n"
-                     "保持女性 Q 版阿舟的大头、小身体、短四肢和暖橙/奶白/棕主题；"
-                     "正式 Q 版主形象仅作已授权来源参考，不修改原 IP 库。\n\n"
-                     "交付 1536×2288、8×11、每格 192×208 的透明 WebP 图集，"
-                     "前九行使用帧数 6/8/8/4/5/8/6/6/6，后两行包含顺时针 16 个 look 方向。"
-                     "工具链保留格 row0/col6 使用经原生流程处理的 neutral 参考；其余 14 个未用格完全透明。"
-                     "保留格不计入动画帧数；逐项完成 hatch-pet 的解码、去色溢、动画与方向 QA。\n\n"
-                     "最终 visual-qa.json 必须记录本 themeRevision、实际图集 atlasSHA256 和明确 pass。"
-                     "准备快照不等于已经生成，也不等于视觉通过。\n")
-            write_new(stage / "generation-brief.md", brief.encode("utf-8"))
-            write_new(stage / "theme-snapshot.json", json_bytes(snapshot))
+            for relative, data in planned.items():
+                write_new(child(stage, relative), data)
             fsync_tree(stage)
             os.rename(stage, directory)
             fsync_dir(directory.parent)
@@ -393,6 +392,61 @@ def remove_tree(path):
     shutil.rmtree(path)
 
 
+def stage_file_names(kind):
+    if kind == "snapshot":
+        return {*("inputs/" + name for name in INPUTS), "generation-brief.md", "theme-snapshot.json"}
+    if kind == "package":
+        return {"pet.json", "spritesheet.webp", "theme-snapshot.json", "package-receipt.json", *QA_FILES}
+    raise PetError("recovery-required", "未知暂存类型，拒绝自动清理")
+
+
+def stage_journal(project, stage, kind, files, operation_id):
+    require(set(files) == stage_file_names(kind), "暂存计划文件集合无效", "recovery-required")
+    journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name,
+               "stageKind": kind, "stageFiles": {name: sha(data) for name, data in files.items()}}
+    if operation_id is not None:
+        journal["operationId"] = operation_id
+    return journal
+
+
+def verify_stage_for_cleanup(stage, journal):
+    require(stage.is_dir() and not stage.is_symlink(), "暂存不是普通目录", "recovery-required")
+    kind, files = journal.get("stageKind"), journal.get("stageFiles")
+    if kind is None and files is None:
+        files = {}
+    else:
+        require(isinstance(files, dict) and set(files) == stage_file_names(kind),
+                "暂存计划文件集合无效", "recovery-required")
+        require(all(isinstance(value, str) and len(value) == 64
+                    and all(c in "0123456789abcdef" for c in value) for value in files.values()),
+                "暂存计划摘要无效", "recovery-required")
+    allowed_dirs = {parent.as_posix() for name in files for parent in Path(name).parents
+                    if parent != Path(".")}
+
+    def inspect(directory):
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    path = Path(entry.path)
+                    relative = path.relative_to(stage).as_posix()
+                    require(not entry.is_symlink(), "暂存含符号链接，拒绝清理", "recovery-required")
+                    if entry.is_dir(follow_symlinks=False):
+                        require(relative in allowed_dirs, "暂存含未知目录，拒绝清理", "recovery-required")
+                        inspect(path)
+                    else:
+                        require(entry.is_file(follow_symlinks=False) and relative in files,
+                                "暂存含未知文件，拒绝清理", "recovery-required")
+                        try:
+                            actual = sha(read(path))
+                        except PetError as exc:
+                            raise PetError("recovery-required", f"无法核验暂存文件：{exc}") from exc
+                        require(actual == files[relative], "暂存文件内容已改变，拒绝清理", "recovery-required")
+        except OSError as exc:
+            raise PetError("recovery-required", f"无法核验暂存，拒绝清理：{exc}") from exc
+
+    inspect(stage)
+
+
 def recover_package_stage(state, project, operation_id=None):
     journal = child(state, "package-journal.json")
     if not journal.exists():
@@ -407,6 +461,7 @@ def recover_package_stage(state, project, operation_id=None):
             "暂存日志路径无效", "recovery-required")
     stage = child(state, name)
     if stage.exists():
+        verify_stage_for_cleanup(stage, data)
         remove_tree(stage)
     journal.unlink()
     fsync_dir(state)
@@ -425,23 +480,20 @@ def package_run(project, run, snapshot_path, operation_id=None):
     previous = selected_package(project) if child(state, "selection.json").exists() else None
     if not destination.exists():
         stage = child(state, ".stage-" + uuid.uuid4().hex)
-        journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "stage": stage.name}
-        if operation_id is not None:
-            journal["operationId"] = operation_id
+        manifest_raw = json_bytes(native_manifest(candidate["config"]))
+        receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
+                   "themeRevision": rev, "atlasSHA256": facts["atlasSHA256"],
+                   "manifestSHA256": sha(manifest_raw), "snapshotSHA256": sha(candidate["snapshotRaw"]),
+                   "qaSHA256": candidate["qaHashes"]}
+        planned = {"pet.json": manifest_raw, "spritesheet.webp": candidate["atlas"],
+                   "theme-snapshot.json": candidate["snapshotRaw"], **candidate["qaRaw"],
+                   "package-receipt.json": json_bytes(receipt)}
+        journal = stage_journal(project, stage, "package", planned, operation_id)
         atomic_json(state / "package-journal.json", journal)
         try:
             stage.mkdir(mode=0o700)
-            manifest_raw = json_bytes(native_manifest(candidate["config"]))
-            write_new(stage / "pet.json", manifest_raw)
-            write_new(stage / "spritesheet.webp", candidate["atlas"])
-            write_new(stage / "theme-snapshot.json", candidate["snapshotRaw"])
-            for path, data in candidate["qaRaw"].items():
-                write_new(child(stage, path), data)
-            receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
-                       "themeRevision": rev, "atlasSHA256": facts["atlasSHA256"],
-                       "manifestSHA256": sha(manifest_raw), "snapshotSHA256": sha(candidate["snapshotRaw"]),
-                       "qaSHA256": candidate["qaHashes"]}
-            write_new(stage / "package-receipt.json", json_bytes(receipt))
+            for relative, data in planned.items():
+                write_new(child(stage, relative), data)
             check_package(stage, project)
             fsync_tree(stage)
             os.rename(stage, destination)
