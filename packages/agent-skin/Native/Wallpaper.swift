@@ -214,9 +214,49 @@ enum WallpaperJournal {
     static func latest(requestID: String) -> [String: Any]? {
         latest(requestID: requestID, directory: directory)
     }
-    static func latest(requestID: String, directory: URL) -> [String: Any]? {
-        let url = directory.appendingPathComponent("latest.json")
-        guard !isLink(directory), !isLink(url), let data = try? Data(contentsOf: url),
+    private static func sameNode(_ left: stat, _ right: stat) -> Bool {
+        left.st_dev == right.st_dev && left.st_ino == right.st_ino && left.st_mode == right.st_mode
+    }
+    private static func sameFile(_ left: stat, _ right: stat) -> Bool {
+        sameNode(left, right) && left.st_size == right.st_size
+            && left.st_mtimespec.tv_sec == right.st_mtimespec.tv_sec
+            && left.st_mtimespec.tv_nsec == right.st_mtimespec.tv_nsec
+            && left.st_ctimespec.tv_sec == right.st_ctimespec.tv_sec
+            && left.st_ctimespec.tv_nsec == right.st_ctimespec.tv_nsec
+    }
+    static func latest(requestID: String, directory: URL,
+                       readChunk: (Int32, UnsafeMutableRawPointer?, Int) -> Int = { Darwin.read($0, $1, $2) }) -> [String: Any]? {
+        let limit = 1024 * 1024
+        let directoryFD = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard directoryFD >= 0 else { return nil }
+        defer { Darwin.close(directoryFD) }
+        var root = stat()
+        guard fstat(directoryFD, &root) == 0 else { return nil }
+        let fd = openat(directoryFD, "latest.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard fd >= 0 else { return nil }
+        defer { Darwin.close(fd) }
+        var before = stat()
+        guard fstat(fd, &before) == 0, before.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              before.st_size >= 0, before.st_size <= limit else { return nil }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = buffer.withUnsafeMutableBufferPointer { pointer in
+                readChunk(fd, pointer.baseAddress, min(pointer.count, limit + 1 - data.count))
+            }
+            if count < 0 {
+                if errno == EINTR { continue }
+                return nil
+            }
+            if count == 0 { break }
+            guard count <= limit - data.count else { return nil }
+            data.append(contentsOf: buffer[..<count])
+        }
+        var after = stat(), namedFile = stat(), namedDirectory = stat()
+        guard data.count == before.st_size, fstat(fd, &after) == 0, sameFile(before, after),
+              fstatat(directoryFD, "latest.json", &namedFile, AT_SYMLINK_NOFOLLOW) == 0,
+              sameFile(after, namedFile), lstat(directory.path, &namedDirectory) == 0,
+              sameNode(root, namedDirectory),
               let result = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               result["requestID"] as? String == requestID else { return nil }
         return result
@@ -224,19 +264,28 @@ enum WallpaperJournal {
     static func record(_ result: [String: Any]) {
         record(result, directory: directory)
     }
-    static func record(_ result: [String: Any], directory: URL) {
+    static func record(_ result: [String: Any], directory: URL,
+                       openLog: (String, Int32, mode_t) -> Int32 = { Darwin.open($0, $1, $2) }) {
         do {
             guard !isLink(directory) else { return }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
             let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]) + Data([10])
             let destination = directory.appendingPathComponent("latest.json")
-            guard !isLink(destination) else { return }
+            var latestEntry = stat()
+            if lstat(destination.path, &latestEntry) == 0 {
+                guard latestEntry.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { return }
+            } else if errno != ENOENT { return }
             try data.write(to: destination, options: [.atomic])
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
             let path = directory.appendingPathComponent("wallpaper.jsonl").path
-            let descriptor = Darwin.open(path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+            let descriptor = openLog(path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, S_IRUSR | S_IWUSR)
             guard descriptor >= 0 else { return }
+            var opened = stat(), named = stat()
+            guard fstat(descriptor, &opened) == 0, opened.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+                  lstat(path, &named) == 0, sameNode(opened, named) else {
+                Darwin.close(descriptor); return
+            }
             let stream = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
             if ((try? stream.seekToEnd()) ?? 0) > 2 * 1024 * 1024 { try stream.truncate(atOffset: 0) }
             try stream.write(contentsOf: data); try stream.close()

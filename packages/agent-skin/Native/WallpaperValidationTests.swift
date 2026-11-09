@@ -562,6 +562,87 @@ private func wallpaperJournalChecks() throws -> Int {
     expect(WallpaperJournal.latest(requestID: "linked-log", directory: logLinkDirectory)?["requestID"] as? String == "linked-log",
            "latest-result recording remains available when the append-only log is blocked")
 
+    let largeDirectory = root.appendingPathComponent("large-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: largeDirectory, withIntermediateDirectories: true)
+    let largeURL = largeDirectory.appendingPathComponent("latest.json")
+    let largeData = try JSONSerialization.data(withJSONObject: ["requestID": "large", "padding": String(repeating: "x", count: 1024 * 1024)])
+    try largeData.write(to: largeURL)
+    expect(WallpaperJournal.latest(requestID: "large", directory: largeDirectory) == nil,
+           "oversized latest results are not read as valid")
+    expect((try? Data(contentsOf: largeURL)) == largeData, "oversized latest data is retained")
+
+    let readDirectory = root.appendingPathComponent("chunked-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "chunked", "state": "applied"], directory: readDirectory)
+    var readCalls = 0
+    let chunked = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { fd, buffer, count in
+        readCalls += 1
+        if readCalls == 1 { errno = EINTR; return -1 }
+        return Darwin.read(fd, buffer, min(count, 7))
+    }
+    expect(chunked?["state"] as? String == "applied" && readCalls > 2,
+           "latest retries interrupted and short reads")
+    let failedRead = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { _, _, _ in errno = EIO; return -1 }
+    expect(failedRead == nil, "latest refuses an I/O error")
+    let readPath = readDirectory.appendingPathComponent("latest.json")
+    let savedPath = readDirectory.appendingPathComponent("saved-latest.json")
+    var replaced = false
+    let replacedRead = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { fd, buffer, count in
+        let result = Darwin.read(fd, buffer, count)
+        if result > 0 && !replaced {
+            try? FileManager.default.moveItem(at: readPath, to: savedPath)
+            try? Data("foreign synthetic bytes".utf8).write(to: readPath)
+            replaced = true
+        }
+        return result
+    }
+    expect(replaced && replacedRead == nil, "latest refuses a path replaced during reading")
+    expect((try? Data(contentsOf: readPath)) == Data("foreign synthetic bytes".utf8)
+           && FileManager.default.fileExists(atPath: savedPath.path), "latest preserves both replaced files")
+
+    let fifoDirectory = root.appendingPathComponent("fifo-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: fifoDirectory, withIntermediateDirectories: true)
+    let fifoLatest = fifoDirectory.appendingPathComponent("latest.json")
+    expect(mkfifo(fifoLatest.path, 0o600) == 0, "synthetic latest FIFO is created")
+    expect(WallpaperJournal.latest(requestID: "fifo", directory: fifoDirectory) == nil, "latest refuses a FIFO")
+    WallpaperJournal.record(["requestID": "fifo"], directory: fifoDirectory)
+    var fifoInfo = stat()
+    expect(lstat(fifoLatest.path, &fifoInfo) == 0 && fifoInfo.st_mode & mode_t(S_IFMT) == mode_t(S_IFIFO),
+           "record preserves an existing latest FIFO")
+
+    let fifoLogDirectory = root.appendingPathComponent("fifo-log-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: fifoLogDirectory, withIntermediateDirectories: true)
+    let fifoLog = fifoLogDirectory.appendingPathComponent("wallpaper.jsonl")
+    expect(mkfifo(fifoLog.path, 0o600) == 0, "synthetic append FIFO is created")
+    let fifoReader = Darwin.open(fifoLog.path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+    expect(fifoReader >= 0, "synthetic FIFO reader opens")
+    defer { Darwin.close(fifoReader) }
+    WallpaperJournal.record(["requestID": "fifo-log"], directory: fifoLogDirectory)
+    var fifoBytes = [UInt8](repeating: 0, count: 512)
+    let fifoCount = Darwin.read(fifoReader, &fifoBytes, fifoBytes.count)
+    expect(fifoCount <= 0, "record never appends data to a FIFO even when it has a reader")
+    expect(WallpaperJournal.latest(requestID: "fifo-log", directory: fifoLogDirectory) != nil,
+           "latest remains available when append FIFO is refused")
+
+    let switchedDirectory = root.appendingPathComponent("switched-log-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "before"], directory: switchedDirectory)
+    let switchedLog = switchedDirectory.appendingPathComponent("wallpaper.jsonl")
+    let savedLog = switchedDirectory.appendingPathComponent("saved.jsonl")
+    let priorLog = try Data(contentsOf: switchedLog)
+    var didSwitch = false
+    WallpaperJournal.record(["requestID": "after"], directory: switchedDirectory) { path, flags, mode in
+        let fd = Darwin.open(path, flags, mode)
+        if fd >= 0 {
+            try? FileManager.default.moveItem(at: switchedLog, to: savedLog)
+            try? Data("foreign synthetic log".utf8).write(to: switchedLog)
+            didSwitch = true
+        }
+        return fd
+    }
+    expect(didSwitch && (try? Data(contentsOf: savedLog)) == priorLog,
+           "append refuses an open descriptor after its path is replaced")
+    expect((try? Data(contentsOf: switchedLog)) == Data("foreign synthetic log".utf8),
+           "append preserves the foreign replacement")
+
     return checks
 }
 
