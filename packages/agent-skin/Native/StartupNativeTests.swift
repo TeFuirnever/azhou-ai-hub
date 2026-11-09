@@ -2111,6 +2111,55 @@ private func nativeEventContractChecks() async throws -> Int {
     try FileManager.default.createDirectory(at: boundedDirectory, withIntermediateDirectories: true)
     try Data("fixture-payload".utf8).write(to: boundedFile)
     expect(StartupPayloadReader.read(from: boundedRoot) == "fixture-payload", "bounded payload reader accepts normal UTF-8 bytes")
+    var interruptedReads = 0
+    let retriedPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        if interruptedReads == 0 { interruptedReads += 1; errno = EINTR; return -1 }
+        return Darwin.read(descriptor, buffer, min(count, 2))
+    }
+    expect(retriedPayload == "fixture-payload" && interruptedReads == 1,
+           "bounded payload reader retries EINTR and assembles short reads")
+    let failedPayload = StartupPayloadReader.read(from: boundedRoot) { _, _, _ in errno = EIO; return -1 }
+    expect(failedPayload == nil && (try? Data(contentsOf: boundedFile)) == Data("fixture-payload".utf8),
+           "bounded payload reader refuses an I/O error without changing the source")
+    let savedPayload = boundedDirectory.appendingPathComponent("saved-original.js")
+    var replacementError: Error?, replaced = false
+    let changedPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        let received = Darwin.read(descriptor, buffer, count)
+        if received > 0 && !replaced {
+            do {
+                try FileManager.default.moveItem(at: boundedFile, to: savedPayload)
+                try Data("foreign-payload".utf8).write(to: boundedFile)
+                replaced = true
+            } catch { replacementError = error }
+        }
+        return received
+    }
+    expect(replacementError == nil && replaced && changedPayload == nil,
+           "bounded payload reader rejects a file replaced while reading")
+    expect((try? Data(contentsOf: savedPayload)) == Data("fixture-payload".utf8)
+           && (try? Data(contentsOf: boundedFile)) == Data("foreign-payload".utf8),
+           "the replaced and replacement payloads remain available for review")
+    try FileManager.default.removeItem(at: savedPayload)
+    try Data("fixture-payload".utf8).write(to: boundedFile)
+    var growthError: Error?, grew = false, readBytes = 0
+    let grownPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        let received = Darwin.read(descriptor, buffer, count)
+        if received > 0 {
+            readBytes += received
+            if !grew {
+                do {
+                    let writer = try FileHandle(forWritingTo: boundedFile)
+                    try writer.seekToEnd()
+                    try writer.write(contentsOf: Data(repeating: 0x42, count: 24 * 1024 * 1024))
+                    try writer.close()
+                    grew = true
+                } catch { growthError = error }
+            }
+        }
+        return received
+    }
+    expect(growthError == nil && grew && grownPayload == nil && readBytes <= 24 * 1024 * 1024,
+           "bounded payload reader rejects a file that grows past its limit without reading beyond the bound")
     try Data().write(to: boundedFile)
     expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects an empty file")
     try Data([0xff, 0xfe]).write(to: boundedFile)

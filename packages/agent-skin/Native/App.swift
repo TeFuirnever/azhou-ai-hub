@@ -1144,7 +1144,8 @@ enum StartupPayloadReader {
             && left.st_ctimespec.tv_nsec == right.st_ctimespec.tv_nsec
     }
 
-    static func read(from root: URL) -> String? {
+    static func read(from root: URL,
+                     readChunk: (Int32, UnsafeMutableRawPointer?, Int) -> Int = { Darwin.read($0, $1, $2) }) -> String? {
         let directoryFlags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
         let rootFD = Darwin.open(root.path, directoryFlags)
         guard rootFD >= 0 else { return nil }
@@ -1168,7 +1169,7 @@ enum StartupPayloadReader {
             let remaining = limit - bytes.count
             guard remaining > 0 else { return nil }
             let count = buffer.withUnsafeMutableBufferPointer { pointer in
-                Darwin.read(sourceFD, pointer.baseAddress, min(pointer.count, remaining))
+                readChunk(sourceFD, pointer.baseAddress, min(pointer.count, remaining))
             }
             if count < 0 {
                 if errno == EINTR { continue }
