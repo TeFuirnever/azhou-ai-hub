@@ -335,6 +335,7 @@ try {
         const value = Number(width);
         if (!Number.isInteger(value) || value < 140 || value > 280) return false;
         shell.style.gridTemplateColumns = value + 'px minmax(0,1fr)';
+        sidebar.style.flexBasis = value + 'px';
         window.dispatchEvent(new Event('resize'));
         return true;
       };
