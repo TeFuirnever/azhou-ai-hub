@@ -1073,7 +1073,7 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
             fsync_dir(pets)
             fsync_dir(codex_home)
             actual = installed_facts(target, project)
-            require(actual["atlasSHA256"] == facts["atlasSHA256"], "安装后实际字节不一致")
+            require(same_installation(actual, facts), "安装后实际内容与候选不一致", "source-conflict")
             require(theme_facts(project)[0]["themeRevision"] == facts["themeRevision"],
                     "安装期间主题发生变化", "source-conflict")
             journal["phase"] = "committed"

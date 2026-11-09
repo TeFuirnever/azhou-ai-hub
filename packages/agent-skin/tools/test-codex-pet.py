@@ -128,6 +128,78 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, code)
         return str(raised.exception)
 
+    def assert_changed_identity_after_publication_is_preserved(self, *, upgrade, field="manifest"):
+        if upgrade:
+            self.install()
+            old_target = self.codex / "pets" / PET.PET_ID
+            old_manifest = (old_target / "pet.json").read_bytes()
+            old_atlas = (old_target / "spritesheet.webp").read_bytes()
+            self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        rename = PET.rename_exclusive
+        injected, original_published = [], {}
+        def modify_after_publish(source, destination):
+            result = rename(source, destination)
+            if Path(destination) == target and ".stage-" in Path(source).name:
+                manifest = target / "pet.json"
+                original_published["manifest"] = manifest.read_bytes()
+                original_published["receipt"] = (target / ".azhou-pet-receipt.json").read_bytes()
+                receipt = target / ".azhou-pet-receipt.json"
+                data = json.loads(original_published["receipt"])
+                if field == "manifest":
+                    metadata = json.loads(original_published["manifest"])
+                    metadata["description"] = "foreign description after publication"
+                    manifest.write_text(json.dumps(metadata))
+                    data["manifestSHA256"] = PET.sha(manifest.read_bytes())
+                else:
+                    data["themeRevision"] = "a" * 64 if data["themeRevision"] != "a" * 64 else "b" * 64
+                receipt.write_text(json.dumps(data))
+                injected.append(True)
+            return result
+        with patch.object(PET, "rename_exclusive", side_effect=modify_after_publish):
+            with self.assertRaises(PET.PetError) as raised:
+                PET.install_package(self.project, self.codex)
+        self.assertEqual(raised.exception.code, "recovery-required")
+        self.assertEqual(injected, [True])
+        if field == "manifest":
+            self.assertEqual(json.loads((target / "pet.json").read_bytes())["description"],
+                             "foreign description after publication")
+        else:
+            self.assertNotEqual(json.loads((target / ".azhou-pet-receipt.json").read_bytes())["themeRevision"],
+                                json.loads(original_published["receipt"])["themeRevision"])
+        journal = PET.journal_path(self.codex / "pets")
+        self.assertTrue(journal.is_file())
+        self.assertEqual(json.loads(journal.read_bytes())["phase"], "prepared")
+        backups = list(self.codex.glob(f".{PET.PET_ID}.previous-*"))
+        self.assertEqual(len(backups), 1 if upgrade else 0)
+        if upgrade:
+            self.assertEqual((backups[0] / "pet.json").read_bytes(), old_manifest)
+            self.assertEqual((backups[0] / "spritesheet.webp").read_bytes(), old_atlas)
+        # Simulate a reviewer restoring the exact captured transaction bytes.
+        (target / "pet.json").write_bytes(original_published["manifest"])
+        (target / ".azhou-pet-receipt.json").write_bytes(original_published["receipt"])
+        outcome = PET.recover_install(self.codex / "pets", self.project)
+        self.assertEqual(outcome, "restored-previous-installed-package" if upgrade else "restored-pre-install-state")
+        if upgrade:
+            self.assertEqual((target / "pet.json").read_bytes(), old_manifest)
+            self.assertEqual((target / "spritesheet.webp").read_bytes(), old_atlas)
+        else:
+            self.assertFalse(target.exists())
+        self.assertFalse(journal.exists())
+
+    def test_first_install_preserves_manifest_changed_after_publish(self):
+        self.assert_changed_identity_after_publication_is_preserved(upgrade=False)
+
+    def test_upgrade_preserves_manifest_changed_after_publish_and_old_backup(self):
+        self.assert_changed_identity_after_publication_is_preserved(upgrade=True)
+
+    def test_first_install_preserves_theme_receipt_changed_after_publish(self):
+        self.assert_changed_identity_after_publication_is_preserved(upgrade=False, field="theme")
+
+    def test_upgrade_preserves_theme_receipt_changed_after_publish_and_old_backup(self):
+        self.assert_changed_identity_after_publication_is_preserved(upgrade=True, field="theme")
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):
