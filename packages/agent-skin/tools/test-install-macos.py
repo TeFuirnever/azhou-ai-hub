@@ -1883,6 +1883,16 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(preserved[0].read_text(), 'keep')
         self.assertFalse(m.DESTINATION.exists())
 
+    def test_source_change_during_copy_preserves_canonical_path(self):
+        m = self.module
+        old = self.old_pair(installed_path=m.DESTINATION)
+        before = m.fingerprint(m.DESTINATION)
+        self.mutate_source_during_copy = True
+        with self.assertRaisesRegex(RuntimeError, '复制期间发生变化'):
+            m.install()
+        self.assertEqual(m.fingerprint(m.DESTINATION), before)
+        self.assertTrue(old.exists())
+
     def test_verified_050_pair_migrates_to_one_app_at_canonical_path(self):
         self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
         self.test_verified_050_pair_migrates_to_one_app()
