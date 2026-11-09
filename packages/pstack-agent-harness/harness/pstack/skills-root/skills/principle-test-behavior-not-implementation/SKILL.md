@@ -6,8 +6,6 @@ disable-model-invocation: true
 
 # Test Behavior, Not Implementation
 
-For asynchronous, resource-owning or platform-sensitive tests, read [Reliable fixtures](references/reliable-fixtures.md) before choosing synchronization and cleanup.
-
 A test is a claim about what the code does for its users: a caller, an end user, or another service. Behavior is what those users can observe through the interface they use. That includes return values, errors, state they can read back, and effects on systems outside the code, such as a request sent, a row written, or a message emitted. Implementation is what they cannot observe: private helpers, internal call order, intermediate data, and which internal collaborator did the work.
 
 Judge each test against two imagined edits:

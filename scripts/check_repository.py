@@ -233,7 +233,6 @@ def check_integration_provenance_versions(root: Path) -> list[str]:
 # Third-party trees the Hub vendors. Their prose and links belong to their
 # upstream, so repository policy checks do not grade them.
 VENDORED_ROOTS = (
-    "packages/pstack-agent-harness/NOTICE-ZCode.md",
     "packages/pstack-agent-harness/pstack/",
     "packages/pstack-agent-harness/components/",
     "packages/pstack-agent-harness/harness/",

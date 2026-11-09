@@ -181,13 +181,7 @@ try {
   const trees = readdirSync(join(outDir, "pstack"), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  for (const tree of trees) {
-    const target = join(outDir, "pstack", tree);
-    cpSync(HOOKS, join(target, "hooks"), { recursive: true });
-    for (const name of ["LICENSE-ZCode", "NOTICE-ZCode.md", "LICENSE-DeepSeek", "ENGINEERING-SOURCES.md"]) {
-      cpSync(join(ROOT, name), join(target, name));
-    }
-  }
+  for (const tree of trees) cpSync(HOOKS, join(outDir, "pstack", tree, "hooks"), { recursive: true });
 
   // Codex installs the plugin through a `.codex-plugin/` manifest plus one
   // slash-command prompt per registered skill. The prompts are mechanical
@@ -354,9 +348,7 @@ try {
       `---\ndescription: ${JSON.stringify(skillDescription(skill))}\n---\n\nInvoke the \`${skill}\` skill and follow it.\n`,
     );
   }
-  for (const name of ["LICENSE", "LICENSE-ZCode", "NOTICE-ZCode.md", "LICENSE-DeepSeek", "ENGINEERING-SOURCES.md"]) {
-    cpSync(join(codexTree, name), join(zcodeBundle, name));
-  }
+  cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
   writeFileSync(
     join(zcodeRoot, "marketplace.json"),
     `${JSON.stringify(

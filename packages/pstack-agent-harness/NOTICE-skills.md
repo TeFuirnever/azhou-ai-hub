@@ -1,6 +1,6 @@
 # NOTICE for the skills-only distribution
 
-This distribution contains MIT-licensed work from three upstream components and additional MIT/Apache-2.0 engineering references. The copyright notices and license terms travel beside this file.
+This distribution contains MIT-licensed work from three upstream sources. The copyright notices and license terms travel beside this file.
 
 ## Upstream sources
 
@@ -11,5 +11,3 @@ This distribution contains MIT-licensed work from three upstream components and 
 | `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, and the `thermo-nuclear-review-subagent` and `thermo-nuclear-code-quality-review-subagent` definitions | [cursor/plugins/thermos](https://github.com/cursor/plugins/tree/118e73b0e196e4d49d5aade7ce6dd8985a621f68/thermos) | (c) 2026 Cursor | [MIT](LICENSE-thermos) |
 
 The pstack-claude port changes runtime names, tool calls, model defaults, and supporting prose. The port's modifications and additions are (c) 2026 Michael Denyer under the same [MIT license](LICENSE). The [repository notice](https://github.com/michael-denyer/pstack-claude/blob/main/NOTICE.md) records full provenance. The [change log](https://github.com/michael-denyer/pstack-claude/blob/main/CHANGES.md) records each release, and [`tools/forks.json`](https://github.com/michael-denyer/pstack-claude/blob/main/tools/forks.json) names each file the port forks and why.
-
-The additional ZCode and DeepSeek Harness adaptations, immutable sources and retained licenses are recorded in [ENGINEERING-SOURCES.md](ENGINEERING-SOURCES.md).

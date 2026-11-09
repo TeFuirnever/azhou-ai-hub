@@ -107,8 +107,6 @@ Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/RE
 
 `pstack-azhouzhou` 0.15.37 当前为**候选版本**，统一从 Hub 维护的本地项目包交付；维护目标为 Codex、Claude Code、MiMo Code（`mimo`）、zcode 和 DeepSeek Harness（`dsh`）。Codex／Claude Code 使用原生插件，zcode 使用仅含 commands 的插件与共享 Skills；MiMo 和 DeepSeek 目前仅有共享 Skills 的发现证据，不声称存在原生 pstack 插件或完成模型调用验收。[安装说明](packages/pstack-agent-harness/README.md#install)使用本地包来源；上游链接保留作署名和源码更新依据。Codex 的 `--codex-home` 决定插件装入哪份配置；自定义目录需要通过对应的 `CODEX_HOME` 启动 Codex，不会自动在默认桌面配置中启用插件。
 
-[ZCode／DSH 逐项对照](docs/research/2026-11-09-zcode-dsh-skills.md)记录了固定版本的每个 Skill 入口。八份适配后的工程参考通过十一个现有 pstack 入口按需读取，保留 MIT／Apache-2.0 来源；分发检查不代表自动强制执行、已安装到宿主或已证明模型效果改善。
-
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 
 原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告和 [2026-10-26 本地交接](evidence/optional-integrations-local-handoff-2026-10-26.md)只描述当时检查的输入与宿主，不代表当前安装归属；维护或迁移前须分别核查已安装 App 和 Pet 的回执。合成适配器测试及过去的宿主观察不能证明后续构建已完成完整冷启动、无障碍、视觉或用户验收。
