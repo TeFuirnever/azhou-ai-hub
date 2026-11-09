@@ -139,6 +139,27 @@ class CandidateImportTests(unittest.TestCase):
         self.assertIn("视觉审阅未通过", result["error"])
         self.assertEqual(tree_bytes(self.target), target_before)
 
+    def test_contradictory_warning_is_not_imported_even_with_matching_receipt(self):
+        package = PET.selected_package(self.source)
+        semantics_path = package / "qa/direction-semantics.json"
+        semantics = json.loads(semantics_path.read_bytes())
+        semantics["directions"][1].update(verdict="warning", ok=False)
+        semantics_path.write_bytes(PET.json_bytes(semantics))
+        review_path = package / "qa/visual-qa.json"
+        review = json.loads(review_path.read_bytes())
+        review.update(labeledLoopReviewed=True, blindResolution={"decision": "accept", "severity": "minor"})
+        review_path.write_bytes(PET.json_bytes(review))
+        receipt_path = package / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["qaSHA256"]["qa/direction-semantics.json"] = PET.sha(semantics_path.read_bytes())
+        receipt["qaSHA256"]["qa/visual-qa.json"] = PET.sha(review_path.read_bytes())
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        source_before, target_before = tree_bytes(self.source), tree_bytes(self.target)
+        result = self.cli(code=2)
+        self.assertEqual(result["status"], "invalid")
+        self.assertEqual(tree_bytes(self.source), source_before)
+        self.assertEqual(tree_bytes(self.target), target_before)
+
     def test_captured_package_read_window_must_match_verified_receipt(self):
         package = PET.selected_package(self.source)
         visual_qa = package / "qa/visual-qa.json"

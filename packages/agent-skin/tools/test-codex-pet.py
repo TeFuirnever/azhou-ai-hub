@@ -831,6 +831,62 @@ class PetSafetyTests(unittest.TestCase):
                        blindResolution={"decision": "accept", "severity": "minor"}))
         self.assertEqual(self.package()["status"], "packaged")
 
+    def test_approved_warning_never_overrides_explicit_failure(self):
+        raw = {name: (self.run / name).read_bytes() for name in PET.QA_FILES}
+        visual = json.loads(raw[PET.QA_FILES[5]])
+        visual.update(labeledLoopReviewed=True, blindResolution={"decision": "accept", "severity": "minor"})
+        raw[PET.QA_FILES[5]] = PET.json_bytes(visual)
+        original_semantics = raw[PET.QA_FILES[3]]
+        for key, value in (("ok", False), ("pass", False), ("status", "fail"),
+                           ("status", "failed"), ("result", "fail"), ("result", "failed")):
+            with self.subTest(key=key, value=value):
+                semantics = json.loads(original_semantics)
+                direction = semantics["directions"][1]
+                direction.pop("pass")
+                direction.update(verdict="warning", **{key: value})
+                raw[PET.QA_FILES[3]] = PET.json_bytes(semantics)
+                with self.assertRaises(PET.PetError):
+                    PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
+
+    def test_approved_warning_retains_existing_numeric_zero_semantics(self):
+        raw = {name: (self.run / name).read_bytes() for name in PET.QA_FILES}
+        visual = json.loads(raw[PET.QA_FILES[5]])
+        visual.update(labeledLoopReviewed=True, blindResolution={"decision": "accept", "severity": "minor"})
+        raw[PET.QA_FILES[5]] = PET.json_bytes(visual)
+        semantics = json.loads(raw[PET.QA_FILES[3]])
+        semantics["directions"][1].update(verdict="warning", ok=0)
+        raw[PET.QA_FILES[3]] = PET.json_bytes(semantics)
+        self.assertEqual(set(PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)), set(PET.QA_FILES))
+
+    def test_direction_failure_list_cannot_be_waived(self):
+        raw = {name: (self.run / name).read_bytes() for name in PET.QA_FILES}
+        visual = json.loads(raw[PET.QA_FILES[5]])
+        visual.update(labeledLoopReviewed=True, blindResolution={"decision": "accept", "severity": "minor"})
+        raw[PET.QA_FILES[5]] = PET.json_bytes(visual)
+        original = raw[PET.QA_FILES[3]]
+        for verdict in ("pass", "warning"):
+            with self.subTest(verdict=verdict):
+                report = json.loads(original)
+                report["directions"][1].update(verdict=verdict, failures=["unresolved"])
+                raw[PET.QA_FILES[3]] = PET.json_bytes(report)
+                with self.assertRaises(PET.PetError):
+                    PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
+
+    def test_contradictory_warning_cannot_be_packaged(self):
+        self.change_qa("qa/direction-semantics.json", lambda report: report["directions"][1].update(verdict="warning", ok=False))
+        self.change_qa("qa/visual-qa.json", lambda review: review.update(labeledLoopReviewed=True,
+                       blindResolution={"decision": "accept", "severity": "minor"}))
+        qa_path = self.run / "qa/direction-semantics.json"
+        before = qa_path.read_bytes()
+        state = PET.state_dir(self.project)
+        selection = state / "selection.json"
+        self.assertFalse(selection.exists())
+        state_before = sorted(str(path.relative_to(state)) for path in state.rglob("*"))
+        self.expect_error(self.package)
+        self.assertFalse(selection.exists())
+        self.assertEqual(sorted(str(path.relative_to(state)) for path in state.rglob("*")), state_before)
+        self.assertEqual(qa_path.read_bytes(), before)
+
     def test_cardinal_warning_cannot_be_waived(self):
         def mark_warning(data):
             data["directions"][0].pop("pass")

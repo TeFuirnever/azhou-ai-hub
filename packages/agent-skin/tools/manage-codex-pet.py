@@ -378,9 +378,13 @@ def inspect_atlas(data, require_webp=False):
     }
 
 
+def explicitly_failed(value):
+    return (any(value.get(key) in ("fail", "failed") for key in ("verdict", "status", "result")) or
+            any(value.get(key) is False for key in ("ok", "pass")))
+
+
 def passed(value):
-    if (any(value.get(key) in ("fail", "failed") for key in ("verdict", "status", "result")) or
-            any(value.get(key) is False for key in ("ok", "pass"))):
+    if explicitly_failed(value):
         return False
     return (value.get("ok") is True or value.get("pass") is True or
             value.get("status") in ("pass", "passed", "ok") or value.get("result") == "pass"
@@ -426,8 +430,8 @@ def validate_qa(raw, atlas_hash, theme_rev):
         verdict = record.get("verdict", record.get("status", record.get("result")))
         warning_allowed = (direction not in (0, 90, 180, 270) and warning_approved
                            and record.get("severity", "minor") == "minor")
-        accepted = warning_allowed if verdict == "warning" else passed(record)
-        require(not record.get("errors") and accepted,
+        accepted = warning_allowed and not explicitly_failed(record) if verdict == "warning" else passed(record)
+        require(not record.get("errors") and not record.get("failures") and accepted,
                 f"方向 {direction:g} 未通过；intermediate warning 需要 labeled-loop 与 minor accept 审阅证据")
     blind = documents[4]
     if blind.get("reviewRequired") or blind.get("warnings"):

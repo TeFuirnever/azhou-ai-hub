@@ -135,7 +135,7 @@ python3 -B tools/manage-codex-pet.py status
 }
 ```
 
-盲测报告带 `warnings` 或 `reviewRequired:true` 时，也要求上述审阅结论。任何明确 fail、未确认方向或 cardinal warning 都不能由这个例外放行。
+盲测报告带 `warnings` 或 `reviewRequired:true` 时，也要求上述审阅结论。任何明确 fail/failed、`ok:false`、`pass:false`、非空 `failures`、未确认方向或 cardinal warning 都不能由这个例外放行；矛盾证据需重新审阅，工具不自动改写原件。
 
 脚本独立解码真实 WebP，并重新计算字节摘要和 RGBA 像素摘要；校验 74 个占用格都有角色与透明背景、14 个未用格完全透明、全透明像素无 RGB 残留。结果分别报告 `occupiedCells:74`、`renderedCells:73`、`animationCells:57`、`lookDirectionCells:16`、`neutralCells:1`、`unusedCells:14`；兼容字段 `usedCells` 表示物理占用格数 74。尺寸正确的坏图、只剩合法 PNG 头的坏图、9 行中间图集、缺失的 neutral 格、错主题审阅或错图片审阅均会被拒绝。整个图集的 SHA256 与独立视觉审阅绑定，因此即使只在审阅后改变辅助格，也会因字节摘要失配被拒绝。QA 自报的宽高或摘要不能替代独立解码和实际摘要检查。
 
