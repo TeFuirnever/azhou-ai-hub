@@ -673,12 +673,12 @@ def publish_assets(package, snapshot, source, digest, adopt):
     return destination
 
 def require_private_git_guard(package, parser):
-    ignored = subprocess.run(['git', 'check-ignore', '-q', '--', 'assets/private/working.png'], cwd=package)
+    ignored = subprocess.run(['git', 'check-ignore', '-q', '--', 'assets/private/'], cwd=package)
     if ignored.returncode:
         parser.error('assets/private/ must be ignored by Git before preparing private artwork.')
     if subprocess.check_output(['git', 'ls-files', '--', 'assets/private'], cwd=package).strip():
         parser.error('Private assets are tracked. Remove them from the index before continuing.')
-    state_path = '.local/agent-skin-asset-preparation/.azhou-assets-receipt.json'
+    state_path = '.local/agent-skin-asset-preparation/'
     if subprocess.run(['git', 'check-ignore', '-q', '--', state_path], cwd=package).returncode:
         parser.error('The local asset transaction state must be ignored by Git.')
     if subprocess.check_output(['git', 'ls-files', '--', '.local/agent-skin-asset-preparation'], cwd=package).strip():

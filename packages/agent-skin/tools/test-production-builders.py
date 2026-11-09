@@ -237,6 +237,58 @@ class PrepareAzhouAssetTests(unittest.TestCase):
             runpy.run_path(str(self.script), run_name="__main__")
         return stdout.getvalue(), run.call_args, check_output.call_args
 
+    def real_git_prepare(self, ignore_rules, *, tracked_private=False):
+        environment = os.environ.copy()
+        environment.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull})
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, env=environment)
+        (self.root / ".gitignore").write_text(ignore_rules)
+        if tracked_private:
+            foreign = self.root / "assets/private/already-tracked.txt"
+            foreign.parent.mkdir(parents=True)
+            foreign.write_bytes(b"preserve tracked fixture")
+            subprocess.run(["git", "add", "-f", "--", "assets/private/already-tracked.txt"],
+                           cwd=self.root, env=environment, check=True)
+        command = [sys.executable, "-B", str(self.script), "--source", str(self.source)]
+        result = subprocess.run(command, cwd=self.root, env=environment, capture_output=True, text=True, timeout=10)
+        return result, command, environment
+
+    def test_real_git_rejects_private_directory_with_only_image_ignored(self):
+        result, _, env = self.real_git_prepare("/.build/\n/assets/private/working.png\n/.local/\n")
+        status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "assets/private"],
+                                         cwd=self.root, env=env, text=True)
+        self.assertNotEqual(result.returncode, 0, f"incomplete ignore wrote files: {status}")
+        self.assertFalse((self.root / "assets/private").exists())
+        self.assertFalse(self.state.exists())
+
+    def test_real_git_rejects_state_directory_with_only_receipt_ignored(self):
+        rules = "/.build/\n/assets/private/\n/.local/agent-skin-asset-preparation/.azhou-assets-receipt.json\n"
+        result, _, _ = self.real_git_prepare(rules)
+        self.assertNotEqual(result.returncode, 0, "receipt-only ignore must not authorize transaction state")
+        self.assertFalse((self.root / "assets/private").exists())
+        self.assertFalse(self.state.exists())
+
+    def test_real_git_directory_ignores_allow_repeat_and_recovery(self):
+        result, command, env = self.real_git_prepare("/.build/\n/assets/private/\n/.local/\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        image = self.root / "assets/private/working.png"
+        before = (image.stat().st_ino, image.read_bytes())
+        repeated = subprocess.run(command, cwd=self.root, env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(repeated.returncode, 0, repeated.stderr)
+        self.assertEqual((image.stat().st_ino, image.read_bytes()), before)
+        recovery = subprocess.run([sys.executable, "-B", str(self.script), "--recover"], cwd=self.root,
+                                  env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(recovery.returncode, 0, recovery.stderr)
+        self.assertIn("no transaction", recovery.stdout)
+        status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all", "--", "assets/private", ".local"],
+                                         cwd=self.root, env=env, text=True)
+        self.assertEqual(status, "")
+
+    def test_real_git_tracked_private_file_remains_untouched(self):
+        result, _, _ = self.real_git_prepare("/.build/\n/assets/private/\n/.local/\n", tracked_private=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / "assets/private/already-tracked.txt").read_bytes(), b"preserve tracked fixture")
+        self.assertFalse((self.root / "assets/private/working.png").exists())
+
     def test_prepares_exact_bytes_and_provenance_under_the_local_project(self):
         output, run_call, check_call = self.invoke()
         destination = self.root / "assets/private"
