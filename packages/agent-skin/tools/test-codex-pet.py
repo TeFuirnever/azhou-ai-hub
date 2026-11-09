@@ -264,6 +264,18 @@ class PetSafetyTests(unittest.TestCase):
     def test_nontransparent_unused_cell_is_rejected(self):
         self.expect_error(lambda: PET.inspect_atlas(atlas_bytes(bad_unused=True)))
 
+    def test_hidden_rgb_is_rejected_only_for_fully_transparent_pixels(self):
+        image = Image.open(io.BytesIO(self.atlas_a)).convert("RGBA")
+        image.putpixel((1, 1), (9, 5, 1, 0))
+        stream = io.BytesIO()
+        image.save(stream, "PNG")
+        self.expect_error(lambda: PET.inspect_atlas(stream.getvalue()))
+
+        image.putpixel((1, 1), (9, 5, 1, 1))
+        stream = io.BytesIO()
+        image.save(stream, "PNG")
+        self.assertTrue(PET.inspect_atlas(stream.getvalue())["fullDecode"])
+
     def test_blank_used_cell_is_rejected(self):
         self.expect_error(lambda: PET.inspect_atlas(atlas_bytes(missing_used=True)))
 
@@ -310,6 +322,19 @@ class PetSafetyTests(unittest.TestCase):
         self.change_qa("qa/direction-semantics.json",
                        lambda x: x["directions"][1].update(direction=x["directions"][0]["direction"]))
         self.expect_error(self.package)
+
+    def test_direction_coverage_rejects_nonfinite_and_out_of_range_angles(self):
+        raw = {name: (self.run / name).read_bytes() for name in PET.QA_FILES}
+        report = json.loads(raw[PET.QA_FILES[3]])
+        report["directions"][0]["direction"] = "-0"
+        raw[PET.QA_FILES[3]] = PET.json_bytes(report)
+        PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
+        for value in ("nan", "inf", "360"):
+            with self.subTest(value=value):
+                report["directions"][0]["direction"] = value
+                raw[PET.QA_FILES[3]] = PET.json_bytes(report)
+                with self.assertRaisesRegex(PET.PetError, "方向记录缺失"):
+                    PET.validate_qa(raw, PET.sha(self.atlas_a), self.rev)
 
     def test_direction_unconfirmed_is_rejected(self):
         self.change_qa("qa/direction-blind-validation.json", lambda x: x.update(ok=True, unconfirmed=["left?"]))

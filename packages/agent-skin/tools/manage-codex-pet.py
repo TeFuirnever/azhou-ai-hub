@@ -19,7 +19,7 @@ import stat
 import sys
 import uuid
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 PET_ID = "azhou-agent-lab"
 DISPLAY_NAME = "阿舟 · Agent 实验室"
@@ -272,39 +272,49 @@ def prepare(project, operation_id=None):
 def inspect_atlas(data, require_webp=False):
     require(len(data) <= MAX_FILE_BYTES, "图集超过 64 MiB")
     try:
-        with Image.open(io.BytesIO(data)) as opened:
-            require(opened.format in ({"WEBP"} if require_webp else {"PNG", "WEBP"}), "图集格式无效")
-            require(opened.size == (1536, 2288), "v2 图集必须为 1536×2288")
-            require(getattr(opened, "n_frames", 1) == 1, "需要静态图集，不接受动画文件")
-            require("A" in opened.getbands() or "transparency" in opened.info, "图集缺少透明通道")
-            opened.load()  # Full decode, never just header or manifest validation.
-            image = opened.convert("RGBA")
+        with Image.open(io.BytesIO(data)) as source:
+            accepted_formats = ("WEBP",) if require_webp else ("PNG", "WEBP")
+            require(source.format in accepted_formats, "图集格式无效")
+            require(source.size == (1536, 2288), "v2 图集必须为 1536×2288")
+            require(getattr(source, "n_frames", 1) == 1, "需要静态图集，不接受动画文件")
+            require("A" in source.getbands() or "transparency" in source.info, "图集缺少透明通道")
+            source.load()
+            raster = source.convert("RGBA")
     except PetError:
         raise
     except Exception as exc:
         raise PetError("invalid", f"图集完整解码失败：{exc}") from exc
-    alpha = image.getchannel("A")
-    require(alpha.getextrema()[0] == 0 and alpha.getextrema()[1] > 0, "图集须包含透明背景及可见角色")
-    for row, count in enumerate(FRAME_COUNTS):
+
+    alpha = raster.getchannel("A")
+    lowest, highest = alpha.getextrema()
+    require(lowest == 0 and highest > 0, "图集须包含透明背景及可见角色")
+
+    expected = {(row, col) for row, count in enumerate(FRAME_COUNTS) for col in range(count)}
+    expected.add(RESERVED_NEUTRAL)
+    for row in range(11):
         for col in range(8):
-            box = (col * 192, row * 208, (col + 1) * 192, (row + 1) * 208)
-            cell = alpha.crop(box)
-            nonempty = cell.getbbox() is not None
-            occupied = col < count or (row, col) == RESERVED_NEUTRAL
-            require(nonempty == occupied, f"单元格 row={row}, col={col} 的使用/透明状态错误")
+            x, y = col * 192, row * 208
+            low, high = alpha.crop((x, y, x + 192, y + 208)).getextrema()
+            occupied = (row, col) in expected
+            require((high > 0) == occupied, f"单元格 row={row}, col={col} 的使用/透明状态错误")
             if occupied:
-                require(cell.getextrema()[0] == 0, f"已用单元格必须同时含透明背景：row={row}, col={col}")
-    # Native load_neutral_cell also permits an external reference processed by
-    # remove_chroma_background + fit_to_cell. Equality is informational only.
-    neutral_matches_idle = (image.crop((0, 0, 192, 208)).tobytes() ==
-                            image.crop((1152, 0, 1344, 208)).tobytes())
-    transparent = alpha.point(lambda value: 255 if value == 0 else 0)
-    require(ImageChops.multiply(image.convert("RGB"), transparent.convert("RGB")).getbbox() is None,
-            "完全透明像素含非零 RGB 残留")
-    return {"atlasSHA256": sha(data), "pixelSHA256": sha(image.tobytes()), "width": 1536,
-            "height": 2288, "usedCells": 74, "occupiedCells": 74, "renderedCells": 73,
-            "animationCells": 57, "lookDirectionCells": 16, "neutralCells": 1,
-            "unusedCells": 14, "neutralMatchesIdle00": neutral_matches_idle, "fullDecode": True}
+                require(low == 0, f"已用单元格必须同时含透明背景：row={row}, col={col}")
+
+    transparent_mask = alpha.point(lambda value: 255 if value == 0 else 0)
+    transparent_rgb = Image.composite(raster.convert("RGB"), Image.new("RGB", raster.size), transparent_mask)
+    require(transparent_rgb.getbbox() is None, "完全透明像素含非零 RGB 残留")
+    # The neutral frame may be independently fitted; equality is informational.
+    idle = raster.crop((0, 0, 192, 208)).tobytes()
+    neutral = raster.crop((1152, 0, 1344, 208)).tobytes()
+    return {
+        "atlasSHA256": sha(data), "pixelSHA256": sha(raster.tobytes()),
+        "width": 1536, "height": 2288,
+        "usedCells": len(expected), "occupiedCells": len(expected),
+        "renderedCells": sum(FRAME_COUNTS), "animationCells": sum(FRAME_COUNTS[:9]),
+        "lookDirectionCells": sum(FRAME_COUNTS[9:]), "neutralCells": 1,
+        "unusedCells": 88 - len(expected), "neutralMatchesIdle00": neutral == idle,
+        "fullDecode": True,
+    }
 
 
 def passed(value):
@@ -317,42 +327,52 @@ def passed(value):
 
 
 def validate_qa(raw, atlas_hash, theme_rev):
-    reports = {name: parse(raw[name]) for name in QA_FILES}
-    for name, report in reports.items():
-        require(isinstance(report, dict), f"QA 必须是 JSON 对象：{name}")
-        require(not report.get("errors") and not report.get("failures"), f"QA 有失败项：{name}")
-    for name in (QA_FILES[0], QA_FILES[1], QA_FILES[4]):
-        require(passed(reports[name]), f"QA 未明确通过：{name}")
-    require(reports[QA_FILES[2]].get("errors") == [], "review.json 必须明确 errors=[]")
-    semantics = reports[QA_FILES[3]]
-    entries = next((semantics[k] for k in ("directions", "results", "checks") if k in semantics), None)
-    if isinstance(entries, dict):
-        entries = [dict(value, direction=key) if isinstance(value, dict) else {"direction": key, "pass": value}
-                   for key, value in entries.items()]
-    require(isinstance(entries, list) and len(entries) == 16, "方向语义必须覆盖 16 项")
-    require(all(isinstance(item, dict) for item in entries), "方向语义每项必须是对象")
-    labels = [str(item.get("direction", item.get("angle", item.get("id", "")))) for item in entries]
+    documents = [parse(raw[path]) for path in QA_FILES]
+    for path, document in zip(QA_FILES, documents):
+        require(isinstance(document, dict), f"QA 必须是 JSON 对象：{path}")
+        require(not document.get("errors") and not document.get("failures"), f"QA 有失败项：{path}")
+    for index in (0, 1, 4):
+        require(passed(documents[index]), f"QA 未明确通过：{QA_FILES[index]}")
+    require(documents[2].get("errors") == [], "review.json 必须明确 errors=[]")
+
+    direction_report = documents[3]
+    records = next((direction_report[key] for key in ("directions", "results", "checks")
+                    if key in direction_report), None)
+    if isinstance(records, dict):
+        records = [dict(value, direction=key) if isinstance(value, dict) else {"direction": key, "pass": value}
+                   for key, value in records.items()]
+    require(isinstance(records, list) and len(records) == 16, "方向语义必须覆盖 16 项")
+    require(all(isinstance(record, dict) for record in records), "方向语义每项必须是对象")
     try:
-        angles = [float(label.removesuffix("°")) for label in labels]
+        directions = [float(str(record.get("direction", record.get("angle", record.get("id", "")))).removesuffix("°"))
+                      for record in records]
     except ValueError as exc:
         raise PetError("invalid", "方向必须以 000/022.5/.../337.5 度数标识") from exc
-    require(set(angles) == {n * 22.5 for n in range(16)}, "方向记录缺失、重复或不符合 16 向契约")
-    visual = reports[QA_FILES[5]]
-    require(passed(visual) and visual.get("atlasSHA256") == atlas_hash and visual.get("themeRevision") == theme_rev,
+
+    slots = {index * 22.5: 1 << index for index in range(16)}
+    covered = 0
+    for direction in directions:
+        covered |= slots.get(direction, 0)
+    require(covered == (1 << 16) - 1, "方向记录缺失、重复或不符合 16 向契约")
+
+    review = documents[5]
+    require(passed(review) and review.get("atlasSHA256") == atlas_hash and review.get("themeRevision") == theme_rev,
             "视觉审阅未通过，或 atlasSHA256/themeRevision 与实际候选不匹配")
-    resolution = visual.get("blindResolution", {})
-    warning_approved = (visual.get("labeledLoopReviewed") is True and
-                        isinstance(resolution, dict) and resolution.get("decision") == "accept"
-                        and resolution.get("severity") == "minor")
-    for angle, item in zip(angles, entries):
-        warning = item.get("verdict", item.get("status", item.get("result"))) == "warning"
-        require(not item.get("errors") and (passed(item) if not warning else
-                angle not in (0, 90, 180, 270) and warning_approved and item.get("severity", "minor") == "minor"),
-                f"方向 {angle:g} 未通过；intermediate warning 需要 labeled-loop 与 minor accept 审阅证据")
-    if reports[QA_FILES[4]].get("reviewRequired") or reports[QA_FILES[4]].get("warnings"):
+    decision = review.get("blindResolution", {})
+    warning_approved = (review.get("labeledLoopReviewed") is True and isinstance(decision, dict)
+                        and decision.get("decision") == "accept" and decision.get("severity") == "minor")
+    for direction, record in zip(directions, records):
+        verdict = record.get("verdict", record.get("status", record.get("result")))
+        warning_allowed = (direction not in (0, 90, 180, 270) and warning_approved
+                           and record.get("severity", "minor") == "minor")
+        accepted = warning_allowed if verdict == "warning" else passed(record)
+        require(not record.get("errors") and accepted,
+                f"方向 {direction:g} 未通过；intermediate warning 需要 labeled-loop 与 minor accept 审阅证据")
+    blind = documents[4]
+    if blind.get("reviewRequired") or blind.get("warnings"):
         require(warning_approved, "盲测 warning 尚无 labeled-loop 与 minor accept 审阅证据")
-    require(not reports[QA_FILES[4]].get("unconfirmed"), "盲测仍存在未确认方向")
-    return {name: sha(data) for name, data in raw.items()}
+    require(not blind.get("unconfirmed"), "盲测仍存在未确认方向")
+    return {path: sha(content) for path, content in raw.items()}
 
 
 def native_manifest(config):
