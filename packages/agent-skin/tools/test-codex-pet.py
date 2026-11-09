@@ -348,6 +348,44 @@ class PetSafetyTests(unittest.TestCase):
                 self.assertEqual(receipt_path.read_bytes(), data)
                 self.assertEqual(selection.read_bytes(), before_selection)
 
+    def test_installed_manifest_non_object_is_reported_and_preserved(self):
+        self.install()
+        target = self.codex / 'pets' / PET.PET_ID
+        path = target / 'pet.json'
+        receipt_path = target / '.azhou-pet-receipt.json'
+        original = json.loads(receipt_path.read_bytes())
+        for value in (None, [], [{}], 'manifest', 7):
+            with self.subTest(value=value):
+                data = PET.json_bytes(value)
+                path.write_bytes(data)
+                receipt = dict(original, manifestSHA256=PET.sha(data))
+                receipt_path.write_bytes(PET.json_bytes(receipt))
+                before = {p.name: p.read_bytes() for p in target.iterdir()}
+                self.assertEqual(PET.status(self.project, self.codex)['installed']['status'], 'unknown-target')
+                self.expect_error(lambda: PET.install_package(self.project, self.codex), 'unknown-target')
+                self.assertEqual({p.name: p.read_bytes() for p in target.iterdir()}, before)
+                self.assertFalse(PET.journal_path(self.codex / 'pets').exists())
+
+    def test_selected_manifest_non_object_is_reported_and_preserved(self):
+        self.package()
+        selected = PET.selected_package(self.project)
+        path = selected / 'pet.json'
+        receipt_path = selected / 'package-receipt.json'
+        original = json.loads(receipt_path.read_bytes())
+        selection = PET.state_dir(self.project) / 'selection.json'
+        selection_before = selection.read_bytes()
+        for value in (None, [], [{}], 'manifest', 7):
+            with self.subTest(value=value):
+                data = PET.json_bytes(value)
+                path.write_bytes(data)
+                receipt = dict(original, manifestSHA256=PET.sha(data))
+                receipt_path.write_bytes(PET.json_bytes(receipt))
+                self.assertEqual(PET.status(self.project, self.codex)['package']['status'], 'invalid')
+                self.expect_error(lambda: PET.verified_selected_package(self.project))
+                self.assertEqual(path.read_bytes(), data)
+                self.assertEqual(selection.read_bytes(), selection_before)
+                self.assertFalse(self.codex.exists())
+
     def test_installed_receipt_requires_a_valid_theme_digest(self):
         self.install()
         target = self.codex / "pets" / PET.PET_ID

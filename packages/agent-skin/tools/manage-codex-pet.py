@@ -510,7 +510,8 @@ def check_package(directory, project, require_current=True):
     qa_hashes = validate_qa(qa, facts["atlasSHA256"], rev)
     manifest_raw = read(directory / "pet.json")
     manifest = parse(manifest_raw)
-    require(set(manifest) == {"id", "displayName", "description", "spriteVersionNumber", "spritesheetPath"}
+    require(isinstance(manifest, dict)
+            and set(manifest) == {"id", "displayName", "description", "spriteVersionNumber", "spritesheetPath"}
             and manifest.get("id") == PET_ID and manifest.get("displayName") == DISPLAY_NAME
             and manifest.get("spriteVersionNumber") == 2 and manifest.get("spritesheetPath") == "spritesheet.webp",
             "pet.json 不符合原生 v2 契约")
@@ -848,7 +849,7 @@ def installed_facts(target, project):
     require(valid_digest(receipt.get("themeRevision")), "已安装主题摘要无效，保留待核对", "unknown-target")
     manifest = read(target / "pet.json")
     metadata = parse(manifest)
-    require(metadata.get("id") == PET_ID and metadata.get("spriteVersionNumber") == 2
+    require(isinstance(metadata, dict) and metadata.get("id") == PET_ID and metadata.get("spriteVersionNumber") == 2
             and metadata.get("spritesheetPath") == "spritesheet.webp", "已安装 manifest 无效", "unknown-target")
     facts = inspect_atlas(read(target / "spritesheet.webp"), require_webp=True)
     require(receipt.get("atlasSHA256") == facts["atlasSHA256"] and receipt.get("manifestSHA256") == sha(manifest),
