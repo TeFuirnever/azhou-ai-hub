@@ -708,6 +708,148 @@ class PetSafetyTests(unittest.TestCase):
         self.assertFalse(stage.exists())
         self.assertFalse(journal.exists())
 
+    def test_history_cleanup_preserves_file_added_after_candidate_verification(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        self.make_run(atlas_bytes((90, 180, 50, 255)))
+        verify = PET.check_package
+        injected = []
+        def inject(directory, *args, **kwargs):
+            result = verify(directory, *args, **kwargs)
+            if Path(directory) == first and not injected:
+                (first / "foreign.txt").write_bytes(b"do not delete")
+                injected.append(True)
+            return result
+        with patch.object(PET, "check_package", side_effect=inject):
+            try: self.package()
+            except PET.PetError: pass
+        self.assertEqual(injected, [True])
+        self.assertTrue((first / "foreign.txt").is_file(), "history cleanup deleted an unplanned file")
+        self.assertEqual((first / "foreign.txt").read_bytes(), b"do not delete")
+
+    def test_install_recovery_preserves_file_added_after_target_verification(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "3" * 32
+        journal = PET.journal_path(pets)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": False,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"]}
+        PET.atomic_json(journal, record)
+        verify = PET.installed_facts
+        injected = []
+        def inject(directory, *args, **kwargs):
+            result = verify(directory, *args, **kwargs)
+            if Path(directory) == target and not injected:
+                (target / "foreign.txt").write_bytes(b"do not delete")
+                injected.append(True)
+            return result
+        with patch.object(PET, "installed_facts", side_effect=inject):
+            try: PET.recover_install(pets, self.project)
+            except PET.PetError: pass
+        self.assertEqual(injected, [True])
+        self.assertTrue((target / "foreign.txt").is_file(), "recovery deleted an unplanned file")
+        self.assertEqual((target / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue(journal.is_file())
+
+    def test_committed_recovery_preserves_file_added_after_backup_verification(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "4" * 32
+        backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+        shutil.copytree(target, backup)
+        journal = PET.journal_path(pets)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "committed", "hadPrevious": True,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": facts["atlasSHA256"],
+                  "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"]}
+        PET.atomic_json(journal, record)
+        verify = PET.installed_facts
+        injected = []
+        def inject(directory, *args, **kwargs):
+            result = verify(directory, *args, **kwargs)
+            if Path(directory) == backup and not injected:
+                (backup / "foreign.txt").write_bytes(b"do not delete")
+                injected.append(True)
+            return result
+        with patch.object(PET, "installed_facts", side_effect=inject):
+            try: PET.recover_install(pets, self.project)
+            except PET.PetError: pass
+        self.assertEqual(injected, [True])
+        self.assertTrue((backup / "foreign.txt").is_file(), "recovery deleted an unplanned backup file")
+        self.assertEqual((backup / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue(target.is_dir())
+        self.assertTrue(journal.is_file())
+
+    def test_owned_cleanup_rejects_file_change_or_directory_copy_after_plan(self):
+        for mode in ("content", "directory"):
+            with self.subTest(mode=mode):
+                target = self.root / ("planned-" + mode)
+                target.mkdir()
+                (target / "pet.json").write_bytes(b"synthetic")
+                plan = PET.capture_removal_plan(target, {"pet.json"})
+                if mode == "content":
+                    (target / "pet.json").write_bytes(b"foreign content")
+                    expected = b"foreign content"
+                else:
+                    saved = self.root / "saved-planned-target"
+                    target.rename(saved)
+                    shutil.copytree(saved, target)
+                    expected = b"synthetic"
+                self.expect_error(lambda: PET.remove_tree(target, plan), "recovery-required")
+                self.assertEqual((target / "pet.json").read_bytes(), expected)
+                if mode == "directory": self.assertEqual((saved / "pet.json").read_bytes(), b"synthetic")
+
+    def test_owned_cleanup_preserves_unplanned_file_inserted_during_deletion(self):
+        target = self.root / "planned-transaction"
+        target.mkdir()
+        for name in ("pet.json", "spritesheet.webp"):
+            (target / name).write_bytes(b"synthetic")
+        plan = PET.capture_removal_plan(target, {"pet.json", "spritesheet.webp"})
+        unlink = PET.os.unlink
+        injected = []
+        def inject(name, *args, **kwargs):
+            if not injected:
+                (target / "foreign.txt").write_bytes(b"do not delete")
+                injected.append(True)
+            return unlink(name, *args, **kwargs)
+        with patch.object(PET.os, "unlink", side_effect=inject):
+            self.expect_error(lambda: PET.remove_tree(target, plan), "recovery-required")
+        self.assertEqual(injected, [True])
+        self.assertEqual((target / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertFalse((target / "pet.json").exists())
+
+    def test_owned_cleanup_does_not_accept_file_disappearing_after_preflight(self):
+        target = self.root / "planned-disappearing"
+        target.mkdir()
+        for name in ("pet.json", "spritesheet.webp"):
+            (target / name).write_bytes(b"synthetic")
+        plan = PET.capture_removal_plan(target, {"pet.json", "spritesheet.webp"})
+        open_file = PET.os.open
+        injected = []
+        def disappear(name, *args, **kwargs):
+            if name == "pet.json" and kwargs.get("dir_fd") is not None and not injected:
+                (target / "pet.json").unlink()
+                injected.append(True)
+            return open_file(name, *args, **kwargs)
+        error = None
+        with patch.object(PET.os, "open", side_effect=disappear):
+            try: PET.remove_tree(target, plan)
+            except PET.PetError as exc: error = exc
+        self.assertEqual(injected, [True])
+        self.assertTrue(target.is_dir(), "missing planned file must not be accepted as cleanup")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), b"synthetic")
+        self.assertIsNotNone(error)
+        self.assertEqual(error.code, "recovery-required")
+
     def test_provisional_package_journal_preserves_even_empty_stage(self):
         state = PET.state_dir(self.project, True)
         journal = state / "package-journal.json"
@@ -1130,10 +1272,13 @@ class PetSafetyTests(unittest.TestCase):
     def test_recovery_refuses_to_delete_unknown_special_files(self):
         stage = self.root / "unknown-stage"
         stage.mkdir()
+        (stage / "owned").write_bytes(b"synthetic")
+        plan = PET.capture_removal_plan(stage, {"owned"})
         unknown = stage / "unexpected-fifo"
         os.mkfifo(unknown)
-        self.expect_error(lambda: PET.remove_tree(stage), code="recovery-required")
+        self.expect_error(lambda: PET.remove_tree(stage, plan), code="recovery-required")
         self.assertTrue(unknown.exists())
+        self.assertEqual((stage / "owned").read_bytes(), b"synthetic")
 
     def test_unknown_same_name_target_is_untouched(self):
         self.package()
@@ -1286,10 +1431,10 @@ class PetSafetyTests(unittest.TestCase):
         target = self.codex / "pets" / PET.PET_ID
         real = PET.remove_tree
 
-        def interrupted(path):
+        def interrupted(path, plan):
             if ".previous-" in str(path):
                 raise SystemExit("simulated process exit during handoff cleanup")
-            return real(path)
+            return real(path, plan)
 
         with patch.object(PET, "remove_tree", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.handoff_package(self.project, previous_project, self.codex)
@@ -1471,10 +1616,10 @@ class PetSafetyTests(unittest.TestCase):
         self.package()
         real = PET.remove_tree
 
-        def interrupted(path):
+        def interrupted(path, plan):
             if ".previous-" in str(path):
                 raise SystemExit("simulated interruption during cleanup")
-            return real(path)
+            return real(path, plan)
 
         with patch.object(PET, "remove_tree", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.install_package(self.project, self.codex)
@@ -1692,7 +1837,7 @@ class PetSafetyTests(unittest.TestCase):
         self.assertFalse(stage.exists())
         self.assertFalse(journal_file.exists())
 
-        PET.remove_tree(target)
+        PET.remove_tree(target, PET.capture_removal_plan(target, PET.stage_file_names("install")))
         PET.atomic_json(journal_file, journal)
         with self.assertRaisesRegex(PET.PetError, "正式目标与旧包均缺失"):
             PET.recover_install(pets, self.project)

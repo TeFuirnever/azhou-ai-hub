@@ -318,7 +318,8 @@ class CandidateImportTests(unittest.TestCase):
                               "recovery-required")
         self.assertEqual(sentinel.read_text(), "preserve this foreign same-owner stage")
         (state / "package-journal.json").unlink()
-        PET.remove_tree(stage)
+        sentinel.unlink()
+        stage.rmdir()
 
         matching_name = ".stage-" + "b" * 32
         matching_stage = state / matching_name

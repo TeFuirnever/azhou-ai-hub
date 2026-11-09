@@ -15,7 +15,6 @@ import io
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import sys
 import uuid
@@ -538,10 +537,24 @@ def verified_selected_package(project, *, require_current=True):
     return directory, facts, receipt
 
 
-def remove_tree(path, *, allow_empty=False):
+def capture_removal_plan(path, names):
     require(path.is_dir() and not path.is_symlink(), f"拒绝删除非普通目录：{path}", "recovery-required")
-    package_files(path, allow_empty=allow_empty)  # Verify all entries before deleting a transaction-owned tree.
-    shutil.rmtree(path)
+    identity = path.lstat()
+    require(package_files(path) == names, "清理目标含未知或缺失文件，保留待核对", "recovery-required")
+    files = {name: sha(read(child(path, name))) for name in names}
+    plan = {"directoryIdentity": {"device": identity.st_dev, "inode": identity.st_ino}, "files": files}
+    require(package_directory_matches(path, plan) and package_files(path) == names,
+            "清理目标身份或内容发生变化，保留待核对", "recovery-required")
+    return plan
+
+
+def remove_tree(path, plan):
+    files = plan["files"]
+    require(package_directory_matches(path, plan) and package_files(path) == set(files),
+            "清理目标身份或内容发生变化，保留待核对", "recovery-required")
+    require(all(sha(read(child(path, name))) == digest for name, digest in files.items()),
+            "清理目标内容发生变化，保留待核对", "recovery-required")
+    remove_planned_directory(path, plan["directoryIdentity"], files, allow_missing=False)
 
 
 def stage_file_names(kind):
@@ -619,24 +632,26 @@ def verify_stage_for_cleanup(stage, journal, expected_kinds):
 
 def remove_planned_stage(stage, journal, expected_kinds):
     verify_stage_for_cleanup(stage, journal, expected_kinds)
-    files = journal["stageFiles"]
+    remove_planned_directory(stage, journal["stageIdentity"], journal["stageFiles"], allow_missing=True)
+
+
+def remove_planned_directory(directory, binding, files, *, allow_missing):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         with contextlib.ExitStack() as root_handles:
-            parent_fd = os.open(stage.parent, flags)
+            parent_fd = os.open(directory.parent, flags)
             root_handles.callback(os.close, parent_fd)
-            root_fd = os.open(stage.name, flags, dir_fd=parent_fd)
+            root_fd = os.open(directory.name, flags, dir_fd=parent_fd)
             root_handles.callback(os.close, root_fd)
-            binding = journal["stageIdentity"]
             expected_identity = (binding["device"], binding["inode"])
 
             def check_root():
-                path_info = os.stat(stage.name, dir_fd=parent_fd, follow_symlinks=False)
+                path_info = os.stat(directory.name, dir_fd=parent_fd, follow_symlinks=False)
                 opened = os.fstat(root_fd)
                 require(stat.S_ISDIR(path_info.st_mode) and stat.S_ISDIR(opened.st_mode)
                         and (path_info.st_dev, path_info.st_ino) == expected_identity
                         and (opened.st_dev, opened.st_ino) == expected_identity,
-                        "暂存目录身份已变化，保留待核对", "recovery-required")
+                        "清理目录身份已变化，保留待核对", "recovery-required")
 
             def open_parent(parts, handles):
                 current = root_fd
@@ -654,11 +669,13 @@ def remove_planned_stage(stage, journal, expected_kinds):
                         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
                                      dir_fd=folder_fd)
                     except FileNotFoundError:
-                        continue
+                        if allow_missing:
+                            continue
+                        raise
                     handles.callback(os.close, fd)
                     before = os.fstat(fd)
                     require(stat.S_ISREG(before.st_mode) and before.st_size <= MAX_FILE_BYTES,
-                            "暂存文件不是允许的普通文件，保留待核对", "recovery-required")
+                            "清理文件不是允许的普通文件，保留待核对", "recovery-required")
                     digest, total = hashlib.sha256(), 0
                     while True:
                         try:
@@ -668,7 +685,7 @@ def remove_planned_stage(stage, journal, expected_kinds):
                         if not chunk:
                             break
                         total += len(chunk)
-                        require(total <= MAX_FILE_BYTES, "暂存文件过大，保留待核对", "recovery-required")
+                        require(total <= MAX_FILE_BYTES, "清理文件过大，保留待核对", "recovery-required")
                         digest.update(chunk)
                     after = os.fstat(fd)
                     at_name = os.stat(parts[-1], dir_fd=folder_fd, follow_symlinks=False)
@@ -676,7 +693,7 @@ def remove_planned_stage(stage, journal, expected_kinds):
                     require(stat.S_ISREG(at_name.st_mode)
                             and identity(before) == identity(after) == identity(at_name)
                             and total == after.st_size and digest.hexdigest() == expected_sha,
-                            "暂存文件内容或身份已变化，保留待核对", "recovery-required")
+                            "清理文件内容或身份已变化，保留待核对", "recovery-required")
                     check_root()
                     os.unlink(parts[-1], dir_fd=folder_fd)
             directories = {parent.as_posix() for name in files for parent in Path(name).parents
@@ -689,11 +706,13 @@ def remove_planned_stage(stage, journal, expected_kinds):
                         check_root()
                         os.rmdir(parts[-1], dir_fd=folder_fd)
                     except FileNotFoundError:
-                        continue
+                        if allow_missing:
+                            continue
+                        raise
             check_root()
-            os.rmdir(stage.name, dir_fd=parent_fd)
+            os.rmdir(directory.name, dir_fd=parent_fd)
     except OSError as exc:
-        raise PetError("recovery-required", f"暂存无法安全清理，保留待核对：{exc}") from exc
+        raise PetError("recovery-required", f"目录无法安全清理，保留待核对：{exc}") from exc
 
 
 def recover_package_stage(state, project, operation_id=None):
@@ -792,12 +811,13 @@ def package_run(project, run, snapshot_path, operation_id=None):
     preserved = []
     for old in packages.iterdir():
         if old not in (destination, previous):
+            plan = capture_removal_plan(old, stage_file_names("package"))
             old_facts, old_receipt = check_package(old, project, require_current=False)
             expected_name = old_facts["themeRevision"] + "-" + old_facts["atlasSHA256"]
             if old.name != expected_name or not package_directory_matches(old, old_receipt):
                 preserved.append(str(old))
                 continue
-            remove_tree(old)
+            remove_tree(old, plan)
     result = {"status": "packaged", "source": {"themeRevision": rev, "status": "reviewed"},
               "package": {"path": str(destination), **facts}, "installed": "unchanged", "runtime": RUNTIME}
     if preserved:
@@ -909,17 +929,19 @@ def recover_install(pets, project):
         verify_candidate(target, "已提交目标发生变化")
         if backup.exists():
             require(record["hadPrevious"], "首次安装出现未知旧副本", "recovery-required")
+            plan = capture_removal_plan(backup, stage_file_names("install"))
             previous = installed_facts(backup, previous_project)
             exact_previous(previous, "旧安装副本摘要不符")
-            operations.append(("remove", backup, None))
+            operations.append(("remove", backup, plan))
         outcome = "completed-committed-install"
     elif backup.exists():
         require(record["hadPrevious"], "首次安装出现未知旧副本", "recovery-required")
         previous = installed_facts(backup, previous_project)
         exact_previous(previous, "旧包摘要不符")
         if target.exists():
+            plan = capture_removal_plan(target, stage_file_names("install"))
             verify_candidate(target, "目标不是本事务候选")
-            operations.append(("remove", target, None))
+            operations.append(("remove", target, plan))
         operations.append(("move", backup, target))
         outcome = "restored-previous-installed-package"
     else:
@@ -927,12 +949,13 @@ def recover_install(pets, project):
             previous = installed_facts(target, previous_project)
             exact_previous(previous, "旧包不在暂存且正式目标已改变")
         elif target.exists():
+            plan = capture_removal_plan(target, stage_file_names("install")) if not record.get("hadPrevious") else None
             actual = installed_facts(target, project)
             if record.get("hadPrevious"):
                 exact_previous(actual, "旧包不在暂存且正式目标已改变")
             else:
                 candidate_matches(actual, "目标不是本事务候选")
-                operations.append(("remove", target, None))
+                operations.append(("remove", target, plan))
         elif record.get("hadPrevious"):
             raise PetError("recovery-required", "正式目标与旧包均缺失，不能声称已恢复")
         outcome = "restored-pre-install-state"
@@ -940,7 +963,7 @@ def recover_install(pets, project):
     for action, source, destination in operations:
         check_stage_before_action()
         if action == "remove":
-            remove_tree(source)
+            remove_tree(source, destination)
         else:
             rename_exclusive(source, destination)
     check_stage_before_action()
