@@ -4,6 +4,8 @@
 
 ## 公开收据
 
+- [2026-11-10 skill 升级机器记录](skill-upgrade-2026-11-10.json) 与[审查说明](../docs/research/2026-11-10-skill-upgrade.md)：正式稳定来源、实际 A/B/C、独立合成验收、保护与恢复；C2 尚待 exact-diff 人类批准。
+
 - [2026-08-23 public install smoke](public-install-smoke-2026-08-23.md)：从公开 GitHub 默认分支发现并隔离安装两个 canonical skill；不升级为发布、跨 harness 或模型质量证明。
 - [2026-09-01 Foundation discovery/invocation on Claude Code](foundation-discovery-invocation-claude-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、headless 主机发现与文档化只读调用；不升级为个人根安装、交互会话或跨 harness 一致性证明。
 - [2026-09-01 Foundation discovery/invocation on zcode](foundation-discovery-invocation-zcode-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、`skills list` 主机发现与文档化只读调用；调用依赖已授权的最小用户级 model provider 配置；不升级为 GUI 行为或跨 harness 一致性证明。
@@ -26,4 +28,4 @@
 - 带 request/correction excerpt 的采集报告；
 - 用户路径、身份、账号、URL、token、私有代码或未公开资产。
 
-本地运行 `collect_agent_history.py` 后，先用 `validate_evidence_bundle.py` 校验，再依据高信号哈希回看原始会话，把机制级结论写入 `benchmarks/repo-pedant/history/`。原始历史始终留在 runtime 自己的目录。
+本地运行 `collect_agent_history.py` 后，先用 `validate_evidence_bundle.py` 校验，再依据高信号哈希回看原始会话，把机制级结论写入 `benchmarks/super-repo-pedant/history/`。原始历史始终留在 runtime 自己的目录。

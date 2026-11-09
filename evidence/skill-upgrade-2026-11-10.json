@@ -1,0 +1,3695 @@
+{
+  "schema": "azhou.skill-upgrade-review.v1",
+  "as_of": "2026-11-10",
+  "baseline": "79905b55c2ac78e265813c485955b9b568127ae9",
+  "state": "review_branch_not_live_promotion",
+  "counts": {
+    "already_at_latest_stable": 4,
+    "no_stable_release": 19,
+    "original_no_upstream_skill_release": 8,
+    "stable_synced_review_branch": 2
+  },
+  "skills": [
+    {
+      "skill": "agent-experience",
+      "path": ".agents/skills/agent-experience/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/preset/agent-preset/skills/agent-experience/SKILL.md"
+      ],
+      "before_entry_sha256": "dc8df64d1e3d0ebbb2d2548d7acd7dba8276f94b948e83cf8c636c1cb70d2bed",
+      "review_entry_sha256": "dc8df64d1e3d0ebbb2d2548d7acd7dba8276f94b948e83cf8c636c1cb70d2bed",
+      "before_tree_sha256": "d238f5ccfc9fd84d3cb4c7ed5ea6b926774dfc8a1d3f4ba6771150eb936390fd",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：有界首层上下文、可靠延迟发现、动作前关键约束、结果邻接上下文/截断/续读、工具行为说明、参数规则归位、事实去重、首轮token与全流程工作量对照。\n- 本地替代：明确宿主实际挂载与源码能力不同，拿不到token计数时标记未测。\n- 未迁入：未迁入任何DSH工具服务或系统提示实现；开发alias使用已解析的preset原文。",
+      "source_verification": {
+        "skill": "agent-experience",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/packages/preset/agent-preset/skills/agent-experience/SKILL.md",
+        "source_sha256": "1244928710cb7e399325c416e80312037d4da249559a09fe289515cc66ee1752",
+        "recorded_sha256": "1244928710cb7e399325c416e80312037d4da249559a09fe289515cc66ee1752",
+        "matches_record": true,
+        "source_git_blob": "0d12d9c3019c61d282fa760e05a3f746726b1adb",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "architecture-governance",
+      "path": ".agents/skills/architecture-governance/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/architecture-governance/SKILL.md",
+        "https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9"
+      ],
+      "before_entry_sha256": "a987dd45d9e44436a59e6e03d24ff88877d61f757303070634618580059b0d8e",
+      "review_entry_sha256": "a987dd45d9e44436a59e6e03d24ff88877d61f757303070634618580059b0d8e",
+      "before_tree_sha256": "8d7551e7bdc3d0555c8ba81c671b8dbaa4f174117f10110d01419f65f03d9d8e",
+      "target": {
+        "tag": "v3.17.2",
+        "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "release_url": "https://github.com/zai-org/ZCode/releases/tag/v3.17.2"
+      },
+      "status": "already_at_latest_stable",
+      "reason": "Current immutable source equals latest stable release commit; preserve local adaptation",
+      "local_capabilities_preserved": "- 保留与补齐：编码前基线与有界上下文、单一状态所有者、公开依赖边、异步顺序/幂等/过期结果/重放、基线违规与新违规分离、检查器实际覆盖边界。\n- 本地替代：按 Hub 当前架构和模块归属检查，新增模块沿已有登记机制；人工检查与可执行门禁分别报告。\n- 未迁入：ZCode architecture-policy.yaml、固定 contract/domain/app/adapters/ui 层级、adopt/context/check 工具、四文件模块模板和停用 app unit test 的产品规则。",
+      "source_verification": {
+        "skill": "architecture-governance",
+        "source": "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/architecture-governance/SKILL.md",
+        "source_sha256": "33fb5462d6d8b0d5b61897b75842c5233e245b1cc5c2dffb02689733acce51bc",
+        "recorded_sha256": "33fb5462d6d8b0d5b61897b75842c5233e245b1cc5c2dffb02689733acce51bc",
+        "matches_record": true,
+        "source_git_blob": "715208e6512dfb2c51631527863b43647b637338",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "cordis-styling-nitpicking",
+      "path": ".agents/skills/cordis-styling-nitpicking/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/cordis-styling-nitpicking/SKILL.md"
+      ],
+      "before_entry_sha256": "5de4525294bca330a4a42b77240f3101b5e4b506f6c426ae456bde61ea7e3999",
+      "review_entry_sha256": "5de4525294bca330a4a42b77240f3101b5e4b506f6c426ae456bde61ea7e3999",
+      "before_tree_sha256": "dadd80248d2f1d1c4c71b2bf11f974fb570470960852bfea24768eb828bee8d6",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：真实插件根的可达审查、全局可变状态归属、副作用逆操作、清理最后依赖调用、并发disposer/监听器失效、真实disposer身份、根退出/替换/异常路径、屏障回归与终态/持久结果。\n- 本地替代：Cordis语义仅在实际Cordis使用中核实；通用异步资源按真实owner判断，严重级别按实际影响。\n- 未迁入：所有三类自动P0、固定vendored Cordis版本的generator workaround、DSH专属记录与审查schema。",
+      "source_verification": {
+        "skill": "cordis-styling-nitpicking",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/cordis-styling-nitpicking/SKILL.md",
+        "source_sha256": "697bdf8aced2c680b74ceea93cb836d650c85f3f451618891d320327cd74d5b1",
+        "recorded_sha256": "697bdf8aced2c680b74ceea93cb836d650c85f3f451618891d320327cd74d5b1",
+        "matches_record": true,
+        "source_git_blob": "acfaf3549204f64e2c8f0e06e9dc46c388d36178",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dep-refs",
+      "path": ".agents/skills/dep-refs/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/dep-refs/SKILL.md",
+        "https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9"
+      ],
+      "before_entry_sha256": "b54aa59905535832e96d2914e0f8cb1c5bf8353781dcdcd8839593546c561b65",
+      "review_entry_sha256": "b54aa59905535832e96d2914e0f8cb1c5bf8353781dcdcd8839593546c561b65",
+      "before_tree_sha256": "beb215e2295bd5c5de68f918fd2005b8a592f298ef0ddc458834e8f3a1df3b3d",
+      "target": {
+        "tag": "v3.17.2",
+        "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "release_url": "https://github.com/zai-org/ZCode/releases/tag/v3.17.2"
+      },
+      "status": "already_at_latest_stable",
+      "reason": "Current immutable source equals latest stable release commit; preserve local adaptation",
+      "local_capabilities_preserved": "- 保留与补齐：文件导出枚举、unused 候选复核、局部探索与全项目删除检查、别名/barrel/跨包出口、动态盲区、结构化批量结果与具体调用位置。\n- 本地替代：已挂载索引优先，缺失时源码搜索并标明语义精度限制；不为查询安装新分析器。\n- 未迁入：ZCode 的 dep:refs/Knip 实现与脚本接口、固定 TypeScript workspace、宿主专用 invocation 元数据。",
+      "source_verification": {
+        "skill": "dep-refs",
+        "source": "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/dep-refs/SKILL.md",
+        "source_sha256": "e65f7de06bde52ca238bbc803d40e731d052e149690222736916e37631db7d23",
+        "recorded_sha256": "e65f7de06bde52ca238bbc803d40e731d052e149690222736916e37631db7d23",
+        "matches_record": true,
+        "source_git_blob": "ea9d32a046031561aa3b4c1a20ca8f4a9830e40a",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-archive-agent-notes",
+      "path": ".agents/skills/dsh-archive-agent-notes/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-archive-agent-notes/SKILL.md"
+      ],
+      "before_entry_sha256": "3ea77fbd8b953de8a1b375458ee2e735f200d8ed491f402b910dc21f0ec46563",
+      "review_entry_sha256": "3ea77fbd8b953de8a1b375458ee2e735f200d8ed491f402b910dc21f0ec46563",
+      "before_tree_sha256": "b04413bbe224447aa76ddd65890fe90494310d67592e5f33bac3c579093fcb6f",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：新增记录替代检查、未来决定价值分类、implemented/proposed/rejected差异、完整/部分替代、双语/索引整体、活跃入站链接、冻结正文/封印、恢复版本与分类报告。\n- 本地替代：保留按本项目授权与记录owner执行；删除为有条件候选，记忆写入需用户明确请求。\n- 未迁入：DSH固定triplet/archived/{kind}布局、专用封印脚本、自动删除与按来源命令修理归档。",
+      "source_verification": {
+        "skill": "dsh-archive-agent-notes",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-archive-agent-notes/SKILL.md",
+        "source_sha256": "298e95629ade953ba5e0e4fd4c50e5205389ac6adc5d55dea1ef26617a323f84",
+        "recorded_sha256": "298e95629ade953ba5e0e4fd4c50e5205389ac6adc5d55dea1ef26617a323f84",
+        "matches_record": true,
+        "source_git_blob": "6052cbf1fc51460533b0443eab9e282104cce6d9",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-ci-test-reliability",
+      "path": ".agents/skills/dsh-ci-test-reliability/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-ci-test-reliability/SKILL.md"
+      ],
+      "before_entry_sha256": "5f9a2ed146cc65e1ae42c834bbb1bb546c677e472e0c8e70da348f32b115d0f2",
+      "review_entry_sha256": "5f9a2ed146cc65e1ae42c834bbb1bb546c677e472e0c8e70da348f32b115d0f2",
+      "before_tree_sha256": "a9cd47d2c566e05a1580644eaeb0d1792bc4c92e9fa90d2145cdea9cda3b730e",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：四层并发拓扑、原子端口/目录、记录值与活资源分离、精确全局恢复、平台mtime/env/handle/signal差异、lane及hook预算、确定性同步、静止清理、既有flake分类与复现阶梯、负对照和独立进程。\n- 本地替代：使用当前测试配置和CI；诊断不授权修改或远端重跑，平台不可用如实停止该复现路径。\n- 未迁入：DSH Vitest固定配置、专用snapshot目录与外部API测试规则的默认继承。",
+      "source_verification": {
+        "skill": "dsh-ci-test-reliability",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-ci-test-reliability/SKILL.md",
+        "source_sha256": "6ed04407132759698e5e5e9684178f826b4c659e15e90e8e996141e5ad7edb4c",
+        "recorded_sha256": "6ed04407132759698e5e5e9684178f826b4c659e15e90e8e996141e5ad7edb4c",
+        "matches_record": true,
+        "source_git_blob": "ba97a377453d629c6e356d20249612acfc4875b0",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-client-ui-ux",
+      "path": ".agents/skills/dsh-client-ui-ux/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-client-ui-ux/SKILL.md"
+      ],
+      "before_entry_sha256": "53059ac77b3bd1a9ad3b0d10aa89a54fbd03477c480a613f29f620d081634680",
+      "review_entry_sha256": "53059ac77b3bd1a9ad3b0d10aa89a54fbd03477c480a613f29f620d081634680",
+      "before_tree_sha256": "dff6254c2651d7c5a6e32d0cefc59891e61b9d2a71724d6e504cdaf74745fde4",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：按影响分级与最低真实页面检查、共享消费者、起点证据、主题/长文/断点/状态、对齐分组、图标复用/新绘制/图稿规范化、几何、反馈寿命、加载、overlay、平台、视觉与批准分离。\n- 补充保留：设计规则维护保持唯一owner，区分迁移/未来适用并给可区分案例和规则版本。\n- 本地替代：视觉细节按需reference，值与组件API由Hub当前目标页面决定。\n- 未迁入：DSH固定字号/字重/curve/token、sidebar与frame-clearance约定、指定审批人员与每GUI PR上传GIF的规定。",
+      "source_verification": {
+        "skill": "dsh-client-ui-ux",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-client-ui-ux/SKILL.md",
+        "source_sha256": "5b73d58e2e5d47323a395065aa466e8950431fee3e177401b582683e3a1480cd",
+        "recorded_sha256": "5b73d58e2e5d47323a395065aa466e8950431fee3e177401b582683e3a1480cd",
+        "matches_record": true,
+        "source_git_blob": "4455609b71cbf2cf245304a43b245ed3af249055",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-code-review",
+      "path": ".agents/skills/dsh-code-review/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-code-review/SKILL.md"
+      ],
+      "before_entry_sha256": "29432cfa279c476c956e8c003fece7678dcb907e7ea636e3793d9d755e8a0726",
+      "review_entry_sha256": "29432cfa279c476c956e8c003fece7678dcb907e7ea636e3793d9d755e8a0726",
+      "before_tree_sha256": "7b306808223e8d261048f0c9cdacb7df9de93ac9f550009cc60c728598ddef95",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：live base/head及完整scope、先独立需求后diff、接口两侧、必要性与消费者、配置真实优先级、权限替代入口、借用/派生状态、最终byte bounds、真实交付入口、文案/双语/UI、负对照与审查回复。\n- 补充保留：所有新增改动文案触发覆盖/准确性/位置/质量语义复核，并接入本地prose规则。\n- 本地替代：使用Foundation scope与Hub合同；第三方产品专属type/projection/locale/export要求不作为本项目阻断器。\n- 未迁入：DSH package层级、特定Cordis export形式、全部生命周期问题P0、未移植的session-projection Skill和默认发GitHub评论。",
+      "source_verification": {
+        "skill": "dsh-code-review",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-code-review/SKILL.md",
+        "source_sha256": "0d33aa4a950d08a8be83af565cb2f0c8fa465702eda6aa461ca4485cc94949c4",
+        "recorded_sha256": "0d33aa4a950d08a8be83af565cb2f0c8fa465702eda6aa461ca4485cc94949c4",
+        "matches_record": true,
+        "source_git_blob": "2be16611a8be11022980e4338da4988c15780fd6",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-create-upgrade-guide",
+      "path": ".agents/skills/dsh-create-upgrade-guide/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-create-upgrade-guide/SKILL.md"
+      ],
+      "before_entry_sha256": "6c85c2b02e4f7183f929418f27fcf371f7131d8a965c1a71ba7ceef3beae5c5e",
+      "review_entry_sha256": "6c85c2b02e4f7183f929418f27fcf371f7131d8a965c1a71ba7ceef3beae5c5e",
+      "before_tree_sha256": "cec1555ca494ac099c5da70e43b969a6319f166ebc62ba567cbabb5b504b2fb5",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：外部break与内部同改区别、识别即写、单个升级区间、未发布指南持续更新/撤销、已发布历史保留、变更/迁移、精确步骤/验证/失败恢复、双语。\n- 本地替代：版本来自受影响组件，文档沿Hub现有owner；不可逆迁移仅在真实授权环境验证。\n- 未迁入：DSH根版本假设、v目录与triplet、500词及固定frontmatter门禁。",
+      "source_verification": {
+        "skill": "dsh-create-upgrade-guide",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-create-upgrade-guide/SKILL.md",
+        "source_sha256": "0ee972372b3fa02c92736e39179940dfe3e8ff1141a95dceefd4fd864ff8963a",
+        "recorded_sha256": "0ee972372b3fa02c92736e39179940dfe3e8ff1141a95dceefd4fd864ff8963a",
+        "matches_record": true,
+        "source_git_blob": "9723537e22b096b856a51398cb1485c7e1d0f3d0",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-doc",
+      "path": ".agents/skills/dsh-doc/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-doc/SKILL.md"
+      ],
+      "before_entry_sha256": "9f8918cbcf24d29cb37f0e15a41b73ebe82112627acd98be28222c7f31d228b7",
+      "review_entry_sha256": "9f8918cbcf24d29cb37f0e15a41b73ebe82112627acd98be28222c7f31d228b7",
+      "before_tree_sha256": "13b4eb384fddecb551a52d6da54a853d6881ae820b5acfdb74153ef6cc7a2f0b",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：读者任务分类、教程/reference/包文档层次、用户到实现、命令/默认/安装形态事实检查、双语/导航原子迁移、语料审计与检索预算、网站只作投影、生成新鲜度与负对照。\n- 本地替代：遵守Hub文档和双语规则，未授权外部写入不会因文档验收被执行；网站建设/部署不自动授权。\n- 未迁入：DSH kind模板集、固定Summary/Dev Note、物理行数/sidecar、VitePress allowlist字段和pnpm gate。",
+      "source_verification": {
+        "skill": "dsh-doc",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-doc/SKILL.md",
+        "source_sha256": "a0f5a09bf759a75d63d145d64899c640dcc240845e15eb5b87a3a2ab2eda65de",
+        "recorded_sha256": "a0f5a09bf759a75d63d145d64899c640dcc240845e15eb5b87a3a2ab2eda65de",
+        "matches_record": true,
+        "source_git_blob": "5e32d4c07ec5fe26b2407b8d408713f4f9cb7457",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-error-handling",
+      "path": ".agents/skills/dsh-error-handling/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-error-handling/SKILL.md"
+      ],
+      "before_entry_sha256": "4810303f52996081839396d8010abae861d8a6d6fd50716727c7d67d17935dde",
+      "review_entry_sha256": "4810303f52996081839396d8010abae861d8a6d6fd50716727c7d67d17935dde",
+      "before_tree_sha256": "dd4eb90a305ce64ba99f78e54dfc3a9858e383361f67a83a1ca2cb7e3010a8a4",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "# Source and local boundary\n\nSource: https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-error-handling/SKILL.md\n\nSource SHA-256: `fcde7e278056263f7b93b6854fe05d0b492bdf09739f4f4f3537e8ffd30a1c2d`. License: MIT; retained notice/license files are in this folder.\n\nThis is a task-scoped adaptation for Azhou AI Hub, not a copy or claim of full upstream parity. It preserves the trigger and general engineering method while substituting the current project rules, actual tools, evidence and authorization. Source-project paths, commands, product-specific runtime contracts, automatic deletion, mandatory publication and approvals do not transfer. Consult the immutable source for omitted source-specific details.\n",
+      "source_verification": {
+        "skill": "dsh-error-handling",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-error-handling/SKILL.md",
+        "source_sha256": "fcde7e278056263f7b93b6854fe05d0b492bdf09739f4f4f3537e8ffd30a1c2d",
+        "recorded_sha256": "fcde7e278056263f7b93b6854fe05d0b492bdf09739f4f4f3537e8ffd30a1c2d",
+        "matches_record": true,
+        "source_git_blob": "f9dd7fd80999c7c5f4cf03096d6a42649b15e40e",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-find-simplifications",
+      "path": ".agents/skills/dsh-find-simplifications/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-find-simplifications/SKILL.md"
+      ],
+      "before_entry_sha256": "167d6e028df68debcc95cab8ce031067ec25335effd515e24cc3a7962c52169d",
+      "review_entry_sha256": "167d6e028df68debcc95cab8ce031067ec25335effd515e24cc3a7962c52169d",
+      "before_tree_sha256": "7926780ff3f17fbe8c62211327cae8c5b38ee863cb71d198ed2668e93e87c495",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：调查与实施分离、完整效果路径、真实区分/权威值、能力取舍、净维护成本、动态/仓外消费者、信任/异步义务、依赖接缝测试、其他分支独立diff与记录合并。\n- 补充保留：评估静态unused检查覆盖编译器/转换器等构建期消费者，不维护第二份workspace例外清单。\n- 本地替代：使用Hub当前受保护设计、依赖和任务owner；不靠候选数或删行数评价。\n- 未迁入：DSH双LLM和JSONL特定不可删设计、固定Agent Note模板、默认宽域委派与关闭其他PR。",
+      "source_verification": {
+        "skill": "dsh-find-simplifications",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-find-simplifications/SKILL.md",
+        "source_sha256": "0287165e16f482bc197bc36a40e66a2eee3d47479bb0dfc1836602a96052befe",
+        "recorded_sha256": "0287165e16f482bc197bc36a40e66a2eee3d47479bb0dfc1836602a96052befe",
+        "matches_record": true,
+        "source_git_blob": "d1ad560b81b58cf7c6a8ff1456c0690de59e2069",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-pre-push-checks",
+      "path": ".agents/skills/dsh-pre-push-checks/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-pre-push-checks/SKILL.md"
+      ],
+      "before_entry_sha256": "632a909430cf266ca05de9515342bff907085e06f789d1789694e28c42eeaf06",
+      "review_entry_sha256": "632a909430cf266ca05de9515342bff907085e06f789d1789694e28c42eeaf06",
+      "before_tree_sha256": "42a112870f264488827a362b93787bf10edcded5f36836f1e011af8145d4fd9f",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：实时基线/scope、实际消费者到检查映射、测试选择与源码覆盖分离、参数透传/数量核对、hook改变字节后复查、exact lease、同步后逐层验证、远端OID/CI/review/no-checks归因。\n- 本地替代：Hub强制python3 scripts/verify.py优先；本地ignored Skill另做文件指纹；推送与历史操作需实际授权。\n- 未迁入：DSH无统一本地基线、具体pnpm/hook/snapshot布局与覆盖率阈值，不自动授权stack sync。",
+      "source_verification": {
+        "skill": "dsh-pre-push-checks",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-pre-push-checks/SKILL.md",
+        "source_sha256": "8a4b78f71444be44bc2fcfab25f6b1553230bdb61433f1bd586f53f8429d17d7",
+        "recorded_sha256": "8a4b78f71444be44bc2fcfab25f6b1553230bdb61433f1bd586f53f8429d17d7",
+        "matches_record": true,
+        "source_git_blob": "e10d03ceccce49f2e4757b9097d05e2ee0ee2c3c",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-prose-standard",
+      "path": ".agents/skills/dsh-prose-standard/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-prose-standard/SKILL.md"
+      ],
+      "before_entry_sha256": "7dce74bb045968699468779e1eddbee40c47d495e60c820059b4a58300998bd1",
+      "review_entry_sha256": "7dce74bb045968699468779e1eddbee40c47d495e60c820059b4a58300998bd1",
+      "before_tree_sha256": "858a811fc51b7759678083bbc3257ce78da4b80221e6bf8346b9ed18ab4b7e5c",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：scope与只读/写入区分、自动/交互、第三方/档案排除、完整命题、按位置补齐合同、局部合同与链接理由、可见文字行为证据、生成片段自足、keep/add/trim/restore与真正边界案例。\n- 本地替代：使用Hub文本/locale/双语所有者，不修改全局偏好或记忆。\n- 未迁入：DSH专用typed locale API、固定snapshot与sidecar要求、把所有任务强制变成交互校准。",
+      "source_verification": {
+        "skill": "dsh-prose-standard",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-prose-standard/SKILL.md",
+        "source_sha256": "63530dfc600b1be07b6f2c1d1a794a3ce0ef78f91d2c18b7b1303dce3b0d5e72",
+        "recorded_sha256": "63530dfc600b1be07b6f2c1d1a794a3ce0ef78f91d2c18b7b1303dce3b0d5e72",
+        "matches_record": true,
+        "source_git_blob": "338ff29a217a455a2a44270d496abfea30b87ac2",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-responsive-ui",
+      "path": ".agents/skills/dsh-responsive-ui/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-responsive-ui/SKILL.md"
+      ],
+      "before_entry_sha256": "74007ac8c8d3fde6b538ae198dcb50dcdefaec646d8d4a8a594750170f7a7eed",
+      "review_entry_sha256": "74007ac8c8d3fde6b538ae198dcb50dcdefaec646d8d4a8a594750170f7a7eed",
+      "before_tree_sha256": "a44b3418cfdff67b43f53fcfb66309bc6dae11981209ddef124a9f8965f00d6e",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：先空间/换行再截断、全文入口、主操作保留、标题、图标化条件、宽度与输入能力分开、混合设备hover、两类tooltip、焦点/草稿/移动键盘、网页输入zoom。\n- 本地替代：最小viewport来自本产品；粗指针16px输入建议需目标浏览器验证。\n- 未迁入：DSH固定390px下限、具体Plugins/模型选择器例外和页面CSS路径。",
+      "source_verification": {
+        "skill": "dsh-responsive-ui",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-responsive-ui/SKILL.md",
+        "source_sha256": "e6df843b5e06f78e2932727efd46781337a62861505a5d4b1db817d6f041565f",
+        "recorded_sha256": "e6df843b5e06f78e2932727efd46781337a62861505a5d4b1db817d6f041565f",
+        "matches_record": true,
+        "source_git_blob": "44b2fbe977c0471d7bc1b628f7dad87d9b4494bf",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-speed-up-perf",
+      "path": ".agents/skills/dsh-speed-up-perf/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-speed-up-perf/SKILL.md"
+      ],
+      "before_entry_sha256": "058a6eb0daeb7482dc0f2e15bda6f1dd26a3355b067d80d1ec86b343854e9a05",
+      "review_entry_sha256": "058a6eb0daeb7482dc0f2e15bda6f1dd26a3355b067d80d1ec86b343854e9a05",
+      "before_tree_sha256": "d87a300ee5b903cae356d3f3df80c2d4689c1557ce52c69b989a2c914fbcfe09",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：用户路径与独立成本维度、现实合成输入和隐私、测量卡、真实构建/冷热/可达输出、raw samples与校准、保留/峰值内存、真实浏览器输入、负对照、行为/取消/持久保证与拒绝标准。\n- 本地替代：沿本项目已有benchmark，历史/本地/CI分开；停止条件受用户任务约束。\n- 未迁入：DSH专属profile、calibration常量、session历史实现和自动建stack/回复外部review。",
+      "source_verification": {
+        "skill": "dsh-speed-up-perf",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-speed-up-perf/SKILL.md",
+        "source_sha256": "8ffc5fed104ede34b27075145350b97489b45d394f9f13464bf2b605c66e2931",
+        "recorded_sha256": "8ffc5fed104ede34b27075145350b97489b45d394f9f13464bf2b605c66e2931",
+        "matches_record": true,
+        "source_git_blob": "491e39f81c440d0ef15978579ce55dd3dc56f0ac",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-translate-docs",
+      "path": ".agents/skills/dsh-translate-docs/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-translate-docs/SKILL.md"
+      ],
+      "before_entry_sha256": "fa50e0798785364b02aadb2c6c0c6f65c7c5400b26c762a4a58792582e260afe",
+      "review_entry_sha256": "fa50e0798785364b02aadb2c6c0c6f65c7c5400b26c762a4a58792582e260afe",
+      "before_tree_sha256": "ca28913c0855b021896735745813df227af60bfb2367fe85e131c1f98adb1dd7",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：点名才启动扩展流程、双语同等权威、最小增量/新pair/双侧冲突分流、briefing内容、纯代码机械同步、逐命题复核/独立通读、术语待定、链接结构及配对盖章边界。\n- 本地替代：缺briefing工具时用准确diff手工形成简报，委派只在实际授权可用时；沿Hub文件命名，保留原普通文档不自动扩展的边界。\n- 未迁入：DSH生成器/sidecar与固定.zh.md规范、强制委派和宿主专用disable-model-invocation字段。",
+      "source_verification": {
+        "skill": "dsh-translate-docs",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-translate-docs/SKILL.md",
+        "source_sha256": "a72d26e988a6f9be29a09d6776bda0539ead49c42a447d327636fe4de0da83e7",
+        "recorded_sha256": "a72d26e988a6f9be29a09d6776bda0539ead49c42a447d327636fe4de0da83e7",
+        "matches_record": true,
+        "source_git_blob": "6ff2650c74c7f581e6ff7f095b36eb82584c785c",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "dsh-trim-cot-leakage",
+      "path": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-trim-cot-leakage/SKILL.md"
+      ],
+      "before_entry_sha256": "0ad014b8cb9fac3d6a78d6cf2daed9ef987317e2d7b13e78f8b12a9f0b6afac2",
+      "review_entry_sha256": "0ad014b8cb9fac3d6a78d6cf2daed9ef987317e2d7b13e78f8b12a9f0b6afac2",
+      "before_tree_sha256": "d677dc714e931ef5852227785a80fd30262c242dbe508ea7bccfea35e47a60cf",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：当前读者可核实标准、八类泄漏与合法反例、scope/exclusions、正负样本校准搜索、无模式语义审阅、命题保留、owner-first/双语/可见行为证据。\n- 本地替代：支持本项目中英文文件与记录，不按关键词自动删，不动原始会话/冻结档案。\n- 未迁入：DSH专有type-equiv/配对命令及历史purge计数，不把来源全文正则集当作完成证明。",
+      "source_verification": {
+        "skill": "dsh-trim-cot-leakage",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/dsh-trim-cot-leakage/SKILL.md",
+        "source_sha256": "977eeb1dfe694e170ac36d9a61c2d9548a2547c3bc170c87e50033cc701d7c2e",
+        "recorded_sha256": "977eeb1dfe694e170ac36d9a61c2d9548a2547c3bc170c87e50033cc701d7c2e",
+        "matches_record": true,
+        "source_git_blob": "f8a852bd66f398fc8c29f50d336df07d47218c27",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "e2e-case-lifecycle",
+      "path": ".agents/skills/e2e-case-lifecycle/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/e2e-case-lifecycle/SKILL.md",
+        "https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9"
+      ],
+      "before_entry_sha256": "0322716ec0461768ea1120be4a88c11dafdee4662016bfa4ea6c71eacf03d41b",
+      "review_entry_sha256": "0322716ec0461768ea1120be4a88c11dafdee4662016bfa4ea6c71eacf03d41b",
+      "before_tree_sha256": "2f42aedc36604049b2e086de0381e6f299779aaa94b4ed6f71e32337b5b29bbe",
+      "target": {
+        "tag": "v3.17.2",
+        "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "release_url": "https://github.com/zai-org/ZCode/releases/tag/v3.17.2"
+      },
+      "status": "already_at_latest_stable",
+      "reason": "Current immutable source equals latest stable release commit; preserve local adaptation",
+      "local_capabilities_preserved": "- 保留与补齐：状态规划和accepted/undefined/pruned、候选与正式证据、case-local/common/synthetic夹具、四种时序、目标元数据、隔离及默认重放、整体晋级回退、容器/套件准入、未跑断言不得covered。\n- 补充保留：开放式功能规划先交给feature-boundary-planner，accepted cases后接管用例生命周期。\n- 本地替代：只使用本项目当前用例、工具和批准所有者；不存在对应流程时具名缺口，不假造命令。\n- 未迁入：ZCode专有case目录、Electron录制helper、provider契约、promote/fixture/Docker工具及固定pnpm门禁。",
+      "source_verification": {
+        "skill": "e2e-case-lifecycle",
+        "source": "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/e2e-case-lifecycle/SKILL.md",
+        "source_sha256": "d66e1f46a5af42914d596d4f2387836d579ae37331783c1b82fc7886a6d18e7a",
+        "recorded_sha256": "d66e1f46a5af42914d596d4f2387836d579ae37331783c1b82fc7886a6d18e7a",
+        "matches_record": true,
+        "source_git_blob": "d5a4e697d5a0693d1c40be5f159181b1c94adafc",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "feature-boundary-planner",
+      "path": ".agents/skills/feature-boundary-planner/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/feature-boundary-planner/SKILL.md",
+        "https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9"
+      ],
+      "before_entry_sha256": "42b39be1c3b47d55050748530f1fbfe731cc83cf9122cbc76ff2c158ad88d83a",
+      "review_entry_sha256": "42b39be1c3b47d55050748530f1fbfe731cc83cf9122cbc76ff2c158ad88d83a",
+      "before_tree_sha256": "6d632a42a89b69e97199dbe9d8d0442a9fa4486cdcd0c5d1fb6e4d94dbc5b29a",
+      "target": {
+        "tag": "v3.17.2",
+        "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "release_url": "https://github.com/zai-org/ZCode/releases/tag/v3.17.2"
+      },
+      "status": "already_at_latest_stable",
+      "reason": "Current immutable source equals latest stable release commit; preserve local adaptation",
+      "local_capabilities_preserved": "- 保留与补齐：impact-only/planning/handoff三模式、七类变化、入口到独立校验/提交owner的矩阵、语义边排序、受控深度、图谱漂移、组合裁剪、稳定case ID与实现交接。\n- 本地替代：使用Hub实际源码索引、现有规划与权威记录；少量有决定价值的问题，不固定提问配额。\n- 未迁入：ZCode专属功能图、领域矩阵、codegraph命令、conversation表及workspaceIdentity公式，不能当成本项目已实现能力。",
+      "source_verification": {
+        "skill": "feature-boundary-planner",
+        "source": "https://github.com/zai-org/ZCode/blob/a9fe401eede6e6e5e01be9048679c206fe6f02d9/.agents/skills/feature-boundary-planner/SKILL.md",
+        "source_sha256": "8eb0f7c5881aa2cbd3f77bdd3d07f6dc3c603e2a77b0d0946759ce60fbd68e7d",
+        "recorded_sha256": "8eb0f7c5881aa2cbd3f77bdd3d07f6dc3c603e2a77b0d0946759ce60fbd68e7d",
+        "matches_record": true,
+        "source_git_blob": "3629542e1979ecb851ebc9d4e7ff94db37ad60de",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "record-browser-gif",
+      "path": ".agents/skills/record-browser-gif/SKILL.md",
+      "classification": [
+        "adapted(project-local)"
+      ],
+      "sources": [
+        "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/record-browser-gif/SKILL.md"
+      ],
+      "before_entry_sha256": "4a7b3a39d2df9003b45f3b821f6854ef9dec2e5a86c182081617bd15245dfcd9",
+      "review_entry_sha256": "4a7b3a39d2df9003b45f3b821f6854ef9dec2e5a86c182081617bd15245dfcd9",
+      "before_tree_sha256": "eb386d1782abc5d5c41289d79ba1fa9291f340b2c73e6866347b4af65124b2c0",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "All 37 official releases are prereleases; keep fcc0ad pin, do not relabel HEAD stable",
+      "local_capabilities_preserved": "- 保留与补齐：真实版本/服务/transport证据链、隔离单次story、video/截图fallback、状态就绪、视频flush、随包encoder、trim/speed/hold/palette/size参数、编码后QA、分片、发布前后head/正文/附件复核。\n- 本地替代：当前浏览器工具优先，依赖缺失不安装；附件检查实际CLI/connector能力，只有明确上传请求才发布。\n- 未迁入：DSH固定build/profile/凭据位置、所有GUI PR强制GIF、仅凭gh版本号假设附件支持；媒体测试不放运行包。",
+      "source_verification": {
+        "skill": "record-browser-gif",
+        "source": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/.agents/skills/record-browser-gif/SKILL.md",
+        "source_sha256": "baacaf5ca4591280a8d3e67f256b8e9beb6a89fe2dd5c0636086621146643806",
+        "recorded_sha256": "baacaf5ca4591280a8d3e67f256b8e9beb6a89fe2dd5c0636086621146643806",
+        "matches_record": true,
+        "source_git_blob": "1fa60fcb4f4b1c5f1ceb2ef197798b7fc4ec70c1",
+        "exit": 0
+      }
+    },
+    {
+      "skill": "super-arch-doc",
+      "path": "skills/super-arch-doc/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "e8d5c0d2cc54d8ed94344173affe8953e0112777db3f7d98b1d7dd95114b04e1",
+      "review_entry_sha256": "e8d5c0d2cc54d8ed94344173affe8953e0112777db3f7d98b1d7dd95114b04e1",
+      "before_tree_sha256": "4be1b0e91f1c63d7b561a009d37bbb039a535969bdbc8d87cf360acabdd0d435",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\nNo upstream skill lineage. The package (entry, brand lifecycle, scaffold `new_doc.py`, closing-gate checker `verify_doc.py`, templates, calibration and review guides) is Azhou-authored. The authoring methodology was distilled from the maintainer's MCC ARCH-2026-001 v0.1–v0.17 document pipeline (team research, readability audit, best-practice review and an architect-approved backlog) — a document process, not a skill package; zero bytes are vendored from any upstream skill.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage; Azhou-authored with zero vendored skill bytes. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-archify",
+      "path": "skills/super-archify/SKILL.md",
+      "classification": [
+        "faithful"
+      ],
+      "sources": [
+        "https://github.com/tt-a1i/archify"
+      ],
+      "before_entry_sha256": "9c1aacec14831cdcfc715845a2c980484c373f67bcf35de64dd1059948f610cd",
+      "review_entry_sha256": "a926e19e8be213e2338f7fb2c7c956098709bc7c5602e85f86c92567f1e12e3d",
+      "before_tree_sha256": "c67843850c7da5d5ae70a73854d60e39cd516a512ed3aab789c5d3e68c31c578",
+      "target": {
+        "tag": "v3.2.0",
+        "commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "release_url": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0"
+      },
+      "status": "stable_sync_in_review_branch",
+      "reason": "Latest skill release; separately versioned DSH adapter is excluded",
+      "local_capabilities_preserved": "# Provenance and local boundary\n\nRepository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) and [archify-MIT.txt](../../../LICENSES/archify-MIT.txt).\n\n## Imported source\n\n| Field | Locked value |\n|---|---|\n| Upstream | `https://github.com/tt-a1i/archify` |\n| Immutable tag / commit | `v3.1.0` / `1c2b42d660e4a7571813fb43839c79e3e9ca7720` |\n| Upstream `SKILL.md` SHA-256 | recorded in `tests/test_archify.py` beside every vendored file hash |\n| License | MIT, retained at [archify-MIT.txt](../../../LICENSES/archify-MIT.txt); upstream `THIRD_PARTY_NOTICES.md` ships inside the package (JetBrains Mono OFL and other bundled notices) |\n\nThe upstream capability baseline at the locked tag is the complete presentation-diagram discipline: typed JSON schemas for ten diagram modes, the deterministic `validate`/`deliver`/`finalize` CLI with real-browser checks, the viewer runtime, the authoring/delivery contracts, and the update-awareness rule. The package is vendored from the upstream `super-archify/` subtree with two exclusions recorded in the compatibility map — the fifteen pre-rendered example HTML files and `package-lock.json` (dev-only); `node bin/archify.mjs doctor` passes all 25 checks on the trimmed package, and every vendored file's SHA-256 is pinned in the complete digest manifest `tests/archify-vendor-manifest.json`.\n\n## Azhou-maintained adaptation\n\n- keeps the upstream `SKILL.md` capability body verbatim, including the fast authoring path, type router, Mermaid mapping, delivery and repair limits, update awareness, setup/fallback and the output contract;\n- normalizes frontmatter to the hub contract (`name`, `description`, `invocation`), moving the upstream `license` and `metadata` fields into this record (upstream v3.1.0 by tt-a1i);\n- carves the coexistence boundary into the description: editable `.excalidraw` source scenes belong to super-excalidraw-diagram; this skill delivers the read-only interactive map (mirrored in super-excalidraw-diagram's own description);\n- adds the Azhou brand protocol, the hold boundary, and the stable receipt (`super-archify.receipt.v1`) whose verification line restates the upstream finalize receipt verdicts;\n- adds `references/setup.md` (Node.js 18+ runtime, fail-closed `doctor`/`guide`/`validate` verification), this provenance record and the upstream compatibility map.\n\nClassification: `faithful` — the complete upstream capability (schemas, CLI gates, renderers, viewer runtime, contracts) is retained unmodified, and every local addition (frontmatter normalization, boundary carve, brand protocol, receipt, setup record, provenance and compatibility records) is packaging or interaction layer, which skill-standard §2.3 excludes from `adapted`. Precedent: verbatim retention of the entire upstream capability with packaging-only additions decides `faithful`. Skill-standard §2.3.\n\n## Reproducible source check\n\n```bash\ngit clone https://github.com/tt-a1i/archify /tmp/archify-upstream\ngit -C /tmp/archify-upstream checkout v3.1.0\nshasum -a 256 /tmp/archify-upstream/archify/SKILL.md /tmp/archify-upstream/archify/bin/archify.mjs\n```\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-asd-ste100",
+      "path": "skills/super-asd-ste100/SKILL.md",
+      "classification": [
+        "faithful"
+      ],
+      "sources": [
+        "https://github.com/TeFuirnever/asd-ste100-skill"
+      ],
+      "before_entry_sha256": "46700151f2d105def2dc9656881e97f4f0362e8c6bdb5c8ade2f6f0468f71523",
+      "review_entry_sha256": "46700151f2d105def2dc9656881e97f4f0362e8c6bdb5c8ade2f6f0468f71523",
+      "before_tree_sha256": "330f7e27518eba1265bae802370717e04ca45ef9d18ae22ae7e7126804b8018b",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "Official releases and tags both empty; preserve existing immutable pin and local capabilities",
+      "local_capabilities_preserved": "# Provenance and local boundary\n\nRepository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) and [asd-ste100-skill-MIT.txt](../../../LICENSES/asd-ste100-skill-MIT.txt).\n\n## Imported source\n\n| Field | Locked value |\n|---|---|\n| Upstream | `https://github.com/TeFuirnever/asd-ste100-skill` |\n| Immutable commit | `32511c6992ecb5f1971e46a2943f2e6adceedafe` |\n| Upstream `SKILL.md` SHA-256 | `39940a0db3d185416edfd757eff4c971006d8f59ad39715295b150b552344342` |\n| Upstream `scripts/ste-lint.py` SHA-256 | `1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85` |\n| License | MIT, retained at [asd-ste100-skill-MIT.txt](../../../LICENSES/asd-ste100-skill-MIT.txt) |\n\nThe upstream capability baseline at the locked commit is the complete controlled-English rewrite discipline: the two-mode `SKILL.md` body (structural rules applied with confidence, lexical rules kept as direction of travel without the non-redistributable ASD dictionary), the writing-rules summary, and the stdlib `ste-lint.py` deterministic linter. `references/writing-rules.md`, `examples/before-after.md` and `examples/linter-edge-cases.md` are vendored byte-identical; `scripts/ste-lint.py` carries two reviewed local patches on the upstream base (recorded below), with both the upstream and the local SHA-256 pinned in `tests/test_asd_ste100.py`, so any further drift fails the unit gate.\n\n## Local linter patches\n\nTwo review findings (PR #291) are fixed locally on the pinned upstream base; both make the linter do what the imported `SKILL.md` already documents:\n\n| Patch | Upstream base SHA-256 | Local SHA-256 | Records |\n|---|---|---|---|\n| Hard-wrapped prose is joined before the sentence-length cap so a >25-word sentence can no longer evade it by splitting across lines; tables, lists, fences, headings and blockquotes stay boundaries | `1b97b2d22ba50cde10654db56e1b98adf96d250dd3c8f693f8a81361b1084e85` | `1cfec74cfd45a472fe92855fb14580026eec440a0fdacc1effcebb1a7c35393d` | `tests/test_asd_ste100.py` wrapped-sentence regression |\n| Synonym-group matching generates real inflection forms (silent-e dropping, consonant doubling, regular suffixes) so `removing`, `deleting`, `stopping` and friends are detected | same base | same local | `tests/test_asd_ste100.py` silent-e regression |\n\nBoth patches have upstream-fix candidates; when the upstream pin moves, re-derive the local delta against the new base and retire the patches it absorbs.\n\nASD-STE100 itself (Issue 9, January 2025) is free to obtain but not free to redistribute; this package encodes only the rule categories and the one-word-one-meaning principle and must never embed the official dictionary. The upstream package already draws this boundary and it carries over unchanged.\n\n## Azhou-maintained adaptation\n\n- keeps the upstream `SKILL.md` capability body verbatim, including the two modes, the structural/lexical rule split, the scan checklist, the process, the output format and the boundaries section;\n- normalizes frontmatter to the hub contract (`name`, `description`, `invocation`), moving the upstream `version` field into this record (upstream v0.4.0 at the locked commit);\n- adds the Azhou brand protocol, the explicit hold boundary for precision-critical asks, and the stable receipt (`super-asd-ste100.receipt.v1`);\n- adds this provenance record and the upstream compatibility map.\n\nClassification: `faithful` — the complete upstream capability (the controlled-English rewrite discipline and its deterministic linter) is retained, and every local addition (frontmatter normalization, brand protocol, receipt, provenance and compatibility records) is packaging or interaction layer, which skill-standard §2.3 excludes from `adapted`. Precedent: verbatim retention of the entire upstream capability with packaging-only additions decides `faithful`. Skill-standard §2.3.\n\n## Reproducible source check\n\n```bash\ngit clone https://github.com/TeFuirnever/asd-ste100-skill /tmp/asd-ste100-src\ngit -C /tmp/asd-ste100-src checkout 32511c6992ecb5f1971e46a2943f2e6adceedafe\nshasum -a 256 /tmp/asd-ste100-src/SKILL.md /tmp/asd-ste100-src/scripts/ste-lint.py\n```\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-ask-azhou",
+      "path": "skills/super-ask-azhou/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [
+        "https://github.com/mattpocock/skills"
+      ],
+      "before_entry_sha256": "cda25ffcb834f19a09dab8abfc82f5a0cfcf51ff96bc7fe4cb3a96bd9313c7db",
+      "review_entry_sha256": "569ad227c61140c8e071128570b54ffe9e6be57bd7185bfbf952b34d97404174",
+      "before_tree_sha256": "eebefbe77daf01b4c7022dcb7e4e630f82fc26e4393c8ce6a4476dfa71752b41",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Source of the adapted pattern\n\n- Upstream: https://github.com/mattpocock/skills (MIT License)\n- Immutable pin: commit `3cca18b368ae95cdbdebbff572ccafa662551015` (2026-09-05 HEAD)\n- Source path: `skills/engineering/ask-matt/SKILL.md` — the hand-written prose flow-map router (no manifest, no scan, model judgment over branch questions) and the user-invoked orchestrator discipline.\n\n## Adaptation boundary\n\n- The pattern is borrowed, not the file: no upstream text is copied. This package's map is written for this hub's catalog and organized by intent across the three families (hub infrastructure, content production, engineering discipline) plus a standalone long-running-experiments branch.\n- The upstream's hand-maintained currency weakness is deliberately closed here, structurally: the routing catalog block in `SKILL.md` is generated from every canonical `skills/*/SKILL.md` frontmatter description by this package's `scripts/generate_routing_index.py`, and the repository gate (`scripts/check_repository.py`) fails on both router coverage and generated-index parity when a skill is added, removed, renamed, or re-described without regenerating.\n- The upstream `disable-model-invocation` frontmatter key is not used: this repository's package contract pins frontmatter to exactly `name` and `description`; the invocation class is declared in the entry body, and the formal axis belongs to the skill-standard proposal (spec #126 ID-9).\n- No model-specific package identity is shipped. The description originally shipped trigger-list-free, per the upstream user-invoked discipline; on 2026-10-06 (u4, after cross-harness execution evidence showed zero router invocations across 137 catalog enumerations and routing questions answered by bare models) that stance was reversed for the router itself: which-skill trigger phrases now live in the description, while the package identity stays harness-neutral.\n- MIT notice: the upstream repository is MIT-licensed; only the pattern (flow-map form, recommendation-only contract, composability rule) is retained, which the upstream license permits with attribution recorded here.\n\n## Reproducible update path\n\n1. Diff the pinned upstream router against the current pin: `git -C <mattpocock-skills-checkout> show 3cca18b368ae95cdbdebbff572ccafa662551015:skills/engineering/ask-matt/SKILL.md`.\n2. Map structural changes (new routing conventions, composability rule updates) onto this package; keep the catalog map generated from this repository's own skill set.\n3. Update the pin above only after the mapped change lands, in the same commit.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage: the ask-matt pattern (pinned commit `3cca18b368ae95cdbdebbff572ccafa662551015`, MIT) is borrowed with zero upstream bytes copied, and the router map is written for this hub's own catalog. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-azhou-doctor",
+      "path": "skills/super-azhou-doctor/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "0d8999e754124df607cb343e10f0a0496a862a4c02b4d7004dc35583b6930f5b",
+      "review_entry_sha256": "0d8999e754124df607cb343e10f0a0496a862a4c02b4d7004dc35583b6930f5b",
+      "before_tree_sha256": "23f2fe3fc92d39e78c2ff428b3b40be2b2cbf906fe6acafd3c6ab66e5abaf94d",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\nNo upstream skill lineage. `super-azhou-doctor` is an Azhou-authored Foundation package of this hub; every file is original work with zero vendored upstream bytes.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage; Azhou-authored with zero vendored skill bytes. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-azhou-info",
+      "path": "skills/super-azhou-info/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "04e8689e4d4ec98150e887c86f07a6aa1e05f4ed3712498355e849071cfc879b",
+      "review_entry_sha256": "04e8689e4d4ec98150e887c86f07a6aa1e05f4ed3712498355e849071cfc879b",
+      "before_tree_sha256": "2f9f5040a7947890400b9c6d6b94a9836dce134504d47b0d8154ac815bcb28d5",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\nNo upstream skill lineage. `super-azhou-info` is an Azhou-authored Foundation package of this hub; every file is original work with zero vendored upstream bytes.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage; Azhou-authored with zero vendored skill bytes. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-azhou-setup",
+      "path": "skills/super-azhou-setup/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "b0b21fa8973c347ad744e8deea757304af81d434f8eb8b748e3742cb8edc2fc1",
+      "review_entry_sha256": "b0b21fa8973c347ad744e8deea757304af81d434f8eb8b748e3742cb8edc2fc1",
+      "before_tree_sha256": "778f4116281cae96020a41f0d515c0df723ffc6fdbbe67a964a11f97d563c2a7",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\nNo upstream skill lineage. `super-azhou-setup` is an Azhou-authored Foundation package of this hub; every file is original work with zero vendored upstream bytes.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage; Azhou-authored with zero vendored skill bytes. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-azhou-verify",
+      "path": "skills/super-azhou-verify/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "a0d2934d1dc9c439a45047cb2e29f51f61a1faf367b7881f3e46c6edfe05d31a",
+      "review_entry_sha256": "a0d2934d1dc9c439a45047cb2e29f51f61a1faf367b7881f3e46c6edfe05d31a",
+      "before_tree_sha256": "a828508d8cfaf7d57fe689d4351db384520097d754fe20b4e5e0fff1f0a363d4",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\nNo upstream skill lineage. `super-azhou-verify` is an Azhou-authored Foundation package of this hub; every file is original work with zero vendored upstream bytes.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage; Azhou-authored with zero vendored skill bytes. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-eli5",
+      "path": "skills/super-eli5/SKILL.md",
+      "classification": [
+        "faithful"
+      ],
+      "sources": [
+        "https://github.com/anthropics/claude-plugins-community"
+      ],
+      "before_entry_sha256": "ba9cb52471da7d1bb39c59678dc670a02dd875f86edd9baf995ef87cf02bf604",
+      "review_entry_sha256": "ba9cb52471da7d1bb39c59678dc670a02dd875f86edd9baf995ef87cf02bf604",
+      "before_tree_sha256": "09c434ceb8d835da6a80af65d7fa754e062a732825f82a748056f4c6c6f15fdf",
+      "target": null,
+      "status": "no_stable_release",
+      "reason": "Official releases and tags both empty; preserve existing immutable pin and local capabilities",
+      "local_capabilities_preserved": "# Provenance and local boundary\n\nRepository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md) and [Claude-Plugins-Community-Apache-2.0.txt](../../../LICENSES/Claude-Plugins-Community-Apache-2.0.txt).\n\n## Imported source\n\n| Field | Locked value |\n|---|---|\n| Upstream | `https://github.com/anthropics/claude-plugins-community` |\n| Immutable commit | `794af9e63d07fad17087dcab61f21f44cb48effd` |\n| Upstream path | `super-eli5/skills/super-eli5/SKILL.md` |\n| Upstream SHA-256 | `3bb95cd13852051c5a1862e8b94da1de7cfba7415d418ab0ca4d762527d1b9a5` |\n| License | Apache-2.0, the repository-level `LICENSE` file of the upstream project |\n\nThe upstream baseline at the locked commit is a single 321-byte `SKILL.md`. Its behavior sentence is retained verbatim in this package's `SKILL.md`; no other upstream bytes exist to import.\n\n## Azhou-maintained adaptation\n\n- keeps the upstream behavior sentence verbatim as the capability baseline;\n- keeps the upstream two-key `name` and `description` frontmatter shape and documents a harness-neutral topic argument instead of the slash-command-only `$ARGUMENTS` slot;\n- adds the topic boundary, the one self-contained artifact contract with a fixed audience declaration and word budgets, the Azhou brand protocol, and a stable receipt;\n- adds the deterministic audience/style read-back assertion (`scripts/check_audience.py`) so receipt v2 catches model non-compliance before delivery;\n- adds this provenance record and the upstream compatibility map.\n\n## Reproducible source check\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/anthropics/claude-plugins-community/794af9e63d07fad17087dcab61f21f44cb48effd/eli5/skills/super-eli5/SKILL.md \\\n  | shasum -a 256\n```\n\nExpected SHA-256: `3bb95cd13852051c5a1862e8b94da1de7cfba7415d418ab0ca4d762527d1b9a5`.\n\nOn platforms without `shasum` (e.g. Windows), the standard-library equivalent:\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/anthropics/claude-plugins-community/794af9e63d07fad17087dcab61f21f44cb48effd/eli5/skills/super-eli5/SKILL.md \\\n  | python -c \"import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())\"\n```\n\n## Fidelity classification\n\nClassification: `faithful` — boundary case, decided by cited evidence: the complete upstream capability is the single 321-byte behavior sentence (pinned commit `794af9e63d07fad17087dcab61f21f44cb48effd`, SHA-256 `3bb95cd13852051c5a1862e8b94da1de7cfba7415d418ab0ca4d762527d1b9a5`), retained verbatim in this package's `SKILL.md`; every local addition (topic boundary, one-artifact output form, brand protocol, stable receipt, this provenance record and the compatibility map) is packaging or interaction layer, which skill-standard §2.3 excludes from `adapted`. Precedent: verbatim retention of the entire upstream capability with packaging-only additions decides `faithful`. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-excalidraw-diagram",
+      "path": "skills/super-excalidraw-diagram/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [],
+      "before_entry_sha256": "913a2d9144c6c09d570feb2066ef1f11dbac2c2bc7f4dd4c6e08cc7052fe5ec0",
+      "review_entry_sha256": "913a2d9144c6c09d570feb2066ef1f11dbac2c2bc7f4dd4c6e08cc7052fe5ec0",
+      "before_tree_sha256": "1365e1f24b4b7c266cd64bfdf9f2b999edc9a4da1a630bc120c3993fcf63d87d",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance and bundled assets\n\nThis file records runtime lineage. Repository-wide notices and license copies live in [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md).\n\n## Maintained Azhou layer\n\nThe following are Azhou-maintained implementations: `SKILL.md`, the brand lifecycle, palette, scene fragments, setup/evolution contracts, templates, deterministic checks, the Python renderer/HTML host, persistence helpers and benchmark protocol.\n\n`coleam00/excalidraw-diagram-skill` was inspected as public prior art but declared no license at audited commit `8646fcc9f74f38539c6cdb4c969723336a96ddcd`. Its files are not distributed here. A pre-publication audit replaced previously mirrored expression in the entry instructions, palette, fragments, schema guide and renderer.\n\n## Licensed sources\n\n| Component | Upstream | Version / boundary |\n|---|---|---|\n| library merge helper and layout prior art | `Agents365-ai/excalidraw-skill` | selected comparison baseline `00606e9fcb072e9644cbfbb3d49a9dafe8b98c25`; exact historical import commit was not recorded; local helper adds offline-catalog behavior |\n| diagram types and schema prior art | `github/awesome-copilot`, `skills/super-excalidraw-diagram-generator` | selected comparison baseline `83561bd7d8a46fcda0581aedabdf8eac7cb196b6`; exact historical import commit was not recorded; local references are maintained independently under the retained [MIT notice](../../../LICENSES/GitHub-Awesome-Copilot-MIT.txt) |\n| official engine | `@excalidraw/excalidraw` | `0.18.1`, tag commit `a2ec2889babf7d2295469c6d90ebe77fae57df84`; `references/vendor/excalidraw-all.esm.js` and mirrored fonts |\n| Mermaid converter | `@excalidraw/mermaid-to-excalidraw` | `2.2.2`, npm `gitHead` `167be14d2f6f5915af4d157bfc66e341ceb58c35`; bundled into the consolidated engine |\n| SVG converter | `svg-to-excalidraw` | `0.0.2`, npm `gitHead` `b862bb78c8d677729996417640c4061af8060ee5`; bundled into the consolidated engine |\n| component libraries | `excalidraw/excalidraw-libraries` | selected comparison baseline `92e1979e8157da0ad9c2bd912c01ea9381d1733f`; exact historical import commit was not recorded; 231 gzipped libraries and 4,134 catalogued items |\n\nThe consolidated engine retains its generated bundled-license comment. Its upstream public Firebase client identifier is neutralized in this offline package because collaboration services are outside the runtime boundary. The checked-in bundle SHA-256 is `f0a616466292610789f05a2da3f529b44d57cb1a44b3ca91081bb8d074fc542c`; recompute it from the repository root with `shasum -a 256 skills/super-excalidraw-diagram/references/vendor/excalidraw-all.esm.js`; the standard-library equivalent on platforms without `shasum` is `python -c \"import hashlib; print(hashlib.sha256(open('skills/super-excalidraw-diagram/references/vendor/excalidraw-all.esm.js','rb').read()).hexdigest())\"`. Rebuilds must repeat that neutralization, preserve the license block, and update this table, lockfiles and verification evidence together.\n\n## Fonts and libraries\n\nThe mirrored Excalidraw production font tree enables offline rendering. Virgil and Excalifont use SIL OFL 1.1; keep `Virgil-LICENSE.md` and `Excalifont-LICENSE.md` beside the assets.\n\nThe gzipped component-library snapshot lives in `references/libraries/`. It is resolved locally by `scripts/excalidraw_lib.py`; network lookup is fallback-only for a library absent from the snapshot. Its sorted per-file SHA-256 manifest digest is `bb265f168a10338f095143d7d56387e9fc44d3d4ad994521b1be989a87ab124a`. Recompute it from the repository root with `find skills/super-excalidraw-diagram/references/libraries -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256`. The standard-library equivalent of that pipeline (same digest, no Unix toolchain):\n\n```bash\npython - <<'PY'\nimport hashlib\nfrom pathlib import Path\nroot = Path(\"skills/super-excalidraw-diagram/references/libraries\")\nlines = \"\".join(\n    f\"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}\\n\"\n    for p in sorted(root.rglob(\"*\"))\n    if p.is_file()\n)\nprint(hashlib.sha256(lines.encode()).hexdigest())\nPY\n```\n\nBefore refresh, compare the selected baseline to the checked-in snapshot; if it differs, record the verified source commit instead of assuming equivalence. Retain author paths, regenerate `icon-catalog.md`, recompute the manifest digest and verify catalog counts before promotion.\n\n## Reproducible refresh boundary\n\n1. Create an isolated checkout/package workspace at the exact package lock or selected comparison baseline above; never copy from a moving default branch.\n2. Follow [setup.md](setup.md) to rebuild the consolidated engine and mirror the matching font tree. Preserve the generated bundled-license comment and repeat the Firebase-client neutralization.\n3. Compare the selected library baseline to the current snapshot. Only after exact source identity is proved, mirror with the gzip command in `icon-catalog.md`, retain author paths, regenerate the catalog, and verify the item counts.\n4. Update this file, `THIRD_PARTY_NOTICES.md`, relevant license copies, bundle/library digests and lockfiles in the same change, then run `python scripts/verify.py` from the repository root.\n\n## Excluded upstream surfaces\n\nStore, room, playground, analytics, hosted library services and archived desktop/embed clients are not runtime dependencies. Stub or empty upstream docs are also excluded. The skill creates local files and does not need Excalidraw cloud infrastructure.\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage: the skill layer (entry, brand lifecycle, palette, fragments, checks, renderer, benchmark protocol) is Azhou-maintained; `coleam00/excalidraw-diagram-skill` was unlicensed prior art and is not distributed; the Agents365 and awesome-copilot entries are comparison baselines, and the Excalidraw engine, converters, fonts and component libraries are vendored runtime dependencies recorded above, not an upstream skill being re-expressed. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-repo-pedant",
+      "path": "skills/super-repo-pedant/SKILL.md",
+      "classification": [
+        "adapted"
+      ],
+      "sources": [
+        "https://github.com/KKKKhazix/Khazix-Skills"
+      ],
+      "before_entry_sha256": "9f68f2fb400b786e6835c7f11e78921382bf30b922235e4a4c86e3e1a7841f52",
+      "review_entry_sha256": "8e676ada6424998499703255249123b19644e9ee47c96c2686d23b2ad35c5bc6",
+      "before_tree_sha256": "0e97466cf7dc9f2afff91739d6afa559f06bcdbfd73b429601dd891db8b2e8f4",
+      "target": {
+        "repository_tag": "v1.2.0",
+        "skill_version": "3.1.1",
+        "commit": "cfa3436d4d31db9b1340af3082a914adf92f023f",
+        "release_url": "https://github.com/KKKKhazix/khazix-skills/releases/tag/v1.2.0"
+      },
+      "status": "stable_sync_in_review_branch",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance\n\n## Upstream lineage\n\n- Upstream skill: `neat-freak` from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills), immutable commit `bab178311a65f93ffd073e4fdebc9911eae35791`, MIT (repository-level copy at [Khazix-Skills-MIT.txt](../../../LICENSES/Khazix-Skills-MIT.txt)).\n- Exact regression snapshot: `benchmarks/super-repo-pedant/upstream/neat-freak/` (entry stored as `SKILL.snapshot.md` so package discovery cannot install the legacy baseline); the snapshot is hash-locked by `scripts/check_repository.py`.\n- Reference baseline (2026-10-18 re-baseline, workspace-owner directed): upstream `neat-freak` **v3.0.0** at `322346ded8129436b3f64707789a73e732ae24d9`, hash-locked as the exact regression snapshot above (now also covering v3's `references/governance.md` and `references/verification.md`). The pin→v3 delta was audited per capability and judged an equivalent evolution (20 kept / 8 changed-mappable / 0 removed across the 28 baseline rows); the compatibility ledger now rests on the v3 wording with this package's stronger forms retained — no local behavior changed in the move; see [neat-freak-compatibility.md](neat-freak-compatibility.md) v3 and [`docs/research/2026-10-07-neat-freak-v3-capability-audit.md`](../../../docs/research/2026-10-07-neat-freak-v3-capability-audit.md). The absorption pin `bab17831` above is retained as lineage.\n- Capability contract: [neat-freak-compatibility.md](neat-freak-compatibility.md) records every original capability as `preserved`, `restored`, `conflict_replaced`, `disadvantage_replaced` or `additive`, with the safety or implementation reason for each replacement.\n\n## Update path\n\n- 2026-10-18 — reference baseline moved from the pre-v3 absorption pin `bab17831` to upstream v3.0.0 `322346de` (owner-directed re-baseline; upstream unchanged since 2026-10-01). The hash-locked snapshot refreshed to the v3 files and gained `references/governance.md` + `references/verification.md`; `scripts/check_repository.py` `BASELINE_HASHES` re-locked (5 entries); the compatibility contract moves to v3 (8 changed ledger rows restated to v3 wording, three converged replacement rows annotated, dispositions and the bare-tidy divergence retained); parity controls flipped in `tests/test_super_repo_pedant_parity.py`; both READMEs re-scope the 28/28 claim. Local skill behavior is byte-unchanged; evidence: `python scripts/verify.py` green on the branch tip (repository policy, unit tests, super-repo-pedant benchmark).\n\n## Fidelity classification\n\nClassification: `adapted` — this package declares itself the strict enhancement of neat-freak (entry: \"super-repo-pedant 是 neat-freak 的严格增强版\"): every original capability remains mandatory, and the local layer adds authorization checkpoints, inventory/impact/execution protocols, receipts and the runtime-state contract on top of the original's flow — a behavior superset, which skill-standard §2.3 classifies as `adapted`. The canonical name is `super-repo-pedant` (renamed from `repo-pedant` in #182 under the audit's promotion-coupled rename milestone #176 M3, coordinated with the super-caveman promotion record's reviewed blobs); the old name survives only as a compatibility trigger. Skill-standard §2.3.\n",
+      "source_verification": null
+    },
+    {
+      "skill": "super-session-insights",
+      "path": "skills/super-session-insights/SKILL.md",
+      "classification": [
+        "original"
+      ],
+      "sources": [
+        "https://github.com/atani/codex-insights",
+        "https://github.com/awesome-skills/insights"
+      ],
+      "before_entry_sha256": "54d9f146a2dfc80d46a6796e43cf1038f790260ec6e9e12c06a794afea53e5cb",
+      "review_entry_sha256": "54d9f146a2dfc80d46a6796e43cf1038f790260ec6e9e12c06a794afea53e5cb",
+      "before_tree_sha256": "a943c7b7ae71dcf006f31e78f5ad90ef9afb678e45d842b3c881f252466f03bf",
+      "target": null,
+      "status": "original_no_upstream_skill_release",
+      "reason": null,
+      "local_capabilities_preserved": "# Provenance · Session Insights\n\n本包**零 vendored 字节**：未复制任何上游代码、模板或文案，因此不需要 `THIRD_PARTY_NOTICES.md` 条目。下列来源仅作机制参考（prior art），以不可变 pin 记录；机制背景见仓库研究笔记 [agent-insights-industry-survey](../../../docs/research/2026-09-07-agent-insights-industry-survey.md) 与 [zcode-session-store-format](../../../docs/research/2026-09-10-zcode-session-store-format.md)。\n\n| 来源 | 角色 | Pin | 许可证 |\n|---|---|---|---|\n| [awesome-skills/insights](https://github.com/awesome-skills/insights) | 可移植社区实现：跨 harness 发现 → 元数据 → 聚合 → 渲染管线与 200 会话上限的参考 | URL pin，2026-09-07 访问；未记录 commit，因为未复制任何字节 | MIT（未复制字节，无 notice 义务） |\n| [Claude Code `/insights` 机制解析（Vincent Qiao 博客）](https://blog.vincentqiao.com/en/posts/claude-code-insights/) | 官方 `/insights` 的元数据先行、增量缓存与分节生成机制转述 | URL pin，2026-09-07 访问 | 博客文章，非代码来源 |\n| [atani/codex-insights](https://github.com/atani/codex-insights) | Codex 会话分析器的指标面参考 | URL pin，2026-09-07 访问；未记录 commit，因为未复制任何字节 | 未复制字节，许可证不影响本包 |\n\n更新路径：若未来需要逐行对照上游实现，先在研究笔记中记录不可变 commit 与许可证，再评估是否仍维持零 vendor；复制任何字节都必须同步进入 `THIRD_PARTY_NOTICES.md` 与本表。\n\n## Fidelity classification\n\nClassification: `original` — no upstream skill lineage: Azhou-authored package; the three prior-art sources pinned above are mechanism references only, with zero vendored bytes (pattern-inspired, nothing copied). Skill-standard §2.3.\n",
+      "source_verification": null
+    }
+  ],
+  "release_evidence": [
+    {
+      "repository": "tt-a1i/archify",
+      "canonical": "tt-a1i/archify",
+      "releases_count": 24,
+      "tags_count": 25,
+      "latest": {
+        "tag_name": "v3.2.0",
+        "target_commitish": "main",
+        "published_at": "2026-10-19T00:43:00Z",
+        "draft": false,
+        "prerelease": false,
+        "html_url": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0",
+        "message": null
+      },
+      "api_evidence_sha256": "42efb7f21ae22d4c9f89abef93726133e5a956e2bb3fc504d5c07b9f0c13b57d"
+    },
+    {
+      "repository": "TeFuirnever/asd-ste100-skill",
+      "canonical": "TeFuirnever/asd-ste100-skill",
+      "releases_count": 0,
+      "tags_count": 0,
+      "latest": {
+        "tag_name": null,
+        "target_commitish": null,
+        "published_at": null,
+        "draft": null,
+        "prerelease": null,
+        "html_url": null,
+        "message": "Not Found"
+      },
+      "api_evidence_sha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05"
+    },
+    {
+      "repository": "anthropics/claude-plugins-community",
+      "canonical": "anthropics/claude-plugins-community",
+      "releases_count": 0,
+      "tags_count": 0,
+      "latest": {
+        "tag_name": null,
+        "target_commitish": null,
+        "published_at": null,
+        "draft": null,
+        "prerelease": null,
+        "html_url": null,
+        "message": "Not Found"
+      },
+      "api_evidence_sha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05"
+    },
+    {
+      "repository": "KKKKhazix/Khazix-Skills",
+      "canonical": "KKKKhazix/khazix-skills",
+      "releases_count": 2,
+      "tags_count": 5,
+      "latest": {
+        "tag_name": "v1.2.0",
+        "target_commitish": "cfa3436d4d31db9b1340af3082a914adf92f023f",
+        "published_at": "2026-11-08T08:45:34Z",
+        "draft": false,
+        "prerelease": false,
+        "html_url": "https://github.com/KKKKhazix/khazix-skills/releases/tag/v1.2.0",
+        "message": null
+      },
+      "api_evidence_sha256": "549b5ac4eec586122b4ceda5bd983c66997fb8b09dcb61c3b0c9a76213fcb560"
+    },
+    {
+      "repository": "deepseek-ai/deepseek-harness",
+      "canonical": "deepseek-ai/deepseek-harness",
+      "releases_count": 37,
+      "tags_count": 38,
+      "latest": {
+        "tag_name": null,
+        "target_commitish": null,
+        "published_at": null,
+        "draft": null,
+        "prerelease": null,
+        "html_url": null,
+        "message": "Not Found"
+      },
+      "api_evidence_sha256": "ea3af60822c0ff9c7945984715a0d046803fe64fa3f135bae6129839f34d9ef5"
+    },
+    {
+      "repository": "zai-org/ZCode",
+      "canonical": "zai-org/ZCode",
+      "releases_count": 3,
+      "tags_count": 4,
+      "latest": {
+        "tag_name": "v3.17.2",
+        "target_commitish": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "published_at": "2026-11-04T10:41:06Z",
+        "draft": false,
+        "prerelease": false,
+        "html_url": "https://github.com/zai-org/ZCode/releases/tag/v3.17.2",
+        "message": null
+      },
+      "api_evidence_sha256": "88051072e560730a088463a6bd42c832707f2fd3a4cb84fb436412aac15f802a"
+    }
+  ],
+  "mechanism": {
+    "name": "project-owned-evidence-admission",
+    "layer": "existing_skill_execution_flow",
+    "candidate_diff_sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059",
+    "approval": "pending_exact_diff_human_approval_C2",
+    "visible": {
+      "created_at": "2026-11-09T17:09:52.035099+00:00",
+      "mechanism": "foreign-project-evidence-admission",
+      "candidate_diff_sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+      "variants": {
+        "A": {
+          "cases": 16,
+          "passed": 10,
+          "duration_ns": 837241874,
+          "cli_calls": 18,
+          "model_calls": 0,
+          "runner_tokens": 0,
+          "runner_api_cost": 0
+        },
+        "B": {
+          "cases": 16,
+          "passed": 10,
+          "duration_ns": 875529751,
+          "cli_calls": 18,
+          "model_calls": 0,
+          "runner_tokens": 0,
+          "runner_api_cost": 0
+        },
+        "C": {
+          "cases": 16,
+          "passed": 16,
+          "duration_ns": 1122974833,
+          "cli_calls": 18,
+          "model_calls": 0,
+          "runner_tokens": 0,
+          "runner_api_cost": 0
+        }
+      },
+      "paired": [
+        {
+          "case_id": "dev-foreign-import",
+          "split": "development",
+          "source_family": "external-import-only",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 57034833
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 47792250
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 60737416
+          },
+          "shared_input_sha256": "414b3bb9b36faef8fd6af00e8676f51c984315ccd8d6d229c1c237a6fce9401b"
+        },
+        {
+          "case_id": "dev-one-own-one-foreign",
+          "split": "development",
+          "source_family": "mixed-external-import",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 44489375
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 45345167
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 65350584
+          },
+          "shared_input_sha256": "24e29e0269d6b05b423fae94e1e742f80a471b38a2731591a2fe2e23a8b0dd8a"
+        },
+        {
+          "case_id": "dev-owned-two",
+          "split": "development",
+          "source_family": "owned-positive",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 45263667
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 45312958
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 70229417
+          },
+          "shared_input_sha256": "d8c62441914cb876e8cce27a1b672eed16d89a6b0e26c0ad88cf5b143d415b57"
+        },
+        {
+          "case_id": "dev-owned-one",
+          "split": "development",
+          "source_family": "owned-floor-negative",
+          "A": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 42312959
+          },
+          "B": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 49335625
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 65377334
+          },
+          "shared_input_sha256": "59bdcbd1a9c1b40d3a3b5bcbd6e180dbadd627a894b3f50a3e3feb022f06f2c7"
+        },
+        {
+          "case_id": "val-foreign-polluted-live",
+          "split": "validation",
+          "source_family": "polluted-local-state",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 40387708
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 53905584
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 60962334
+          },
+          "shared_input_sha256": "2972c0be8323790e82a73f33091a789d45432d8ea5c4a67c8f439fa8f18fb661"
+        },
+        {
+          "case_id": "val-foreign-severe",
+          "split": "validation",
+          "source_family": "foreign-severity-exception",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 57251667
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 50542833
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 65514083
+          },
+          "shared_input_sha256": "1212468afd8c4510aeb4e43c59cbc14e9dc416b2fc65b84b84330a826fdf13ae"
+        },
+        {
+          "case_id": "val-mixed-archive",
+          "split": "validation",
+          "source_family": "filtered-archive-retention",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "archive_retains_ineligible_signals",
+              "independent_sessions",
+              "projects",
+              "selected_evidence"
+            ],
+            "duration_ns": 125899292
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "archive_retains_ineligible_signals",
+              "independent_sessions",
+              "projects",
+              "selected_evidence"
+            ],
+            "duration_ns": 152011917
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 166951167
+          },
+          "shared_input_sha256": "6738e448c5ee77158c215743a4bd8a2ef1b03e36ceff13334ef55b802051854c"
+        },
+        {
+          "case_id": "val-same-session",
+          "split": "validation",
+          "source_family": "observer-duplicates",
+          "A": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 41063458
+          },
+          "B": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 44996417
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 59152709
+          },
+          "shared_input_sha256": "7e146d02d2604f8d6a67a6b7af3e99327b56de09fa51aeb3ebe04d20c050013e"
+        },
+        {
+          "case_id": "val-owned-severe",
+          "split": "validation",
+          "source_family": "owned-severity-positive",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 41589583
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 45991416
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 60186041
+          },
+          "shared_input_sha256": "8063da1a1755bb4dc6483c25d2ec56b1bb184b01d50607b6d4d7b786d8d30fff"
+        },
+        {
+          "case_id": "val-global-owned-and-foreign",
+          "split": "validation",
+          "source_family": "explicit-global-two-projects",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 41442292
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 47474791
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 60576709
+          },
+          "shared_input_sha256": "7fb4b682734fc0774554aebb5274be7b3533b331ae5109e387176b47b146415f"
+        },
+        {
+          "case_id": "holdout-linked-worktree",
+          "split": "modifier_visible_evaluation",
+          "source_family": "linked-worktree-origin-identity",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 56029917
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 49142834
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 66944583
+          },
+          "shared_input_sha256": "ae5298c6dedad6d51687ee6ad86ee06b9f8feb3dc6d348b3c0d7563310ad24a2"
+        },
+        {
+          "case_id": "holdout-owned-import",
+          "split": "modifier_visible_evaluation",
+          "source_family": "owned-detached-signal-file",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 51320708
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 47296542
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 66503125
+          },
+          "shared_input_sha256": "31caf4ac1f6ff33888b8b31273cf29d04fbf4fded9643e02df1ad49cf03bd011"
+        },
+        {
+          "case_id": "holdout-partial-and-failure",
+          "split": "modifier_visible_evaluation",
+          "source_family": "owned-partial-outcome",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 46504125
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 51956417
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 64604041
+          },
+          "shared_input_sha256": "89ce677ac2d929b0a2edc3427b735634f960c3e4e4b6fcf2af0bd8910018b22f"
+        },
+        {
+          "case_id": "holdout-success-plus-foreign",
+          "split": "modifier_visible_evaluation",
+          "source_family": "success-not-corroboration",
+          "A": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 46004416
+          },
+          "B": {
+            "pass": false,
+            "returncode": 0,
+            "failed_checks": [
+              "returncode"
+            ],
+            "duration_ns": 50355250
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 59364916
+          },
+          "shared_input_sha256": "463c801ed4d12ad9c2be359d2ced94d436ea58e4a5164a82802401052fa9c839"
+        },
+        {
+          "case_id": "holdout-global-one-project",
+          "split": "modifier_visible_evaluation",
+          "source_family": "global-project-floor",
+          "A": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 50313541
+          },
+          "B": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 46239833
+          },
+          "C": {
+            "pass": true,
+            "returncode": 2,
+            "failed_checks": [],
+            "duration_ns": 58019541
+          },
+          "shared_input_sha256": "5199976ce69e062534fb9c15bee06ec6910c045de3f4cae94303e92848bc5d60"
+        },
+        {
+          "case_id": "holdout-global-foreign-only",
+          "split": "modifier_visible_evaluation",
+          "source_family": "explicit-global-external-projects",
+          "A": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 50334333
+          },
+          "B": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 47829917
+          },
+          "C": {
+            "pass": true,
+            "returncode": 0,
+            "failed_checks": [],
+            "duration_ns": 72500833
+          },
+          "shared_input_sha256": "1d1a4ed1bfddb5ec1cdefba7292fdf3e4d398ba1009941fa93c654bbb2536453"
+        }
+      ],
+      "attribution": "A and B loaded runtime code is byte-identical; B-A task-effect estimate is not attempted. C changes only existing project-scope eligibility and fixes six synthetic contract scenarios.",
+      "cost_limit": "Model generation/orchestration usage unavailable. Timings are one observed run and include background machine load; do not claim a speed effect.",
+      "coverage_limit": "All sixteen cases visible to modifier. No original private history used. Final independent hidden evaluation owned by root. Declared project_id is not cryptographic origin authentication; existing identity normalization and session ancestry behavior unchanged.",
+      "approval_status": "Not promoted; independent paired human/semantic reviews and exact-diff human approval remain unfulfilled. Promotion evaluator known binding limitation is a separate root-reported hold.",
+      "rollback_verified": true
+    },
+    "independent_synthetic_holdout": {
+      "schema": "hub-independent-paired-summary.v1",
+      "synthetic": true,
+      "natural_task_claim": false,
+      "freeze_manifest_sha256": "5f8171b3f8aa99fa2e2301c28f89ff98fd30b876c1177970740b3e8f696610d8",
+      "registration_chronology": "Candidate source/diff hashes were received before this manifest was finalized; no candidate source, diff content, engineer tests, or candidate outcomes were read before freeze",
+      "case_count": 12,
+      "case_families": 11,
+      "A_B_equal_all": true,
+      "by_arm": {
+        "A": {
+          "manifest_sha256": "fabf7216ce4c35858df00123a0d494e515539134cf9dc854e24c1f967abb6790",
+          "passed": 4,
+          "failed": 8,
+          "proposal_commands": 12,
+          "elapsed_seconds": 0.4941512499935925,
+          "summed_command_seconds": 0.4814121280214749,
+          "source_main_sha256": "c543a3e46129b74e462d1f1eec554b9e2a4fe282506aba33c3ed16d3e8468caf",
+          "actual_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "B": {
+          "manifest_sha256": "90af5afa6a43a25dee72fa436027c8c7d771f00f4373a09cd844315d0374daa2",
+          "passed": 4,
+          "failed": 8,
+          "proposal_commands": 12,
+          "elapsed_seconds": 0.4831025419989601,
+          "summed_command_seconds": 0.4703791260253638,
+          "source_main_sha256": "c543a3e46129b74e462d1f1eec554b9e2a4fe282506aba33c3ed16d3e8468caf",
+          "actual_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "C": {
+          "manifest_sha256": "9f5bf94df5b644e8b01e28303022f7bc2edb762b7d7abce355c90a8ba1b78af4",
+          "passed": 12,
+          "failed": 0,
+          "proposal_commands": 12,
+          "elapsed_seconds": 0.6866140839993022,
+          "summed_command_seconds": 0.6633865420008078,
+          "source_main_sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+          "actual_source_diff_sha256": "9911d236d466a3716c31f67242989c1ee3516ce3dab442e84b1a77ce3196c2a5"
+        }
+      },
+      "by_scope": {
+        "project": {
+          "A": {
+            "checks": 9,
+            "passed": 1
+          },
+          "B": {
+            "checks": 9,
+            "passed": 1
+          },
+          "C": {
+            "checks": 9,
+            "passed": 9
+          }
+        },
+        "global": {
+          "A": {
+            "checks": 3,
+            "passed": 3
+          },
+          "B": {
+            "checks": 3,
+            "passed": 3
+          },
+          "C": {
+            "checks": 3,
+            "passed": 3
+          }
+        }
+      },
+      "improved_checks": [
+        "h01",
+        "h02",
+        "h03",
+        "h04",
+        "h05",
+        "h06",
+        "h07",
+        "h08"
+      ],
+      "regressed_checks": [],
+      "baseline_success_controls": [
+        "h09",
+        "h10",
+        "h11",
+        "h12"
+      ],
+      "setup": {
+        "command_count": 28,
+        "summed_command_seconds": 0.9420229608658701
+      },
+      "binding": {
+        "sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+        "reconstructed_source_sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+        "scope": "manage_evolution.py hunks only; other review diff files are not verified here"
+      },
+      "C_binding_command_count": 2,
+      "C_binding_command_seconds": 0.021997959061991423,
+      "model_calls": 0,
+      "model_tokens": 0,
+      "model_api_cost": 0,
+      "cost_scope": "Controlled CLI setup/evaluation only; root orchestration and candidate-search LLM costs not measured here",
+      "limitations": [
+        "h03 and h04 share one source family/order metamorphism",
+        "Source records are reused across checks; no independent-task statistics",
+        "Only CLI project-ownership mechanism evaluated",
+        "B implementation identical to A; upstream instruction benefit not evaluated",
+        "No historical user outcome or recursive self-improvement claim",
+        "No promotion or live source application"
+      ],
+      "rows": [
+        {
+          "case_id": "h01",
+          "family": "partial-plus-foreign-severe",
+          "scope": "project",
+          "expected_exit_code": 2,
+          "expected_candidate_fields": null,
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h02",
+          "family": "own-nonfailures-foreign-severe",
+          "scope": "project",
+          "expected_exit_code": 2,
+          "expected_candidate_fields": null,
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h03",
+          "family": "mixed-store-order",
+          "scope": "project",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "project",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+              "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+            ],
+            "independent_sessions": 2,
+            "projects": 1,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects",
+              "severe_trigger"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 5,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects",
+              "severe_trigger"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 5,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h04",
+          "family": "mixed-store-order",
+          "scope": "project",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "project",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+              "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+            ],
+            "independent_sessions": 2,
+            "projects": 1,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects",
+              "severe_trigger"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 5,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects",
+              "severe_trigger"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "60378eb34eb0a63368ba87da7433e86f8b241bdc0f576abc1e6e7aae7d96c3f3",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 5,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h05",
+          "family": "foreign-only-two-files",
+          "scope": "project",
+          "expected_exit_code": 2,
+          "expected_candidate_fields": null,
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bd9fb3764a0b51eb950bbc66654f6d012a4a0c2b652abf8a3be3ba90261c644f"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bd9fb3764a0b51eb950bbc66654f6d012a4a0c2b652abf8a3be3ba90261c644f"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h06",
+          "family": "same-origin-peer-and-extra-foreign",
+          "scope": "project",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "project",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5",
+              "f0eec1997bebffccdb21c247ebc0d2b57b038e4de2fb63cd135eb8df743f413b"
+            ],
+            "independent_sessions": 2,
+            "projects": 1,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "a3f336b32223396f8129ead9898e9abb0f664e135dba517ca117066179132132",
+                "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5",
+                "f0eec1997bebffccdb21c247ebc0d2b57b038e4de2fb63cd135eb8df743f413b"
+              ],
+              "independent_sessions": 3,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "a3f336b32223396f8129ead9898e9abb0f664e135dba517ca117066179132132",
+                "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5",
+                "f0eec1997bebffccdb21c247ebc0d2b57b038e4de2fb63cd135eb8df743f413b"
+              ],
+              "independent_sessions": 3,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5",
+                "f0eec1997bebffccdb21c247ebc0d2b57b038e4de2fb63cd135eb8df743f413b"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h07",
+          "family": "same-origin-single-plus-foreign-severe",
+          "scope": "project",
+          "expected_exit_code": 2,
+          "expected_candidate_fields": null,
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "b542175b5641a393de348ed817eca3ca68d8a878c291d836b2a53fa04748b731",
+                "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "exit_code"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "b542175b5641a393de348ed817eca3ca68d8a878c291d836b2a53fa04748b731",
+                "d4a135929aa185e7431f63a79204fd835c7ec8e418d86e6fb9fc5e9a1e4e88e5"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h08",
+          "family": "own-severe-excludes-foreign-counts",
+          "scope": "project",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "project",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "321f38c0bac11a97a02026c925609b6bd514cbaff06c01240cbce34380e51494"
+            ],
+            "independent_sessions": 1,
+            "projects": 1,
+            "severe_trigger": true,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "321f38c0bac11a97a02026c925609b6bd514cbaff06c01240cbce34380e51494",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 3,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": false,
+            "exit_code": 0,
+            "failed_fields": [
+              "signal_ids",
+              "independent_sessions",
+              "projects"
+            ],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "321f38c0bac11a97a02026c925609b6bd514cbaff06c01240cbce34380e51494",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 3,
+              "projects": 3,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "321f38c0bac11a97a02026c925609b6bd514cbaff06c01240cbce34380e51494"
+              ],
+              "independent_sessions": 1,
+              "projects": 1,
+              "severe_trigger": true,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h09",
+          "family": "unrelated-foreign-mechanism",
+          "scope": "project",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "project",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+              "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+            ],
+            "independent_sessions": 2,
+            "projects": 1,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "project",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "432df78f8bd23b73d1b642b770d0dfd31d533f6d18a866951112ac4132ab7312",
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571"
+              ],
+              "independent_sessions": 2,
+              "projects": 1,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h10",
+          "family": "global-requested-and-foreign",
+          "scope": "global",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "global",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+              "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+            ],
+            "independent_sessions": 2,
+            "projects": 2,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "672134e7477144155d9fcf365b855e6a839447cf583191fa4d8ec64e9a867571",
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h11",
+          "family": "global-same-origin-not-two-projects",
+          "scope": "global",
+          "expected_exit_code": 2,
+          "expected_candidate_fields": null,
+          "A": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "B": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 2,
+            "failed_fields": [],
+            "actual": null
+          },
+          "A_B_equal": true
+        },
+        {
+          "case_id": "h12",
+          "family": "global-two-foreign-projects",
+          "scope": "global",
+          "expected_exit_code": 0,
+          "expected_candidate_fields": {
+            "scope": "global",
+            "mechanism": "owned-evidence",
+            "signal_ids": [
+              "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+              "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+            ],
+            "independent_sessions": 2,
+            "projects": 2,
+            "severe_trigger": false,
+            "parse_errors": 0,
+            "live_skill_modified": false
+          },
+          "A": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "B": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "C": {
+            "passed": true,
+            "exit_code": 0,
+            "failed_fields": [],
+            "actual": {
+              "scope": "global",
+              "mechanism": "owned-evidence",
+              "signal_ids": [
+                "889423d7744007ddc878d3c0461727e4349ec82538e1772fbfc1a47244aa9a03",
+                "bf5e5f6be49685375b2c2522c3938e54636ca98e17f2c901c84c41615891948f"
+              ],
+              "independent_sessions": 2,
+              "projects": 2,
+              "severe_trigger": false,
+              "parse_errors": 0,
+              "live_skill_modified": false
+            }
+          },
+          "A_B_equal": true
+        }
+      ]
+    },
+    "evaluation_candidate_diff_sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+    "revision_binding": {
+      "reason": "Repository UTF-8 subprocess policy: explicit text encoding in a new test setup command. No runtime/evaluator/input/answer modification.",
+      "candidate_r1_diff_sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+      "candidate_r2_diff_sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059",
+      "delta_sha256": "7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471",
+      "runtime_sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+      "test_before_sha256": "29bb6e80ccd6638330561949a99627bb5f3549adc757de908fdf7bb9bcb6682f",
+      "test_after_sha256": "89f36d6a472a437a1fd560e81f3c54226ff2cb8782bb850aab5e4f91991908b4",
+      "contract_sha256": "74531c900bf783a9e3a78f41124948310813f800de3b8d45f4562742a8f87ee7",
+      "frozen_evaluator_sha256": "9da187226fb46479591963b55aa3316469ac8936ff810b04f2f483e89a233469",
+      "human_approval": false
+    },
+    "paired_panel": {
+      "schema": "azhou.paired-review-panel.v1",
+      "candidate_diff_sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059",
+      "reviewers": [
+        {
+          "reviewer": 1,
+          "sha256": "f5a25b1a99df3f7708d1d0dc26cbce7ba39268e7391a1dc23418138f8d945219",
+          "preference": "Y",
+          "candidate_label": "Y",
+          "human_approval": false
+        },
+        {
+          "reviewer": 2,
+          "sha256": "b060f59dcd34d52f7611e0674c839d59ce205928cdd6c68c588b8c422e6f7668",
+          "preference": "X",
+          "candidate_label": "X",
+          "human_approval": false
+        },
+        {
+          "reviewer": 3,
+          "sha256": "9a6e315eecf7617d7d0bc79dbfcc67d32dd5294502485016bf78ac225ae4a50f",
+          "preference": "Y",
+          "candidate_label": "Y",
+          "human_approval": false
+        }
+      ],
+      "independent_contexts": 3,
+      "model_diversity": false,
+      "order_reversed": true,
+      "human_approval": false,
+      "promotion_authorized": false,
+      "note": "Independent artifact interpretation; deterministic and hidden acceptance remain primary effect evidence. Supplemental archival fixture does not enlarge frozen evaluation.",
+      "evaluated_candidate_diff_sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+      "revision_attestations": [
+        {
+          "reviewer": 1,
+          "sha256": "b8314e9b192ed4cd3caded333043473e2d88d65a08975eb610ae25d2cec00aab",
+          "content": {
+            "review_id": "independent-1",
+            "reviewer_context_identity": "paired_review_one",
+            "independent_context": true,
+            "attestation_kind": "r1_to_r2_encoding_adapter",
+            "preference": "Y",
+            "regression_found": false,
+            "judgment_unchanged": true,
+            "human_approval": false,
+            "promotion_authorized": false,
+            "r1_patch_sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+            "r2_patch_sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059",
+            "delta_sha256": "7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471",
+            "runtime_sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+            "test_after_sha256": "89f36d6a472a437a1fd560e81f3c54226ff2cb8782bb850aab5e4f91991908b4",
+            "checks": {
+              "r1_patch_sha_matches": true,
+              "r2_patch_sha_matches": true,
+              "delta_sha_matches": true,
+              "r2_patch_only_encoding_change_beyond_blob_header": true,
+              "final_test_contains_one_encoding_adapter": true,
+              "undo_adapter_restores_test_r1_hash": true,
+              "final_test_hash_matches": true,
+              "runtime_matches_binding": true,
+              "runtime_matches_original_review_supplement": true,
+              "contract_matches_binding": true,
+              "packet_function_sources_exactly_match": true,
+              "frozen_evaluator_matches_binding": true
+            },
+            "packet_function_checks": {
+              "project_identity": true,
+              "is_severe": true,
+              "cmd_propose": true
+            },
+            "finding": "C2 changes only explicit UTF-8 decoding for the test-fixture Git subprocess. No assertion or candidate runtime changes occur in the C1-to-C2 delta; the reviewed Y functions exactly match final source, and the full runtime hash equals the original supplement. Original paired judgment and fixture limitations remain unchanged.",
+            "limits": [
+              "This attests byte/source consistency of the narrow adapter delta, not fresh behavioral execution.",
+              "The current frozen evaluator hash matches the supplied binding; this check does not independently re-audit its entire historical lifecycle.",
+              "No human approval or promotion authority is supplied."
+            ]
+          }
+        },
+        {
+          "reviewer": 2,
+          "sha256": "4de79d91a37edc44eef41511186bf03fc8cf8d6b3590ec6ed64551fd7855b1e7",
+          "content": {
+            "review_id": "independent-2",
+            "attestation_id": "independent-2-r2",
+            "context_identity": "/root/paired_review_two",
+            "independent_context": true,
+            "purpose": "Bind the existing independent X/Y review to the exact C2 diff after the isolated test-fixture UTF-8 change.",
+            "original_review_sha256": "b060f59dcd34d52f7611e0674c839d59ce205928cdd6c68c588b8c422e6f7668",
+            "artifacts_read": [
+              {
+                "path": "$TASK_EVIDENCE/mechanism-project-scope/candidate.diff",
+                "sha256": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e"
+              },
+              {
+                "path": "$TASK_EVIDENCE/mechanism-project-scope/candidate-r2.diff",
+                "sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059"
+              },
+              {
+                "path": "$TASK_EVIDENCE/mechanism-project-scope/candidate-r1-to-r2.diff",
+                "sha256": "7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471"
+              },
+              {
+                "path": "$TASK_EVIDENCE/mechanism-project-scope/candidate-r2-binding.json",
+                "sha256": "39d5ec004c5086372ba6412f12ecd5c112e0e2cbe3b31725ff78c66e2406d4db"
+              }
+            ],
+            "exact_change": {
+              "file": "tests/test_manage_evolution.py",
+              "test": "test_project_candidate_accepts_same_origin_linked_worktree_evidence",
+              "before": "setup = subprocess.run(command, capture_output=True, text=True, check=False)",
+              "after": "setup = subprocess.run(command, capture_output=True, text=True, encoding=\"utf-8\", check=False)",
+              "substantive_changed_lines": 1,
+              "description": "One fixture-setup subprocess call gains explicit encoding=\"utf-8\". The only other difference between the complete candidate diff files is the test-file Git index metadata changing from 10d978c..aa6931b to 10d978c..1ab3909."
+            },
+            "verification": {
+              "c1_diff_hash_matches_binding": true,
+              "c2_diff_hash_matches_binding_and_requested_hash": true,
+              "delta_hash_matches_binding": true,
+              "old_subprocess_line_occurs_once": true,
+              "new_subprocess_line_occurs_once": true,
+              "complete_c2_diff_equals_c1_with_only_expected_encoding_and_git_index_change": true,
+              "same_candidate_patch_file_set": true,
+              "runtime_diff_section_identical": true,
+              "contract_diff_section_identical": true,
+              "all_assertion_lines_identical": true,
+              "r1_to_r2_delta_contains_only_expected_line_replacement": true,
+              "no_evaluator_or_input_change_in_exact_revision_delta": true,
+              "binding_human_approval_false": true
+            },
+            "runtime_binding": {
+              "sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+              "binding_matches_prior_supplement_runtime_hash": true,
+              "runtime_diff_section_unchanged": true,
+              "runtime_file_rehashed_in_this_update": false,
+              "evidence": "The C1 and C2 runtime diff sections are byte-for-byte identical. The supplied binding runtime SHA-256 equals the X runtime SHA-256 already checked in the supplemental review."
+            },
+            "frozen_evaluator_binding": {
+              "sha256_recorded_in_binding": "9da187226fb46479591963b55aa3316469ac8936ff810b04f2f483e89a233469",
+              "evaluator_rehashed_in_this_update": false,
+              "evaluator_change_in_revision_delta": false
+            },
+            "transfer": {
+              "original_preference": "X",
+              "preference": "X",
+              "preference_changed": false,
+              "original_no_observed_runtime_regression_finding_transfers": true,
+              "original_paired_reasoning_transfers_to_unchanged_runtime": true,
+              "supplemental_fixture_integrity_findings_remain_applicable_to_reviewed_runtime": true,
+              "judgment": "The original X preference and no-observed-regression finding transfer to the unchanged runtime bound to C2. The exact revision delta changes only decoding of output from one test-fixture setup subprocess. Ownership filtering, corroboration thresholds, severe exceptions, explicit global semantics, candidate contents, archival behavior, test assertions, and scenario inputs are unchanged in the compared candidate diffs.",
+              "scope": "This is an artifact-binding attestation carrying forward existing findings, not a newly executed evaluation of C2."
+            },
+            "limitations": [
+              "Read only the four expressly authorized diff/binding artifacts for this update. No implementation, evaluator, input, packet, or prior review files were reread.",
+              "No evaluation or test was rerun, no source was edited, and no prior record was modified. Only this separately authorized attestation file is written.",
+              "The runtime and evaluator files were not directly rehashed in this update. Runtime continuity is supported by the identical runtime diff section, the binding metadata, and the previously reviewed supplement's matching runtime hash.",
+              "Absence of evaluator or input changes is established for the exact C1-to-C2 diff and supported by the binding statement; this update is not a whole-filesystem audit.",
+              "Explicit UTF-8 can affect decoding of fixture-command output in environments emitting another encoding. That test-setup behavior was not executed here and does not alter the reviewed CLI runtime.",
+              "All scope limits of the original and supplemental reviews remain. Existing observations are not extended to untested environments, concurrency, interrupted archival, or other unseen scenarios."
+            ],
+            "blockers_to_runtime_finding_transfer": [],
+            "evaluation_rerun": false,
+            "source_edits": false,
+            "prior_records_preserved": true,
+            "human_approval": false,
+            "promotion_authorized": false
+          }
+        },
+        {
+          "reviewer": 3,
+          "sha256": "256544f963a47a77140ee03118717cbdeae23d38269238b1f474095aeb25e7ca",
+          "content": {
+            "attestation_id": "independent-3-r2",
+            "review_id": "independent-3",
+            "context_identity": "/root/paired_review_three",
+            "independent_context": true,
+            "purpose": "Exact-diff and byte-binding update only; no new evaluation and no change to the original judgment.",
+            "original_review": {
+              "path": "$TASK_EVIDENCE/paired-reviews/review-3/review.json",
+              "sha256": "9a6e315eecf7617d7d0bc79dbfcc67d32dd5294502485016bf78ac225ae4a50f",
+              "preference": "Y",
+              "regression_found": false
+            },
+            "verified_artifact_sha256": {
+              "candidate.diff": "699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e",
+              "candidate-r2.diff": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059",
+              "candidate-r1-to-r2.diff": "7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471",
+              "candidate-r2-binding.json": "39d5ec004c5086372ba6412f12ecd5c112e0e2cbe3b31725ff78c66e2406d4db"
+            },
+            "exact_change_verification": {
+              "file": "tests/test_manage_evolution.py",
+              "test": "test_project_candidate_accepts_same_origin_linked_worktree_evidence",
+              "before": "setup = subprocess.run(command, capture_output=True, text=True, check=False)",
+              "after": "setup = subprocess.run(command, capture_output=True, text=True, encoding=\"utf-8\", check=False)",
+              "changed_call_sites": 1,
+              "description": "Explicit UTF-8 decoding is added at one fixture-setup subprocess call site inside the existing command loop.",
+              "diff_metadata_change": "The test-file Git index line changes from 10d978c..aa6931b to 10d978c..1ab3909.",
+              "exact_byte_verification": "The actual C2 diff bytes exactly equal the actual C1 diff bytes after these two replacements, each occurring once. There are no other byte changes between the two diff files.",
+              "delta_agrees": true,
+              "runtime_diff_unchanged": true,
+              "contract_diff_unchanged": true,
+              "assertion_lines_identical": true,
+              "test_case_inputs_and_commands_unchanged": true,
+              "evaluator_or_frozen_input_edits_in_delta": false
+            },
+            "actual_byte_binding": {
+              "runtime": {
+                "path": "$REVIEW_WORKTREE/skills/super-repo-pedant/scripts/manage_evolution.py",
+                "sha256": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+                "matches_original_Y_supplement_runtime": true,
+                "matches_r2_binding": true
+              },
+              "frozen_evaluator": {
+                "path": "$TASK_EVIDENCE/mechanism-project-scope/frozen_evaluator.py",
+                "sha256": "9da187226fb46479591963b55aa3316469ac8936ff810b04f2f483e89a233469",
+                "matches_supplied_frozen_evaluator_binding": true
+              }
+            },
+            "judgment_transfer": {
+              "transfers": true,
+              "preference": "Y",
+              "regression_found": false,
+              "basis": "The actual runtime is byte-identical to the Y runtime assessed in the original supplemental evidence. The C1-to-C2 difference is confined to explicit UTF-8 decoding in a test fixture setup call; assertions, fixture commands, input literals, runtime patch, and contract patch are unchanged. The frozen evaluator's actual hash matches the supplied binding. The original preference for project-owned admission, preserved global and valid-owned behavior, archival retention, and observed sentinel integrity therefore transfers to this identical runtime within the original evidence limits.",
+              "interpretation": "No observed regression is the original bounded paired-review conclusion, not a claim that C2 has been newly executed by this reviewer."
+            },
+            "coverage_limits": [
+              "All coverage limits in the original review remain applicable, including the synthetic 16-case scope, modifier-visible evaluation cases, partial source coverage, identity edge cases, limited archival scenarios, and isolated sentinel coverage.",
+              "This update reads the four specified binding artifacts and hashes the explicitly authorized actual runtime and frozen evaluator. It does not rerun tests, evaluations, proposal/archive commands, or live installation behavior.",
+              "Assertions and test input literals are confirmed unchanged by exact C1/C2 diff-byte comparison. The supplied delta contains no evaluator or frozen-input edits. Separate frozen input artifacts were not independently inventoried or rehashed in this update.",
+              "The frozen evaluator's actual bytes match the supplied expected hash; this is a hash-binding check, not a new inspection of its behavior or a reproduction of prior evaluation results.",
+              "No broader encoding or locale behavior is newly tested. This update makes no new claim about fixture execution on environments outside the original evidence.",
+              "The original skill-sentinel integrity finding remains tied to the original isolated supplemental run. No new sentinel run or full live-skill-tree integrity check was performed."
+            ],
+            "blockers": [],
+            "source_edits_performed": false,
+            "evaluations_rerun": false,
+            "human_approval": false,
+            "promotion_authorized": false
+          }
+        }
+      ],
+      "candidate_votes": 3,
+      "baseline_votes": 0,
+      "safety_regression_observed": false
+    },
+    "C2_rollback": {
+      "sha256": "6d078dc0a229807d5248b1ea5e66023ed1629c14efa01f1d8fe25045ae517cd1",
+      "restored_exactly": true,
+      "file_count": 4,
+      "live_tree_modified": false
+    }
+  },
+  "verification": {
+    "baseline_repository": "passed_8_of_8",
+    "final_repository": {
+      "state": "passed_8_of_8",
+      "record": {
+        "variant": "C2_upstream_plus_project_scope",
+        "argv": [
+          "python3",
+          "scripts/verify.py",
+          "--print-summary"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 67.57891174999531,
+        "log_sha256": "a751e14dee655977bc2ffbddb6cd8d9e436a157cfaa19d99adbdf1c246b687af",
+        "candidate_diff_sha256": "d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059"
+      },
+      "summary": {
+        "schema": "azhou-hub.verify-summary.v1",
+        "verdict": "passed",
+        "exit_code": 0,
+        "gates": [
+          {
+            "label": "repository policy",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 scripts/check_repository.py",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "unit tests",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 -m unittest discover -s tests",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "package manifests and POSIX lifecycle suites",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 scripts/verify_packages.py",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "super-repo-pedant benchmark",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-repo-pedant/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "excalidraw benchmark wiring",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "super-session-insights benchmark wiring",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-session-insights/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "working-tree whitespace",
+            "command": "git diff --check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "staged whitespace",
+            "command": "git diff --cached --check",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "failed_gates": [],
+        "unit_summary": [
+          [
+            "662",
+            "57.477"
+          ],
+          [
+            "59",
+            "0.673"
+          ],
+          [
+            "45",
+            "1.193"
+          ]
+        ],
+        "summary_text_sha256": "a751e14dee655977bc2ffbddb6cd8d9e436a157cfaa19d99adbdf1c246b687af"
+      }
+    },
+    "pstack_comparison": {
+      "root_count": 18,
+      "before_regular_file_count": 4746,
+      "after_regular_file_count": 4746,
+      "before_regular_file_bytes": 46845893,
+      "after_regular_file_bytes": 46845893,
+      "comparable_regular_files_equal": true,
+      "added_files": [],
+      "removed_files": [],
+      "changed_files": [],
+      "regular_file_map_sha256_before": "4524fc4aa96d72e5cbf63bf73356a3d314f193144ab3ab42ae8edc4d29d5fcd8",
+      "regular_file_map_sha256_after": "4524fc4aa96d72e5cbf63bf73356a3d314f193144ab3ab42ae8edc4d29d5fcd8",
+      "git_comparison": {
+        "file": "$TASK_EVIDENCE/pstack-git-comparison.json",
+        "mismatch_count": 0,
+        "pstack_validator_nodes_changed": [],
+        "sha256": "d4ff69f50590951e30af9b27aab1bc047064f16e1c230fd9027f697a10795c10",
+        "tracked_file_count": 3234,
+        "worktree_extra_non_git_count": 0
+      },
+      "main_clean": true,
+      "main_head_equals_initial_base": true,
+      "uncompared_metadata": "Baseline lacks explicit directory/root-kind and symlink-text records. Current directory modes and link identities are recorded in after; no retrospective claim is made for omitted baseline metadata.",
+      "limitations": [
+        "No pstack CLI, installer, native registry command or live runtime invocation was performed.",
+        "Byte/mode/source/AST equivalence is static protection evidence; host model/services or external state not captured here remain outside the claim.",
+        "Whole-tree pre/post equality applies only to the original named roots and captured regular-file records. Additional absent homes and recorded CLI are current-only or historical fingerprint comparisons."
+      ],
+      "artifact_sha256": "29c63cec3fb7224c75ae1a2e8ef5188e16d18ed112a610fb561a30f759d8020d"
+    },
+    "upstream_B_repository": {
+      "variant": "B_upstream_only",
+      "attempt": 2,
+      "base": "79905b55c2ac78e265813c485955b9b568127ae9",
+      "candidate_saved_hashes": {
+        "skills/super-repo-pedant/scripts/manage_evolution.py": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+        "tests/test_manage_evolution.py": "89f36d6a472a437a1fd560e81f3c54226ff2cb8782bb850aab5e4f91991908b4",
+        "skills/super-repo-pedant/references/evolution-contract.md": "74531c900bf783a9e3a78f41124948310813f800de3b8d45f4562742a8f87ee7"
+      },
+      "argv": [
+        "python3",
+        "scripts/verify.py",
+        "--print-summary"
+      ],
+      "tested_source_hashes": {
+        "skills/super-repo-pedant/scripts/manage_evolution.py": "c543a3e46129b74e462d1f1eec554b9e2a4fe282506aba33c3ed16d3e8468caf",
+        "tests/test_manage_evolution.py": "f12b7633f78aa84fc5490fff2ae43c51407fc8e798b71203f6df4fc89ea57a42",
+        "skills/super-repo-pedant/references/evolution-contract.md": "1a7c1d7c7953fdea258bd127a4d306fa683dbc57aedc055f30c06a323c96bd2c"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 65.60606650001137,
+      "log_sha256": "9224ff7538a166f2c41d9c5a0c52c4d342faa9ffaeb1ed5e5dc5f5d47a2dca7b",
+      "candidate_restored_hashes": {
+        "skills/super-repo-pedant/scripts/manage_evolution.py": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+        "tests/test_manage_evolution.py": "89f36d6a472a437a1fd560e81f3c54226ff2cb8782bb850aab5e4f91991908b4",
+        "skills/super-repo-pedant/references/evolution-contract.md": "74531c900bf783a9e3a78f41124948310813f800de3b8d45f4562742a8f87ee7"
+      },
+      "candidate_restored_exactly": true,
+      "summary": {
+        "schema": "azhou-hub.verify-summary.v1",
+        "verdict": "passed",
+        "exit_code": 0,
+        "gates": [
+          {
+            "label": "repository policy",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 scripts/check_repository.py",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "unit tests",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 -m unittest discover -s tests",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "package manifests and POSIX lifecycle suites",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 scripts/verify_packages.py",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "super-repo-pedant benchmark",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-repo-pedant/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "excalidraw benchmark wiring",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-excalidraw-diagram/ordinary-model-floor/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "super-session-insights benchmark wiring",
+            "command": "/opt/homebrew/opt/python@3.15/bin/python3.15 benchmarks/super-session-insights/benchmark.py check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "working-tree whitespace",
+            "command": "git diff --check",
+            "exit_code": 0,
+            "status": "passed"
+          },
+          {
+            "label": "staged whitespace",
+            "command": "git diff --cached --check",
+            "exit_code": 0,
+            "status": "passed"
+          }
+        ],
+        "failed_gates": [],
+        "unit_summary": [
+          [
+            "656",
+            "55.511"
+          ],
+          [
+            "59",
+            "0.660"
+          ],
+          [
+            "45",
+            "1.222"
+          ]
+        ],
+        "summary_text_sha256": "9224ff7538a166f2c41d9c5a0c52c4d342faa9ffaeb1ed5e5dc5f5d47a2dca7b"
+      }
+    },
+    "first_B_attempt": {
+      "exit_code": 1,
+      "failure": "three new Archify fixture subprocess calls omitted explicit UTF-8; corrected without modifying upstream runtime or assertions",
+      "log_sha256": "b6ae07c5b974eab0588a0bc79fbf9ca3dff9f4fe7d805f6b8ab884980beb067a"
+    },
+    "C1_policy_failure": {
+      "failure": "one added evolution fixture subprocess omitted explicit UTF-8; C2 changes this single setup argument",
+      "runtime_changed": false,
+      "frozen_evaluator_changed": false,
+      "log_sha256": "8f6c17e28b524748299f077c05ec4c69ae23cc5fed8793a0a06167d52623595a"
+    },
+    "utf8_repair_tests": {
+      "passed": 47,
+      "failed": 0,
+      "log_sha256": "f1c028ed670a5a32841cff923bd42b574095e6add8e84b79e8d1d787d0ef3f2f"
+    },
+    "source_preservation": {
+      "manifest_sha256": "5040473874b09dc843dccf8f5525c3ba806619eb18657322b0d443a395eef416",
+      "files": 3117,
+      "bytes": 321543183,
+      "source_stable_during_copy": true,
+      "all_records_equal": true,
+      "archify_candidate_package_files": 190
+    },
+    "known_skip": {
+      "class": "NativeEventAssessmentTests",
+      "file": "tests/test_agent_skin_native_event_assessment.py",
+      "reason": "AZHOU_AGENT_SKIN_NATIVE_EVENT_SAMPLES not set; native producer integration samples not provided",
+      "status": "existing_not_executed"
+    },
+    "post_verify_document_changes": {
+      "scope": [
+        "README.md",
+        "README.zh-CN.md",
+        "evidence/README.md",
+        "evidence/skill-upgrade-2026-11-10.json",
+        "docs/research/2026-11-10-skill-upgrade.md"
+      ],
+      "purpose": "final results, canonical evidence path, four-case registry count, discoverability",
+      "followup_checks": "repository policy/whitespace passed; independent maintained-doc and bound-memory link/readback audit passed with explicit limits"
+    },
+    "post_verify_document_checks": [
+      {
+        "argv": [
+          "python3",
+          "-B",
+          "scripts/check_repository.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 5.933287916996051,
+        "log_sha256": "a14ae48ceb4bd8d2041cf73f45408130aa4c52dfa5bcea96752f04bcee254183"
+      },
+      {
+        "argv": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.03119333297945559,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "argv": [
+          "git",
+          "diff",
+          "--cached",
+          "--check"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.010133916977792978,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "closeout": {
+      "files": 1427,
+      "classifications": {
+        "out_of_scope": 1385,
+        "verified": 12,
+        "update": 30
+      },
+      "holds": 4,
+      "surfaces": 7,
+      "consumers": 34,
+      "inventory_sha256": "b6c027f4bace725c871e0f944bab86b38a5e23309f7e5329b8d2018b3b6abfcb",
+      "inventory_validator_exit": 0,
+      "consumer_report_sha256": "d3728b89dc86ae70462a3ea4bb266082e53e9e2dc830fec6f3b3533e769073ac",
+      "link_audit_sha256": "f453b8a2943e0e3f9253af25b00ae1726472eed0a484c869f7dac6214ce165b7",
+      "meaningful_broken_local_links": 0,
+      "external_URLs_not_verified_by_link_audit": true
+    }
+  },
+  "limits": [
+    "No natural-task performance claim",
+    "No recursive-improvement claim",
+    "Existing promotion gate verifies declared hashes but not patch bytes; outer bundle binds actual bytes",
+    "Historical source sessions unavailable; summaries are not original evidence",
+    "Overall model orchestration cost unknown; deterministic runners used zero model calls",
+    "pstack static protection covers captured roots; no live invocation, historical removed-install CLI differs and was outside initial snapshot"
+  ],
+  "upstream_functional_evidence": {
+    "schema": "azhou.archify.source-regressions.v1",
+    "upstream_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+    "test_sources": {
+      "timeline-dst-ticks.test.mjs": {
+        "source_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "upstream_path": "test/timeline-dst-ticks.test.mjs",
+        "sha256": "03de7237c7c6057bda7e8b4bc86f746528cffa10987160e6cb91b9f85e4e25be"
+      },
+      "workflow-migration-semantics.test.mjs": {
+        "source_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "upstream_path": "test/workflow-migration-semantics.test.mjs",
+        "sha256": "78f94ff0f54a9632c4163798bac563742a22ac24e293c5ba96d20c586628adcd"
+      },
+      "explainer-charts.test.mjs": {
+        "source_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "upstream_path": "test/explainer-charts.test.mjs",
+        "sha256": "4358b5cdd8d3f4202d01d096cb6f17d84d918a08f17387b9b41bc77e71def02d"
+      }
+    },
+    "environment": {
+      "node": "v24.15.0",
+      "chrome": "Google Chrome 157.0.8103.38",
+      "ARCHIFY_UPDATE_CHECK_DISABLED": "1"
+    },
+    "results": [
+      {
+        "label": "A-upstream-regressions",
+        "command": [
+          "node",
+          "--test",
+          "test/timeline-dst-ticks.test.mjs",
+          "test/workflow-migration-semantics.test.mjs"
+        ],
+        "cwd": "$UPSTREAM_AUDIT/archify-source-tests/A-workspace",
+        "exit": 1,
+        "elapsed_s": 2.6805,
+        "stdout_file": "$UPSTREAM_AUDIT/archify-source-tests/A-upstream-regressions/stdout",
+        "stderr_file": "$UPSTREAM_AUDIT/archify-source-tests/A-upstream-regressions/stderr",
+        "stdout_sha256": "c7d73c6749b9d8dbbe172552e7de125d193a297bab2961488101e07b79ff06ff",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "cases": [
+          {
+            "name": "timeline: daily local ticks survive spring forward without moving the time axis",
+            "status": "fail",
+            "elapsed_ms": 193.960917
+          },
+          {
+            "name": "timeline: daily local ticks survive fall back without moving the time axis",
+            "status": "fail",
+            "elapsed_ms": 196.48075
+          },
+          {
+            "name": "timeline: hourly ticks skips the nonexistent spring hour",
+            "status": "pass",
+            "elapsed_ms": 233.533167
+          },
+          {
+            "name": "timeline: hourly ticks retains both real occurrences of the repeated fall hour",
+            "status": "pass",
+            "elapsed_ms": 345.860583
+          },
+          {
+            "name": "timeline: hourly ticks aligns whole hours across the Lord Howe half-hour jump",
+            "status": "fail",
+            "elapsed_ms": 318.408583
+          },
+          {
+            "name": "timeline: a skipped civil date in Apia does not invent or duplicate an instant",
+            "status": "pass",
+            "elapsed_ms": 246.667
+          },
+          {
+            "name": "timeline: equal endpoint offsets do not hide the daylight-saving season inside a long segment",
+            "status": "fail",
+            "elapsed_ms": 258.187
+          },
+          {
+            "name": "timeline: a short segment keeps its start tick and automatic breaks retain real local dates",
+            "status": "fail",
+            "elapsed_ms": 452.225292
+          },
+          {
+            "name": "fallback migration preserves valid requiredEdges",
+            "status": "fail",
+            "elapsed_ms": 266.228625
+          },
+          {
+            "name": "fallback migration preserves valid requiredPaths",
+            "status": "fail",
+            "elapsed_ms": 288.025
+          },
+          {
+            "name": "fallback migration preserves valid allowedRoots",
+            "status": "fail",
+            "elapsed_ms": 423.336667
+          },
+          {
+            "name": "fallback migration preserves valid allowedTerminals",
+            "status": "fail",
+            "elapsed_ms": 431.971625
+          },
+          {
+            "name": "fallback migration preserves valid combined contracts",
+            "status": "fail",
+            "elapsed_ms": 338.104167
+          },
+          {
+            "name": "authored invalid requiredEdges still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 229.920542
+          },
+          {
+            "name": "authored invalid requiredPaths still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 200.438334
+          },
+          {
+            "name": "authored invalid allowedRoots still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 181.088792
+          },
+          {
+            "name": "authored invalid allowedTerminals still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 181.881958
+          },
+          {
+            "name": "only the incomplete planning projection omits semantic contracts without mutating the source",
+            "status": "fail",
+            "elapsed_ms": 14.493583
+          },
+          {
+            "name": "planning keeps semantic contracts when it retains every authored edge",
+            "status": "pass",
+            "elapsed_ms": 6.594042
+          }
+        ],
+        "case_summary": {
+          "total": 19,
+          "pass": 8,
+          "fail": 11
+        }
+      },
+      {
+        "label": "B-upstream-regressions",
+        "command": [
+          "node",
+          "--test",
+          "test/timeline-dst-ticks.test.mjs",
+          "test/workflow-migration-semantics.test.mjs",
+          "test/explainer-charts.test.mjs"
+        ],
+        "cwd": "$UPSTREAM_AUDIT/archify-source-tests/B-workspace",
+        "exit": 0,
+        "elapsed_s": 4.3903,
+        "stdout_file": "$UPSTREAM_AUDIT/archify-source-tests/B-upstream-regressions/stdout",
+        "stderr_file": "$UPSTREAM_AUDIT/archify-source-tests/B-upstream-regressions/stderr",
+        "stdout_sha256": "5fd56daad6625d45a8818859beb976e25534ab619f61da32c14fa22cb451a1e6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "cases": [
+          {
+            "name": "explainer chart fences render static themed SVG without shipping the chart library",
+            "status": "pass",
+            "elapsed_ms": 563.590541
+          },
+          {
+            "name": "explainer chart fences send native diagram types to shorthand and locate syntax errors",
+            "status": "pass",
+            "elapsed_ms": 269.289542
+          },
+          {
+            "name": "explainer chart CJK axis titles stand upright and task lists become checklists",
+            "status": "pass",
+            "elapsed_ms": 898.154709
+          },
+          {
+            "name": "explainer charts label bar values and give pie slices their value and share",
+            "status": "pass",
+            "elapsed_ms": 1067.745583
+          },
+          {
+            "name": "a data chart reads its CSV next to the draft, freezes it, and names a missing column",
+            "status": "pass",
+            "elapsed_ms": 501.0405
+          },
+          {
+            "name": "a blank data cell is missing data, never drawn as zero",
+            "status": "pass",
+            "elapsed_ms": 7.411375
+          },
+          {
+            "name": "timeline: daily local ticks survive spring forward without moving the time axis",
+            "status": "pass",
+            "elapsed_ms": 407.937208
+          },
+          {
+            "name": "timeline: daily local ticks survive fall back without moving the time axis",
+            "status": "pass",
+            "elapsed_ms": 578.946042
+          },
+          {
+            "name": "timeline: hourly ticks skips the nonexistent spring hour",
+            "status": "pass",
+            "elapsed_ms": 315.410458
+          },
+          {
+            "name": "timeline: hourly ticks retains both real occurrences of the repeated fall hour",
+            "status": "pass",
+            "elapsed_ms": 248.106042
+          },
+          {
+            "name": "timeline: hourly ticks aligns whole hours across the Lord Howe half-hour jump",
+            "status": "pass",
+            "elapsed_ms": 246.309625
+          },
+          {
+            "name": "timeline: a skipped civil date in Apia does not invent or duplicate an instant",
+            "status": "pass",
+            "elapsed_ms": 232.067875
+          },
+          {
+            "name": "timeline: equal endpoint offsets do not hide the daylight-saving season inside a long segment",
+            "status": "pass",
+            "elapsed_ms": 216.487334
+          },
+          {
+            "name": "timeline: a short segment keeps its start tick and automatic breaks retain real local dates",
+            "status": "pass",
+            "elapsed_ms": 378.914583
+          },
+          {
+            "name": "fallback migration preserves valid requiredEdges",
+            "status": "pass",
+            "elapsed_ms": 772.065875
+          },
+          {
+            "name": "fallback migration preserves valid requiredPaths",
+            "status": "pass",
+            "elapsed_ms": 950.029958
+          },
+          {
+            "name": "fallback migration preserves valid allowedRoots",
+            "status": "pass",
+            "elapsed_ms": 704.246959
+          },
+          {
+            "name": "fallback migration preserves valid allowedTerminals",
+            "status": "pass",
+            "elapsed_ms": 569.731167
+          },
+          {
+            "name": "fallback migration preserves valid combined contracts",
+            "status": "pass",
+            "elapsed_ms": 711.797875
+          },
+          {
+            "name": "authored invalid requiredEdges still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 139.48925
+          },
+          {
+            "name": "authored invalid requiredPaths still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 141.40025
+          },
+          {
+            "name": "authored invalid allowedRoots still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 139.72325
+          },
+          {
+            "name": "authored invalid allowedTerminals still rejects validation and migration",
+            "status": "pass",
+            "elapsed_ms": 141.613167
+          },
+          {
+            "name": "only the incomplete planning projection omits semantic contracts without mutating the source",
+            "status": "pass",
+            "elapsed_ms": 9.60025
+          },
+          {
+            "name": "planning keeps semantic contracts when it retains every authored edge",
+            "status": "pass",
+            "elapsed_ms": 5.410459
+          }
+        ],
+        "case_summary": {
+          "total": 25,
+          "pass": 25,
+          "fail": 0
+        }
+      },
+      {
+        "label": "B-browser-native",
+        "command": [
+          "node",
+          "$REVIEW_WORKTREE/skills/super-archify/bin/archify.mjs",
+          "finalize",
+          "workflow",
+          "$UPSTREAM_AUDIT/archify-probe-inputs/workflow.json",
+          "$UPSTREAM_AUDIT/archify-browser/native/artifact.html",
+          "--quality",
+          "showcase",
+          "--json"
+        ],
+        "cwd": "$UPSTREAM_AUDIT/archify-browser/native",
+        "exit": 0,
+        "elapsed_s": 2.1493,
+        "stdout_file": "$UPSTREAM_AUDIT/archify-source-tests/B-browser-native/stdout",
+        "stderr_file": "$UPSTREAM_AUDIT/archify-source-tests/B-browser-native/stderr",
+        "stdout_sha256": "bbff852bc49d29161b0fdb002f1f690922492aab67962b42f5a3472dab896216",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "B-browser-explainer",
+        "command": [
+          "node",
+          "$REVIEW_WORKTREE/skills/super-archify/bin/archify.mjs",
+          "finalize",
+          "explainer",
+          "$UPSTREAM_AUDIT/archify-probe-inputs/explainer.json",
+          "$UPSTREAM_AUDIT/archify-browser/explainer/artifact.html",
+          "--browser-check",
+          "--json"
+        ],
+        "cwd": "$UPSTREAM_AUDIT/archify-browser/explainer",
+        "exit": 0,
+        "elapsed_s": 3.7585,
+        "stdout_file": "$UPSTREAM_AUDIT/archify-source-tests/B-browser-explainer/stdout",
+        "stderr_file": "$UPSTREAM_AUDIT/archify-source-tests/B-browser-explainer/stderr",
+        "stdout_sha256": "02143786d91360543030125110380a3d01baa66c38f97c49f4f033c96f4e1c2b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "limitations": "Unchanged upstream regression fixtures, selected for affected concrete behavior. Not held-out model tasks or independent semantic/visual quality judgments. No model tokens or model costs incurred by these CLI checks. Browser check claims limited to the actual returned gates.",
+    "browser_artifacts": {
+      "native/artifact.html": {
+        "sha256": "4256c96f0f8723e9358f826cc705011d26c1a1cd2dcf4ecfb6d67be1b4775a68",
+        "bytes": 830775
+      },
+      "native/artifact.browser-check.json": {
+        "sha256": "27107696b5900c773b82c676088a29243601c5f919c28bbea207e608b28e6acd",
+        "bytes": 36852
+      },
+      "native/artifact.finalize.json": {
+        "sha256": "457a7012a13c7a77f467f05d881856438898cf37ff9db700290e8744d3dc0b1a",
+        "bytes": 53626
+      },
+      "native/artifact.delivery.json": {
+        "sha256": "ac9d9e6311efd21cb6f2a5d436a60910e35c1adb3752c061f1fb8cbb34fd56f0",
+        "bytes": 577
+      },
+      "native/artifact.finalize-summary.json": {
+        "sha256": "b375c6ebb8b5455cc3e24f0ee1941d0294b4a4163c0c1f7ba6bdefabf1e33828",
+        "bytes": 1258
+      },
+      "explainer/artifact.html": {
+        "sha256": "8c97ff43d5291a796112ff85121ef04e7e13adf29da552ad0472f3900c562ff8",
+        "bytes": 132013
+      },
+      "explainer/artifact.browser-check.json": {
+        "sha256": "6cda9e5291774e4d848df9495ea0a60a7ada8f36c7874009d65e4c112385cb63",
+        "bytes": 276330
+      },
+      "explainer/artifact.finalize.json": {
+        "sha256": "743490a62af134db1cc917fbf3a2bfd3f7089d42e6e768890dcd5953542cf538",
+        "bytes": 310901
+      },
+      "explainer/artifact.delivery.json": {
+        "sha256": "7f731a271258714fb769d95e17449986bdcf1e8dbb53f429961dab22e46aa35e",
+        "bytes": 717
+      },
+      "explainer/artifact.finalize-summary.json": {
+        "sha256": "e3c71f553b6051bf749b36c955b88779e756131a7a6ec9fb166cd956801ded21",
+        "bytes": 2087
+      }
+    },
+    "paired_existing_cases": [
+      {
+        "name": "timeline: daily local ticks survive spring forward without moving the time axis",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 193.960917,
+        "B_elapsed_ms": 407.937208
+      },
+      {
+        "name": "timeline: daily local ticks survive fall back without moving the time axis",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 196.48075,
+        "B_elapsed_ms": 578.946042
+      },
+      {
+        "name": "timeline: hourly ticks skips the nonexistent spring hour",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 233.533167,
+        "B_elapsed_ms": 315.410458
+      },
+      {
+        "name": "timeline: hourly ticks retains both real occurrences of the repeated fall hour",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 345.860583,
+        "B_elapsed_ms": 248.106042
+      },
+      {
+        "name": "timeline: hourly ticks aligns whole hours across the Lord Howe half-hour jump",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 318.408583,
+        "B_elapsed_ms": 246.309625
+      },
+      {
+        "name": "timeline: a skipped civil date in Apia does not invent or duplicate an instant",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 246.667,
+        "B_elapsed_ms": 232.067875
+      },
+      {
+        "name": "timeline: equal endpoint offsets do not hide the daylight-saving season inside a long segment",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 258.187,
+        "B_elapsed_ms": 216.487334
+      },
+      {
+        "name": "timeline: a short segment keeps its start tick and automatic breaks retain real local dates",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 452.225292,
+        "B_elapsed_ms": 378.914583
+      },
+      {
+        "name": "fallback migration preserves valid requiredEdges",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 266.228625,
+        "B_elapsed_ms": 772.065875
+      },
+      {
+        "name": "fallback migration preserves valid requiredPaths",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 288.025,
+        "B_elapsed_ms": 950.029958
+      },
+      {
+        "name": "fallback migration preserves valid allowedRoots",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 423.336667,
+        "B_elapsed_ms": 704.246959
+      },
+      {
+        "name": "fallback migration preserves valid allowedTerminals",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 431.971625,
+        "B_elapsed_ms": 569.731167
+      },
+      {
+        "name": "fallback migration preserves valid combined contracts",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 338.104167,
+        "B_elapsed_ms": 711.797875
+      },
+      {
+        "name": "authored invalid requiredEdges still rejects validation and migration",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 229.920542,
+        "B_elapsed_ms": 139.48925
+      },
+      {
+        "name": "authored invalid requiredPaths still rejects validation and migration",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 200.438334,
+        "B_elapsed_ms": 141.40025
+      },
+      {
+        "name": "authored invalid allowedRoots still rejects validation and migration",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 181.088792,
+        "B_elapsed_ms": 139.72325
+      },
+      {
+        "name": "authored invalid allowedTerminals still rejects validation and migration",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 181.881958,
+        "B_elapsed_ms": 141.613167
+      },
+      {
+        "name": "only the incomplete planning projection omits semantic contracts without mutating the source",
+        "A": "fail",
+        "B": "pass",
+        "A_elapsed_ms": 14.493583,
+        "B_elapsed_ms": 9.60025
+      },
+      {
+        "name": "planning keeps semantic contracts when it retains every authored edge",
+        "A": "pass",
+        "B": "pass",
+        "A_elapsed_ms": 6.594042,
+        "B_elapsed_ms": 5.410459
+      }
+    ],
+    "new_B_only_cases": [
+      {
+        "name": "explainer chart fences render static themed SVG without shipping the chart library",
+        "status": "pass",
+        "elapsed_ms": 563.590541
+      },
+      {
+        "name": "explainer chart fences send native diagram types to shorthand and locate syntax errors",
+        "status": "pass",
+        "elapsed_ms": 269.289542
+      },
+      {
+        "name": "explainer chart CJK axis titles stand upright and task lists become checklists",
+        "status": "pass",
+        "elapsed_ms": 898.154709
+      },
+      {
+        "name": "explainer charts label bar values and give pie slices their value and share",
+        "status": "pass",
+        "elapsed_ms": 1067.745583
+      },
+      {
+        "name": "a data chart reads its CSV next to the draft, freezes it, and names a missing column",
+        "status": "pass",
+        "elapsed_ms": 501.0405
+      },
+      {
+        "name": "a blank data cell is missing data, never drawn as zero",
+        "status": "pass",
+        "elapsed_ms": 7.411375
+      }
+    ],
+    "paired_summary": {
+      "cases": 19,
+      "A_pass": 8,
+      "B_pass": 19,
+      "fixed": 11,
+      "regressed": 0
+    },
+    "costs": {
+      "model_calls": 0,
+      "model_token_usage": "not applicable to deterministic CLI checks",
+      "model_api_cost": 0,
+      "external_browser_and_cli_wall_times": "recorded per result; processes ran concurrently, no speedup claim"
+    },
+    "raw_evidence_sha256": "5dc3409d64ea0f551f3354b03201c93037e2f5204c9c4abdc8156123a52bafe6"
+  },
+  "backpass_source_audit": {
+    "source_commit": "c8d60c24d4dc7e341d363bd4cddb5c8d6fedbb54",
+    "original_full_stdout_available": false,
+    "original_log_retrieval_sha256": "73499262e48716e490a202a64fe5ed606a226e0b9aa9c7f34ab739094503c8bb",
+    "later_replay": {
+      "record_kind": "later_replay_not_original_run",
+      "started_at_utc": "2026-11-09T17:41:28.977384+00:00",
+      "completed_at_utc": "2026-11-09T17:41:36.253685+00:00",
+      "source_commit": "c8d60c24d4dc7e341d363bd4cddb5c8d6fedbb54",
+      "source_unchanged": true,
+      "node_version": "v24.15.0",
+      "node_executable": "/usr/local/bin/node",
+      "python_version": "3.15.2 (main, Oct 25 2026, 16:57:51) [Clang 21.0.0 (clang-2100.3.34.2)]",
+      "invocations": [
+        {
+          "record_kind": "later_replay",
+          "name": "targeted-tests",
+          "command": [
+            "node",
+            "--import",
+            "./test/helpers/hermetic-config.js",
+            "--test",
+            "test/association.test.js",
+            "test/sample.test.js",
+            "test/sample-reuse.test.js",
+            "test/proposal.test.js",
+            "test/workspace.test.js",
+            "test/synthesize.test.js",
+            "test/gap-ledger.test.js",
+            "test/budget.test.js"
+          ],
+          "cwd": "$BACKPASS_SOURCE",
+          "source_commit": "c8d60c24d4dc7e341d363bd4cddb5c8d6fedbb54",
+          "started_at_utc": "2026-11-09T17:41:28.977384+00:00",
+          "exit_code": 0,
+          "duration_ns": 7135915792,
+          "stdin_sha256": null,
+          "stdout_sha256": "94c96720f7768bfedfe3d26084b329054bb18e14806bef31ef8fe4d593a4f905",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_file": "targeted-tests.stdout.log",
+          "stderr_file": "targeted-tests.stderr.log",
+          "model_calls": 0
+        },
+        {
+          "record_kind": "later_replay",
+          "name": "quote-bypass",
+          "command": [
+            "node",
+            "--input-type=module",
+            "-"
+          ],
+          "cwd": "$BACKPASS_SOURCE",
+          "source_commit": "c8d60c24d4dc7e341d363bd4cddb5c8d6fedbb54",
+          "started_at_utc": "2026-11-09T17:41:28.977384+00:00",
+          "exit_code": 0,
+          "duration_ns": 32912250,
+          "stdin_sha256": "b82eb0bf26de186665222b21850b5835d83e7ca81e96359e8d2e8bad36685f6c",
+          "stdout_sha256": "120085b9ed2b5119a4e5772e80918cc15a02da82fc1f7318ddb8402c37f1cdf7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_file": "quote-bypass.stdout.log",
+          "stderr_file": "quote-bypass.stderr.log",
+          "model_calls": 0
+        },
+        {
+          "record_kind": "later_replay",
+          "name": "source-quote-binding",
+          "command": [
+            "node",
+            "--import",
+            "./test/helpers/hermetic-config.js",
+            "--input-type=module",
+            "-"
+          ],
+          "cwd": "$BACKPASS_SOURCE",
+          "source_commit": "c8d60c24d4dc7e341d363bd4cddb5c8d6fedbb54",
+          "started_at_utc": "2026-11-09T17:41:28.977384+00:00",
+          "exit_code": 0,
+          "duration_ns": 49629208,
+          "stdin_sha256": "6ee7258a91b62cf4f46c0c4ac21b9b51ecaa2fe4c0fdbd893bf6de5e67e4b9eb",
+          "stdout_sha256": "6b896dddb4d4529548de456897f674743d73ad75b9ea17eec5eae123a9a8e542",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_file": "source-quote-binding.stdout.log",
+          "stderr_file": "source-quote-binding.stderr.log",
+          "model_calls": 0
+        }
+      ],
+      "controls": {
+        "quote_bypass": [
+          {
+            "usedRawTranscript": false,
+            "gapsAccepted": 0,
+            "quotesNotInTrace": 1
+          },
+          {
+            "usedRawTranscript": true,
+            "gapsAccepted": 1,
+            "quotesNotInTrace": 0
+          },
+          {
+            "usedRawTranscript": "false",
+            "gapsAccepted": 0,
+            "quotesNotInTrace": 1
+          }
+        ],
+        "source_quote_binding": {
+          "synthetic": true,
+          "violations": [],
+          "edits": 1,
+          "transcripts": 2,
+          "gapIds": []
+        },
+        "quote_control_matches_reported_behavior": true,
+        "binding_control_matches_reported_behavior": true
+      },
+      "test_output_tail": [
+        "✔ project scope bills a skill symlinked out of the repo but never stages it (11.270709ms)",
+        "✔ a setext heading stays with the section it introduces when a removal is split (0.2ms)",
+        "✔ a plain thematic break never ties an extraction to the deletion after it (0.140792ms)",
+        "✔ a thematic break between a heading and its section never lets an extraction orphan the heading (0.041625ms)",
+        "ℹ tests 269",
+        "ℹ suites 0",
+        "ℹ pass 269",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0",
+        "ℹ todo 0",
+        "ℹ duration_ms 7110.14625"
+      ],
+      "limits": [
+        "Original full test stdout was not saved; original process handles expired.",
+        "This directory contains a later replay, with a new observed time; it does not recover the original 8.87-second run.",
+        "Tests and controls use synthetic fixtures and no model calls. They do not demonstrate Hub task-quality gains.",
+        "Only the original eight targeted test files and two controls were rerun; full lint/typecheck/all-suite checks were not run.",
+        "Source copies and source/test mapping were captured at this later replay from the unchanged pinned commit."
+      ]
+    },
+    "later_replay_sha256": "171f941b0d3b3ed0615e9b2c50eb7d6dfb93b5bc3d4842c1b2894266ecb2bb22",
+    "source_test_mapping": [
+      {
+        "mechanism": "session ownership",
+        "source": "src/discovery/association.js",
+        "functions": [
+          "associate",
+          "associateRemote",
+          "passesStrict"
+        ],
+        "tests": [
+          "test/association.test.js"
+        ],
+        "guarantee": "Code applies tiered ownership; tier3 is excluded only under strict mode."
+      },
+      {
+        "mechanism": "sampling and stable identities",
+        "source": "src/sample.js",
+        "functions": [
+          "sampleUnit",
+          "sampleTranscripts",
+          "capTranscripts"
+        ],
+        "tests": [
+          "test/sample.test.js",
+          "test/sample-reuse.test.js"
+        ],
+        "guarantee": "Deterministic identity+seed draw, weighted/stratified cap. Not task-level holdout isolation."
+      },
+      {
+        "mechanism": "quote verification exception",
+        "source": "src/analyze.js",
+        "functions": [
+          "sanitizeEvidence",
+          "analyzeOne"
+        ],
+        "tests": [
+          "quote-bypass-control.mjs"
+        ],
+        "guarantee": "Literal usedRawTranscript=true bypasses trace substring check; semantic correctness is not proven."
+      },
+      {
+        "mechanism": "independent source floor and quote binding gap",
+        "source": "src/proposal.js",
+        "functions": [
+          "countSources",
+          "buildProposal",
+          "uniqueMatchingGapIds"
+        ],
+        "tests": [
+          "test/proposal.test.js",
+          "source-quote-binding-control.mjs"
+        ],
+        "guarantee": "Counts admitted source labels/observers; source+quote join is not a universal evidence admission gate."
+      },
+      {
+        "mechanism": "gap deduplication",
+        "source": "src/gap-ledger.js",
+        "functions": [
+          "recordGapObservations",
+          "normalizeGapLedgerSessions",
+          "mergeGapEntries"
+        ],
+        "tests": [
+          "test/gap-ledger.test.js"
+        ],
+        "guarantee": "Known observer duplication collapses. Gap semantic equivalence still depends on model judgment or lexical fallback."
+      },
+      {
+        "mechanism": "staging and measured diff",
+        "source": "src/workspace.js",
+        "functions": [
+          "prepareWorkspace",
+          "measureWorkspace",
+          "repoFingerprint"
+        ],
+        "tests": [
+          "test/workspace.test.js"
+        ],
+        "guarantee": "Staged copies, measured originals and watched-file fingerprints; not an OS sandbox or full-repository protection."
+      },
+      {
+        "mechanism": "direct-write detection",
+        "source": "src/synthesize.js",
+        "functions": [
+          "assertRepoUntouched",
+          "synthesizeProposal"
+        ],
+        "tests": [
+          "test/synthesize.test.js"
+        ],
+        "guarantee": "Detects observed changes to guarded paths after invocation, with attribution limits."
+      },
+      {
+        "mechanism": "budget",
+        "source": "src/tokens.js",
+        "functions": [
+          "estimateTokens",
+          "budgetStatus",
+          "budgetGateKind"
+        ],
+        "tests": [
+          "test/budget.test.js",
+          "test/proposal.test.js"
+        ],
+        "guarantee": "UTF8 bytes/4 proxy controls instruction length; not actual billed tokens."
+      },
+      {
+        "mechanism": "rejections and evidence freshness",
+        "source": "src/state.js",
+        "functions": [
+          "evidenceKey",
+          "isEvidenceFresh",
+          "rejectionKey",
+          "isSuppressedByRejection",
+          "recordRejection"
+        ],
+        "tests": [
+          "test/proposal.test.js",
+          "test/sample-reuse.test.js"
+        ],
+        "guarantee": "Freshness and rejection identities enforced in code; no demonstrated task-quality benefit from these tests alone."
+      },
+      {
+        "mechanism": "atomic apply and rollback",
+        "source": "src/apply/writer.js",
+        "functions": [
+          "applyDecisions",
+          "atomicReplace",
+          "commitStillCurrent"
+        ],
+        "tests": [
+          "test/proposal.test.js"
+        ],
+        "guarantee": "Checks current target hashes when supplied, composes edits, atomic replacements, guarded rollback. Legacy proposals without target hashes retain compatibility path."
+      }
+    ],
+    "mapping_sha256": "6686ef37f4e13d81b116e2cf019226e6643966c914083f4f5b2f03535d8c3a4a",
+    "replay_script_sha256": "89952406352376404adcff36caf469d5d93c28a009fc72e74aa4675ab7659057"
+  }
+}

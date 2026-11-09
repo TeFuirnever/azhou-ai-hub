@@ -354,6 +354,25 @@ class RenameResidueTest(unittest.TestCase):
     def test_renamed_catalog_has_no_residue_outside_allowed_surfaces(self) -> None:
         self.assertEqual([], check_rename_residue(public_files(ROOT), ROOT))
 
+    def test_upstream_identity_exception_is_exact_and_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preview = root / "skills/super-archify/bin/preview.mjs"
+            preview.parent.mkdir(parents=True)
+            literal = "const cliPath = path.join(here, 'archify.mjs');\n"
+            preview.write_text(literal, encoding="utf-8")
+            self.assertEqual([], check_rename_residue([preview], root))
+            # The exception must not hide another residue in the same file.
+            preview.write_text(literal + "// Run archify as the canonical skill.\n", encoding="utf-8")
+            self.assertTrue(check_rename_residue([preview], root))
+            # The same literal in an unrelated file is not an upstream boundary.
+            other = root / "unexpected.mjs"
+            other.write_text(literal, encoding="utf-8")
+            self.assertTrue(check_rename_residue([other], root))
+            # Other renamed skills never inherit archify's source exception.
+            preview.write_text(literal + "// repo-pedant\n", encoding="utf-8")
+            self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([preview], root)))
+
     def test_old_name_outside_allowed_surfaces_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

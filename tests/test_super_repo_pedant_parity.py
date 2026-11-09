@@ -110,16 +110,21 @@ class RepoPedantParityTest(unittest.TestCase):
         self.assertTrue((SKILL_DIR / "scripts" / "closeout_hook.py").is_file())
         self.assertTrue((SKILL_DIR / "scripts" / "manage_evolution.py").is_file())
 
-    def test_contract_v3_rebaselines_the_ledger_onto_upstream_v3(self) -> None:
-        # Positive controls: contract v3 rests the ledger on the audited v3.0.0 baseline.
-        self.assertIn("Contract version: v3 (2026-10-18)", CONTRACT_TEXT)
+    def test_current_stable_baseline_retains_prior_lineage_and_capability_contract(self) -> None:
+        # Stable metadata must agree while preserving both historical baselines.
+        self.assertIn("Contract version: v4 (2026-11-10)", CONTRACT_TEXT)
+        self.assertEqual("v1.2.0", PARITY["baseline_release"])
+        self.assertEqual("3.1.1", PARITY["baseline_skill_version"])
+        self.assertEqual("cfa3436d4d31db9b1340af3082a914adf92f023f", PARITY["baseline_commit"])
+        self.assertIn(PARITY["baseline_commit"], CONTRACT_TEXT)
+        self.assertIn(PARITY["baseline_commit"], PROVENANCE_TEXT)
         self.assertIn("## Baseline", CONTRACT_TEXT)
         self.assertIn(V3_OBSERVATION_COMMIT, CONTRACT_TEXT)
         self.assertIn("equivalent evolution", CONTRACT_TEXT)
         self.assertIn(AUDIT_DOC_RELPATH, CONTRACT_TEXT)
         self.assertIn(V3_OBSERVATION_COMMIT, PROVENANCE_TEXT)
         self.assertIn(AUDIT_DOC_RELPATH, PROVENANCE_TEXT)
-        self.assertIn("Reference baseline (2026-10-18 re-baseline", PROVENANCE_TEXT)
+        self.assertIn("Previous reference baseline (2026-10-18 re-baseline", PROVENANCE_TEXT)
         # The audit document exists and carries the per-capability ledger the contract cites.
         self.assertTrue((ROOT / AUDIT_DOC_RELPATH).is_file())
         self.assertIn("pin `bab17831` 语义", AUDIT_TEXT)
