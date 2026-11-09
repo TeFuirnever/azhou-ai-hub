@@ -1129,6 +1129,66 @@ struct NativePlayerProgress {
     }
 }
 
+enum StartupPayloadReader {
+    private static let limit = 24 * 1024 * 1024
+
+    private static func sameNode(_ left: stat, _ right: stat) -> Bool {
+        left.st_dev == right.st_dev && left.st_ino == right.st_ino && left.st_mode == right.st_mode
+    }
+
+    private static func sameFile(_ left: stat, _ right: stat) -> Bool {
+        sameNode(left, right) && left.st_size == right.st_size
+            && left.st_mtimespec.tv_sec == right.st_mtimespec.tv_sec
+            && left.st_mtimespec.tv_nsec == right.st_mtimespec.tv_nsec
+            && left.st_ctimespec.tv_sec == right.st_ctimespec.tv_sec
+            && left.st_ctimespec.tv_nsec == right.st_ctimespec.tv_nsec
+    }
+
+    static func read(from root: URL) -> String? {
+        let directoryFlags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+        let rootFD = Darwin.open(root.path, directoryFlags)
+        guard rootFD >= 0 else { return nil }
+        defer { Darwin.close(rootFD) }
+        var rootBefore = stat()
+        guard fstat(rootFD, &rootBefore) == 0 else { return nil }
+        let startupFD = openat(rootFD, "startup", directoryFlags)
+        guard startupFD >= 0 else { return nil }
+        defer { Darwin.close(startupFD) }
+        var startupBefore = stat()
+        guard fstat(startupFD, &startupBefore) == 0 else { return nil }
+        let sourceFD = openat(startupFD, "install.js", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard sourceFD >= 0 else { return nil }
+        defer { Darwin.close(sourceFD) }
+        var before = stat()
+        guard fstat(sourceFD, &before) == 0, before.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              before.st_size > 0, before.st_size < limit else { return nil }
+        var bytes = Data()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let remaining = limit - bytes.count
+            guard remaining > 0 else { return nil }
+            let count = buffer.withUnsafeMutableBufferPointer { pointer in
+                Darwin.read(sourceFD, pointer.baseAddress, min(pointer.count, remaining))
+            }
+            if count < 0 {
+                if errno == EINTR { continue }
+                return nil
+            }
+            if count == 0 { break }
+            bytes.append(contentsOf: buffer[..<count])
+        }
+        var after = stat(), namedFile = stat(), namedStartup = stat(), namedRoot = stat()
+        guard bytes.count == before.st_size,
+              fstat(sourceFD, &after) == 0, sameFile(before, after),
+              fstatat(startupFD, "install.js", &namedFile, AT_SYMLINK_NOFOLLOW) == 0,
+              sameFile(after, namedFile),
+              fstatat(rootFD, "startup", &namedStartup, AT_SYMLINK_NOFOLLOW) == 0,
+              sameNode(startupBefore, namedStartup),
+              lstat(root.path, &namedRoot) == 0, sameNode(rootBefore, namedRoot) else { return nil }
+        return String(data: bytes, encoding: .utf8)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private var launcherHost: SkinHostID? {
         let bundle = Bundle(url: runtime.bundleURL)
@@ -1422,12 +1482,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             throw StartupFailure(reason: "asset-invalid", message: "缺少 Agent Skin 资源目录；本次不会启动或注入 Codex。")
         }
         let root = real(resources)
-        let source = root.appendingPathComponent("startup/install.js")
-        guard source.path.hasPrefix(root.path + "/"),
-              (try? source.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey]).isSymbolicLink) != true,
-              (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-              let bytes = try? Data(contentsOf: source), !bytes.isEmpty, bytes.count < 24 * 1024 * 1024,
-              let text = String(data: bytes, encoding: .utf8) else {
+        guard let text = StartupPayloadReader.read(from: root) else {
             throw StartupFailure(reason: "asset-invalid", message: "缺少有效的 startup/install.js 生产载荷；本次不会启动或注入 Codex。")
         }
         return text

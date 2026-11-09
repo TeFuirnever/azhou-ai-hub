@@ -2080,6 +2080,61 @@ private func nativeEventContractChecks() async throws -> Int {
         return (runtime, target, system)
     }
 
+    let linkedResourceRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-linked-resource-" + UUID().uuidString, isDirectory: true)
+    let outsideStartup = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-outside-payload-" + UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: linkedResourceRoot); try? FileManager.default.removeItem(at: outsideStartup) }
+    try FileManager.default.createDirectory(at: linkedResourceRoot, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: outsideStartup, withIntermediateDirectories: true)
+    try Data("synthetic-external-payload".utf8).write(to: outsideStartup.appendingPathComponent("install.js"))
+    try FileManager.default.createSymbolicLink(at: linkedResourceRoot.appendingPathComponent("startup"),
+                                               withDestinationURL: outsideStartup)
+    let (linkedPayloadRuntime, _, _) = makeColdRuntime(pid: 491, resourceURL: linkedResourceRoot)
+    linkedPayloadRuntime.startupTransportFactory = { _, _ in FakeStartupTransport(pages: [], evaluations: []) }
+    let linkedPayloadDelegate = AppDelegate(runtime: linkedPayloadRuntime, presentation: FakeNativePlayerPresentation())
+    linkedPayloadDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+    try await settleLaunch(linkedPayloadRuntime)
+    let linkedFailure = linkedPayloadRuntime.output.compactMap { line -> [String: Any]? in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }.first { $0["event"] as? String == "startup-failed" }
+    expect(linkedPayloadRuntime.openCount == 0 && linkedFailure?["reason"] as? String == "asset-invalid",
+           "a startup directory symlink is rejected as an invalid asset before opening the target")
+
+    let boundedRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-payload-bounds-" + UUID().uuidString, isDirectory: true)
+        .resolvingSymlinksInPath().standardizedFileURL
+    defer { try? FileManager.default.removeItem(at: boundedRoot) }
+    let boundedDirectory = boundedRoot.appendingPathComponent("startup", isDirectory: true)
+    let boundedFile = boundedDirectory.appendingPathComponent("install.js")
+    try FileManager.default.createDirectory(at: boundedDirectory, withIntermediateDirectories: true)
+    try Data("fixture-payload".utf8).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == "fixture-payload", "bounded payload reader accepts normal UTF-8 bytes")
+    try Data().write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects an empty file")
+    try Data([0xff, 0xfe]).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects invalid UTF-8")
+    try FileManager.default.removeItem(at: boundedFile)
+    try FileManager.default.createSymbolicLink(at: boundedFile, withDestinationURL: startupPayloadURL)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a file symlink")
+    try FileManager.default.removeItem(at: boundedFile)
+    expect(mkfifo(boundedFile.path, 0o600) == 0, "synthetic payload FIFO was created")
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a FIFO without waiting for a writer")
+    try FileManager.default.removeItem(at: boundedFile)
+    try FileManager.default.createDirectory(at: boundedFile, withIntermediateDirectories: false)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a directory")
+    try FileManager.default.removeItem(at: boundedFile)
+    let allowedSize = 24 * 1024 * 1024 - 1
+    try Data(repeating: 0x41, count: allowedSize).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot)?.utf8.count == allowedSize,
+           "bounded payload reader accepts one byte below its exclusive limit")
+    let oversizedHandle = try FileHandle(forWritingTo: boundedFile)
+    try oversizedHandle.truncate(atOffset: UInt64(allowedSize + 1))
+    try oversizedHandle.close()
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil,
+           "bounded payload reader rejects the exclusive size limit")
+
     let hotRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"], resourceURL: coldResources)
     hotRuntime.installedTargetURL = syntheticCodex
     let hotTarget = FakeNativeApplication(pid: 47, bundleIdentifier: "com.openai.codex",
