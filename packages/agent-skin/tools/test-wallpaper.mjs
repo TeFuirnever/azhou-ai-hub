@@ -220,7 +220,7 @@ try {
     await check('captured 0.7.0 falsely reports success with independent fades', async () => {
       try {
         await cdp.evaluate('__azhouWallpaper.dispose()');
-        const state = await cdp.evaluate('(async()=>{' + baseline.installer + '\nreturn await installRenderer(' + JSON.stringify(baseline.payload) + ');})()');
+        const state = await cdp.evaluate('(async()=>{' + baseline.installer + '\nconst state=await installRenderer(' + JSON.stringify(baseline.payload) + ');window.__wallpaperFixtureBaseline=globalThis.__azhouWallpaper;return state;})()');
         const inspected = await onFixture(() => {
           const fade = document.getElementById('fixture-fade');
           return { inFooter: !!fade.closest('[data-thread-scroll-footer]'), gradient: getComputedStyle(fade).backgroundImage,
@@ -231,7 +231,12 @@ try {
         assert.ok(inspected.gradient.includes('linear-gradient')); assert.ok(inspected.topGradient.includes('linear-gradient'));
         await onFixture(() => { document.getElementById('result').textContent = '0.7.0 基线：状态成功，但独立渐变仍覆盖背景'; });
         return { state, inspected, screenshot: await screenshot('00-baseline-fade-0.7.0.png') };
-      } finally { await cdp.evaluate('__wallpaperFixture.apply()'); }
+      } finally {
+        await cdp.evaluate(`(()=>{const api=window.__wallpaperFixtureBaseline;
+          delete window.__wallpaperFixtureBaseline;
+          if(api&&globalThis.__azhouWallpaper===api)api.dispose();})()`);
+        await cdp.evaluate('__wallpaperFixture.apply()');
+      }
     });
   }
   await check('decoded image and matched shell/background', async () => {
