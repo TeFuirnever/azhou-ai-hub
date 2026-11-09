@@ -2,6 +2,8 @@
 
 Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack), shipped for three runtimes. The source is pristine upstream plus a quilt patch queue; nothing under `pstack/` or `components/` is edited by hand. [UPSTREAM.md](UPSTREAM.md) records the sources, the queue and the pending work.
 
+The proposed `resume.mjs` checkpoint helper is not shipped. Its [storage reference](hub-skills/poteto-mode/references/resume-storage.md) documents a design, not an available command.
+
 ## Layout
 
 | Directory | What it is |

@@ -76,6 +76,8 @@ python scripts/azhou_hub.py verify
 
 `setup`、`repair`、`migrate` 和 `uninstall` 在出现 `--apply` 前保持只读。Setup 可重复收敛，遇到不同安装会拒绝覆盖；当目标符号链接已解析到另一 checkout 的相同 canonical 包内容时，dry-run 会报告 `conflict-same-source` 并以退出码 `3` 结束而不是失败，`--apply` 仍会拒绝执行。Receipt-owned 生命周期命令要求再次提供同一显式 target，并独立校验 canonical source 与安装身份；不会强制覆盖 drift、跨 harness root 迁移、安装 hook、重写宿主配置、访问 registry 或自更新。各 harness 共用同一批包，但发现、调用、权限和可选集成仍由宿主负责；完整边界见[支持矩阵](docs/support-matrix.md)与[基础 CLI 合同](docs/foundations.md)。
 
+变更计划和 review 可以使用实验性的[变更范围命令](docs/foundations.md#experimental-change-scope)，以显式 ref 区分 Git 各层；结果是有明确边界的一次观察，不是锁或语义依赖图。
+
 Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--apply --plan-id <reviewed-planId>`，源、目标、模式或执行前状态发生变化都会拒绝执行。
 
 ## 可选能力接入
@@ -84,7 +86,7 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力；ZCode 图形界面调用尚未验收，宿主调用、hook 信任和发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力；ZCode 图形界面调用尚未验收，宿主调用、hook 信任和发布批准仍需独立证据；拟议的 `resume.mjs` 检查点工具尚未交付。 |
 | `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加 ZCode 桌面入口与可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。应用本地化显示名为 `阿舟 AI 实验室 for Codex` / `Azhou AI Lab for Codex`，原生入口仍为 `~/Applications/阿舟 AI 实验室.app`；先验证新入口，再退役已核实归属的旧名入口。使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 23 将 Codex 显示名与固定安装文件名分离，Finder 本地化仍跟随 macOS 语言；维护提示跟随系统语言。build 24 在页面内控件可见且可命中之前隐藏 Appearance 备用入口；Home 导航未出现时，备用位置避开 composer，导航出现后回到 Your dot 下方。build 25 兼容 Your dot 按钮位于导航列表包装中的结构。C0 定义共享宿主合同和按操作能力门；build 39 携带钉住桌面 3.17.2.9661 指纹的 ZCode driver；build 38 通过含主区像素护栏的真实宿主生产 UI 验收，原生冷启动入口打开用户日常 profile（2026-11-07 维护者确认）；热附着激活同一实例且无重播（2026-11-08 维护者确认）。build 40 将普通双击启动的全部启动事件落到 `~/Library/Logs/AzhouZCodeStartup/events.jsonl`（Codex 宿主为 `AzhouCodexStartup`），静默失败可读出诊断点与原因。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。ZCode 宿主已有 2026-11-06/07 build 35–38 真实验收回执与 ChatGPT-desktop 一致风格入口。DeepSeek Harness 形态以 `azhou-agent-skin` 插件包交付（`tools/build-dsh-plugin.py`），本地组装确定、校验器通过，已在一次性 profile 上用随应用打包的 CLI 验证官方安装路径（安装、清单、移除、重装与层栈组合），并在真实 DSH web 客户端与真实桌面 carrier 上完成机器级验证：控制器注册、动画自然收束、主题跟随宿主、默认壁纸应用并经用户验收（2026-11-07）、`Azhou appearance` 设置行出现在宿主设置弹窗且同一面板嵌入、阿舟侧栏胶囊为该设置行让路而移除（[组装回执](evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](evidence/live-dsh-plugin-host-2026-11-05.md)、[设置行回执](evidence/live-dsh-settings-section-2026-11-07.md)）。壁纸导入对话框与插件管理页展示仍开放；生产 desktop profile 经 profile workspace 符号链接实时运行（2026-11-06 起）。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属需单独核验；程序再分发尚未获授权。 |
 
