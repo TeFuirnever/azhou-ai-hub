@@ -155,6 +155,8 @@ The native configuration and child-setting rules are distinct. For the tested cl
 
 ## Agent Skin: build, test entry and production boundary
 
+For updates to existing daily installations, follow the [three-host local install SOP](../packages/agent-skin/docs/local-install-sop.md). The test-entry adapter below keeps its existing ownership boundary.
+
 The canonical package is `packages/agent-skin/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
 
 ```sh

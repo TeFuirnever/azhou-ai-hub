@@ -55,6 +55,8 @@ Use source search/read for literals, configs, non-code files, graph gaps, and ev
 - Never let lifecycle hooks or history observers mutate the live skill. Evolution candidates require deterministic checks, paired majority, no safety regression, and exact-diff human approval.
 - Keep raw agent history, excerpts, local inventory, hook state, and evolution candidates out of Git.
 
+For Agent Skin local installation, source recovery, or installed-version checks, read [the three-host local install SOP](packages/agent-skin/docs/local-install-sop.md) first.
+
 ## Verification
 
 Run before handoff:

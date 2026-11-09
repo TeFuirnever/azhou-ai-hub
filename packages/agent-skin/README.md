@@ -1,5 +1,7 @@
 # 阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex
 
+三端本机安装、旧来源恢复及安装后复查，先读 [本地安装 SOP](docs/local-install-sop.md)。
+
 本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 41**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；Codex 与 ZCode 使用原生入口和同窗口 CDP 动画、壁纸及设置流程；DeepSeek Harness（DSH）通过可组装的插件包接入共享核心。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter；build 35 起包含已核验的 ZCode driver 与运行时，钉住 ZCode 桌面 3.17.2.9661 身份指纹并通过真实宿主生产 UI 验收（原生冷启动入口与热附着已通过真实宿主验收，维护者确认）。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。ZCode 宿主已有 build 35 真实 UI 验收回执，Codex 宿主验收状态见 support-matrix。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
