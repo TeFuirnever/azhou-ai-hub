@@ -62,7 +62,6 @@ REQUIRED_PATHS = (
     "scripts/azhou_hub.py",
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
-    "skills/super-lavish/SKILL.md",
 )
 
 INSTALLABLE_SKILL_PATHS = {
@@ -76,7 +75,6 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
-    "skills/super-lavish/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-session-insights/SKILL.md",
 }
@@ -124,12 +122,6 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先让结构讲清关系，再让文字补充证据。",
         "startup": "🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）",
         "brand_path": "skills/super-excalidraw-diagram/references/brand-layer.md",
-    },
-    "skills/super-lavish/SKILL.md": {
-        "display_name": "Super Lavish",
-        "motto": "把复杂结果变成可审阅的界面。",
-        "startup": "🦊 阿舟 · Super Lavish 启动（mode=<artifact|relay|review|export|share>, scope=<short scope>）",
-        "brand_path": "skills/super-lavish/references/brand-layer.md",
     },
     "skills/super-repo-pedant/SKILL.md": {
         "display_name": "Super Repo Pedant",

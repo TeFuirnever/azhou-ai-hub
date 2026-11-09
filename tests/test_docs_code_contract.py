@@ -8,7 +8,7 @@ under-tested after the 2026-09-05/06 evolution batches:
   script's argparse (the repo already hit doc-code drift twice via dead script
   pointers).
 - The completion-criteria additions (excalidraw SKILL.md sections 1-3,
-  super-repo-pedant SKILL.md sections 2-3, super-lavish ``artifact-mode.md`` steps 1-7)
+  super-repo-pedant SKILL.md sections 2-3)
   stay present; deleting a marker fails here.
 """
 
@@ -24,7 +24,6 @@ INVENTORY_PY = ROOT / "skills" / "super-repo-pedant" / "scripts" / "inventory_kn
 AGENTS_MD = ROOT / "AGENTS.md"
 EXCALIDRAW_SKILL = ROOT / "skills" / "super-excalidraw-diagram" / "SKILL.md"
 REPO_PEDANT_SKILL = ROOT / "skills" / "super-repo-pedant" / "SKILL.md"
-ARTIFACT_MODE = ROOT / "skills" / "super-lavish" / "references" / "artifact-mode.md"
 
 
 def documented_snapshot_flags(setup_text: str) -> set[str]:
@@ -59,19 +58,6 @@ def repo_pedant_sections_missing_completion(skill_text: str) -> list[str]:
     return missing
 
 
-def artifact_steps_missing_completion(artifact_text: str) -> list[str]:
-    workflow = artifact_text.split("## Artifact mode workflow", 1)[1].split("\n## ", 1)[0]
-    missing = []
-    for step_line in [ln for ln in workflow.splitlines() if re.match(r"^\d+\. ", ln)]:
-        number = int(step_line.split(".", 1)[0])
-        start = workflow.index(step_line)
-        next_match = re.search(rf"\n{number + 1}\. ", workflow[start + 1:])
-        block = workflow[start : start + 1 + next_match.start()] if next_match else workflow[start:]
-        if "Completion:" not in block:
-            missing.append(str(number))
-    return missing
-
-
 class SetupDocsMatchArgparse(unittest.TestCase):
     def test_every_documented_snapshot_flag_exists_in_script(self) -> None:
         documented = documented_snapshot_flags(SETUP_MD.read_text(encoding="utf-8"))
@@ -92,8 +78,6 @@ class CompletionCriteriaPinned(unittest.TestCase):
     def test_repo_pedant_sections_2_and_3_carry_completion_conditions(self) -> None:
         self.assertEqual([], repo_pedant_sections_missing_completion(REPO_PEDANT_SKILL.read_text(encoding="utf-8")))
 
-    def test_lavish_artifact_mode_steps_carry_completion_markers(self) -> None:
-        self.assertEqual([], artifact_steps_missing_completion(ARTIFACT_MODE.read_text(encoding="utf-8")))
 
 
 if __name__ == "__main__":
