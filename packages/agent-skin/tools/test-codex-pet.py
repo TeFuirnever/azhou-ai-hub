@@ -292,6 +292,62 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(selection.read_bytes(), selected)
         self.assertEqual({name: (directory / name).read_bytes() for name in evidence}, evidence)
 
+    def replace_selected_with_identical_copy(self):
+        self.package()
+        selected = PET.selected_package(self.project)
+        saved = self.root / "saved-original-selected"
+        selected.rename(saved)
+        shutil.copytree(saved, selected)
+        self.assertNotEqual(saved.stat().st_ino, selected.stat().st_ino)
+        return selected, saved
+
+    def test_copied_selected_candidate_is_not_verified_or_installed(self):
+        selected, saved = self.replace_selected_with_identical_copy()
+        selection = PET.state_dir(self.project) / "selection.json"
+        before = selection.read_bytes()
+        copied_receipt = (selected / "package-receipt.json").read_bytes()
+        original_receipt = (saved / "package-receipt.json").read_bytes()
+        self.assertEqual(PET.status(self.project, self.codex)["package"]["status"], "source-conflict")
+        self.expect_error(lambda: PET.install_package(self.project, self.codex), "source-conflict")
+        self.assertFalse(self.codex.exists())
+        self.assertEqual(selection.read_bytes(), before)
+        self.assertEqual((selected / "package-receipt.json").read_bytes(), copied_receipt)
+        self.assertEqual((saved / "package-receipt.json").read_bytes(), original_receipt)
+
+    def test_install_refuses_copied_selected_candidate_before_creating_home(self):
+        selected, saved = self.replace_selected_with_identical_copy()
+        self.expect_error(lambda: PET.install_package(self.project, self.codex), "source-conflict")
+        self.assertFalse(self.codex.exists())
+        self.assertTrue(selected.is_dir())
+        self.assertTrue(saved.is_dir())
+
+    def test_copied_selected_candidate_is_not_adopted_by_package(self):
+        selected, saved = self.replace_selected_with_identical_copy()
+        selection = PET.state_dir(self.project) / "selection.json"
+        before = selection.read_bytes()
+        copied = (selected / "package-receipt.json").read_bytes()
+        self.expect_error(self.package, "source-conflict")
+        self.assertEqual(selection.read_bytes(), before)
+        self.assertEqual((selected / "package-receipt.json").read_bytes(), copied)
+        self.assertEqual((saved / "package-receipt.json").read_bytes(), copied)
+
+    def test_selected_candidate_with_malformed_recorded_identity_is_not_reused(self):
+        self.package()
+        selected = PET.selected_package(self.project)
+        receipt_path = selected / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        selection = PET.state_dir(self.project) / "selection.json"
+        before_selection = selection.read_bytes()
+        for value in (None, {}, {"device": True, "inode": selected.stat().st_ino}):
+            with self.subTest(identity=value):
+                changed = dict(receipt, directoryIdentity=value)
+                data = PET.json_bytes(changed)
+                receipt_path.write_bytes(data)
+                self.expect_error(lambda: PET.verified_selected_package(self.project), "source-conflict")
+                self.expect_error(self.package, "source-conflict")
+                self.assertEqual(receipt_path.read_bytes(), data)
+                self.assertEqual(selection.read_bytes(), before_selection)
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):

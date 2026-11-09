@@ -80,6 +80,32 @@ class CandidateImportTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, code)
         return str(raised.exception)
 
+    def test_source_with_replaced_bound_selected_directory_is_rejected(self):
+        selected = PET.selected_package(self.source)
+        saved = self.fixture.root / "saved-source-candidate"
+        selected.rename(saved)
+        shutil.copytree(saved, selected)
+        before_source, before_target = tree_bytes(self.source), tree_bytes(self.target)
+        self.assertNotEqual(selected.stat().st_ino, saved.stat().st_ino)
+        self.assert_pet_error(lambda: IMPORT.build_plan(self.source, self.target), "source-conflict")
+        self.assertEqual(tree_bytes(self.source), before_source)
+        self.assertEqual(tree_bytes(self.target), before_target)
+        self.assertTrue(saved.is_dir())
+
+    def test_completed_import_rejects_replaced_bound_target_directory(self):
+        _, plan_id, _, _ = IMPORT.build_plan(self.source, self.target)
+        self.assertEqual(IMPORT.apply_import(self.source, self.target, plan_id)["status"], "imported")
+        selected = PET.selected_package(self.target)
+        saved = self.fixture.root / "saved-target-candidate"
+        selected.rename(saved)
+        shutil.copytree(saved, selected)
+        before_source, before_target = tree_bytes(self.source), tree_bytes(self.target)
+        self.assertNotEqual(selected.stat().st_ino, saved.stat().st_ino)
+        self.assert_pet_error(lambda: IMPORT.build_plan(self.source, self.target), "source-conflict")
+        self.assertEqual(tree_bytes(self.source), before_source)
+        self.assertEqual(tree_bytes(self.target), before_target)
+        self.assertTrue(saved.is_dir())
+
     def test_default_plan_is_read_only(self):
         source_before = tree_bytes(self.source)
         target_before = tree_bytes(self.target)

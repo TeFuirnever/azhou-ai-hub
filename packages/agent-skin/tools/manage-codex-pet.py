@@ -534,6 +534,8 @@ def selected_package(project):
 def verified_selected_package(project, *, require_current=True):
     directory = selected_package(project)
     facts, receipt = check_package(directory, project, require_current=require_current)
+    require("directoryIdentity" not in receipt or package_directory_matches(directory, receipt),
+            "选中候选的目录身份不匹配，保留待核对", "source-conflict")
     require(directory.name == facts["themeRevision"] + "-" + facts["atlasSHA256"],
             "选中候选的内容与路径不一致，保留待核对", "source-conflict")
     return directory, facts, receipt
@@ -806,7 +808,8 @@ def package_run(project, run, snapshot_path, operation_id=None):
     selected_facts, selected_receipt = check_package(destination, project)
     require(selected_facts["themeRevision"] == rev and selected_facts["atlasSHA256"] == facts["atlasSHA256"],
             "候选目录内容与名称不一致，保留待核对", "source-conflict")
-    require(package_directory_matches(destination, selected_receipt) or (not published_new and destination == previous),
+    require(package_directory_matches(destination, selected_receipt)
+            or (not published_new and destination == previous and "directoryIdentity" not in selected_receipt),
             "候选目录缺少当前实体绑定，保留待核对", "source-conflict")
     require(selected_receipt.get("qaSHA256") == candidate["qaHashes"]
             and selected_receipt.get("snapshotSHA256") == sha(candidate["snapshotRaw"])
