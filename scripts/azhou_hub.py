@@ -1497,6 +1497,11 @@ def change_scope(project: Path, base: str, head: str) -> dict[str, Any]:
         except UnicodeDecodeError as exc:
             raise ScopeError("Git returned a path that is not valid UTF-8") from exc
 
+    def reject_replacement_refs() -> None:
+        if git("for-each-ref", "--format=%(refname)", "refs/replace/").strip():
+            raise ScopeError("Git replacement refs are not supported")
+
+    reject_replacement_refs()
     actual_root = Path(os.fsdecode(git("rev-parse", "--show-toplevel").rstrip(b"\n"))).resolve()
     if actual_root != project:
         raise ScopeError("project must be the Git worktree root")
@@ -1682,6 +1687,7 @@ def change_scope(project: Path, base: str, head: str) -> dict[str, Any]:
         current_config = git("config", "--null", "--get-regexp",
                              r"^core\.(filemode|autocrlf|eol|safecrlf|ignorecase|symlinks|attributesfile)$",
                              allowed_codes=(0, 1))
+        reject_replacement_refs()
         if (first != second or commit("HEAD") != worktree_head or original_index.read_bytes() != index_bytes
                 or current_attributes != attributes_raw or current_info != attribute_bytes
                 or current_all_attributes != all_attributes or current_config != config_data):

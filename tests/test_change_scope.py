@@ -86,6 +86,17 @@ class ChangeScopeCliTest(unittest.TestCase):
         self.assertNotEqual(first_identity["effective_attributes_sha256"], second_identity["effective_attributes_sha256"])
         self.assertEqual(first_identity["index_file_sha256"], hashlib.sha256((self.root / ".git" / "index").read_bytes()).hexdigest())
 
+    def test_replacement_refs_are_rejected(self):
+        (self.root / "committed.txt").write_text("commit\n")
+        self.git("add", "committed.txt")
+        self.git("commit", "-qm", "change")
+        base_tree = self.git("rev-parse", f"{self.base}^{{tree}}").strip()
+        replacement = self.git("commit-tree", base_tree, "-p", self.base, "-m", "replacement").strip()
+        self.git("replace", "HEAD", replacement)
+        result = self.call("--base", self.base, "--head", "HEAD")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("replacement refs", result.stderr)
+
     def test_tmpdir_inside_an_unrelated_worktree_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             other = Path(directory) / "other"
