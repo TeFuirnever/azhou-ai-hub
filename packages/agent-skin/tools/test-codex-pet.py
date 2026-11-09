@@ -584,6 +584,73 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(PET.selected_package(self.project), previous)
         self.assertEqual((PET.state_dir(self.project) / "selection.json").read_bytes(), selection)
 
+    def test_selection_metadata_mismatch_is_not_accepted(self):
+        self.package()
+        path = PET.state_dir(self.project) / "selection.json"
+        value = json.loads(path.read_text())
+        value["atlasSHA256"] = "0" * 64
+        path.write_bytes(PET.json_bytes(value))
+        before = path.read_bytes()
+        self.expect_error(lambda: PET.selected_package(self.project), "source-conflict")
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_selected_name_must_match_verified_package_for_status_and_install(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        first_selection = (PET.state_dir(self.project) / "selection.json").read_bytes()
+        self.make_run(self.atlas_b)
+        self.package()
+        second = PET.selected_package(self.project)
+        saved = self.root / "saved-first-package"
+        first.rename(saved)
+        shutil.copytree(second, first)
+        receipt_path = first / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        identity = first.lstat()
+        receipt["directoryIdentity"] = {"device": identity.st_dev, "inode": identity.st_ino}
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        selection_path = PET.state_dir(self.project) / "selection.json"
+        selection_path.write_bytes(first_selection)
+        self.expect_error(lambda: PET.install_package(self.project, self.codex), "source-conflict")
+        self.assertEqual(PET.status(self.project, self.codex)["package"]["status"], "source-conflict")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = PET.main(["validate", "--project-root", str(self.project), "--codex-home", str(self.codex)])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "source-conflict")
+        self.assertEqual(selection_path.read_bytes(), first_selection)
+        self.assertTrue(saved.is_dir())
+        self.assertFalse((self.codex / "pets" / PET.PET_ID).exists())
+
+    def test_handoff_rejects_mismatched_old_selection_without_changing_install(self):
+        old_project = self.make_old_install()
+        self.package()
+        old_selection = PET.state_dir(old_project) / "selection.json"
+        value = json.loads(old_selection.read_text())
+        value["themeRevision"] = "0" * 64
+        old_selection.write_bytes(PET.json_bytes(value))
+        target = self.codex / "pets" / PET.PET_ID
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        self.expect_error(lambda: PET.handoff_package(self.project, old_project, self.codex), "source-conflict")
+        self.assertEqual({path.name: path.read_bytes() for path in target.iterdir()}, before)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_selection_rejects_noncanonical_names_and_extra_fields(self):
+        self.package()
+        path = PET.state_dir(self.project) / "selection.json"
+        original = json.loads(path.read_text())
+        values = [[], {**original, "extra": 1}, {**original, "package": "-" + original["package"][1:]},
+                  {**original, "package": original["package"].upper()},
+                  {**original, "themeRevision": "0" * 64}]
+        for value in values:
+            with self.subTest(value=value):
+                path.write_bytes(PET.json_bytes(value))
+                before = path.read_bytes()
+                self.expect_error(lambda: PET.selected_package(self.project), "source-conflict")
+                self.assertEqual(path.read_bytes(), before)
+        path.write_bytes(PET.json_bytes(original))
+        self.assertTrue(PET.selected_package(self.project).is_dir())
+
     def test_png_valid_header_but_corrupt_body_is_rejected(self):
         stream = io.BytesIO()
         Image.new("RGBA", (1536, 2288)).save(stream, "PNG")

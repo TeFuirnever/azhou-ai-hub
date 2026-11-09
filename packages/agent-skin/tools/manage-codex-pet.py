@@ -497,10 +497,22 @@ def check_package(directory, project, require_current=True):
 def selected_package(project):
     state = state_dir(project)
     selection = parse(read(child(state, "selection.json")))
-    name = selection.get("package", "")
+    require(isinstance(selection, dict) and set(selection) == {"package", "themeRevision", "atlasSHA256"},
+            "候选选择记录格式未知，保留待核对", "source-conflict")
+    name = selection["package"]
     require(isinstance(name, str) and len(name) == 129 and name[64] == "-"
-            and all(c in "0123456789abcdef-" for c in name), "候选选择路径无效")
+            and all(c in "0123456789abcdef" for c in name[:64] + name[65:])
+            and selection["themeRevision"] == name[:64] and selection["atlasSHA256"] == name[65:],
+            "候选选择记录与路径不一致，保留待核对", "source-conflict")
     return child(state, "packages/" + name)
+
+
+def verified_selected_package(project, *, require_current=True):
+    directory = selected_package(project)
+    facts, receipt = check_package(directory, project, require_current=require_current)
+    require(directory.name == facts["themeRevision"] + "-" + facts["atlasSHA256"],
+            "选中候选的内容与路径不一致，保留待核对", "source-conflict")
+    return directory, facts, receipt
 
 
 def remove_tree(path, *, allow_empty=False):
@@ -819,8 +831,7 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
             "接管安装必须同时提供旧项目与已验证候选摘要")
     require(expected_previous is not None or previous_project is None or not Path(previous_project).exists(),
             "旧项目仍存在时必须验证其当前候选摘要")
-    directory = selected_package(project)
-    facts, _ = check_package(directory, project)
+    directory, facts, _ = verified_selected_package(project)
     if previous_project is not None and expected_previous is not None:
         require(same_installation(facts, expected_previous),
                 "Hub 当前候选与旧项目已安装候选不一致，拒绝接管", "source-conflict")
@@ -945,9 +956,8 @@ def handoff_package(project, previous_project, codex_home):
         # The legacy CLI owns the old lock; Hub package operations own the Hub lock.
         with lock(child(old_state, "project.lock")):
             with lock(child(hub_state, "project.lock")):
-                old_directory = selected_package(previous_project)
-                old_facts, _ = check_package(old_directory, previous_project)
-                new_facts, _ = check_package(selected_package(project), project)
+                _, old_facts, _ = verified_selected_package(previous_project)
+                _, new_facts, _ = verified_selected_package(project)
                 require(same_installation(old_facts, new_facts),
                         "Hub 候选与旧项目已安装候选不完全一致，拒绝把内容变更混入接管", "source-conflict")
                 return install_package(project, codex_home, previous_project=previous_project,
@@ -978,8 +988,7 @@ def status(project, codex_home):
     except (PetError, OSError) as exc:
         result["source"] = {"status": "invalid", "error": str(exc)}
     try:
-        directory = selected_package(project)
-        facts, _ = check_package(directory, project, require_current=False)
+        directory, facts, _ = verified_selected_package(project, require_current=False)
         matching = facts["themeRevision"] == result["source"].get("themeRevision")
         result["package"] = {"status": "verified" if matching else "stale-theme", "path": str(directory), **facts}
     except (PetError, OSError) as exc:
@@ -1029,7 +1038,7 @@ def main(argv=None):
                 data = validate_run(project, args.run, args.snapshot)
                 result = {"status": "validated", "themeRevision": data["snapshot"]["themeRevision"], **data["facts"]}
             else:
-                facts, _ = check_package(selected_package(project), project)
+                _, facts, _ = verified_selected_package(project)
                 result = {"status": "validated", **facts}
         elif args.command == "handoff":
             result = handoff_package(project, args.previous_project_root, args.codex_home)
