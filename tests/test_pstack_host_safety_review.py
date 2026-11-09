@@ -44,7 +44,7 @@ class PstackHostSafetyReviewTest(unittest.TestCase):
         self.assertIn(key, hook)
         self.assertNotIn("~/.claude/rules/pstack-models.md", adapter)
         self.assertNotIn("~/.claude/rules/pstack-models.md", readme)
-        self.assertEqual(len([line for line in (PACKAGE / "patches/series").read_text().splitlines() if line.strip() and not line.startswith("#")]), 24)
+        self.assertEqual(len([line for line in (PACKAGE / "patches/series").read_text().splitlines() if line.strip() and not line.startswith("#")]), 23)
 
     @unittest.skipUnless(os.name == "posix" and shutil.which("git") and
                          Path("/bin/bash").is_file(), "POSIX Git worktree audit")

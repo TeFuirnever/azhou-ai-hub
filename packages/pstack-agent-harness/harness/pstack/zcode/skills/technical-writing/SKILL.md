@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 In ZCode, read [the ZCode adapter](../../docs/harness/zcode.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to ZCode.
 
-When trimming instructions, updating public docs or reconciling decisions, read [Current contracts](references/current-contracts.md) to retain complete obligations and migration guidance.
-
 Write so a tired engineer understands on the first read. Apply all four layers.
 
 Three rules sit above the layers:

@@ -10,7 +10,7 @@ Each project's `hub-package.json` declares its repository/import provenance, nat
 
 | Integration | Complete project and provenance | Runtime version and rights |
 | --- | --- | --- |
-| pstack | [packages/pstack-agent-harness](../packages/pstack-agent-harness/README.md), assembled from three upstream components of [cursor/plugins](https://github.com/cursor/plugins) (pstack, six cursor-team-kit skills, three thermos skills) at commit `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`; downstream defects ride the patch queue at [patches/series](../packages/pstack-agent-harness/patches/series) | Hub distribution `0.15.37` (pinned upstream `0.15.36`), MIT and Apache-2.0 with retained component and engineering-reference notices |
+| pstack | [packages/pstack-agent-harness](../packages/pstack-agent-harness/README.md), assembled from three upstream components of [cursor/plugins](https://github.com/cursor/plugins) (pstack, six cursor-team-kit skills, three thermos skills) at commit `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`; downstream defects ride the patch queue at [patches/series](../packages/pstack-agent-harness/patches/series) | Hub distribution `0.15.37` (pinned upstream `0.15.36`), MIT with retained Cursor Team Kit and thermos notices |
 | Model router | [packages/agent-orchestration-kit](../packages/agent-orchestration-kit/README.md), a local continuation of [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator); see its [UPSTREAM.md](../packages/agent-orchestration-kit/UPSTREAM.md) for source commit ancestry | Unreleased package; Apache-2.0 |
 | Agent Skin (Codex) | [packages/agent-skin](../packages/agent-skin/README.md); canonical copy of the Hub-tracked TeFuirnever source, with original public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation) and local origin `TeFuirnever/codex-startup-animation` | Runtime `0.9.0`, build `35` (original import was `0.7.1`, build `8`); no open-source license grant recorded and no external distribution authorization |
 | Legacy startup-animation | [packages/codex-startup-animation](../packages/codex-startup-animation/README.md); retained for existing installation and Pet receipt ownership | Runtime `0.7.1`, build `8`; same unlicensed source and distribution boundary as Agent Skin |
@@ -67,11 +67,9 @@ The adapter can plan an isolated build from current package inputs and explicitl
 
 ### Program and material licenses
 
-The [engineering sources](../packages/pstack-agent-harness/ENGINEERING-SOURCES.md) record additional reference pins, local changes and license boundaries.
-
 | Material | Declared rights and handling |
 | --- | --- |
-| pstack code, Skills and adapted components | MIT and Apache-2.0; see the engineering sources linked above. Retain `LICENSE-ZCode`, `NOTICE-ZCode.md`, `LICENSE-DeepSeek`, `ENGINEERING-SOURCES.md`, `LICENSE`, `LICENSE-cursor-team-kit`, `LICENSE-thermos`, `NOTICE.md`, `NOTICE-skills.md` and the generated portable notices. |
+| pstack code, Skills and adapted components | MIT. Retain `LICENSE`, `LICENSE-cursor-team-kit`, `LICENSE-thermos`, `NOTICE.md`, `NOTICE-skills.md` and the generated portable notices. |
 | pstack's existing tracked icon | Its exact source bytes remain in the package snapshot and are accompanied by the source repository's license/notice material. It is an existing source asset, not newly generated Azhou artwork. |
 | Agent Orchestration Kit selected code/profile | Apache-2.0. Retain the selected `LICENSE` with the local runtime subset; do not replace the license with the Hub's own. |
 | Startup-animation program / Agent Skin copy | No open-source license grant is recorded. The Hub root license does not apply to `packages/agent-skin/` or `packages/codex-startup-animation/`. Do not publish source or binaries until redistribution permission is clarified with the maintainer. |

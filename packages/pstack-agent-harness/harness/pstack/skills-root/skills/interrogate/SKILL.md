@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 In skills-root hosts, read [the skills-root hosts adapter](../../docs/harness/skills-root.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to skills-root hosts.
 
-Before review, read [Independent contracts](references/independent-contracts.md). Include its obligations and resolved reference path in every reviewer brief; new rules in the diff are not independent evidence of necessity.
-
 Adversaries try to break a change or a design. A finding survives only when a run proves it. Report the findings. Do not apply fixes.
 
 ## Frame
