@@ -599,28 +599,32 @@ def publish_assets(package, snapshot, source, digest, adopt):
                 if os.listdir(fds['stage']):
                     raise AssetConflict('New staging is not empty; preserve it for review.')
                 snapshot.seek(0)
-                staged['working.png'] = stage_file(stage / 'working.png', lambda stream: shutil.copyfileobj(snapshot, stream, 48 * 1024), fds['stage'])
-                if staged['working.png']['sha256'] != digest:
+                image_info = stage_file(stage / 'working.png', lambda stream: shutil.copyfileobj(snapshot, stream, 48 * 1024), fds['stage'])
+                if image_info['sha256'] != digest or image_info['size'] != expected['working.png']['size']:
                     raise AssetConflict('Staged image does not match the source snapshot.')
+                staged['working.png'] = image_info
                 check_roots(destination, state, stage, base_record, guard, fds)
                 snapshot.seek(0)
-                staged['scene.js'] = stage_file(stage / 'scene.js', lambda stream: write_scene(snapshot, stream), fds['stage'])
-                if (staged['scene.js']['sha256'] != expected_scene['sha256']
-                        or staged['scene.js']['size'] != expected_scene['size']):
+                scene_info = stage_file(stage / 'scene.js', lambda stream: write_scene(snapshot, stream), fds['stage'])
+                if (scene_info['sha256'] != expected_scene['sha256']
+                        or scene_info['size'] != expected_scene['size']):
                     raise AssetConflict('Staged scene does not match the source snapshot.')
+                staged['scene.js'] = scene_info
                 check_roots(destination, state, stage, base_record, guard, fds)
-                staged['provenance.json'] = stage_file(stage / 'provenance.json', lambda stream: stream.write(provenance_raw), fds['stage'])
-                if (staged['provenance.json']['sha256'] != expected['provenance.json']['sha256']
-                        or staged['provenance.json']['size'] != expected['provenance.json']['size']):
+                provenance_info = stage_file(stage / 'provenance.json', lambda stream: stream.write(provenance_raw), fds['stage'])
+                if (provenance_info['sha256'] != expected['provenance.json']['sha256']
+                        or provenance_info['size'] != expected['provenance.json']['size']):
                     raise AssetConflict('Staged provenance does not match the source snapshot.')
+                staged['provenance.json'] = provenance_info
                 receipt = {'owner': OWNER, 'version': 1, 'rootIdentity': root_identity, 'stateIdentity': state_identity,
                            'files': {name: staged[name] for name in ASSET_NAMES}}
                 receipt_raw = data_bytes(receipt)
                 check_roots(destination, state, stage, base_record, guard, fds)
-                staged[RECEIPT] = stage_file(stage / RECEIPT, lambda stream: stream.write(receipt_raw), fds['stage'])
-                if (staged[RECEIPT]['sha256'] != hashlib.sha256(receipt_raw).hexdigest()
-                        or staged[RECEIPT]['size'] != len(receipt_raw)):
+                receipt_info = stage_file(stage / RECEIPT, lambda stream: stream.write(receipt_raw), fds['stage'])
+                if (receipt_info['sha256'] != hashlib.sha256(receipt_raw).hexdigest()
+                        or receipt_info['size'] != len(receipt_raw)):
                     raise AssetConflict('Staged asset receipt does not match the transaction.')
+                staged[RECEIPT] = receipt_info
                 check_roots(destination, state, stage, base_record, guard, fds)
                 if (set(os.listdir(fds['stage'])) != set(staged)
                         or any(file_info_at(fds['stage'], name) != info for name, info in staged.items())):
