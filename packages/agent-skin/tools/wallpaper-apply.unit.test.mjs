@@ -93,6 +93,49 @@ test('an existing supported shell receives a verified image and the renderer res
   assert.equal(fixture.timers.length, 0);
 });
 
+test('the image digest and appearance use one snapshot during asynchronous preparation', async t => {
+  await t.test('input changes while the image digest is pending', async () => {
+    let finishDigest;
+    const digest = { subtle: { digest: (...args) => new Promise((resolve, reject) => {
+      finishDigest = () => webcrypto.subtle.digest(...args).then(resolve, reject);
+    }) } };
+    const fixture = createHost({ shell: true, digest });
+    const renderer = rendererRecorder();
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
+    const input = { ...VALUE };
+    const pending = apply(input);
+    await waitFor(() => typeof finishDigest === 'function');
+    Object.assign(input, { image: 'data:image/png;base64,AQ==', strength: 72, surface: 'white' });
+    finishDigest();
+    assert.deepEqual(await pending, { applied: true, imageDecoded: true });
+    assert.equal(renderer.calls.length, 1);
+    assert.equal(renderer.calls[0].image, VALUE.image);
+    assert.equal(renderer.calls[0].imageSHA256, expectedDigest());
+    assert.equal(renderer.calls[0].strength, VALUE.strength);
+    assert.equal(renderer.calls[0].surface, VALUE.surface);
+  });
+
+  await t.test('input changes while the supported shell is mounting', async () => {
+    const fixture = createHost();
+    const renderer = rendererRecorder();
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
+    const input = { ...VALUE };
+    const pending = apply(input);
+    await waitFor(() => fixture.observers.length === 1);
+    Object.assign(input, { image: 'data:image/png;base64,AQ==', strength: 72, surface: 'white' });
+    fixture.mountRoot();
+    fixture.setAttribute('data-app-shell-frame');
+    fixture.setAttribute('data-app-shell-main-surface');
+    fixture.observers[0].trigger();
+    assert.deepEqual(await pending, { applied: true, imageDecoded: true });
+    assert.equal(renderer.calls.length, 1);
+    assert.equal(renderer.calls[0].image, VALUE.image);
+    assert.equal(renderer.calls[0].imageSHA256, expectedDigest());
+    assert.equal(renderer.calls[0].strength, VALUE.strength);
+    assert.equal(renderer.calls[0].surface, VALUE.surface);
+  });
+});
+
 test('a late attribute-based shell is awaited without expiring a naturally completed caller', async () => {
   const fixture = createHost();
   const renderer = rendererRecorder();

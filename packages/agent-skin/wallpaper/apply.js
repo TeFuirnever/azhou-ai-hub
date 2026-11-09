@@ -56,12 +56,14 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
   }
 
   return async function applyWallpaper(value, isCurrent) {
-    if (!value || typeof value.image !== 'string'
+    const image = value?.image;
+    if (typeof image !== 'string'
         || typeof host.crypto?.subtle?.digest !== 'function' || typeof host.atob !== 'function') {
       return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'apply-unavailable', imageDecoded: false };
     }
     if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
-    const encoded = value.image.slice(value.image.indexOf(',') + 1);
+    const { strength, surface } = value;
+    const encoded = image.slice(image.indexOf(',') + 1);
     const bytes = Uint8Array.from(host.atob(encoded), character => character.charCodeAt(0));
     const digest = await host.crypto.subtle.digest('SHA-256', bytes);
     const imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -74,8 +76,7 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     if (shellState !== 'ready') return { applied: false, reason: 'wallpaper-unsupported',
       failureCode: shellState === 'timeout' ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
     return installRenderer({
-      version, image: value.image, imageSHA256, css,
-      strength: value.strength, surface: value.surface, isCurrent,
+      version, image, imageSHA256, css, strength, surface, isCurrent,
       ...(ports ? { pageAdapter } : {}),
     });
   };
