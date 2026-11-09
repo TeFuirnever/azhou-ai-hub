@@ -373,6 +373,30 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(before, {name: (self.project / name).read_bytes() for name in PET.INPUTS})
         self.assertEqual(PET.install_package(self.project, self.codex)["status"], "already-installed")
 
+    def test_same_atlas_and_theme_with_different_installed_manifest_is_preserved(self):
+        self.install()
+        target = self.codex / "pets" / PET.PET_ID
+        manifest_path = target / "pet.json"
+        receipt_path = target / ".azhou-pet-receipt.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["description"] = "locally different description"
+        manifest_path.write_bytes(PET.json_bytes(manifest))
+        receipt = json.loads(receipt_path.read_text())
+        receipt["manifestSHA256"] = PET.sha(manifest_path.read_bytes())
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        selection_path = PET.state_dir(self.project) / "selection.json"
+        selection = selection_path.read_bytes()
+        candidate_manifest = (PET.selected_package(self.project) / "pet.json").read_bytes()
+        installed = PET.status(self.project, self.codex)["installed"]
+        self.assertEqual(installed["status"], "stale-package")
+        self.assertFalse(installed["matchesSelectedPackage"])
+        self.expect_error(lambda: PET.install_package(self.project, self.codex), "source-conflict")
+        self.assertEqual({path.name: path.read_bytes() for path in target.iterdir()}, before)
+        self.assertEqual(selection_path.read_bytes(), selection)
+        self.assertEqual((PET.selected_package(self.project) / "pet.json").read_bytes(), candidate_manifest)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
     def test_png_valid_header_but_corrupt_body_is_rejected(self):
         stream = io.BytesIO()
         Image.new("RGBA", (1536, 2288)).save(stream, "PNG")

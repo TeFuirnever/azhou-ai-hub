@@ -794,6 +794,8 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
                     "旧项目已有安装目标缺失，拒绝执行接管", "unknown-target")
         if previous_project is None and previous and all(
                 previous[k] == facts[k] for k in ("atlasSHA256", "themeRevision")):
+            require(same_installation(previous, facts),
+                    "同图集和主题的已安装 manifest 不一致，保留待核对", "source-conflict")
             return {"status": "already-installed", "source": facts["themeRevision"],
                     "package": str(directory), "installed": previous, "runtime": RUNTIME, "recovery": recovery}
         tx = uuid.uuid4().hex
@@ -933,8 +935,7 @@ def status(project, codex_home):
             facts = installed_facts(target, project)
             matches_theme = facts["themeRevision"] == result["source"].get("themeRevision")
             chosen = result["package"]
-            matches_package = (all(facts[k] == chosen[k] for k in ("atlasSHA256", "themeRevision"))
-                               if "atlasSHA256" in chosen else None)
+            matches_package = same_installation(facts, chosen) if "atlasSHA256" in chosen else None
             label = ("stale-theme" if not matches_theme else "stale-package" if matches_package is False
                      else "verified" if matches_package else "verified-unselected")
             result["installed"] = {"status": label, "bytesVerified": True,
