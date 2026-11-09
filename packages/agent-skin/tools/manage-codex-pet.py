@@ -249,6 +249,8 @@ def theme_facts(project):
 def snapshot_metadata(snapshot):
     require(isinstance(snapshot, dict) and snapshot.get("petId") == PET_ID,
             "snapshot petId 不匹配")
+    require(type(snapshot.get("schemaVersion")) is int and snapshot["schemaVersion"] == 1,
+            "snapshot schemaVersion 未知，保留待核对")
     records = snapshot.get("inputs", [])
     require(isinstance(records, list) and all(isinstance(record, dict) for record in records),
             "snapshot 输入记录必须是对象列表")

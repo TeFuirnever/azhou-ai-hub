@@ -200,6 +200,53 @@ class PetSafetyTests(unittest.TestCase):
     def test_upgrade_preserves_theme_receipt_changed_after_publish_and_old_backup(self):
         self.assert_changed_identity_after_publication_is_preserved(upgrade=True, field="theme")
 
+    def test_snapshot_metadata_requires_the_known_integer_schema(self):
+        valid = json.loads(self.snapshot.read_bytes())
+        self.assertEqual(PET.snapshot_metadata(valid), self.rev)
+        for label, value in (("missing", None), ("boolean", True), ("text", "1"),
+                             ("float", 1.0), ("zero", 0), ("future", 2)):
+            with self.subTest(label=label):
+                changed = dict(valid)
+                if label == "missing": changed.pop("schemaVersion")
+                else: changed["schemaVersion"] = value
+                with self.assertRaises(PET.PetError): PET.snapshot_metadata(changed)
+
+    def test_prepare_preserves_unknown_snapshot_schema(self):
+        original = json.loads(self.snapshot.read_bytes())
+        original["schemaVersion"] = 2
+        data = PET.json_bytes(original)
+        self.snapshot.write_bytes(data)
+        self.expect_error(lambda: PET.prepare(self.project))
+        self.assertEqual(self.snapshot.read_bytes(), data)
+        self.assertFalse((PET.state_dir(self.project) / "selection.json").exists())
+
+    def test_package_rejects_unknown_snapshot_schema_without_selection(self):
+        original = json.loads(self.snapshot.read_bytes())
+        original["schemaVersion"] = True
+        data = PET.json_bytes(original)
+        self.snapshot.write_bytes(data)
+        self.expect_error(lambda: PET.package_run(self.project, self.run, self.snapshot))
+        self.assertEqual(self.snapshot.read_bytes(), data)
+        self.assertFalse((PET.state_dir(self.project) / "selection.json").exists())
+
+    def test_selected_package_with_unknown_snapshot_schema_is_not_verified(self):
+        self.package()
+        directory = PET.selected_package(self.project)
+        snapshot_path = directory / "theme-snapshot.json"
+        snapshot = json.loads(snapshot_path.read_bytes())
+        snapshot["schemaVersion"] = 2
+        data = PET.json_bytes(snapshot)
+        snapshot_path.write_bytes(data)
+        receipt_path = directory / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["snapshotSHA256"] = PET.sha(data)
+        receipt_data = PET.json_bytes(receipt)
+        receipt_path.write_bytes(receipt_data)
+        self.assertEqual(PET.status(self.project, self.codex)["package"]["status"], "invalid")
+        self.assertEqual(snapshot_path.read_bytes(), data)
+        self.assertEqual(receipt_path.read_bytes(), receipt_data)
+        self.assertTrue((directory / "spritesheet.webp").is_file())
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):
