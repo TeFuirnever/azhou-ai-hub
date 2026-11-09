@@ -792,6 +792,100 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(PET.prepare(self.project)["themeRevision"], self.rev)
         self.assertFalse(stage.exists())
 
+    def test_install_stage_unknown_is_checked_before_target_or_backup_changes(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        for case in ("legacy-target", "bound-extra", "wrong-kind", "committed-backup"):
+            with self.subTest(case=case):
+                tx = {"legacy-target": "1", "bound-extra": "2", "wrong-kind": "3", "committed-backup": "4"}[case] * 32
+                stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+                backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+                stage.mkdir()
+                if case != "wrong-kind":
+                    (stage / "foreign.txt").write_bytes(b"unknown synthetic bytes")
+                if case == "committed-backup":
+                    shutil.copytree(target, backup)
+                journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                           "transaction": tx, "stagingLocation": "codex-home",
+                           "phase": "committed" if case == "committed-backup" else "prepared",
+                           "hadPrevious": case == "committed-backup", "previousAtlasSHA256": facts["atlasSHA256"],
+                           "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"]}
+                if case in ("bound-extra", "wrong-kind"):
+                    kind = "snapshot" if case == "wrong-kind" else "install"
+                    planned = {name: b"synthetic" for name in PET.stage_file_names(kind)}
+                    binding = PET.stage_journal(self.project, stage, kind, planned, None)
+                    journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]})
+                PET.atomic_json(PET.journal_path(pets), journal)
+                self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+                self.assertEqual(PET.installed_facts(target, self.project)["atlasSHA256"], facts["atlasSHA256"])
+                self.assertTrue(stage.is_dir())
+                if case != "wrong-kind":
+                    self.assertEqual((stage / "foreign.txt").read_bytes(), b"unknown synthetic bytes")
+                self.assertTrue(PET.journal_path(pets).is_file())
+                if case == "committed-backup":
+                    self.assertEqual(PET.installed_facts(backup, self.project)["atlasSHA256"], facts["atlasSHA256"])
+                    shutil.rmtree(backup)
+                shutil.rmtree(stage)
+                PET.journal_path(pets).unlink()
+
+    def test_install_stage_partial_file_is_preserved_on_failure(self):
+        self.package()
+        write = PET.write_new
+
+        def fail_during_file(path, data):
+            if ".stage-" in str(path) and Path(path).name == "spritesheet.webp":
+                Path(path).write_bytes(b"partial image")
+                raise OSError("injected partial install write")
+            return write(path, data)
+
+        with patch.object(PET, "write_new", side_effect=fail_during_file):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertFalse((self.codex / "pets" / PET.PET_ID).exists())
+        self.assertTrue(PET.journal_path(self.codex / "pets").is_file())
+        stages = list(self.codex.glob(f".{PET.PET_ID}.stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "spritesheet.webp").read_bytes(), b"partial image")
+
+    def test_install_stage_boundary_failure_cleans_owned_subset(self):
+        self.package()
+        write = PET.write_new
+
+        def fail_before_file(path, data):
+            if ".stage-" in str(path) and Path(path).name == "spritesheet.webp":
+                raise OSError("injected boundary interruption")
+            return write(path, data)
+
+        with patch.object(PET, "write_new", side_effect=fail_before_file):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "install-failed")
+        self.assertFalse((self.codex / "pets" / PET.PET_ID).exists())
+        self.assertFalse(PET.journal_path(self.codex / "pets").exists())
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.stage-*")))
+        self.assertEqual(PET.install_package(self.project, self.codex)["status"], "installed")
+
+    def test_install_rechecks_package_bytes_before_journaling(self):
+        self.package()
+        manifest = PET.selected_package(self.project) / "pet.json"
+        read = PET.read
+        calls = 0
+
+        def change_at_capture(path):
+            nonlocal calls
+            data = read(path)
+            if Path(path) == manifest:
+                calls += 1
+                if calls == 2:
+                    return b"changed synthetic manifest"
+            return data
+
+        with patch.object(PET, "read", side_effect=change_at_capture):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "source-conflict")
+        self.assertEqual(calls, 2)
+        self.assertFalse((self.codex / "pets" / PET.PET_ID).exists())
+        self.assertFalse(PET.journal_path(self.codex / "pets").exists())
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.stage-*")))
+
     def test_stage_recovery_preserves_unbound_unknown_and_changed_contents(self):
         for case in ("legacy", "extra-file", "extra-directory", "symlink", "fifo", "changed", "bad-digest", "scan-error"):
             with self.subTest(case=case), tempfile.TemporaryDirectory(dir=self.root) as temp:

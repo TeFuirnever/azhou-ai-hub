@@ -397,6 +397,8 @@ def stage_file_names(kind):
         return {*("inputs/" + name for name in INPUTS), "generation-brief.md", "theme-snapshot.json"}
     if kind == "package":
         return {"pet.json", "spritesheet.webp", "theme-snapshot.json", "package-receipt.json", *QA_FILES}
+    if kind == "install":
+        return {"pet.json", "spritesheet.webp", ".azhou-pet-receipt.json"}
     raise PetError("recovery-required", "未知暂存类型，拒绝自动清理")
 
 
@@ -409,12 +411,13 @@ def stage_journal(project, stage, kind, files, operation_id):
     return journal
 
 
-def verify_stage_for_cleanup(stage, journal):
+def verify_stage_for_cleanup(stage, journal, expected_kinds):
     require(stage.is_dir() and not stage.is_symlink(), "暂存不是普通目录", "recovery-required")
     kind, files = journal.get("stageKind"), journal.get("stageFiles")
     if kind is None and files is None:
         files = {}
     else:
+        require(kind in expected_kinds, "暂存类型与事务不匹配", "recovery-required")
         require(isinstance(files, dict) and set(files) == stage_file_names(kind),
                 "暂存计划文件集合无效", "recovery-required")
         require(all(isinstance(value, str) and len(value) == 64
@@ -461,7 +464,7 @@ def recover_package_stage(state, project, operation_id=None):
             "暂存日志路径无效", "recovery-required")
     stage = child(state, name)
     if stage.exists():
-        verify_stage_for_cleanup(stage, data)
+        verify_stage_for_cleanup(stage, data, {"snapshot", "package"})
         remove_tree(stage)
     journal.unlink()
     fsync_dir(state)
@@ -572,6 +575,8 @@ def recover_install(pets, project):
     # Keep transaction copies outside that scan, on the same filesystem.
     stage = child(pets.parent, f".{PET_ID}.stage-{tx}")
     backup = child(pets.parent, f".{PET_ID}.previous-{tx}")
+    if stage.exists():
+        verify_stage_for_cleanup(stage, data, {"install"})
     if data.get("phase") == "committed":
         actual = installed_facts(target, project)
         require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
@@ -672,10 +677,21 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
         tx = uuid.uuid4().hex
         stage = child(codex_home, f".{PET_ID}.stage-{tx}")
         backup = child(codex_home, f".{PET_ID}.previous-{tx}")
+        manifest_raw = read(directory / "pet.json")
+        atlas = read(directory / "spritesheet.webp")
+        require(sha(manifest_raw) == facts["manifestSHA256"] and sha(atlas) == facts["atlasSHA256"],
+                "安装前候选内容发生变化", "source-conflict")
+        receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
+                   "themeRevision": facts["themeRevision"], "atlasSHA256": facts["atlasSHA256"],
+                   "manifestSHA256": facts["manifestSHA256"]}
+        planned = {"pet.json": manifest_raw, "spritesheet.webp": atlas,
+                   ".azhou-pet-receipt.json": json_bytes(receipt)}
+        binding = stage_journal(project, stage, "install", planned, None)
         journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "transaction": tx,
                    "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": bool(previous),
                    "previousAtlasSHA256": previous["atlasSHA256"] if previous else None,
-                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"]}
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]}
         if previous_project is not None:
             journal.update({"previousProjectRoot": str(previous_project),
                             "previousThemeRevision": previous["themeRevision"],
@@ -683,12 +699,8 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
         atomic_json(journal_path(pets), journal)
         try:
             stage.mkdir(mode=0o700)
-            for name in ("pet.json", "spritesheet.webp"):
-                write_new(stage / name, read(directory / name))
-            receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
-                       "themeRevision": facts["themeRevision"], "atlasSHA256": facts["atlasSHA256"],
-                       "manifestSHA256": facts["manifestSHA256"]}
-            write_new(stage / ".azhou-pet-receipt.json", json_bytes(receipt))
+            for relative, data in planned.items():
+                write_new(child(stage, relative), data)
             installed_facts(stage, project)
             # CAS on display inputs immediately before changing the installed target.
             require(theme_facts(project)[0]["themeRevision"] == facts["themeRevision"],
