@@ -376,12 +376,29 @@ def ownership(receipt, project):
             and receipt.get("petId") == PET_ID, "发现非本项目管理的同名内容，拒绝覆盖", "unknown-target")
 
 
-def package_files(directory):
+def package_files(directory, *, allow_empty=False):
+    directory = Path(directory)
     names = set()
-    for path in directory.rglob("*"):
-        require(not path.is_symlink(), f"拒绝包内符号链接：{path}")
-        if path.is_file():
-            names.add(path.relative_to(directory).as_posix())
+
+    def visit(folder, *, root=False):
+        try:
+            with os.scandir(folder) as scanned:
+                entries = list(scanned)
+            if not root and not allow_empty:
+                require(bool(entries), f"拒绝处理未知空目录：{folder}", "recovery-required")
+            for entry in entries:
+                path = Path(entry.path)
+                require(not entry.is_symlink(), f"拒绝包内符号链接：{path}")
+                if entry.is_dir(follow_symlinks=False):
+                    visit(path)
+                elif entry.is_file(follow_symlinks=False):
+                    names.add(path.relative_to(directory).as_posix())
+                else:
+                    raise PetError("recovery-required", f"拒绝清理含非常规文件的目录：{path}")
+        except OSError as exc:
+            raise PetError("recovery-required", f"无法完整扫描目录：{folder}") from exc
+
+    visit(directory, root=True)
     return names
 
 
@@ -424,9 +441,9 @@ def selected_package(project):
     return child(state, "packages/" + name)
 
 
-def remove_tree(path):
+def remove_tree(path, *, allow_empty=False):
     require(path.is_dir() and not path.is_symlink(), f"拒绝删除非普通目录：{path}", "recovery-required")
-    package_files(path)  # Refuse symlinks before deleting a transaction-owned tree.
+    package_files(path, allow_empty=allow_empty)  # Verify all entries before deleting a transaction-owned tree.
     shutil.rmtree(path)
 
 
@@ -503,7 +520,7 @@ def recover_package_stage(state, project, operation_id=None):
     stage = child(state, name)
     if stage.exists():
         verify_stage_for_cleanup(stage, data, {"snapshot", "package"})
-        remove_tree(stage)
+        remove_tree(stage, allow_empty=True)
     journal.unlink()
     fsync_dir(state)
 
@@ -592,82 +609,104 @@ def journal_path(pets):
 
 
 def recover_install(pets, project):
-    path = journal_path(pets)
-    if not path.exists():
+    journal = journal_path(pets)
+    if not journal.exists():
         return None
-    data = parse(read(path))
-    ownership(data, project)
-    previous_project = prior_project_from_journal(data, project)
-    has_handoff_owner = previous_project != project
-    if has_handoff_owner:
-        require(data.get("previousAtlasSHA256") and data.get("previousThemeRevision")
-                and data.get("previousManifestSHA256"),
-                "接管恢复日志缺少旧安装摘要", "recovery-required")
-    require(data.get("stagingLocation") == "codex-home", "旧版或未知暂存布局需人工核对，不能推测恢复路径",
+    record = parse(read(journal))
+    ownership(record, project)
+    require(record.get("phase") in ("prepared", "committed") and isinstance(record.get("hadPrevious"), bool),
+            "安装恢复日志状态无效，保留待核对", "recovery-required")
+    def valid_digest(value):
+        return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+    candidate_keys = ("candidateAtlasSHA256", "candidateThemeRevision", "candidateManifestSHA256")
+    previous_keys = ("previousAtlasSHA256", "previousThemeRevision", "previousManifestSHA256")
+    require(all(valid_digest(record.get(key)) for key in candidate_keys),
+            "安装恢复日志缺少完整候选摘要，保留待核对", "recovery-required")
+    if record["hadPrevious"]:
+        require(all(valid_digest(record.get(key)) for key in previous_keys),
+                "安装恢复日志缺少完整旧安装摘要，保留待核对", "recovery-required")
+    else:
+        require(all(record.get(key) is None for key in previous_keys),
+                "首次安装日志含未知旧安装摘要，保留待核对", "recovery-required")
+    previous_project = prior_project_from_journal(record, project)
+    handoff = previous_project != project
+    if handoff:
+        require(record.get("previousAtlasSHA256") and record.get("previousThemeRevision")
+                and record.get("previousManifestSHA256"), "接管恢复日志缺少旧安装摘要", "recovery-required")
+    require(record.get("stagingLocation") == "codex-home", "旧版或未知暂存布局需人工核对，不能推测恢复路径",
             "recovery-required")
-    tx = data.get("transaction", "")
-    require(isinstance(tx, str) and len(tx) == 32 and all(c in "0123456789abcdef" for c in tx),
+    transaction = record.get("transaction", "")
+    require(isinstance(transaction, str) and len(transaction) == 32
+            and all(char in "0123456789abcdef" for char in transaction),
             "安装恢复日志 transaction 无效", "recovery-required")
     target = child(pets, PET_ID)
-    # The native loader scans every directory under pets, including hidden ones.
-    # Keep transaction copies outside that scan, on the same filesystem.
-    stage = child(pets.parent, f".{PET_ID}.stage-{tx}")
-    backup = child(pets.parent, f".{PET_ID}.previous-{tx}")
+    # The host scans hidden directories under pets, so keep transaction copies outside it.
+    stage = child(pets.parent, f".{PET_ID}.stage-{transaction}")
+    backup = child(pets.parent, f".{PET_ID}.previous-{transaction}")
     if stage.exists():
-        verify_stage_for_cleanup(stage, data, {"install"})
-    if data.get("phase") == "committed":
-        actual = installed_facts(target, project)
-        require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
-                actual["themeRevision"] == data["candidateThemeRevision"], "已提交目标发生变化", "recovery-required")
+        verify_stage_for_cleanup(stage, record, {"install"})
+
+    def candidate_matches(current, message):
+        expected = {"atlasSHA256": record["candidateAtlasSHA256"],
+                    "themeRevision": record["candidateThemeRevision"],
+                    "manifestSHA256": record["candidateManifestSHA256"]}
+        require(same_installation(current, expected), message, "recovery-required")
+
+    def verify_candidate(path, message):
+        candidate_matches(installed_facts(path, project), message)
+
+    def exact_previous(actual, message):
+        expected = {"atlasSHA256": record["previousAtlasSHA256"],
+                    "themeRevision": record["previousThemeRevision"],
+                    "manifestSHA256": record["previousManifestSHA256"]}
+        require(same_installation(actual, expected), message, "recovery-required")
+
+    operations = []
+    if record.get("phase") == "committed":
+        verify_candidate(target, "已提交目标发生变化")
         if backup.exists():
-            old = installed_facts(backup, previous_project)
-            if has_handoff_owner:
-                require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
-                                                "themeRevision": data["previousThemeRevision"],
-                                                "manifestSHA256": data["previousManifestSHA256"]}),
-                        "旧安装副本摘要不符", "recovery-required")
-            remove_tree(backup)
+            require(record["hadPrevious"], "首次安装出现未知旧副本", "recovery-required")
+            previous = installed_facts(backup, previous_project)
+            exact_previous(previous, "旧安装副本摘要不符")
+            operations.append(("remove", backup, None))
         outcome = "completed-committed-install"
     elif backup.exists():
-        old = installed_facts(backup, previous_project)
-        require(old["atlasSHA256"] == data.get("previousAtlasSHA256"), "旧包摘要不符", "recovery-required")
-        if has_handoff_owner:
-            require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
-                                            "themeRevision": data["previousThemeRevision"],
-                                            "manifestSHA256": data["previousManifestSHA256"]}),
-                    "旧包摘要不符", "recovery-required")
+        require(record["hadPrevious"], "首次安装出现未知旧副本", "recovery-required")
+        previous = installed_facts(backup, previous_project)
+        exact_previous(previous, "旧包摘要不符")
         if target.exists():
-            actual = installed_facts(target, project)
-            require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
-                    actual["themeRevision"] == data["candidateThemeRevision"], "目标不是本事务候选", "recovery-required")
-            remove_tree(target)
-        os.rename(backup, target)
+            verify_candidate(target, "目标不是本事务候选")
+            operations.append(("remove", target, None))
+        operations.append(("move", backup, target))
         outcome = "restored-previous-installed-package"
     else:
-        if target.exists() and data.get("hadPrevious") and has_handoff_owner:
-            old = installed_facts(target, previous_project)
-            require(same_installation(old, {"atlasSHA256": data["previousAtlasSHA256"],
-                                            "themeRevision": data["previousThemeRevision"],
-                                            "manifestSHA256": data["previousManifestSHA256"]}),
-                    "旧包不在暂存且正式目标已改变", "recovery-required")
+        if target.exists() and record.get("hadPrevious") and handoff:
+            previous = installed_facts(target, previous_project)
+            exact_previous(previous, "旧包不在暂存且正式目标已改变")
         elif target.exists():
             actual = installed_facts(target, project)
-            if data.get("hadPrevious"):
-                require(actual["atlasSHA256"] == data.get("previousAtlasSHA256"),
-                        "旧包不在暂存且正式目标已改变", "recovery-required")
+            if record.get("hadPrevious"):
+                exact_previous(actual, "旧包不在暂存且正式目标已改变")
             else:
-                require(actual["atlasSHA256"] == data["candidateAtlasSHA256"] and
-                        actual["themeRevision"] == data["candidateThemeRevision"], "目标不是本事务候选", "recovery-required")
-                remove_tree(target)
-        elif data.get("hadPrevious"):
+                candidate_matches(actual, "目标不是本事务候选")
+                operations.append(("remove", target, None))
+        elif record.get("hadPrevious"):
             raise PetError("recovery-required", "正式目标与旧包均缺失，不能声称已恢复")
         outcome = "restored-pre-install-state"
+
+    for action, source, destination in operations:
+        if action == "remove":
+            remove_tree(source)
+        else:
+            os.rename(source, destination)
     if stage.exists():
-        remove_tree(stage)
+        remove_tree(stage, allow_empty=True)
     fsync_dir(pets.parent)
-    path.unlink()
+    journal.unlink()
     fsync_dir(pets)
     return outcome
+
+
 
 
 def install_package(project, codex_home, *, previous_project=None, expected_previous=None):
@@ -728,7 +767,10 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
         journal = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID, "transaction": tx,
                    "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": bool(previous),
                    "previousAtlasSHA256": previous["atlasSHA256"] if previous else None,
+                   "previousThemeRevision": previous["themeRevision"] if previous else None,
+                   "previousManifestSHA256": previous["manifestSHA256"] if previous else None,
                    "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"],
                    "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]}
         if previous_project is not None:
             journal.update({"previousProjectRoot": str(previous_project),

@@ -341,6 +341,15 @@ class PetSafetyTests(unittest.TestCase):
         image.save(stream, "WEBP", lossless=True)
         self.expect_error(lambda: PET.inspect_atlas(stream.getvalue()))
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO support")
+    def test_recovery_refuses_to_delete_unknown_special_files(self):
+        stage = self.root / "unknown-stage"
+        stage.mkdir()
+        unknown = stage / "unexpected-fifo"
+        os.mkfifo(unknown)
+        self.expect_error(lambda: PET.remove_tree(stage), code="recovery-required")
+        self.assertTrue(unknown.exists())
+
     def test_unknown_same_name_target_is_untouched(self):
         self.package()
         target = self.codex / "pets" / PET.PET_ID
@@ -830,6 +839,7 @@ class PetSafetyTests(unittest.TestCase):
             "previousProjectRoot": str(old_project), "transaction": tx,
             "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": True,
             "candidateAtlasSHA256": PET.sha(self.atlas_b), "candidateThemeRevision": self.rev,
+            "candidateManifestSHA256": old["manifestSHA256"],
             "previousAtlasSHA256": old["atlasSHA256"], "previousThemeRevision": old["themeRevision"],
             "previousManifestSHA256": old["manifestSHA256"],
         }
@@ -882,6 +892,164 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(PET.prepare(self.project)["themeRevision"], self.rev)
         self.assertFalse(stage.exists())
 
+    def test_recovery_preserves_unknown_backup_entries_and_scan_failures(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "9" * 32
+        backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+        shutil.copytree(target, backup)
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": tx, "stagingLocation": "codex-home", "phase": "committed",
+                   "hadPrevious": True, "previousAtlasSHA256": facts["atlasSHA256"],
+                   "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"]}
+        real_scandir = PET.os.scandir
+        for case in ("fifo", "empty-directory", "scan-error"):
+            with self.subTest(case=case):
+                extra = backup / "unknown"
+                if case == "fifo":
+                    os.mkfifo(extra)
+                elif case == "empty-directory":
+                    extra.mkdir()
+                def fail_backup(path):
+                    if Path(path) == backup:
+                        raise OSError("injected scan failure")
+                    return real_scandir(path)
+                PET.atomic_json(PET.journal_path(pets), journal)
+                injection = patch.object(PET.os, "scandir", side_effect=fail_backup) if case == "scan-error" else contextlib.nullcontext()
+                with injection:
+                    self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+                self.assertTrue(backup.is_dir())
+                self.assertTrue(target.is_dir())
+                self.assertTrue(PET.journal_path(pets).is_file())
+                if case == "fifo":
+                    self.assertTrue(extra.exists())
+                    extra.unlink()
+                elif case == "empty-directory":
+                    self.assertTrue(extra.is_dir())
+                    extra.rmdir()
+                PET.journal_path(pets).unlink()
+
+    def test_planned_empty_stage_directories_can_be_cleaned(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "8" * 32)
+        (stage / "inputs/assets/private").mkdir(parents=True)
+        planned = {name: b"planned synthetic bytes" for name in PET.stage_file_names("snapshot")}
+        PET.atomic_json(state / "package-journal.json", PET.stage_journal(self.project, stage, "snapshot", planned, None))
+        PET.recover_package_stage(state, self.project)
+        self.assertFalse(stage.exists())
+        self.assertFalse((state / "package-journal.json").exists())
+
+    def test_recovery_unproven_or_unknown_journals_preserve_target_and_backup(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "d" * 32
+        backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+        shutil.copytree(target, backup)
+        baseline = {p.name: p.read_bytes() for p in backup.iterdir()}
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": tx, "stagingLocation": "codex-home", "phase": "committed",
+                   "hadPrevious": True, "previousAtlasSHA256": facts["atlasSHA256"],
+                   "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"]}
+        for case in ("legacy-candidate", "legacy-backup", "unknown-phase", "nonboolean", "first-with-backup", "bad-digest"):
+            with self.subTest(case=case):
+                value = dict(journal)
+                if case == "legacy-candidate":
+                    value.pop("candidateManifestSHA256")
+                elif case == "legacy-backup":
+                    value.pop("previousManifestSHA256")
+                elif case == "unknown-phase":
+                    value["phase"] = "unknown"
+                elif case == "nonboolean":
+                    value["hadPrevious"] = "yes"
+                elif case == "first-with-backup":
+                    value["hadPrevious"] = False
+                    for key in ("previousAtlasSHA256", "previousThemeRevision", "previousManifestSHA256"):
+                        value[key] = None
+                else:
+                    value["candidateManifestSHA256"] = "not-a-digest"
+                PET.atomic_json(PET.journal_path(pets), value)
+                self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+                self.assertEqual({p.name: p.read_bytes() for p in backup.iterdir()}, baseline)
+                self.assertEqual(PET.installed_facts(target, self.project)["manifestSHA256"], facts["manifestSHA256"])
+                self.assertTrue(PET.journal_path(pets).is_file())
+
+    def test_recovery_preserves_same_atlas_backup_with_different_manifest(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "e" * 32
+        backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+        shutil.copytree(target, backup)
+        manifest = backup / "pet.json"
+        altered = json.loads(manifest.read_text())
+        altered["description"] = "unknown synthetic modification"
+        manifest.write_bytes(PET.json_bytes(altered))
+        receipt_path = backup / ".azhou-pet-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        receipt["manifestSHA256"] = PET.sha(manifest.read_bytes())
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        self.assertNotEqual(PET.installed_facts(backup, self.project)["manifestSHA256"], facts["manifestSHA256"])
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": tx, "stagingLocation": "codex-home", "phase": "committed",
+                   "hadPrevious": True, "previousAtlasSHA256": facts["atlasSHA256"],
+                   "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"]}
+        PET.atomic_json(PET.journal_path(pets), journal)
+        self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual(json.loads(manifest.read_text())["description"], "unknown synthetic modification")
+        self.assertTrue(PET.journal_path(pets).is_file())
+        self.assertTrue(target.is_dir())
+
+    def test_recovery_preserves_same_atlas_backup_with_different_theme(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "e" * 32
+        backup = self.codex / f".{PET.PET_ID}.previous-{tx}"
+        shutil.copytree(target, backup)
+        receipt_path = backup / ".azhou-pet-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        receipt["themeRevision"] = "0" * 64
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        self.assertNotEqual(PET.installed_facts(backup, self.project)["themeRevision"], facts["themeRevision"])
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": tx, "stagingLocation": "codex-home", "phase": "committed",
+                   "hadPrevious": True, "previousAtlasSHA256": facts["atlasSHA256"],
+                   "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"]}
+        PET.atomic_json(PET.journal_path(pets), journal)
+        self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual(json.loads(receipt_path.read_text())["themeRevision"], "0" * 64)
+        self.assertTrue(PET.journal_path(pets).is_file())
+        self.assertTrue(target.is_dir())
+
+    def test_recovery_preserves_candidate_with_different_manifest(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": "f" * 32, "stagingLocation": "codex-home", "phase": "committed",
+                   "hadPrevious": False, "previousAtlasSHA256": None, "previousThemeRevision": None,
+                   "previousManifestSHA256": None, "candidateAtlasSHA256": facts["atlasSHA256"],
+                   "candidateThemeRevision": facts["themeRevision"], "candidateManifestSHA256": "0" * 64}
+        PET.atomic_json(PET.journal_path(pets), journal)
+        self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual(PET.installed_facts(target, self.project)["manifestSHA256"], facts["manifestSHA256"])
+        self.assertTrue(PET.journal_path(pets).is_file())
+
     def test_install_stage_unknown_is_checked_before_target_or_backup_changes(self):
         self.install()
         pets = self.codex / "pets"
@@ -900,8 +1068,12 @@ class PetSafetyTests(unittest.TestCase):
                 journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
                            "transaction": tx, "stagingLocation": "codex-home",
                            "phase": "committed" if case == "committed-backup" else "prepared",
-                           "hadPrevious": case == "committed-backup", "previousAtlasSHA256": facts["atlasSHA256"],
-                           "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"]}
+                           "hadPrevious": case == "committed-backup",
+                           "previousAtlasSHA256": facts["atlasSHA256"] if case == "committed-backup" else None,
+                           "previousThemeRevision": facts["themeRevision"] if case == "committed-backup" else None,
+                           "previousManifestSHA256": facts["manifestSHA256"] if case == "committed-backup" else None,
+                           "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                           "candidateManifestSHA256": facts["manifestSHA256"]}
                 if case in ("bound-extra", "wrong-kind"):
                     kind = "snapshot" if case == "wrong-kind" else "install"
                     planned = {name: b"synthetic" for name in PET.stage_file_names(kind)}

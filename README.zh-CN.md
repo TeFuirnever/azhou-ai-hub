@@ -117,6 +117,8 @@ Agent Skin 构建发布会保留无法核验的注册工具、DSH 输出和暂�
 
 2026-10-26 的 Pet 回执指向保留的 `codex-startup-animation` 源目录；将源码复制到 Agent Skin 不会转移 Pet 属主。维护前核查当前 Pet 回执，并在必要的接管经过审阅前保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
 
+Pet 恢复需要事务绑定的图集、主题和 manifest 证据；缺少绑定的旧日志及无法核验的暂存内容会保留待核对。详见 [Pet 恢复约定](packages/agent-skin/docs/codex-pet.md#锁事务与恢复范围)。
+
 ## Skills
 
 | Skill | 解决的真实任务 | 验证依据 |
