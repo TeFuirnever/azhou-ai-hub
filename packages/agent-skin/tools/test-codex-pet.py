@@ -74,26 +74,12 @@ class PetSafetyTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def make_run(self, image):
-        (self.run / "final").mkdir(parents=True, exist_ok=True)
-        (self.run / "qa").mkdir(exist_ok=True)
-        (self.run / "final/spritesheet-extended.webp").write_bytes(image)
-        data = {name: {"ok": True, "errors": []} for name in PET.QA_FILES}
-        data["qa/direction-semantics.json"] = {"directions": [
-            {"direction": str(n * 22.5), "pass": True, "expected": "synthetic", "observed": "synthetic",
-             "reason": "fixture only, not a visual acceptance"} for n in range(16)]}
-        data["qa/visual-qa.json"] = {"pass": True, "atlasSHA256": PET.sha(image),
-                                     "themeRevision": self.rev, "reviewer": "synthetic test fixture"}
-        for name, value in data.items():
-            (self.run / name).write_text(json.dumps(value))
-
-    def make_package_for(self, project, image, label):
-        snapshot = Path(PET.prepare(project)["snapshot"])
-        revision = json.loads(snapshot.read_text())["themeRevision"]
-        run = self.root / label
-        (run / "final").mkdir(parents=True)
-        (run / "qa").mkdir()
-        (run / "final/spritesheet-extended.webp").write_bytes(image)
+    def make_run(self, image, *, directory=None, revision=None):
+        directory = directory or self.run
+        revision = revision or self.rev
+        (directory / "final").mkdir(parents=True, exist_ok=True)
+        (directory / "qa").mkdir(exist_ok=True)
+        (directory / "final/spritesheet-extended.webp").write_bytes(image)
         data = {name: {"ok": True, "errors": []} for name in PET.QA_FILES}
         data["qa/direction-semantics.json"] = {"directions": [
             {"direction": str(n * 22.5), "pass": True, "expected": "synthetic", "observed": "synthetic",
@@ -101,7 +87,15 @@ class PetSafetyTests(unittest.TestCase):
         data["qa/visual-qa.json"] = {"pass": True, "atlasSHA256": PET.sha(image),
                                      "themeRevision": revision, "reviewer": "synthetic test fixture"}
         for name, value in data.items():
-            (run / name).write_text(json.dumps(value))
+            (directory / name).write_text(json.dumps(value))
+
+    def make_package_for(self, project, image, label):
+        snapshot = Path(PET.prepare(project)["snapshot"])
+        revision = json.loads(snapshot.read_text())["themeRevision"]
+        run = self.root / label
+        (run / "final").mkdir(parents=True)
+        (run / "qa").mkdir()
+        self.make_run(image, directory=run, revision=revision)
         return PET.package_run(project, run, snapshot)
 
     def make_old_install(self, image=None):
@@ -593,6 +587,38 @@ class PetSafetyTests(unittest.TestCase):
             return real(path, value)
         return patch.object(PET, "atomic_json", side_effect=write)
 
+    def mutate_after_stage_receipt(self, mutation):
+        real = PET.write_new
+
+        def write(path, data):
+            result = real(path, data)
+            if Path(path).name == ".azhou-pet-receipt.json" and ".stage-" in str(path):
+                mutation()
+            return result
+        return patch.object(PET, "write_new", side_effect=write)
+
+    def test_theme_change_during_install_preserves_previous_pet(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        with self.mutate_after_stage_receipt(lambda: (self.project / "style.css").write_text("changed during install")):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "install-failed")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_a)
+        self.assertFalse(PET.journal_path(target.parent).exists())
+
+    def test_unexpected_target_change_during_install_is_preserved(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        foreign = target / "foreign.txt"
+        with self.mutate_after_stage_receipt(lambda: foreign.write_text("preserve")):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertEqual(foreign.read_text(), "preserve")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_a)
+        self.assertTrue(PET.journal_path(target.parent).exists())
+
     def test_exception_after_swap_restores_previous_install(self):
         self.install()
         self.make_run(self.atlas_b)
@@ -628,6 +654,26 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(PET.recover_install(self.codex / "pets", self.project),
                          "restored-previous-installed-package")
         self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_a)
+
+    def test_interruption_after_backing_up_target_restores_previous_pet(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        real = PET.os.rename
+
+        def interrupted(source, destination):
+            real(source, destination)
+            if Path(source) == target and ".previous-" in str(destination):
+                raise SystemExit("simulated interruption after backup")
+
+        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+            PET.install_package(self.project, self.codex)
+        self.assertFalse(target.exists())
+        self.assertTrue(PET.journal_path(target.parent).exists())
+        self.assertEqual(PET.recover_install(target.parent, self.project), "restored-previous-installed-package")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_a)
+        self.assertFalse(PET.journal_path(target.parent).exists())
 
     def test_recover_does_not_require_the_old_theme_to_remain_current(self):
         self.install()
@@ -1259,6 +1305,32 @@ class PetSafetyTests(unittest.TestCase):
                 PET.recover_package_stage(state, self.project)
                 self.assertFalse(stage.exists())
                 self.assertFalse((state / "package-journal.json").exists())
+
+    def test_snapshot_write_failure_preserves_previous_snapshot_and_can_retry(self):
+        (self.project / "style.css").write_bytes(b"changed synthetic theme")
+        state = PET.state_dir(self.project)
+        with patch.object(PET, "fsync_tree", side_effect=OSError("injected sync failure")):
+            with self.assertRaisesRegex(OSError, "injected sync failure"):
+                PET.prepare(self.project)
+        self.assertTrue(self.snapshot.is_file())
+        self.assertFalse((state / "package-journal.json").exists())
+        self.assertFalse(list(state.glob(".stage-*")))
+        self.assertNotEqual(PET.prepare(self.project)["themeRevision"], self.rev)
+
+    def test_package_write_failure_keeps_selected_package_and_can_retry(self):
+        self.package()
+        state = PET.state_dir(self.project)
+        previous = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        with patch.object(PET, "fsync_tree", side_effect=OSError("injected sync failure")):
+            with self.assertRaisesRegex(OSError, "injected sync failure"):
+                self.package()
+        self.assertEqual(PET.selected_package(self.project), previous)
+        self.assertTrue(previous.is_dir())
+        self.assertFalse((state / "package-journal.json").exists())
+        self.assertFalse(list(state.glob(".stage-*")))
+        self.package()
+        self.assertNotEqual(PET.selected_package(self.project), previous)
 
 
 if __name__ == "__main__":
