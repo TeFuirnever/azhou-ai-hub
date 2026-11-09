@@ -50,6 +50,10 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def valid_digest(value):
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True,
                       separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -841,6 +845,7 @@ def installed_facts(target, project):
             "同名 pet 含未知或缺失文件，拒绝覆盖", "unknown-target")
     receipt = parse(read(target / ".azhou-pet-receipt.json"))
     ownership(receipt, project)
+    require(valid_digest(receipt.get("themeRevision")), "已安装主题摘要无效，保留待核对", "unknown-target")
     manifest = read(target / "pet.json")
     metadata = parse(manifest)
     require(metadata.get("id") == PET_ID and metadata.get("spriteVersionNumber") == 2
@@ -881,8 +886,6 @@ def recover_install(pets, project):
     ownership(record, project)
     require(record.get("phase") in ("prepared", "committed") and isinstance(record.get("hadPrevious"), bool),
             "安装恢复日志状态无效，保留待核对", "recovery-required")
-    def valid_digest(value):
-        return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
     candidate_keys = ("candidateAtlasSHA256", "candidateThemeRevision", "candidateManifestSHA256")
     previous_keys = ("previousAtlasSHA256", "previousThemeRevision", "previousManifestSHA256")
     require(all(valid_digest(record.get(key)) for key in candidate_keys),

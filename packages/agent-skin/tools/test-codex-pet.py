@@ -348,6 +348,46 @@ class PetSafetyTests(unittest.TestCase):
                 self.assertEqual(receipt_path.read_bytes(), data)
                 self.assertEqual(selection.read_bytes(), before_selection)
 
+    def test_installed_receipt_requires_a_valid_theme_digest(self):
+        self.install()
+        target = self.codex / "pets" / PET.PET_ID
+        receipt_path = target / ".azhou-pet-receipt.json"
+        original = json.loads(receipt_path.read_bytes())
+        for label, value in (("missing", None), ("boolean", True), ("empty", ""),
+                             ("nonhex", "z" * 64), ("uppercase", "A" * 64)):
+            with self.subTest(label=label):
+                receipt = dict(original)
+                if label == "missing": receipt.pop("themeRevision")
+                else: receipt["themeRevision"] = value
+                data = PET.json_bytes(receipt)
+                receipt_path.write_bytes(data)
+                self.expect_error(lambda: PET.installed_facts(target, self.project), "unknown-target")
+                self.assertEqual(PET.status(self.project, self.codex)["installed"]["status"], "unknown-target")
+                self.assertEqual(receipt_path.read_bytes(), data)
+        receipt_path.write_bytes(PET.json_bytes(original))
+        self.assertEqual(PET.installed_facts(target, self.project)["themeRevision"], self.rev)
+
+    def test_upgrade_preserves_target_with_invalid_receipt_before_transaction(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        receipt_path = target / ".azhou-pet-receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["themeRevision"] = "not-a-digest"
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        with self.assertRaises(PET.PetError) as raised:
+            PET.install_package(self.project, self.codex)
+        backups = list(self.codex.glob(f".{PET.PET_ID}.previous-*"))
+        journal = PET.journal_path(self.codex / "pets")
+        self.assertEqual(raised.exception.code, "unknown-target",
+                         f"target={target.exists()}, backups={len(backups)}, journal={journal.exists()}")
+        self.assertEqual({path.name: path.read_bytes() for path in target.iterdir()}, before)
+        self.assertFalse(journal.exists())
+        self.assertFalse(backups)
+        self.assertFalse(list(self.codex.glob(f".{PET.PET_ID}.stage-*")))
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):
