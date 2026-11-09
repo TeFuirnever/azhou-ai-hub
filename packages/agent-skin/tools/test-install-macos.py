@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Isolated installer regressions; native exclusive rename is exercised on macOS."""
 import contextlib
+from functools import partial
 import importlib.util
 import io
 import json
@@ -1881,6 +1882,26 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(len(preserved), 1)
         self.assertEqual(preserved[0].read_text(), 'keep')
         self.assertFalse(m.DESTINATION.exists())
+
+    def test_verified_050_pair_migrates_to_one_app_at_canonical_path(self):
+        self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
+        self.test_verified_050_pair_migrates_to_one_app()
+
+    def test_upgrade_registers_canonical_without_unregistering_it_at_canonical_path(self):
+        self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
+        self.test_upgrade_registers_canonical_without_unregistering_it()
+
+    def test_pending_upgrade_repairs_canonical_registration_without_unregister_at_canonical_path(self):
+        self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
+        self.test_pending_upgrade_repairs_canonical_registration_without_unregister()
+
+    def test_pending_upgrade_refreshes_metadata_when_registry_url_is_already_correct_at_canonical_path(self):
+        self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
+        self.test_pending_upgrade_refreshes_metadata_when_registry_url_is_already_correct()
+
+    def test_deleted_package_stale_registration_is_retryable_at_canonical_path(self):
+        self.old_pair = partial(self.old_pair, installed_path=self.module.DESTINATION)
+        self.test_deleted_package_stale_registration_is_retryable()
 
 
 if __name__ == '__main__':
