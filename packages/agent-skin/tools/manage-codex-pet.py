@@ -818,18 +818,19 @@ def package_run(project, run, snapshot_path, operation_id=None):
             fsync_dir(packages)
         finally:
             recover_package_stage(state, project, operation_id)
-    selected_facts, selected_receipt = check_package(destination, project)
-    require(selected_facts["themeRevision"] == rev and selected_facts["atlasSHA256"] == facts["atlasSHA256"],
-            "候选目录内容与名称不一致，保留待核对", "source-conflict")
-    require(package_directory_matches(destination, selected_receipt)
-            or (not published_new and destination == previous and "directoryIdentity" not in selected_receipt),
-            "候选目录缺少当前实体绑定，保留待核对", "source-conflict")
-    require(selected_receipt.get("qaSHA256") == candidate["qaHashes"]
-            and selected_receipt.get("snapshotSHA256") == sha(candidate["snapshotRaw"])
-            and selected_receipt.get("manifestSHA256") == sha(json_bytes(native_manifest(candidate["config"]))),
-            "同名候选的审阅或快照字节与本次输入不同，保留待核对", "source-conflict")
-    atomic_json(state / "selection.json", {"package": name, "themeRevision": rev,
-                                           "atlasSHA256": facts["atlasSHA256"]})
+    def verify_destination():
+        selected_facts, selected_receipt = check_package(destination, project)
+        require(selected_facts["themeRevision"] == rev and selected_facts["atlasSHA256"] == facts["atlasSHA256"],
+                "候选目录内容与名称不一致，保留待核对", "source-conflict")
+        require(package_directory_matches(destination, selected_receipt)
+                or (not published_new and destination == previous and "directoryIdentity" not in selected_receipt),
+                "候选目录缺少当前实体绑定，保留待核对", "source-conflict")
+        require(selected_receipt.get("qaSHA256") == candidate["qaHashes"]
+                and selected_receipt.get("snapshotSHA256") == sha(candidate["snapshotRaw"])
+                and selected_receipt.get("manifestSHA256") == sha(json_bytes(native_manifest(candidate["config"]))),
+                "同名候选的审阅或快照字节与本次输入不同，保留待核对", "source-conflict")
+
+    verify_destination()
     preserved = []
     for old in packages.iterdir():
         if old not in (destination, previous):
@@ -840,6 +841,9 @@ def package_run(project, run, snapshot_path, operation_id=None):
                 preserved.append(str(old))
                 continue
             remove_tree(old, plan)
+    verify_destination()
+    atomic_json(state / "selection.json", {"package": name, "themeRevision": rev,
+                                           "atlasSHA256": facts["atlasSHA256"]})
     result = {"status": "packaged", "source": {"themeRevision": rev, "status": "reviewed"},
               "package": {"path": str(destination), **facts}, "installed": "unchanged", "runtime": RUNTIME}
     if preserved:

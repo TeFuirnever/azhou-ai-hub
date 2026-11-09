@@ -1030,6 +1030,73 @@ class PetSafetyTests(unittest.TestCase):
         self.assertFalse(stage.exists())
         self.assertFalse(journal.exists())
 
+    def test_history_cleanup_failure_keeps_previous_selection_and_allows_retry(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        selection = PET.state_dir(self.project) / 'selection.json'
+        previous = selection.read_bytes()
+        third = atlas_bytes((90, 180, 50, 255))
+        self.make_run(third)
+        destination = first.parent / (self.rev + '-' + PET.sha(third))
+        check = PET.check_package
+        injected = []
+        def add_unknown(directory, *args, **kwargs):
+            result = check(directory, *args, **kwargs)
+            if Path(directory) == first and not injected:
+                (first / 'foreign.txt').write_bytes(b'foreign synthetic data')
+                injected.append(True)
+            return result
+        with patch.object(PET, 'check_package', side_effect=add_unknown):
+            self.expect_error(self.package, 'recovery-required')
+        self.assertEqual(injected, [True])
+        self.assertEqual(selection.read_bytes(), previous)
+        self.assertEqual((first / 'foreign.txt').read_bytes(), b'foreign synthetic data')
+        self.assertTrue(destination.is_dir())
+        (first / 'foreign.txt').unlink()
+        self.assertEqual(self.package()['status'], 'packaged')
+        self.assertEqual(PET.selected_package(self.project), destination)
+        self.assertFalse(first.exists())
+
+    def test_candidate_is_rechecked_after_history_cleanup_before_selection(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        selection = PET.state_dir(self.project) / 'selection.json'
+        previous = selection.read_bytes()
+        third = atlas_bytes((90, 180, 50, 255))
+        self.make_run(third)
+        destination = first.parent / (self.rev + '-' + PET.sha(third))
+        remove = PET.remove_tree
+        changed = []
+        def tamper_after_cleanup(path, plan):
+            remove(path, plan)
+            if Path(path) == first:
+                (destination / 'pet.json').write_bytes(b'foreign synthetic bytes')
+                changed.append(True)
+        with patch.object(PET, 'remove_tree', side_effect=tamper_after_cleanup):
+            self.expect_error(self.package)
+        self.assertEqual(changed, [True])
+        self.assertEqual(selection.read_bytes(), previous)
+        self.assertEqual((destination / 'pet.json').read_bytes(), b'foreign synthetic bytes')
+
+    def test_selection_publication_failure_leaves_previous_selection(self):
+        self.package()
+        selection = PET.state_dir(self.project) / 'selection.json'
+        previous = selection.read_bytes()
+        self.make_run(self.atlas_b)
+        atomic = PET.atomic_json
+        def fail_before_selection(path, value):
+            if Path(path) == selection:
+                raise OSError('injected selection failure')
+            return atomic(path, value)
+        with patch.object(PET, 'atomic_json', side_effect=fail_before_selection):
+            with self.assertRaisesRegex(OSError, 'selection failure'):
+                self.package()
+        self.assertEqual(selection.read_bytes(), previous)
+
     def test_history_cleanup_preserves_file_added_after_candidate_verification(self):
         self.package()
         first = PET.selected_package(self.project)
