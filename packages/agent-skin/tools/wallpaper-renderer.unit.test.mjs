@@ -494,6 +494,51 @@ test('decode and page identity are checked again after the image resolves', asyn
     assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '#10121c');
     globalThis.__azhouWallpaper.dispose();
   }));
+  await t.test('validated style and digest survive mutation during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload, strength: 42 };
+    page.image.decode = async () => {
+      payload.css = CSS + '@import url(https://example.invalid/foreign.css);';
+      payload.strength = 999;
+      payload.imageSHA256 = 'b'.repeat(64);
+      page.image.complete = true;
+    };
+    const result = await installRenderer(payload);
+    assert.equal(page.styleElements.find(style => style.isConnected).textContent, CSS);
+    assert.equal(result.imageSHA256, HASH);
+    assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('var(--azhou-base) 76%'));
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('the validated digest remains fixed for the controller lifetime', async () => onPage({}, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => { payload.imageSHA256 = 'b'.repeat(64); page.image.complete = true; };
+    const result = await installRenderer(payload);
+    assert.equal(result.imageSHA256, HASH);
+    payload.imageSHA256 = 'c'.repeat(64);
+    assert.equal(globalThis.__azhouWallpaper.status().imageSHA256, HASH);
+    assert.equal(globalThis.__azhouWallpaper.dispose().imageSHA256, HASH);
+  }));
+  await t.test('the validated strength remains fixed during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload, strength: 42 };
+    page.image.decode = async () => { payload.strength = 999; page.image.complete = true; };
+    await installRenderer(payload);
+    assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('var(--azhou-base) 76%'));
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('the original cancellation callback remains authoritative during decode', async () => onPage({}, async page => {
+    let current = true;
+    const payload = { ...page.payload, isCurrent: () => current };
+    page.image.decode = async () => { current = false; payload.isCurrent = () => true; page.image.complete = true; };
+    await assert.rejects(installRenderer(payload), { code: 'page-changed-during-decode' });
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+  await t.test('preview permission remains bound to the initial request', async () => onPage({
+    url: 'http://127.0.0.1/wallpaper/preview.html', preview: true,
+  }, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => { payload.preview = false; page.image.complete = true; };
+    assert.equal((await installRenderer(payload)).applied, true);
+    globalThis.__azhouWallpaper.dispose();
+  }));
   await t.test('invalid base64', async () => onPage({}, async page => {
     await assert.rejects(installRenderer({ ...page.payload, image: 'data:image/png;base64,====' }), { code: 'invalid-local-image' });
   }));

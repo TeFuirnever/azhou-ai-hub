@@ -117,6 +117,8 @@ export async function installRenderer(payload) {
     const descriptor = Object.getOwnPropertyDescriptor(object, name);
     return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
   };
+  const preview = payload?.preview;
+  const isCurrent = ownValue(payload, 'isCurrent');
   const pageAdapter = ownValue(payload, 'pageAdapter');
   const ports = ownValue(pageAdapter, 'wallpaper');
   // The ports group is atomic: an adapter that declares it must supply every
@@ -140,26 +142,30 @@ export async function installRenderer(payload) {
       return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
     }
     // The generated production payload never contains this fixture-only flag.
-    return payload?.preview === true && (
+    return preview === true && (
       (url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname))
       || (url.protocol === 'file:' && url.pathname.endsWith('/wallpaper/preview.html'))
     );
   }
   if (!validPage()) throw problem('unexpected-page');
-  if (!payload || payload.version !== VERSION || typeof payload.css !== 'string'
-      || !payload.css.includes('[data-azhou-wallpaper="active"]')
-      || !payload.css.includes('--azhou-style-ready')
-      || /@import\b|url\(\s*['"]?(?:https?:|\/\/)/i.test(payload.css)
-      || typeof payload.imageSHA256 !== 'string' || !/^[0-9a-f]{64}$/.test(payload.imageSHA256)
-      || (payload.surface !== undefined && !validSurface(payload.surface))
-      || (payload.strength !== undefined && (!Number.isInteger(payload.strength) || payload.strength < 0 || payload.strength > 75))) {
+  const request = {
+    version: payload?.version, css: payload?.css, image: payload?.image,
+    imageSHA256: payload?.imageSHA256, strength: payload?.strength, surface: payload?.surface,
+  };
+  if (!payload || request.version !== VERSION || typeof request.css !== 'string'
+      || !request.css.includes('[data-azhou-wallpaper="active"]')
+      || !request.css.includes('--azhou-style-ready')
+      || /@import\b|url\(\s*['"]?(?:https?:|\/\/)/i.test(request.css)
+      || typeof request.imageSHA256 !== 'string' || !/^[0-9a-f]{64}$/.test(request.imageSHA256)
+      || (request.surface !== undefined && !validSurface(request.surface))
+      || (request.strength !== undefined && (!Number.isInteger(request.strength) || request.strength < 0 || request.strength > 75))) {
     throw problem('invalid-local-payload');
   }
-  let surface = typeof payload.surface === 'string' ? payload.surface.trim() : null;
+  let surface = typeof request.surface === 'string' ? request.surface.trim() : null;
   let surfaceOwned = false;
-  const imageMatch = typeof payload.image === 'string'
-    && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(payload.image);
-  if (!imageMatch || payload.image.length > 16 * 1024 * 1024) throw problem('invalid-local-image');
+  const imageMatch = typeof request.image === 'string'
+    && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(request.image);
+  if (!imageMatch || request.image.length > 16 * 1024 * 1024) throw problem('invalid-local-image');
   const applicationRoot = document.getElementById('root');
   const currentSurfaces = () => {
     if (!applicationRoot) return [];
@@ -169,7 +175,7 @@ export async function installRenderer(payload) {
       && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
   };
   const shellReady = () => adapter
-    ? ports.shellState(ownValue(payload, 'isCurrent'), globalThis) === 'ready' && currentSurfaces().length === 1
+    ? ports.shellState(isCurrent, globalThis) === 'ready' && currentSurfaces().length === 1
     : !!applicationRoot?.querySelector('[data-app-shell-frame]')
       && !!applicationRoot?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
   if (!document.body || !applicationRoot
@@ -215,7 +221,7 @@ export async function installRenderer(payload) {
     throw problem('image-decode-failed');
   }
 
-  if ((typeof ownValue(payload, 'isCurrent') === 'function' && !ownValue(payload, 'isCurrent')())
+  if ((typeof isCurrent === 'function' && !isCurrent())
       || !validPage() || !applicationRoot.isConnected
       || !shellReady()) {
     URL.revokeObjectURL(imageURL); image.src = '';
@@ -243,7 +249,7 @@ export async function installRenderer(payload) {
     URL.revokeObjectURL(imageURL); image.src = '';
     throw problem('style-id-conflict-after-decode');
   }
-  const strength = payload.strength ?? 42;
+  const strength = request.strength ?? 42;
   const washStops = [24, 18, 12, 16, 30, 65, 70];
   const washScale = strength / 42;
   const wash = 'linear-gradient(90deg,' + washStops.map((opacity, index) => {
@@ -277,7 +283,7 @@ export async function installRenderer(payload) {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.setAttribute('data-azhou-owner', OWNER);
-  const styleText = payload.css + (adapter ? ports.css : '');
+  const styleText = request.css + (adapter ? ports.css : '');
   style.textContent = styleText;
   let disposed = false, committed = false, api;
   let original = rollbackOriginal;
@@ -341,7 +347,7 @@ export async function installRenderer(payload) {
       rootClear: false, workspaceBackgroundClear: false, coverMatched: false, fixedViewport: false,
       footerSurfaces: 0, footerBackgroundClear: false, footerFadeSurfaces: 0, footerFadeClear: false,
       topFadeSurfaces: 0, topFadeClear: false, decorationEffectsClear: false, unsupportedDecorations: [],
-      reason: 'disposed', imageSHA256: payload.imageSHA256 };
+      reason: 'disposed', imageSHA256: request.imageSHA256 };
     const surfaces = currentSurfaces().filter(node => node.isConnected);
     const bodyStyle = getComputedStyle(document.body);
     const transparentSurfaces = surfaces.filter(node => {
@@ -391,7 +397,7 @@ export async function installRenderer(payload) {
       footerFadeSurfaces: footerFadeSurfaces.length, footerFadeClear,
       topFadeSurfaces: topFadeSurfaces.length, topFadeClear, decorationEffectsClear,
       unsupportedDecorations: unsupported,
-      imageSHA256: payload.imageSHA256,
+      imageSHA256: request.imageSHA256,
       image: { width: image.naturalWidth, height: image.naturalHeight, displayMode: 'cover',
         viewport: { width: innerWidth, height: innerHeight },
         devicePixelRatio: devicePixelRatio || 1,
