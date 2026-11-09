@@ -1190,6 +1190,23 @@ enum StartupPayloadReader {
     }
 }
 
+struct LocalWebNavigation {
+    static func decide(url: URL?, root: URL?, completion: (WKNavigationActionPolicy) -> Void) {
+        guard let url, let root, url.isFileURL, root.isFileURL else { completion(.cancel); return }
+        for item in [url, root] {
+            if item.user != nil || item.password != nil || item.port != nil {
+                completion(.cancel); return
+            }
+            if let host = item.host, !host.isEmpty, host.lowercased() != "localhost" {
+                completion(.cancel); return
+            }
+        }
+        let base = root.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let candidate = url.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        completion(base.count > 1 && candidate.count > base.count && candidate.starts(with: base) ? .allow : .cancel)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private var launcherHost: SkinHostID? {
         let bundle = Bundle(url: runtime.bundleURL)
@@ -1982,8 +1999,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if processExitCode != 0 { runtime.exit(code: processExitCode) }
     }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        guard let url = action.request.url, url.isFileURL, let root = webRoot else { decisionHandler(.cancel); return }
-        decisionHandler(real(url).path.hasPrefix(root.path + "/") ? .allow : .cancel)
+        LocalWebNavigation.decide(url: action.request.url, root: webRoot, completion: decisionHandler)
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { fail(error.localizedDescription, "navigation-error") }

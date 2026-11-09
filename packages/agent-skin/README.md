@@ -24,6 +24,8 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 ## 安装与启动
 
+原生播放器的页面导航仅限自身 web 资源目录内的本地文件；非本机 `file://` 地址在路径标准化前被拒绝。此判断不能排除检查后符号链接被并发替换。
+
 本机构建与安装需要 macOS 13+、Xcode Command Line Tools、Python 3，以及已安装、身份为 `com.openai.codex` 的官方应用。构建通过 `xcrun --sdk macosx swiftc` 明确选择 macOS SDK。播放器使用系统 AppKit / WebKit；壁纸辅助任务使用 Foundation 的 WebSocket 连接 CDP，不依赖旧扩展的 Node 运行链路。阿舟工作图、升级壁纸图和图标均为本地私有素材，不随公开源码分发。
 
 ```sh

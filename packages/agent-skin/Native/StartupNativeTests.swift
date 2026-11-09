@@ -1238,6 +1238,58 @@ private func nativeEventContractChecks() async throws -> Int {
         checks += 1
     }
 
+    let navigationBase = FileManager.default.temporaryDirectory.appendingPathComponent("agent-skin-navigation-" + UUID().uuidString)
+    let navigationRoot = navigationBase.appendingPathComponent("web")
+    let navigationSibling = navigationBase.appendingPathComponent("web-other")
+    try FileManager.default.createDirectory(at: navigationRoot, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: navigationSibling, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: navigationBase) }
+    let page = navigationRoot.appendingPathComponent("index.html")
+    try "synthetic".write(to: page, atomically: true, encoding: .utf8)
+    let outside = navigationSibling.appendingPathComponent("outside.html")
+    try "synthetic".write(to: outside, atomically: true, encoding: .utf8)
+    let innerLink = navigationRoot.appendingPathComponent("inner-link")
+    let outerLink = navigationRoot.appendingPathComponent("outer-link")
+    try FileManager.default.createSymbolicLink(at: innerLink, withDestinationURL: page)
+    try FileManager.default.createSymbolicLink(at: outerLink, withDestinationURL: outside)
+    var remote = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    remote.host = "remote"
+    var localhost = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    localhost.host = "localhost"
+    var withUser = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    withUser.host = "localhost"; withUser.user = "user"
+    var withPort = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    withPort.host = "localhost"; withPort.port = 8080
+    expect(remote.url?.host == "remote", "remote navigation fixture retains authority")
+    expect(withUser.url?.user == "user", "navigation fixture retains user info")
+    expect(withPort.url?.port == 8080, "navigation fixture retains port")
+    var query = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    query.query = "preview=1"; query.fragment = "fixture"
+    let navigationCases: [(URL?, URL?, WKNavigationActionPolicy, String)] = [
+        (page, navigationRoot, .allow, "local page"),
+        (innerLink, navigationRoot, .allow, "internal symlink"),
+        (localhost.url, navigationRoot, .allow, "localhost authority"),
+        (query.url, navigationRoot, .allow, "local query and fragment"),
+        (navigationRoot, navigationRoot, .cancel, "root is not a file descendant"),
+        (outside, navigationRoot, .cancel, "sibling sharing a prefix"),
+        (outerLink, navigationRoot, .cancel, "symlink to outside"),
+        (navigationRoot.appendingPathComponent("../web-other/outside.html"), navigationRoot, .cancel, "parent traversal"),
+        (remote.url, navigationRoot, .cancel, "remote authority"),
+        (withUser.url, navigationRoot, .cancel, "authority with user"),
+        (withPort.url, navigationRoot, .cancel, "authority with port"),
+        (URL(string: "https://example.invalid/index.html"), navigationRoot, .cancel, "remote scheme"),
+        (nil, navigationRoot, .cancel, "missing URL"),
+        (page, nil, .cancel, "missing root"),
+        (page, URL(fileURLWithPath: "/"), .cancel, "filesystem root"),
+        (page, remote.url, .cancel, "remote root authority"),
+    ]
+    for (url, root, expected, label) in navigationCases {
+        var calls = 0
+        var actual: WKNavigationActionPolicy?
+        LocalWebNavigation.decide(url: url, root: root) { value in calls += 1; actual = value }
+        expect(calls == 1 && actual == expected, "local navigation: " + label)
+    }
+
     func validStatus(_ runID: Int, phase: String, ready: Bool, completed: Bool,
                      overlay: Bool, completion: Any) -> [String: Any] {
         ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
