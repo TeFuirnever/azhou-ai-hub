@@ -47,61 +47,33 @@ export async function installRenderer(payload) {
     }
   }
   function decodeImage(image) {
-    let decodeTimer;
-    let fallbackTimer;
-    let rejectFallback;
-    const nativeDecodeState = { value: 'pending' };
-    const clearFallback = reason => {
-      if (fallbackTimer !== undefined) {
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let fallbackTimer, deadlineTimer;
+      const finish = error => {
+        if (finished) return;
+        finished = true;
         clearTimeout(fallbackTimer);
-        fallbackTimer = undefined;
-      }
-      rejectFallback?.(reason);
-    };
-    const nativeOperation = (() => {
-      try { return image.decode(); }
-      catch (error) { return Promise.reject(error); }
-    })();
-    const nativeDecode = Promise.resolve(nativeOperation).then(() => {
-      nativeDecodeState.value = 'resolved';
-      clearFallback(problem('native-decode-complete'));
-      return true;
-    }, error => {
-      nativeDecodeState.value = 'rejected';
-      clearFallback(error);
-      throw error;
-    });
-    let decoded = nativeDecode;
-    if (typeof globalThis.createImageBitmap === 'function') {
-      const bitmapFallback = new Promise((resolve, reject) => {
-        rejectFallback = reject;
+        clearTimeout(deadlineTimer);
+        if (error) reject(error);
+        else resolve(true);
+      };
+      let nativeResult;
+      try { nativeResult = image.decode(); }
+      catch (error) { nativeResult = Promise.reject(error); }
+      Promise.resolve(nativeResult).then(() => finish(), error => finish(error || problem('image-decode-failed')));
+      if (typeof globalThis.createImageBitmap === 'function') {
         fallbackTimer = setTimeout(() => {
-          fallbackTimer = undefined;
-          if (nativeDecodeState.value !== 'pending' || !image.complete
-              || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
-            reject(problem('image-decode-fallback-unavailable'));
-            return;
-          }
-          let operation;
-          try { operation = globalThis.createImageBitmap(image); }
-          catch (error) { reject(error); return; }
-          Promise.resolve(operation).then(bitmap => {
-            if (decodeBitmapPixels(image, bitmap)) resolve(true);
-            else reject(problem('image-decode-fallback-invalid'));
-          }, reject);
+          if (finished || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return;
+          let bitmapResult;
+          try { bitmapResult = globalThis.createImageBitmap(image); }
+          catch { return; }
+          Promise.resolve(bitmapResult).then(bitmap => {
+            if (decodeBitmapPixels(image, bitmap)) finish();
+          }, () => {});
         }, 250);
-      });
-      decoded = Promise.any([nativeDecode, bitmapFallback]).catch(error => {
-        if (error instanceof AggregateError && error.errors?.length) throw error.errors[0];
-        throw error;
-      });
-    }
-    return Promise.race([decoded, new Promise((_, reject) => {
-      decodeTimer = setTimeout(() => reject(problem('image-decode-timeout')), 4000);
-    })]).finally(() => {
-      clearTimeout(decodeTimer);
-      if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
-      rejectFallback?.(problem('image-decode-finished'));
+      }
+      deadlineTimer = setTimeout(() => finish(problem('image-decode-timeout')), 4000);
     });
   }
   function validSurface(value) {

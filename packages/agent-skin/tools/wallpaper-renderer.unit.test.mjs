@@ -483,6 +483,81 @@ test('a canceled page closes a pending validation bitmap before any style commit
   });
 });
 
+test('native and bitmap decoders settle once under interleaving', async t => {
+  await t.test('native success still wins after an invalid bitmap', async () => onPage({ bitmap: 'reject', timeout: 'controlled' }, async page => {
+    let resolveNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise(resolve => { resolveNative = resolve; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true);
+    page.fireTimer(250);
+    await Promise.resolve();
+    resolveNative();
+    assert.equal((await installation).applied, true);
+    assert.equal(page.bitmapOperations.length, 1);
+    assert.equal(page.timers.size, 0);
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('fallback success survives a later native rejection', async () => onPage({ bitmap: 'ok', timeout: 'controlled' }, async page => {
+    let rejectNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise((_resolve, reject) => { rejectNative = reject; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true);
+    page.fireTimer(250);
+    assert.equal((await installation).applied, true);
+    rejectNative(new Error('late native failure'));
+    await Promise.resolve();
+    assert.equal(globalThis.__azhouWallpaper.status().applied, true);
+    assert.equal(page.timers.size, 0);
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('late native success after timeout cannot install', async () => onPage({ timeout: 'controlled' }, async page => {
+    let resolveNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise(resolve => { resolveNative = resolve; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(4000), true);
+    page.fireTimer(4000);
+    await assert.rejects(installation, { code: 'image-decode-timeout' });
+    resolveNative();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.timers.size, 0);
+  }));
+  await t.test('synchronous native decoder throw is sanitized', async () => onPage({ timeout: 'controlled' }, async page => {
+    page.image.decode = () => { throw new Error('decoder detail'); };
+    await assert.rejects(installRenderer(page.payload), { code: 'image-decode-failed' });
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.timers.size, 0);
+  }));
+  for (const nativeOutcome of ['success', 'failure']) {
+    await t.test('late bitmap closes after native ' + nativeOutcome, async () => onPage({ bitmap: 'pending', timeout: 'controlled' }, async page => {
+      let resolveNative, rejectNative;
+      page.image.decode = () => { page.image.complete = true; return new Promise((resolve, reject) => { resolveNative = resolve; rejectNative = reject; }); };
+      const installation = installRenderer(page.payload);
+      assert.equal(await page.waitForTimer(250), true);
+      page.fireTimer(250);
+      assert.equal(page.bitmapOperations.length, 1);
+      if (nativeOutcome === 'success') {
+        resolveNative();
+        assert.equal((await installation).applied, true);
+      } else {
+        rejectNative(new Error('native failure'));
+        await assert.rejects(installation, { code: 'image-decode-failed' });
+      }
+      const bitmap = { width: page.image.naturalWidth, height: page.image.naturalHeight,
+        closed: false, close() { this.closed = true; } };
+      page.bitmapOperations[0].resolve(bitmap);
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(bitmap.closed, true);
+      assert.equal(page.timers.size, 0);
+      if (nativeOutcome === 'success') globalThis.__azhouWallpaper.dispose();
+      assert.equal(page.revoked.length, 1);
+    }));
+  }
+});
+
 test('decode and page identity are checked again after the image resolves', async t => {
   await t.test('surface remains the validated value if the caller changes it during decode', async () => onPage({}, async page => {
     const payload = { ...page.payload };
