@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { validateCheckSelection } from './startup-browser-selection.mjs';
+import { CDP, navigateWithLoad } from './test-startup-browser-cdp.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
@@ -96,91 +97,6 @@ async function check(name, operation) {
     report.checks.push({ name, passed: false, elapsedMs: Date.now() - started, error: safeError(error?.stack || error) });
     return null;
   }
-}
-
-class CDP {
-  constructor(socket) {
-    this.socket = socket;
-    this.nextID = 1;
-    this.pending = new Map();
-    this.eventWaiters = new Set();
-    socket.addEventListener('message', event => {
-      let value;
-      try { value = JSON.parse(event.data); } catch { return; }
-      if (value.method) {
-        for (const waiter of this.eventWaiters) {
-          if (waiter.method !== value.method) continue;
-          let matches = false;
-          try { matches = waiter.predicate(value.params); } catch (error) {
-            clearTimeout(waiter.timer);
-            this.eventWaiters.delete(waiter);
-            waiter.reject(error);
-            continue;
-          }
-          if (!matches) continue;
-          clearTimeout(waiter.timer);
-          this.eventWaiters.delete(waiter);
-          waiter.resolve(value.params);
-        }
-        return;
-      }
-      if (!value.id || !this.pending.has(value.id)) return;
-      const pending = this.pending.get(value.id);
-      this.pending.delete(value.id);
-      clearTimeout(pending.timer);
-      value.error ? pending.reject(new Error(value.error.message)) : pending.resolve(value.result);
-    });
-    socket.addEventListener('close', () => {
-      for (const pending of this.pending.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error('Fixture CDP closed'));
-      }
-      this.pending.clear();
-    });
-  }
-  static async open(address, expectedPort) {
-    const url = new URL(address);
-    assert.equal(url.protocol, 'ws:');
-    assert.equal(url.hostname, '127.0.0.1');
-    assert.equal(Number(url.port), expectedPort);
-    assert.ok(url.pathname.startsWith('/devtools/page/'));
-    const socket = new WebSocket(address);
-    await new Promise((resolveOpen, reject) => {
-      const timer = setTimeout(() => { socket.close(); reject(new Error('Fixture WebSocket timeout')); }, 5000);
-      socket.addEventListener('open', () => { clearTimeout(timer); resolveOpen(); }, { once: true });
-      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Fixture WebSocket failed')); }, { once: true });
-    });
-    return new CDP(socket);
-  }
-  call(method, params = {}) {
-    const id = this.nextID++;
-    return new Promise((resolveCall, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Fixture CDP timeout: ' + method)); }, 12000);
-      this.pending.set(id, { resolve: resolveCall, reject, timer });
-      this.socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  waitForEvent(method, predicate = () => true, timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
-      const waiter = { method, predicate, resolve, reject, timer: null };
-      waiter.timer = setTimeout(() => {
-        this.eventWaiters.delete(waiter);
-        reject(new Error('Timed out waiting for CDP event ' + method));
-      }, timeoutMs);
-      this.eventWaiters.add(waiter);
-    });
-  }
-  async evaluate(expression) {
-    const result = await this.call('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-      timeout: 10000,
-    });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    return result.result?.value;
-  }
-  close() { this.socket.close(); }
 }
 
 async function dispatchTab(shiftKey = false) {
@@ -997,19 +913,14 @@ try {
   };
 
   async function navigate(path) {
-    const loaded = cdp.waitForEvent('Page.loadEventFired');
-    const result = await cdp.call('Page.navigate', { url: origin + path });
-    assert.ok(!result.errorText, result.errorText);
-    await loaded;
+    await navigateWithLoad(cdp, origin + path);
     const expectedURL = origin + path;
     await until(() => cdp.evaluate(`document.readyState === 'complete' && location.href === ${JSON.stringify(expectedURL)}`),
       10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
   }
   async function navigateFreshRecoveryFixture(path) {
-    const unloaded = cdp.waitForEvent('Page.loadEventFired');
-    await cdp.call('Page.navigate', { url: 'about:blank' });
-    await unloaded;
+    await navigateWithLoad(cdp, 'about:blank');
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate(path);
   }

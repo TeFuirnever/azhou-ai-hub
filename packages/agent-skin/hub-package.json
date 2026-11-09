@@ -116,6 +116,8 @@
     "tools/test-bootstrap-unit-tools.py",
     "tools/test-startup-native.py",
     "tools/test-startup-browser.mjs",
+    "tools/test-startup-browser-cdp.mjs",
+    "tools/test-startup-browser-cdp.unit.test.mjs",
     "tools/test-synthetic-legacy-wallpaper.mjs",
     "tools/test-animation-preview-final-text-browser.mjs",
     "tools/startup-browser-selection.mjs",
