@@ -484,6 +484,16 @@ test('a canceled page closes a pending validation bitmap before any style commit
 });
 
 test('decode and page identity are checked again after the image resolves', async t => {
+  await t.test('surface remains the validated value if the caller changes it during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => {
+      payload.surface = 'not-a-color';
+      page.image.complete = true;
+    };
+    await installRenderer(payload);
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '#10121c');
+    globalThis.__azhouWallpaper.dispose();
+  }));
   await t.test('invalid base64', async () => onPage({}, async page => {
     await assert.rejects(installRenderer({ ...page.payload, image: 'data:image/png;base64,====' }), { code: 'invalid-local-image' });
   }));
