@@ -296,6 +296,59 @@ async function onPage(options, operation) {
   try { return await operation(page); } finally { page.restore(); }
 }
 
+test('uncommitted image resources are released on unexpected synchronous failures', async t => {
+  await t.test('image construction failure releases the allocated URL', async () => onPage({}, async page => {
+    globalThis.Image = function Image() { throw new Error('injected image construction failure'); };
+    await assert.rejects(installRenderer(page.payload), /injected image construction failure/);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+  await t.test('invalid prior baseline preserves the controller and releases the new URL', async () => onPage({}, async page => {
+    const previous = { owner: 'azhou.codex-startup-animation', version: '0.9.0', status() {}, dispose() {},
+      __azhouWallpaperBaseline_071: { attribute: null, properties: {} } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: previous });
+    await assert.rejects(installRenderer(page.payload));
+    assert.equal(globalThis.__azhouWallpaper, previous);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.image.src, '');
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  }));
+  await t.test('style construction failure leaves a working controller attached', async () => onPage({}, async page => {
+    let disposals = 0;
+    const previous = { owner: 'azhou.codex-startup-animation', version: '0.9.0', status() { return { applied: true }; }, dispose() { disposals++; } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: previous });
+    const oldStyle = page.document.createElement('style');
+    oldStyle.id = STYLE_ID;
+    oldStyle.setAttribute('data-azhou-owner', previous.owner);
+    page.head.appendChild(oldStyle);
+    const create = page.document.createElement;
+    page.document.createElement = function(tag) {
+      if (tag === 'style') throw new Error('injected style construction failure');
+      return create.call(this, tag);
+    };
+    await assert.rejects(installRenderer(page.payload), /injected style construction failure/);
+    assert.equal(globalThis.__azhouWallpaper, previous);
+    assert.equal(disposals, 0);
+    assert.equal(oldStyle.isConnected, true);
+    assert.equal(oldStyle.id, STYLE_ID);
+    assert.equal(oldStyle.disabled, false);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+  }));
+  await t.test('style construction failure releases the URL and preserves host state', async () => onPage({}, async page => {
+    const create = page.document.createElement;
+    page.document.createElement = function(tag) {
+      if (tag === 'style') throw new Error('injected style construction failure');
+      return create.call(this, tag);
+    };
+    await assert.rejects(installRenderer(page.payload), /injected style construction failure/);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.image.src, '');
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+});
+
 test('the renderer applies one decoded local scene, reports a stable receipt, and restores the host baseline', async () => {
   await onPage({ originalAttribute: 'host', originalImage: 'url(host-image)', originalWash: 'host-wash',
     originalSurface: '#fafafa' }, async page => {
