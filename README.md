@@ -99,7 +99,7 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-Each wallpaper request keeps its image, appearance values, validated style, cancellation check and host adapter bound while it waits for the host and decodes the image. Agent Skin's native maintenance helper also provides an explicit [wallpaper retry](packages/agent-skin/README.md#wallpaper-recovery): it reuses the completed controller's last image and strength without replaying the animation. Status remains read-only and reports bounded failure codes; unsupported or foreign controllers are not replaced.
+Each wallpaper request keeps its image, appearance values, validated style, cancellation check and host adapter bound while it waits for the host and decodes the image. If the adapter changes during the wait, the request stops safely. Agent Skin's native maintenance helper also provides an explicit [wallpaper retry](packages/agent-skin/README.md#wallpaper-recovery): it reuses the completed controller's last image and strength without replaying the animation. Status remains read-only and reports bounded failure codes; unsupported or foreign controllers are not replaced.
 
 Agent Skin checks old entries before isolating and cleaning them. If cleanup stops after removing some files, it preserves the remaining temporary contents for manual recovery; avoid concurrent changes to the installation directories. See the [installation details](packages/agent-skin/README.md#安装升级与旧入口清理).
 

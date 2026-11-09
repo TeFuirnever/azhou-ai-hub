@@ -1,12 +1,38 @@
 export function createWallpaperApplicator(installRenderer, options, host = globalThis) {
   const { version, css } = options;
   const pageAdapter = options.pageAdapter;
-  const ports = pageAdapter?.wallpaper;
 
-  function wallpaperShellState(isCurrent) {
+  function captureAdapter() {
+    const ports = pageAdapter?.wallpaper;
+    const attributes = ports?.attributes;
+    const filter = attributes?.observeFilter;
+    const controller = pageAdapter?.controllerWallpaper;
+    return { ports, attributes, filter, filterValues: Array.isArray(filter) ? [...filter] : filter,
+      controller, owner: controller?.owner, validPage: ports?.validPage, shellState: ports?.shellState,
+      surfaces: ports?.surfaces, css: ports?.css, scope: ports?.scope, surfaceMarker: attributes?.surfaceMarker };
+  }
+
+  function adapterUnchanged(binding) {
+    const { ports, attributes, filter, filterValues, controller } = binding;
+    if (pageAdapter?.wallpaper !== ports) return false;
+    if (!ports) return true;
+    return ports.attributes === attributes && attributes?.observeFilter === filter
+      && (!Array.isArray(filter) || (filter.length === filterValues.length
+        && Array.prototype.every.call(filter, (value, index) => value === filterValues[index])))
+      && attributes?.surfaceMarker === binding.surfaceMarker && pageAdapter?.controllerWallpaper === controller
+      && controller?.owner === binding.owner && ports.validPage === binding.validPage
+      && ports.shellState === binding.shellState && ports.surfaces === binding.surfaces
+      && ports.css === binding.css && ports.scope === binding.scope;
+  }
+
+  function wallpaperShellState(isCurrent, binding) {
     if (typeof isCurrent === 'function' && !isCurrent()) return 'cancelled';
-    if (ports) return typeof ports.shellState === 'function'
-      ? ports.shellState(isCurrent, host) : null;
+    if (!adapterUnchanged(binding)) return 'unsupported';
+    if (binding.ports) {
+      const state = typeof binding.shellState === 'function'
+        ? Reflect.apply(binding.shellState, binding.ports, [isCurrent, host]) : null;
+      return adapterUnchanged(binding) ? state : 'unsupported';
+    }
     const document = host.document;
     const applicationRoot = document?.getElementById('root');
     return document?.body && applicationRoot
@@ -15,9 +41,9 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
       ? 'ready' : null;
   }
 
-  function waitForWallpaperShell(isCurrent) {
+  function waitForWallpaperShell(isCurrent, binding) {
     const document = host.document;
-    const initial = wallpaperShellState(isCurrent);
+    const initial = wallpaperShellState(isCurrent, binding);
     if (initial) return Promise.resolve(initial);
     const Observer = host.MutationObserver;
     if (typeof Observer !== 'function' || !document?.documentElement) return Promise.resolve('unsupported');
@@ -34,14 +60,14 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         resolve(state);
       };
       const check = () => {
-        const state = wallpaperShellState(isCurrent);
+        const state = wallpaperShellState(isCurrent, binding);
         if (state) finish(state);
       };
       try {
         observer = new Observer(check);
         observer.observe(document.documentElement, {
           childList: true, subtree: true, attributes: true,
-          attributeFilter: ports?.attributes?.observeFilter
+          attributeFilter: binding.filterValues
             ?? ['data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'],
         });
       } catch {
@@ -50,7 +76,7 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
       }
       // Cold hosts can mount the workspace after the startup animation. Keep
       // this wait bounded without extending or replaying the animation.
-      timer = host.setTimeout(() => finish(wallpaperShellState(isCurrent) || 'timeout'), 60000);
+      timer = host.setTimeout(() => finish(wallpaperShellState(isCurrent, binding) || 'timeout'), 60000);
       check();
     });
   }
@@ -63,21 +89,23 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     }
     if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
     const { strength, surface } = value;
+    const binding = captureAdapter();
     const encoded = image.slice(image.indexOf(',') + 1);
     const bytes = Uint8Array.from(host.atob(encoded), character => character.charCodeAt(0));
     const digest = await host.crypto.subtle.digest('SHA-256', bytes);
     const imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
     if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
 
-    const shellState = await waitForWallpaperShell(isCurrent);
+    const shellState = await waitForWallpaperShell(isCurrent, binding);
     if (shellState === 'cancelled' || (typeof isCurrent === 'function' && !isCurrent())) {
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
-    if (shellState !== 'ready') return { applied: false, reason: 'wallpaper-unsupported',
-      failureCode: shellState === 'timeout' ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
+    const adapterMatches = adapterUnchanged(binding);
+    if (shellState !== 'ready' || !adapterMatches) return { applied: false, reason: 'wallpaper-unsupported',
+      failureCode: shellState === 'timeout' && adapterMatches ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
     return installRenderer({
       version, image, imageSHA256, css, strength, surface, isCurrent,
-      ...(ports ? { pageAdapter } : {}),
+      ...(binding.ports ? { pageAdapter } : {}),
     });
   };
 }

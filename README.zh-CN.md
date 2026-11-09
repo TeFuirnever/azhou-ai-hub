@@ -99,7 +99,7 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-每次壁纸请求在等待宿主及图片解码时，都会保持图片、外观参数、已校验样式、取消检查和宿主适配器的关联。Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)：沿用已完成控制器最近请求的图片和强度，不重播动画。状态检查仍只读，并报告有限的失败原因码；不替换不受支持或其他所有者的控制器。
+每次壁纸请求在等待宿主及图片解码时，都会保持图片、外观参数、已校验样式、取消检查和宿主适配器的关联；等待期间若适配器发生变化，请求会安全停止。Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)：沿用已完成控制器最近请求的图片和强度，不重播动画。状态检查仍只读，并报告有限的失败原因码；不替换不受支持或其他所有者的控制器。
 
 Agent Skin 会在清理旧入口前核验并隔离副本；如果清理部分文件后中断，剩余临时内容会保留，需人工处理。维护期间请避免其他进程同时改动安装目录。详见[安装说明](packages/agent-skin/README.md#安装升级与旧入口清理)。
 
