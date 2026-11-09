@@ -403,11 +403,13 @@ class DshPluginBuildTests(unittest.TestCase):
         (stage_parent / "azhou-payload" / "stale.txt").write_text("stale", encoding="utf-8")
         leftover = stage_parent / "leftover.txt"
         leftover.write_text("leftover", encoding="utf-8")
+        stages_before = set((self.root / ".build").glob("azhou-stage.dsh-*"))
         manifest = self.build_plugin(destination)
         self.assertEqual(sorted(self.snapshot(destination)),
                          sorted(self.artifacts.DSH_PLUGIN_PACKAGE_ENTRIES))
         self.assertTrue(leftover.is_file(), "unrelated staging leftovers must survive cleanup")
-        self.assertFalse((stage_parent / "azhou-payload").exists())
+        self.assertEqual((stage_parent / "azhou-payload/stale.txt").read_text(encoding="utf-8"), "stale")
+        self.assertEqual(set((self.root / ".build").glob("azhou-stage.dsh-*")), stages_before)
 
         argv = ["build-dsh-plugin.py", "--output", str(destination)]
         with mock.patch.object(subprocess, "check_output", return_value="arm64\n"), \
@@ -423,6 +425,26 @@ class DshPluginBuildTests(unittest.TestCase):
         self.assertEqual(summary["outputs"], len(manifest["outputs"]))
         self.assertEqual(self.snapshot(destination), self.snapshot(self.destination),
                          "a CLI rebuild over an existing destination must stay byte-identical")
+
+    def test_unknown_content_added_to_new_stage_is_preserved_before_publish(self):
+        destination = self.root / ".build/azhou-dsh-plugin-stage-race/azhou-agent-skin"
+        observed = []
+        stages_before = set((self.root / ".build").glob("azhou-stage.dsh-*"))
+
+        def inject_unknown(_tree, _root):
+            stages = set((self.root / ".build").glob("azhou-stage.dsh-*")) - stages_before
+            self.assertEqual(len(stages), 1)
+            foreign = next(iter(stages)) / "foreign.txt"
+            foreign.write_bytes(b"unknown synthetic file")
+            observed.append(foreign)
+
+        with mock.patch.object(self.emitter, "_assert_no_path_leak", side_effect=inject_unknown):
+            with self.assertRaisesRegex(RuntimeError, "保留"):
+                self.build_plugin(destination)
+        self.assertFalse(destination.exists())
+        self.assertEqual(observed[0].read_bytes(), b"unknown synthetic file")
+        # This fixture owns the test-only stage; production does not remove it.
+        shutil.rmtree(observed[0].parent)
 
     def test_main_reports_build_failures_and_exits_nonzero(self):
         with mock.patch.object(sys, "argv", ["build-dsh-plugin.py"]), \

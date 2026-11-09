@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -266,6 +267,19 @@ def _assert_no_path_leak(tree: Path, root: Path) -> None:
             raise RuntimeError(f'DSH plugin file leaks the local build path: {item.name}')
 
 
+def verified_startup_stage(stage_root: Path, artifacts, created):
+    receipt = artifacts.tree_receipt(stage_root)
+    if receipt[:2] != created:
+        raise RuntimeError(f'DSH 暂存根已替换，保留：{stage_root}')
+    files = {'azhou-payload/Contents/Resources/' + name for name in artifacts.STARTUP_OUTPUTS}
+    files.add('azhou-payload/Contents/Resources/startup/manifest.json')
+    directories = {parent.as_posix() for name in files for parent in Path(name).parents if parent != Path('.')}
+    expected = {**{name: 'file' for name in files}, **{name: 'directory' for name in directories}}
+    if {entry[0]: entry[1] for entry in receipt[3]} != expected:
+        raise RuntimeError(f'DSH 暂存含未知或缺失对象，保留：{stage_root}')
+    return receipt
+
+
 def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
     root = Path(root).resolve()
     destination = Path(destination) if destination is not None else root / PLUGIN_OUTPUT_DIR / PLUGIN_NAME
@@ -278,13 +292,16 @@ def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
         raise RuntimeError('拒绝通过符号链接 .build 目录构建 DSH 插件。')
     build_dir.mkdir(parents=True, exist_ok=True)
 
-    stage = root / STAGE_PARENT / 'azhou-payload'
-    if stage.is_symlink():
+    legacy_stage = root / STAGE_PARENT / 'azhou-payload'
+    if legacy_stage.is_symlink():
         raise RuntimeError('拒绝通过符号链接 staging 目录构建 DSH 插件。')
-    if stage.exists():
-        shutil.rmtree(stage)
+    stage_root = Path(tempfile.mkdtemp(prefix='azhou-stage.dsh-', dir=build_dir))
+    initial = stage_root.lstat()
+    stage = stage_root / 'azhou-payload'
+    completed = False
     try:
         builder.build_startup(stage, root=root, host='dsh')
+        stage_receipt = verified_startup_stage(stage_root, artifacts, (initial.st_dev, initial.st_ino))
         payload = (stage / 'Contents/Resources/startup/install.js').read_text(encoding='utf-8')
         body = _payload_body(payload)
         icon = _render_icon(root, artifacts, theme)
@@ -298,19 +315,25 @@ def build_plugin(destination: Path | None = None, *, root: Path = ROOT) -> dict:
                              inputs=inputs, artifacts=artifacts)
             _assert_identical(first, second)
             _assert_no_path_leak(first, root)
+            artifacts.require_tree(stage_root, stage_receipt)
             if destination.is_symlink():
                 raise RuntimeError(f'拒绝覆写符号链接 DSH 插件目录：{destination}')
             if destination.exists():
                 shutil.rmtree(destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(first), str(destination))
+        artifacts.verify_dsh_plugin(destination)
+        completed = True
     finally:
-        shutil.rmtree(stage, ignore_errors=True)
-        try:
-            stage.parent.rmdir()
-        except OSError:
-            pass
-    artifacts.verify_dsh_plugin(destination)
+        if completed:
+            try:
+                artifacts.require_tree(stage_root, stage_receipt)
+                shutil.rmtree(stage_root)
+            except BaseException:
+                print(f'DSH 构建暂存保留待核对：{stage_root}', file=sys.stderr)
+                raise
+        else:
+            print(f'DSH 构建未完成，暂存保留待核对：{stage_root}', file=sys.stderr)
     return manifest
 
 
