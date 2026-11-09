@@ -509,7 +509,12 @@ private func wallpaperJournalChecks() throws -> Int {
     expect(WallpaperJournal.latest(requestID: "second", directory: journal)?["state"] as? String == "restored",
            "the newest record replaces the latest result")
 
-    try Data(repeating: 0x78, count: 2 * 1024 * 1024 + 1).write(to: logURL)
+    let padding = String(repeating: "x", count: 800_000)
+    for index in 0..<3 {
+        WallpaperJournal.record(["requestID": "large-\(index)", "padding": padding], directory: journal)
+    }
+    let oversizedOwnedLog = try Data(contentsOf: logURL)
+    expect(oversizedOwnedLog.count > 2 * 1024 * 1024, "owned journal crosses the rotation threshold")
     WallpaperJournal.record(["requestID": "bounded", "state": "applied"], directory: journal)
     let boundedLog = try Data(contentsOf: logURL)
     expect(boundedLog.count < 4_096 && String(decoding: boundedLog, as: UTF8.self).contains("bounded"),
@@ -629,7 +634,7 @@ private func wallpaperJournalChecks() throws -> Int {
     let savedLog = switchedDirectory.appendingPathComponent("saved.jsonl")
     let priorLog = try Data(contentsOf: switchedLog)
     var didSwitch = false
-    WallpaperJournal.record(["requestID": "after"], directory: switchedDirectory) { path, flags, mode in
+    WallpaperJournal.record(["requestID": "after"], directory: switchedDirectory, openLog: { path, flags, mode in
         let fd = Darwin.open(path, flags, mode)
         if fd >= 0 {
             try? FileManager.default.moveItem(at: switchedLog, to: savedLog)
@@ -637,11 +642,362 @@ private func wallpaperJournalChecks() throws -> Int {
             didSwitch = true
         }
         return fd
-    }
+    })
     expect(didSwitch && (try? Data(contentsOf: savedLog)) == priorLog,
            "append refuses an open descriptor after its path is replaced")
     expect((try? Data(contentsOf: switchedLog)) == Data("foreign synthetic log".utf8),
            "append preserves the foreign replacement")
+
+    let foreignLatestDir = root.appendingPathComponent("foreign-latest", isDirectory: true)
+    try FileManager.default.createDirectory(at: foreignLatestDir, withIntermediateDirectories: true)
+    let foreignLatest = foreignLatestDir.appendingPathComponent("latest.json")
+    let foreignLatestBytes = Data("{\"requestID\":\"legacy\",\"state\":\"kept\"}".utf8)
+    try foreignLatestBytes.write(to: foreignLatest)
+    WallpaperJournal.record(["requestID": "new"], directory: foreignLatestDir)
+    expect((try? Data(contentsOf: foreignLatest)) == foreignLatestBytes, "an unbound latest file is not replaced")
+    expect(WallpaperJournal.latest(requestID: "legacy", directory: foreignLatestDir)?["state"] as? String == "kept",
+           "an unbound legacy latest remains readable")
+    expect(!FileManager.default.fileExists(atPath: foreignLatestDir.appendingPathComponent("wallpaper.jsonl").path),
+           "an unbound latest prevents subsequent log creation")
+
+    let foreignLogDir = root.appendingPathComponent("foreign-log", isDirectory: true)
+    try FileManager.default.createDirectory(at: foreignLogDir, withIntermediateDirectories: true)
+    let foreignLog = foreignLogDir.appendingPathComponent("wallpaper.jsonl")
+    let foreignLogBytes = Data(repeating: 0x78, count: 2 * 1024 * 1024 + 1)
+    try foreignLogBytes.write(to: foreignLog)
+    WallpaperJournal.record(["requestID": "new"], directory: foreignLogDir)
+    expect((try? Data(contentsOf: foreignLog)) == foreignLogBytes, "an unbound oversized log is not truncated")
+    expect(WallpaperJournal.latest(requestID: "new", directory: foreignLogDir) != nil,
+           "an independently safe latest remains available when the log is foreign")
+
+    let editedDir = root.appendingPathComponent("edited-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: editedDir)
+    let editedLatest = editedDir.appendingPathComponent("latest.json")
+    let editedLog = editedDir.appendingPathComponent("wallpaper.jsonl")
+    let editedLogBefore = try Data(contentsOf: editedLog)
+    let editedLatestBytes = Data("foreign in-place change".utf8)
+    try editedLatestBytes.write(to: editedLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: editedDir)
+    expect((try? Data(contentsOf: editedLatest)) == editedLatestBytes, "a changed bound latest is preserved")
+    expect((try? Data(contentsOf: editedLog)) == editedLogBefore, "a changed latest prevents log updates")
+
+    let editedLogDir = root.appendingPathComponent("edited-log", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: editedLogDir)
+    let editedLogPath = editedLogDir.appendingPathComponent("wallpaper.jsonl")
+    let editedLogBytes = Data("foreign edited log".utf8)
+    try editedLogBytes.write(to: editedLogPath)
+    WallpaperJournal.record(["requestID": "later"], directory: editedLogDir)
+    expect((try? Data(contentsOf: editedLogPath)) == editedLogBytes, "a changed bound log is preserved")
+
+    let hardlinkDir = root.appendingPathComponent("hardlink-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: hardlinkDir)
+    let hardlinkLatest = hardlinkDir.appendingPathComponent("latest.json")
+    let hardlinkAlias = hardlinkDir.appendingPathComponent("alias")
+    try FileManager.default.linkItem(at: hardlinkLatest, to: hardlinkAlias)
+    let hardlinkBefore = try Data(contentsOf: hardlinkLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: hardlinkDir)
+    expect((try? Data(contentsOf: hardlinkLatest)) == hardlinkBefore && (try? Data(contentsOf: hardlinkAlias)) == hardlinkBefore,
+           "a bound file with an extra hard link is not modified")
+
+    let copiedDir = root.appendingPathComponent("copied-latest", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: copiedDir)
+    let copiedLatest = copiedDir.appendingPathComponent("latest.json")
+    let savedOriginal = copiedDir.appendingPathComponent("saved-original")
+    let copiedFile = copiedDir.appendingPathComponent("copy")
+    try FileManager.default.copyItem(at: copiedLatest, to: copiedFile)
+    try FileManager.default.moveItem(at: copiedLatest, to: savedOriginal)
+    try FileManager.default.moveItem(at: copiedFile, to: copiedLatest)
+    let copiedBytes = try Data(contentsOf: copiedLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: copiedDir)
+    expect((try? Data(contentsOf: copiedLatest)) == copiedBytes && FileManager.default.fileExists(atPath: savedOriginal.path),
+           "a copied file cannot inherit inode-bound ownership")
+
+    let extraMetadataDir = root.appendingPathComponent("extra-metadata", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: extraMetadataDir)
+    let extraLatest = extraMetadataDir.appendingPathComponent("latest.json")
+    let extraLog = extraMetadataDir.appendingPathComponent("wallpaper.jsonl")
+    let extraBefore = try Data(contentsOf: extraLatest), extraLogBefore = try Data(contentsOf: extraLog)
+    let extraFD = Darwin.open(extraLatest.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+    let extraValue = Data("synthetic user attribute".utf8)
+    let setExtra = extraValue.withUnsafeBytes { fsetxattr(extraFD, "com.example.user-data", $0.baseAddress, $0.count, 0, 0) }
+    expect(extraFD >= 0 && setExtra == 0, "synthetic extra extended attribute is installed")
+    Darwin.close(extraFD)
+    WallpaperJournal.record(["requestID": "later"], directory: extraMetadataDir)
+    let checkExtraFD = Darwin.open(extraLatest.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let extraLength = fgetxattr(checkExtraFD, "com.example.user-data", nil, 0, 0, 0)
+    Darwin.close(checkExtraFD)
+    expect((try? Data(contentsOf: extraLatest)) == extraBefore && (try? Data(contentsOf: extraLog)) == extraLogBefore
+           && extraLength == extraValue.count, "unrecognized extended attributes are preserved")
+
+    let aclDir = root.appendingPathComponent("acl-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: aclDir)
+    let aclLatest = aclDir.appendingPathComponent("latest.json")
+    let aclLog = aclDir.appendingPathComponent("wallpaper.jsonl")
+    let aclBefore = try Data(contentsOf: aclLatest), aclLogBefore = try Data(contentsOf: aclLog)
+    let chmod = Process()
+    chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+    chmod.arguments = ["+a", "everyone deny write", aclLatest.path]
+    try chmod.run(); chmod.waitUntilExit()
+    expect(chmod.terminationStatus == 0, "synthetic ACL is installed")
+    WallpaperJournal.record(["requestID": "later"], directory: aclDir)
+    let aclFD = Darwin.open(aclLatest.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let actualACL = acl_get_fd_np(aclFD, ACL_TYPE_EXTENDED)
+    expect((try? Data(contentsOf: aclLatest)) == aclBefore && (try? Data(contentsOf: aclLog)) == aclLogBefore
+           && actualACL != nil, "an ACL-bearing file is preserved")
+    if let actualACL { acl_free(UnsafeMutableRawPointer(actualACL)) }
+    Darwin.close(aclFD)
+
+    let permissionsDir = root.appendingPathComponent("permissions-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: permissionsDir)
+    let permissionsLatest = permissionsDir.appendingPathComponent("latest.json")
+    let permissionBefore = try Data(contentsOf: permissionsLatest)
+    try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: permissionsLatest.path)
+    WallpaperJournal.record(["requestID": "later"], directory: permissionsDir)
+    let permissionMode = try FileManager.default.attributesOfItem(atPath: permissionsLatest.path)[.posixPermissions] as? NSNumber
+    expect((try? Data(contentsOf: permissionsLatest)) == permissionBefore && permissionMode?.intValue == 0o644,
+           "a changed permission mode is preserved rather than repaired")
+
+    let lockSwapDir = root.appendingPathComponent("lock-swap", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: lockSwapDir)
+    let lockLatest = lockSwapDir.appendingPathComponent("latest.json")
+    let lockBefore = try Data(contentsOf: lockLatest)
+    let lockPath = lockSwapDir.appendingPathComponent(".azhou-wallpaper.lock")
+    let lockSaved = lockSwapDir.appendingPathComponent("saved-lock")
+    var lockChanged = false
+    var lockIO = WallpaperJournal.IO()
+    lockIO.step = { phase in
+        if phase == "staged-latest" && !lockChanged {
+            try? FileManager.default.moveItem(at: lockPath, to: lockSaved)
+            try? Data("foreign lock".utf8).write(to: lockPath)
+            lockChanged = true
+        }
+    }
+    WallpaperJournal.record(["requestID": "later"], directory: lockSwapDir, io: lockIO)
+    expect(lockChanged && (try? Data(contentsOf: lockLatest)) == lockBefore,
+           "replacing the locked name prevents publication")
+    expect((try? Data(contentsOf: lockPath)) == Data("foreign lock".utf8)
+           && FileManager.default.fileExists(atPath: lockSaved.path), "replaced lock entries are retained")
+
+    for phase in ["append-log", "appended-log"] {
+        let changedLogDir = root.appendingPathComponent("change-" + phase, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: changedLogDir)
+        let changedLogPath = changedLogDir.appendingPathComponent("wallpaper.jsonl")
+        let replacement = Data("foreign in-place log".utf8)
+        var changed = false
+        var io = WallpaperJournal.IO()
+        io.step = { observed in
+            if observed == phase && !changed {
+                try? replacement.write(to: changedLogPath)
+                changed = true
+            }
+        }
+        WallpaperJournal.record(["requestID": "later"], directory: changedLogDir, io: io)
+        expect(changed && (try? Data(contentsOf: changedLogPath)) == replacement,
+               "concurrent log changes are retained at " + phase)
+        WallpaperJournal.record(["requestID": "retry"], directory: changedLogDir)
+        expect((try? Data(contentsOf: changedLogPath)) == replacement, "unverified log blocks retry at " + phase)
+    }
+
+    let metadataRaceDir = root.appendingPathComponent("append-extra-metadata", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: metadataRaceDir)
+    let metadataRaceLog = metadataRaceDir.appendingPathComponent("wallpaper.jsonl")
+    var metadataRaceChanged = false
+    var metadataRaceIO = WallpaperJournal.IO()
+    metadataRaceIO.step = { phase in
+        if phase == "appended-log" && !metadataRaceChanged {
+            let fd = Darwin.open(metadataRaceLog.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+            let value = Data("do not remove".utf8)
+            metadataRaceChanged = value.withUnsafeBytes { fsetxattr(fd, "com.example.added", $0.baseAddress, $0.count, 0, 0) } == 0
+            Darwin.close(fd)
+        }
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: metadataRaceDir, io: metadataRaceIO)
+    let metadataRaceBytes = try Data(contentsOf: metadataRaceLog)
+    WallpaperJournal.record(["requestID": "retry"], directory: metadataRaceDir)
+    let metadataCheckFD = Darwin.open(metadataRaceLog.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let metadataLength = fgetxattr(metadataCheckFD, "com.example.added", nil, 0, 0, 0)
+    Darwin.close(metadataCheckFD)
+    expect(metadataRaceChanged && metadataLength > 0 && (try? Data(contentsOf: metadataRaceLog)) == metadataRaceBytes,
+           "new metadata after append is preserved and never silently adopted")
+
+    let appendFailureDir = root.appendingPathComponent("append-sync-failure", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: appendFailureDir)
+    let appendFailureLog = appendFailureDir.appendingPathComponent("wallpaper.jsonl")
+    var syncCalls = 0
+    var appendFailureIO = WallpaperJournal.IO()
+    appendFailureIO.sync = { fd in
+        syncCalls += 1
+        if syncCalls == 4 { errno = EIO; return -1 }
+        return fsync(fd)
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: appendFailureDir, io: appendFailureIO)
+    let partialLog = try Data(contentsOf: appendFailureLog)
+    expect(syncCalls == 4 && String(decoding: partialLog, as: UTF8.self).contains("second"),
+           "an append sync failure retains the written bytes")
+    WallpaperJournal.record(["requestID": "retry"], directory: appendFailureDir)
+    expect((try? Data(contentsOf: appendFailureLog)) == partialLog, "a log with stale binding is not rewritten on retry")
+
+    let stagedDir = root.appendingPathComponent("unknown-stage", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: stagedDir)
+    let stagedLatest = stagedDir.appendingPathComponent("latest.json")
+    let stagedBefore = try Data(contentsOf: stagedLatest)
+    let foreignStage = stagedDir.appendingPathComponent(".azhou-wallpaper-stage")
+    try Data("unknown stage".utf8).write(to: foreignStage)
+    WallpaperJournal.record(["requestID": "later"], directory: stagedDir)
+    expect((try? Data(contentsOf: stagedLatest)) == stagedBefore && (try? Data(contentsOf: foreignStage)) == Data("unknown stage".utf8),
+           "an unverified fixed stage blocks further writes and is preserved")
+
+    for phase in ["staged-latest", "published-latest", "cleanup-latest"] {
+        let swapDir = root.appendingPathComponent("swap-" + phase, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: swapDir)
+        let latest = swapDir.appendingPathComponent("latest.json")
+        let log = swapDir.appendingPathComponent("wallpaper.jsonl")
+        let originalLatest = try Data(contentsOf: latest), originalLog = try Data(contentsOf: log)
+        let stage = swapDir.appendingPathComponent(".azhou-wallpaper-stage")
+        let saved = swapDir.appendingPathComponent("saved")
+        var changed = false
+        var io = WallpaperJournal.IO()
+        io.step = { observed in
+            if observed == phase && !changed {
+                let target = phase == "staged-latest" ? latest : stage
+                try? FileManager.default.moveItem(at: target, to: saved)
+                try? Data("foreign swapped bytes".utf8).write(to: target)
+                changed = true
+            }
+        }
+        WallpaperJournal.record(["requestID": "new"], directory: swapDir, io: io)
+        expect(changed, "fault was injected at " + phase)
+        let preservedForeign = ((try? Data(contentsOf: stage)) == Data("foreign swapped bytes".utf8))
+            || ((try? Data(contentsOf: latest)) == Data("foreign swapped bytes".utf8))
+        expect(preservedForeign, "unknown file is preserved at " + phase)
+        expect((try? Data(contentsOf: saved)) == originalLatest, "old latest is retained at " + phase)
+        expect((try? Data(contentsOf: log)) == originalLog, "log remains unchanged at " + phase)
+        let beforeRetry = try Data(contentsOf: stage)
+        WallpaperJournal.record(["requestID": "retry"], directory: swapDir)
+        expect((try? Data(contentsOf: stage)) == beforeRetry, "unknown stage blocks retry at " + phase)
+    }
+
+    for failure in ["marker", "sync", "partial-write"] {
+        let failedDir = root.appendingPathComponent("write-failure-" + failure, isDirectory: true)
+        var io = WallpaperJournal.IO()
+        var calls = 0
+        if failure == "marker" { io.setMarker = { _, _ in false } }
+        if failure == "sync" { io.sync = { _ in errno = EIO; return -1 } }
+        if failure == "partial-write" {
+            io.writeChunk = { fd, bytes, count in
+                calls += 1
+                if calls > 1 { errno = EIO; return -1 }
+                return Darwin.write(fd, bytes, min(count, 7))
+            }
+        }
+        WallpaperJournal.record(["requestID": "failure"], directory: failedDir, io: io)
+        let stage = failedDir.appendingPathComponent(".azhou-wallpaper-stage")
+        expect(FileManager.default.fileExists(atPath: stage.path), "failed stage is retained for " + failure)
+        expect(!FileManager.default.fileExists(atPath: failedDir.appendingPathComponent("latest.json").path),
+               "failed write does not publish latest for " + failure)
+        let stageBytes = try Data(contentsOf: stage)
+        WallpaperJournal.record(["requestID": "retry"], directory: failedDir)
+        expect((try? Data(contentsOf: stage)) == stageBytes, "retry preserves the failed stage for " + failure)
+    }
+
+    let missingMarkerDir = root.appendingPathComponent("missing-marker", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: missingMarkerDir)
+    let missingMarkerLatest = missingMarkerDir.appendingPathComponent("latest.json")
+    let missingMarkerLog = missingMarkerDir.appendingPathComponent("wallpaper.jsonl")
+    let missingMarkerBefore = try Data(contentsOf: missingMarkerLatest), missingMarkerLogBefore = try Data(contentsOf: missingMarkerLog)
+    let missingMarkerFD = Darwin.open(missingMarkerLatest.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+    expect(missingMarkerFD >= 0 && fremovexattr(missingMarkerFD, "com.azhou.agent-skin.wallpaper.v1", 0) == 0,
+           "synthetic ownership marker is removed")
+    Darwin.close(missingMarkerFD)
+    WallpaperJournal.record(["requestID": "later"], directory: missingMarkerDir)
+    expect((try? Data(contentsOf: missingMarkerLatest)) == missingMarkerBefore && (try? Data(contentsOf: missingMarkerLog)) == missingMarkerLogBefore,
+           "a missing ownership marker preserves latest and log")
+
+    for failure in ["rename", "unlink", "directory-sync"] {
+        let failureDir = root.appendingPathComponent("publish-failure-" + failure, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: failureDir)
+        let latest = failureDir.appendingPathComponent("latest.json")
+        let log = failureDir.appendingPathComponent("wallpaper.jsonl")
+        let oldLatest = try Data(contentsOf: latest), oldLog = try Data(contentsOf: log)
+        let stage = failureDir.appendingPathComponent(".azhou-wallpaper-stage")
+        var io = WallpaperJournal.IO()
+        var syncCount = 0
+        if failure == "rename" { io.rename = { _, _, _, _, _ in errno = EIO; return -1 } }
+        if failure == "unlink" { io.unlink = { _, _, _ in errno = EIO; return -1 } }
+        if failure == "directory-sync" {
+            io.sync = { fd in syncCount += 1; if syncCount == 3 { errno = EIO; return -1 }; return fsync(fd) }
+        }
+        WallpaperJournal.record(["requestID": "new"], directory: failureDir, io: io)
+        expect((try? Data(contentsOf: log)) == oldLog, "publication failure keeps the prior log for " + failure)
+        if failure == "rename" {
+            expect((try? Data(contentsOf: latest)) == oldLatest && FileManager.default.fileExists(atPath: stage.path),
+                   "rename failure preserves the old latest and new stage")
+        } else if failure == "unlink" {
+            expect((try? Data(contentsOf: stage)) == oldLatest && WallpaperJournal.latest(requestID: "new", directory: failureDir) != nil,
+                   "unlink failure retains the old stage and published latest")
+        } else {
+            expect(syncCount == 3 && WallpaperJournal.latest(requestID: "new", directory: failureDir) != nil,
+                   "directory sync failure reports a possibly published latest")
+        }
+        if failure != "directory-sync" {
+            let stageBefore = try Data(contentsOf: stage)
+            WallpaperJournal.record(["requestID": "retry"], directory: failureDir)
+            expect((try? Data(contentsOf: stage)) == stageBefore, "failed publication stage blocks retry for " + failure)
+        }
+    }
+
+    let collisionDir = root.appendingPathComponent("target-collision", isDirectory: true)
+    try FileManager.default.createDirectory(at: collisionDir, withIntermediateDirectories: true)
+    let collisionTarget = collisionDir.appendingPathComponent("latest.json")
+    var collisionIO = WallpaperJournal.IO()
+    collisionIO.step = { phase in
+        if phase == "staged-latest" { try? Data("foreign target".utf8).write(to: collisionTarget) }
+    }
+    WallpaperJournal.record(["requestID": "new"], directory: collisionDir, io: collisionIO)
+    expect((try? Data(contentsOf: collisionTarget)) == Data("foreign target".utf8),
+           "exclusive first publication preserves a concurrently created target")
+    expect(FileManager.default.fileExists(atPath: collisionDir.appendingPathComponent(".azhou-wallpaper-stage").path),
+           "first publication collision retains the staged object")
+
+    let markerFailureDir = root.appendingPathComponent("append-marker-failure", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: markerFailureDir)
+    let markerFailureLog = markerFailureDir.appendingPathComponent("wallpaper.jsonl")
+    var markerCalls = 0
+    var markerIO = WallpaperJournal.IO()
+    let normalMarker = markerIO.setMarker
+    markerIO.setMarker = { fd, data in
+        markerCalls += 1
+        return markerCalls == 2 ? false : normalMarker(fd, data)
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: markerFailureDir, io: markerIO)
+    let unboundAppend = try Data(contentsOf: markerFailureLog)
+    expect(markerCalls == 2 && String(decoding: unboundAppend, as: UTF8.self).contains("second"),
+           "marker update failure preserves appended bytes")
+    WallpaperJournal.record(["requestID": "retry"], directory: markerFailureDir)
+    expect((try? Data(contentsOf: markerFailureLog)) == unboundAppend,
+           "marker update failure blocks future modification of the log")
+
+    let lockedDir = root.appendingPathComponent("held-lock", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: lockedDir)
+    let lockedLatest = lockedDir.appendingPathComponent("latest.json")
+    let lockedBefore = try Data(contentsOf: lockedLatest)
+    let lockedFD = Darwin.open(lockedDir.appendingPathComponent(".azhou-wallpaper.lock").path, O_RDWR | O_CLOEXEC)
+    expect(lockedFD >= 0 && flock(lockedFD, LOCK_EX | LOCK_NB) == 0, "synthetic cooperating lock is held")
+    WallpaperJournal.record(["requestID": "later"], directory: lockedDir)
+    expect((try? Data(contentsOf: lockedLatest)) == lockedBefore, "a busy lock prevents journal changes")
+    flock(lockedFD, LOCK_UN); Darwin.close(lockedFD)
+
+    let shortDir = root.appendingPathComponent("short-write", isDirectory: true)
+    var shortIO = WallpaperJournal.IO()
+    var shortCalls = 0
+    shortIO.writeChunk = { fd, bytes, count in
+        shortCalls += 1
+        if shortCalls == 1 { errno = EINTR; return -1 }
+        return Darwin.write(fd, bytes, min(count, 7))
+    }
+    WallpaperJournal.record(["requestID": "short"], directory: shortDir, io: shortIO)
+    expect(shortCalls > 2 && WallpaperJournal.latest(requestID: "short", directory: shortDir) != nil,
+           "short writes are completed before publication")
 
     return checks
 }
@@ -1445,7 +1801,7 @@ private func wallpaperCommandChecks() throws -> Int {
         expectedVersion: "0.9.0",
         sourceLoader: { "unused-test-payload" },
         sleep: { _ in },
-        journal: { _ in },
+        journal: { _ in true },
         output: { _ in }
     )
     expect(cancelled == 2, "the cancellation fixture enters the helper's rejected-request exit path")
@@ -2092,7 +2448,8 @@ private func wallpaperCLIRunChecks() -> Int {
         checks += 1
     }
     func run(_ arguments: [String], resolver: any WallpaperTargetResolver,
-             system: FakeWallpaperSystem, transport: FakeWallpaperOperationTransport)
+             system: FakeWallpaperSystem, transport: FakeWallpaperOperationTransport,
+             journalComplete: Bool = true)
         -> (Int32, [String: Any]?, [[String: Any]]) {
         var output: Data?
         var journal: [[String: Any]] = []
@@ -2100,7 +2457,7 @@ private func wallpaperCLIRunChecks() -> Int {
             arguments, resolver: resolver, system: system, transportFactory: { transport },
             now: { ProcessInfo.processInfo.systemUptime }, expectedVersion: "0.9.0",
             sourceLoader: { "unused-test-payload" }, sleep: { _ in },
-            journal: { journal.append($0) }, output: { output = $0 }
+            journal: { journal.append($0); return journalComplete }, output: { output = $0 }
         )
         let result = output.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         return (code, result, journal)
@@ -2132,6 +2489,21 @@ private func wallpaperCLIRunChecks() -> Int {
            "CLI output adds request timing while status avoids journal writes")
     expect(statusTransport.closeCount == 1 && statusSession.closeCount == 1,
            "CLI completion closes the injected page and transport resources")
+
+    let applySession = FakeWallpaperPageSession(responses: [
+        WallpaperCLI.applyGuardSource: ["state": "ready"],
+        "unused-test-payload": goodState,
+        WallpaperCLI.statusSource: goodState,
+    ])
+    let incomplete = run(["--wallpaper-helper", "--action", "apply", "--target-pid", "4123",
+                          "--target-bundle", "/tmp/Codex.app", "--port", "49221"],
+                         resolver: FakeWallpaperTargetResolver(), system: FakeWallpaperSystem(),
+                         transport: FakeWallpaperOperationTransport(pages: [page], session: applySession),
+                         journalComplete: false)
+    expect(incomplete.0 == 0 && incomplete.1?["state"] as? String == "applied"
+           && incomplete.1?["journalStatus"] as? String == "not-recorded"
+           && incomplete.2.count == 1 && incomplete.2[0]["journalStatus"] == nil,
+           "CLI reports an incomplete journal without changing a successful wallpaper result")
 
     let invalid = run(["--wallpaper-helper", "--action", "invalid"], resolver: FakeWallpaperTargetResolver(),
                       system: FakeWallpaperSystem(),

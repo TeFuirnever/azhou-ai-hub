@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import CoreFoundation
+import CryptoKit
 import CFNetwork
 import Darwin
 
@@ -261,36 +262,265 @@ enum WallpaperJournal {
               result["requestID"] as? String == requestID else { return nil }
         return result
     }
-    static func record(_ result: [String: Any]) {
+    @discardableResult
+    static func record(_ result: [String: Any]) -> Bool {
         record(result, directory: directory)
     }
-    static func record(_ result: [String: Any], directory: URL,
-                       openLog: (String, Int32, mode_t) -> Int32 = { Darwin.open($0, $1, $2) }) {
-        do {
-            guard !isLink(directory) else { return }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                                    attributes: [.posixPermissions: 0o700])
-            let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]) + Data([10])
-            let destination = directory.appendingPathComponent("latest.json")
-            var latestEntry = stat()
-            if lstat(destination.path, &latestEntry) == 0 {
-                guard latestEntry.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { return }
-            } else if errno != ENOENT { return }
-            try data.write(to: destination, options: [.atomic])
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
-            let path = directory.appendingPathComponent("wallpaper.jsonl").path
-            let descriptor = openLog(path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, S_IRUSR | S_IWUSR)
-            guard descriptor >= 0 else { return }
-            var opened = stat(), named = stat()
-            guard fstat(descriptor, &opened) == 0, opened.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
-                  lstat(path, &named) == 0, sameNode(opened, named) else {
-                Darwin.close(descriptor); return
-            }
-            let stream = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
-            if ((try? stream.seekToEnd()) ?? 0) > 2 * 1024 * 1024 { try stream.truncate(atOffset: 0) }
-            try stream.write(contentsOf: data); try stream.close()
-        } catch { /* A logging failure cannot interrupt the user's Codex session. */ }
+    private static let markerName = "com.azhou.agent-skin.wallpaper.v1"
+    private static let stageName = ".azhou-wallpaper-stage"
+    private static let recordLimit = 1024 * 1024
+    private static let logLimit = 3 * 1024 * 1024
+
+    struct IO {
+        var writeChunk: (Int32, UnsafeRawPointer?, Int) -> Int = { Darwin.write($0, $1, $2) }
+        var sync: (Int32) -> Int32 = { fsync($0) }
+        var rename: (Int32, String, Int32, String, UInt32) -> Int32 = { renameatx_np($0, $1, $2, $3, $4) }
+        var unlink: (Int32, String, Int32) -> Int32 = { unlinkat($0, $1, $2) }
+        var setMarker: (Int32, Data) -> Bool = { fd, data in
+            data.withUnsafeBytes { fsetxattr(fd, WallpaperJournal.markerName, $0.baseAddress, $0.count, 0, 0) } == 0
+        }
+        var step: (String) -> Void = { _ in }
     }
+    private struct Binding: Codable, Equatable {
+        let version: Int
+        let role: String
+        let rootDevice: UInt64
+        let rootInode: UInt64
+        let fileDevice: UInt64
+        let fileInode: UInt64
+        let sha256: String
+        let systemAttributes: [String: String]
+    }
+    private struct Proof {
+        let info: stat
+        let data: Data
+        let binding: Binding
+    }
+    private static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+    private static func encoded(_ binding: Binding) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try? encoder.encode(binding)
+    }
+    private static func marker(_ fd: Int32) -> Data? {
+        let size = fgetxattr(fd, markerName, nil, 0, 0, 0)
+        guard size > 0 && size <= 2048 else { return nil }
+        var bytes = [UInt8](repeating: 0, count: size)
+        let count = bytes.withUnsafeMutableBytes { fgetxattr(fd, markerName, $0.baseAddress, $0.count, 0, 0) }
+        return count == size ? Data(bytes) : nil
+    }
+    private static func bind(_ fd: Int32, role: String, root: stat, data: Data, io: IO,
+                             expectedAttributes: [String: String]? = nil) -> Bool {
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { return false }
+        guard let attributes = systemMetadata(fd, requireMarker: false),
+              expectedAttributes == nil || attributes == expectedAttributes else { return false }
+        let binding = Binding(version: 1, role: role, rootDevice: UInt64(bitPattern: Int64(root.st_dev)), rootInode: UInt64(root.st_ino),
+                              fileDevice: UInt64(bitPattern: Int64(info.st_dev)), fileInode: UInt64(info.st_ino),
+                              sha256: digest(data), systemAttributes: attributes)
+        guard let data = encoded(binding) else { return false }
+        return io.setMarker(fd, data)
+    }
+    private static func snapshot(_ fd: Int32, name: String, rootFD: Int32, limit: Int) -> (stat, Data)? {
+        var before = stat(), after = stat(), named = stat()
+        guard fstat(fd, &before) == 0, before.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              before.st_nlink == 1, before.st_mode & 0o777 == 0o600,
+              before.st_uid == geteuid(), before.st_flags == 0,
+              before.st_size >= 0, before.st_size <= limit,
+              lseek(fd, 0, SEEK_SET) == 0 else { return nil }
+        var data = Data(), buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = buffer.withUnsafeMutableBufferPointer { Darwin.read(fd, $0.baseAddress, min($0.count, limit + 1 - data.count)) }
+            if count < 0 { if errno == EINTR { continue }; return nil }
+            if count == 0 { break }
+            guard count <= limit - data.count else { return nil }
+            data.append(contentsOf: buffer[..<count])
+        }
+        guard data.count == before.st_size, fstat(fd, &after) == 0, sameFile(before, after),
+              fstatat(rootFD, name, &named, AT_SYMLINK_NOFOLLOW) == 0, sameFile(after, named) else { return nil }
+        return (after, data)
+    }
+    private static func systemMetadata(_ fd: Int32, requireMarker: Bool) -> [String: String]? {
+        let count = flistxattr(fd, nil, 0, 0)
+        guard count >= 0 && count <= 4096 else { return nil }
+        var bytes = [UInt8](repeating: 0, count: count)
+        if count > 0 {
+            let read = bytes.withUnsafeMutableBytes { buffer in
+                flistxattr(fd, buffer.baseAddress?.assumingMemoryBound(to: CChar.self), buffer.count, 0)
+            }
+            guard read == count, bytes.last == 0 else { return nil }
+        }
+        let parts = bytes.split(separator: 0, omittingEmptySubsequences: true)
+        let names = parts.compactMap { String(data: Data($0), encoding: .utf8) }
+        guard names.count == parts.count, Set(names).count == names.count,
+              !requireMarker || names.contains(markerName),
+              names.allSatisfy({ $0 == markerName || $0 == "com.apple.provenance" }) else { return nil }
+        var result: [String: String] = [:]
+        if names.contains("com.apple.provenance") {
+            let size = fgetxattr(fd, "com.apple.provenance", nil, 0, 0, 0)
+            guard size >= 0 && size <= 4096 else { return nil }
+            var value = [UInt8](repeating: 0, count: size)
+            let read = value.withUnsafeMutableBytes { buffer in
+                fgetxattr(fd, "com.apple.provenance", buffer.baseAddress, buffer.count, 0, 0)
+            }
+            guard read == size else { return nil }
+            result["com.apple.provenance"] = digest(Data(value))
+        }
+        errno = 0
+        guard let acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED) else { return errno == ENOENT ? result : nil }
+        acl_free(UnsafeMutableRawPointer(acl))
+        return nil
+    }
+    private static func capture(_ fd: Int32, name: String, role: String, rootFD: Int32, root: stat, limit: Int) -> Proof? {
+        guard let attributes = systemMetadata(fd, requireMarker: true), let raw = marker(fd), let binding = try? JSONDecoder().decode(Binding.self, from: raw),
+              encoded(binding) == raw, binding.version == 1, binding.role == role,
+              binding.rootDevice == UInt64(bitPattern: Int64(root.st_dev)), binding.rootInode == UInt64(root.st_ino),
+              let (info, data) = snapshot(fd, name: name, rootFD: rootFD, limit: limit),
+              binding.fileDevice == UInt64(bitPattern: Int64(info.st_dev)), binding.fileInode == UInt64(info.st_ino),
+              attributes == binding.systemAttributes, systemMetadata(fd, requireMarker: true) == attributes,
+              marker(fd) == raw, binding.sha256 == digest(data) else { return nil }
+        return Proof(info: info, data: data, binding: binding)
+    }
+    private static func writeAll(_ fd: Int32, data: Data, io: IO) -> Bool {
+        data.withUnsafeBytes { bytes in
+            var offset = 0
+            while offset < bytes.count {
+                let count = io.writeChunk(fd, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
+                if count < 0 { if errno == EINTR { continue }; return false }
+                if count == 0 || count > bytes.count - offset { return false }
+                offset += count
+            }
+            return true
+        }
+    }
+    private static func directoryMatches(_ directory: URL, root: stat) -> Bool {
+        var named = stat()
+        return lstat(directory.path, &named) == 0 && sameNode(root, named)
+    }
+    private static func scopeMatches(_ directory: URL, rootFD: Int32, root: stat, lock: stat) -> Bool {
+        var namedLock = stat()
+        return directoryMatches(directory, root: root)
+            && fstatat(rootFD, ".azhou-wallpaper.lock", &namedLock, AT_SYMLINK_NOFOLLOW) == 0
+            && sameNode(lock, namedLock)
+    }
+    private static func publish(_ data: Data, name: String, role: String, directory: URL,
+                                rootFD: Int32, root: stat, lock: stat, oldFD: Int32?, old: Proof?,
+                                io: IO) -> Bool {
+        let fd = openat(rootFD, stageName, O_CREAT | O_EXCL | O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { return false }
+        defer { Darwin.close(fd) }
+        guard fchmod(fd, 0o600) == 0, writeAll(fd, data: data, io: io), io.sync(fd) == 0, bind(fd, role: role, root: root, data: data, io: io), io.sync(fd) == 0,
+              let staged = capture(fd, name: stageName, role: role, rootFD: rootFD, root: root, limit: logLimit),
+              staged.data == data, scopeMatches(directory, rootFD: rootFD, root: root, lock: lock) else { return false }
+        io.step("staged-" + role)
+        guard let confirmedStage = capture(fd, name: stageName, role: role, rootFD: rootFD, root: root, limit: logLimit),
+              sameNode(staged.info, confirmedStage.info), staged.data == confirmedStage.data,
+              scopeMatches(directory, rootFD: rootFD, root: root, lock: lock) else { return false }
+        if let old, let oldFD {
+            guard let confirmedOld = capture(oldFD, name: name, role: role, rootFD: rootFD, root: root, limit: logLimit),
+                  sameNode(old.info, confirmedOld.info), old.binding == confirmedOld.binding, old.data == confirmedOld.data else { return false }
+        }
+        let flag = old == nil ? UInt32(RENAME_EXCL) : UInt32(RENAME_SWAP)
+        guard io.rename(rootFD, stageName, rootFD, name, flag) == 0 else { return false }
+        io.step("published-" + role)
+        guard let published = capture(fd, name: name, role: role, rootFD: rootFD, root: root, limit: logLimit),
+              sameNode(staged.info, published.info), published.data == data,
+              scopeMatches(directory, rootFD: rootFD, root: root, lock: lock) else { return false }
+        if let old, let oldFD {
+            guard let displaced = capture(oldFD, name: stageName, role: role, rootFD: rootFD, root: root, limit: logLimit),
+                  sameNode(old.info, displaced.info), old.binding == displaced.binding, old.data == displaced.data,
+                  scopeMatches(directory, rootFD: rootFD, root: root, lock: lock) else { return false }
+            io.step("cleanup-" + role)
+            guard let confirmed = capture(oldFD, name: stageName, role: role, rootFD: rootFD, root: root, limit: logLimit),
+                  sameNode(old.info, confirmed.info), old.binding == confirmed.binding, old.data == confirmed.data,
+                  scopeMatches(directory, rootFD: rootFD, root: root, lock: lock), io.unlink(rootFD, stageName, 0) == 0 else { return false }
+        }
+        return io.sync(rootFD) == 0
+    }
+    private static func writeJournal(_ result: [String: Any], directory: URL,
+                                     openLog: (String, Int32, mode_t) -> Int32,
+                                     io: IO) -> Bool {
+        guard !isLink(directory) else { return false }
+        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                     attributes: [.posixPermissions: 0o700]) }
+        catch { return false }
+        guard let serialized = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]) else { return false }
+        let data = serialized + Data([10])
+        guard data.count <= recordLimit else { return false }
+        let rootFD = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard rootFD >= 0 else { return false }
+        defer { Darwin.close(rootFD) }
+        var root = stat()
+        guard fstat(rootFD, &root) == 0, directoryMatches(directory, root: root) else { return false }
+        let lockFD = openat(rootFD, ".azhou-wallpaper.lock", O_CREAT | O_RDWR | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
+        guard lockFD >= 0 else { return false }
+        defer { Darwin.close(lockFD) }
+        var openedLock = stat(), namedLock = stat(), existingStage = stat()
+        guard fstat(lockFD, &openedLock) == 0, openedLock.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              fstatat(rootFD, ".azhou-wallpaper.lock", &namedLock, AT_SYMLINK_NOFOLLOW) == 0,
+              sameNode(openedLock, namedLock), flock(lockFD, LOCK_EX | LOCK_NB) == 0 else { return false }
+        defer { flock(lockFD, LOCK_UN) }
+        guard scopeMatches(directory, rootFD: rootFD, root: root, lock: openedLock),
+              fstatat(rootFD, stageName, &existingStage, AT_SYMLINK_NOFOLLOW) != 0, errno == ENOENT else { return false }
+
+        let latestFD = openat(rootFD, "latest.json", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        let latestMissing = latestFD < 0 && errno == ENOENT
+        guard latestFD >= 0 || latestMissing else { return false }
+        defer { if latestFD >= 0 { Darwin.close(latestFD) } }
+        let latest = latestFD >= 0 ? capture(latestFD, name: "latest.json", role: "latest", rootFD: rootFD, root: root, limit: recordLimit) : nil
+        guard latestMissing || latest != nil else { return false }
+        guard publish(data, name: "latest.json", role: "latest", directory: directory, rootFD: rootFD, root: root, lock: openedLock,
+                      oldFD: latestFD >= 0 ? latestFD : nil, old: latest, io: io) else { return false }
+
+        let logPath = directory.appendingPathComponent("wallpaper.jsonl").path
+        let logFD = openLog(logPath, O_RDWR | O_APPEND | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0o600)
+        let logMissing = logFD < 0 && errno == ENOENT
+        guard logFD >= 0 || logMissing else { return false }
+        defer { if logFD >= 0 { Darwin.close(logFD) } }
+        if logMissing {
+            return publish(data, name: "wallpaper.jsonl", role: "log", directory: directory,
+                           rootFD: rootFD, root: root, lock: openedLock, oldFD: nil, old: nil, io: io)
+        }
+        guard let previous = capture(logFD, name: "wallpaper.jsonl", role: "log", rootFD: rootFD, root: root, limit: logLimit),
+              directoryMatches(directory, root: root) else { return false }
+        if previous.data.count > 2 * 1024 * 1024 {
+            return publish(data, name: "wallpaper.jsonl", role: "log", directory: directory,
+                           rootFD: rootFD, root: root, lock: openedLock, oldFD: logFD, old: previous, io: io)
+        }
+        io.step("append-log")
+        guard scopeMatches(directory, rootFD: rootFD, root: root, lock: openedLock),
+              let confirmed = capture(logFD, name: "wallpaper.jsonl", role: "log", rootFD: rootFD, root: root, limit: logLimit),
+              sameNode(previous.info, confirmed.info), previous.binding == confirmed.binding, previous.data == confirmed.data,
+              writeAll(logFD, data: data, io: io), io.sync(logFD) == 0 else { return false }
+        io.step("appended-log")
+        let combined = previous.data + data
+        guard let (after, actual) = snapshot(logFD, name: "wallpaper.jsonl", rootFD: rootFD, limit: logLimit),
+              sameNode(previous.info, after), actual == combined, marker(logFD) == encoded(previous.binding),
+              systemMetadata(logFD, requireMarker: true) == previous.binding.systemAttributes,
+              scopeMatches(directory, rootFD: rootFD, root: root, lock: openedLock),
+              bind(logFD, role: "log", root: root, data: combined, io: io,
+                   expectedAttributes: previous.binding.systemAttributes), io.sync(logFD) == 0,
+              let current = capture(logFD, name: "wallpaper.jsonl", role: "log", rootFD: rootFD, root: root, limit: logLimit),
+              current.data == combined else { return false }
+        return true
+    }
+    @discardableResult
+    static func record(_ result: [String: Any], directory: URL,
+                       openLog: (String, Int32, mode_t) -> Int32 = { Darwin.open($0, $1, $2) },
+                       io: IO = IO()) -> Bool {
+        let complete = writeJournal(result, directory: directory, openLog: openLog, io: io)
+        if !complete {
+            let warning = WallpaperMessages.localized(
+                chinese: "壁纸日志未完整写入；无法核验的文件已保留待检查。",
+                english: "Wallpaper journal incomplete; unverified files are preserved for review."
+            )
+            fputs(warning + "\n", stderr)
+        }
+        return complete
+    }
+
 }
 
 struct CodexBundleFacts: Sendable {
@@ -1954,7 +2184,7 @@ enum WallpaperCLI {
         expectedVersion: String,
         sourceLoader: @escaping () throws -> String,
         sleep: @escaping (TimeInterval) async throws -> Void,
-        journal: ([String: Any]) -> Void,
+        journal: ([String: Any]) -> Bool,
         output: (Data) -> Void
     ) -> Int32 {
         WallpaperMessages.prepareForRun()
@@ -1997,7 +2227,9 @@ enum WallpaperCLI {
         if base["requestID"] == nil, let index = arguments.firstIndex(of: "--request-id"), index + 1 < arguments.count { base["requestID"] = arguments[index + 1] }
         base["seconds"] = ((ProcessInfo.processInfo.systemUptime - began) * 1000).rounded() / 1000
         base["timestamp"] = ISO8601DateFormatter().string(from: Date())
-        if action == "apply" || action == "retry" || action == "restore" { journal(base) }
+        if action == "apply" || action == "retry" || action == "restore" {
+            if !journal(base) { base["journalStatus"] = "not-recorded" }
+        }
         if let data = try? JSONSerialization.data(withJSONObject: base, options: [.sortedKeys, .withoutEscapingSlashes]) {
             output(data + Data([10]))
         }
