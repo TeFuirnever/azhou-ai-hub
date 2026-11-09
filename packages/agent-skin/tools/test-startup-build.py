@@ -53,6 +53,7 @@ BUILD_FILES = (
     "wallpaper/wallpaper.css",
     "wallpaper/apply.js",
     "wallpaper/preview.html",
+    "wallpaper/preview-controller.js",
     "tools/build-macos.sh",
     "tools/build-lock.py",
     "tools/build-preflight.py",

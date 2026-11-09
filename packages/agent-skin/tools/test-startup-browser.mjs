@@ -190,7 +190,7 @@ try {
   const helperExpressions = JSON.parse(helperExpressionJSON);
   assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'retrySource', 'statusSource']);
   assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
-  const scriptStart = preview.lastIndexOf('<script type="module">');
+  const scriptStart = preview.lastIndexOf('<script type="module" src="./preview-controller.js">');
   const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
   assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'The local preview fixture has a replaceable module entry');
   const fixtureHTML = preview.slice(0, scriptStart)

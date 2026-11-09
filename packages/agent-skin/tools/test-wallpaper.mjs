@@ -99,6 +99,7 @@ try {
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'), readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'), readFile(join(ROOT, 'assets/private', options.image)),
   ]);
+  const previewController = await readFile(join(ROOT, 'wallpaper/preview-controller.js'), 'utf8');
   const imageSHA256 = createHash('sha256').update(imageBytes).digest('hex');
   const mime = options.image.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
   const payload = { version: '0.9.0', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
@@ -125,6 +126,7 @@ try {
   const routes = new Map([
     ['/wallpaper/preview.html', ['text/html; charset=utf-8', preview]],
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', renderer]],
+    ['/wallpaper/preview-controller.js', ['text/javascript; charset=utf-8', previewController]],
     ['/wallpaper/wallpaper.css', ['text/css; charset=utf-8', css]],
     ['/assets/private/' + options.image, [mime, imageBytes]],
     ['/fixture-base.css', ['text/css; charset=utf-8', baseCSS]],
@@ -634,6 +636,43 @@ try {
     return result;
   });
 
+  await check('preview restore cancels in-flight initial apply', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      globalThis.__azhouWallpaper?.dispose();
+      const decode=Image.prototype.decode; let resume;
+      Image.prototype.decode=function(){return decode.call(this).then(()=>new Promise(resolve=>{resume=resolve;}));};
+      try {
+        document.getElementById('apply').click();
+        const end=Date.now()+3000; while(!resume&&Date.now()<end) await new Promise(r=>setTimeout(r,10));
+        if(!resume) throw new Error('decode not reached');
+        document.getElementById('restore').click(); resume();
+        await new Promise(r=>setTimeout(r,300));
+        return {active:!!globalThis.__azhouWallpaper,styles:document.querySelectorAll('#azhou-wallpaper-style').length};
+      } finally { Image.prototype.decode=decode; globalThis.__azhouWallpaper?.dispose(); }
+    })()`);
+    assert.deepEqual(result,{active:false,styles:0});
+    await cdp.evaluate('__wallpaperFixture.apply()');
+    return result;
+  });
+  await check('preview controls recover after check failure', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      const original=Image.prototype.decode; let fail;
+      Image.prototype.decode=function(){return new Promise((resolve,reject)=>{fail=reject;});};
+      const pending=__wallpaperFixture.runChecks().then(()=>false,()=>true);
+      const disabled=['theme','apply','restore','checks'].every(id=>document.getElementById(id).disabled);
+      try {
+        const end=Date.now()+3000; while(!fail&&Date.now()<end) await new Promise(r=>setTimeout(r,10));
+        if(!fail) throw new Error('decode not reached');
+        fail(new Error('synthetic decode failure'));
+        const rejected=await pending;
+        const enabled=['theme','apply','restore','checks'].every(id=>!document.getElementById(id).disabled);
+        return {disabled,enabled,rejected};
+      } finally { Image.prototype.decode=original; globalThis.__azhouWallpaper?.dispose(); }
+    })()`);
+    assert.deepEqual(result,{disabled:true,enabled:true,rejected:true});
+    await cdp.evaluate('__wallpaperFixture.apply()');
+    return result;
+  });
   await check('fixture built-in lifecycle/rollback checks', () => cdp.evaluate('__wallpaperFixture.runChecks()').then(result => { assert.equal(result.passed, true); return result; }));
   await check('failed replacement keeps only a verified working previous controller', async () => {
     const result = await cdp.evaluate(`(async()=>{
