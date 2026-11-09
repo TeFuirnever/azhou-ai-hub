@@ -5,13 +5,14 @@ import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
-import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { validateCheckSelection } from './startup-browser-selection.mjs';
 import { CDP, navigateWithLoad } from './test-startup-browser-cdp.mjs';
+import { canRemoveProfile, profileIdentity, removeOwnedProfile, trackOwnedChild } from './test-startup-browser-process.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
@@ -62,7 +63,10 @@ let server;
 let chrome;
 let profile;
 let cdp;
-let stopping = false;
+let cleanupPromise;
+let chromeOwner;
+let profileOwner;
+let suiteCompleted = false;
 let chromeError = '';
 
 function safeError(error) {
@@ -115,29 +119,38 @@ async function dispatchEnter() {
   await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
 }
 
-async function cleanup() {
-  if (stopping) return;
-  stopping = true;
-  try { cdp?.close(); } catch {}
-  if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
-    const exited = new Promise(resolveExit => chrome.once('exit', resolveExit));
-    chrome.kill('SIGTERM');
-    await Promise.race([exited, delay(2000)]);
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      chrome.kill('SIGKILL');
-      await Promise.race([exited, delay(1000)]);
+function cleanup() {
+  if (cleanupPromise) return cleanupPromise;
+  cleanupPromise = (async () => {
+    const errors = [];
+    try { cdp?.close(); } catch (error) { errors.push(error); }
+    let stopped = !chrome;
+    if (chromeOwner) {
+      try { stopped = await chromeOwner.stop(); } catch (error) { errors.push(error); }
     }
-  }
-  if (server) {
-    server.closeAllConnections();
-    await new Promise(resolveClose => server.close(resolveClose));
-  }
-  if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
-  report.cleanup = {
-    ownChromeStopped: !chrome || chrome.exitCode !== null || chrome.signalCode !== null,
-    temporaryProfileRemoved: !!profile,
-    serverClosed: !server?.listening,
-  };
+    if (server?.listening) {
+      try { server.closeAllConnections(); } catch (error) { errors.push(error); }
+      try { await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose())); }
+      catch (error) { errors.push(error); }
+    }
+    let removed = false;
+    if (profile && canRemoveProfile({ stopped, completed: suiteCompleted, fatalError: report.fatalError,
+      checks: report.checks, errors })) {
+      try { removed = await removeOwnedProfile(profile, profileOwner); } catch (error) { errors.push(error); }
+    }
+    report.cleanup = {
+      ownChromeStopped: stopped,
+      temporaryProfileRemoved: removed,
+      profilePath: profile && !removed ? profile : null,
+      errors: errors.map(safeError),
+      serverClosed: !server?.listening,
+    };
+    if (!stopped || (profile && !removed) || errors.length) {
+      throw new Error('Fixture cleanup incomplete; inspect the retained or partially removed profile: '
+        + errors.map(safeError).join('; '));
+    }
+  })();
+  return cleanupPromise;
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -747,6 +760,7 @@ try {
   await new Promise((resolveListen, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolveListen); });
   const origin = 'http://127.0.0.1:' + server.address().port;
   profile = await mkdtemp(join(tmpdir(), 'azhou-startup-browser-'));
+  profileOwner = await profileIdentity(profile);
   const animationPreviewDir = join(profile, 'agent-skin-preview');
   const animationDefaultsDir = join(animationPreviewDir, 'assets/defaults');
   await mkdir(animationDefaultsDir, { recursive: true });
@@ -881,6 +895,7 @@ try {
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + profile,
     '--window-size=1512,889', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  chromeOwner = trackOwnedChild(chrome);
   chrome.on('error', error => { chromeError = safeError(error); });
   chrome.stderr.on('data', chunk => { chromeError = (chromeError + chunk.toString()).slice(-4000); });
   const debugPort = await until(async () => {
@@ -6424,6 +6439,7 @@ try {
   report.passed = report.checks.some(item => item.passed)
     && report.checks.every(item => item.passed || item.skipped)
     && selection.valid;
+  suiteCompleted = true;
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);

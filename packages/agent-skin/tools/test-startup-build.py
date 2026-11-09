@@ -58,6 +58,7 @@ BUILD_FILES = (
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
     "tools/test-startup-browser-cdp.mjs",
+    "tools/test-startup-browser-process.mjs",
     "tools/test-synthetic-legacy-wallpaper.mjs",
     "tools/test-animation-preview-final-text-browser.mjs",
     "tools/startup-browser-selection.mjs",
