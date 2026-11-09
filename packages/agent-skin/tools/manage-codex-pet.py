@@ -808,6 +808,10 @@ def package_run(project, run, snapshot_path, operation_id=None):
             "候选目录内容与名称不一致，保留待核对", "source-conflict")
     require(package_directory_matches(destination, selected_receipt) or (not published_new and destination == previous),
             "候选目录缺少当前实体绑定，保留待核对", "source-conflict")
+    require(selected_receipt.get("qaSHA256") == candidate["qaHashes"]
+            and selected_receipt.get("snapshotSHA256") == sha(candidate["snapshotRaw"])
+            and selected_receipt.get("manifestSHA256") == sha(json_bytes(native_manifest(candidate["config"]))),
+            "同名候选的审阅或快照字节与本次输入不同，保留待核对", "source-conflict")
     atomic_json(state / "selection.json", {"package": name, "themeRevision": rev,
                                            "atlasSHA256": facts["atlasSHA256"]})
     preserved = []

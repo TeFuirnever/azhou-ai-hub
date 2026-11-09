@@ -247,6 +247,51 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(receipt_path.read_bytes(), receipt_data)
         self.assertTrue((directory / "spritesheet.webp").is_file())
 
+    def test_package_refuses_reusing_a_different_visual_review(self):
+        self.package()
+        directory = PET.selected_package(self.project)
+        selection = PET.state_dir(self.project) / "selection.json"
+        before_selection = selection.read_bytes()
+        old_qa = (directory / "qa/visual-qa.json").read_bytes()
+        old_receipt = (directory / "package-receipt.json").read_bytes()
+        current_qa = self.run / "qa/visual-qa.json"
+        changed = json.loads(current_qa.read_bytes())
+        changed["reviewer"] = "different synthetic review"
+        current_qa.write_text(json.dumps(changed))
+        new_qa = current_qa.read_bytes()
+        self.expect_error(lambda: PET.package_run(self.project, self.run, self.snapshot), "source-conflict")
+        self.assertEqual(selection.read_bytes(), before_selection)
+        self.assertEqual((directory / "qa/visual-qa.json").read_bytes(), old_qa)
+        self.assertEqual((directory / "package-receipt.json").read_bytes(), old_receipt)
+        self.assertEqual(current_qa.read_bytes(), new_qa)
+
+    def test_package_refuses_reusing_differently_serialized_snapshot(self):
+        self.package()
+        directory = PET.selected_package(self.project)
+        selection = PET.state_dir(self.project) / "selection.json"
+        before_selection = selection.read_bytes()
+        old_snapshot = (directory / "theme-snapshot.json").read_bytes()
+        old_receipt = (directory / "package-receipt.json").read_bytes()
+        self.snapshot.write_text(json.dumps(json.loads(self.snapshot.read_bytes()), indent=2, ensure_ascii=False))
+        changed_snapshot = self.snapshot.read_bytes()
+        self.assertNotEqual(changed_snapshot, old_snapshot)
+        self.expect_error(lambda: PET.package_run(self.project, self.run, self.snapshot), "source-conflict")
+        self.assertEqual(selection.read_bytes(), before_selection)
+        self.assertEqual((directory / "theme-snapshot.json").read_bytes(), old_snapshot)
+        self.assertEqual((directory / "package-receipt.json").read_bytes(), old_receipt)
+        self.assertEqual(self.snapshot.read_bytes(), changed_snapshot)
+
+    def test_package_reuses_exactly_matching_review_evidence(self):
+        first = self.package()
+        directory = PET.selected_package(self.project)
+        selection = PET.state_dir(self.project) / "selection.json"
+        evidence = {name: (directory / name).read_bytes() for name in (*PET.QA_FILES, "theme-snapshot.json", "package-receipt.json")}
+        selected = selection.read_bytes()
+        second = self.package()
+        self.assertEqual(first["package"]["path"], second["package"]["path"])
+        self.assertEqual(selection.read_bytes(), selected)
+        self.assertEqual({name: (directory / name).read_bytes() for name in evidence}, evidence)
+
     def test_read_regular_files_and_size_limit(self):
         path = self.root / "bounded-input"
         with patch.object(PET, "MAX_FILE_BYTES", 32):

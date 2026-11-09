@@ -105,6 +105,8 @@ python3 -B tools/manage-codex-pet.py status
 
 当已安装 Pet 与候选图集、主题相同但 manifest 不同时，`status` 显示 `stale-package`，安装返回 `source-conflict` 并保留原对象，需核对来源；不能仅凭图集和主题称为已安装。
 
+候选目录按主题修订和图集摘要命名。同名候选仅在既有 QA、快照和 manifest 摘要均与本次提交的字节一致时复用；证据不同则返回 `source-conflict`，保留旧候选、当前选择和新材料待核对。现有命名不能为相同图集与主题并列保存不同审阅版本；不要自行删除旧候选来绕过冲突。
+
 `sync` 只安装主题仍匹配的已审阅候选。也可为 `sync` 同时提供 `--run` 与 `--snapshot`，在同一次项目锁内完成验证、打包与安装。没有候选或主题变更时返回 `generation-required`，指向 `prepare → ImageGen/hatch-pet → 审阅 → package/validate → sync`，不会自动生图。
 
 `install` 安装当前已选候选；`sync` 额外提供无候选时的生成引导。二者均不会启动或退出宿主，也不会自报已激活。
