@@ -1091,6 +1091,39 @@ enum NativeEntryIdentity {
 }
 
 @MainActor
+struct NativePlayerProgress {
+    private enum State {
+        case waiting, ready, skippedBeforeReady, completed
+    }
+
+    private var state: State = .waiting
+
+    var isReady: Bool { state == .ready || state == .completed }
+    var isDone: Bool { state == .skippedBeforeReady || state == .completed }
+
+    mutating func markReady() {
+        switch state {
+        case .waiting: state = .ready
+        case .skippedBeforeReady: state = .completed
+        case .ready, .completed: break
+        }
+    }
+
+    mutating func acceptCompletion() -> Bool {
+        guard state == .ready else { return false }
+        state = .completed
+        return true
+    }
+
+    mutating func markClosed() {
+        switch state {
+        case .waiting: state = .skippedBeforeReady
+        case .ready: state = .completed
+        case .skippedBeforeReady, .completed: break
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private var launcherHost: SkinHostID? {
         let bundle = Bundle(url: runtime.bundleURL)
@@ -1112,7 +1145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var logFile: FileHandle?, watchdog: (any NativeScheduledAction)?
     private var instanceLock: (any NativeInstanceLock)?
     private var lockFailureReason: String?
-    private var ready = false, opening = false, requested = false, done = false
+    private var playerProgress = NativePlayerProgress()
+    private var ready: Bool { playerProgress.isReady }
+    private var done: Bool { playerProgress.isDone }
+    private var opening = false, requested = false
     private var terminating = false, failed = false, activated = false, promoted = false
     private var startupRequested = false, processExitCode: Int32 = 0
     private var startupEventStream: NativeStartupEventStream?
@@ -1301,7 +1337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 displayLocale = locale
                 updateNativeDisplayLabels()
             }
-            ready = true
+            playerProgress.markReady()
             let milliseconds = (body["duration"] as? NSNumber)?.doubleValue ?? 0
             let duration = milliseconds.isFinite && milliseconds > 0 ? milliseconds / 1000 : 0
             presentation?.showReady()
@@ -1315,8 +1351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 if !self.preview { self.startTrustedSession() }
             }
         case "complete":
-            guard ready, !done, !failed else { return }
-            done = true
+            guard !failed, playerProgress.acceptCompletion() else { return }
             if smokeTest { logSmokeEvent("animation-complete") }
             else { log("animation-complete", ["report": body["report"] ?? [:]]) }
             if preview {
@@ -1856,7 +1891,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
             terminating = true; runtime.terminate()
         }
-        else { done = true; log("window-close-as-skip"); finishIfReady("window-close") }
+        else { playerProgress.markClosed(); log("window-close-as-skip"); finishIfReady("window-close") }
         return false
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

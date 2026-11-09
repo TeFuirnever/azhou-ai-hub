@@ -1670,6 +1670,46 @@ private func nativeEventContractChecks() async throws -> Int {
     expect(playerRuntime.terminated == 1 && playerPresentation.evaluations.count == evaluationCountAtEnd,
            "messages after completion cannot re-enter the terminated player flow")
 
+    let outOfOrderRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+    let outOfOrderPresentation = FakeNativePlayerPresentation()
+    let outOfOrderPlayer = AppDelegate(runtime: outOfOrderRuntime, presentation: outOfOrderPresentation)
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(outOfOrderRuntime.terminated == 0 && outOfOrderPresentation.evaluations.isEmpty,
+           "completion before readiness is ignored without ending preview")
+    outOfOrderPlayer.receivePlayerMessage(body: "ready", isMainFrame: true)
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    let outOfOrderCount = outOfOrderPresentation.evaluations.count
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(outOfOrderPresentation.readyCount == 1 && outOfOrderRuntime.terminated == 1
+           && outOfOrderPresentation.evaluations.count == outOfOrderCount,
+           "a later ready and completion succeed once despite an earlier completion")
+
+    var closedBeforeReady = NativePlayerProgress()
+    closedBeforeReady.markClosed()
+    expect(!closedBeforeReady.isReady && closedBeforeReady.isDone,
+           "closing before readiness records completion without fabricating readiness")
+    closedBeforeReady.markReady()
+    expect(closedBeforeReady.isReady && closedBeforeReady.isDone && !closedBeforeReady.acceptCompletion(),
+           "late readiness cannot complete a previously closed player twice")
+    var progress = NativePlayerProgress()
+    expect(!progress.acceptCompletion() && !progress.isReady && !progress.isDone,
+           "completion before readiness does not advance player progress")
+    progress.markReady()
+    expect(progress.acceptCompletion() && !progress.acceptCompletion() && progress.isDone,
+           "ready player accepts exactly one completion")
+
+    let failedAfterReadyRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+    let failedAfterReadyPresentation = FakeNativePlayerPresentation()
+    let failedAfterReadyPlayer = AppDelegate(runtime: failedAfterReadyRuntime, presentation: failedAfterReadyPresentation)
+    failedAfterReadyPlayer.receivePlayerMessage(body: "ready", isMainFrame: true)
+    failedAfterReadyPlayer.receivePlayerMessage(body: "jsError", isMainFrame: true)
+    let failedAfterReadyCount = failedAfterReadyPresentation.evaluations.count
+    failedAfterReadyPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(failedAfterReadyRuntime.terminated == 0
+           && failedAfterReadyPresentation.evaluations.count == failedAfterReadyCount
+           && failedAfterReadyRuntime.output.contains { $0.contains("javascript-error") },
+           "completion after a displayed player failure is ignored")
+
     let failureRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
     let failurePresentation = FakeNativePlayerPresentation()
     let failurePlayer = AppDelegate(runtime: failureRuntime, presentation: failurePresentation)
