@@ -397,6 +397,193 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual((PET.selected_package(self.project) / "pet.json").read_bytes(), candidate_manifest)
         self.assertFalse(PET.journal_path(target.parent).exists())
 
+    def test_unknown_valid_looking_package_copy_is_preserved(self):
+        self.package()
+        selected = PET.selected_package(self.project)
+        unknown = selected.parent / "unowned-copy"
+        shutil.copytree(selected, unknown)
+        marker = unknown / "pet.json"
+        before = marker.read_bytes()
+        self.make_run(self.atlas_b)
+        result = self.package()
+        self.assertEqual(marker.read_bytes(), before)
+        self.assertIn(str(unknown), result["preservedUnverifiedPackages"])
+        self.assertTrue(PET.selected_package(self.project).is_dir())
+
+    def test_unbound_legacy_package_remains_readable_but_is_not_pruned(self):
+        self.package()
+        legacy = PET.selected_package(self.project)
+        receipt_path = legacy / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        del receipt["directoryIdentity"]
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        PET.check_package(legacy, self.project)
+        self.assertEqual(self.package()["status"], "packaged")
+        self.assertEqual(PET.selected_package(self.project), legacy)
+        self.make_run(self.atlas_b)
+        self.package()
+        self.make_run(atlas_bytes((90, 180, 50, 255)))
+        result = self.package()
+        self.assertTrue(legacy.is_dir())
+        self.assertIn(str(legacy), result["preservedUnverifiedPackages"])
+        PET.check_package(legacy, self.project, require_current=False)
+
+    def test_same_name_candidate_with_different_content_is_not_selected(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        second = PET.selected_package(self.project)
+        selection_path = PET.state_dir(self.project) / "selection.json"
+        selection = selection_path.read_bytes()
+        saved = self.root / "saved-original-candidate"
+        first.rename(saved)
+        shutil.copytree(second, first)
+        receipt_path = first / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        identity = first.lstat()
+        receipt["directoryIdentity"] = {"device": identity.st_dev, "inode": identity.st_ino}
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        before = (first / "spritesheet.webp").read_bytes()
+        self.make_run(self.atlas_a)
+        self.expect_error(self.package, "source-conflict")
+        self.assertEqual(selection_path.read_bytes(), selection)
+        self.assertEqual(PET.selected_package(self.project), second)
+        self.assertEqual((first / "spritesheet.webp").read_bytes(), before)
+        self.assertTrue(saved.is_dir())
+
+    def test_unbound_unselected_legacy_candidate_is_not_adopted(self):
+        self.package()
+        legacy = PET.selected_package(self.project)
+        receipt_path = legacy / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_text())
+        del receipt["directoryIdentity"]
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        self.make_run(self.atlas_b)
+        self.package()
+        previous = PET.selected_package(self.project)
+        selection = (PET.state_dir(self.project) / "selection.json").read_bytes()
+        self.make_run(self.atlas_a)
+        self.expect_error(self.package, "source-conflict")
+        self.assertEqual(PET.selected_package(self.project), previous)
+        self.assertEqual((PET.state_dir(self.project) / "selection.json").read_bytes(), selection)
+        self.assertTrue(legacy.is_dir())
+
+    def test_recreated_package_directory_is_preserved_despite_valid_copied_receipt(self):
+        self.package()
+        first = PET.selected_package(self.project)
+        self.make_run(self.atlas_b)
+        self.package()
+        moved = self.root / "original-candidate"
+        first.rename(moved)
+        shutil.copytree(moved, first)
+        self.assertNotEqual(first.stat().st_ino, moved.stat().st_ino)
+        before = (first / "pet.json").read_bytes()
+        self.make_run(atlas_bytes((90, 180, 50, 255)))
+        result = self.package()
+        self.assertEqual((first / "pet.json").read_bytes(), before)
+        self.assertTrue(moved.is_dir())
+        self.assertIn(str(first), result["preservedUnverifiedPackages"])
+
+    def test_provisional_package_journal_preserves_even_empty_stage(self):
+        state = PET.state_dir(self.project, True)
+        journal = state / "package-journal.json"
+        stage = state / (".stage-" + "a" * 32)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "stage": stage.name, "phase": "allocating"}
+        stage.mkdir()
+        PET.atomic_json(journal, record)
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertTrue(stage.is_dir())
+        self.assertTrue(journal.exists())
+        (stage / "foreign.txt").write_bytes(b"preserve")
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual((stage / "foreign.txt").read_bytes(), b"preserve")
+        (stage / "foreign.txt").unlink()
+        stage.rmdir()
+        PET.recover_package_stage(state, self.project)
+        self.assertFalse(journal.exists())
+
+    def test_unknown_package_journal_phase_preserves_even_absent_stage(self):
+        state = PET.state_dir(self.project, True)
+        journal = state / "package-journal.json"
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "stage": ".stage-" + "a" * 32, "phase": "unexpected"}
+        PET.atomic_json(journal, record)
+        before = journal.read_bytes()
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual(journal.read_bytes(), before)
+
+    def test_package_directory_binding_rejects_malformed_identity(self):
+        directory = self.root / "identity"
+        directory.mkdir()
+        info = directory.lstat()
+        valid = {"device": info.st_dev, "inode": info.st_ino}
+        self.assertTrue(PET.package_directory_matches(directory, {"directoryIdentity": valid}))
+        for identity in (None, {}, {"device": True, "inode": info.st_ino},
+                         {"device": -1, "inode": info.st_ino},
+                         {**valid, "unknown": 1}):
+            with self.subTest(identity=identity):
+                self.assertFalse(PET.package_directory_matches(directory, {"directoryIdentity": identity}))
+        self.assertFalse(PET.package_directory_matches(self.root / "missing", {"directoryIdentity": valid}))
+
+    def test_new_package_stage_collision_preserves_unknown_empty_directory(self):
+        state = PET.state_dir(self.project, True)
+        token = "a" * 32
+        stage = state / (".stage-" + token)
+        stage.mkdir()
+        with patch.object(PET.uuid, "uuid4", return_value=type("Token", (), {"hex": token})()):
+            self.expect_error(self.package, "recovery-required")
+        self.assertTrue(stage.is_dir())
+        self.assertEqual(list(stage.iterdir()), [])
+        self.assertTrue((state / "package-journal.json").exists())
+        self.assertFalse((state / "selection.json").exists())
+
+    def test_empty_install_stage_preserves_target_and_journal(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        facts = PET.installed_facts(target, self.project)
+        tx = "f" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        planned = {name: b"synthetic install evidence" for name in PET.stage_file_names("install")}
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        journal = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                   "transaction": tx, "stagingLocation": "codex-home", "phase": "committed", "hadPrevious": True,
+                   "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                   "candidateManifestSHA256": facts["manifestSHA256"], "previousAtlasSHA256": facts["atlasSHA256"],
+                   "previousThemeRevision": facts["themeRevision"], "previousManifestSHA256": facts["manifestSHA256"],
+                   "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]}
+        PET.atomic_json(PET.journal_path(pets), journal)
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertEqual({path.name: path.read_bytes() for path in target.iterdir()}, before)
+        self.assertTrue(stage.is_dir())
+        self.assertTrue(PET.journal_path(pets).is_file())
+
+    def test_package_stage_replaced_at_publish_is_not_selected(self):
+        self.package()
+        previous = PET.selected_package(self.project)
+        selection = (PET.state_dir(self.project) / "selection.json").read_bytes()
+        self.make_run(self.atlas_b)
+        rename = PET.rename_exclusive
+        moved = []
+        def replace_stage(source, destination):
+            source = Path(source)
+            if source.name.startswith(".stage-") and Path(destination).parent.name == "packages":
+                saved = self.root / "original-stage"
+                source.rename(saved)
+                shutil.copytree(saved, source)
+                moved.append((saved, Path(destination)))
+            return rename(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=replace_stage):
+            self.expect_error(self.package, "source-conflict")
+        self.assertTrue(moved[0][0].is_dir())
+        self.assertTrue(moved[0][1].is_dir())
+        self.assertEqual(PET.selected_package(self.project), previous)
+        self.assertEqual((PET.state_dir(self.project) / "selection.json").read_bytes(), selection)
+
     def test_png_valid_header_but_corrupt_body_is_rejected(self):
         stream = io.BytesIO()
         Image.new("RGBA", (1536, 2288)).save(stream, "PNG")
@@ -1067,6 +1254,10 @@ class PetSafetyTests(unittest.TestCase):
             "previousAtlasSHA256": old["atlasSHA256"], "previousThemeRevision": old["themeRevision"],
             "previousManifestSHA256": old["manifestSHA256"],
         }
+        planned = {name: b"synthetic install evidence" for name in PET.stage_file_names("install")}
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        journal.update({"stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"]})
+        (stage / "pet.json").write_bytes(planned["pet.json"])
         journal_file = PET.journal_path(pets)
         PET.atomic_json(journal_file, journal)
         self.assertEqual(PET.recover_install(pets, self.project), "restored-pre-install-state")
@@ -1235,6 +1426,7 @@ class PetSafetyTests(unittest.TestCase):
         stage = state / (".stage-" + "8" * 32)
         (stage / "inputs/assets/private").mkdir(parents=True)
         planned = {name: b"planned synthetic bytes" for name in PET.stage_file_names("snapshot")}
+        (stage / "inputs/style.css").write_bytes(planned["inputs/style.css"])
         PET.atomic_json(state / "package-journal.json", PET.stage_journal(self.project, stage, "snapshot", planned, None))
         PET.recover_package_stage(state, self.project)
         self.assertFalse(stage.exists())
@@ -1519,18 +1711,34 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(len(stages), 1)
         self.assertEqual((stages[0] / "inputs/style.css").read_bytes(), b"partial")
 
-    def test_legacy_empty_or_absent_stage_can_clear_without_claiming_files(self):
+    def test_legacy_absent_stage_can_clear_but_empty_stage_is_preserved(self):
         for exists in (False, True):
             with self.subTest(exists=exists), tempfile.TemporaryDirectory(dir=self.root) as temp:
                 state = Path(temp)
                 stage = state / (".stage-" + "c" * 32)
                 if exists:
                     stage.mkdir()
-                PET.atomic_json(state / "package-journal.json", {"owner": PET.OWNER, "petId": PET.PET_ID,
+                journal = state / "package-journal.json"
+                PET.atomic_json(journal, {"owner": PET.OWNER, "petId": PET.PET_ID,
                                 "projectRoot": str(self.project), "stage": stage.name})
-                PET.recover_package_stage(state, self.project)
-                self.assertFalse(stage.exists())
-                self.assertFalse((state / "package-journal.json").exists())
+                if exists:
+                    self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+                    self.assertTrue(stage.is_dir())
+                    self.assertTrue(journal.is_file())
+                else:
+                    PET.recover_package_stage(state, self.project)
+                    self.assertFalse(journal.exists())
+
+    def test_bound_but_empty_stage_is_preserved(self):
+        state = PET.state_dir(self.project)
+        stage = state / (".stage-" + "e" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic bytes" for name in PET.stage_file_names("snapshot")}
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "snapshot", planned, None))
+        self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertTrue(stage.is_dir())
+        self.assertTrue(journal.is_file())
 
     def test_snapshot_write_failure_preserves_previous_snapshot_and_can_retry(self):
         (self.project / "style.css").write_bytes(b"changed synthetic theme")

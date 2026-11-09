@@ -531,19 +531,18 @@ def stage_journal(project, stage, kind, files, operation_id):
 def verify_stage_for_cleanup(stage, journal, expected_kinds):
     require(stage.is_dir() and not stage.is_symlink(), "暂存不是普通目录", "recovery-required")
     kind, files = journal.get("stageKind"), journal.get("stageFiles")
-    if kind is None and files is None:
-        files = {}
-    else:
-        require(kind in expected_kinds, "暂存类型与事务不匹配", "recovery-required")
-        require(isinstance(files, dict) and set(files) == stage_file_names(kind),
-                "暂存计划文件集合无效", "recovery-required")
-        require(all(isinstance(value, str) and len(value) == 64
-                    and all(c in "0123456789abcdef" for c in value) for value in files.values()),
-                "暂存计划摘要无效", "recovery-required")
+    require(kind in expected_kinds, "暂存缺少已绑定类型，保留待核对", "recovery-required")
+    require(isinstance(files, dict) and set(files) == stage_file_names(kind),
+            "暂存计划文件集合无效", "recovery-required")
+    require(all(isinstance(value, str) and len(value) == 64
+                and all(c in "0123456789abcdef" for c in value) for value in files.values()),
+            "暂存计划摘要无效", "recovery-required")
+    verified_files = 0
     allowed_dirs = {parent.as_posix() for name in files for parent in Path(name).parents
                     if parent != Path(".")}
 
     def inspect(directory):
+        nonlocal verified_files
         try:
             with os.scandir(directory) as entries:
                 for entry in entries:
@@ -561,10 +560,12 @@ def verify_stage_for_cleanup(stage, journal, expected_kinds):
                         except PetError as exc:
                             raise PetError("recovery-required", f"无法核验暂存文件：{exc}") from exc
                         require(actual == files[relative], "暂存文件内容已改变，拒绝清理", "recovery-required")
+                        verified_files += 1
         except OSError as exc:
             raise PetError("recovery-required", f"无法核验暂存，拒绝清理：{exc}") from exc
 
     inspect(stage)
+    require(verified_files > 0, "空暂存缺少归属证据，保留待核对", "recovery-required")
 
 
 def recover_package_stage(state, project, operation_id=None):
@@ -580,11 +581,31 @@ def recover_package_stage(state, project, operation_id=None):
     require(isinstance(name, str) and name.startswith(".stage-") and len(name) == 39,
             "暂存日志路径无效", "recovery-required")
     stage = child(state, name)
+    phase = data.get("phase")
+    require(phase in (None, "allocating"), "暂存日志阶段未知，保留待核对", "recovery-required")
+    if phase == "allocating":
+        require("stageKind" not in data and "stageFiles" not in data,
+                "预备日志包含未知绑定，保留待核对", "recovery-required")
+        require(not stage.exists(), "预备阶段的目录归属未确认，保留待核对", "recovery-required")
     if stage.exists():
         verify_stage_for_cleanup(stage, data, {"snapshot", "package"})
         remove_tree(stage, allow_empty=True)
     journal.unlink()
     fsync_dir(state)
+
+
+def package_directory_matches(directory, receipt):
+    identity = receipt.get("directoryIdentity")
+    if not isinstance(identity, dict) or set(identity) != {"device", "inode"}:
+        return False
+    if any(type(identity[key]) is not int or identity[key] < 0 for key in identity):
+        return False
+    try:
+        actual = directory.lstat()
+    except OSError:
+        return False
+    return (stat.S_ISDIR(actual.st_mode) and actual.st_dev == identity["device"]
+            and actual.st_ino == identity["inode"])
 
 
 def package_run(project, run, snapshot_path, operation_id=None):
@@ -598,38 +619,60 @@ def package_run(project, run, snapshot_path, operation_id=None):
     name = rev + "-" + facts["atlasSHA256"]
     destination = child(packages, name)
     previous = selected_package(project) if child(state, "selection.json").exists() else None
+    published_new = False
     if not destination.exists():
         stage = child(state, ".stage-" + uuid.uuid4().hex)
-        manifest_raw = json_bytes(native_manifest(candidate["config"]))
-        receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
-                   "themeRevision": rev, "atlasSHA256": facts["atlasSHA256"],
-                   "manifestSHA256": sha(manifest_raw), "snapshotSHA256": sha(candidate["snapshotRaw"]),
-                   "qaSHA256": candidate["qaHashes"]}
-        planned = {"pet.json": manifest_raw, "spritesheet.webp": candidate["atlas"],
-                   "theme-snapshot.json": candidate["snapshotRaw"], **candidate["qaRaw"],
-                   "package-receipt.json": json_bytes(receipt)}
-        journal = stage_journal(project, stage, "package", planned, operation_id)
-        atomic_json(state / "package-journal.json", journal)
+        provisional = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
+                       "stage": stage.name, "phase": "allocating"}
+        if operation_id is not None:
+            provisional["operationId"] = operation_id
+        atomic_json(state / "package-journal.json", provisional)
         try:
             stage.mkdir(mode=0o700)
+            stage_identity = stage.lstat()
+            manifest_raw = json_bytes(native_manifest(candidate["config"]))
+            receipt = {"owner": OWNER, "projectRoot": str(project), "petId": PET_ID,
+                       "themeRevision": rev, "atlasSHA256": facts["atlasSHA256"],
+                       "manifestSHA256": sha(manifest_raw), "snapshotSHA256": sha(candidate["snapshotRaw"]),
+                       "qaSHA256": candidate["qaHashes"],
+                       "directoryIdentity": {"device": stage_identity.st_dev, "inode": stage_identity.st_ino}}
+            planned = {"pet.json": manifest_raw, "spritesheet.webp": candidate["atlas"],
+                       "theme-snapshot.json": candidate["snapshotRaw"], **candidate["qaRaw"],
+                       "package-receipt.json": json_bytes(receipt)}
+            journal = stage_journal(project, stage, "package", planned, operation_id)
+            atomic_json(state / "package-journal.json", journal)
             for relative, data in planned.items():
                 write_new(child(stage, relative), data)
             check_package(stage, project)
+            require(package_directory_matches(stage, receipt), "候选暂存身份发生变化", "source-conflict")
             fsync_tree(stage)
             rename_exclusive(stage, destination)
+            published_new = True
             fsync_dir(packages)
         finally:
             recover_package_stage(state, project, operation_id)
-    check_package(destination, project)
+    selected_facts, selected_receipt = check_package(destination, project)
+    require(selected_facts["themeRevision"] == rev and selected_facts["atlasSHA256"] == facts["atlasSHA256"],
+            "候选目录内容与名称不一致，保留待核对", "source-conflict")
+    require(package_directory_matches(destination, selected_receipt) or (not published_new and destination == previous),
+            "候选目录缺少当前实体绑定，保留待核对", "source-conflict")
     atomic_json(state / "selection.json", {"package": name, "themeRevision": rev,
                                            "atlasSHA256": facts["atlasSHA256"]})
-    # At most selected + previous reviewed package. Never remove unknown content.
+    preserved = []
     for old in packages.iterdir():
         if old not in (destination, previous):
-            check_package(old, project, require_current=False)
+            old_facts, old_receipt = check_package(old, project, require_current=False)
+            expected_name = old_facts["themeRevision"] + "-" + old_facts["atlasSHA256"]
+            if old.name != expected_name or not package_directory_matches(old, old_receipt):
+                preserved.append(str(old))
+                continue
             remove_tree(old)
-    return {"status": "packaged", "source": {"themeRevision": rev, "status": "reviewed"},
-            "package": {"path": str(destination), **facts}, "installed": "unchanged", "runtime": RUNTIME}
+    result = {"status": "packaged", "source": {"themeRevision": rev, "status": "reviewed"},
+              "package": {"path": str(destination), **facts}, "installed": "unchanged", "runtime": RUNTIME}
+    if preserved:
+        result["preservedUnverifiedPackages"] = sorted(preserved)
+    return result
+
 
 
 def installed_facts(target, project):
