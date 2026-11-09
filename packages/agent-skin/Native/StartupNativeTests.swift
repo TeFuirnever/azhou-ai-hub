@@ -1564,6 +1564,19 @@ private func nativeEventContractChecks() async throws -> Int {
            "verified main-frame ready message localizes and starts the preview renderer")
     expect(playerPresentation.schedules.map(\.delay) == [25, 0, 1],
            "ready schedules the completion watchdog and only finite in-range snapshots")
+    for (duration, expectedDelay) in [
+        (NSNumber(value: Double.nan), 25.0),
+        (NSNumber(value: Double.infinity), 25.0),
+        (NSNumber(value: -1), 25.0),
+        (NSNumber(value: 50_000), 62.0),
+    ] {
+        let runtime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+        let presentation = FakeNativePlayerPresentation()
+        let delegate = AppDelegate(runtime: runtime, presentation: presentation)
+        delegate.receivePlayerMessage(body: ["action": "ready", "duration": duration], isMainFrame: true)
+        expect(presentation.schedules.map(\.delay) == [expectedDelay],
+               "ready normalizes duration before scheduling its watchdog")
+    }
     playerPresentation.schedules[1].fire()
     expect(playerRuntime.output.contains { $0.contains("snapshot-error") && $0.contains("no image") },
            "a failed native snapshot is reported without failing the animation")
