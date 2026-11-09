@@ -745,7 +745,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             shutil.copyfile(ROOT / relative, notice)
             self.assertEqual([], check_markdown_links([notice], root))
             notice.write_text("[changed](missing.md)", encoding="utf-8")
-            self.assertEqual([f"upstream notice changed: {relative}"],
+            self.assertEqual([f"upstream notice changed: {relative.as_posix()}"],
                              check_markdown_links([notice], root))
 
     def test_project_local_workflows_are_required_public_files(self) -> None:
