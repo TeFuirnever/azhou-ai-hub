@@ -132,12 +132,15 @@ struct NativeStartupObservation {
 }
 
 final class NativeStartupCapture: @unchecked Sendable {
+    private enum State {
+        case waiting
+        case installed(at: TimeInterval)
+        case observing(installedAt: TimeInterval, runID: Int, status: NativeStartupStatus, statusAt: TimeInterval)
+    }
+
     private let lock = NSLock()
     let targetPID: Int32
-    private var installAt: TimeInterval?
-    private var installedRunID: Int?
-    private var status: NativeStartupStatus?
-    private var statusAt: TimeInterval?
+    private var state: State = .waiting
     private var pageID: String?
 
     init(targetPID: Int32) { self.targetPID = targetPID }
@@ -146,7 +149,7 @@ final class NativeStartupCapture: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         pageID = id
-        installAt = nil; installedRunID = nil; status = nil; statusAt = nil
+        state = .waiting
     }
 
     func observe(_ response: [String: Any], at uptime: TimeInterval, pageID: String? = nil) -> (runID: Int, installedAt: TimeInterval)? {
@@ -154,31 +157,36 @@ final class NativeStartupCapture: @unchecked Sendable {
         defer { lock.unlock() }
         guard self.pageID == pageID else { return nil }
 
-        if NativeStartupStatus.boolean(response["installed"]) == true,
-           NativeStartupStatus.boolean(response["alreadyActive"]) == false,
-           installAt == nil {
-            installAt = uptime
+        if case .waiting = state,
+           NativeStartupStatus.boolean(response["installed"]) == true,
+           NativeStartupStatus.boolean(response["alreadyActive"]) == false {
+            state = .installed(at: uptime)
         }
-        guard let rawStatus = response["status"], let observed = NativeStartupStatus.parse(rawStatus),
-              let installAt else { return nil }
-
-        if installedRunID == nil {
-            installedRunID = observed.runID
-            status = observed
-            statusAt = uptime
-            return (observed.runID, installAt)
+        guard let raw = response["status"], let observed = NativeStartupStatus.parse(raw) else { return nil }
+        switch state {
+        case .waiting:
+            return nil
+        case .installed(let installedAt):
+            state = .observing(installedAt: installedAt, runID: observed.runID, status: observed, statusAt: uptime)
+            return (observed.runID, installedAt)
+        case .observing(let installedAt, let runID, _, _):
+            guard runID == observed.runID else { return nil }
+            state = .observing(installedAt: installedAt, runID: runID, status: observed, statusAt: uptime)
+            return nil
         }
-        guard installedRunID == observed.runID else { return nil }
-        status = observed
-        statusAt = uptime
-        return nil
     }
 
     func snapshot() -> NativeStartupObservation {
         lock.lock()
         defer { lock.unlock() }
-        return NativeStartupObservation(targetPID: targetPID, installedAt: installAt,
-                                        status: status, statusAt: statusAt, pageID: pageID)
+        switch state {
+        case .waiting:
+            return NativeStartupObservation(targetPID: targetPID, installedAt: nil, status: nil, statusAt: nil, pageID: pageID)
+        case .installed(let installedAt):
+            return NativeStartupObservation(targetPID: targetPID, installedAt: installedAt, status: nil, statusAt: nil, pageID: pageID)
+        case .observing(let installedAt, _, let status, let statusAt):
+            return NativeStartupObservation(targetPID: targetPID, installedAt: installedAt, status: status, statusAt: statusAt, pageID: pageID)
+        }
     }
 }
 

@@ -1169,6 +1169,45 @@ private func nativeEventContractChecks() async throws -> Int {
          "completion": completion]
     }
 
+    let observations = NativeStartupCapture(targetPID: 4040)
+    let loading = validStatus(42, phase: "loading", ready: false, completed: false,
+                              overlay: true, completion: NSNull())
+    let playing = validStatus(42, phase: "playing", ready: true, completed: false,
+                              overlay: true, completion: NSNull())
+    expect(observations.snapshot().installedAt == nil && observations.snapshot().status == nil,
+           "capture starts without installation or status evidence")
+    expect(observations.observe(["status": loading], at: 1) == nil
+           && observations.snapshot().status == nil,
+           "status alone cannot establish an installation")
+    expect(observations.observe(["installed": true, "alreadyActive": true, "status": loading], at: 2) == nil
+           && observations.snapshot().installedAt == nil,
+           "an already-active controller cannot establish a new installation")
+    expect(observations.observe(["installed": true, "alreadyActive": false, "status": ["invalid": true]], at: 3) == nil
+           && observations.snapshot().installedAt == 3 && observations.snapshot().status == nil,
+           "a confirmed installation waits for a valid run")
+    _ = observations.observe(["installed": true, "alreadyActive": false], at: 4)
+    expect(observations.snapshot().installedAt == 3, "duplicate install receipts retain the first time")
+    let captured = observations.observe(["status": loading], at: 5)
+    expect(captured?.runID == 42 && captured?.installedAt == 3
+           && observations.snapshot().statusAt == 5,
+           "the first valid status binds the run and reports installation once")
+    let other = validStatus(43, phase: "playing", ready: true, completed: false,
+                            overlay: true, completion: NSNull())
+    expect(observations.observe(["status": other], at: 6) == nil
+           && observations.snapshot().status?.runID == 42 && observations.snapshot().statusAt == 5,
+           "another run cannot replace the bound status")
+    expect(observations.observe(["status": ["runId": 42]], at: 7) == nil
+           && observations.snapshot().statusAt == 5,
+           "invalid status preserves the last valid observation")
+    expect(observations.observe(["status": playing], at: 8) == nil
+           && observations.snapshot().status?.phase == "playing" && observations.snapshot().statusAt == 8,
+           "the bound run can update without another installation notification")
+    let combined = NativeStartupCapture(targetPID: 4041)
+    let combinedResult = combined.observe(["installed": true, "alreadyActive": false, "status": playing], at: 9)
+    expect(combinedResult?.runID == 42 && combinedResult?.installedAt == 9
+           && combined.snapshot().targetPID == 4041 && combined.snapshot().statusAt == 9,
+           "one response can confirm the install and bind its status")
+
     var disabledWallpaper = validStatus(1, phase: "playing", ready: true, completed: false,
                                         overlay: true, completion: NSNull())
     disabledWallpaper["wallpaper"] = ["applied": false, "reason": "disabled", "imageDecoded": false]
