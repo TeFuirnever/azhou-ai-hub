@@ -1984,6 +1984,69 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, '待完成的来源接管记录不一致'):
             m.pending_legacy_handoff(old_root, source_hash, bad_receipt)
 
+    def test_registry_inventory_rejects_ambiguous_or_malformed_results(self):
+        m = self.module
+        groups = [{'bundleID': identity[0], 'urls': []} for identity in m.KNOWN]
+        hidden = {'bundleID': groups[0]['bundleID'], 'urls': [{'path': '/other/unknown.app'}]}
+        cases = [
+            {'schema': 1, 'applications': [hidden, *groups]},
+            {'schema': 1, 'applications': [*groups, hidden]},
+            {'schema': True, 'applications': groups},
+            {'schema': 1, 'applications': {}},
+            {'schema': 1, 'applications': [*groups, None]},
+            {'schema': 1, 'applications': [dict(groups[0], urls={}), *groups[1:]]},
+            {'schema': 1, 'applications': [dict(groups[0], urls=[None]), *groups[1:]]},
+            {'schema': 1, 'applications': [dict(groups[0], urls=[{'path': None}]), *groups[1:]]},
+            {'schema': 1, 'applications': [dict(groups[0], urls=[{'path': '/bad\x00name'}]), *groups[1:]]},
+            {'schema': 1, 'applications': [dict(groups[0], bundleID=123), *groups[1:]]},
+            None,
+        ]
+        for value in cases:
+            with self.subTest(value=value), patch.object(m.subprocess, 'check_output', return_value=json.dumps(value)):
+                with self.assertRaises(RuntimeError):
+                    m.registry_inventory()
+        with patch.object(m.subprocess, 'check_output', return_value='{'):
+            with self.assertRaises(RuntimeError):
+                m.registry_inventory()
+
+    def test_registry_inventory_rejects_duplicate_json_keys(self):
+        m = self.module
+        groups = [{'bundleID': identity[0], 'urls': []} for identity in m.KNOWN]
+        normal = json.dumps({'schema': 1, 'applications': groups})
+        duplicated_schema = normal.replace('"schema": 1', '"schema": 1, "schema": 1', 1)
+        duplicated_urls = normal.replace('"urls": []', '"urls": [{"path": "/other/unknown.app"}], "urls": []', 1)
+        groups[0]['urls'] = [{'path': '/fixture/known.app'}]
+        duplicated_path = json.dumps({'schema': 1, 'applications': groups}).replace(
+            '"path": "/fixture/known.app"', '"path": "/other/unknown.app", "path": "/fixture/known.app"', 1)
+        for raw in (duplicated_schema, duplicated_urls, duplicated_path):
+            with self.subTest(raw=raw), patch.object(m.subprocess, 'check_output', return_value=raw):
+                with self.assertRaises(RuntimeError):
+                    m.registry_inventory()
+
+    def test_installer_stops_before_publication_on_duplicate_inventory_group(self):
+        m = self.module
+        unknown = self.base / 'foreign.app'
+        unknown.mkdir()
+        (unknown / 'sentinel').write_text('keep')
+        groups = [{'bundleID': identity[0], 'urls': []} for identity in m.KNOWN]
+        hidden = {'bundleID': groups[0]['bundleID'], 'urls': [{'path': str(unknown)}]}
+        result = json.dumps({'schema': 1, 'applications': [hidden, *groups]})
+        with patch.object(m.subprocess, 'check_output', return_value=result), patch.object(m, 'install_payload') as publish:
+            with self.assertRaisesRegex(RuntimeError, '重复'):
+                m.install()
+            publish.assert_not_called()
+        self.assertEqual((unknown / 'sentinel').read_text(), 'keep')
+        self.assertFalse(m.DESTINATION.exists())
+
+    def test_registry_inventory_accepts_complete_groups_and_deduplicates_paths(self):
+        m = self.module
+        groups = [{'bundleID': identity[0], 'urls': []} for identity in m.KNOWN]
+        groups[0]['urls'] = [{'path': '/fixture/one.app', 'other': 4}, {'path': '/fixture/one.app'}]
+        with patch.object(m.subprocess, 'check_output', return_value=json.dumps({'schema': 1, 'applications': groups, 'other': 2})):
+            inventory = m.registry_inventory()
+        self.assertEqual(inventory[groups[0]['bundleID']], {Path('/fixture/one.app')})
+        self.assertEqual(set(inventory), {item['bundleID'] for item in groups})
+
     def test_scan_and_registry_inventory_reject_unsafe_managed_entries(self):
         m = self.module
         app_parent = m.DESTINATION.parent

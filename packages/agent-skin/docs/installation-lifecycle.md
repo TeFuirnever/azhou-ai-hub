@@ -75,7 +75,7 @@ python3 tools/install-macos.py --check
 .build/azhou-install-registry register "$HOME/Applications/阿舟 AI 实验室.app"
 ```
 
-它使用公开的 `NSWorkspace.urlsForApplications(withBundleIdentifier:)` 查询三个项目身份的全部URL，保留不存在的旧路径记录；通过 `LSRegisterURL` 登记唯一规范路径。不能用只返回一个“首选应用”的API证明没有重复。
+它使用公开的 `NSWorkspace.urlsForApplications(withBundleIdentifier:)` 查询三个项目身份的全部URL，保留不存在的旧路径记录；通过 `LSRegisterURL` 登记唯一规范路径。不能用只返回一个“首选应用”的API证明没有重复。 安装器要求清单中每个已知身份恰有一组，且各组 URL 路径均为绝对路径；重复字段、重复分组、遗漏或畸形结果会中止，不能靠后一个分组覆盖前一组。安装前的既有退休事务仍按其恢复规则处理。
 
 旧路径注销是针对这台macOS已经核实支持的 `lsregister -u` 的有限维护调用。Apple将该工具定位为调试工具、非稳定API；代码必须记录调用失败，并依靠公开API的最终复查决定登记是否已收敛。禁止全局清空、重建或递归重新登记系统数据库。
 

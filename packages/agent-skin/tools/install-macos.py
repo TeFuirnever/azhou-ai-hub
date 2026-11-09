@@ -704,21 +704,43 @@ def scan_apps(source_info, source_hash, record, handoff=None):
 
 
 def registry_inventory():
-    result = json.loads(subprocess.check_output([str(REGISTRY_TOOL), 'inventory'], text=True))
-    if result.get('schema') != 1:
+    raw = subprocess.check_output([str(REGISTRY_TOOL), 'inventory'], text=True)
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('duplicate JSON key')
+            result[key] = value
+        return result
+
+    try:
+        result = json.loads(raw, object_pairs_hook=unique_object)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError('应用登记检查器返回未知格式。') from error
+    if (not isinstance(result, dict) or type(result.get('schema')) is not int
+            or result['schema'] != 1 or not isinstance(result.get('applications'), list)):
         raise RuntimeError('应用登记检查器返回未知格式。')
-    groups = result.get('applications', [])
-    if {item.get('bundleID') for item in groups} != {identity[0] for identity in KNOWN}:
-        raise RuntimeError('应用登记检查没有覆盖全部已知项目 ID。')
+    known_ids = {identity[0] for identity in KNOWN}
     inventory = {}
-    for group in groups:
+    for group in result['applications']:
+        if not isinstance(group, dict) or not isinstance(group.get('bundleID'), str):
+            raise RuntimeError('应用登记检查器返回未知格式。')
+        bundle_id = group['bundleID']
+        if bundle_id not in known_ids or bundle_id in inventory:
+            raise RuntimeError('应用登记检查没有覆盖全部已知项目 ID 或存在重复。')
+        if not isinstance(group.get('urls'), list):
+            raise RuntimeError('应用登记检查器返回未知格式。')
         urls = set()
-        for item in group.get('urls', []):
-            path = Path(item.get('path', ''))
+        for item in group['urls']:
+            if not isinstance(item, dict) or not isinstance(item.get('path'), str) or '\0' in item['path']:
+                raise RuntimeError('应用登记检查器返回未知格式。')
+            path = Path(item['path'])
             if not path.is_absolute():
                 raise RuntimeError('应用登记检查返回非绝对路径。')
             urls.add(path)
-        inventory[group['bundleID']] = urls
+        inventory[bundle_id] = urls
+    if set(inventory) != known_ids:
+        raise RuntimeError('应用登记检查没有覆盖全部已知项目 ID。')
     return inventory
 
 
