@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import signal
 import shutil
 import struct
 import subprocess
@@ -217,17 +218,19 @@ class PrepareAzhouAssetTests(unittest.TestCase):
         tools.mkdir(parents=True)
         self.script = tools / "prepare-azhou-assets.py"
         shutil.copy2(TOOLS / self.script.name, self.script)
+        shutil.copy2(TOOLS / "build-lock.py", tools / "build-lock.py")
+        self.state = self.root / ".local/agent-skin-asset-preparation"
         self.assertEqual(self.script.read_bytes(), (TOOLS / self.script.name).read_bytes())
         self.source = Path(self.temporary.name) / "approved-working.png"
         self.source.write_bytes(png_header(1254, 1254))
         self.run_result = subprocess.CompletedProcess(["git", "check-ignore"], 0)
         self.tracked = b""
 
-    def invoke(self, source=None):
+    def invoke(self, source=None, *, adopt=False):
         source = source or self.source
         stdout = io.StringIO()
         self.stderr = io.StringIO()
-        with mock.patch.object(sys, "argv", [str(self.script), "--source", str(source)]), \
+        with mock.patch.object(sys, "argv", [str(self.script), "--source", str(source), *(["--adopt-existing"] if adopt else [])]), \
                 mock.patch.object(subprocess, "run", return_value=self.run_result) as run, \
                 mock.patch.object(subprocess, "check_output", return_value=self.tracked) as check_output, \
                 contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(self.stderr):
@@ -395,6 +398,856 @@ class PrepareAzhouAssetTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "64 MiB"):
                 module.capture(self.source.resolve(), snapshot)
             self.assertEqual(snapshot.tell(), 0)
+
+    def test_foreign_output_symlink_does_not_change_its_target(self):
+        destination = self.root / "assets/private"
+        destination.mkdir(parents=True)
+        foreign = Path(self.temporary.name) / "foreign-user-data"
+        foreign.write_bytes(b"do not modify")
+        (destination / "working.png").symlink_to(foreign)
+        try: self.invoke()
+        except SystemExit: pass
+        self.assertEqual(foreign.read_bytes(), b"do not modify")
+        self.assertTrue((destination / "working.png").is_symlink())
+        self.assertFalse((destination / "scene.js").exists())
+
+    def test_unknown_partial_output_is_not_replaced(self):
+        destination = self.root / "assets/private"
+        destination.mkdir(parents=True)
+        (destination / "scene.js").write_bytes(b"foreign content")
+        try: self.invoke()
+        except SystemExit: pass
+        self.assertEqual((destination / "scene.js").read_bytes(), b"foreign content")
+        self.assertFalse((destination / "working.png").exists())
+        self.assertFalse((destination / "provenance.json").exists())
+
+    def test_output_failure_does_not_silently_mix_old_and_new_assets(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        names = ("working.png", "scene.js", "provenance.json", ".azhou-assets-receipt.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=15))
+        module = load_module(self.script, "synthetic_asset_transaction_fault")
+        swap = module.swap_files
+        calls = []
+        def fail_second(*args):
+            calls.append(args)
+            if len(calls) == 2: raise OSError("injected second publication failure")
+            return swap(*args)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=fail_second), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertGreaterEqual(len(calls), 3)
+        self.assertIn("prior outputs restored", stderr.getvalue())
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_unbound_legacy_output_requires_explicit_adoption(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        receipt = self.state / ".azhou-assets-receipt.json"
+        receipt.unlink()
+        names = ("working.png", "scene.js", "provenance.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=11))
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertIn("--adopt-existing", self.stderr.getvalue())
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        self.assertFalse(receipt.exists())
+        self.invoke(adopt=True)
+        self.assertTrue(receipt.is_file())
+        self.assertEqual((destination / "working.png").read_bytes(), self.source.read_bytes())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+
+    def test_adoption_refuses_legacy_scene_with_changed_bytes(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        (self.state / ".azhou-assets-receipt.json").unlink()
+        (destination / "scene.js").write_bytes(b"foreign scene")
+        before = {name: (destination / name).read_bytes() for name in ("working.png", "scene.js", "provenance.json")}
+        with self.assertRaises(SystemExit): self.invoke(adopt=True)
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in before}, before)
+        self.assertFalse((self.state / ".azhou-assets-receipt.json").exists())
+
+    def test_copied_private_directory_does_not_inherit_binding(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        saved = self.root / "assets/saved-private"
+        destination.rename(saved)
+        shutil.copytree(saved, destination)
+        before = (destination / "working.png").read_bytes()
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual((destination / "working.png").read_bytes(), before)
+        self.assertEqual((saved / "working.png").read_bytes(), before)
+        self.assertIn("receipt does not match", self.stderr.getvalue())
+
+    def test_unknown_transaction_record_is_preserved_without_publishing(self):
+        destination = self.root / "assets/private"
+        destination.mkdir(parents=True)
+        self.state.mkdir(parents=True)
+        journal = self.state / ".azhou-assets-transaction.json"
+        journal.write_bytes(b"unknown journal")
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual(journal.read_bytes(), b"unknown journal")
+        self.assertFalse((destination / "working.png").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_unjournaled_empty_staging_is_cleaned_after_prepare_error(self):
+        module = load_module(self.script, "synthetic_asset_stage_fault")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "stage_file", side_effect=OSError("injected before stage write")), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        self.assertIn("before publication", stderr.getvalue())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+        self.assertFalse((destination / "working.png").exists())
+
+    def test_unknown_journal_appearing_during_creation_is_not_claimed(self):
+        module = load_module(self.script, "synthetic_asset_journal_collision")
+        write_journal = module.write_journal
+        unknown = b"foreign transaction record"
+        def collide(state, *args):
+            (state / ".azhou-assets-transaction.json").write_bytes(unknown)
+            return write_journal(state, *args)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "write_journal", side_effect=collide), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        self.assertEqual((self.state / ".azhou-assets-transaction.json").read_bytes(), unknown)
+        self.assertEqual(len(list(self.state.glob(".azhou-assets-stage-*"))), 1)
+        self.assertFalse((destination / "working.png").exists())
+
+    def test_recover_option_restores_interrupted_update_without_source(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        names = ("working.png", "scene.js", "provenance.json", ".azhou-assets-receipt.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=17))
+        module = load_module(self.script, "synthetic_asset_interrupted")
+        swap = module.swap_files
+        def crash_after_swap(*args):
+            swap(*args)
+            raise SystemExit("simulated process exit after first swap")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=crash_after_swap), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.source.unlink()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.assertIn("rolled-back", stdout.getvalue())
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_output_lock_excludes_an_independent_process(self):
+        module = load_module(self.script, "synthetic_asset_lock")
+        self.state.mkdir(parents=True)
+        code = ("import importlib.util,sys\n"
+                "spec=importlib.util.spec_from_file_location('asset_lock_child',sys.argv[1])\n"
+                "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\n"
+                "try:\n with m.preparation_lock(m.Path(sys.argv[2]),m.Path(sys.argv[3])): pass\n"
+                "except m.AssetConflict: sys.exit(3)\n")
+        command = [sys.executable, "-B", "-c", code, str(self.script), str(self.root), str(self.state)]
+        with module.preparation_lock(self.root, self.state):
+            blocked = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertEqual(blocked.returncode, 3, blocked.stderr)
+        admitted = subprocess.run(command, capture_output=True, text=True, timeout=5)
+        self.assertEqual(admitted.returncode, 0, admitted.stderr)
+
+    def test_new_target_race_preserves_foreign_file_and_transaction(self):
+        module = load_module(self.script, "synthetic_asset_new_race")
+        link = module.os.link
+        unknown = b"foreign target"
+        injected = []
+        def race(source, destination, *args, **kwargs):
+            if destination == "working.png" and not injected:
+                (self.root / "assets/private/working.png").write_bytes(unknown)
+                injected.append(True)
+            return link(source, destination, *args, **kwargs)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module.os, "link", side_effect=race), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        self.assertEqual(injected, [True])
+        self.assertEqual((destination / "working.png").read_bytes(), unknown)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.assertEqual(len(list(self.state.glob(".azhou-assets-stage-*"))), 1)
+        self.assertIn("requires recovery", stderr.getvalue())
+
+    def test_swap_race_preserves_displaced_foreign_file_and_original(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        original = (destination / "working.png").read_bytes()
+        saved = Path(self.temporary.name) / "saved-prior-working.png"
+        self.source.write_bytes(png_header(1254, 1254, padding=21))
+        module = load_module(self.script, "synthetic_asset_swap_race")
+        swap = module.swap_files
+        unknown = b"foreign replacement"
+        injected = []
+        def race(left_fd, left_name, right_fd, right_name):
+            if right_name == "working.png" and not injected:
+                (destination / right_name).rename(saved)
+                (destination / right_name).write_bytes(unknown)
+                injected.append(True)
+            return swap(left_fd, left_name, right_fd, right_name)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=race), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(injected, [True])
+        self.assertEqual(saved.read_bytes(), original)
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "working.png").read_bytes(), unknown)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.assertIn("requires recovery", stderr.getvalue())
+
+    def test_partial_unjournaled_stage_is_preserved(self):
+        module = load_module(self.script, "synthetic_asset_partial_stage")
+        partial = b"partial stage bytes"
+        def fail_after_creation(path, writer, stage_fd):
+            fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=stage_fd)
+            with os.fdopen(fd, "wb") as stream: stream.write(partial)
+            raise OSError("injected partial write")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "stage_file", side_effect=fail_after_creation), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "working.png").read_bytes(), partial)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse((destination / "working.png").exists())
+
+    def test_unknown_stage_file_after_journal_stops_before_publication(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        names = ("working.png", "scene.js", "provenance.json", ".azhou-assets-receipt.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=24))
+        module = load_module(self.script, "synthetic_asset_stage_foreign")
+        write_journal = module.write_journal
+        def insert_unknown(state, state_fd, stage, *args):
+            result = write_journal(state, state_fd, stage, *args)
+            (stage / "foreign.txt").write_bytes(b"do not delete")
+            return result
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "write_journal", side_effect=insert_unknown), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+
+    @unittest.skipUnless(hasattr(signal, "SIGKILL"), "requires owned child SIGKILL")
+    def test_killed_child_update_can_be_recovered_without_source(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        names = ("working.png", "scene.js", "provenance.json", ".azhou-assets-receipt.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=31))
+        code = ("import importlib.util,os,signal,subprocess,sys\n"
+                "spec=importlib.util.spec_from_file_location('asset_killed',sys.argv[1])\n"
+                "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\n"
+                "real=m.swap_files\n"
+                "def crash(*args):\n real(*args);os.kill(os.getpid(),signal.SIGKILL)\n"
+                "m.swap_files=crash\n"
+                "m.subprocess.run=lambda *a,**k:subprocess.CompletedProcess([],0)\n"
+                "m.subprocess.check_output=lambda *a,**k:b''\n"
+                "sys.argv=[sys.argv[1],'--source',sys.argv[2]];m.main()\n")
+        child = subprocess.run([sys.executable, "-B", "-c", code, str(self.script), str(self.source)],
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(child.returncode, -signal.SIGKILL, child.stderr)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.source.unlink()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.assertIn("rolled-back", stdout.getvalue())
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    @unittest.skipUnless(hasattr(signal, "SIGKILL"), "requires owned child SIGKILL")
+    def test_killed_first_publication_retracts_only_created_files(self):
+        code = ("import importlib.util,os,signal,subprocess,sys\n"
+                "spec=importlib.util.spec_from_file_location('asset_first_killed',sys.argv[1])\n"
+                "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\n"
+                "real=m.os.link\n"
+                "def crash(*args,**kwargs):\n real(*args,**kwargs);os.kill(os.getpid(),signal.SIGKILL)\n"
+                "m.os.link=crash\n"
+                "m.subprocess.run=lambda *a,**k:subprocess.CompletedProcess([],0)\n"
+                "m.subprocess.check_output=lambda *a,**k:b''\n"
+                "sys.argv=[sys.argv[1],'--source',sys.argv[2]];m.main()\n")
+        child = subprocess.run([sys.executable, "-B", "-c", code, str(self.script), str(self.source)],
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(child.returncode, -signal.SIGKILL, child.stderr)
+        destination = self.root / "assets/private"
+        self.assertTrue((destination / "working.png").is_file())
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.source.unlink()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.assertIn("rolled-back", stdout.getvalue())
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    @unittest.skipUnless(hasattr(signal, "SIGKILL"), "requires owned child SIGKILL")
+    def test_killed_child_after_publish_finishes_commit_without_source(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        image = png_header(1254, 1254, padding=33)
+        self.source.write_bytes(image)
+        code = ("import importlib.util,os,signal,subprocess,sys\n"
+                "spec=importlib.util.spec_from_file_location('asset_killed_done',sys.argv[1])\n"
+                "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\n"
+                "real=m.recover_transaction;calls=[]\n"
+                "def crash_after_publish(*args):\n calls.append(1)\n if len(calls)==2: os.kill(os.getpid(),signal.SIGKILL)\n return real(*args)\n"
+                "m.recover_transaction=crash_after_publish\n"
+                "m.subprocess.run=lambda *a,**k:subprocess.CompletedProcess([],0)\n"
+                "m.subprocess.check_output=lambda *a,**k:b''\n"
+                "sys.argv=[sys.argv[1],'--source',sys.argv[2]];m.main()\n")
+        child = subprocess.run([sys.executable, "-B", "-c", code, str(self.script), str(self.source)],
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(child.returncode, -signal.SIGKILL, child.stderr)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.source.unlink()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.assertIn("committed", stdout.getvalue())
+        self.assertEqual((destination / "working.png").read_bytes(), image)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_private_directory_symlink_is_rejected_without_touching_target(self):
+        assets = self.root / "assets"
+        assets.mkdir()
+        outside = Path(self.temporary.name) / "foreign-directory"
+        outside.mkdir()
+        (outside / "user.txt").write_bytes(b"do not touch")
+        (assets / "private").symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual((outside / "user.txt").read_bytes(), b"do not touch")
+        self.assertEqual(sorted(path.name for path in outside.iterdir()), ["user.txt"])
+        self.assertTrue((assets / "private").is_symlink())
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO")
+    def test_fifo_output_is_rejected_without_waiting(self):
+        destination = self.root / "assets/private"
+        destination.mkdir(parents=True)
+        fifo = destination / "scene.js"
+        os.mkfifo(fifo)
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertTrue(fifo.exists())
+        self.assertFalse((destination / "working.png").exists())
+
+    def test_receipt_symlink_is_preserved_without_following_it(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        receipt = self.state / ".azhou-assets-receipt.json"
+        saved = Path(self.temporary.name) / "saved-receipt.json"
+        receipt.rename(saved)
+        outside = Path(self.temporary.name) / "foreign-receipt"
+        outside.write_bytes(b"do not touch")
+        receipt.symlink_to(outside)
+        before = (destination / "working.png").read_bytes()
+        with self.assertRaises(SystemExit): self.invoke()
+        self.assertEqual(outside.read_bytes(), b"do not touch")
+        self.assertEqual((destination / "working.png").read_bytes(), before)
+        self.assertTrue(receipt.is_symlink())
+        self.assertTrue(saved.is_file())
+
+    def test_swap_that_succeeds_then_raises_is_proven_and_rolled_back(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        names = ("working.png", "scene.js", "provenance.json", ".azhou-assets-receipt.json")
+        before = {name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}
+        self.source.write_bytes(png_header(1254, 1254, padding=41))
+        module = load_module(self.script, "synthetic_asset_swap_uncertain")
+        swap = module.swap_files
+        calls = []
+        def success_then_error(*args):
+            swap(*args)
+            calls.append(True)
+            if len(calls) == 1: raise OSError("injected error after successful exchange")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=success_then_error), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertIn("prior outputs restored", stderr.getvalue())
+        self.assertEqual({name: ((self.state if name == ".azhou-assets-receipt.json" else destination) / name).read_bytes() for name in names}, before)
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_partial_cleanup_preserves_remaining_stage_and_journal(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        image = png_header(1254, 1254, padding=45)
+        self.source.write_bytes(image)
+        module = load_module(self.script, "synthetic_asset_cleanup_partial")
+        unlink = module.checked_unlink
+        calls = []
+        def fail_after_unlink(directory_fd, name, expected):
+            unlink(directory_fd, name, expected)
+            if name == "working.png" and not calls:
+                calls.append(True)
+                raise OSError("injected partial cleanup")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "checked_unlink", side_effect=fail_after_unlink), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(calls, [True])
+        self.assertEqual((destination / "working.png").read_bytes(), image)
+        journal = self.state / ".azhou-assets-transaction.json"
+        journal_before = journal.read_bytes()
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertIn("requires recovery", stderr.getvalue())
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): runpy.run_path(str(self.script), run_name="__main__")
+        self.assertEqual(journal.read_bytes(), journal_before)
+        self.assertTrue(stages[0].is_dir())
+        self.assertEqual((destination / "working.png").read_bytes(), image)
+
+    def test_staged_image_corruption_never_publishes(self):
+        module = load_module(self.script, "synthetic_asset_short_stage")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        def short_copy(source, destination, length): destination.write(source.read(8))
+        with mock.patch.object(module.shutil, "copyfileobj", side_effect=short_copy), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        self.assertFalse((destination / "working.png").exists())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+
+    def test_staged_scene_corruption_never_publishes(self):
+        module = load_module(self.script, "synthetic_asset_bad_scene")
+        stage_file = module.stage_file
+        def corrupt(path, writer, stage_fd):
+            result = stage_file(path, writer, stage_fd)
+            if path.name == "scene.js": path.write_bytes(b"incorrect scene")
+            return result
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "stage_file", side_effect=corrupt), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        destination = self.root / "assets/private"
+        self.assertFalse((destination / "working.png").exists())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+
+    def test_identical_repeat_keeps_private_fingerprint_and_identities_stable(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        receipt = self.state / ".azhou-assets-receipt.json"
+        paths = [destination / name for name in ("working.png", "scene.js", "provenance.json")] + [receipt]
+        before = {str(path): (path.stat().st_dev, path.stat().st_ino, path.read_bytes()) for path in paths}
+        verifier = load_module(TOOLS / "verify-artifacts.py", "synthetic_asset_input_fingerprint")
+        verifier.ROOT = self.root
+        verifier.INPUT_FILES = ()
+        inputs = verifier.source_inputs()
+        self.invoke()
+        self.assertEqual({str(path): (path.stat().st_dev, path.stat().st_ino, path.read_bytes()) for path in paths}, before)
+        self.assertEqual(verifier.source_inputs(), inputs)
+        self.assertEqual(sorted(path.name for path in destination.iterdir()), ["provenance.json", "scene.js", "working.png"])
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_unignored_local_transaction_state_prevents_preparation(self):
+        module = load_module(self.script, "synthetic_asset_git_guard")
+        success = subprocess.CompletedProcess(["git", "check-ignore"], 0)
+        fail = subprocess.CompletedProcess(["git", "check-ignore"], 1)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", side_effect=[success, fail]), \
+                mock.patch.object(subprocess, "check_output", return_value=b""), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertIn("transaction state must be ignored", stderr.getvalue())
+        self.assertFalse((self.root / "assets/private").exists())
+        self.assertFalse(self.state.exists())
+
+    def test_preparation_refuses_when_project_build_lock_is_held(self):
+        lock = load_module(self.root / "tools/build-lock.py", "synthetic_existing_build_lock")
+        with lock.acquired():
+            with self.assertRaises(SystemExit): self.invoke()
+        self.assertIn("build lock", self.stderr.getvalue())
+        destination = self.root / "assets/private"
+        self.assertFalse((destination / "working.png").exists())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+
+    def test_direct_startup_build_contends_and_accepts_verified_inherited_lock(self):
+        builder_path = self.root / "tools/build-startup.py"
+        shutil.copy2(TOOLS / "build-startup.py", builder_path)
+        lock = load_module(self.root / "tools/build-lock.py", "synthetic_startup_build_lock")
+        code = ("import importlib.util,sys\n"
+                "from pathlib import Path\n"
+                "spec=importlib.util.spec_from_file_location('synthetic_child_builder',sys.argv[1])\n"
+                "m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\n"
+                "try: m.build_startup(Path(sys.argv[2])/'.build/stage',root=Path(sys.argv[2]))\n"
+                "except Exception as e:\n"
+                " print(str(e))\n"
+                " sys.exit(3 if '另一个构建' in str(e) else 4 if 'verify-artifacts.py' in str(e) else 5)\n")
+        command = [sys.executable, "-B", "-c", code, str(builder_path), str(self.root)]
+        environment = os.environ.copy()
+        environment.pop("_AZHOU_BUILD_LOCK_FD", None)
+        with lock.acquired() as fd:
+            blocked = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=5)
+            self.assertEqual(blocked.returncode, 3, blocked.stdout + blocked.stderr)
+            inherited = dict(environment, _AZHOU_BUILD_LOCK_FD=str(fd))
+            passed = subprocess.run(command, env=inherited, pass_fds=(fd,), capture_output=True, text=True, timeout=5)
+            self.assertEqual(passed.returncode, 4, passed.stdout + passed.stderr)
+        self.assertFalse((self.root / ".build/stage").exists())
+
+    def test_build_lock_replacement_during_publication_preserves_transaction(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        original = (destination / "working.png").read_bytes()
+        self.source.write_bytes(png_header(1254, 1254, padding=49))
+        module = load_module(self.script, "synthetic_asset_lock_replacement")
+        swap = module.swap_files
+        lock_path = self.root / ".build/.agent-skin-build.lock"
+        saved_lock = self.root / ".build/saved-lock"
+        changed = []
+        def replace_lock_after_swap(*args):
+            swap(*args)
+            if not changed:
+                lock_path.rename(saved_lock)
+                lock_path.write_bytes(b"foreign lock")
+                changed.append(True)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=replace_lock_after_swap), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(changed, [True])
+        self.assertEqual(lock_path.read_bytes(), b"foreign lock")
+        self.assertTrue(saved_lock.is_file())
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "working.png").read_bytes(), original)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.assertIn("requires recovery", stderr.getvalue())
+
+    def test_recover_refuses_missing_output_when_journal_exists(self):
+        self.state.mkdir(parents=True)
+        journal = self.state / ".azhou-assets-transaction.json"
+        journal.write_bytes(b"preserve pending transaction")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): runpy.run_path(str(self.script), run_name="__main__")
+        self.assertNotIn("No private asset transaction found", stdout.getvalue())
+        self.assertEqual(journal.read_bytes(), b"preserve pending transaction")
+        self.assertFalse((self.root / "assets/private").exists())
+
+    def test_recover_refuses_local_directory_symlink(self):
+        outside = Path(self.temporary.name) / "foreign-local"
+        outside.mkdir()
+        (outside / "user.txt").write_bytes(b"do not touch")
+        (self.root / ".local").symlink_to(outside, target_is_directory=True)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): runpy.run_path(str(self.script), run_name="__main__")
+        self.assertEqual((outside / "user.txt").read_bytes(), b"do not touch")
+        self.assertTrue((self.root / ".local").is_symlink())
+        self.assertNotIn("No private asset transaction found", stdout.getvalue())
+
+    def test_staging_directory_replaced_before_write_does_not_touch_foreign_directory(self):
+        module = load_module(self.script, "synthetic_asset_stage_dir_race")
+        stage_file = module.stage_file
+        saved = self.state / "moved-original-stage"
+        replaced = []
+        def swap_stage(path, writer, stage_fd):
+            if not replaced:
+                path.parent.rename(saved)
+                path.parent.mkdir()
+                (path.parent / "foreign.txt").write_bytes(b"do not modify")
+                replaced.append(path.parent)
+            return stage_file(path, writer, stage_fd)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "stage_file", side_effect=swap_stage), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(len(replaced), 1)
+        self.assertEqual((replaced[0] / "foreign.txt").read_bytes(), b"do not modify")
+        self.assertFalse((replaced[0] / "working.png").exists())
+        self.assertEqual((saved / "working.png").read_bytes(), self.source.read_bytes())
+        self.assertFalse((self.root / "assets/private/working.png").exists())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+
+    def test_private_directory_replaced_at_swap_does_not_touch_foreign_directory(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        original = (destination / "working.png").read_bytes()
+        saved = self.root / "assets/saved-private"
+        self.source.write_bytes(png_header(1254, 1254, padding=51))
+        module = load_module(self.script, "synthetic_asset_output_root_race")
+        swap = module.swap_files
+        changed = []
+        def replace_before_swap(*args):
+            if not changed:
+                destination.rename(saved)
+                destination.mkdir()
+                (destination / "working.png").write_bytes(b"foreign file")
+                changed.append(True)
+            return swap(*args)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=replace_before_swap), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(changed, [True])
+        self.assertEqual((destination / "working.png").read_bytes(), b"foreign file")
+        self.assertEqual(sorted(path.name for path in destination.iterdir()), ["working.png"])
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "working.png").read_bytes(), original)
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        self.assertTrue(saved.is_dir())
+
+    def test_state_directory_replaced_during_rollback_preserves_foreign_directory(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        original = (destination / "working.png").read_bytes()
+        self.source.write_bytes(png_header(1254, 1254, padding=53))
+        module = load_module(self.script, "synthetic_asset_recovery_root_race")
+        swap = module.swap_files
+        def crash_after_swap(*args):
+            swap(*args)
+            raise SystemExit("simulated process exit")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(module, "swap_files", side_effect=crash_after_swap), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        saved = self.state.parent / "saved-asset-state"
+        changed = []
+        def move_state_before_rollback(*args):
+            if not changed:
+                self.state.rename(saved)
+                self.state.mkdir()
+                (self.state / "foreign.txt").write_bytes(b"do not modify")
+                changed.append(True)
+            return swap(*args)
+        with mock.patch.object(module, "swap_files", side_effect=move_state_before_rollback), \
+                mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit): module.main()
+        self.assertEqual(changed, [True])
+        self.assertEqual((self.state / "foreign.txt").read_bytes(), b"do not modify")
+        self.assertEqual(sorted(path.name for path in self.state.iterdir()), ["foreign.txt"])
+        self.assertEqual((destination / "working.png").read_bytes(), original)
+        self.assertTrue((saved / ".azhou-assets-transaction.json").is_file())
+        self.assertEqual(len(list(saved.glob(".azhou-assets-stage-*"))), 1)
+
+    def test_output_fsync_failure_after_final_swap_preserves_old_backups(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        old_working = (destination / "working.png").read_bytes()
+        output_identity = destination.stat()
+        self.source.write_bytes(png_header(1254, 1254, padding=57))
+        module = load_module(self.script, "synthetic_asset_fsync_failure")
+        swap, fsync = module.swap_files, module.os.fsync
+        swaps, failures = [], []
+        def tracked_swap(*args):
+            result = swap(*args)
+            swaps.append(True)
+            return result
+        def fail_output(fd):
+            info = os.fstat(fd)
+            if len(swaps) >= 4 and (info.st_dev, info.st_ino) == (output_identity.st_dev, output_identity.st_ino):
+                failures.append(True)
+                raise OSError("injected output fsync failure")
+            return fsync(fd)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        error = None
+        with mock.patch.object(module, "swap_files", side_effect=tracked_swap), \
+                mock.patch.object(module.os, "fsync", side_effect=fail_output), \
+                mock.patch.object(sys, "argv", [str(self.script), "--source", str(self.source)]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            try: module.main()
+            except SystemExit as exc: error = exc
+        self.assertEqual(len(swaps), 4)
+        self.assertTrue(failures)
+        self.assertIsNotNone(error, "unsynced output must not be reported as committed")
+        self.assertTrue((self.state / ".azhou-assets-transaction.json").is_file())
+        stages = list(self.state.glob(".azhou-assets-stage-*"))
+        self.assertEqual(len(stages), 1)
+        self.assertEqual((stages[0] / "working.png").read_bytes(), old_working)
+        self.source.unlink()
+        with mock.patch.object(sys, "argv", [str(self.script), "--recover"]), \
+                mock.patch.object(subprocess, "run", return_value=self.run_result), \
+                mock.patch.object(subprocess, "check_output", return_value=self.tracked), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            runpy.run_path(str(self.script), run_name="__main__")
+        self.assertIn("committed", stdout.getvalue())
+        self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
+        self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
+        self.assertEqual((destination / "working.png").read_bytes(), png_header(1254, 1254, padding=57))
+
+    def test_legacy_adoption_refuses_unrecognized_contents(self):
+        self.invoke()
+        destination = self.root / "assets/private"
+        (self.state / ".azhou-assets-receipt.json").unlink()
+        files = {name: (destination / name).read_bytes() for name in ("working.png", "scene.js", "provenance.json")}
+        cases = (
+            ("provenance.json", b'{}', "provenance"),
+            ("working.png", b'not a PNG', "recognized PNG"),
+            ("working.png", png_header(1, 1), "dimensions"),
+            ("working.png", png_header(1254, 1254, padding=1), "provenance differ"),
+        )
+        for name, contents, message in cases:
+            with self.subTest(name=name, message=message):
+                for filename, data in files.items():
+                    (destination / filename).write_bytes(data)
+                (destination / name).write_bytes(contents)
+                before = {filename: (destination / filename).read_bytes() for filename in files}
+                with self.assertRaises(SystemExit):
+                    self.invoke(adopt=True)
+                self.assertIn(message, self.stderr.getvalue())
+                self.assertEqual({filename: (destination / filename).read_bytes() for filename in files}, before)
+                self.assertFalse((self.state / ".azhou-assets-receipt.json").exists())
+
+    def test_existing_file_read_handles_interrupt_and_rejects_midread_replacement(self):
+        self.invoke()
+        module = load_module(self.script, "synthetic_existing_asset_read")
+        destination = self.root / "assets/private"
+        fd = os.open(destination, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        original_read = os.read
+        calls = []
+        def interrupted_once(file_fd, size):
+            if not calls:
+                calls.append(True)
+                raise InterruptedError()
+            return original_read(file_fd, size)
+        with mock.patch.object(module.os, "read", side_effect=interrupted_once):
+            info = module.file_info_at(fd, "working.png")
+        self.assertEqual(info["sha256"], hashlib.sha256((destination / "working.png").read_bytes()).hexdigest())
+        replacement = b"foreign replacement"
+        calls.clear()
+        def replace_after_read(file_fd, size):
+            result = original_read(file_fd, size)
+            if result and not calls:
+                calls.append(True)
+                (destination / "working.png").unlink()
+                (destination / "working.png").write_bytes(replacement)
+            return result
+        with mock.patch.object(module.os, "read", side_effect=replace_after_read):
+            with self.assertRaises(module.AssetConflict):
+                module.file_info_at(fd, "working.png")
+        self.assertEqual((destination / "working.png").read_bytes(), replacement)
+
+    def test_unsupported_atomic_exchange_leaves_original_files_unchanged(self):
+        module = load_module(self.script, "synthetic_unsupported_exchange")
+        directory = Path(self.temporary.name)
+        (directory / "old").write_bytes(b"old")
+        (directory / "new").write_bytes(b"new")
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        with mock.patch.object(module.sys, "platform", "unsupported"):
+            with self.assertRaisesRegex(module.AssetConflict, "unavailable"):
+                module.swap_files(fd, "old", fd, "new")
+        self.assertEqual((directory / "old").read_bytes(), b"old")
+        self.assertEqual((directory / "new").read_bytes(), b"new")
+
+    def test_deeply_nested_transaction_record_is_preserved(self):
+        destination = self.root / "assets/private"
+        destination.mkdir(parents=True)
+        self.state.mkdir(parents=True)
+        journal = self.state / ".azhou-assets-transaction.json"
+        contents = b'{"nested":' + b'[' * 100000 + b'0' + b']' * 100000 + b'}'
+        journal.write_bytes(contents)
+        with self.assertRaises(SystemExit):
+            self.invoke()
+        self.assertTrue("Invalid JSON record" in self.stderr.getvalue() or "not recognized" in self.stderr.getvalue())
+        self.assertEqual(journal.read_bytes(), contents)
+        self.assertFalse((destination / "working.png").exists())
 
     def test_rejects_using_the_output_copy_as_source(self):
         destination = self.root / "assets/private/working.png"

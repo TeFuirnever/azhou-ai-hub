@@ -51,6 +51,10 @@ bash tools/install-macos.sh
 open "$HOME/Applications/阿舟 AI 实验室.app"
 ```
 
+私有启动图的三个生成文件由本地回据绑定，并与构建共用锁。若已有旧版生成文件却没有回据，准备命令会保留它们并停止；核对来源、权利和三个文件后，确需更新时可显式运行 `python3 tools/prepare-azhou-assets.py --source "$AZHOU_WORKING_IMAGE" --adopt-existing`。该选项只校验旧文件的一致性，不证明素材获授权。
+
+准备过程中断后，可运行 `python3 tools/prepare-azhou-assets.py --recover`，无需原图。只有事务记录、目录和文件身份及内容均可核验时才完成或撤回；陌生、缺失或部分清理的数据会保留，需人工核对。不要并发更改私有素材目录或 `.local/agent-skin-asset-preparation/`；锁只约束配合的进程，最后一次核验与文件操作之间仍有竞争，突然断电及部分清理也可能需要人工恢复。
+
 只构建时运行 `bash tools/build-macos.sh`，输出 `.build/azhou-payload`。旧的 `bash tools/build-extension.sh` 兼容入口转发到同一构建。载荷不是日常启动入口；安装使用上面的统一命令。
 
 也可以双击 `扩展启动Codex.command`：始终构建当前源码，完成安装、旧项目入口清理和唯一性检查后，再打开规范安装路径。不会因旧 `dist` 存在而跳过构建。

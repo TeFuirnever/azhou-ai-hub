@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import stat
@@ -365,10 +366,33 @@ def asset_work_directory(parent, artifacts):
         raise
 
 
-def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex') -> dict:
+def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_fd: int | None = None) -> dict:
     if host not in ('codex', 'zcode', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
     root = Path(root).resolve()
+    spec = importlib.util.spec_from_file_location('agent_skin_startup_build_lock', root / 'tools/build-lock.py')
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Missing build lock module.')
+    lock = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lock)
+    inherited = os.environ.get('_AZHOU_BUILD_LOCK_FD')
+    if lock_fd is None and inherited:
+        try:
+            lock_fd = int(inherited)
+        except ValueError as exc:
+            raise RuntimeError('Invalid inherited build lock.') from exc
+    if lock_fd is not None:
+        lock.checked_lock_file(lock_fd)
+        result = _build_startup_locked(bundle, root=root, host=host)
+        lock.checked_lock_file(lock_fd)
+        return result
+    with lock.acquired() as fd:
+        result = _build_startup_locked(bundle, root=root, host=host)
+        lock.checked_lock_file(fd)
+        return result
+
+
+def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
     if host != 'dsh':

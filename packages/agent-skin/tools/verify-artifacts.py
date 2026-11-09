@@ -429,7 +429,20 @@ def aggregate_inputs(inputs):
     return digest.hexdigest()
 
 
+def require_no_asset_transaction(root):
+    local = root / '.local'
+    state = local / 'agent-skin-asset-preparation'
+    if local.is_symlink() or (local.exists() and not local.is_dir()):
+        raise RuntimeError('Asset transaction state has an unsafe .local path; preserve it for review.')
+    if state.is_symlink() or (state.exists() and not state.is_dir()):
+        raise RuntimeError('Asset transaction state is not a regular directory; preserve it for review.')
+    journal = state / '.azhou-assets-transaction.json'
+    if journal.exists() or journal.is_symlink():
+        raise RuntimeError('Private asset preparation is incomplete; run prepare-azhou-assets.py --recover.')
+
+
 def source_inputs():
+    require_no_asset_transaction(ROOT)
     files = [ROOT / name for name in INPUT_FILES]
     private = ROOT / 'assets/private'
     if private.is_symlink() or not private.is_dir():
@@ -446,6 +459,7 @@ def source_inputs():
         if path.is_symlink() or not path.is_file():
             raise RuntimeError(f'缺少实体构建输入：{path}')
         inputs[path.relative_to(ROOT).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    require_no_asset_transaction(ROOT)
     return inputs
 
 

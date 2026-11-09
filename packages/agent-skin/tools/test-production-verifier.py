@@ -225,6 +225,32 @@ class VerifierApiTests(unittest.TestCase):
             link.unlink()
         self.assertIn("assets/private/working.png", self.verifier.source_inputs())
 
+    def test_source_inputs_reject_pending_asset_transaction_before_and_after_scan(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-asset-journal-") as temporary:
+            root = Path(temporary).resolve()
+            private = root / "assets/private"
+            private.mkdir(parents=True)
+            (private / "working.png").write_bytes(b"synthetic")
+            state = root / ".local/agent-skin-asset-preparation"
+            state.mkdir(parents=True)
+            journal = state / ".azhou-assets-transaction.json"
+            original = self.verifier.checked_descendants
+            with mock.patch.object(self.verifier, "ROOT", root), mock.patch.object(self.verifier, "INPUT_FILES", ()):
+                journal.write_bytes(b"preserve transaction")
+                with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
+                    self.verifier.source_inputs()
+                self.assertEqual(journal.read_bytes(), b"preserve transaction")
+                journal.unlink()
+                def insert_after_scan(path):
+                    yield from original(path)
+                    journal.write_bytes(b"appeared during scan")
+                with mock.patch.object(self.verifier, "checked_descendants", side_effect=insert_after_scan):
+                    with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
+                        self.verifier.source_inputs()
+                self.assertEqual(journal.read_bytes(), b"appeared during scan")
+                journal.unlink()
+                self.assertIn("assets/private/working.png", self.verifier.source_inputs())
+
     def test_source_snapshot_hashes_large_private_inputs_exactly(self):
         path = self.root / "assets/private/synthetic-large.bin"
         data = b"synthetic-input" * 100_000

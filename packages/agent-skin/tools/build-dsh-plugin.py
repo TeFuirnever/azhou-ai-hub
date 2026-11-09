@@ -438,7 +438,7 @@ def _build_plugin_locked(destination: Path | None, *, root: Path, lock, lock_fd:
     stage = stage_root / 'azhou-payload'
     completed = False
     try:
-        builder.build_startup(stage, root=root, host='dsh')
+        builder.build_startup(stage, root=root, host='dsh', lock_fd=lock_fd)
         stage_receipt = verified_startup_stage(stage_root, artifacts, (initial.st_dev, initial.st_ino))
         payload = (stage / 'Contents/Resources/startup/install.js').read_text(encoding='utf-8')
         body = _payload_body(payload)
