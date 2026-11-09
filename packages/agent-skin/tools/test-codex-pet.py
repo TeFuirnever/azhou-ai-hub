@@ -485,6 +485,229 @@ class PetSafetyTests(unittest.TestCase):
         self.assertTrue(moved.is_dir())
         self.assertIn(str(first), result["preservedUnverifiedPackages"])
 
+    def test_foreign_file_added_after_stage_validation_is_preserved(self):
+        state = PET.state_dir(self.project, True)
+        validate = PET.verify_stage_for_cleanup
+        for index, kind in enumerate(("snapshot", "package")):
+            with self.subTest(kind=kind):
+                stage = state / (".stage-" + str(index) * 32)
+                stage.mkdir()
+                planned = {name: b"synthetic" for name in PET.stage_file_names(kind)}
+                name = "generation-brief.md" if kind == "snapshot" else "pet.json"
+                PET.write_new(stage / name, planned[name])
+                record = PET.stage_journal(self.project, stage, kind, planned, None)
+                journal = state / "package-journal.json"
+                PET.atomic_json(journal, record)
+                def inject(stage_path, *args):
+                    validate(stage_path, *args)
+                    (stage_path / "foreign.txt").write_bytes(b"do not delete")
+                error = None
+                with patch.object(PET, "verify_stage_for_cleanup", side_effect=inject):
+                    try: PET.recover_package_stage(state, self.project)
+                    except PET.PetError as exc: error = exc
+                self.assertTrue((stage / "foreign.txt").is_file(), "foreign file must survive cleanup")
+                self.assertEqual((stage / "foreign.txt").read_bytes(), b"do not delete")
+                self.assertTrue(journal.is_file())
+                self.assertIsNotNone(error)
+                self.assertEqual(error.code, "recovery-required")
+                (stage / "foreign.txt").unlink()
+                PET.recover_package_stage(state, self.project)
+
+    def test_foreign_file_added_after_install_stage_validation_is_preserved(self):
+        self.install()
+        pets = self.codex / "pets"
+        facts = PET.installed_facts(pets / PET.PET_ID, self.project)
+        tx = "a" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("install")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        journal = PET.journal_path(pets)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "committed", "hadPrevious": False,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"],
+                  "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                  "stageIdentity": binding["stageIdentity"]}
+        PET.atomic_json(journal, record)
+        validate = PET.verify_stage_for_cleanup
+        def inject(stage_path, *args):
+            validate(stage_path, *args)
+            (stage_path / "foreign.txt").write_bytes(b"do not delete")
+        error = None
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=inject):
+            try: PET.recover_install(pets, self.project)
+            except PET.PetError as exc: error = exc
+        self.assertTrue((stage / "foreign.txt").is_file(), "foreign file must survive cleanup")
+        self.assertEqual((stage / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue(journal.is_file())
+        self.assertIsNotNone(error)
+        self.assertEqual(error.code, "recovery-required")
+        self.assertTrue((pets / PET.PET_ID).is_dir())
+
+    def test_install_recovery_keeps_target_when_stage_gains_unknown_file(self):
+        self.install()
+        pets = self.codex / "pets"
+        target = pets / PET.PET_ID
+        original = {path.name: path.read_bytes() for path in target.iterdir()}
+        facts = PET.installed_facts(target, self.project)
+        tx = "f" * 32
+        stage = self.codex / f".{PET.PET_ID}.stage-{tx}"
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("install")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        binding = PET.stage_journal(self.project, stage, "install", planned, None)
+        journal = PET.journal_path(pets)
+        record = {"owner": PET.OWNER, "projectRoot": str(self.project), "petId": PET.PET_ID,
+                  "transaction": tx, "stagingLocation": "codex-home", "phase": "prepared", "hadPrevious": False,
+                  "candidateAtlasSHA256": facts["atlasSHA256"], "candidateThemeRevision": facts["themeRevision"],
+                  "candidateManifestSHA256": facts["manifestSHA256"],
+                  "stageKind": binding["stageKind"], "stageFiles": binding["stageFiles"],
+                  "stageIdentity": binding["stageIdentity"]}
+        PET.atomic_json(journal, record)
+        validate = PET.verify_stage_for_cleanup
+        calls = []
+        def inject(stage_path, *args):
+            validate(stage_path, *args)
+            calls.append(True)
+            if len(calls) == 1: (stage_path / "foreign.txt").write_bytes(b"do not delete")
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=inject):
+            self.expect_error(lambda: PET.recover_install(pets, self.project), "recovery-required")
+        self.assertTrue(target.is_dir(), "installed candidate must not be removed after stage conflict")
+        self.assertEqual({path.name: path.read_bytes() for path in target.iterdir()}, original)
+        self.assertEqual((stage / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue(journal.is_file())
+
+    def test_foreign_file_added_during_stage_deletion_is_not_removed(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "b" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("snapshot")}
+        PET.write_new(stage / "generation-brief.md", planned["generation-brief.md"])
+        PET.write_new(stage / "inputs/style.css", planned["inputs/style.css"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "snapshot", planned, None))
+        unlink = PET.os.unlink
+        injected = []
+        def inject(name, *args, **kwargs):
+            if not injected:
+                (stage / "foreign.txt").write_bytes(b"do not delete")
+                injected.append(True)
+            return unlink(name, *args, **kwargs)
+        with patch.object(PET.os, "unlink", side_effect=inject):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual(injected, [True])
+        self.assertEqual((stage / "foreign.txt").read_bytes(), b"do not delete")
+        self.assertTrue(journal.is_file())
+        self.assertFalse((stage / "generation-brief.md").exists())
+
+    def test_stage_file_changed_after_final_validation_is_not_removed(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "c" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("package")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        validate = PET.verify_stage_for_cleanup
+        calls = []
+        def replace_after_validation(stage_path, *args):
+            validate(stage_path, *args)
+            calls.append(True)
+            if len(calls) == 2: (stage_path / "pet.json").write_bytes(b"changed by another actor")
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=replace_after_validation):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual((stage / "pet.json").read_bytes(), b"changed by another actor")
+        self.assertTrue(journal.is_file())
+
+    def test_stage_symlink_substitution_after_final_validation_is_preserved(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "d" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("package")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        outside = self.root / "outside"
+        outside.write_bytes(b"do not delete")
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        validate = PET.verify_stage_for_cleanup
+        calls = []
+        def replace_after_validation(stage_path, *args):
+            validate(stage_path, *args)
+            calls.append(True)
+            if len(calls) == 2:
+                (stage_path / "pet.json").unlink()
+                (stage_path / "pet.json").symlink_to(outside)
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=replace_after_validation):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual(outside.read_bytes(), b"do not delete")
+        self.assertTrue((stage / "pet.json").is_symlink())
+        self.assertTrue(journal.is_file())
+
+    def test_stage_copy_after_final_validation_is_preserved(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "e" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("package")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        saved = self.root / "actual-stage"
+        validate = PET.verify_stage_for_cleanup
+        calls = []
+        def replace_after_validation(stage_path, *args):
+            validate(stage_path, *args)
+            calls.append(True)
+            if len(calls) == 2:
+                stage_path.rename(saved)
+                shutil.copytree(saved, stage_path)
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=replace_after_validation):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual((stage / "pet.json").read_bytes(), b"synthetic")
+        self.assertEqual((saved / "pet.json").read_bytes(), b"synthetic")
+        self.assertTrue(journal.is_file())
+
+    def test_stage_unlink_failure_preserves_file_and_journal(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "1" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("package")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        with patch.object(PET.os, "unlink", side_effect=PermissionError("injected")):
+            self.expect_error(lambda: PET.recover_package_stage(state, self.project), "recovery-required")
+        self.assertEqual((stage / "pet.json").read_bytes(), b"synthetic")
+        self.assertTrue(journal.is_file())
+        PET.recover_package_stage(state, self.project)
+        self.assertFalse(stage.exists())
+        self.assertFalse(journal.exists())
+
+    def test_stage_cleanup_retries_interrupted_file_read(self):
+        state = PET.state_dir(self.project, True)
+        stage = state / (".stage-" + "2" * 32)
+        stage.mkdir()
+        planned = {name: b"synthetic" for name in PET.stage_file_names("package")}
+        PET.write_new(stage / "pet.json", planned["pet.json"])
+        journal = state / "package-journal.json"
+        PET.atomic_json(journal, PET.stage_journal(self.project, stage, "package", planned, None))
+        validate, read = PET.verify_stage_for_cleanup, PET.os.read
+        calls, interruptions = [], []
+        def validated(stage_path, *args):
+            validate(stage_path, *args)
+            calls.append(True)
+        def interrupt_once(fd, size):
+            if len(calls) >= 2 and not interruptions:
+                interruptions.append(True)
+                raise InterruptedError()
+            return read(fd, size)
+        with patch.object(PET, "verify_stage_for_cleanup", side_effect=validated), patch.object(PET.os, "read", side_effect=interrupt_once):
+            PET.recover_package_stage(state, self.project)
+        self.assertEqual(interruptions, [True])
+        self.assertFalse(stage.exists())
+        self.assertFalse(journal.exists())
+
     def test_provisional_package_journal_preserves_even_empty_stage(self):
         state = PET.state_dir(self.project, True)
         journal = state / "package-journal.json"

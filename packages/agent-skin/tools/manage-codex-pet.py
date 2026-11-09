@@ -617,6 +617,85 @@ def verify_stage_for_cleanup(stage, journal, expected_kinds):
     require_stage_identity(stage, journal)
 
 
+def remove_planned_stage(stage, journal, expected_kinds):
+    verify_stage_for_cleanup(stage, journal, expected_kinds)
+    files = journal["stageFiles"]
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    try:
+        with contextlib.ExitStack() as root_handles:
+            parent_fd = os.open(stage.parent, flags)
+            root_handles.callback(os.close, parent_fd)
+            root_fd = os.open(stage.name, flags, dir_fd=parent_fd)
+            root_handles.callback(os.close, root_fd)
+            binding = journal["stageIdentity"]
+            expected_identity = (binding["device"], binding["inode"])
+
+            def check_root():
+                path_info = os.stat(stage.name, dir_fd=parent_fd, follow_symlinks=False)
+                opened = os.fstat(root_fd)
+                require(stat.S_ISDIR(path_info.st_mode) and stat.S_ISDIR(opened.st_mode)
+                        and (path_info.st_dev, path_info.st_ino) == expected_identity
+                        and (opened.st_dev, opened.st_ino) == expected_identity,
+                        "暂存目录身份已变化，保留待核对", "recovery-required")
+
+            def open_parent(parts, handles):
+                current = root_fd
+                for part in parts:
+                    current = os.open(part, flags, dir_fd=current)
+                    handles.callback(os.close, current)
+                return current
+
+            check_root()
+            for name, expected_sha in sorted(files.items()):
+                parts = Path(name).parts
+                with contextlib.ExitStack() as handles:
+                    try:
+                        folder_fd = open_parent(parts[:-1], handles)
+                        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                                     dir_fd=folder_fd)
+                    except FileNotFoundError:
+                        continue
+                    handles.callback(os.close, fd)
+                    before = os.fstat(fd)
+                    require(stat.S_ISREG(before.st_mode) and before.st_size <= MAX_FILE_BYTES,
+                            "暂存文件不是允许的普通文件，保留待核对", "recovery-required")
+                    digest, total = hashlib.sha256(), 0
+                    while True:
+                        try:
+                            chunk = os.read(fd, min(1024 * 1024, MAX_FILE_BYTES + 1 - total))
+                        except InterruptedError:
+                            continue
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        require(total <= MAX_FILE_BYTES, "暂存文件过大，保留待核对", "recovery-required")
+                        digest.update(chunk)
+                    after = os.fstat(fd)
+                    at_name = os.stat(parts[-1], dir_fd=folder_fd, follow_symlinks=False)
+                    identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+                    require(stat.S_ISREG(at_name.st_mode)
+                            and identity(before) == identity(after) == identity(at_name)
+                            and total == after.st_size and digest.hexdigest() == expected_sha,
+                            "暂存文件内容或身份已变化，保留待核对", "recovery-required")
+                    check_root()
+                    os.unlink(parts[-1], dir_fd=folder_fd)
+            directories = {parent.as_posix() for name in files for parent in Path(name).parents
+                           if parent != Path(".")}
+            for name in sorted(directories, key=lambda item: (-len(Path(item).parts), item)):
+                parts = Path(name).parts
+                with contextlib.ExitStack() as handles:
+                    try:
+                        folder_fd = open_parent(parts[:-1], handles)
+                        check_root()
+                        os.rmdir(parts[-1], dir_fd=folder_fd)
+                    except FileNotFoundError:
+                        continue
+            check_root()
+            os.rmdir(stage.name, dir_fd=parent_fd)
+    except OSError as exc:
+        raise PetError("recovery-required", f"暂存无法安全清理，保留待核对：{exc}") from exc
+
+
 def recover_package_stage(state, project, operation_id=None):
     journal = child(state, "package-journal.json")
     if not journal.exists():
@@ -639,7 +718,7 @@ def recover_package_stage(state, project, operation_id=None):
     if stage.exists():
         verify_stage_for_cleanup(stage, data, {"snapshot", "package"})
         require_stage_identity(stage, data)
-        remove_tree(stage, allow_empty=True)
+        remove_planned_stage(stage, data, {"snapshot", "package"})
     journal.unlink()
     fsync_dir(state)
 
@@ -806,7 +885,7 @@ def recover_install(pets, project):
 
     def check_stage_before_action():
         if stage_present:
-            require_stage_identity(stage, record)
+            verify_stage_for_cleanup(stage, record, {"install"})
         else:
             require(not stage.exists() and not stage.is_symlink(), "恢复期间出现未知暂存，保留待核对", "recovery-required")
 
@@ -866,7 +945,7 @@ def recover_install(pets, project):
             rename_exclusive(source, destination)
     check_stage_before_action()
     if stage_present:
-        remove_tree(stage, allow_empty=True)
+        remove_planned_stage(stage, record, {"install"})
     fsync_dir(pets.parent)
     journal.unlink()
     fsync_dir(pets)
