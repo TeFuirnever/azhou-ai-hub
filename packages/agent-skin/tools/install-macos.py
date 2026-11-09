@@ -394,7 +394,7 @@ def _remove_retirement_contents(directory_fd, evidence, parts=(), guard=None):
             raise RuntimeError('隔离副本包含非普通文件，已停止清理。')
 
 
-def _clean_install_work(directory, expected_hash, expected_root):
+def _clean_install_work(directory, expected_hash, expected_root, expected_payload):
     _require_retirement_fd_support()
     directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     descriptor = None
@@ -410,6 +410,8 @@ def _clean_install_work(directory, expected_hash, expected_root):
             descriptor = os.open('payload', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory_fd)
             if os.fstat(descriptor).st_dev != os.fstat(directory_fd).st_dev:
                 raise RuntimeError('隔离副本跨越文件系统边界，已停止清理。')
+            if expected_payload is None or not _same_inode(os.fstat(descriptor), expected_payload):
+                raise RuntimeError('安装临时载荷身份发生变化。')
             digest, evidence = _fingerprint_retirement_directory(descriptor, with_evidence=True)
             if digest != expected_hash:
                 raise RuntimeError('安装临时副本与已验证内容不一致。')
@@ -760,43 +762,85 @@ def install_payload(source_hash, original, before_swap=None):
     staged = temporary / 'payload'  # Never create a second discoverable .app.
     cleanup = True
     cleanup_hash = source_hash
+    cleanup_payload_identity = None
     try:
         subprocess.run(['/usr/bin/ditto', str(SOURCE), str(staged)], check=True)
+        staged_identity = os.stat(staged, follow_symlinks=False)
+        cleanup_payload_identity = staged_identity
         verify(staged)
         if fingerprint(staged) != source_hash or fingerprint(SOURCE) != source_hash:
             raise RuntimeError('构建载荷在复制期间发生变化，原入口未修改。')
-        staged_identity = os.stat(staged, follow_symlinks=False)
         require_stopped([DESTINATION])
         if original:
+            original_identity = os.stat(DESTINATION, follow_symlinks=False)
             unchanged(original)
-            if before_swap is not None:
-                before_swap()
+
+            def require_positions(stage_identity, target_identity):
+                for path, expected in ((temporary, temporary_identity), (staged, stage_identity),
+                                       (DESTINATION, target_identity)):
+                    actual = os.stat(path, follow_symlinks=False)
+                    if not stat.S_ISDIR(actual.st_mode) or not _same_inode(actual, expected):
+                        raise RuntimeError(f'安装交换位置发生变化：{path}')
+
             cleanup = False
+            if before_swap is not None:
+                try:
+                    before_swap()
+                except Exception as error:
+                    raise RuntimeError(f'预发布核验失败，临时目录已保留：{temporary}；{error}') from error
+            try:
+                require_positions(staged_identity, original_identity)
+                unchanged(original)
+                require_positions(staged_identity, original_identity)
+            except (OSError, ValueError, RuntimeError) as error:
+                raise RuntimeError(f'候选在核查后发生变化，已保留入口和临时目录：{temporary}') from error
             try:
                 swap(staged, DESTINATION)
                 cleanup_hash = original['sha256Tree']
-            except BaseException:
-                cleanup = True
+                cleanup_payload_identity = original_identity
+            except BaseException as swap_error:
+                try:
+                    require_positions(staged_identity, original_identity)
+                    unchanged(original)
+                    if fingerprint(staged) == source_hash:
+                        cleanup = True
+                except (OSError, ValueError, RuntimeError):
+                    pass
+                if not cleanup:
+                    raise RuntimeError(f'安装交换结果未确认，已保留入口和临时目录：{temporary}') from swap_error
                 raise
             try:
+                require_positions(original_identity, staged_identity)
                 _verify_displaced_entry(original, staged)
                 verify(DESTINATION)
                 if fingerprint(DESTINATION) != source_hash:
                     raise RuntimeError('安装后内容校验失败。')
+                require_positions(original_identity, staged_identity)
             except BaseException as verification_error:
                 try:
+                    require_positions(original_identity, staged_identity)
+                    _verify_displaced_entry(original, staged)
+                    if fingerprint(DESTINATION) != source_hash:
+                        raise RuntimeError('新入口内容发生变化')
+                    require_positions(original_identity, staged_identity)
                     swap(staged, DESTINATION)
+                    require_positions(staged_identity, original_identity)
                     cleanup_hash = source_hash
+                    cleanup_payload_identity = staged_identity
                 except BaseException as rollback_error:
-                    raise RuntimeError(f'安装校验失败且回滚未完成；原包保留在 {staged}，请保留该临时目录。') from rollback_error
+                    raise RuntimeError(f'安装校验失败且回滚未完成；请保留入口及临时目录待核对：{temporary}') from rollback_error
                 cleanup = True
                 raise verification_error
             cleanup = True
         else:
             if DESTINATION.exists() or DESTINATION.is_symlink():
                 raise RuntimeError('规范入口被其他操作创建，未覆盖。')
+            cleanup = False
             if before_swap is not None:
-                before_swap()
+                try:
+                    before_swap()
+                except Exception as error:
+                    raise RuntimeError(f'预发布核验失败，临时目录已保留：{temporary}；{error}') from error
             try:
                 current_root = os.stat(temporary, follow_symlinks=False)
                 current_stage = os.stat(staged, follow_symlinks=False)
@@ -806,6 +850,7 @@ def install_payload(source_hash, original, before_swap=None):
             except (OSError, RuntimeError) as error:
                 cleanup = False
                 raise RuntimeError(f'安装暂存发生变化，已保留：{temporary}') from error
+            cleanup = True
             publish_exclusive(staged, DESTINATION)
             try:
                 verify(DESTINATION)
@@ -827,7 +872,7 @@ def install_payload(source_hash, original, before_swap=None):
     finally:
         if cleanup:
             try:
-                _clean_install_work(temporary, cleanup_hash, temporary_identity)
+                _clean_install_work(temporary, cleanup_hash, temporary_identity, cleanup_payload_identity)
             except BaseException as cleanup_error:
                 raise RuntimeError(f'安装临时内容未清理，已保留：{temporary}。') from cleanup_error
 

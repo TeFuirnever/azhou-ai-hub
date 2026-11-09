@@ -970,7 +970,7 @@ class InstallerTests(unittest.TestCase):
         with patch.object(m.os, 'fstat', side_effect=report_other_device):
             with patch.object(m, '_fingerprint_retirement_directory', side_effect=AssertionError('unexpected scan')):
                 with self.assertRaisesRegex(RuntimeError, '跨越文件系统边界'):
-                    m._clean_install_work(directory, expected, directory.stat())
+                    m._clean_install_work(directory, expected, directory.stat(), payload.stat())
         self.assertEqual(content.read_text(), 'synthetic')
 
     def test_retirement_preserves_cross_device_payload(self):
@@ -1127,6 +1127,147 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(m.fingerprint(m.DESTINATION), before)
         self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
 
+    def test_upgrade_failure_preserves_foreign_target_without_exchange(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        actual_verify = m.verify
+        saved = m.DESTINATION.with_name('saved-new')
+        def replace_during_verification(path):
+            if Path(path) == m.DESTINATION:
+                m.DESTINATION.rename(saved)
+                m.DESTINATION.mkdir()
+                (m.DESTINATION / 'unknown.txt').write_text('keep')
+                raise RuntimeError('injected verify failure')
+            return actual_verify(path)
+        with patch.object(m, 'verify', side_effect=replace_during_verification):
+            with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
+                m.install_payload(digest, original)
+        self.assertEqual((m.DESTINATION / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue(saved.is_dir())
+        self.assertTrue(next(m.DESTINATION.parent.glob('.azhou-install-*/payload')).is_dir())
+        self.assertEqual(self.swap_calls, 1)
+
+    def test_upgrade_failure_preserves_foreign_stage_without_exchange(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        actual_verify = m.verify
+        saved = {}
+        def replace_during_verification(path):
+            if Path(path) == m.DESTINATION:
+                stage = next(m.DESTINATION.parent.glob('.azhou-install-*/payload'))
+                saved['old'] = stage.with_name('saved-old')
+                stage.rename(saved['old'])
+                stage.mkdir()
+                (stage / 'unknown.txt').write_text('keep')
+                saved['foreign'] = stage
+                raise RuntimeError('injected verify failure')
+            return actual_verify(path)
+        with patch.object(m, 'verify', side_effect=replace_during_verification):
+            with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
+                m.install_payload(digest, original)
+        self.assertEqual((saved['foreign'] / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue(saved['old'].is_dir())
+        self.assertEqual(m.fingerprint(m.DESTINATION), digest)
+        self.assertEqual(self.swap_calls, 1)
+
+    def test_swap_error_after_exchange_preserves_both_positions(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        old_hash = m.fingerprint(m.DESTINATION)
+        exchange = m.swap
+        def exchange_then_fail(left, right):
+            exchange(left, right)
+            raise OSError('injected uncertain swap')
+        with patch.object(m, 'swap', side_effect=exchange_then_fail):
+            with self.assertRaisesRegex(RuntimeError, '交换结果未确认'):
+                m.install_payload(digest, original)
+        stage = next(m.DESTINATION.parent.glob('.azhou-install-*/payload'))
+        self.assertEqual(m.fingerprint(stage), old_hash)
+        self.assertEqual(m.fingerprint(m.DESTINATION), digest)
+        self.assertEqual(self.swap_calls, 1)
+
+    def test_upgrade_failure_preserves_replaced_transaction_root(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        actual_verify = m.verify
+        saved = {}
+        def replace_during_verification(path):
+            if Path(path) == m.DESTINATION:
+                root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+                saved['old'] = root.with_name('saved-transaction')
+                root.rename(saved['old'])
+                root.mkdir()
+                (root / 'unknown.txt').write_text('keep')
+                saved['foreign'] = root
+                raise RuntimeError('injected verify failure')
+            return actual_verify(path)
+        with patch.object(m, 'verify', side_effect=replace_during_verification):
+            with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
+                m.install_payload(digest, original)
+        self.assertEqual((saved['foreign'] / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue((saved['old'] / 'payload').is_dir())
+        self.assertEqual(m.fingerprint(m.DESTINATION), digest)
+        self.assertEqual(self.swap_calls, 1)
+
+    def test_failed_prepublication_callback_preserves_replaced_stage(self):
+        m = self.module
+        def replace_then_fail():
+            root = next(m.DESTINATION.parent.glob('.azhou-install-*'))
+            stage = root / 'payload'
+            stage.rename(root / 'saved-payload')
+            stage.mkdir()
+            (stage / 'unknown.txt').write_text('keep')
+            raise RuntimeError('injected callback failure')
+        with self.assertRaisesRegex(RuntimeError, 'injected callback failure'):
+            m.install_payload(m.fingerprint(m.SOURCE), None, before_swap=replace_then_fail)
+        stage = next(m.DESTINATION.parent.glob('.azhou-install-*/payload'))
+        self.assertEqual((stage / 'unknown.txt').read_text(), 'keep')
+        self.assertTrue((stage.parent / 'saved-payload').is_dir())
+        self.assertFalse(m.DESTINATION.exists())
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'native exchange is a macOS API')
+    def test_native_exchange_installs_verified_synthetic_payload(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        with patch.object(m, 'swap', m.HELPERS['swap']):
+            m.install_payload(digest, original)
+        self.assertEqual(m.fingerprint(m.DESTINATION), digest)
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'native exchange is a macOS API')
+    def test_native_exchange_rolls_back_verified_synthetic_payload(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        old_hash = m.fingerprint(m.DESTINATION)
+        actual_verify = m.verify
+        def fail_after_exchange(path):
+            if Path(path) == m.DESTINATION:
+                raise RuntimeError('injected verify failure')
+            return actual_verify(path)
+        with patch.object(m, 'swap', m.HELPERS['swap']), patch.object(m, 'verify', side_effect=fail_after_exchange):
+            with self.assertRaisesRegex(RuntimeError, 'injected verify failure'):
+                m.install_payload(digest, original)
+        self.assertEqual(m.fingerprint(m.DESTINATION), old_hash)
+        self.assertFalse(list(m.DESTINATION.parent.glob('.azhou-install-*')))
+
     def test_post_swap_failure_rolls_back(self):
         m = self.module
         self.old_pair(installed_path=m.DESTINATION)
@@ -1155,6 +1296,7 @@ class InstallerTests(unittest.TestCase):
             m.install_payload(source_hash, original, before_swap=replace_target)
         self.assertEqual(m.fingerprint(preserved), old_hash)
         self.assertEqual((m.DESTINATION / 'Contents/Resources/web/index.html').read_text(), 'different owner')
+        self.assertEqual(self.swap_calls, 0)
 
     def test_swap_verification_does_not_block_on_fifo_info_plist(self):
         m = self.module
@@ -1181,13 +1323,15 @@ class InstallerTests(unittest.TestCase):
         signal.alarm(3)
         try:
             with patch.object(m, 'swap', side_effect=replace_info_after_exchange):
-                with self.assertRaisesRegex(RuntimeError, '候选在核查后发生变化'):
+                with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
                     m.install_payload(digest, original)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, previous)
         self.assertTrue(raced)
-        self.assertTrue((m.DESTINATION / 'Contents/Info.plist').is_fifo())
+        staged = next(m.DESTINATION.parent.glob('.azhou-install-*/payload'))
+        self.assertTrue((staged / 'Contents/Info.plist').is_fifo())
+        self.assertEqual(m.fingerprint(m.DESTINATION), digest)
 
     def test_swap_cleanup_preserves_replaced_staging_entry(self):
         m = self.module
@@ -1198,20 +1342,41 @@ class InstallerTests(unittest.TestCase):
         clean = m._clean_install_work
         observed = {}
 
-        def replace_before_cleanup(directory, expected_hash, expected_root):
+        def replace_before_cleanup(directory, expected_hash, expected_root, expected_payload):
             payload = Path(directory) / 'payload'
             saved = payload.with_name('saved-original')
             payload.rename(saved)
             payload.mkdir()
             (payload / 'valuable-user-data.txt').write_text('keep')
             observed.update(payload=payload, saved=saved)
-            return clean(directory, expected_hash, expected_root)
+            return clean(directory, expected_hash, expected_root, expected_payload)
 
         with patch.object(m, '_clean_install_work', side_effect=replace_before_cleanup):
             with self.assertRaisesRegex(RuntimeError, '临时'):
                 m.install_payload(digest, original)
         self.assertEqual((observed['payload'] / 'valuable-user-data.txt').read_text(), 'keep')
         self.assertEqual((observed['saved'] / 'Contents/Resources/web/index.html').read_text(), 'known old')
+
+    def test_swap_cleanup_preserves_identical_foreign_payload(self):
+        m = self.module
+        self.old_pair(installed_path=m.DESTINATION)
+        info, digest = m.verify(m.SOURCE), m.fingerprint(m.SOURCE)
+        candidates, _ = m.scan_apps(info, digest, m.read_receipt())
+        original = next(entry for entry in candidates if entry['path'] == m.DESTINATION)
+        clean = m._clean_install_work
+        observed = {}
+        def replace_before_cleanup(directory, expected_hash, expected_root, expected_payload):
+            payload = Path(directory) / 'payload'
+            saved = m.DESTINATION.parent / 'saved-original'
+            payload.rename(saved)
+            shutil.copytree(saved, payload)
+            observed.update(payload=payload, saved=saved, inode=payload.stat().st_ino)
+            return clean(directory, expected_hash, expected_root, expected_payload)
+        with patch.object(m, '_clean_install_work', side_effect=replace_before_cleanup):
+            with self.assertRaisesRegex(RuntimeError, '临时'):
+                m.install_payload(digest, original)
+        self.assertEqual(observed['payload'].stat().st_ino, observed['inode'])
+        self.assertTrue(observed['saved'].is_dir())
 
     def test_swap_cleanup_preserves_stage_replaced_after_verification(self):
         m = self.module
@@ -1699,7 +1864,7 @@ class InstallerTests(unittest.TestCase):
         self.old_pair(installed_path=m.DESTINATION)
         before = m.fingerprint(m.DESTINATION)
         self.failure = 'rollback'
-        with self.assertRaisesRegex(RuntimeError, '原包保留'):
+        with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
             m.install()
         temporary = list(m.DESTINATION.parent.glob('.azhou-install-*'))
         self.assertEqual(len(temporary), 1)
