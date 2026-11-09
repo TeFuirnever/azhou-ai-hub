@@ -124,8 +124,16 @@ def read(path):
 
 
 def parse(data):
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("对象字段重复")
+            result[key] = value
+        return result
     try:
-        return json.loads(data, parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
+        return json.loads(data, object_pairs_hook=unique_object,
+                          parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
     except (ValueError, UnicodeError) as exc:
         raise PetError("invalid", f"JSON 无效：{exc}") from exc
 

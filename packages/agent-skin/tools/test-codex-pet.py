@@ -2238,6 +2238,50 @@ class PetSafetyTests(unittest.TestCase):
         self.assertEqual(left[1].read_bytes(), b"foreign before publication")
         self.assertFalse(path.exists())
 
+    def test_json_parser_rejects_duplicate_keys_at_any_depth(self):
+        for raw in (b'{"pass":false,"pass":true}', b'{"nested":{"x":1,"x":2}}',
+                    b'{"outer":{},"outer":{}}', b'[{"x":1,"x":1}]'):
+            with self.subTest(raw=raw):
+                self.expect_error(lambda: PET.parse(raw))
+        for raw, expected in ((b'{}', {}), (b'[]', []), (b'{"x":[1,true,null]}', {'x': [1, True, None]})):
+            self.assertEqual(PET.parse(raw), expected)
+        for raw in (b'{"x":NaN}', b'{"x":Infinity}', b'{"x":-Infinity}'):
+            self.expect_error(lambda: PET.parse(raw))
+
+    def test_duplicate_qa_pass_cannot_hide_failure(self):
+        qa = self.run / 'qa/visual-qa.json'
+        original = qa.read_text()
+        self.assertIn('"pass": true', original)
+        data = original.replace('"pass": true', '"pass": false, "pass": true', 1).encode()
+        qa.write_bytes(data)
+        self.expect_error(lambda: PET.validate_run(self.project, self.run, self.snapshot))
+        self.assertEqual(qa.read_bytes(), data)
+        self.assertFalse((PET.state_dir(self.project) / 'selection.json').exists())
+
+    def test_duplicate_selection_is_invalid_and_preserved(self):
+        self.package()
+        selection = PET.state_dir(self.project) / 'selection.json'
+        original = selection.read_text()
+        self.assertIn('"package":', original)
+        data = original.replace('"package":', '"package": "unknown", "package":', 1).encode()
+        selection.write_bytes(data)
+        self.assertEqual(PET.status(self.project, self.codex)['package']['status'], 'invalid')
+        self.assertEqual(selection.read_bytes(), data)
+        self.assertFalse(self.codex.exists())
+
+    def test_duplicate_recovery_journal_is_preserved(self):
+        pets = self.codex / 'pets'
+        pets.mkdir(parents=True)
+        sentinel = self.codex / 'unknown'
+        sentinel.write_bytes(b'keep synthetic data')
+        journal = PET.journal_path(pets)
+        data = ('{"owner":' + json.dumps(PET.OWNER) + ',"projectRoot":' + json.dumps(str(self.project))
+                + ',"petId":' + json.dumps(PET.PET_ID) + ',"phase":"prepared","phase":"committed"}').encode()
+        journal.write_bytes(data)
+        self.expect_error(lambda: PET.recover_install(pets, self.project))
+        self.assertEqual(journal.read_bytes(), data)
+        self.assertEqual(sentinel.read_bytes(), b'keep synthetic data')
+
     def test_json_parser_cleanup_and_package_history_are_deterministic(self):
         with self.assertRaisesRegex(PET.PetError, "JSON 无效"):
             PET.parse(b"\xff")

@@ -106,6 +106,17 @@ class CandidateImportTests(unittest.TestCase):
         self.assertEqual(tree_bytes(self.target), before_target)
         self.assertTrue(saved.is_dir())
 
+    def test_duplicate_source_selection_stops_plan_without_writes(self):
+        selection = PET.state_dir(self.source) / 'selection.json'
+        text = selection.read_text()
+        self.assertIn('"package":', text)
+        selection.write_text(text.replace('"package":', '"package": "unknown", "package":', 1))
+        source_before, target_before = tree_bytes(self.source), tree_bytes(self.target)
+        result = self.cli(code=2)
+        self.assertEqual(result['status'], 'invalid')
+        self.assertEqual(tree_bytes(self.source), source_before)
+        self.assertEqual(tree_bytes(self.target), target_before)
+
     def test_default_plan_is_read_only(self):
         source_before = tree_bytes(self.source)
         target_before = tree_bytes(self.target)
