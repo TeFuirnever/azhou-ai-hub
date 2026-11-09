@@ -17,12 +17,10 @@ AZHOU_SKILL_NAMES = (
     "super-azhou-setup",
     "super-azhou-verify",
 )
-LAVISH_DIR = ROOT / "skills" / "super-lavish"
 TASK_SKILL_NAMES = ("super-eli5",)
 SKILL_DIRS = (
     SKILL_DIR,
     ROOT / "skills" / "super-excalidraw-diagram",
-    LAVISH_DIR,
     *(ROOT / "skills" / name for name in AZHOU_SKILL_NAMES),
     *(ROOT / "skills" / name for name in TASK_SKILL_NAMES),
     ROOT / "skills" / "super-ask-azhou",
@@ -143,8 +141,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(13, len(SKILL_DIRS))
-        self.assertIn("thirteen canonical packages", support)
+        self.assertEqual(12, len(SKILL_DIRS))
+        self.assertIn("twelve canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
@@ -209,44 +207,6 @@ class SkillPackageTest(unittest.TestCase):
         self.assertNotIn("/user/starred/", skill)
         self.assertNotIn("github.com/TeFuirnever/azhou-ai-hub", cli)
         self.assertNotIn("/user/starred/", cli)
-    def test_lavish_package_keeps_the_locked_upstream_baseline(self) -> None:
-        skill = (LAVISH_DIR / "SKILL.md").read_text(encoding="utf-8")
-        setup = (LAVISH_DIR / "references" / "setup.md").read_text(encoding="utf-8")
-        provenance = (LAVISH_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
-        compatibility = (LAVISH_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
-        brand = (LAVISH_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")
-
-        self.assertEqual("super-lavish", re.search(r"^name:\s*([^\n]+)$", skill, re.MULTILINE).group(1).strip())
-        for surface in (skill, setup, provenance):
-            self.assertIn("0.1.89", surface)
-        self.assertIn("232972beba9e0e4e75682c98f2aeb2cf01532122", provenance)
-        self.assertIn("7c730b29baab6b29dd4c11f02783190f78e215604993a80228e3784423b5e857", provenance)
-        self.assertIn("No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored", provenance)
-        self.assertIn("super-lavish.receipt.v1", brand)
-        self.assertIn("spec-relay.receipt.v1", brand)
-        self.assertIn("spec-relay.html-state.v1", (LAVISH_DIR / "references" / "spec-relay.md").read_text(encoding="utf-8"))
-        for anchor in (
-            "🦊 阿舟 · Super Lavish 启动",
-            "🧭 方向锁定",
-            "🧱 产物就绪",
-            "🧭 范围锁定",
-            "🧱 交接包就绪",
-            "🔎 审阅进行",
-            "🧾 反馈入包",
-            "📦 交接就绪",
-            "🔒 阿舟暂停这一项",
-            "✅ 验证通过",
-            "❌ 验证失败",
-        ):
-            self.assertIn(anchor, brand)
-        self.assertIn("把复杂结果变成可审阅的界面。", brand)
-        self.assertIn("A host without Unicode", brand)
-        self.assertIn("Emoji", brand)
-        self.assertIn("lavish-axi@0.1.89", skill)
-        self.assertIn("lavish-axi@0.1.89", setup)
-        self.assertIn("preserved", compatibility)
-        self.assertIn("intentionally omitted", compatibility)
-
     def test_repo_pedant_brand_layer_covers_the_interactive_lifecycle(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         brand = (SKILL_DIR / "references" / "brand-layer.md").read_text(encoding="utf-8")

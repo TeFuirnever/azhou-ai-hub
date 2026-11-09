@@ -16,7 +16,6 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 <img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox beside the claims — 13 installable skill packages, one deterministic repository gate, human-approved evolution only." width="100%" />
 
-
 https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
 
 </div>
@@ -40,7 +39,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
@@ -82,7 +80,7 @@ For setup, review the deterministic `planId` from the dry-run, then pass the exa
 
 ## Optional integrations
 
-Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The thirteen canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
+Three complete projects live under `packages/`; they keep their own native layouts, toolchains and provenance. The twelve canonical Skills under `skills/` keep their existing independent install and invocation contracts. These projects are not Skills, and installing a Hub Skill does not enable any integration.
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
@@ -123,7 +121,6 @@ The 2026-10-26 Pet receipt names the retained `codex-startup-animation` source; 
 | [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates. |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for against the upstream v3.0.0 reference baseline (<code>322346de</code>, snapshot hash-locked; audited 2026-10-07, re-baselined 2026-10-18 with the absorption pin <code>bab17831</code> retained as lineage); 3 registered behavior cases; fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. A sandbox-blocked preview degrades to geometry and hash verification and is reported as an explicit hold, never a silent skip. Checked-in reference output proves wiring only, not model quality. |
-| [Super Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual agent responses into rich, reviewable HTML artifacts users can annotate and answer through the Lavish Editor CLI; in Spec Relay relay mode, package a PRD, RFC, design spec or technical plan with comments, selected-text annotations, disposition and next-owner state inside one portable HTML file. | Upstream baseline hash-locked for reproducibility at the locked CLI <code>0.1.89</code>, with the documented local relay layer on top; provenance records the immutable upstream commit and the reproducible source check. Relay mode embeds <code>spec-relay.html-state.v1</code> with optimistic revision guards; deterministic checks cover feedback updates, stale-copy rejection, exact visible-state projection and responsive layout. Local review is not publication; <code>share</code> requires separate authorization. No hosted-share receipt is claimed. |
 | [Eli5](skills/super-eli5/SKILL.md) | Explain a topic like the reader knows nothing about it: one self-contained HTML artifact of big pictures and few words, refusing precision-critical asks instead of degrading them to pictures. | Upstream behavior sentence retained verbatim at the locked upstream commit with a reproducible SHA-256 source check; the local layer adds the topic boundary, self-contained artifact contract with a fixed audience declaration and word budgets, brand protocol and stable receipt, whose judgment layer carries a deterministic audience/style read-back assertion covered by positive and negative tests. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Ask Azhou](skills/super-ask-azhou/SKILL.md) | Router for the whole catalog: describe the intent, get the skill, its mode, and its boundary. Recommendation-only; gate-enforced coverage of every canonical skill. | Router pattern adapted from a pinned upstream; routing-map parity is a repository-gate check with a negative control. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | Draft, calibrate and review an architecture design document from upstream sources: reading notes with per-fact provenance, a baseline skeleton with controlled evidence vocabulary, PlantUML-only diagram discipline (four-part captions, sequence-diagram rules), source cross-calibration and two-line best-practice review gates. | Distilled from the MCC ARCH-2026-001 v0.1-v0.17 pipeline (upstream team research, readability audit, best-practice review and an architect-approved 20-item backlog); five validated sequence diagrams and two registered review guides ship as references; deterministic scaffold (`new_doc.py`), closing-gate checker (`verify_doc.py`) and a golden scaffold case in `benchmarks/super-arch-doc/`. |
@@ -131,17 +128,16 @@ The 2026-10-26 Pet receipt names the retained `codex-startup-animation` source; 
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English — tool descriptions, error messages, inter-agent instructions, status reports — under ASD-STE100-derived controlled-English structural rules in Strict or STE-flavored mode, preserving every hedge, fact and scope qualifier; the non-redistributable ASD dictionary stays out by design. | Faithfully imported at the locked upstream commit with pinned SHA-256 integrity tests; `scripts/ste-lint.py` turns the machine-checkable structural rules into a deterministic stdlib gate (hard-violation exit codes, `--baseline`, `--json`, `--selftest`) covered by positive and negative tests. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into presentation-grade interactive diagram maps — ten typed-JSON modes from architecture and workflow to ERD, tree, timeline and waterfall — delivered as self-contained explorable HTML with themes, pan/zoom, guided views and truthful exports; editable .excalidraw source scenes stay super-excalidraw-diagram's lane. | Faithfully imported at the locked upstream tag with pinned SHA-256 integrity tests over the trimmed vendored subtree (`doctor` passes all 25 checks); the deterministic `validate`/`deliver`/`finalize` real-browser gate chain is preserved unmodified, with the Azhou brand protocol and `super-archify.receipt.v1` added as wrapper layers. No behavior benchmark yet. Minimal behavior eval-case path: `docs/eval-case-contract.md`. |
 
-All thirteen packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/super-ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces) — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
+All twelve packages are independently installable and discoverable as package surfaces. The catalog composes on the invocation axis standardized in the [skill standard](docs/skill-standard.md) §2.2: [Ask Azhou](skills/super-ask-azhou/SKILL.md) is the user-invoked front door, and every package declares its class in `SKILL.md` frontmatter (user-invoked orchestrators or dual-class surfaces) — orchestrators may point at disciplines; nothing chains into another orchestrator. That does not make the four Foundation adapters standalone control planes: they require an explicit local checkout and orchestrate its repository-level CLI rather than copying lifecycle behavior into prompts. Runtime instructions live under <code>skills/</code>; prompts, assertions, fixtures and judge records stay under <code>benchmarks/</code>.
 
 Canonical names carry one brand: every package uses the `super-` prefix. Fidelity to upstream material is recorded in each package's provenance, not in the directory name. The repository gate enforces the brand prefix and fails on residue from renamed-away names outside the documented compatibility surfaces.
 
-## Try four task skills
+## Try three task skills
 
 | Skill | Copy this into your agent | What must come back |
 |---|---|---|
 | Super Repo Pedant | <code>This phase is done. Run super-repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/super-repo-pedant.md). |
 | Excalidraw Diagram | <code>Use super-excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/super-excalidraw-diagram.md). |
-| Super Lavish | <code>Use super-lavish in relay mode to package this spec and its review comments into one transferable HTML.</code> | Source-linked HTML with addressable sections, embedded comments and annotations, dispositioned feedback, unresolved owners, explicit transport/publication status and a relay receipt. [Run the demo](docs/demos/super-lavish.md). |
 | Arch Doc | <code>Use super-arch-doc to draft this repository's architecture document from its upstream design docs.</code> | Research notes with per-fact provenance, a template scaffold with accounted diagram captions, PlantUML-only diagrams, deterministic closing gates and a stable receipt. [Run the demo](docs/demos/super-arch-doc.md). |
 
 The demos separate product behavior from benchmark claims. Synthetic fixtures prove contracts and verifier wiring; only frozen attempt-1 runs count as model evidence.
@@ -188,18 +184,6 @@ The skill never calls JSON validity “done.” It requires an editable source s
 > ✏️ Effect preview generated with the Azhou Scenes skill. Machine colour gate passed; final identity, hand and text review remains a human checkpoint.
 
 [Read the package](skills/super-excalidraw-diagram/SKILL.md) · [Read setup](skills/super-excalidraw-diagram/references/setup.md) · [Read provenance](skills/super-excalidraw-diagram/references/provenance.md)
-
-## Lavish Editor
-
-> 🪄 The HTML is the relay packet.
-
-Lavish Editor is the general rich-HTML review surface: an artifact mode for complex or visual responses plus the Azhou-maintained Spec Relay relay mode for spec handoff. Both keep the upstream review runtime, focused playbooks, editable Mermaid/Excalidraw whiteboard review, portable export and optional sharing. Azhou appears only in agent progress anchors and receipts; the transferable HTML never receives Azhou identity, emoji, character assets or colors from the skill. Relay mode writes complete comments, selected-text annotations, targets, dispositions and ownership into an HTML-safe <code>spec-relay.html-state.v1</code> block. Reviewers can resolve feedback and move the packet to its next owner without losing the original record; packet revisions reject stale-copy overwrites. The responsive visible ledger is validated as the exact projection of embedded state, so the same file carries the Spec and its review history to the next teammate or agent. Local review is not publication; <code>share</code> still requires separate authorization and transfers the embedded comments too.
-
-![Super Lavish effect preview](assets/skills/super-lavish-effect.png)
-
-> 🦊 Effect preview generated with the Azhou Scenes skill. Human visual P0 approved; the formal colour gate still awaits the governed workspace audit.
-
-[Read the package](skills/super-lavish/SKILL.md) · [Read the relay contract](skills/super-lavish/references/spec-relay.md) · [Read setup](skills/super-lavish/references/setup.md) · [Read provenance](skills/super-lavish/references/provenance.md) · [Read compatibility](skills/super-lavish/references/upstream-compatibility.md)
 
 ## Arch Doc
 

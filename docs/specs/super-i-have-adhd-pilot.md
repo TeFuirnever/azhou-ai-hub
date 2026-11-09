@@ -11,7 +11,7 @@ Upstream 已有 action-first、bounded steps、state continuity、停止模式�
 | 已有能力 / evidence | 与 pilot 的重叠 | 本次不重复的范围 |
 |---|---|---|
 | [Eli5](../../skills/super-eli5/SKILL.md) | 理解复杂主题 | 已有 zero-background HTML/picture contract；不把 precision-critical decision handoff 降为 Eli5 |
-| [Lavish](../../skills/super-lavish/SKILL.md) | structured artifact / Spec Relay review | 不重建 HTML editor、annotation、relay state 或 publication workflow |
+| `Lavish` | structured artifact / Spec Relay review | 不重建 HTML editor、annotation、relay state 或 publication workflow |
 | [Arch Doc](../../skills/super-arch-doc/SKILL.md) | source calibration、evidence 与设计判断 | 不重建 architecture authoring workflow |
 | [ASD-STE100](../../skills/super-asd-ste100/SKILL.md) | 清楚表达、保留精确信息 | 主要面向 agent-facing English rewrite，不等于 human decision continuity |
 | Retired Super Caveman | 历史上合并 i-have-adhd 与 compression/routes | 以 retirement commit `f7788b2` 的 parent 中 SKILL、modes、provenance 为只读历史；当前目录已无此 package，见 [changelog](../../CHANGELOG.md)。不恢复 compression、companion routes、hooks 或 promotion machinery，不假设新 Skill 取代它 |
