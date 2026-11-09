@@ -91,3 +91,12 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 ## Contributor rule
 
 New vendored or adapted material requires a source URL, immutable version or commit, license identifier, retained notice and a reproducible update path. Public visibility without a license is not permission to copy, modify or redistribute.
+
+## ZCode and DeepSeek engineering references
+
+Eight pstack references adapt ZCode at `a9fe401eede6e6e5e01be9048679c206fe6f02d9`
+(Apache-2.0) and DeepSeek Harness at `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`
+(MIT, Copyright (c) 2026 DeepSeek). The [package provenance](packages/pstack-agent-harness/ENGINEERING-SOURCES.md)
+lists original files, local changes, retained licenses and reproducible updates.
+The complete ZCode license and original notice and the DeepSeek MIT notice
+travel with each generated skill bundle. Other surveyed skills are not imported.

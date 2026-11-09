@@ -5,7 +5,7 @@
   "version": "0.15.37",
   "commit": "c742dd61706fbacc1b95f1a20b7b988cf096ce6c",
   "repository": "https://github.com/cursor/plugins.git",
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "runtime_paths": [
     ".agents/plugins/marketplace.json",
     ".claude-plugin/marketplace.json",
@@ -15,6 +15,10 @@
     "NOTICE-skills.md",
     "NOTICE.md",
     "hub-package.json",
-    "harness/pstack/codex"
+    "harness/pstack/codex",
+    "LICENSE-ZCode",
+    "NOTICE-ZCode.md",
+    "LICENSE-DeepSeek",
+    "ENGINEERING-SOURCES.md"
   ]
 }

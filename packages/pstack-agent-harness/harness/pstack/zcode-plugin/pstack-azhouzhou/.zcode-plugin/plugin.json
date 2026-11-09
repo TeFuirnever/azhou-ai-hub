@@ -5,6 +5,6 @@
   "author": {
     "name": "Lauren Tan"
   },
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "commands": "commands"
 }

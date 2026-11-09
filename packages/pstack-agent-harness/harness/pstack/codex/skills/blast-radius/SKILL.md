@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Blast radius
 
+For a public interface, shared UI, state, generation or installation change, read [Semantic impact](references/semantic-impact.md) before tracing the diff.
+
 Find what a change breaks somewhere else, before it ships. Use for "blast radius of X", "what could this break", or reviewing a small diff you don't trust yet.
 
 Companion to `how` and `why`. `how` tells you what the code does. `why` tells you why it's shaped that way. Blast radius tells you what it breaks somewhere else.

@@ -88,3 +88,5 @@ The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ st
 Model quality is not a support claim. Benchmark comparisons must freeze the prompt, runtime package digest, time limit and tool permissions, then record attempt-1 evidence.
 
 Open a [bug report](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?template=bug.yml) when an entry is stale. Include the harness version, skill commit and a redacted reproduction.
+
+The [engineering-reference comparison](research/2026-11-09-zcode-dsh-skills.md) covers 92 pinned ZCode/DSH Skill entries. The pstack bundle includes eight MIT/Apache-2.0 adapted references with eleven conditional entry routes; generated-layout verification does not establish new host discovery, model invocation or effectiveness.

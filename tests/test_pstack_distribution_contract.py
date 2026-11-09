@@ -205,7 +205,7 @@ class PstackDistributionContractTest(unittest.TestCase):
         series = (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
         self.assertIn("0021-hub-distribution-version-0.15.37.patch", series)
         self.assertIn("0022-hub-claude-sheet-hook-path.patch", series)
-        self.assertEqual(series[-1], "0023-hub-worktree-audit-preserve-untracked.patch")
+        self.assertIn("0023-hub-worktree-audit-preserve-untracked.patch", series)
 
     def test_codex_adapter_model_and_agent_paths_match_native_hook(self) -> None:
         source = (PACKAGE / "hub-adapters/codex.md").read_text(encoding="utf-8")

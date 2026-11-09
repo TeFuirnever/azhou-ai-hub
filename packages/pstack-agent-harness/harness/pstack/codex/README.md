@@ -288,4 +288,6 @@ to set it up, point cursor at [`FOR_AGENTS.md`](https://github.com/cursor/plugin
 
 ## license
 
-MIT
+The original pstack components are MIT. The Hub distribution also includes
+Apache-2.0 ZCode and MIT DeepSeek engineering references; retain their licenses
+and notices listed in [ENGINEERING-SOURCES.md](ENGINEERING-SOURCES.md).
