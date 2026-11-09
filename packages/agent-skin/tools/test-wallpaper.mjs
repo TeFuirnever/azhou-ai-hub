@@ -673,6 +673,28 @@ try {
     await cdp.evaluate('__wallpaperFixture.apply()');
     return result;
   });
+  await check('stale controller cannot update a replaced app root', async () => {
+    const result = await onFixture(() => {
+      const api = globalThis.__azhouWallpaper;
+      const html = document.documentElement;
+      const root = document.getElementById('root');
+      const replacement = document.createElement('div');
+      replacement.id = 'root';
+      const before = html.style.getPropertyValue('--azhou-wallpaper-surface');
+      try {
+        root.replaceWith(replacement);
+        const updated = api.updateSurface('rgb(40, 50, 60)');
+        return { updated, before, after: html.style.getPropertyValue('--azhou-wallpaper-surface'),
+          currentRoot: document.getElementById('root') === replacement,
+          ownerSame: globalThis.__azhouWallpaper === api };
+      } finally { replacement.replaceWith(root); }
+    });
+    assert.equal(result.updated, false);
+    assert.equal(result.after, result.before);
+    assert.equal(result.currentRoot, true);
+    assert.equal(result.ownerSame, true);
+    return result;
+  });
   await check('fixture built-in lifecycle/rollback checks', () => cdp.evaluate('__wallpaperFixture.runChecks()').then(result => { assert.equal(result.passed, true); return result; }));
   await check('failed replacement keeps only a verified working previous controller', async () => {
     const result = await cdp.evaluate(`(async()=>{

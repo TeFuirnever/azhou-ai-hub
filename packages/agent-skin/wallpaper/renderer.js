@@ -434,7 +434,9 @@ export async function installRenderer(payload) {
       if (globalThis.__azhouWallpaper === api) delete globalThis.__azhouWallpaper;
     };
     function updateSurface(value) {
-      if (disposed || !validSurface(value)) return false;
+      if (disposed || ownValue(globalThis, '__azhouWallpaper') !== api
+          || document.documentElement !== root || !applicationRoot.isConnected
+          || document.getElementById('root') !== applicationRoot || !validSurface(value)) return false;
       const currentValue = root.style.getPropertyValue(SURFACE_PROPERTY);
       const currentPriority = root.style.getPropertyPriority(SURFACE_PROPERTY);
       const originalSurface = rollbackOriginal.properties.get(SURFACE_PROPERTY);

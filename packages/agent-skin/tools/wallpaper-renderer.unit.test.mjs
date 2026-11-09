@@ -396,6 +396,35 @@ test('surface updates preserve host-owned values or priorities through disposal'
   }
 });
 
+test('surface update refuses stale page and controller ownership', async t => {
+  for (const kind of ['document-root', 'app-replaced', 'app-detached', 'controller-replaced', 'controller-accessor']) {
+    await t.test(kind, async () => onPage({}, async page => {
+      await installRenderer(page.payload);
+      const api = globalThis.__azhouWallpaper;
+      const oldValue = page.root.style.getPropertyValue(PROPERTY_SURFACE);
+      const originalGet = page.document.getElementById;
+      const foreign = { owner: 'foreign' };
+      try {
+        if (kind === 'document-root') page.document.documentElement = new Node('foreign-html');
+        if (kind === 'app-replaced') page.document.getElementById = id => id === 'root' ? new Node('foreign-app') : originalGet.call(page.document, id);
+        if (kind === 'app-detached') page.applicationRoot.isConnected = false;
+        if (kind === 'controller-replaced') globalThis.__azhouWallpaper = foreign;
+        if (kind === 'controller-accessor') Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, get() { throw new Error('foreign getter'); } });
+        const result = api.updateSurface('rgb(40, 50, 60)');
+        assert.deepEqual({ result, value: page.root.style.getPropertyValue(PROPERTY_SURFACE) },
+          { result: false, value: oldValue });
+        if (kind === 'controller-replaced') assert.equal(globalThis.__azhouWallpaper, foreign);
+      } finally {
+        page.document.documentElement = page.root;
+        page.document.getElementById = originalGet;
+        page.applicationRoot.isConnected = true;
+        Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: api });
+        api.dispose();
+      }
+    }));
+  }
+});
+
 test('the renderer rejects unsupported pages, payloads, image bytes, and shells before installation', async t => {
   await t.test('untrusted iframe', async () => onPage({}, async page => {
     globalThis.window.top = {};
