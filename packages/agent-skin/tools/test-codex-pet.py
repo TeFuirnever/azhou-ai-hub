@@ -218,6 +218,135 @@ class PetSafetyTests(unittest.TestCase):
             self.expect_error(lambda: PET.read(path), "source-conflict")
         self.assertEqual(path.read_bytes(), b"modified and longer")
 
+    def test_exclusive_rename_preserves_existing_directory_and_symlink(self):
+        source = self.root / "exclusive-source"
+        source.mkdir()
+        (source / "owned").write_bytes(b"owned")
+        target = self.root / "exclusive-target"
+        target.mkdir()
+        before = target.stat().st_ino
+        with self.assertRaises(FileExistsError):
+            PET.rename_exclusive(source, target)
+        self.assertEqual(target.stat().st_ino, before)
+        self.assertEqual((source / "owned").read_bytes(), b"owned")
+        target.rmdir()
+        outside = self.root / "outside-target"
+        outside.mkdir()
+        target.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(FileExistsError):
+            PET.rename_exclusive(source, target)
+        self.assertTrue(target.is_symlink())
+        self.assertTrue(outside.is_dir())
+        target.unlink()
+        PET.rename_exclusive(source, target)
+        self.assertEqual((target / "owned").read_bytes(), b"owned")
+
+    def test_exclusive_rename_refuses_unsupported_platform(self):
+        with patch.object(PET.sys, "platform", "unsupported-fixture"):
+            self.expect_error(lambda: PET.rename_exclusive(self.root / "source", self.root / "target"))
+
+    def test_first_install_preserves_target_created_during_publication(self):
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        publish = PET.rename_exclusive
+        created = []
+        def race(source, destination):
+            if Path(destination) == target and ".stage-" in str(source):
+                target.mkdir()
+                created.append(target.stat().st_ino)
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=race):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertEqual(target.stat().st_ino, created[0])
+        self.assertTrue(PET.journal_path(target.parent).is_file())
+        self.assertEqual(len(list(self.codex.glob(f".{PET.PET_ID}.stage-*"))), 1)
+
+    def test_first_install_preserves_symlink_created_during_publication(self):
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        outside = self.root / "unknown-pet"
+        outside.mkdir()
+        (outside / "foreign.txt").write_bytes(b"preserve")
+        publish = PET.rename_exclusive
+        def race(source, destination):
+            if Path(destination) == target and ".stage-" in str(source):
+                target.symlink_to(outside, target_is_directory=True)
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=race):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertTrue(target.is_symlink())
+        self.assertEqual((outside / "foreign.txt").read_bytes(), b"preserve")
+        self.assertTrue(PET.journal_path(target.parent).is_file())
+
+    def test_backup_collision_preserves_old_pet_and_unknown_directory(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        publish = PET.rename_exclusive
+        foreign = []
+        def race(source, destination):
+            if Path(source) == target and ".previous-" in str(destination):
+                Path(destination).mkdir()
+                foreign.append((Path(destination), Path(destination).stat().st_ino))
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=race):
+            self.expect_error(lambda: PET.install_package(self.project, self.codex), "recovery-required")
+        self.assertEqual((target / "spritesheet.webp").read_bytes(), self.atlas_a)
+        self.assertEqual(foreign[0][0].stat().st_ino, foreign[0][1])
+        self.assertTrue(PET.journal_path(target.parent).is_file())
+
+    def test_recovery_preserves_target_created_before_backup_restore(self):
+        self.install()
+        self.make_run(self.atlas_b)
+        self.package()
+        target = self.codex / "pets" / PET.PET_ID
+        publish = PET.rename_exclusive
+        def interrupt(source, destination):
+            publish(source, destination)
+            if Path(source) == target and ".previous-" in str(destination):
+                raise SystemExit("synthetic interruption after backup")
+        with patch.object(PET, "rename_exclusive", side_effect=interrupt), self.assertRaises(SystemExit):
+            PET.install_package(self.project, self.codex)
+        created = []
+        def race(source, destination):
+            if Path(destination) == target and ".previous-" in str(source):
+                target.mkdir()
+                created.append(target.stat().st_ino)
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=race), self.assertRaises(FileExistsError):
+            PET.recover_install(target.parent, self.project)
+        self.assertEqual(target.stat().st_ino, created[0])
+        self.assertTrue(PET.journal_path(target.parent).is_file())
+        self.assertEqual(len(list(self.codex.glob(f".{PET.PET_ID}.previous-*"))), 1)
+
+    def test_snapshot_and_package_publication_preserve_raced_directories(self):
+        (self.project / "style.css").write_bytes(b"changed synthetic theme")
+        publish = PET.rename_exclusive
+        captured = []
+        def snapshot_race(source, destination):
+            if "/snapshots/" in str(destination):
+                Path(destination).mkdir()
+                captured.append((Path(destination), Path(destination).stat().st_ino))
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=snapshot_race), self.assertRaises(FileExistsError):
+            PET.prepare(self.project)
+        self.assertEqual(captured[0][0].stat().st_ino, captured[0][1])
+        self.assertTrue(self.snapshot.is_file())
+        captured[0][0].rmdir()  # Only the synthetic directory created by this test.
+        new_snapshot = Path(PET.prepare(self.project)["snapshot"])
+        new_rev = json.loads(new_snapshot.read_text())["themeRevision"]
+        self.make_run(self.atlas_a, revision=new_rev)
+        def package_race(source, destination):
+            if "/packages/" in str(destination):
+                Path(destination).mkdir()
+                captured.append((Path(destination), Path(destination).stat().st_ino))
+            return publish(source, destination)
+        with patch.object(PET, "rename_exclusive", side_effect=package_race), self.assertRaises(FileExistsError):
+            PET.package_run(self.project, self.run, new_snapshot)
+        self.assertEqual(captured[1][0].stat().st_ino, captured[1][1])
+        self.assertFalse((PET.state_dir(self.project) / "selection.json").exists())
+
     def test_snapshot_is_frozen_and_deterministic(self):
         again = PET.prepare(self.project)
         self.assertEqual(again["snapshot"], str(self.snapshot))
@@ -498,14 +627,14 @@ class PetSafetyTests(unittest.TestCase):
         previous_project = self.make_old_install()
         self.package()
         target = self.codex / "pets" / PET.PET_ID
-        real = PET.os.rename
+        real = PET.rename_exclusive
 
         def interrupted(source, destination):
             real(source, destination)
             if Path(destination) == target and ".stage-" in str(source):
                 raise SystemExit("simulated process exit during handoff")
 
-        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+        with patch.object(PET, "rename_exclusive", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.handoff_package(self.project, previous_project, self.codex)
         self.assertTrue(PET.journal_path(target.parent).exists())
         self.assertEqual(PET.recover_install(target.parent, self.project), "restored-previous-installed-package")
@@ -640,7 +769,7 @@ class PetSafetyTests(unittest.TestCase):
         self.install()
         self.make_run(self.atlas_b)
         self.package()
-        real = PET.os.rename
+        real = PET.rename_exclusive
         target = self.codex / "pets" / PET.PET_ID
 
         def interrupted(source, destination):
@@ -648,7 +777,7 @@ class PetSafetyTests(unittest.TestCase):
             if Path(destination) == target and ".stage-" in str(source):
                 raise SystemExit("simulated abrupt interruption")
 
-        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+        with patch.object(PET, "rename_exclusive", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.install_package(self.project, self.codex)
         self.assertTrue(PET.journal_path(self.codex / "pets").exists())
         self.assertEqual(PET.recover_install(self.codex / "pets", self.project),
@@ -660,14 +789,14 @@ class PetSafetyTests(unittest.TestCase):
         self.make_run(self.atlas_b)
         self.package()
         target = self.codex / "pets" / PET.PET_ID
-        real = PET.os.rename
+        real = PET.rename_exclusive
 
         def interrupted(source, destination):
             real(source, destination)
             if Path(source) == target and ".previous-" in str(destination):
                 raise SystemExit("simulated interruption after backup")
 
-        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+        with patch.object(PET, "rename_exclusive", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.install_package(self.project, self.codex)
         self.assertFalse(target.exists())
         self.assertTrue(PET.journal_path(target.parent).exists())
@@ -679,7 +808,7 @@ class PetSafetyTests(unittest.TestCase):
         self.install()
         self.make_run(self.atlas_b)
         self.package()
-        real = PET.os.rename
+        real = PET.rename_exclusive
         target = self.codex / "pets" / PET.PET_ID
 
         def interrupted(source, destination):
@@ -687,7 +816,7 @@ class PetSafetyTests(unittest.TestCase):
             if Path(destination) == target and ".stage-" in str(source):
                 raise SystemExit("simulated process exit")
 
-        with patch.object(PET.os, "rename", side_effect=interrupted), self.assertRaises(SystemExit):
+        with patch.object(PET, "rename_exclusive", side_effect=interrupted), self.assertRaises(SystemExit):
             PET.install_package(self.project, self.codex)
         (self.project / "style.css").write_text("theme changed after interruption")
         output = io.StringIO()
@@ -743,7 +872,7 @@ class PetSafetyTests(unittest.TestCase):
         self.package()
         pets = self.codex / "pets"
         target = pets / PET.PET_ID
-        real = PET.os.rename
+        real = PET.rename_exclusive
         observations = []
 
         def inspect_scan():
@@ -762,7 +891,7 @@ class PetSafetyTests(unittest.TestCase):
             if source == target or destination == target:
                 inspect_scan()
 
-        with patch.object(PET.os, "rename", side_effect=intercepted):
+        with patch.object(PET, "rename_exclusive", side_effect=intercepted):
             result = PET.install_package(self.project, self.codex)
         self.assertEqual(result["status"], "installed")
         self.assertEqual(observations, [[PET.PET_ID], [], [], [PET.PET_ID]])

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import ctypes
 import fcntl
 import hashlib
 import io
@@ -124,6 +125,30 @@ def parse(data):
         return json.loads(data, parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
     except (ValueError, UnicodeError) as exc:
         raise PetError("invalid", f"JSON 无效：{exc}") from exc
+
+
+def rename_exclusive(source, destination):
+    """Move one entry without replacing any existing destination."""
+    try:
+        if sys.platform == "darwin":
+            library = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+            operation = library.renamex_np
+            operation.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+            operation.restype = ctypes.c_int
+            result = operation(os.fsencode(source), os.fsencode(destination), 4)
+        elif sys.platform.startswith("linux"):
+            library = ctypes.CDLL(None, use_errno=True)
+            operation = library.renameat2
+            operation.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            operation.restype = ctypes.c_int
+            result = operation(-100, os.fsencode(source), -100, os.fsencode(destination), 1)
+        else:
+            raise PetError("invalid", "当前系统没有可验证的排他目录发布接口")
+    except AttributeError as exc:
+        raise PetError("invalid", "当前系统没有可验证的排他目录发布接口") from exc
+    if result != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(destination))
 
 
 def fsync_dir(path):
@@ -260,7 +285,7 @@ def prepare(project, operation_id=None):
             for relative, data in planned.items():
                 write_new(child(stage, relative), data)
             fsync_tree(stage)
-            os.rename(stage, directory)
+            rename_exclusive(stage, directory)
             fsync_dir(directory.parent)
         finally:
             recover_package_stage(state, project, operation_id)
@@ -574,7 +599,7 @@ def package_run(project, run, snapshot_path, operation_id=None):
                 write_new(child(stage, relative), data)
             check_package(stage, project)
             fsync_tree(stage)
-            os.rename(stage, destination)
+            rename_exclusive(stage, destination)
             fsync_dir(packages)
         finally:
             recover_package_stage(state, project, operation_id)
@@ -718,7 +743,7 @@ def recover_install(pets, project):
         if action == "remove":
             remove_tree(source)
         else:
-            os.rename(source, destination)
+            rename_exclusive(source, destination)
     if stage.exists():
         remove_tree(stage, allow_empty=True)
     fsync_dir(pets.parent)
@@ -811,10 +836,10 @@ def install_package(project, codex_home, *, previous_project=None, expected_prev
                 current_target = installed_facts(target, previous_project or project)
                 require(same_installation(current_target, previous),
                         "安装目标在检查后发生变化", "source-conflict")
-                os.rename(target, backup)
+                rename_exclusive(target, backup)
                 fsync_dir(pets)
                 fsync_dir(codex_home)
-            os.rename(stage, target)
+            rename_exclusive(stage, target)
             fsync_dir(pets)
             fsync_dir(codex_home)
             actual = installed_facts(target, project)
