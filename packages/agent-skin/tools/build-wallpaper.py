@@ -6,9 +6,11 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import runpy
+import stat
 import struct
 import tempfile
 
@@ -19,26 +21,58 @@ MAX_IMAGE_BYTES = ((16 * 1024 * 1024 - len(DATA_PREFIX)) // 4) * 3
 
 
 def snapshot_image(path, output):
-    if path.is_symlink() or not path.is_file():
-        raise RuntimeError('Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.')
-    digest = hashlib.sha256()
-    header = b''
-    size = 0
-    with path.open('rb') as source:
-        while chunk := source.read(48 * 1024):
+    missing = 'Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.'
+    limit = 'Wallpaper image exceeds the renderer local-image limit.'
+    def identity(info):
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    try:
+        before = path.lstat()
+    except OSError as error:
+        raise RuntimeError(missing) from error
+    if not stat.S_ISREG(before.st_mode):
+        raise RuntimeError(missing)
+    if before.st_size > MAX_IMAGE_BYTES:
+        raise RuntimeError(limit)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError as error:
+        raise RuntimeError('Wallpaper source could not be safely opened.') from error
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or identity(before) != identity(opened):
+            raise RuntimeError('Wallpaper source changed before capture.')
+        digest, header, size = hashlib.sha256(), bytearray(), 0
+        while True:
+            try:
+                chunk = os.read(fd, min(48 * 1024, MAX_IMAGE_BYTES + 1 - size))
+            except InterruptedError:
+                continue
+            except OSError as error:
+                raise RuntimeError('Wallpaper source could not be read.') from error
+            if not chunk:
+                break
             size += len(chunk)
-            header += chunk[:max(0, 26 - len(header))]
+            if size > MAX_IMAGE_BYTES:
+                raise RuntimeError(limit)
+            header.extend(chunk[:max(0, 26 - len(header))])
             digest.update(chunk)
-            if size <= MAX_IMAGE_BYTES:
-                output.write(chunk)
+            output.write(chunk)
+        after = os.fstat(fd)
+        try:
+            current = path.lstat()
+        except OSError as error:
+            raise RuntimeError('Wallpaper source changed during capture.') from error
+        if (not stat.S_ISREG(current.st_mode) or identity(before) != identity(after)
+                or identity(after) != identity(current) or size != after.st_size):
+            raise RuntimeError('Wallpaper source changed during capture.')
+    finally:
+        os.close(fd)
     if (len(header) < 26 or header[:8] != b'\x89PNG\r\n\x1a\n'
             or header[12:16] != b'IHDR' or header[24] != 8 or header[25] not in (2, 6)):
         raise RuntimeError('Wallpaper requires the private 8-bit RGB/RGBA PNG Q-style Azhou panorama.')
     width, height = struct.unpack('>II', header[16:24])
     if not (1024 <= width <= 8192 and 512 <= height <= 8192 and 1.4 <= width / height <= 2.5):
         raise RuntimeError('Wallpaper artwork must be a landscape PNG, 1024–8192px wide, 512–8192px high, aspect 1.4–2.5.')
-    if len(DATA_PREFIX) + 4 * ((size + 2) // 3) > 16 * 1024 * 1024:
-        raise RuntimeError('Wallpaper image exceeds the renderer local-image limit.')
     return digest.hexdigest(), width, height, header[24], header[25]
 
 

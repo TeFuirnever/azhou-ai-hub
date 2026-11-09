@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import runpy
 import signal
+import stat
 import shutil
 import struct
 import subprocess
@@ -196,6 +197,106 @@ class WallpaperPackageTests(unittest.TestCase):
             with mock.patch.object(self.module, "ROOT", self.root):
                 with self.assertRaisesRegex(RuntimeError, "renderer local-image limit"):
                     self.module.package(self.stage)
+
+    def test_capture_rejects_in_place_source_changes(self):
+        self.image.write_bytes(png_header(1400, 1000) + b'a' * 100000)
+        original_sha = hashlib.sha256
+        image = self.image
+        class MutatingDigest:
+            def __init__(self):
+                self.digest = original_sha()
+                self.changed = False
+            def update(self, data):
+                self.digest.update(data)
+                if not self.changed:
+                    self.changed = True
+                    image.write_bytes(png_header(1400, 1000) + b'b' * 100000)
+            def hexdigest(self):
+                return self.digest.hexdigest()
+        output = io.BytesIO()
+        with mock.patch.object(self.module.hashlib, 'sha256', side_effect=MutatingDigest):
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                self.module.snapshot_image(image, output)
+        self.assertEqual(image.read_bytes()[-1:], b'b')
+
+    def test_capture_rejects_file_replaced_by_fifo_before_open(self):
+        saved = self.image.with_name('saved.png')
+        original = os.open
+        def substitute(path, flags, *args, **kwargs):
+            if Path(path) == self.image:
+                self.image.rename(saved)
+                os.mkfifo(self.image)
+            return original(path, flags, *args, **kwargs)
+        with mock.patch.object(self.module.os, 'open', side_effect=substitute):
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                self.package()
+        self.assertTrue(saved.is_file())
+        self.assertTrue(stat.S_ISFIFO(self.image.lstat().st_mode))
+        self.assertFalse((self.stage / 'Contents/Resources/wallpaper').exists())
+
+    def test_capture_handles_short_reads_and_interruptions(self):
+        data = png_header(1400, 1000) + b'x' * 400
+        self.image.write_bytes(data)
+        original = os.read
+        calls = 0
+        def short_read(fd, count):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise InterruptedError()
+            return original(fd, min(count, 19))
+        output = io.BytesIO()
+        with mock.patch.object(self.module.os, 'read', side_effect=short_read):
+            result = self.module.snapshot_image(self.image, output)
+        self.assertGreater(calls, 2)
+        self.assertEqual(output.getvalue(), data)
+        self.assertEqual(result[0], hashlib.sha256(data).hexdigest())
+
+    def test_capture_rejects_read_error_and_retains_source(self):
+        original = self.image.read_bytes()
+        with mock.patch.object(self.module.os, 'read', side_effect=OSError('synthetic read error')):
+            with self.assertRaisesRegex(RuntimeError, 'could not be read'):
+                self.package()
+        self.assertEqual(self.image.read_bytes(), original)
+        self.assertFalse((self.stage / 'Contents/Resources/wallpaper').exists())
+
+    def test_capture_bounds_a_source_that_grows_during_read(self):
+        self.image.write_bytes(png_header(1400, 1000))
+        original = os.read
+        grown = False
+        def grow_after_read(fd, count):
+            nonlocal grown
+            result = original(fd, count)
+            if result and not grown:
+                grown = True
+                with self.image.open('ab') as stream:
+                    stream.write(b'x' * 100)
+            return result
+        output = io.BytesIO()
+        with mock.patch.object(self.module, 'MAX_IMAGE_BYTES', 64), mock.patch.object(self.module.os, 'read', side_effect=grow_after_read):
+            with self.assertRaisesRegex(RuntimeError, 'renderer local-image limit'):
+                self.module.snapshot_image(self.image, output)
+        self.assertLessEqual(len(output.getvalue()), 64)
+        self.assertGreater(self.image.stat().st_size, 64)
+
+    def test_capture_rejects_path_replaced_after_read(self):
+        saved = self.image.with_name('saved.png')
+        original = os.read
+        changed = False
+        def replace_after_read(fd, count):
+            nonlocal changed
+            result = original(fd, count)
+            if result and not changed:
+                changed = True
+                self.image.rename(saved)
+                self.image.write_bytes(b'foreign synthetic data')
+            return result
+        with mock.patch.object(self.module.os, 'read', side_effect=replace_after_read):
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                self.package()
+        self.assertEqual(self.image.read_bytes(), b'foreign synthetic data')
+        self.assertTrue(saved.is_file())
+        self.assertFalse((self.stage / 'Contents/Resources/wallpaper').exists())
 
     def test_cli_packages_the_requested_stage(self):
         script = self.root / "tools/build-wallpaper.py"
