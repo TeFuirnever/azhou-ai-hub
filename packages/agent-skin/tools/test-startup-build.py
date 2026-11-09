@@ -54,6 +54,7 @@ BUILD_FILES = (
     "wallpaper/apply.js",
     "wallpaper/preview.html",
     "tools/build-macos.sh",
+    "tools/build-lock.py",
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",

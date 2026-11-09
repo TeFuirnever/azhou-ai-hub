@@ -170,7 +170,7 @@ def python_coverage(out: Path, sources: list[str]) -> dict:
         "[paths]\nsource =\n" + f"    {ROOT / 'tools'}\n    */source/tools\n",
         encoding="utf-8",
     )
-    suites = ["test-startup-build.py", "test-dsh-build.py", "test-install-macos.py", "test-codex-pet.py", "test-import-codex-pet.py"]
+    suites = ["test-startup-build.py", "test-dsh-build.py", "test-install-macos.py", "test-codex-pet.py", "test-import-codex-pet.py", "test-build-publish-safety.py"]
     suites += sorted(path.name for path in (ROOT / "tools").glob("test-production-*.py"))
     for suite in suites:
         run([sys.executable, "-m", "coverage", "run", "--rcfile", str(config),

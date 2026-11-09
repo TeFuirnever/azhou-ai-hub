@@ -22,16 +22,30 @@ fi
 theme_json="$(python3 tools/build-preflight.py ${host_args[@]+"${host_args[@]}"})"
 theme_icon_input="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["iconInput"])')"
 theme_installation_name="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["installationName"])')"
+if [[ -z "${_AZHOU_BUILD_LOCK_FD:-}" ]]; then
+  exec python3 tools/build-lock.py --run "$build_host"
+fi
+python3 tools/build-lock.py --verify "$_AZHOU_BUILD_LOCK_FD"
 mkdir -p .build/module-cache
 stage_root="$(mktemp -d "$PWD/.build/azhou-stage.XXXXXX")"
+stage_identity=''
+stage_receipt=''
+build_succeeded=0
 cleanup_stage() {
-  if [[ -f "$stage_root/.preserve-original" ]]; then
-    printf '原子回滚未完成，原包临时副本保留在：%s\n' "$stage_root" >&2
+  local result=$?
+  trap - EXIT
+  if [[ "$build_succeeded" == 1 && -n "$stage_receipt" ]]; then
+    if ! python3 tools/build-lock.py --verify "$_AZHOU_BUILD_LOCK_FD" || ! printf '%s' "$stage_receipt" | python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --cleanup-stage "$stage_root"; then
+      printf '暂存无法确认安全清理，请核对：%s\n' "$stage_root" >&2
+      [[ "$result" != 0 ]] || result=1
+    fi
   else
-    rm -rf -- "$stage_root"
+    printf '构建未完成，暂存保留待核对：%s\n' "$stage_root" >&2
   fi
+  exit "$result"
 }
 trap cleanup_stage EXIT
+stage_identity="$(python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --stage-identity "$stage_root")"
 bundle="$stage_root/$payload_name"
 mkdir -p "$bundle/Contents/MacOS"
 python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-bundle-info "$bundle"
@@ -58,8 +72,10 @@ python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --check-inpu
 plutil -lint "$bundle/Contents/Info.plist"
 codesign --force --sign - "$bundle"
 codesign --verify --strict "$bundle"
-python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --publish "$bundle"
-mv -f "$stage_root/azhou-install-registry" .build/azhou-install-registry
+stage_receipt="$(printf '%s' "$stage_identity" | python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --seal-stage "$stage_root")"
+python3 tools/build-lock.py --verify "$_AZHOU_BUILD_LOCK_FD"
+printf '%s' "$stage_receipt" | python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --publish-build "$bundle"
+build_succeeded=1
 if [[ "$build_host" == zcode ]]; then
   printf '%s\n' 'ZCode本地候选已构建：.build/azhou-zcode-payload；未安装或替换任何日常入口。';exit 0
 fi
