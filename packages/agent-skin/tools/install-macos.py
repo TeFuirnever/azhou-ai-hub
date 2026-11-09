@@ -5,6 +5,7 @@ import contextlib
 import ctypes
 import errno
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -81,15 +82,34 @@ def save_receipt(record):
     destination = receipt_path()
     destination.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix='.installation-', suffix='.json', dir=destination.parent)
+    expected = None
+    published = False
+
+    def matches_owned():
+        if expected is None:
+            return False
+        try:
+            HELPERS['require_file'](name, expected)
+            return True
+        except (OSError, RuntimeError):
+            return False
+
     try:
         with os.fdopen(descriptor, 'w') as stream:
-            json.dump(record, stream, ensure_ascii=False, indent=2)
-            stream.write('\n')
+            data = json.dumps(record, ensure_ascii=False, indent=2) + '\n'
+            stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+            identity = os.fstat(stream.fileno())
+            expected = [identity.st_dev, identity.st_ino, identity.st_mode & 0o777,
+                        hashlib.sha256(data.encode(stream.encoding)).hexdigest()]
+        if not matches_owned():
+            raise RuntimeError(f'安装回执暂存内容发生变化，保留待核对：{name}')
         os.replace(name, destination)
+        published = True
     finally:
-        Path(name).unlink(missing_ok=True)
+        if not published and matches_owned():
+            Path(name).unlink()
 
 
 @contextlib.contextmanager

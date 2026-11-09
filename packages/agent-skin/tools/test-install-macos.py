@@ -65,6 +65,73 @@ class InstallerTests(unittest.TestCase):
         self.output.__enter__()
         self.addCleanup(self.output.__exit__, None, None, None)
 
+    def test_receipt_preserves_file_created_at_published_temporary_name(self):
+        m = self.module
+        replace = os.replace
+        foreign = []
+        def publish_then_reuse(source, destination):
+            replace(source, destination)
+            Path(source).write_bytes(b'foreign after publication')
+            foreign.append(Path(source))
+        with patch.object(m.os, 'replace', side_effect=publish_then_reuse):
+            m.save_receipt({'fixture': True})
+        self.assertEqual(json.loads(m.receipt_path().read_text()), {'fixture': True})
+        self.assertEqual(foreign[0].read_bytes(), b'foreign after publication')
+
+    def test_receipt_failure_removes_only_unmodified_temporary_file(self):
+        m = self.module
+        with patch.object(m.os, 'replace', side_effect=OSError('synthetic replace failure')):
+            with self.assertRaisesRegex(OSError, 'synthetic replace failure'):
+                m.save_receipt({'fixture': True})
+        self.assertEqual(list((m.ROOT / '.local').glob('.installation-*.json')), [])
+        foreign = []
+        def replace_source_then_fail(source, destination):
+            source = Path(source)
+            source.rename(source.with_suffix('.saved'))
+            source.write_bytes(b'foreign replacement')
+            foreign.append(source)
+            raise OSError('synthetic replace failure')
+        with patch.object(m.os, 'replace', side_effect=replace_source_then_fail):
+            with self.assertRaisesRegex(OSError, 'synthetic replace failure'):
+                m.save_receipt({'fixture': True})
+        self.assertEqual(foreign[0].read_bytes(), b'foreign replacement')
+        self.assertFalse(m.receipt_path().exists())
+
+    def test_receipt_preserves_in_place_modified_and_incomplete_files(self):
+        m = self.module
+        changed = []
+        def modify_then_fail(source, destination):
+            source = Path(source)
+            source.write_bytes(b'changed contents')
+            changed.append(source)
+            raise OSError('synthetic replace failure')
+        with patch.object(m.os, 'replace', side_effect=modify_then_fail):
+            with self.assertRaisesRegex(OSError, 'synthetic replace failure'):
+                m.save_receipt({'fixture': True})
+        self.assertEqual(changed[0].read_bytes(), b'changed contents')
+        with patch.object(m.os, 'fsync', side_effect=OSError('synthetic fsync failure')):
+            with self.assertRaisesRegex(OSError, 'synthetic fsync failure'):
+                m.save_receipt({'incomplete': True})
+        leftovers = list((m.ROOT / '.local').glob('.installation-*.json'))
+        self.assertEqual(len(leftovers), 2)
+        self.assertFalse(m.receipt_path().exists())
+
+    def test_receipt_rejects_replacement_before_publication(self):
+        m = self.module
+        fsync = os.fsync
+        changed = []
+        def replace_after_sync(fd):
+            fsync(fd)
+            source = next((m.ROOT / '.local').glob('.installation-*.json'))
+            source.rename(source.with_suffix('.saved'))
+            source.write_bytes(b'foreign before publication')
+            changed.append(source)
+        with patch.object(m.os, 'fsync', side_effect=replace_after_sync):
+            with self.assertRaisesRegex(RuntimeError, '保留'):
+                m.save_receipt({'fixture': True})
+        self.assertEqual(changed[0].read_bytes(), b'foreign before publication')
+        self.assertFalse(m.receipt_path().exists())
+
     def bundle(self, path, identity=None, version='0.5.1', build='3', marker=True, body='new'):
         m = self.module
         identity = identity or m.EXPECTED

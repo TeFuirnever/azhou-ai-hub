@@ -65,6 +65,51 @@ class BuildSafetyTests(unittest.TestCase):
              mock.patch.object(verifier, 'check', side_effect=check), mock.patch.object(verifier, 'swap', side_effect=fake_swap):
             verifier.publish(self.stage)
 
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'requires POSIX FIFO')
+    def test_file_receipt_rejects_fifo_inserted_before_open_without_blocking(self):
+        path = self.root / 'raced-file'
+        program = r"""
+import importlib.util, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('fixture', sys.argv[1])
+v = importlib.util.module_from_spec(spec); spec.loader.exec_module(v)
+p = Path(sys.argv[2]); p.write_bytes(b'original')
+original = os.open
+def race(path, flags, *args, **kwargs):
+    if Path(path) == p:
+        p.rename(p.with_name('saved')); os.mkfifo(p)
+    return original(path, flags, *args, **kwargs)
+os.open = race
+try:
+    try: v.file_receipt(p)
+    except RuntimeError: pass
+    else: raise AssertionError('replacement accepted')
+finally: os.open = original
+assert p.is_fifo() and p.with_name('saved').read_bytes() == b'original'
+"""
+        result = subprocess.run([sys.executable, '-c', program, str(SOURCE), str(path)],
+                                capture_output=True, text=True, timeout=4)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_file_receipt_preserves_replacement_after_read(self):
+        path = self.root / 'raced-file'
+        path.write_bytes(b'original')
+        fstat = verifier.os.fstat
+        calls = 0
+        def replace_after_read(fd):
+            nonlocal calls
+            result = fstat(fd)
+            calls += 1
+            if calls == 2:
+                path.rename(path.with_name('saved'))
+                path.write_bytes(b'foreign')
+            return result
+        with mock.patch.object(verifier.os, 'fstat', side_effect=replace_after_read):
+            with self.assertRaisesRegex(RuntimeError, '保留'):
+                verifier.file_receipt(path)
+        self.assertEqual(path.read_bytes(), b'foreign')
+        self.assertEqual(path.with_name('saved').read_bytes(), b'original')
+
     def test_native_exchange_on_synthetic_directories(self):
         self.existing_payload()
         verifier.swap(self.stage, self.target)

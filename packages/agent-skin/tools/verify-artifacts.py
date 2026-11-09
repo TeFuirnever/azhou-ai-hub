@@ -644,16 +644,22 @@ def file_receipt(path):
     info = Path(path).lstat()
     if not stat.S_ISREG(info.st_mode):
         raise RuntimeError(f'拒绝处理非普通文件，保留：{path}')
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
     try:
         opened = os.fstat(fd)
-        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_size', 'st_mtime_ns')
+        def same(left, right):
+            return all(getattr(left, field) == getattr(right, field) for field in fields)
+        if not stat.S_ISREG(opened.st_mode) or not same(info, opened):
             raise RuntimeError(f'文件身份发生变化，保留：{path}')
-        with os.fdopen(fd, 'rb', closefd=False) as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        hasher = hashlib.sha256()
+        while chunk := os.read(fd, 64 * 1024):
+            hasher.update(chunk)
+        digest = hasher.hexdigest()
         after = os.fstat(fd)
-        if (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-            raise RuntimeError(f'文件内容发生变化，保留：{path}')
+        current = Path(path).lstat()
+        if not same(opened, after) or not same(after, current):
+            raise RuntimeError(f'文件内容或身份发生变化，保留：{path}')
     finally:
         os.close(fd)
     return [info.st_dev, info.st_ino, info.st_mode & 0o777, digest]
