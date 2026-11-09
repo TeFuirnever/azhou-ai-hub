@@ -44,9 +44,9 @@ class ChangeScopeCliTest(unittest.TestCase):
         (self.root / "staged.txt").write_text("staged\n")
         (self.root / "mixed.txt").write_text("stage\n")
         self.git("add", "staged.txt", "mixed.txt")
-        (self.root / "mixed.txt").write_text("stage\nplus\n")
+        (self.root / "mixed.txt").write_bytes(b"stage\nplus\n")
         (self.root / "base.txt").write_text("changed\n")
-        (self.root / "name with space.txt").write_text("untracked\n")
+        (self.root / "name with space.txt").write_bytes(b"untracked\n")
         special_name = "line\nbreak.txt" if os.name != "nt" else "unicode-测试.txt"
         (self.root / special_name).write_text("untracked\n")
         status = ["git", "status", "--porcelain=v1", "-z"]
