@@ -150,7 +150,7 @@ The demos separate product behavior from benchmark claims. Synthetic fixtures pr
 - **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
 - **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`) and zcode. Their discovery, invocation, hooks and history adapters are reported separately in the [support matrix](docs/support-matrix.md); other harnesses are temporarily unsupported. MiMo Code's local Skill discovery has a [bounded receipt](evidence/mimocode-skill-discovery-2026-10-26.md), while its model invocation and host adapters remain unverified.
 - **Per-skill platform view.** A derived summary of the support matrix shows each canonical skill across harnesses and operating systems in [docs/skill-platform-view.md](docs/skill-platform-view.md); the support matrix stays the single authority.
-- **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
+- **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval. [Scope and attribution rules](docs/skill-standard.md#11-scope-and-attribution) exclude pstack from Hub Skill upgrades/evolution and limit holds to evidenced affected actions; [evaluation rules](docs/skill-standard.md#41-evaluation-integrity) separate integrity fixes from task-quality claims.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ![Azhou AI Hub: the documented verification command and a recorded local result.](assets/github/readme-proof.png)
@@ -168,6 +168,8 @@ This phase is done. Run super-repo-pedant reconcile.
 An inferred milestone only produces one reminder; it does not silently edit the repository. Explicit reconcile/handoff covers three project knowledge layers: user docs, <code>AGENTS.md</code>/<code>CLAUDE.md</code>, and memory proven to belong to the current project. Global instructions, unclear memory ownership, whole-file deletion, publication and deployment remain checkpoints.
 
 Optional evolution commands require a platform file lock for signal additions and archiving. If archiving stops between state-file updates, new signal writes pause until a retry verifies the pending archive and completes the candidate receipt; conflicting evidence is refused.
+
+Promotion now binds the actual candidate and patch bytes to the exact base and resulting source tree. Use `bind` to prepare that binding, `gate` to check the clean base against an external approval anchor, and `verify-applied` to check the committed result. Metadata-only invocations cannot pass the source gate. These read-only commands do not apply changes or authenticate an approver; see the [evolution contract](skills/super-repo-pedant/references/evolution-contract.md).
 
 [Read the compatibility contract](skills/super-repo-pedant/references/neat-freak-compatibility.md) · [Read the execution protocol](skills/super-repo-pedant/references/execution-protocol.md)
 

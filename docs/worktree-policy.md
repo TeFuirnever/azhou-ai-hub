@@ -39,6 +39,14 @@ If `get` reports every slot in use or dirty, do not delete or force anything. A 
 - Record branch, HEAD, dirty state, verification commands and results in the handoff receipt.
 - Never run implementation from the primary checkout when the task was allocated a lease.
 
+### Single writer and verification freeze
+
+A Treehouse lease excludes other acquisitions, not other processes that already know its path. Record one active write owner and the current phase in external task state. Read-only reviewers use immutable snapshots; they must not edit, commit, rebase, reset or regenerate content in the writer's worktree. Do not start a second writer during a resume until the previous owner has acknowledged handoff or its session/process/lock state has been resolved; absence of a shell process alone is insufficient. Pause overlapping writes when ownership is uncertain. This is an operational rule, not a claim that Treehouse enforces a process lock.
+
+Before version-bound verification, freeze writes and capture HEAD, index identity, the complete changed-file set and bytes/modes, runtime, evaluator and input identities. Record allowed generated outputs separately. Until the verification record is closed, no participant may edit source, stage, commit or rebase. Compare the same fixed paths and identities afterward; do not recompute only the remaining dirty paths after a commit. Any source, HEAD or evaluator drift invalidates the version-bound verdict even with exit code zero. Preserve that run and repeat on a stable isolated revision; do not repair its receipt into a pass. A before/after match is an observation, not proof against transient writes or an OS sandbox.
+
+A moving `origin/main` is not permission to rebase during verification. Finish the frozen run, compare upstream paths and semantic consumers, then prepare a separate integration revision and fresh diff/approval binding as required. Do not rewrite a frozen or published candidate to hide a governance/report correction. Independent recovery replicas may run tests without another task writing them.
+
 ## Return a lease
 
 Return only after proving that work is merged, committed on the intended branch, or preserved by another explicitly verified recovery point. The worktree must be clean, idle and no longer needed for review.
