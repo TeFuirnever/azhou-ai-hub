@@ -6289,7 +6289,10 @@ try {
 
   for (const delayedShell of [false, true]) {
     await check('ready playback timeout restores Appearance ' + (delayedShell ? 'after a delayed shell' : 'in the current navigation'), async () => {
-      await navigate('/fixture.html?animation=1&home-nav-fixture=1&entry-avatar=1&no-initial-wallpaper=1&manual-startup-timeout=1'
+      // Settings saved by earlier checks override no-initial-wallpaper and can
+      // surface the wallpaper recovery notice after cancel; start from a clear
+      // settings database so the asserted entry display stays deterministic.
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&home-nav-fixture=1&entry-avatar=1&no-initial-wallpaper=1&manual-startup-timeout=1'
         + (delayedShell ? '&hold-shell=1' : ''));
       await until(() => cdp.evaluate('window.__startupAPI?.status().phase === "playing" && window.__startupAPI.status().ready'),
         15000, 'actual animation ready before its playback watchdog');
