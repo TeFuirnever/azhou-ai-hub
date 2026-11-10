@@ -299,7 +299,8 @@ try {
   await check('real thread footer plate: clear backgrounds, intact composer, failure and restore', async () => {
     const result = await cdp.evaluate(`(async()=>{
       const originalTheme=document.documentElement.dataset.theme, results=[];
-      const plate=document.querySelector('[data-thread-scroll-footer] > ._background_fixture');
+      const plate=document.getElementById('fixture-footer-plate');
+      const originalClasses=plate.className, originalHidden=plate.getAttribute('aria-hidden');
       const footer=plate.parentElement, composer=document.querySelector('.composer');
       const sample=()=>{
         const r=composer.getBoundingClientRect(), s=getComputedStyle(plate);
@@ -309,22 +310,53 @@ try {
           button:getComputedStyle(composer.querySelector('button')).backgroundColor};
       };
       try {
-        for(const theme of ['dark','light']) {
+        for(const variant of ['legacy','hyphen-first','hyphen-after']) for(const theme of ['dark','light']) {
           __azhouWallpaper.dispose();document.documentElement.dataset.theme=theme;
+          plate.className=variant==='legacy'?originalClasses:
+            (variant==='hyphen-first'?'background-fixture surface-fixture':'surface-fixture background-fixture')+
+            ' pointer-events-none absolute inset-x-0 z-0 bottom-0';
+          if(variant==='legacy')plate.removeAttribute('aria-hidden');else plate.setAttribute('aria-hidden','true');
           const before=sample();await __wallpaperFixture.apply();const applied=sample(),state=__azhouWallpaper.status();
           plate.style.setProperty('background-color','var(--color-surface)','important');
           const blocked=__azhouWallpaper.status();plate.style.removeProperty('background-color');
           const recovered=__azhouWallpaper.status();
           const saved=__azhouWallpaper;let rejected=false;
           try { await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,
-            css:__wallpaperFixture.payload.css+' html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] [data-thread-scroll-footer] > div._background_fixture {background-color:#202024!important;}'}); }
+            css:__wallpaperFixture.payload.css+' html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] [data-thread-scroll-footer] > #fixture-footer-plate {background-color:#202024!important;}'}); }
           catch { rejected=true; }
           const rollback={rejected,sameAPI:__azhouWallpaper===saved,applied:__azhouWallpaper.status().applied,plate:sample().plate};
+          let unknown=null;
+          if(variant!=='legacy'){
+            plate.removeAttribute('aria-hidden');
+            unknown={state:__azhouWallpaper.status(),paint:sample().plate,rejected:false};
+            try{await __wallpaperFixture.apply();}catch{unknown.rejected=true;}
+            unknown.sameAPI=__azhouWallpaper===saved;
+            plate.setAttribute('aria-hidden','true');
+          }
+          const protectedBefore=sample().composer;
+          composer.classList.add('background-protected','pointer-events-none');
+          composer.setAttribute('aria-hidden','true');
+          const protectedAfter=sample().composer;
+          composer.classList.remove('background-protected','pointer-events-none');
+          composer.removeAttribute('aria-hidden');
+          const decoy=document.createElement('div');
+          decoy.className='background-protected pointer-events-none';
+          decoy.setAttribute('aria-hidden','true');decoy.setAttribute('data-composer-layout','');
+          decoy.style.cssText='position:absolute;inset:0;pointer-events:none;background:rgb(89,67,45);box-shadow:0 1px 2px rgb(20,30,40)';
+          let protectedDirect;
+          try{footer.appendChild(decoy);const style=getComputedStyle(decoy);
+            protectedDirect={background:style.backgroundColor,shadow:style.boxShadow,applied:__azhouWallpaper.status().applied};
+          }finally{decoy.remove();}
           __azhouWallpaper.dispose();const restored=sample();
-          results.push({theme,before,applied,state,blocked,recovered,rollback,restored});
+          results.push({variant,theme,before,applied,state,blocked,recovered,rollback,unknown,protectedBefore,protectedAfter,protectedDirect,restored});
           await __wallpaperFixture.apply();
         }
-      } finally {plate.style.removeProperty('background-color');document.documentElement.dataset.theme=originalTheme;}
+      } finally {
+        plate.style.removeProperty('background-color');plate.className=originalClasses;
+        if(originalHidden===null)plate.removeAttribute('aria-hidden');else plate.setAttribute('aria-hidden',originalHidden);
+        document.documentElement.dataset.theme=originalTheme;
+        if(!globalThis.__azhouWallpaper)await __wallpaperFixture.apply();
+      }
       return results;
     })()`);
     for (const item of result) {
@@ -337,6 +369,16 @@ try {
       assert.equal(item.blocked.applied, false); assert.equal(item.blocked.footerBackgroundClear, false);
       assert.equal(item.recovered.applied, true); assert.equal(item.recovered.footerBackgroundClear, true);
       assert.deepEqual(item.rollback, { rejected: true, sameAPI: true, applied: true, plate: 'rgba(0, 0, 0, 0)' });
+      assert.deepEqual(item.state.unsupportedDecorations, []);
+      assert.deepEqual(item.protectedAfter, item.protectedBefore);
+      assert.deepEqual(item.protectedDirect, {background:'rgb(89, 67, 45)',shadow:'rgb(20, 30, 40) 0px 1px 2px 0px',applied:true});
+      if(item.unknown){
+        assert.equal(item.unknown.state.applied,false);
+        assert.ok(item.unknown.state.unsupportedDecorations.includes('unmatched-footer-decoration'));
+        assert.notEqual(item.unknown.paint,'rgba(0, 0, 0, 0)');
+        assert.equal(item.unknown.rejected,true);
+        assert.equal(item.unknown.sameAPI,true);
+      }
       assert.deepEqual(item.restored, item.before);
     }
     return result;
