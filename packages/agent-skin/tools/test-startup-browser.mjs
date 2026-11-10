@@ -2274,7 +2274,8 @@ try {
       await delay(200); // The real entry batches layout updates after host mutations.
       metrics = await until(async () => {
         const value = await appearanceEntryMetrics();
-        return value?.rect.height === 44 ? value : false;
+        return value?.viewport.width === 640 && value?.viewport.height === 720
+          && value?.rect.height === 44 ? value : false;
       }, 3000, 'the 44px fallback is positioned after the collapsed sidebar settles');
       assert.ok(metrics, 'completed page still exposes the appearance entry');
       assert.equal(metrics.rect.height, 44, 'the compact narrow-viewport appearance button retains a 44px touch target');
@@ -2326,8 +2327,13 @@ try {
         button.style.cssText='position:absolute;left:6px;top:8px;width:40px;height:40px';
         rail.appendChild(button);document.body.appendChild(rail);
       })()`);
-      await delay(200);
-      const metrics=await appearanceEntryMetrics();
+      await delay(200); // The real entry batches layout updates after host mutations.
+      const metrics = await until(async () => {
+        const value = await appearanceEntryMetrics();
+        return value?.viewport.width === 640 && value?.viewport.height === 720
+          && value?.rect.height === 44
+          && value?.rect.x >= 0 && value?.rect.x + value?.rect.width <= 52 ? value : false;
+      }, 3000, 'the compact avatar entry settles within the rail after the viewport override');
       assert.ok(metrics.avatar, 'the real compact fallback includes an avatar');
       assert.equal(metrics.rect.height, 44);
       assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
