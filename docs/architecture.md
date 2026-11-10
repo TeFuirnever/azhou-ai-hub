@@ -50,7 +50,7 @@ observed → corroborated → regression_ready → isolated_candidate
          → paired_reviewed → human_approved → promoted | rejected
 ~~~
 
-History collectors and lifecycle hooks never write a live skill. Promotion requires deterministic checks, no safety regression, an odd-number paired majority and exact-diff human approval.
+History collectors and lifecycle hooks never write a live skill. Promotion requires deterministic checks, no safety regression, an odd-number paired majority and exact-diff human approval. The Super Repo Pedant CLI additionally binds actual candidate/patch bytes, repository identity and immutable base/result trees; private-index replay and reverse checks precede the read-only preflight, and a separate post-application check verifies the clean committed result. The explicit Git workflow remains the application owner. See the [source-binding contract](../skills/super-repo-pedant/references/evolution-contract.md).
 
 ## Authority map
 

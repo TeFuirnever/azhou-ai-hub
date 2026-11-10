@@ -37,7 +37,15 @@ Promotion requires all gates:
 2. baseline and candidate run on the same real test prompts;
 3. an odd number of same-judge paired comparisons, minimum `N=3`, prefers the candidate by majority;
 4. no safety regression or unresolved hold exists;
-5. a human explicitly approves the exact diff.
+5. a human explicitly approves the exact diff and actual source binding.
+
+`bind` computes a content binding from the raw candidate and patch bytes, the exact full base/candidate commits and trees, and the Git common-directory identity. The candidate is one nonempty commit directly on the base. It replays and reverses the patch using only a temporary index/object directory, requiring both resulting trees to match. `gate` additionally requires a clean checked-out base, evaluation and human-approval `source_binding_sha256` values, and an externally supplied `--expected-binding-sha256` matching the computed binding. Declared hashes alone no longer authorize the CLI gate.
+
+`gate` is a read-only preflight, not an application receipt or a lock. The explicit Git application owner must serialize edits, recheck immediately before applying, and call `verify-applied` afterward with the same patch, versions, evidence and approval anchor. Only a clean actual commit directly on the approved base with the approved result tree verifies; a squash commit may have a different commit id but must have that parent and tree. The tool never applies to live source, commits, promotes, resets or rolls back automatically. Failed checks preserve source; explicit Git reverse/revert and a new receipt handle recovery.
+
+Raw tracked bytes, executable modes on POSIX and index entries must match the committed version. Non-ignored untracked files, hidden index flags, submodules, changes involving symlinks, invalid paths and oversized candidates are rejected. Ignored runtime state is excluded, not certified harmless. Git environment redirects and global configuration are not inherited; repository hooks are disabled for every observational Git command, and no clean/smudge filter is used to validate source bytes. Temporary storage must be outside every registered worktree, the common Git directory and any enclosing Git repository. The private temporary index is workspace isolation, not an OS sandbox. Hashes bind content but do not authenticate a human, model run, reviewer independence or permissions. Another clone requires a new binding; linked worktrees share the Git common-directory identity.
+
+Historical evaluation schemas remain structurally readable. The pure `validate_promotion` helper checks record structure only; it is not the actual source gate. Historical metadata-only invocations must acquire a fresh binding and approval rather than silently upgrading their authority.
 
 Absolute scores and 7-day/30-day health trends are triage signals only. Unpaired aggregate success rates, confidence thresholds, occurrence counts, or absence of correction cannot promote a candidate.
 

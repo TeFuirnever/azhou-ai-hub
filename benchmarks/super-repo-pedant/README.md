@@ -34,3 +34,17 @@ Each candidate starts as a fresh fixture copy and receives only the case prompt.
 4. human and safety reviewers both mark the run `passed` with reviewer identity.
 
 Use identical fixtures and permissions for baseline/candidate. Run at least three independent paired judges, reverse A/B order, reject safety regressions, then stop for human promotion confirmation. Absolute scores remain triage signals only.
+
+## Isolated replay of the 2026-11-10 evaluator
+
+`replay_isolated.py` is a development adapter for the exact previously reviewed project-scope evaluator, not a general evaluator sandbox. It reads the original registration by an external SHA-256 anchor, verifies the pinned evaluator and frozen inputs, then creates a new output tree and synthetic Git identities. Only ownership paths are remapped; evaluator bytes, cases and answers remain unchanged. The derived registration is recorded separately.
+
+~~~bash
+python3 benchmarks/super-repo-pedant/replay_isolated.py \
+  --source /absolute/frozen-project-scope-corpus \
+  --runtime /absolute/skill/scripts \
+  --output /absolute/new-replay-directory \
+  --expected-registration-sha256 '<frozen-registration-sha256>'
+~~~
+
+The output directory must be new and disjoint from corpus/runtime; existing output is never reused. Before/after inventories cover original corpus and runtime plus copied protocol, frozen inputs and runtime, including bytes, links, directories and modes. `status=complete` and `isolation_status=passed` mean the replay completed without observed input drift. `effect_status` reports case outcomes separately: a correctly isolated baseline can still fail cases. Any observed input drift invalidates the effect result. Original evidence remains intact; failures and partial timeout output stay in the new directory. This is a path-mapped synthetic replay, not the original exact protocol, a natural task trial or an OS sandbox.

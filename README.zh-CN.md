@@ -169,6 +169,8 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 
 可选的演化命令在追加信号和归档时必须取得平台文件锁。若归档在多份状态文件更新之间中断，新信号写入会暂停，直到重试核对待完成归档并补完候选收据；证据冲突时会拒绝继续。
 
+晋级现在将候选与补丁的实际字节绑定到精确基线及结果源码树：用 `bind` 准备绑定，`gate` 对照外部批准锚点检查干净基线，`verify-applied` 检查实际提交结果。只有声明摘要的旧调用无法通过源码门禁。这些只读命令不应用变更，也不认证批准者身份；详见[演化合同](skills/super-repo-pedant/references/evolution-contract.md)。
+
 [兼容合同](skills/super-repo-pedant/references/neat-freak-compatibility.md) · [执行协议](skills/super-repo-pedant/references/execution-protocol.md)
 
 ![Repo Pedant 效果图](assets/skills/super-repo-pedant-effect.png)

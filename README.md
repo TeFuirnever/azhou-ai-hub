@@ -169,6 +169,8 @@ An inferred milestone only produces one reminder; it does not silently edit the 
 
 Optional evolution commands require a platform file lock for signal additions and archiving. If archiving stops between state-file updates, new signal writes pause until a retry verifies the pending archive and completes the candidate receipt; conflicting evidence is refused.
 
+Promotion now binds the actual candidate and patch bytes to the exact base and resulting source tree. Use `bind` to prepare that binding, `gate` to check the clean base against an external approval anchor, and `verify-applied` to check the committed result. Metadata-only invocations cannot pass the source gate. These read-only commands do not apply changes or authenticate an approver; see the [evolution contract](skills/super-repo-pedant/references/evolution-contract.md).
+
 [Read the compatibility contract](skills/super-repo-pedant/references/neat-freak-compatibility.md) · [Read the execution protocol](skills/super-repo-pedant/references/execution-protocol.md)
 
 ![Repo Pedant effect preview](assets/skills/super-repo-pedant-effect.png)
