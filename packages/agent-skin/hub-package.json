@@ -106,6 +106,7 @@
     "tools/wallpaper-apply.unit.test.mjs",
     "tools/startup-bootstrap.unit.test.mjs",
     "tools/native-expressions.unit.test.mjs",
+    "tools/preview-controller.unit.test.mjs",
     "tools/test-unit-coverage.py",
     "tools/test-swift-coverage.py",
     "tools/test-shell-cli.py",
