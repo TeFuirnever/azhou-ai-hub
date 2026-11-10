@@ -1,11 +1,15 @@
 <!doctype html>
+<!-- 合成宿主夹具：只在隔离浏览器检查里模拟 Codex 外壳，供壁纸渲染器与测试消费；
+     不进入任何构建产物。锚点（ID、data-*、_xxx_fixture 类前缀、thread-scroll-container、
+     pointer-events-none/sticky/bottom-0 组合）是 renderer CSS 与 test-wallpaper.mjs 的合同。 -->
 <html lang="zh-CN" data-theme="dark" data-codex-window-type="electron">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:; base-uri 'none'; object-src 'none'">
-  <title>壁纸测试场景</title>
+  <title>壁纸检查场景</title>
   <style>
+    /* ---- 主题令牌：--color-surface 同时被壁纸 CSS 的兜底链引用，名称与取值保持 ---- */
     :root {
       color-scheme: dark;
       --color-surface: #202024;
@@ -15,6 +19,9 @@
       --text: #f2f0f4;
       --muted: #aaa7b1;
       --border: #ffffff18;
+      --fixture-composer-height: 132px;
+      --fixture-side-width: 232px;
+      --fixture-reading-indent: clamp(28px, 7vw, 120px);
     }
     :root[data-theme="light"] {
       color-scheme: light;
@@ -26,70 +33,142 @@
       --muted: #77717d;
       --border: #2820321c;
     }
+
+    /* ---- 基础与顶栏 ---- */
     * { box-sizing: border-box; }
-    body { margin: 0; color: var(--text); background: var(--color-surface); font: 14px/1.6 -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; color: var(--text); background: var(--color-surface); font: 14px/1.65 ui-sans-serif, -apple-system, "PingFang SC", sans-serif; }
     button, textarea { font: inherit; }
-    button { color: inherit; background: var(--color-surface-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
-    .controls { height: 54px; position: relative; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--color-surface-secondary); }
-    .controls small { display: block; color: var(--muted); font-size: 10px; line-height: 1.1; }
-    .actions { display: flex; gap: 6px; }
+    button { color: inherit; background: var(--color-surface-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+    .topbar {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 20px;
+      position: relative;
+      z-index: 30;
+      border-bottom: 1px solid var(--border);
+      background: var(--color-surface-secondary);
+    }
+    .topbar small { display: block; color: var(--muted); font-size: 10px; line-height: 1.1; }
+    .topbar-actions { display: flex; gap: 6px; }
+    #result { position: fixed; top: 68px; right: 15px; z-index: 25; max-width: 390px; padding: 8px 12px; white-space: pre-wrap; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; background: var(--color-surface-elevated-secondary); }
+
+    /* ---- 应用外壳：侧栏 + 主面 ---- */
     [data-app-shell-frame] { display: flex; min-height: calc(100vh - 54px); background: var(--color-surface-secondary); }
-    .sidebar { flex: 0 0 232px; padding: 24px 18px; border-right: 1px solid var(--border); background: var(--color-surface-secondary); }
-    .sidebar p { color: var(--muted); font-size: 11px; margin: 22px 8px 8px; }
+    .sidebar { flex: 0 0 var(--fixture-side-width); padding: 24px 18px; border-right: 1px solid var(--border); background: var(--color-surface-secondary); }
+    .sidebar p { color: var(--muted); font-size: 11px; margin: 20px 10px 6px; }
     .sidebar > div { padding: 8px; }
     .sidebar [aria-current="page"] { border-radius: 7px; background: var(--border); }
     [data-app-shell-main-surface] { flex: 1 1 auto; }
     [data-app-shell-main-surface], [data-app-shell-page-surface] { min-width: 0; background: var(--color-surface); }
+
+    /* ---- 工作区与阅读流 ---- */
     ._WorkspaceContent_fixture { position: relative; isolation: isolate; min-height: calc(100vh - 54px); }
     ._WorkspaceContent_fixture::before { content: ""; position: absolute; inset: 52px 0 0; z-index: -10; pointer-events: none; background: var(--color-surface); }
-    .toolbar { height: 58px; padding: 16px 30px; border-bottom: 1px solid var(--border); }
-    .fixture-thread-layout { position: relative; height: calc(100vh - 112px); min-height: 360px; --fixture-composer-height: 132px; }
+    .page-toolbar {
+      height: 58px;
+      padding: 16px 30px;
+      border-bottom: 1px solid var(--border);
+    }
+    .fixture-thread-layout { position: relative; height: calc(100vh - 112px); min-height: 360px; }
+    /* 顶渐隐与底渐隐是渲染器要清空的装饰层，尺寸属合同：40px / 32px */
     ._MainContentTopFade_fixture { position: absolute; inset-inline: 0; top: 0; height: 40px; z-index: 5; pointer-events: none; background-image: linear-gradient(to bottom in oklab, var(--color-surface), transparent); }
     .thread-scroll-container { height: 100%; overflow-x: hidden; overflow-y: auto; }
     .thread-content { min-height: 100%; display: flex; flex-direction: column; }
-    .reading-area { margin: 36px 0 30px clamp(28px, 7vw, 120px); width: min(610px, calc(100% - 72px)); padding: 20px 26px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--color-surface) 96%, transparent); }
-    .reading-area h1 { margin-top: 0; font-size: 23px; }
-    .sample-answer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
-    .sample-answer strong { color: #d6a474; font-size: 12px; }
+    .reading-area { margin: 36px 0 30px var(--fixture-reading-indent); width: min(610px, calc(100% - 72px)); padding: 20px 26px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--color-surface) 96%, transparent); }
+    .reading-area h1 { margin-top: 0; font-size: 22px; }
+    .answer-block { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .answer-block strong { color: #d6a474; font-size: 12px; }
     pre { padding: 16px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--color-surface-secondary); }
     .fixture-menu { display: inline-block; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--color-surface-elevated-secondary); box-shadow: 0 4px 14px #0003; }
-    .fixture-scroll-bottom { position: sticky; bottom: 0; margin-top: auto; height: var(--fixture-composer-height); flex-shrink: 0; z-index: 10; pointer-events: none; }
+    /* ---- 底部输入区：面板渐隐 + 输入卡；composer 高度 132px 属合同 ---- */
+    .bottom-fade-rail {
+      position: sticky;
+      bottom: 0;
+      margin-top: auto;
+      height: var(--fixture-composer-height);
+      flex-shrink: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
     :is(._background_fixture, .background-fixture) { position: absolute; inset-inline: 0; pointer-events: none; }
     ._fade_fixture { top: -32px; height: 32px; background-image: linear-gradient(to top in oklab, var(--color-surface), transparent); }
     :is(._surface_fixture, .surface-fixture) { inset-block: 0; background: var(--color-surface); }
     [data-thread-scroll-footer] { position: absolute; inset-inline: 0; bottom: 0; height: var(--fixture-composer-height); padding-bottom: 16px; z-index: 20; pointer-events: none; }
     .composer-layer { position: relative; height: 100%; pointer-events: none; }
-    .composer { pointer-events: auto; position: relative; display: flex; flex-direction: column; margin-left: clamp(28px, 7vw, 120px); width: min(680px, calc(100% - 72px)); height: 100%; padding: 12px 17px; border: 1px solid var(--border); border-radius: 17px; background: var(--color-background-composer-surface); box-shadow: 0 8px 30px #00000012; }
+    .composer { pointer-events: auto; position: relative; display: flex; flex-direction: column; margin-left: var(--fixture-reading-indent); width: min(680px, calc(100% - 72px)); height: 100%; padding: 12px 17px; border: 1px solid var(--border); border-radius: 17px; background: var(--color-background-composer-surface); box-shadow: 0 8px 30px #00000012; }
     .fixture-editor { flex: 1; min-height: 0; overflow: auto; mask-image: linear-gradient(to bottom, transparent, #000 3px, #000 calc(100% - 3px), transparent); }
     textarea { width: 100%; height: 100%; min-height: 50px; resize: none; border: 0; outline: none; color: inherit; background: transparent; }
-    .composer footer { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
-    .composer button { width: 30px; height: 30px; padding: 0; border-radius: 50%; }
-    #result { position: fixed; top: 68px; right: 15px; z-index: 25; max-width: 390px; padding: 8px 12px; white-space: pre-wrap; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; background: var(--color-surface-elevated-secondary); }
-    @media (max-width: 900px) { .sidebar { flex-basis: 170px; } .controls small { display: none; } .actions button { padding: 5px 8px; font-size: 11px; } .reading-area { padding: 12px 18px; } }
+    .composer footer { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; }
+    .composer button { width: 28px; height: 28px; padding: 0; border-radius: 50%; }
+
+    /* ---- 窄屏 ---- */
+    @media (max-width: 900px) {
+      :root { --fixture-side-width: 170px; }
+      .topbar small { display: none; }
+      .topbar-actions button { padding: 5px 8px; font-size: 11px; }
+      .reading-area { padding: 12px 18px; }
+    }
   </style>
 </head>
 <body>
-  <header class="controls">
-    <div><strong>壁纸模拟场景</strong><small>仅供测试；画面裁切和阅读效果需要视觉检查</small></div>
-    <div class="actions"><button id="theme">浅色</button><button id="apply">重新应用</button><button id="restore">恢复底色</button><button id="checks">运行检查</button></div>
+  <header class="topbar">
+    <div><strong>壁纸检查场景</strong><small>合成宿主，仅供隔离测试；裁切与阅读观感需人工目检</small></div>
+    <div class="topbar-actions">
+      <button id="theme">浅色</button>
+      <button id="apply">重新应用</button>
+      <button id="restore">恢复底色</button>
+      <button id="checks">运行检查</button>
+    </div>
   </header>
   <div id="root">
-    <div data-app-shell-frame data-app-shell-unified-tab-strip="true">
-      <aside class="sidebar"><div><strong>›_ Codex</strong></div><div>＋ 新任务</div><div>搜索</div><p>项目</p><div aria-current="page">阿舟的实验室</div><div>想法记录</div><p>最近的任务</p><div>完善一个小工具</div><div>准备下一次实验</div></aside>
+    <div data-app-shell-frame>
+      <aside class="sidebar">
+        <div><strong>›_ Codex</strong></div>
+        <div>＋ 新任务</div>
+        <div>搜索</div>
+        <p>项目</p>
+        <div aria-current="page">我的工作台</div>
+        <div>灵感便签</div>
+        <p>最近的任务</p>
+        <div>打磨手边小工具</div>
+        <div>筹划新的尝试</div>
+      </aside>
       <main data-app-shell-main-surface="default">
         <div class="_WorkspaceContent_fixture">
           <section data-app-shell-page-surface="true">
-            <div class="toolbar">实验室 / 启动体验</div>
+            <div class="page-toolbar">工作台 / 启动画面</div>
             <div class="fixture-thread-layout">
-              <div class="_MainContentTopFade_fixture _background_top_fixture" aria-hidden="true"></div>
+              <div class="_MainContentTopFade_fixture" aria-hidden="true"></div>
               <div class="thread-scroll-container">
                 <div class="thread-content">
-                  <article class="reading-area"><h1>为想法做一次实验</h1><p>这是模拟阅读区域，用于观察壁纸与文字的关系。</p><div class="sample-answer"><strong>实验记录</strong><p>检查不同窗口尺寸下，背景、代码和输入框是否清晰。</p><p>拉长对话后继续滚动，留意段落、边界和底部输入区域是否仍然容易辨认。</p><pre>const nextStep = "完成第一版";</pre><div class="fixture-menu" role="menu" aria-label="示例菜单">示例菜单</div></div></article>
-                  <div class="fixture-scroll-bottom pointer-events-none sticky bottom-0"><div id="fixture-fade" class="_background_fixture _fade_fixture pointer-events-none absolute inset-x-0 z-0"></div></div>
+                  <article class="reading-area">
+                    <h1>给一个念头做个原型</h1>
+                    <p>模拟的阅读区域：观察壁纸与正文、代码之间的层次关系。</p>
+                    <div class="answer-block">
+                      <strong>过程笔记</strong>
+                      <p>调整窗口尺寸，检查背景、代码块和输入框是否依旧清晰。</p>
+                      <p>向下滚动加长对话，确认段落边界与底部输入区可读。</p>
+                      <pre>const goal = "先跑通再说";</pre>
+                      <div class="fixture-menu" role="menu" aria-label="示例菜单">示例菜单</div>
+                    </div>
+                  </article>
+                  <div class="bottom-fade-rail pointer-events-none sticky bottom-0">
+                    <div id="fixture-fade" class="_background_fixture _fade_fixture pointer-events-none absolute inset-x-0 z-0"></div>
+                  </div>
                 </div>
                 <div data-thread-scroll-footer="true">
-                  <div id="fixture-footer-plate" class="_background_fixture _surface_fixture pointer-events-none absolute inset-x-0 z-0 bottom-0 bg-surface"></div>
-                  <div class="composer-layer" data-pip-obstacle><div class="composer" data-composer-layout="root" data-composer-surface-variant="default"><div class="fixture-editor vertical-scroll-fade-mask" data-composer-input-layout="true"><textarea aria-label="示例输入区" placeholder="继续描述你的想法…"></textarea></div><footer><span>本地模拟</span><button aria-label="示例发送按钮">↑</button></footer></div></div>
+                  <div id="fixture-footer-plate" class="_background_fixture _surface_fixture pointer-events-none absolute inset-x-0 z-0 bottom-0"></div>
+                  <div class="composer-layer">
+                    <div class="composer" data-composer-layout="root" data-composer-surface-variant="default">
+                      <div class="fixture-editor" data-composer-input-layout="true">
+                        <textarea aria-label="示例输入区" placeholder="写下接下来的打算…"></textarea>
+                      </div>
+                      <footer><span>离线场景</span><button aria-label="示例发送按钮">↑</button></footer>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -98,7 +177,7 @@
       </main>
     </div>
   </div>
-  <output id="result">正在加载本地素材…</output>
+  <output id="result">正在读取合成素材…</output>
   <script type="module" src="./preview-controller.js"></script>
 </body>
 </html>
