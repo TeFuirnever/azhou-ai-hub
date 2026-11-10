@@ -1176,3 +1176,21 @@ test('ZCode dispose preserves a detached recorded surface', async () => {
     assert.equal(globalThis.__azhouWallpaper, undefined);
   } finally { fixture.restore(); }
 });
+
+test('an incumbent that fully disposes during decode is refused, not silently replaced', async () => {
+  await onPage({}, async page => {
+    await installRenderer(page.payload);
+    const incumbent = globalThis.__azhouWallpaper;
+    const decode = page.image.decode;
+    page.image.decode = async function () {
+      await incumbent.dispose();
+      await decode.call(this);
+    };
+    await assert.rejects(installRenderer(page.payload), { code: 'namespace-changed-during-decode' });
+    assert.equal(Object.hasOwn(globalThis, '__azhouWallpaper'), false, 'the disposed incumbent is not revived');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '');
+    assert.equal(page.revoked.length, 2, 'each attempt releases its own Blob URL');
+  });
+});
