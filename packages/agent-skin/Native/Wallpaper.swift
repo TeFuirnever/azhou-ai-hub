@@ -1299,9 +1299,11 @@ struct StartupConnector {
                 if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
                 if status.completed || status.ready {
                     do { try await requireCurrentPage(selected, deadline: deadline) }
-                    catch let failure as StartupFailure where failure.pageConnectionLost && status.completed {
+                    catch {
                         // Completion and user skip are terminal, even if their
-                        // document has since ended. Never replay a finished run.
+                        // document has since ended or its proof failed. Never
+                        // replay a finished run.
+                        guard status.completed, !(error is CancellationError) else { throw error }
                         return .partial(reason: "startup-interrupted")
                     }
                 }

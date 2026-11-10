@@ -4408,7 +4408,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
              "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
         }
         if generation == 0 { return [entry("page-a")] }
-        if mode == "raw-unavailable" { throw URLError(.badServerResponse) }
+        if ["raw-unavailable", "complete-blip", "ready-blip"].contains(mode) { throw URLError(.badServerResponse) }
         if ["cancel-list", "cancel-ready-list"].contains(mode) { cancel?(); throw URLError(.cancelled) }
         switch mode {
         case "same-target": return [entry("page-a")]
@@ -4473,6 +4473,8 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "before-install": break
             case "cancel-ready-list": terminal = "ready-replaced"
             case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
+            case "ready-blip": terminal = "ready-replaced"
+            case "complete-blip": terminal = "complete-replaced"
             default: throw URLError(.networkConnectionLost)
             }
         }
@@ -4657,6 +4659,19 @@ private func startupPageReplacementChecks() async throws -> Int {
     for mode in ["cancel-list", "cancel-ready-list", "bad-install", "bad-status", "missing-controller", "href-drift", "run-drift", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced"] {
         let r = try await startupReplacementScenario(stage: mode == "bad-install" ? "install" : "status", mode: mode); common(r)
         expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) remains terminal")
+    }
+    for mode in ["complete-blip", "ready-blip"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        let requests = r["requests"] as? [String] ?? []
+        if mode == "complete-blip" {
+            expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+                && !requests.contains("page-a:dispose") && r["connections"] as? [String] == ["page-a"],
+                "a transient completed-checkpoint recheck failure stays terminal without disposal or reconnection")
+        } else {
+            expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")"
+                && requests.contains("page-a:dispose") && r["connections"] as? [String] == ["page-a"],
+                "a transient pre-completion recheck failure stays a strict disposal failure")
+        }
     }
     for mode in ["context-lost", "posix-loss", "handshake-404", "before-install", "ready-replaced", "chain"] {
         let stage = ["before-install", "handshake-404"].contains(mode) ? "inspect" : mode == "ready-replaced" ? "status" : "install"
