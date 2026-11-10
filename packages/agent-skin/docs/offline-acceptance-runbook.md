@@ -38,6 +38,6 @@ ZCode 桌面自动更新（或任何宿主指纹漂移）后，身份门按设�
 
 1. 先亲眼看 `zcode-window.png`（捕获时无人审阅；本仓图像 Read 只回 CDN URL，主视觉 MCP 可能 401，备一条可用通道）。完成标准：确认为正常空主工作区。
 2. 核对 OBSERVATION 十步、closeout waitExit=0、UI exit 0。
-3. 盖章与替换安装走主线链 `python3 tools/ship-zcode.py --evidence <本次 OBSERVATION.json> --install`：以真实验收记录组装 `zcode-validation.json`（recordSHA、实测 payloadSHA、宿主三指纹、真实 evidenceIDs；记录须显式声明 `ownedAppearanceSurface`/`persistentSettings`），重签、strict 校验后写入 `~/Applications/阿舟 AI 实验室 for ZCode.app`，stdout 输出全链回执。
+3. 盖章前必须由**本次真实宿主监督链**提供 `OBSERVATION.json` 的 `run`（`runID`、UTC 起止时间、`evidenceIDs`）和同轮 `observations`（对 `ownedAppearanceSurface` 与 `persistentSettings` 的 `observed` 事件，各自绑定实际证据 ID）。可用 `tools/acceptance-harness.mjs` 的 `acceptanceDeclarations(run, observations)` **从这些已捕获事实导出**顶层布尔声明，随后记录 `observedAt=run.endedAt`；不能凭 UI 看起来正常、旧截图或合成测试直接填真。`ship-zcode.py --evidence` 会拒绝缺失、失败、异 run、错误时间窗或未绑定证据。当前仓库没有完整的离线监督链记录生成器，所以如果这次实机验收没有可靠产出此记录就保持待验收、**不可执行** `--install`。只有验收记录真实、操作者复核截图、身份与回滚条件满足后，才使用主线链 `python3 tools/ship-zcode.py --evidence <本次 OBSERVATION.json> --install` 组装并重签 `zcode-validation.json`，strict 校验后安装，stdout 输出全链回执。
 4. 安装后逐项核验（签名、build 号、validation 内容、回执 `ok=true`）。
 5. 收尾：`launchctl bootout` + 删 plist、evidence 回执、README build 号、提交。声明未验收项（原生冷启动入口、热附着按例保留）。

@@ -58,3 +58,62 @@ export function wallpaperBlockers(chain) {
     return alpha !== null && alpha > 0.5;
   });
 }
+
+// Explicit declarations for offline ZCode host acceptance. Call only with a
+// real supervisor's observation trail; this validator does not capture a host,
+// attest the source of entries, or make L4/L5 real-host checks pass by itself.
+// The returned flags are intentionally absent until BOTH capabilities have
+// observed facts bound to this precise run and to declared evidence identifiers.
+export const ACCEPTANCE_DECLARATION_FACTS = Object.freeze([
+  'ownedAppearanceSurface', 'persistentSettings',
+]);
+const ACCEPTANCE_OUTCOMES = new Set(['observed', 'failed', 'refused', 'unverified']);
+const UTC_TIMESTAMP = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?Z$/;
+
+function acceptanceEpoch(value) {
+  if (typeof value !== 'string' || !UTC_TIMESTAMP.test(value)) return null;
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 19) !== value.slice(0, 19)) return null;
+  return ms;
+}
+
+function safeAcceptanceId(value) {
+  return typeof value === 'string' && value.trim().length > 0 &&
+    !/[\r\n\u0000]/.test(value) && Buffer.byteLength(value) <= 256;
+}
+
+export function acceptanceDeclarations(run, observations) {
+  function refuse(reason) { throw new Error('declaration-refused:' + reason); }
+  const validRun = run && typeof run === 'object' && !Array.isArray(run) &&
+    safeAcceptanceId(run.runID) && Array.isArray(run.evidenceIDs) &&
+    run.evidenceIDs.length > 0 && run.evidenceIDs.every(safeAcceptanceId);
+  const started = validRun ? acceptanceEpoch(run.startedAt) : null;
+  const ended = validRun ? acceptanceEpoch(run.endedAt) : null;
+  if (!validRun || started === null || ended === null || ended < started) refuse('run-invalid');
+  if (!Array.isArray(observations)) refuse('observations-not-array');
+
+  const observed = new Set();
+  for (let i = 0; i < observations.length; i++) {
+    const entry = observations[i];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) refuse('entry-' + i + '-malformed');
+    if (!safeAcceptanceId(entry.fact)) refuse('entry-' + i + '-fact-invalid');
+    if (!ACCEPTANCE_OUTCOMES.has(entry.outcome)) refuse('entry-' + i + '-outcome-invalid');
+    const at = acceptanceEpoch(entry.observedAt);
+    if (at === null) refuse('entry-' + i + '-observedAt-invalid');
+    if (entry.runID !== run.runID) refuse('entry-' + i + '-foreign-run');
+    if (at < started || at > ended) refuse('entry-' + i + '-outside-window');
+    if (ACCEPTANCE_DECLARATION_FACTS.includes(entry.fact)) {
+      if (!safeAcceptanceId(entry.evidenceID) || !run.evidenceIDs.includes(entry.evidenceID)) {
+        refuse('entry-' + i + '-evidence-unbound');
+      }
+      if (entry.outcome !== 'observed') refuse('entry-' + i + '-outcome-not-observed');
+      observed.add(entry.fact);
+    }
+  }
+  const declarations = {};
+  for (const fact of ACCEPTANCE_DECLARATION_FACTS) {
+    if (!observed.has(fact)) refuse(fact + '-not-observed');
+    declarations[fact] = true;
+  }
+  return declarations;
+}

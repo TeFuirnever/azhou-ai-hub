@@ -80,6 +80,23 @@ class ShipChainTests(unittest.TestCase):
             "ownedAppearanceSurface": True,
             "persistentSettings": True,
             "observedAt": "2026-11-08T09:38:03.7791Z",
+            "run": {
+                "runID": "rc41-zcode-observation",
+                "startedAt": "2026-11-08T09:00:00Z",
+                "endedAt": "2026-11-08T09:38:03.7791Z",
+                "evidenceIDs": [
+                    "RC41-real-ZCode-3.17.2.9661-production-builder-UI-exit0",
+                    "RC41-main-area-wallpaper-pixels-uncovered",
+                ],
+            },
+            "observations": [
+                {"runID": "rc41-zcode-observation", "fact": "ownedAppearanceSurface",
+                 "outcome": "observed", "observedAt": "2026-11-08T09:35:00Z",
+                 "evidenceID": "RC41-real-ZCode-3.17.2.9661-production-builder-UI-exit0"},
+                {"runID": "rc41-zcode-observation", "fact": "persistentSettings",
+                 "outcome": "observed", "observedAt": "2026-11-08T09:36:00Z",
+                 "evidenceID": "RC41-main-area-wallpaper-pixels-uncovered"},
+            ],
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     # --- scripted subprocess environment ---------------------------------
@@ -179,6 +196,19 @@ class ShipChainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(receipt["failure"]["step"], "stamp")
         self.assertIn("persistentSettings", receipt["failure"]["error"])
+        self.assertFalse(self.stamp_path.exists())
+        self.assertFalse(any(call[0] == "codesign" for call in self.calls))
+
+    def test_full_ship_refuses_true_flags_without_observed_trail(self):
+        """The public CLI must fail at stamp, before codesign, even for true flags."""
+        record = json.loads(self.evidence.read_text(encoding="utf-8"))
+        record.pop("observations")
+        self.evidence.write_text(json.dumps(record), encoding="utf-8")
+        code, receipt = self.run_ship(["--evidence", str(self.evidence)])
+        self.assertEqual(code, 1)
+        self.assertFalse(receipt["ok"])
+        self.assertEqual(receipt["failure"]["step"], "stamp")
+        self.assertIn("observations", receipt["failure"]["error"])
         self.assertFalse(self.stamp_path.exists())
         self.assertFalse(any(call[0] == "codesign" for call in self.calls))
 
@@ -391,7 +421,17 @@ class ShipInputValidationTests(unittest.TestCase):
         self.evidence = self.root / "evidence.json"
         self.record = {"hostVersion": "fixture.1", "hostFingerprints": dict(HOST_FINGERPRINTS),
                        "evidenceIDs": ["synthetic-unit-control"], "ownedAppearanceSurface": True,
-                       "persistentSettings": True, "observedAt": "2026-11-10T00:00:00Z"}
+                       "persistentSettings": True, "observedAt": "2026-11-10T00:05:00Z",
+                       "run": {"runID": "rc42-synthetic-observation",
+                               "startedAt": "2026-11-10T00:00:00Z",
+                               "endedAt": "2026-11-10T00:05:00Z",
+                               "evidenceIDs": ["synthetic-unit-control"]},
+                       "observations": [
+                           {"runID": "rc42-synthetic-observation", "fact": fact,
+                            "outcome": "observed", "observedAt": "2026-11-10T00:02:00Z",
+                            "evidenceID": "synthetic-unit-control"}
+                           for fact in ("ownedAppearanceSurface", "persistentSettings")],
+                       }
         self.evidence.write_text(json.dumps(self.record), encoding="utf-8")
 
     def test_evidence_refuses_missing_nonobject_and_invalid_contract_fields(self):
@@ -411,6 +451,84 @@ class ShipInputValidationTests(unittest.TestCase):
                 self.evidence.write_text(text, encoding="utf-8")
                 with self.assertRaises(self.module.ShipFailure):
                     self.module.load_evidence(self.evidence, "abc")
+
+    def _record_with_trail(self):
+        end = "2026-11-10T00:05:00Z"
+        run_id = "rc42-synthetic-observation"
+        evidence = list(self.record["evidenceIDs"])
+        return {
+            **self.record,
+            "observedAt": end,
+            "run": {
+                "runID": run_id, "startedAt": "2026-11-10T00:00:00Z",
+                "endedAt": end, "evidenceIDs": evidence,
+            },
+            "observations": [
+                {"runID": run_id, "fact": fact, "outcome": "observed",
+                 "observedAt": "2026-11-10T00:02:00Z", "evidenceID": evidence[0]}
+                for fact in ("ownedAppearanceSurface", "persistentSettings")
+            ],
+        }
+
+    def test_evidence_accepts_proven_observations_and_unrelated_context(self):
+        record = self._record_with_trail()
+        record["observations"].append({
+            "runID": record["run"]["runID"], "fact": "wallpaper",
+            "outcome": "observed", "observedAt": "2026-11-10T00:03:00Z",
+            "evidenceID": "not-a-capability",
+        })
+        self.evidence.write_text(json.dumps(record), encoding="utf-8")
+        evidence = self.module.load_evidence(self.evidence, "abc")
+        self.assertEqual(evidence["recordSHA256"], hashlib.sha256(self.evidence.read_bytes()).hexdigest())
+        self.assertTrue(self.module.build_stamp(evidence, "a" * 64)["persistentSettings"])
+
+    def test_true_flags_without_provenance_are_refused(self):
+        base = self._record_with_trail()
+        for field in ("run", "observations", "observedAt"):
+            record = json.loads(json.dumps(base))
+            record.pop(field)
+            self.evidence.write_text(json.dumps(record), encoding="utf-8")
+            with self.subTest(missing=field), self.assertRaises(self.module.ShipFailure):
+                self.module.load_evidence(self.evidence, "abc")
+
+    def test_contradicted_or_foreign_observations_are_refused(self):
+        changes = [
+            ("failed", {"outcome": "failed"}),
+            ("refused", {"outcome": "refused"}),
+            ("unverified", {"outcome": "unverified"}),
+            ("unknown-outcome", {"outcome": "maybe"}),
+            ("missing-outcome", {"outcome": None}),
+            ("unhashable-outcome", {"outcome": []}),
+            ("blank-fact", {"fact": " "}),
+            ("foreign-run", {"runID": "previous-run"}),
+            ("stale", {"observedAt": "2026-11-09T00:02:00Z"}),
+            ("future", {"observedAt": "2026-11-10T00:06:00Z"}),
+            ("unbound-evidence", {"evidenceID": "foreign-proof"}),
+            ("missing-evidence", {"evidenceID": None}),
+            ("bad-timestamp", {"observedAt": "2026-02-30T00:01:00Z"}),
+        ]
+        for label, change in changes:
+            record = self._record_with_trail()
+            record["observations"][0].update(change)
+            self.evidence.write_text(json.dumps(record), encoding="utf-8")
+            with self.subTest(label=label), self.assertRaises(self.module.ShipFailure):
+                self.module.load_evidence(self.evidence, "abc")
+
+    def test_malformed_trail_and_run_window_are_refused(self):
+        corruptions = [
+            ("wrong-trail", "observations", "not-a-list"),
+            ("null-trail", "observations", None),
+            ("non-object", "observations", [7]),
+            ("null-run", "run", None),
+            ("bad-run-time", "run", {"runID": "r", "startedAt": "bad", "endedAt": "2026-11-10T00:05:00Z"}),
+            ("wrong-record-time", "observedAt", "2026-11-10T00:04:00Z"),
+        ]
+        for label, field, value in corruptions:
+            record = self._record_with_trail()
+            record[field] = value
+            self.evidence.write_text(json.dumps(record), encoding="utf-8")
+            with self.subTest(label=label), self.assertRaises(self.module.ShipFailure):
+                self.module.load_evidence(self.evidence, "abc")
 
     def test_stamp_validation_refuses_each_mismatched_identity(self):
         evidence = self.module.load_evidence(self.evidence, "abc")

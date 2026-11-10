@@ -28,7 +28,7 @@ python3 -B tools/test-unit-coverage.py
 
 ## 功能用例
 
-每项都规定触发、期望和验收入口。模拟或单元测试通过不自动关闭实机验收。
+每项都规定触发、期望和验收入口。模拟或单元测试通过不自动关闭实机验收。ZCode 盖章证据还必须由同轮宿主 `observations` 严格导出两项能力声明，`tools/acceptance-declarations.test.mjs` 和 `tools/test-ship-zcode.py` 只验证验证器在合成记录上的可观察行为；只有真实监督链及截图、设置持久化证据均可追溯时才能宣称宿主通过。
 
 | ID | 触发与操作 | 期望 | 自动看护 / 实机验收 |
 |---|---|---|---|

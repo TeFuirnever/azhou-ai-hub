@@ -54,6 +54,12 @@ Execution-path unit controls use synthetic journals, disposable test directories
 | F9 registration / install ownership | P9.1 `azhou-install-registry register` accepts only the Codex identity, leaving the ZCode entry installed-but-unregistered; P9.2 the ZCode install was a manual cp+codesign with no audit tool | L3 (+ registry CLI as a separate task) | `python3 tools/ship-zcode.py` full-chain receipt; an explicit `--install` is the only path that writes `~/Applications` | the manual cp+codesign path is replaced by the receipt chain; P9.1 registry registration remains uncovered and stays a separately tracked task |
 | F10 data / assets | P10.1 `assets/private` is untracked by design, with no expected-file list to fail early | L0 | `tools/private-assets.MANIFEST.expected` + `python3 tools/check-private-assets.py` (first `quick` step) | both: the manifest ships in Git; wherever any artwork is present, existence, non-symlink form and optional sha256 baselines are strictly checked, so a partial or drifted maintainer copy fails at L0 instead of late inside a build, while artwork-free checkouts pass in the explicit fresh-checkout mode |
 
+### L3 real-observation declaration boundary
+
+`tools/acceptance-harness.mjs::acceptanceDeclarations(run, observations)` derives the two native stamp capability declarations only from in-window, same-run, evidence-ID-bound `observed` entries. `tools/ship-zcode.py --evidence` independently refuses a record with true booleans but no matching observation trail, including missing, contradictory, foreign-run, stale and malformed inputs. Synthetic negative controls: `tools/acceptance-declarations.test.mjs` and `tools/test-ship-zcode.py`.
+
+This guard protects the input **contract**, not the trustworthiness of a capture source: no complete real ZCode supervisor recorder or L4/L5 real-host receipt is delivered by these helpers. Only an actual authorized host-run trace, reviewed screenshot and settings-persistence observation may satisfy that acceptance. Until then the ZCode candidate remains pending and must not be stamped or installed.
+
 ## New-incident procedure
 
 1. Record the incident with its evidence receipt before touching code.

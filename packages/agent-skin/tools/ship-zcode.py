@@ -17,6 +17,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -92,6 +93,75 @@ def git_identity(root):
     return values[0], values[1]
 
 
+ACCEPTANCE_FACTS = ("ownedAppearanceSurface", "persistentSettings")
+ACCEPTANCE_OUTCOMES = frozenset({"observed", "failed", "refused", "unverified"})
+ACCEPTANCE_UTC_RE = re.compile(
+    r"^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T"
+    r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?Z$"
+)
+
+
+def _acceptance_time(value):
+    """Parse a canonical UTC observation instant, rejecting loose ISO variants."""
+    if not isinstance(value, str) or not ACCEPTANCE_UTC_RE.fullmatch(value):
+        raise ShipFailure("验收观察时间必须使用有效的 UTC RFC3339 Z 时间戳。")
+    try:
+        return datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as error:
+        raise ShipFailure(f"验收观察时间非法：{error}") from error
+
+
+def validate_observation_trail(record, evidence_ids):
+    """Require two observed host capabilities, bound to this run and evidence.
+
+    These checks validate a captured record's internal consistency. They do
+    not replace the real supervisor capture or certify the original host.
+    """
+    run = record.get("run")
+    if (not isinstance(run, dict) or not is_safe_text(run.get("runID"), 256)
+            or not run["runID"].strip()):
+        raise ShipFailure("验收证据缺少本次 run 的 runID；不能用手填声明代替观察。")
+    run_id = run["runID"]
+    if run.get("evidenceIDs") != evidence_ids:
+        raise ShipFailure("验收 run 的 evidenceIDs 与记录声明不一致。")
+    start = _acceptance_time(run.get("startedAt"))
+    end = _acceptance_time(run.get("endedAt"))
+    if end < start:
+        raise ShipFailure("验收 run 结束时间早于开始时间。")
+    if record.get("observedAt") != run.get("endedAt"):
+        raise ShipFailure("OBSERVATION observedAt 与本次运行结束时间不一致。")
+    observations = record.get("observations")
+    if not isinstance(observations, list):
+        raise ShipFailure("验收证据缺少 observations 列表；拒绝未观察的 true 声明。")
+
+    observed = set()
+    for index, entry in enumerate(observations):
+        if not isinstance(entry, dict):
+            raise ShipFailure(f"验收观察轨迹第 {index} 项不是对象。")
+        fact = entry.get("fact")
+        if not is_safe_text(fact, 256) or not fact.strip():
+            raise ShipFailure(f"验收观察轨迹第 {index} 项 fact 无效。")
+        outcome = entry.get("outcome")
+        if not isinstance(outcome, str) or outcome not in ACCEPTANCE_OUTCOMES:
+            raise ShipFailure(f"验收观察轨迹第 {index} 项 outcome 无效。")
+        if entry.get("runID") != run_id:
+            raise ShipFailure(f"验收观察轨迹第 {index} 项属于别的 run。")
+        when = _acceptance_time(entry.get("observedAt"))
+        if not start <= when <= end:
+            raise ShipFailure(f"验收观察轨迹第 {index} 项不在本次 run 时间窗。")
+        if fact in ACCEPTANCE_FACTS:
+            evidence_id = entry.get("evidenceID")
+            if (not is_safe_text(evidence_id, 256) or not evidence_id.strip()
+                    or evidence_id not in evidence_ids):
+                raise ShipFailure(f"验收观察轨迹第 {index} 项 {fact} 的 evidenceID 未绑定。")
+            if outcome != "observed":
+                raise ShipFailure(f"验收观察轨迹第 {index} 项与 {fact} 声明矛盾。")
+            observed.add(fact)
+    for fact in ACCEPTANCE_FACTS:
+        if fact not in observed:
+            raise ShipFailure(f"验收记录缺少本次实际观察的 {fact}，拒绝凭空盖章。")
+
+
 def load_evidence(path, short_commit):
     """Load the real-acceptance OBSERVATION record that the stamp must cite.
 
@@ -122,7 +192,8 @@ def load_evidence(path, short_commit):
     for field in ('ownedAppearanceSurface', 'persistentSettings'):
         if record.get(field) is not True:
             raise ShipFailure(f'验收证据记录必须以真实验收显式声明 {field}=true；拒绝替未验收载荷盖章。')
-    observed_at = record.get('observedAt', now_iso())
+    validate_observation_trail(record, identifiers)
+    observed_at = record['observedAt']
     if not is_safe_text(observed_at, 64):
         raise ShipFailure('验收证据记录 observedAt 必须是可读的 ISO-8601 字符串。')
     try:
