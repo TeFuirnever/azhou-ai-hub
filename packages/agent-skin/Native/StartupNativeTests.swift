@@ -1048,6 +1048,7 @@ struct StartupNativeTests {
         }
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
+        checks += try await startupIdentityDiagnosticChecks()
         checks += try await startupPageReplacementChecks()
         checks += try await startupControllerBindingChecks()
         checks += try await nativeEventContractChecks()
@@ -5080,3 +5081,387 @@ private func startupPageReplacementChecks() async throws -> Int {
            "same PID and run ID cannot make an old-page observation satisfy new-page readiness")
     return checks
 }
+
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+@MainActor
+private final class IdentityDiagnosticApplication: NativeApplication {
+    let mode: String
+    let expectedBundle: URL
+    let expectedExecutable: URL
+    var postOpenMode = ""
+    private(set) var reads: [String] = []
+    init(mode: String, bundle: URL, executable: URL) {
+        self.mode = mode; expectedBundle = bundle; expectedExecutable = executable
+    }
+    var processIdentifier: Int32 { reads.append("pid"); return mode == "invalid-pid" ? -1 : 4123 }
+    var bundleIdentifier: String? {
+        reads.append("bundleID")
+        if mode == "callback-id-missing" || postOpenMode == "id-missing" { return nil }
+        return mode == "callback-id-mismatch" ? "fixture.other" : "com.openai.codex"
+    }
+    var bundleURL: URL? {
+        reads.append("bundle")
+        if mode == "callback-bundle-missing" || postOpenMode == "bundle-missing"
+            || (mode == "callback-bundle-vanishes" && reads.filter { $0 == "bundle" }.count > 1) { return nil }
+        return mode == "callback-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : expectedBundle
+    }
+    var executableURL: URL? {
+        reads.append("executable")
+        if mode == "callback-executable-missing" || postOpenMode == "executable-missing" { return nil }
+        return mode == "facts-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : expectedExecutable
+    }
+    var launchTime: TimeInterval? {
+        reads.append("launchTime")
+        return ["no-launch-time", "no-launch-time-or-date"].contains(mode) ? nil : 123.456
+    }
+    var isTerminated: Bool { reads.append("terminated"); return mode == "callback-terminated" || postOpenMode == "terminated" }
+    var isActive: Bool { false }
+    var isHidden: Bool { false }
+    func activate() -> Bool { fatalError("identity diagnostics must never activate the host") }
+}
+
+private final class IdentityDiagnosticEnvironment: @unchecked Sendable {
+    let mode: String
+    let bundle: URL
+    let executable: URL
+    private(set) var probes: [String] = []
+    private var bundleReads = 0
+    private var processReads = 0
+    private var psReads = 0
+    private var time: TimeInterval = 101
+    init(_ mode: String) {
+        self.mode = mode
+        let path = mode == "invalid-extension" ? "/private/identity-private"
+            : mode == "nested-app" ? "/private/identity-private.app/Inner.app"
+            : "/private/identity-private.app"
+        bundle = URL(fileURLWithPath: path)
+        executable = bundle.appendingPathComponent("Contents/MacOS/Fixture")
+    }
+    func environment() -> CodexTargetEnvironment {
+        CodexTargetEnvironment(
+            mainBundleURL: mode == "launcher-bundle" ? bundle : URL(fileURLWithPath: "/private/launcher.app"),
+            bundleFacts: { [self] _ in
+                bundleReads += 1; probes.append("bundle:\(bundleReads)")
+                if (mode == "bundle-facts-missing" && bundleReads == 1)
+                    || (mode == "signature-bundle-missing" && bundleReads == 2) { return nil }
+                let identifier: String? = mode == "package-id-missing" ? nil
+                    : mode == "package-id-mismatch" || (mode == "signature-id-mismatch" && bundleReads == 2)
+                        ? "fixture.other" : "com.openai.codex"
+                let binary: URL? = mode == "package-executable-missing" ? nil
+                    : mode == "package-executable-outside" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
+                return CodexBundleFacts(identifier: identifier, executableURL: binary)
+            },
+            processFacts: { [self] pid in
+                processReads += 1; probes.append("process:\(processReads)")
+                if (mode == "fresh-process-missing" && processReads == 1)
+                    || (mode == "revalidate-process-missing" && processReads == 2) { return nil }
+                if mode == "ps-budget-timeout" && processReads == 2 { time = 200 }
+                let identifier: String? = mode == "fresh-id-missing" ? nil
+                    : mode == "fresh-id-mismatch" ? "fixture.other" : "com.openai.codex"
+                let processBundle: URL? = mode == "fresh-bundle-missing" ? nil
+                    : mode == "fresh-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : bundle
+                let binary: URL? = mode == "fresh-executable-missing" ? nil
+                    : mode == "fresh-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
+                let date: Date? = ["fresh-launch-missing", "no-launch-time-or-date"].contains(mode) ? nil
+                    : Date(timeIntervalSince1970: mode == "fresh-launch-mismatch"
+                           || (mode == "revalidate-launch-mismatch" && processReads == 2)
+                           || (mode == "post-signature-launch-mismatch" && processReads == 3) ? 124.456 : 123.456)
+                return CodexProcessFacts(processIdentifier: pid, isTerminated: mode == "fresh-terminated",
+                                         bundleIdentifier: identifier, bundleURL: processBundle,
+                                         executableURL: binary, launchDate: date)
+            },
+            runningProcesses: { _ in fatalError("identity validation must not enumerate or open the host") },
+            isExecutableFile: { [self] _ in probes.append("executable"); return mode != "not-executable" },
+            runCommand: { [self] file, _, timeout, _ in
+                probes.append("command:\(file):\(timeout)")
+                if file == "/bin/ps" {
+                    psReads += 1
+                    if mode == "ps-nserror" { throw NSError(domain: "IdentityFixture", code: 71, userInfo: [NSLocalizedDescriptionKey: "identity-private-message"]) }
+                    if mode == "ps-inspection-failed" { throw WallpaperFailure(state: "inspection-failed", chinese: "identity-private-message", english: "identity-private-message") }
+                    if mode == "signature-budget-timeout" { time = 200 }
+                    if mode == "ps-field-count" { return "identity-private-output" }
+                    if mode == "ps-uid-missing" { return "invalid \(executable.path)" }
+                    if mode == "ps-uid-mismatch" { return "502 \(executable.path)" }
+                    if mode == "ps-executable-mismatch" { return "501 /private/identity-private-other" }
+                    return "501 \(executable.path)"
+                }
+                precondition(file == "/usr/bin/codesign", "identity fixture must not probe listeners")
+                if mode == "signature-nserror" { throw NSError(domain: "IdentityFixture", code: 72, userInfo: [NSLocalizedDescriptionKey: "identity-private-signature", NSFilePathErrorKey: "/private/identity-private-file"]) }
+                if mode == "signature-inspection-timeout" || mode == "signature-inspection-failed" {
+                    throw WallpaperFailure(state: mode == "signature-inspection-timeout" ? "inspection-timeout" : "inspection-failed",
+                                           chinese: "identity-private-message", english: "identity-private-message")
+                }
+                return ""
+            },
+            currentUID: { [self] in probes.append("uid"); return 501 },
+            now: { [self] in time })
+    }
+}
+
+@MainActor
+private func startupIdentityDiagnosticChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: identity diagnostics: \(label)") }
+        checks += 1
+    }
+    let allowed: Set<String> = ["stage", "checkpoint", "at", "pid", "pidObserved", "outcome", "errorDomain", "errorCode", "state", "reason",
+                               "beforeDeadline", "callbackErrorPresent", "applicationPresent", "notTerminated", "bundlePresent", "executablePresent",
+                               "bundleIDPresent", "bundleMatches", "bundleIDMatches", "executableMatches", "launchTimePresent", "pidValid", "appExtensionMatches",
+                               "differentFromLauncher", "notNestedApp", "bundleFactsPresent", "executableInsideBundle", "executableFile", "processPresent",
+                               "expectedLaunchTimePresent", "observedLaunchTimePresent", "launchTimeMatches", "launchTimeAccepted", "fieldCountMatches", "uidPresent", "uidMatches"]
+    func contentFree(_ records: [[String: Any]]) throws {
+        for record in records {
+            expect(Set(record.keys).isSubset(of: allowed), "diagnostics expose only the fixed identity schema")
+            expect(record["stage"] as? String == "target-identity" && record["at"] is TimeInterval,
+                   "every identity record has a fixed stage and its sampled monotonic time")
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+            expect(!text.contains("identity-private") && !text.contains("file://") && !text.contains("/bin/") && !text.contains("/Applications/"),
+                   "paths, ps output, command text and arbitrary error descriptions never enter the sink")
+        }
+    }
+    func expanded(_ record: [String: Any]) -> [[String: Any]] {
+        guard let records = record["checks"] as? [[String: Any]] else { return [record] }
+        expect(Set(record.keys) == ["stage", "checkpoint", "at", "checks"]
+               && record["stage"] as? String == "target-identity"
+               && record["checkpoint"] as? String == "bounded-open" && record["at"] is TimeInterval,
+               "one bounded-open envelope carries only the fixed metadata and actual observations")
+        expect(!records.isEmpty && records.count <= 11, "the finite validation path keeps its diagnostic batch bounded")
+        return records
+    }
+    struct Observation {
+        let reason: String
+        let reads: [String]
+        let probes: [String]
+        let records: [[String: Any]]
+    }
+    func observe(_ mode: String, enabled: Bool) async throws -> Observation {
+        let fixture = IdentityDiagnosticEnvironment(mode)
+        let application = IdentityDiagnosticApplication(mode: mode, bundle: fixture.bundle, executable: fixture.executable)
+        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+        runtime.openedApplication = mode == "callback-missing" ? nil : application
+        if mode == "callback-error" { runtime.openError = NSError(domain: "IdentityFixture", code: 70, userInfo: [NSLocalizedDescriptionKey: "identity-private-open"]) }
+        if mode == "callback-deadline" { runtime.beforeOpenCompletion = { runtime.uptime = 200 } }
+        var records: [[String: Any]] = []
+        var emittedProbeCounts: [Int] = []
+        var emittedGetterCounts: [Int] = []
+        let sink: ((String, [String: Any]) -> Void)? = enabled ? { event, fields in
+            precondition(event == "startup-diagnostic")
+            emittedProbeCounts.append(fixture.probes.count)
+            emittedGetterCounts.append(application.reads.count)
+            records.append(contentsOf: expanded(fields))
+        } : nil
+        let system: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
+        let reason: String
+        do {
+            let result = try await AppDelegate.openTargetApplication(
+                runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
+            expect(result === application, "the unchanged bounded open returns exactly its callback object")
+            reason = "ready"
+        } catch let failure as StartupFailure { reason = failure.reason }
+        expect(runtime.openCount == 1 && runtime.terminated == 0 && runtime.activated == 0,
+               "observations do not add opens, activation, termination or retries")
+        if enabled {
+            expect(emittedProbeCounts == [fixture.probes.count] && emittedGetterCounts == [application.reads.count],
+                   "diagnostic I/O occurs exactly once, after all callback identity decisions and host probes finish")
+        } else { expect(records.isEmpty, "off means no identity records") }
+        try contentFree(records)
+        return Observation(reason: reason, reads: application.reads, probes: fixture.probes, records: records)
+    }
+    let cases: [(String, String, String, String, Bool)] = [
+        ("valid", "ready", "callback-identity", "bundleMatches", true),
+        ("callback-bundle-vanishes", "ready", "callback-identity", "bundlePresent", true),
+        ("no-launch-time", "ready", "launch-time", "expectedLaunchTimePresent", false),
+        ("no-launch-time-or-date", "ready", "process-facts", "expectedLaunchTimePresent", false),
+        ("callback-missing", "target-identity", "callback-identity", "applicationPresent", false),
+        ("callback-terminated", "target-identity", "callback-identity", "notTerminated", false),
+        ("callback-bundle-missing", "target-identity", "callback-identity", "bundlePresent", false),
+        ("callback-executable-missing", "target-identity", "callback-identity", "executablePresent", false),
+        ("callback-id-missing", "target-identity", "callback-identity", "bundleIDPresent", false),
+        ("callback-bundle-mismatch", "target-identity", "callback-identity", "bundleMatches", false),
+        ("callback-id-mismatch", "target-identity", "callback-identity", "bundleIDMatches", false),
+        ("callback-error", "target-missing", "callback-identity", "callbackErrorPresent", true),
+        ("callback-deadline", "attach-timeout", "callback-identity", "beforeDeadline", false),
+        ("invalid-pid", "target-identity", "target-input", "pidValid", false),
+        ("invalid-extension", "target-identity", "target-input", "appExtensionMatches", false),
+        ("launcher-bundle", "target-identity", "target-input", "differentFromLauncher", false),
+        ("nested-app", "target-identity", "target-input", "notNestedApp", false),
+        ("bundle-facts-missing", "target-identity", "target-input", "bundleFactsPresent", false),
+        ("package-id-missing", "target-identity", "target-input", "bundleIDPresent", false),
+        ("package-id-mismatch", "target-identity", "target-input", "bundleIDMatches", false),
+        ("package-executable-missing", "target-identity", "target-input", "executablePresent", false),
+        ("package-executable-outside", "target-identity", "target-input", "executableInsideBundle", false),
+        ("not-executable", "target-identity", "target-input", "executableFile", false),
+        ("fresh-process-missing", "target-identity", "process-facts-initial", "processPresent", false),
+        ("fresh-terminated", "target-identity", "process-facts-initial", "notTerminated", false),
+        ("fresh-id-missing", "target-identity", "process-facts-initial", "bundleIDPresent", false),
+        ("fresh-id-mismatch", "target-identity", "process-facts-initial", "bundleIDMatches", false),
+        ("fresh-bundle-missing", "target-identity", "process-facts-initial", "bundlePresent", false),
+        ("fresh-bundle-mismatch", "target-identity", "process-facts-initial", "bundleMatches", false),
+        ("fresh-executable-missing", "target-identity", "process-facts-initial", "executablePresent", false),
+        ("fresh-executable-mismatch", "target-identity", "process-facts-initial", "executableMatches", false),
+        ("fresh-launch-missing", "target-identity", "launch-time", "observedLaunchTimePresent", false),
+        ("fresh-launch-mismatch", "target-identity", "launch-time", "launchTimeMatches", false),
+        ("revalidate-process-missing", "target-identity", "process-facts", "processPresent", false),
+        ("revalidate-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
+        ("post-signature-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
+        ("ps-field-count", "target-identity", "ps-identity", "fieldCountMatches", false),
+        ("ps-uid-missing", "target-identity", "ps-identity", "uidPresent", false),
+        ("ps-uid-mismatch", "target-identity", "ps-identity", "uidMatches", false),
+        ("ps-executable-mismatch", "target-identity", "ps-identity", "executableMatches", false),
+        ("facts-executable-mismatch", "target-identity", "system-target-input", "executableMatches", false),
+        ("signature-bundle-missing", "target-identity", "signature", "bundleFactsPresent", false),
+        ("signature-id-mismatch", "target-identity", "signature", "bundleIDMatches", false),
+    ]
+    for (mode, expectedReason, checkpoint, field, value) in cases {
+        let off = try await observe(mode, enabled: false)
+        let on = try await observe(mode, enabled: true)
+        expect(off.reason == expectedReason && on.reason == off.reason, "opt-in leaves success/refusal unchanged for \(mode)")
+        expect(on.reads == off.reads && on.probes == off.probes, "identity getters and actual host-boundary probe order/count stay unchanged for \(mode)")
+        expect(on.records.contains { $0["checkpoint"] as? String == checkpoint && $0[field] as? Bool == value },
+               "the actual rejecting/accepting predicate is distinguishable for \(mode)")
+        let callback = on.records.first { $0["checkpoint"] as? String == "callback-identity" }!
+        if on.reads.contains("pid") {
+            expect(callback["pid"] as? Int32 == (mode == "invalid-pid" ? -1 : 4123) && callback["pidObserved"] as? Bool == true,
+                   "PID comes only from the facts constructed after callback guards")
+        } else {
+            expect(callback["pid"] == nil && callback["pidObserved"] as? Bool == false,
+                   "an early refusal never samples an unvisited PID just for logging")
+        }
+        if mode == "callback-bundle-missing" {
+            expect(on.reads == ["terminated", "bundle"] && callback["executablePresent"] == nil && callback["bundleMatches"] == nil,
+                   "unvisited short-circuit predicates stay absent rather than looking missing or mismatched")
+        }
+        if mode == "fresh-process-missing" {
+            expect(on.probes == ["bundle:1", "executable", "process:1"],
+                   "a missing initial process snapshot is never re-probed for diagnosis")
+        }
+        if mode == "valid" {
+            expect(on.reads == ["terminated", "bundle", "executable", "bundleID", "pid", "launchTime"],
+                   "callback diagnostic taps consume the original getter order exactly once")
+            expect(on.probes == ["bundle:1", "executable", "process:1", "process:2", "command:/bin/ps:2.0", "uid", "bundle:2", "command:/usr/bin/codesign:12.0", "process:3", "command:/bin/ps:2.0", "uid"],
+                   "production validation through the existential still performs its original three snapshots/two ps/one signature checks")
+        }
+    }
+    let failures: [(String, String, String, String?, Int?)] = [
+        ("ps-nserror", "target-identity", "ps-identity", nil, 71),
+        ("ps-inspection-failed", "target-identity", "ps-identity", "inspection-failed", nil),
+        ("ps-budget-timeout", "attach-timeout", "ps-identity", nil, nil),
+        ("signature-budget-timeout", "attach-timeout", "signature", nil, nil),
+        ("signature-nserror", "target-identity", "signature", nil, 72),
+        ("signature-inspection-timeout", "attach-timeout", "signature", "inspection-timeout", nil),
+        ("signature-inspection-failed", "target-identity", "signature", "inspection-failed", nil),
+    ]
+    for (mode, expectedReason, checkpoint, state, code) in failures {
+        let off = try await observe(mode, enabled: false)
+        let on = try await observe(mode, enabled: true)
+        expect(off.reason == expectedReason && on.reason == off.reason && on.reads == off.reads && on.probes == off.probes,
+               "throwing checkpoint leaves error mapping and all probe counts unchanged for \(mode)")
+        let record = on.records.first { $0["checkpoint"] as? String == checkpoint && $0["outcome"] as? String == "error" }!
+        if let state { expect(record["state"] as? String == state, "original fixed WallpaperFailure state survives at \(checkpoint)") }
+        if let code { expect(record["errorDomain"] as? String == "IdentityFixture" && record["errorCode"] as? Int == code,
+                             "raw NSError identity survives before outer failure mapping") }
+        if mode == "signature-nserror" || mode == "signature-inspection-failed" {
+            expect(on.records.last?["state"] as? String == "signature-refused", "signature diagnostics distinguish the raw command failure from its existing public mapping")
+        }
+    }
+    // Default protocol forwarding keeps fake/custom target systems on their exact
+    // existing validate path; it must not swallow production dynamic dispatch.
+    let typedErrors: [Error] = [StartupFailure(reason: "attach-timeout", message: "identity-private-timeout"),
+                               WallpaperFailure(state: "inspection-timeout", chinese: "identity-private", english: "identity-private"),
+                               WallpaperFailure(state: "target-changed", chinese: "identity-private", english: "identity-private"),
+                               NSError(domain: "IdentityFixture", code: 73, userInfo: [NSLocalizedDescriptionKey: "identity-private"])]
+    for (index, error) in typedErrors.enumerated() {
+        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+        let fixture = IdentityDiagnosticEnvironment("valid")
+        runtime.openedApplication = IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+        let system = FakeStartupSystem(expectedPID: 4123, ports: [])
+        system.validationError = error
+        var records: [[String: Any]] = []
+        do {
+            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                                                           port: 9333, deadline: 200, system: system, log: { _, _ in },
+                                                           diagnostics: { _, record in records.append(contentsOf: expanded(record)) })
+            fatalError("typed validation failure must still reject")
+        } catch let failure as StartupFailure {
+            expect(failure.reason == (index < 2 ? "attach-timeout" : "target-identity"), "all existing bounded-open typed error mappings stay fixed")
+        }
+        expect(system.validatedPIDs == [4123] && records.last?["checkpoint"] as? String == "system-validation",
+               "default overload forwards once and the catch identifies its own checkpoint")
+        try contentFree(records)
+    }
+    // The callback may have complete facts while the next, independently used
+    // post-open snapshot does not. Never overwrite the earlier observation.
+    for mode in ["", "bundle-missing", "executable-missing", "id-missing", "terminated"] {
+        for enabled in [false, true] {
+            let fixture = IdentityDiagnosticEnvironment("valid")
+            let application = IdentityDiagnosticApplication(mode: "callback-bundle-vanishes", bundle: fixture.bundle, executable: fixture.executable)
+            let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"]); runtime.openedApplication = application
+            let system = FakeStartupSystem(expectedPID: 4123, ports: [])
+            var records: [[String: Any]] = []
+            let sink: ((String, [String: Any]) -> Void)? = enabled ? { _, record in records.append(contentsOf: expanded(record)) } : nil
+            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                                                           port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
+            // Use a separate application for the non-bundle predicates so the
+            // original short-circuit order is tested at every post-open field.
+            let postApplication = mode.isEmpty || mode == "bundle-missing" ? application
+                : IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+            postApplication.postOpenMode = mode
+            let delegate = AppDelegate(runtime: runtime, presentation: FakeNativePlayerPresentation())
+            do {
+                _ = try delegate.startupFacts(postApplication, diagnostics: sink, at: 102)
+                fatalError("post-open missing identity must still reject")
+            } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "post-open disappearance keeps its existing refusal") }
+            if enabled {
+                let callback = records.first { $0["checkpoint"] as? String == "callback-identity" }!
+                let post = records.last!
+                expect(callback["outcome"] as? String == "accepted" && callback["bundlePresent"] as? Bool == true
+                       && post["checkpoint"] as? String == "post-open-facts" && post["outcome"] as? String == "rejected",
+                       "later field loss is distinguished from the successful callback snapshot")
+                expect(post["pid"] == nil && post["pidObserved"] as? Bool == false && post["at"] as? TimeInterval == 102,
+                       "post-open refusal records only observed predicates at its own time")
+                try contentFree(records)
+            } else { expect(records.isEmpty, "post-open diagnostics also remain opt-in") }
+        }
+    }
+    let fixture = IdentityDiagnosticEnvironment("no-launch-time")
+    let application = IdentityDiagnosticApplication(mode: "no-launch-time", bundle: fixture.bundle, executable: fixture.executable)
+    var postRecords: [[String: Any]] = []
+    var clockReads = 0
+    func clock() -> TimeInterval { clockReads += 1; return 102 }
+    let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
+                               presentation: FakeNativePlayerPresentation())
+    let offFacts = try delegate.startupFacts(application, at: clock())
+    expect(clockReads == 0 && offFacts.launchTime == nil, "disabled diagnostic does not evaluate even its clock autoclosure")
+    let onFacts = try delegate.startupFacts(application, diagnostics: { _, record in postRecords.append(record) }, at: clock())
+    expect(clockReads == 1 && onFacts.pid == offFacts.pid && onFacts.bundle == offFacts.bundle && onFacts.executable == offFacts.executable
+           && onFacts.bundleID == offFacts.bundleID && onFacts.launchTime == nil,
+           "accepted post-open facts stay identical and absent launch time remains allowed")
+    expect(postRecords.count == 1 && postRecords[0]["pid"] as? Int32 == 4123 && postRecords[0]["launchTimePresent"] as? Bool == false,
+           "accepted post-open diagnostic uses its constructed facts")
+    try contentFree(postRecords)
+    let scopeFixture = IdentityDiagnosticEnvironment("valid")
+    let scopedSystem: any StartupTargetSystem = CodexStartupTargetSystem(environment: scopeFixture.environment())
+    let facts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
+                                   bundleID: "com.openai.codex", launchTime: 123.456)
+    var scopedRecords: [[String: Any]] = []
+    try scopedSystem.validate(facts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
+    let count = scopedRecords.count
+    try scopedSystem.validate(facts, deadline: 200)
+    try scopedSystem.validate(facts, deadline: 200, diagnostics: nil)
+    expect(count > 0 && scopedRecords.count == count, "the diagnostic environment copy never leaks its sink into later validations")
+    let wrongFacts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
+                                        bundleID: "fixture.other", launchTime: nil)
+    do {
+        try scopedSystem.validate(wrongFacts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
+        fatalError("a wrong target ID must still reject before any process probe")
+    } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "system target-input guard is unchanged") }
+    expect(scopedRecords.last?["checkpoint"] as? String == "system-target-input"
+           && scopedRecords.last?["bundleIDMatches"] as? Bool == false,
+           "direct system input refusal gets its own content-free predicate")
+    try contentFree(scopedRecords)
+    return checks
+}
+#endif

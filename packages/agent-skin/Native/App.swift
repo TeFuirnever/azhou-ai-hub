@@ -1410,13 +1410,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         default: log("unhandled-message", ["action": action])
         }
     }
-    private func startupFacts(_ app: any NativeApplication) throws -> StartupTargetFacts {
-        guard !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
-              let bundleID = app.bundleIdentifier else {
-            throw StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
+    func startupFacts(_ app: any NativeApplication,
+                     diagnostics: ((String, [String: Any]) -> Void)? = nil,
+                     at: @autoclosure () -> TimeInterval = ProcessInfo.processInfo.systemUptime) throws -> StartupTargetFacts {
+        var diagnostic = StartupIdentityDiagnostic("post-open-facts", at: at(), diagnostics: diagnostics)
+        guard diagnostic.check("notTerminated", !app.isTerminated),
+              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
+              let executable = diagnostic.present("executablePresent", app.executableURL),
+              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier) else {
+            let failure = StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
-        return StartupTargetFacts(pid: app.processIdentifier, bundle: real(bundle), executable: real(executable),
-                                  bundleID: bundleID, launchTime: app.launchTime)
+        let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
+                                       bundle: real(bundle),
+                                       executable: real(executable),
+                                       bundleID: bundleID,
+                                       launchTime: diagnostic.present("launchTimePresent", app.launchTime))
+        diagnostic.finish("accepted")
+        return facts
     }
 
     private func startupPayload() throws -> String {
@@ -1586,7 +1598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             onOpeningChanged: { [weak self] value in self?.opening = value },
             startupFacts: { [weak self] app in
                 guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
-                return try self.startupFacts(app)
+                return try self.startupFacts(app, diagnostics: self.startupDiagnostics, at: self.runtime.uptime)
             },
             performDisable: nil)
         let dependencies = SkinAssemblyDependencies(
@@ -1667,7 +1679,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                            system: any StartupTargetSystem) async throws -> any NativeApplication {
         try await Self.openTargetApplication(runtime: runtime, targetBundleID: targetID, url: url,
                                              port: port, deadline: deadline, system: system,
-                                             log: { [weak self] event, fields in self?.log(event, fields) })
+                                             log: { [weak self] event, fields in self?.log(event, fields) },
+                                             diagnostics: startupDiagnostics)
     }
 
     /// Shared bounded application-open routine (same order and failures as the
@@ -1677,7 +1690,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     static func openTargetApplication(
         runtime: any NativeAppRuntime, targetBundleID: String, url: URL, port: Int,
         deadline: TimeInterval, system: any StartupTargetSystem,
-        log: @escaping (String, [String: Any]) -> Void
+        log: @escaping (String, [String: Any]) -> Void,
+        diagnostics: ((String, [String: Any]) -> Void)? = nil
     ) async throws -> any NativeApplication {
         let openTimeout = try StartupBudget.boundedTimeout(
             maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
@@ -1693,35 +1707,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             log("target-open-request", ["path": url.path, "bundleID": targetBundleID, "debuggingPort": port])
             runtime.openApplication(at: url, debuggingPort: port) { app, error in
                 DispatchQueue.main.async {
-                    guard runtime.uptime < deadline else {
-                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
-                        return
-                    }
-                    if error != nil {
-                        waiter.finish(.failure(StartupFailure(reason: "target-missing", message: "Codex 启动失败。")))
-                        return
-                    }
-                    guard let app, !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
-                          let bundleID = app.bundleIdentifier,
-                          bundle.resolvingSymlinksInPath().standardizedFileURL == url,
-                          bundleID == targetBundleID else {
-                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")))
-                        return
-                    }
-                    do {
-                        try system.validate(
-                            StartupTargetFacts(pid: app.processIdentifier,
-                                               bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
-                                               executable: executable.resolvingSymlinksInPath().standardizedFileURL,
-                                               bundleID: bundleID, launchTime: app.launchTime),
-                            deadline: deadline)
+                    let now = runtime.uptime
+                    let verdict: StartupFailure? = {
+                        // Keep synchronous journal I/O outside every identity predicate and
+                        // process query. This finite validation path produces at most 11 checks;
+                        // the single batch is emitted only once this callback verdict is final.
+                        var checks: [[String: Any]] = []
+                        let observations: ((String, [String: Any]) -> Void)? = diagnostics.map { _ in
+                            { _, record in checks.append(record) }
+                        }
+                        defer {
+                            diagnostics?("startup-diagnostic", ["stage": "target-identity", "checkpoint": "bounded-open",
+                                                                 "at": now, "checks": checks])
+                        }
+                        var diagnostic = StartupIdentityDiagnostic("callback-identity", at: now, diagnostics: observations)
+                        guard diagnostic.check("beforeDeadline", now < deadline) else {
+                            let failure = StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")
+                            diagnostic.finish("rejected", error: failure)
+                            return failure
+                        }
+                        if diagnostic.check("callbackErrorPresent", error != nil) {
+                            diagnostic.finish("error", error: error)
+                            return StartupFailure(reason: "target-missing", message: "Codex 启动失败。")
+                        }
+                        guard let app = diagnostic.present("applicationPresent", app),
+                              diagnostic.check("notTerminated", !app.isTerminated),
+                              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
+                              let executable = diagnostic.present("executablePresent", app.executableURL),
+                              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier),
+                              diagnostic.check("bundleMatches", bundle.resolvingSymlinksInPath().standardizedFileURL == url),
+                              diagnostic.check("bundleIDMatches", bundleID == targetBundleID) else {
+                            let failure = StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")
+                            diagnostic.finish("rejected", error: failure)
+                            return failure
+                        }
+                        let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
+                                                       bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
+                                                       executable: executable.resolvingSymlinksInPath().standardizedFileURL,
+                                                       bundleID: bundleID,
+                                                       launchTime: diagnostic.present("launchTimePresent", app.launchTime))
+                        diagnostic.finish("accepted")
+                        let validation = StartupIdentityDiagnostic("system-validation", pid: facts.pid, at: now, diagnostics: observations)
+                        do {
+                            try system.validate(facts, deadline: deadline, diagnostics: observations)
+                            validation.finish("accepted")
+                            return nil
+                        } catch let failure as StartupFailure where failure.reason == "attach-timeout" {
+                            validation.finish("error", error: failure)
+                            return failure
+                        } catch let failure as WallpaperFailure where failure.state == "inspection-timeout" {
+                            validation.finish("error", error: failure)
+                            return StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")
+                        } catch {
+                            validation.finish("error", error: error)
+                            return StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")
+                        }
+                    }()
+                    if let verdict {
+                        waiter.finish(.failure(verdict))
+                    } else if let app {
                         waiter.finish(.success(app))
-                    } catch let error as StartupFailure where error.reason == "attach-timeout" {
-                        waiter.finish(.failure(error))
-                    } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
-                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")))
-                    } catch {
-                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")))
                     }
                 }
             }

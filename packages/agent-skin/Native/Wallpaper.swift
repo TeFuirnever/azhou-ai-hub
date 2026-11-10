@@ -267,6 +267,7 @@ struct CodexTargetEnvironment: @unchecked Sendable {
     let runCommand: (_ file: String, _ arguments: [String], _ timeout: TimeInterval, _ emptyExit: Int32?) throws -> String
     let currentUID: () -> UInt32
     let now: () -> TimeInterval
+    var identityDiagnostics: ((String, [String: Any]) -> Void)? = nil
 
     static var live: CodexTargetEnvironment {
         CodexTargetEnvironment(
@@ -305,23 +306,45 @@ private struct WallpaperTarget: Sendable {
     init(pid: Int32, bundle: URL, launchTime: TimeInterval?, commandDeadline: TimeInterval? = nil,
          environment: CodexTargetEnvironment = .live) throws {
         let realBundle = Self.real(bundle)
-        guard pid > 0, realBundle.pathExtension.lowercased() == "app",
-              realBundle != Self.real(environment.mainBundleURL),
-              !realBundle.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }),
-              let package = environment.bundleFacts(realBundle), package.identifier == "com.openai.codex",
-              let binary = package.executableURL.map(Self.real),
-              binary.path.hasPrefix(realBundle.appendingPathComponent("Contents/MacOS").path + "/"),
-              environment.isExecutableFile(binary),
-              let app = environment.processFacts(pid), !app.isTerminated,
-              app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == realBundle,
-              app.executableURL.map(Self.real) == binary else {
-            throw WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
+        var diagnostic = StartupIdentityDiagnostic("target-input", pid: pid, at: environment.now(),
+                                                   diagnostics: environment.identityDiagnostics)
+        guard diagnostic.check("pidValid", pid > 0),
+              diagnostic.check("appExtensionMatches", realBundle.pathExtension.lowercased() == "app"),
+              diagnostic.check("differentFromLauncher", realBundle != Self.real(environment.mainBundleURL)),
+              diagnostic.check("notNestedApp", !realBundle.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") })),
+              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(realBundle)),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier) == "com.openai.codex"),
+              let binary = diagnostic.present("executablePresent", package.executableURL.map(Self.real)),
+              diagnostic.check("executableInsideBundle", binary.path.hasPrefix(realBundle.appendingPathComponent("Contents/MacOS").path + "/")),
+              diagnostic.check("executableFile", environment.isExecutableFile(binary)) else {
+            let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
-        if let launchTime {
-            guard let date = app.launchDate, abs(date.timeIntervalSince1970 - launchTime) < 0.01 else {
-                throw WallpaperFailure(state: "target-changed", chinese: "Codex 进程已变化；未连接壁纸。", english: "The Codex process changed; wallpaper was not connected.")
+        diagnostic.finish("accepted")
+        diagnostic = StartupIdentityDiagnostic("process-facts-initial", pid: pid, at: environment.now(),
+                                               diagnostics: environment.identityDiagnostics)
+        guard let app = diagnostic.present("processPresent", environment.processFacts(pid)),
+              diagnostic.check("notTerminated", !app.isTerminated),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier) == "com.openai.codex"),
+              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL).map(Self.real) == realBundle),
+              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL).map(Self.real) == binary) else {
+            let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
+        }
+        diagnostic.finish("accepted")
+        diagnostic = StartupIdentityDiagnostic("launch-time", pid: pid, at: environment.now(),
+                                               diagnostics: environment.identityDiagnostics)
+        if let launchTime = diagnostic.present("expectedLaunchTimePresent", launchTime) {
+            guard let date = diagnostic.present("observedLaunchTimePresent", app.launchDate),
+                  diagnostic.check("launchTimeMatches", abs(date.timeIntervalSince1970 - launchTime) < 0.01) else {
+                let failure = WallpaperFailure(state: "target-changed", chinese: "Codex 进程已变化；未连接壁纸。", english: "The Codex process changed; wallpaper was not connected.")
+                diagnostic.finish("rejected", error: failure)
+                throw failure
             }
-        }
+            diagnostic.finish("accepted")
+        } else { diagnostic.finish("not-required") }
         self.pid = pid; self.bundle = realBundle; self.executable = binary; self.launchDate = app.launchDate
         self.commandDeadline = commandDeadline
         self.environment = environment
@@ -333,22 +356,40 @@ private struct WallpaperTarget: Sendable {
                                                 totalDeadline: deadline, now: environment.now())
     }
     func validate(deadline: TimeInterval? = nil) throws {
-        guard let app = environment.processFacts(pid), !app.isTerminated,
-              app.bundleIdentifier == "com.openai.codex", app.bundleURL.map(Self.real) == bundle,
-              app.executableURL.map(Self.real) == executable,
-              launchDate == nil || app.launchDate == launchDate else {
-            throw WallpaperFailure(state: "target-changed", chinese: "已核实的 Codex 进程已退出或发生变化。", english: "The verified Codex process exited or changed.")
+        var diagnostic = StartupIdentityDiagnostic("process-facts", pid: pid, at: environment.now(),
+                                                   diagnostics: environment.identityDiagnostics)
+        guard let app = diagnostic.present("processPresent", environment.processFacts(pid)),
+              diagnostic.check("notTerminated", !app.isTerminated),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier) == "com.openai.codex"),
+              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL).map(Self.real) == bundle),
+              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL).map(Self.real) == executable),
+              diagnostic.check("launchTimeAccepted", diagnostic.present("expectedLaunchTimePresent", launchDate) == nil
+                               || diagnostic.present("observedLaunchTimePresent", app.launchDate) == launchDate) else {
+            let failure = WallpaperFailure(state: "target-changed", chinese: "已核实的 Codex 进程已退出或发生变化。", english: "The verified Codex process exited or changed.")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
-        let process = try environment.runCommand("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
+        diagnostic.finish("accepted")
+        diagnostic = StartupIdentityDiagnostic("ps-identity", pid: pid, at: environment.now(),
+                                               diagnostics: environment.identityDiagnostics)
+        let process: String
+        do {
+            process = try environment.runCommand("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
                                                  try commandTimeout(2, deadline: deadline), nil)
+        } catch { diagnostic.finish("error", error: error); throw error }
         let fields = process.trimmingCharacters(in: .whitespacesAndNewlines).split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
-        guard fields.count == 2, UInt32(fields[0]) == environment.currentUID(),
-              Self.real(URL(fileURLWithPath: String(fields[1]))) == executable else {
-            throw WallpaperFailure(state: "target-mismatch", chinese: "目标进程用户或执行路径与已核实的 Codex 不符。", english: "The target process user or executable path does not match the verified Codex.")
+        guard diagnostic.check("fieldCountMatches", fields.count == 2),
+              diagnostic.check("uidMatches", diagnostic.present("uidPresent", UInt32(fields[0])) == environment.currentUID()),
+              diagnostic.check("executableMatches", Self.real(URL(fileURLWithPath: String(fields[1]))) == executable) else {
+            let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标进程用户或执行路径与已核实的 Codex 不符。", english: "The target process user or executable path does not match the verified Codex.")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
+        diagnostic.finish("accepted")
     }
     func validateSignature(deadline: TimeInterval? = nil) throws {
-        try StartupBundleSignature.verify(bundle, deadline: deadline ?? commandDeadline, environment: environment)
+        try StartupBundleSignature.verify(bundle, deadline: deadline ?? commandDeadline, environment: environment,
+                                          diagnosticPID: pid)
         try validate(deadline: deadline)
     }
     func ports(deadline: TimeInterval? = nil) throws -> [Int] {
@@ -362,26 +403,37 @@ private struct WallpaperTarget: Sendable {
 private enum StartupBundleSignature {
     private static let requirement = "=anchor apple generic and identifier \"com.openai.codex\" and certificate leaf[subject.OU] = \"2DC432GLL2\""
 
-    static func verify(_ bundle: URL, deadline: TimeInterval?, environment: CodexTargetEnvironment = .live) throws {
+    static func verify(_ bundle: URL, deadline: TimeInterval?, environment: CodexTargetEnvironment = .live,
+                       diagnosticPID: Int32? = nil) throws {
         let resolved = bundle.resolvingSymlinksInPath().standardizedFileURL
-        guard resolved.pathExtension.lowercased() == "app",
-              let package = environment.bundleFacts(resolved), package.identifier == "com.openai.codex" else {
-            throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用路径或 Bundle ID 无效。", english: "The Codex app path or bundle ID is invalid.")
+        var diagnostic = StartupIdentityDiagnostic("signature", pid: diagnosticPID, at: environment.now(),
+                                                   diagnostics: environment.identityDiagnostics)
+        guard diagnostic.check("appExtensionMatches", resolved.pathExtension.lowercased() == "app"),
+              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(resolved)),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier) == "com.openai.codex") else {
+            let failure = WallpaperFailure(state: "signature-refused", chinese: "Codex 应用路径或 Bundle ID 无效。", english: "The Codex app path or bundle ID is invalid.")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
         let timeout: TimeInterval
         if let deadline {
-            timeout = try StartupBudget.boundedTimeout(maximum: 12, stageDeadline: deadline,
-                                                       totalDeadline: deadline, now: environment.now())
+            do {
+                timeout = try StartupBudget.boundedTimeout(maximum: 12, stageDeadline: deadline,
+                                                           totalDeadline: deadline, now: environment.now())
+            } catch { diagnostic.finish("error", error: error); throw error }
         } else { timeout = 12 }
         do {
             _ = try environment.runCommand("/usr/bin/codesign",
                                            ["--verify", "--deep", "--strict", "-R", requirement, resolved.path],
                                            timeout, nil)
         } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
+            diagnostic.finish("error", error: error)
             throw error
         } catch {
+            diagnostic.finish("error", error: error)
             throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用签名未通过 Apple 锚点、Bundle ID 和 Team ID 核验。", english: "The Codex app signature did not pass Apple anchor, bundle ID, and team ID verification.")
         }
+        diagnostic.finish("accepted")
     }
 }
 
@@ -479,6 +531,49 @@ enum StartupDiagnosticsPolicy {
     }
 }
 
+/// Taps only the values consumed by an existing identity check. Missing keys
+/// mean the original short-circuit guard did not observe that field. No paths,
+/// descriptions, command output, or error userInfo enter this diagnostic.
+struct StartupIdentityDiagnostic {
+    private let diagnostics: ((String, [String: Any]) -> Void)?
+    private var fields: [String: Any] = [:]
+
+    init(_ checkpoint: String, pid: Int32? = nil, at: @autoclosure () -> TimeInterval,
+         diagnostics: ((String, [String: Any]) -> Void)?) {
+        self.diagnostics = diagnostics
+        if diagnostics != nil {
+            fields = ["stage": "target-identity", "checkpoint": checkpoint, "at": at()]
+            if let pid { fields["pid"] = pid }
+        }
+    }
+    mutating func check(_ field: String, _ value: Bool) -> Bool {
+        if diagnostics != nil { fields[field] = value }
+        return value
+    }
+    mutating func present<T>(_ field: String, _ value: T?) -> T? {
+        _ = check(field, value != nil)
+        return value
+    }
+    mutating func processIdentifier(_ value: Int32) -> Int32 {
+        if diagnostics != nil { fields["pid"] = value }
+        return value
+    }
+    func finish(_ outcome: String, error: Error? = nil) {
+        guard let diagnostics else { return }
+        var record = fields
+        record["outcome"] = outcome
+        record["pidObserved"] = fields["pid"] != nil
+        if let error {
+            let original = error as NSError
+            record["errorDomain"] = original.domain
+            record["errorCode"] = original.code
+            if let failure = error as? WallpaperFailure { record["state"] = failure.state }
+            if let failure = error as? StartupFailure { record["reason"] = failure.reason }
+        }
+        diagnostics("startup-diagnostic", record)
+    }
+}
+
 /// Append-only daily sink for launcher startup events, mirroring WallpaperJournal's
 /// bounded and symlink-safe JSONL handling. A logging failure never blocks startup.
 enum StartupEventJournal {
@@ -573,11 +668,17 @@ protocol StartupOperationLock: AnyObject {
 protocol StartupTargetSystem {
     func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval,
+                  diagnostics: ((String, [String: Any]) -> Void)?) throws
     func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int]
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock
 }
 
 extension StartupTargetSystem {
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval,
+                  diagnostics: ((String, [String: Any]) -> Void)?) throws {
+        try validate(target, deadline: deadline)
+    }
     func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
         try validate(target, deadline: deadline)
     }
@@ -625,14 +726,21 @@ struct CodexStartupTargetSystem: StartupTargetSystem {
     init(environment: CodexTargetEnvironment = .live) { self.environment = environment }
 
     private func target(_ facts: StartupTargetFacts, deadline: TimeInterval? = nil) throws -> WallpaperTarget {
-        guard facts.bundleID == "com.openai.codex" else {
-            throw StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
+        var diagnostic = StartupIdentityDiagnostic("system-target-input", pid: facts.pid, at: environment.now(),
+                                                   diagnostics: environment.identityDiagnostics)
+        guard diagnostic.check("bundleIDMatches", facts.bundleID == "com.openai.codex") else {
+            let failure = StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
         let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime,
                                          commandDeadline: deadline, environment: environment)
-        guard target.executable == facts.executable else {
-            throw StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
+        guard diagnostic.check("executableMatches", target.executable == facts.executable) else {
+            let failure = StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
+        diagnostic.finish("accepted")
         return target
     }
 
@@ -642,6 +750,16 @@ struct CodexStartupTargetSystem: StartupTargetSystem {
 
     func validate(_ facts: StartupTargetFacts, deadline: TimeInterval) throws {
         try target(facts, deadline: deadline).validateSignature(deadline: deadline)
+    }
+
+    func validate(_ facts: StartupTargetFacts, deadline: TimeInterval,
+                  diagnostics: ((String, [String: Any]) -> Void)?) throws {
+        guard let diagnostics else { return try validate(facts, deadline: deadline) }
+        // A value copy scopes observations to this call; shared systems and later
+        // connector validations retain their original environment and sink.
+        var observed = environment
+        observed.identityDiagnostics = diagnostics
+        try CodexStartupTargetSystem(environment: observed).validate(facts, deadline: deadline)
     }
 
     func validateProcess(_ facts: StartupTargetFacts, deadline: TimeInterval) throws {
