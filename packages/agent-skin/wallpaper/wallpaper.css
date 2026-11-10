@@ -60,6 +60,7 @@ html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface]
 html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
   [data-thread-scroll-footer],
   [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]),
   .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
     :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
   :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
@@ -70,6 +71,7 @@ html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
 html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
   [data-thread-scroll-footer],
   [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]),
   .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
     :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
   :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
@@ -80,6 +82,7 @@ html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
 html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] :where(
   [data-thread-scroll-footer],
   [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
+  [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]),
   .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
     :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
   :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
