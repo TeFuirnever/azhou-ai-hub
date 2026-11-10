@@ -455,6 +455,15 @@ enum StartupLogPolicy {
     }
 }
 
+/// Bounded, content-free startup diagnostics stay off unless the launcher
+/// invocation explicitly opts in through its environment.
+enum StartupDiagnosticsPolicy {
+    static let environmentKey = "AZHOU_STARTUP_DIAGNOSTICS"
+    static func isEnabled(environment: [String: String]) -> Bool {
+        environment[environmentKey] == "1"
+    }
+}
+
 /// Append-only daily sink for launcher startup events, mirroring WallpaperJournal's
 /// bounded and symlink-safe JSONL handling. A logging failure never blocks startup.
 enum StartupEventJournal {
@@ -1096,12 +1105,14 @@ struct StartupConnector {
     let transport: any StartupTransport
     let now: () -> TimeInterval
     let sleep: (TimeInterval) async throws -> Void
+    let diagnostics: ((String, [String: Any]) -> Void)?
 
     init(
         target: StartupTargetFacts,
         expectedPort: Int,
         system: any StartupTargetSystem,
         transport: any StartupTransport,
+        diagnostics: ((String, [String: Any]) -> Void)? = nil,
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         sleep: @escaping (TimeInterval) async throws -> Void = { seconds in
             try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
@@ -1111,6 +1122,7 @@ struct StartupConnector {
         self.expectedPort = expectedPort
         self.system = system
         self.transport = transport
+        self.diagnostics = diagnostics
         self.now = now
         self.sleep = sleep
     }
@@ -1141,6 +1153,20 @@ struct StartupConnector {
         guard now() < deadline else {
             throw StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过阶段或总预算。")
         }
+    }
+
+    private func report(_ stage: String, page: Page?, error: (any Error)? = nil, proof: [String: Any] = [:]) {
+        guard let diagnostics else { return }
+        var fields: [String: Any] = ["stage": stage, "at": now()]
+        if let page { fields["page"] = page.id }
+        if let error {
+            let ns = error as NSError
+            fields["errorDomain"] = ns.domain
+            fields["errorCode"] = ns.code
+            fields["pageConnectionLost"] = (error as? StartupFailure)?.pageConnectionLost == true
+            if let failure = error as? WallpaperFailure { fields["state"] = failure.state }
+        }
+        diagnostics(stage, fields.merging(proof) { current, _ in current })
     }
 
     private func validateOwnership(_ deadline: TimeInterval) throws {
@@ -1198,10 +1224,21 @@ struct StartupConnector {
             let entries = try await transport.targets(port: expectedPort, timeout: min(1.2, deadline - now()))
             try validateOwnership(deadline)
             let ids = entries.compactMap { $0["id"] as? String }
-            guard ids.count == entries.count, ids.allSatisfy({ $0.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil }), Set(ids).count == ids.count else {
+            let uniqueIDs = ids.count == entries.count
+                && ids.allSatisfy({ $0.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil })
+                && Set(ids).count == ids.count
+            report("proof", page: old, proof: [
+                "oldIDPresent": ids.contains(old.id),
+                "eligibleMains": entries.filter(WallpaperValidation.mainPage).count,
+                "uniqueIDs": uniqueIDs
+            ])
+            guard uniqueIDs else {
                 throw StartupFailure(reason: "protocol-error", message: "完整调试目标清单缺少唯一身份。")
             }
-            guard !ids.contains(old.id) else { return nil }
+            if ids.contains(old.id) {
+                try await sleep(min(0.15, max(0, deadline - now())))
+                continue
+            }
             if let entry = try mainPages(entries).first { return try page(entry) }
             try await sleep(min(0.15, max(0, deadline - now())))
         }
@@ -1230,27 +1267,37 @@ struct StartupConnector {
         var selected = try await initialPage(deadline: deadline)
         var visited: Set<String> = []
         var attempted: Set<String> = []
-        while true {
-            try validateOwnership(deadline)
-            guard visited.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
-            try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))
-            do {
-                return try await attachPage(selected, payload: payload, attempted: &attempted, deadline: deadline)
-            } catch let failure as StartupFailure where failure.pageConnectionLost {
-                try requireBudget(deadline)
-                guard let next = try await replacement(for: selected, deadline: deadline) else { throw failure }
-                try requireBudget(deadline)
-                // No await or old-page cleanup can cross this boundary. Request
-                // IDs keep increasing; captures are invalidated before B replies.
-                transport.disconnectPage()
-                selected = next
+        var stage = "discover"
+        do {
+            while true {
+                try validateOwnership(deadline)
+                guard visited.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
+                stage = "connect"
+                try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))
+                do {
+                    return try await attachPage(selected, payload: payload, attempted: &attempted, stage: &stage, deadline: deadline)
+                } catch let failure as StartupFailure where failure.pageConnectionLost {
+                    try requireBudget(deadline)
+                    stage = "recover"
+                    report("recover", page: selected, error: failure)
+                    guard let next = try await replacement(for: selected, deadline: deadline) else { throw failure }
+                    try requireBudget(deadline)
+                    // No await or old-page cleanup can cross this boundary. Request
+                    // IDs keep increasing; captures are invalidated before B replies.
+                    transport.disconnectPage()
+                    selected = next
+                }
             }
+        } catch {
+            report(stage, page: selected, error: error)
+            throw error
         }
     }
 
     private func attachPage(_ selected: Page, payload: String, attempted: inout Set<String>,
-                            deadline: TimeInterval) async throws -> StartupOutcome {
+                            stage: inout String, deadline: TimeInterval) async throws -> StartupOutcome {
         try requireBudget(deadline)
+        stage = "inspect"
         let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
         try Task.checkCancellation()
         guard let href = inspected["href"] as? String,
@@ -1259,8 +1306,10 @@ struct StartupConnector {
             throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面在建立连接后已导航或不受支持。")
         }
         guard !controllerPresent else { return .partial(reason: "startup-active") }
+        stage = "recheck"
         try await requireCurrentPage(selected, deadline: deadline)
         guard attempted.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
+        stage = "install"
         let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: min(10, deadline - now()))
         try Task.checkCancellation()
         guard let installed = Self.boolean(install["installed"]) else {
@@ -1283,6 +1332,7 @@ struct StartupConnector {
         do {
             while now() < deadline {
                 try requireBudget(deadline)
+                stage = "status"
                 let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, deadline - now()))
                 try Task.checkCancellation()
                 guard response["href"] as? String == href else { return .partial(reason: "startup-interrupted") }
@@ -1298,8 +1348,10 @@ struct StartupConnector {
                 if status.phase == "failed" || status.phase == "timeout" { return .failed(reason: status.reason) }
                 if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
                 if status.completed || status.ready {
+                    stage = "recheck"
                     do { try await requireCurrentPage(selected, deadline: deadline) }
                     catch {
+                        report("recheck", page: selected, error: error)
                         // Completion and user skip are terminal, even if their
                         // document has since ended or its proof failed. Never
                         // replay a finished run.

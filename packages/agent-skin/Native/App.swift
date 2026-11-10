@@ -1177,6 +1177,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         launcherPath: real(runtime.bundleURL).path,
         sink: { [weak self] in self?.writeLogRecord($0) }
     )
+    private lazy var startupDiagnostics: ((String, [String: Any]) -> Void)? =
+        StartupDiagnosticsPolicy.isEnabled(environment: ProcessInfo.processInfo.environment)
+            ? { [weak self] _, fields in self?.log("startup-diagnostic", fields) }
+            : nil
     init(runtime: (any NativeAppRuntime)? = nil,
          presentation: (any NativePlayerPresentation)? = nil) {
         let runtime = runtime ?? SystemNativeAppRuntime()
@@ -1602,12 +1606,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         return try self.startupPayload()
                     },
                     makeTargetSystem: { runtime.makeStartupTargetSystem() },
-                    makeConnector: { facts, port, connectorSystem, capture, events in
+                    makeConnector: { [weak self] facts, port, connectorSystem, capture, events in
                         StartupConnector(
                             target: facts, expectedPort: port, system: connectorSystem,
                             transport: InstallObservingStartupTransport(
                                 base: runtime.makeStartupTransport(capture: capture, events: events),
-                                recorder: installObservation))
+                                recorder: installObservation),
+                            diagnostics: self?.startupDiagnostics)
                     },
                     installObservation: installObservation, assembly: assembly)
             },

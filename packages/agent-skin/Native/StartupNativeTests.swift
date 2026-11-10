@@ -4394,7 +4394,12 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private(set) var lockReleases = 0
     private(set) var requestsLocked = true
     var cancel: (() -> Void)?
-    init(stage: String, mode: String = "replace") { self.stage = stage; self.mode = mode }
+    private var lagReadsLeft = 0
+    private var waitReads = 0
+    init(stage: String, mode: String = "replace") {
+        self.stage = stage; self.mode = mode
+        lagReadsLeft = mode.hasPrefix("lag-") ? Int(String(mode.dropFirst(4))) ?? 0 : 0
+    }
     func time() -> TimeInterval { lock.lock(); defer { lock.unlock() }; return clock }
     func advance(_ seconds: TimeInterval) { lock.lock(); clock += seconds; lock.unlock() }
     func hasReplaced() -> Bool { lock.lock(); defer { lock.unlock() }; return generation > 0 }
@@ -4410,6 +4415,16 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         if generation == 0 { return [entry("page-a")] }
         if ["raw-unavailable", "complete-blip", "ready-blip"].contains(mode) { throw URLError(.badServerResponse) }
         if ["cancel-list", "cancel-ready-list"].contains(mode) { cancel?(); throw URLError(.cancelled) }
+        if mode.hasPrefix("lag-"), generation > 0 {
+            if lagReadsLeft > 0 { lagReadsLeft -= 1; return [entry("page-a"), entry("page-b")] }
+            return [entry("page-b")]
+        }
+        if mode == "persist", generation > 0 { return [entry("page-a"), entry("page-b")] }
+        if mode == "cancel-wait", generation > 0 {
+            waitReads += 1
+            if waitReads > 1 { cancel?(); throw URLError(.cancelled) }
+            return [entry("page-a"), entry("page-b")]
+        }
         switch mode {
         case "same-target": return [entry("page-a")]
         case "old-main": return [entry("page-a"), entry("page-b")]
@@ -4567,10 +4582,13 @@ private final class StartupReplacementURLProtocol: URLProtocol {
 }
 
 @MainActor
-private func startupReplacementScenario(stage: String, mode: String = "replace") async throws -> [String: Any] {
+private func startupReplacementScenario(stage: String, mode: String = "replace",
+                                        diagnostics enabled: Bool = false) async throws -> [String: Any] {
     let world = StartupReplacementWorld(stage: stage, mode: mode)
     StartupReplacementURLProtocol.world = world
     defer { StartupReplacementURLProtocol.world = nil }
+    var diagnosticRecords: [[String: Any]] = []
+    if enabled { diagnosticRecords.reserveCapacity(16) }
     let task = Task { @MainActor () throws -> [String: Any] in
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StartupReplacementURLProtocol.self]
@@ -4587,7 +4605,8 @@ private func startupReplacementScenario(stage: String, mode: String = "replace")
             executable: URL(fileURLWithPath: "/synthetic/Codex.app/Contents/MacOS/Codex"),
             bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
         let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
-            transport: transport, now: world.time, sleep: { world.advance($0) })
+            transport: transport, diagnostics: enabled ? { _, fields in diagnosticRecords.append(fields) } : nil,
+            now: world.time, sleep: { world.advance($0) })
             .run(payload: "test-only-probe", deadline: 5)
         let observation = capture.snapshot()
         let final = events.resolve(outcome, observation: observation, at: world.time())
@@ -4602,6 +4621,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace")
             "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
             "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
             "events": records.map { $0["event"] as? String ?? "" }, "elapsed": world.time(),
+            "diagnostics": diagnosticRecords,
             "host": false, "productionConnectorAndCodec": true]
     }
     world.cancel = { task.cancel() }
@@ -4673,6 +4693,59 @@ private func startupPageReplacementChecks() async throws -> Int {
                 "a transient pre-completion recheck failure stays a strict disposal failure")
         }
     }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, mode: "lag-1"); common(r)
+        expect(r["recovered"] as? Bool == true && r["connections"] as? [String] == ["page-a", "page-b"]
+            && (r["installs"] as? [String: Int])?["page-b"] == 1,
+            "\(stage) recovers once delayed inventory removal proves the old target absent")
+        expect((r["diagnostics"] as? [[String: Any]])?.isEmpty == true,
+            "\(stage) stays diagnostic-silent unless the invocation opts in")
+    }
+    let lagging = try await startupReplacementScenario(stage: "install", mode: "lag-3"); common(lagging)
+    expect(lagging["recovered"] as? Bool == true && (lagging["installs"] as? [String: Int])?["page-b"] == 1,
+        "repeated delayed inventory reads keep waiting within the shared budget")
+    let persistent = try await startupReplacementScenario(stage: "install", mode: "persist"); common(persistent)
+    expect(persistent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+        && persistent["connections"] as? [String] == ["page-a"]
+        && (persistent["installs"] as? [String: Int])?["page-b"] == nil,
+        "a never-absent old target refuses at the exhausted budget without reaching the candidate")
+    let cancelWait = try await startupReplacementScenario(stage: "install", mode: "cancel-wait"); common(cancelWait)
+    expect(cancelWait["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+        && cancelWait["connections"] as? [String] == ["page-a"],
+        "cancellation inside the proof wait never reconnects")
+    let malformedInventory = try await startupReplacementScenario(stage: "install", mode: "duplicate-id"); common(malformedInventory)
+    expect(malformedInventory["outcome"] as? String == "failed(reason: \"protocol-error\")",
+        "malformed inventory still refuses immediately")
+    let exhausted = try await startupReplacementScenario(stage: "install", mode: "deadline"); common(exhausted)
+    expect(exhausted["outcome"] as? String == "failed(reason: \"attach-timeout\")",
+        "an exhausted budget still refuses without a proof read")
+    let observed = try await startupReplacementScenario(stage: "install", mode: "lag-1", diagnostics: true); common(observed)
+    let diagnosticRecords = (observed["diagnostics"] as? [[String: Any]]) ?? []
+    let allowedKeys: Set<String> = ["stage", "at", "page", "errorDomain", "errorCode", "pageConnectionLost", "state",
+                                    "oldIDPresent", "eligibleMains", "uniqueIDs"]
+    var serializedDiagnostics = ""
+    for record in diagnosticRecords {
+        serializedDiagnostics += String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+    }
+    expect(observed["recovered"] as? Bool == true
+        && !diagnosticRecords.isEmpty
+        && diagnosticRecords.allSatisfy { Set($0.keys).isSubset(of: allowedKeys) }
+        && !serializedDiagnostics.contains("test-only-probe"),
+        "opt-in diagnostics stay bounded and content-free")
+    let proofs = diagnosticRecords.filter { ($0["stage"] as? String) == "proof" }
+    expect(proofs.count == 2 && (proofs[0]["oldIDPresent"] as? Bool) == true
+        && (proofs[0]["eligibleMains"] as? Int) == 2 && (proofs[0]["uniqueIDs"] as? Bool) == true
+        && (proofs[1]["oldIDPresent"] as? Bool) == false && (proofs[1]["eligibleMains"] as? Int) == 1,
+        "proof diagnostics record the lagging read and the proven replacement inventory")
+    let recover = diagnosticRecords.first { ($0["stage"] as? String) == "recover" }
+    expect(recover?["page"] as? String == "page-a" && (recover?["pageConnectionLost"] as? Bool) == true
+        && (recover?["errorDomain"] as? String)?.isEmpty == false,
+        "the qualifying failure diagnostic carries page, classification and error identity")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: [:])
+        && !StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "0"])
+        && !StartupDiagnosticsPolicy.isEnabled(environment: ["UNRELATED": "1"])
+        && StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "1"]),
+        "startup diagnostics stay disabled unless the invocation opts in exactly")
     for mode in ["context-lost", "posix-loss", "handshake-404", "before-install", "ready-replaced", "chain"] {
         let stage = ["before-install", "handshake-404"].contains(mode) ? "inspect" : mode == "ready-replaced" ? "status" : "install"
         let r = try await startupReplacementScenario(stage: stage, mode: mode); common(r)
