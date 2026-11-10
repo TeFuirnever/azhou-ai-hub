@@ -40,6 +40,19 @@ The old canonical rename had also reached two runtime contracts. These are repai
 
 These internal filenames and upstream protocol identifiers are not canonical discovery names. Restoring them does not install or mutate another skill, change pstack, or authorize automatic updates.
 
+## Local compatibility fixes found during integration
+
+PR #430's first CodeQL analysis reported six new paths in the v3.2.0 explainer (three dynamic text-to-HTML paths, one style-fragment rewrite, and two data-to-code constructions). This is a static-analysis finding count, not evidence of six exploited incidents. A separate review also found that plain repository citations silently replaced an explicit revision. All four affected source files were absent from the prior v3.1.0 package and matched the immutable v3.2.0 source before these local fixes.
+
+| File | Local change | Preserved behavior and regression |
+|---|---|---|
+| `explainer/reader.js` | Escape dynamic text/attribute values before HTML construction | Walk, Ask and source-card structure retained; existing reader/browser interactions remain the behavior baseline |
+| `explainer/render.mjs` | Unwrap complete style elements and escape HTML raw-text style terminators after CSS processing | CSS range operators, native preview styles and themes retained; adversarial style text cannot close the enclosing style element |
+| `explainer/browser-check.mjs` | Send selectors as CDP `Runtime.callFunctionOn` arguments in the page context, then release the receiver | Existing focus, Enter activation and native-viewer checks retained; selector data is not JavaScript source |
+| `explainer/sources.mjs` | Reject explicit citation revisions conflicting with the document pin before fallback handling | Same-pin excerpts, explicit old document pins, inferred HEAD and no-repository plain references retained; two-commit regression covers silent revision replacement |
+
+The revision inconsistency was reproduced with real Git commits and original inputs. CodeQL paths, concrete regression results and limits are recorded separately in the task evidence. These are bounded local safety/correctness adaptations, not a new upstream version or an extra skill capability. The source commit, source digests and license remain unchanged; packaged digests and each migration disposition describe the actual local bytes. Regression code lives in repository-level `tests/test_archify.py`; immutable upstream tests remain separate evidence.
+
 ## Retained third-party notices
 
 The package retains JetBrains Mono's SIL OFL notice and every upstream notice. The new explainer bundles the unmodified Pele 1.3.0 chart subset under `explainer/vendor/pele/`; its MIT license (kepano, 2026), npm tarball provenance, and embedded Lucide `rotate-ccw` ISC notice remain beside the bytes. Delivered charts are static SVG, as the upstream package documents.

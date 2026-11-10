@@ -49,7 +49,7 @@
     "examples/release-delivery.workflow.json": "dbd5c174af66296caec372e7214cf4df7158b50a563508e16826b95ab8d1cd6c",
     "examples/subscription-billing.erd.json": "89945699d92b9cc0ab91263cf38a07c350867d260eacd5d8ba1dc835fe2d22ed",
     "examples/web-app.architecture.json": "95e051b27a9e4a3307e194c0f666fca4af51470be7e2228d400ff48aea5b353b",
-    "explainer/browser-check.mjs": "cbbebfca2cb58cde0791f349e4f13490c0d085ce2f8653279139cf2aed334677",
+    "explainer/browser-check.mjs": "02154602a97850c3f0ab5a55b18735d63d2b5d29fa87f6cf5dc9fc18efa9b6b9",
     "explainer/charts.mjs": "bb49c5e8e5d6ba70a511d292dbac6a47953a010b67a8563e5f68222c7b220390",
     "explainer/check.mjs": "151211edd6f1b842ee63b1aef8682cb68e6237ce3b9e7a81e09667420f2b9b3b",
     "explainer/diagrams.mjs": "bb4aae343968db5a5ad70c368ad41dcc9d2ac93f3ace02645059daf33cab16ba",
@@ -61,10 +61,10 @@
     "explainer/patch.mjs": "b2721021de474431537705d696325ea01eb946e9095e8476fad1802d2fb5be4d",
     "explainer/prepare.mjs": "d8ff050738d7c858d62641b069455482814de0c4bdf7c0872d0a2a663b1b0643",
     "explainer/reader.css": "20ae425a84157c2d478241250975e74fca8938b47b85c5414149710ff4a3538f",
-    "explainer/reader.js": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
-    "explainer/render.mjs": "415c8c0638f42abc3b96f1b105453780678f1e33a9994f844cfbe4833670f25d",
+    "explainer/reader.js": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755",
+    "explainer/render.mjs": "3993aa9e6abd47f0bd903cf4254f465c331369f98e507523da7e9181be8eb21d",
     "explainer/revision.mjs": "29032cab30c03b2e4c48730f40175e0e59aa4794893c02e5ae38668776c18288",
-    "explainer/sources.mjs": "c6aae2ef90b6e49d16c1ccd5cfc5351a7716b8f9150e1c261dbd6ca8b8ca9ab5",
+    "explainer/sources.mjs": "cbe349e5f7bf6203b1ae51ee2eb73ee5fb1bf399e23f0b301af1be41f8adae09",
     "explainer/validate.mjs": "4e14063082b4bced482e0d2f771de5b29ef805677fcc354dfd283b9e16bd1b0a",
     "explainer/vendor/pele/LICENSE": "311bccc30de6f7b9cbfb64232bb0c911ccb2191abe316550813ae25b2c7925b9",
     "explainer/vendor/pele/README.md": "47cb1894b1d248c49b7d79590a97fba294b090a7f2bac178a85baa79f2dae0d6",
@@ -107,11 +107,11 @@
     "references/brand-marks.md": "d6e1a6ceafd07e48f27caf01655ea642365a5416ed0543b4022ca62750b58f0f",
     "references/delivery-contract.md": "0e283a418871a19c7adcc493c461ae6180e9b233f14ad95a19a9c15e109d2415",
     "references/explainer-authoring.md": "966ad693abfbef01c35fee34921d28faeb78ef722c55521d65433815a70efc20",
-    "references/provenance.md": "34cab3efb68b303cd2321ed0e928b2dcb26f113c8f33c7a32e7fd3e4f4c3f01d",
+    "references/provenance.md": "86c26d435216148d4959a04cfb703b408b4da25ef9f8fd287f6436a4faa770aa",
     "references/repository-authoring.md": "c1648fc0c1b85a3a9bfbf3a8919dfa741ff0b5a55ea310d1fcacbf6ee837e139",
     "references/setup.md": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "92a090f347984fb55bb176e3f278b1fdf483120bdf8595ae25cd55284362cda5",
+    "references/upstream-compatibility.md": "3d0a76acc46efbff8230694338cc5788b9ea5fb64f7d65e86b6fcaf7080fb0ce",
     "references/viewer-runtime.md": "7d35ef52a8f47e77e8ec827cea7c71219bf1aafa53b5ef72ad4f1e1437f882a4",
     "renderers/architecture/grid.mjs": "f6de99c32436feed3378b0ddef516bb4732ff27a89c543b50635d4d14a15a55a",
     "renderers/architecture/labels.mjs": "3a0066a987d8ad20121d0f7261d8bcfd3659443a335ea5e47938e7779ae12d31",
@@ -705,10 +705,11 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream_added_dependency",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "cbbebfca2cb58cde0791f349e4f13490c0d085ce2f8653279139cf2aed334677",
+      "packaged_sha256": "02154602a97850c3f0ab5a55b18735d63d2b5d29fa87f6cf5dc9fc18efa9b6b9",
       "path": "explainer/browser-check.mjs",
+      "resolution": "Local CDP function-argument transport for selectors in the page context; preserve focus, keyboard and native-viewer checks without composing JavaScript from selector data. PR430 CodeQL paths.",
       "target_sha256": "cbbebfca2cb58cde0791f349e4f13490c0d085ce2f8653279139cf2aed334677"
     },
     {
@@ -801,18 +802,20 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream_added_dependency",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
+      "packaged_sha256": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755",
       "path": "explainer/reader.js",
+      "resolution": "Local dynamic text and attribute escaping in Walk, Ask and source cards; retain controls and source rendering semantics. PR430 CodeQL paths; source tag bytes retained in target_sha256.",
       "target_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6"
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream_added_dependency",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "415c8c0638f42abc3b96f1b105453780678f1e33a9994f844cfbe4833670f25d",
+      "packaged_sha256": "3993aa9e6abd47f0bd903cf4254f465c331369f98e507523da7e9181be8eb21d",
       "path": "explainer/render.mjs",
+      "resolution": "Local complete-style extraction and HTML raw-text terminator escape after CSS processing; retain native preview CSS and range operators. PR430 CodeQL path.",
       "target_sha256": "415c8c0638f42abc3b96f1b105453780678f1e33a9994f844cfbe4833670f25d"
     },
     {
@@ -825,10 +828,11 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream_added_dependency",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "c6aae2ef90b6e49d16c1ccd5cfc5351a7716b8f9150e1c261dbd6ca8b8ca9ab5",
+      "packaged_sha256": "cbe349e5f7bf6203b1ae51ee2eb73ee5fb1bf399e23f0b301af1be41f8adae09",
       "path": "explainer/sources.mjs",
+      "resolution": "Local rejection of an explicit citation revision that conflicts with the document pin, matching the existing code-source contract; preserve matching pins, inferred HEAD and no-repository plain references. PR430 revision review.",
       "target_sha256": "c6aae2ef90b6e49d16c1ccd5cfc5351a7716b8f9150e1c261dbd6ca8b8ca9ab5"
     },
     {
@@ -1181,7 +1185,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "bd5fa29eb98deb2e8a0051b98bbfe766489501647eac9ed3c050e6449c4b49b2",
-      "packaged_sha256": "34cab3efb68b303cd2321ed0e928b2dcb26f113c8f33c7a32e7fd3e4f4c3f01d",
+      "packaged_sha256": "86c26d435216148d4959a04cfb703b408b4da25ef9f8fd287f6436a4faa770aa",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -1213,7 +1217,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "9f67321e4bee67226f128b622f978483f4017fd671bcec48c8c473beeb92cfa5",
-      "packaged_sha256": "92a090f347984fb55bb176e3f278b1fdf483120bdf8595ae25cd55284362cda5",
+      "packaged_sha256": "3d0a76acc46efbff8230694338cc5788b9ea5fb64f7d65e86b6fcaf7080fb0ce",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null
     },

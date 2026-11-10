@@ -247,5 +247,129 @@ console.log(JSON.stringify({local,official,renamedRejected}));
             self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(), receipt["artifact"]["sha256"])
 
 
+
+@unittest.skipIf(shutil.which("node") is None, "node is not available")
+class ArchifyExplainerSecurityRegressionTest(unittest.TestCase):
+    def test_citation_revision_is_never_silently_replaced(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
+const [root,repo] = process.argv.slice(1);
+const {resolveExplainerSources}=await import(pathToFileURL(path.join(root,'explainer/sources.mjs')));
+const git=(...args)=>execFileSync('git',['-C',repo,...args],{encoding:'utf8'}).trim();
+git('init','--quiet');
+git('config','remote.origin.url','https://github.com/example/revision-regression');
+const commit=text=>{fs.writeFileSync(path.join(repo,'evidence.txt'),text+'\n');git('add','evidence.txt');git('-c','user.name=Regression','-c','user.email=regression@example.invalid','-c','commit.gpgsign=false','commit','--quiet','-m','Fixture');return git('rev-parse','HEAD');};
+const old=commit('Original evidence'), latest=commit('Later evidence');
+const make=(pin,revision=latest,code=false)=>({sources:[{id:'ref',path:'evidence.txt',lines:[1,1],...(pin===undefined?{}:{revision:pin})}],panels:[{id:'panel',blocks:code?[{id:'code',type:'code',source:'ref'}]:[]}],...(revision===null?{}:{meta:{repository:{url:'https://github.com/example/revision-regression',revision}}})});
+for(const doc of [make(old),make(old,null),make(old,latest,true)]){
+  const before=JSON.stringify(doc);
+  await assert.rejects(resolveExplainerSources(doc,{repoRoot:repo}),error=>error.archifyDiagnostics?.[0]?.code==='explainer/source-revision'&&error.archifyDiagnostics[0].subject.path==='/sources/0/revision');
+  assert.equal(JSON.stringify(doc),before);
+}
+for(const [doc,revision,text] of [[make(latest),latest,'Later evidence'],[make(undefined),latest,'Later evidence'],[make(old,old),old,'Original evidence']]){
+  const before=JSON.stringify(doc), result=await resolveExplainerSources(doc,{repoRoot:repo});
+  assert.equal(result.sources.ref.revision,revision);assert.equal(result.sources.ref.text,text);assert.ok(result.sources.ref.url.includes('/blob/'+revision+'/'));assert.equal(JSON.stringify(doc),before);
+}
+const plain=await resolveExplainerSources(make(old),{});
+assert.equal(plain.sources.ref.revision,old);assert.equal(plain.sources.ref.text,undefined);assert.deepEqual(plain.dependencies,[]);
+console.log(JSON.stringify({checks:7,passed:true}));
+"""
+        with tempfile.TemporaryDirectory(prefix="archify-revision-regression-") as directory:
+            result = subprocess.run(
+                ["node", "--input-type=module", "-e", program, str(SKILL_DIR), directory],
+                capture_output=True, text=True, encoding="utf-8", timeout=20,
+            )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"checks": 7, "passed": True}, json.loads(result.stdout))
+
+    def test_native_css_cannot_close_the_preview_style_element(self) -> None:
+        from html.parser import HTMLParser
+
+        program = r"""
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {renderExplainer}=await import(pathToFileURL(path.join(process.argv[1],'explainer/render.mjs')));
+const doc={schema_version:1,diagram_type:'explainer',meta:{id:'css-regression',title:'CSS containment',locale:'en'},answer:{summary:'Keep native styles contained.'},panels:[{id:'panel',title:'Preview',blocks:[{id:'native',type:'diagram',diagramType:'architecture',spec:{}}]}],sources:[]};
+const styles='<style>.node{--sample:"</sty/**/le><img id=style-breakout src=x onerror=globalThis.injected=1><style>"}@media (width < 900px){.node{fill:rgb(1,2,3)}}</style>';
+const diagram={diagramType:'architecture',html:'<!doctype html><html><body><svg></svg></body></html>',svg:'<svg viewBox="0 0 100 100"><rect class="node" width="10" height="10"/></svg>',styles,semantic:{nodes:[],edges:[]}};
+console.log(renderExplainer(doc,{preparedDiagrams:{diagrams:{native:diagram},dependencies:[]}}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=10,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+        class Page(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.breakouts = []
+                self.styles = []
+                self.in_style = False
+
+            def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+                if dict(attrs).get("id") == "style-breakout":
+                    self.breakouts.append(tag)
+                self.in_style = tag == "style" or self.in_style
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag == "style":
+                    self.in_style = False
+
+            def handle_data(self, data: str) -> None:
+                if self.in_style:
+                    self.styles.append(data)
+
+        page = Page()
+        page.feed(result.stdout)
+        self.assertEqual([], page.breakouts)
+        preview_css = next(css for css in page.styles if "--sample" in css)
+        self.assertIn("@media (width < 900px)", preview_css)
+        self.assertIn(".preview-native .node{fill:rgb(1,2,3)}", preview_css)
+        self.assertNotIn("</style", preview_css.lower())
+
+    def test_browser_argument_transport_preserves_data_and_releases_context(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const source=fs.readFileSync(path.join(process.argv[1],'explainer/browser-check.mjs'),'utf8');
+const start=source.indexOf('async function call('), end=source.indexOf('function measureNativePreviews()',start);
+assert.ok(start>=0&&end>start);
+const call=vm.runInNewContext(source.slice(start,end)+'\ncall');
+const payload='[data-value="</script>\\\'\u2028<literal>"]';
+const sent=[];let failure=false;
+const browser={sessionPromise:Promise.resolve('session'),cdp:{async send(method,params,session){
+  sent.push({method,params,session});
+  if(method==='Runtime.evaluate'){assert.equal(params.expression,'globalThis');return {result:{objectId:'context'}};}
+  if(method==='Runtime.callFunctionOn'){
+    assert.equal(params.arguments[0].value,payload);assert.ok(!params.functionDeclaration.includes(payload));
+    return failure?{exceptionDetails:{text:'Expected browser failure'}}:{result:{value:payload}};
+  }
+  assert.equal(method,'Runtime.releaseObject');assert.equal(params.objectId,'context');return {};
+}}};
+assert.equal(await call(browser,function(value){return value;},[payload]),payload);
+assert.equal(sent.at(-1).method,'Runtime.releaseObject');
+failure=true;
+await assert.rejects(call(browser,function(value){return value;},[payload]),/Expected browser failure/);
+assert.equal(sent.at(-1).method,'Runtime.releaseObject');
+console.log(JSON.stringify({argumentPreserved:true,errorPropagated:true,contextReleased:true}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=10,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(
+            {"argumentPreserved": True, "errorPropagated": True, "contextReleased": True},
+            json.loads(result.stdout),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

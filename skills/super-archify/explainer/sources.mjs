@@ -268,6 +268,8 @@ export async function resolveExplainerSources(document, { repoRoot, baseDir, sou
     let metadata = null;
     try { metadata = document.meta?.repository ? { ...document.meta.repository } : deriveRepository(context, repoRoot); } catch {}
     for (const { entry, index } of metadata ? cited : []) {
+      if (entry.revision !== undefined && String(entry.revision).toLowerCase() !== String(metadata.revision).toLowerCase()) fail(context, `/sources/${index}/revision`, 'source', 'source-revision',
+        'All repository sources must use the document’s pinned revision.', 'Use the document repository revision or omit the source revision.');
       try {
         const verified = verifyRepositoryEvidence('architecture', { meta: { repository: metadata }, components: [{ id: entry.id, sources: [{ path: entry.path, line: entry.lines[0], end_line: entry.lines[1] }] }] }, repoRoot);
         const reference = verified.nodes[entry.id][0];

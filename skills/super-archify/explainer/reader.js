@@ -9,6 +9,7 @@
   const say = (en,zh) => english ? en : zh;
   const byId = id => document.getElementById(id);
   const all = (selector, within = document) => [...within.querySelectorAll(selector)];
+  const escapeText = value => String(value ?? '').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   let toastTimer;
   function notify(text) { const toast=byId('toast');toast.textContent=text;toast.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('visible'),3000); }
   // Measured board layout. Each panel is measured at every column width, then each column template is
@@ -452,7 +453,7 @@
     stop();
     let index = 0;
     const bar = document.createElement('div'); bar.className = 'walk-bar';
-    bar.innerHTML = `<button type="button" data-walk="prev">← ${words.prev}</button><span class="walk-count"></span><button type="button" data-walk="next">${words.next} →</button><span class="walk-text" aria-live="polite"></span><button type="button" data-walk="end">${words.end}</button>`;
+    bar.innerHTML = `<button type="button" data-walk="prev">← ${escapeText(words.prev)}</button><span class="walk-count"></span><button type="button" data-walk="next">${escapeText(words.next)} →</button><span class="walk-text" aria-live="polite"></span><button type="button" data-walk="end">${escapeText(words.end)}</button>`;
     // A diagram's bar sits above the diagram, so it stays in view while a tall diagram scrolls past.
     const figure = control.closest('figcaption')?.closest('figure'); if (figure) figure.before(bar); else control.after(bar);
     // The bar takes the start button's place while the walk runs, so one set of controls shows.
@@ -530,7 +531,7 @@
   function setupAsk() {
     const dialog = document.createElement('dialog'); dialog.className = 'ask-dialog';
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-    dialog.innerHTML = `<form method="dialog"><header><div><h2 id="ask-title">${words.ask}</h2><p class="ask-where"></p></div><button type="button" class="ask-close" data-ask-cancel aria-label="${words.askCancel}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header><blockquote hidden></blockquote><div class="ask-chips" role="group" aria-label="${words.askQuestion}">${words.askChips.map(chip=>`<button type="button" data-chip>${chip}</button>`).join('')}</div><textarea rows="4" aria-labelledby="ask-title" placeholder="${words.askPlaceholder}"></textarea><footer><p class="ask-note">${words.askNote}</p><button type="button" data-ask-cancel>${words.askCancel}</button><button type="submit" class="primary">${words.askCopy}<kbd>${mac ? '⌘↵' : 'Ctrl ↵'}</kbd></button></footer></form>`;
+    dialog.innerHTML = `<form method="dialog"><header><div><h2 id="ask-title">${escapeText(words.ask)}</h2><p class="ask-where"></p></div><button type="button" class="ask-close" data-ask-cancel aria-label="${escapeText(words.askCancel)}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header><blockquote hidden></blockquote><div class="ask-chips" role="group" aria-label="${escapeText(words.askQuestion)}">${words.askChips.map(chip=>`<button type="button" data-chip>${escapeText(chip)}</button>`).join('')}</div><textarea rows="4" aria-labelledby="ask-title" placeholder="${escapeText(words.askPlaceholder)}"></textarea><footer><p class="ask-note">${escapeText(words.askNote)}</p><button type="button" data-ask-cancel>${escapeText(words.askCancel)}</button><button type="submit" class="primary">${escapeText(words.askCopy)}<kbd>${mac ? '⌘↵' : 'Ctrl ↵'}</kbd></button></footer></form>`;
     document.body.append(dialog);
     const area = dialog.querySelector('textarea'), quoteBox = dialog.querySelector('blockquote');
     let context = null;
@@ -607,17 +608,17 @@
       const source = sources[id] || prepared.document?.sources?.find(entry=>entry.id === id);
       if (!source) return;
       clearTimeout(hideTimer);
-      const escapeText = value => String(value ?? '').replace(/[&<>"]/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[character]));
+
       // A repository source shows its pinned excerpt; a web page its host; any other note its text.
       const host = (()=>{ try { return new URL(source.url).host.replace(/^www\./,''); } catch { return ''; } })();
       const where = source.path ? `${source.path}${source.lines ? `:${source.lines.join('–')}` : ''}` : host;
       const kind = source.path ? 'code' : source.url ? 'web' : 'note';
       const lines = source.path && typeof source.text === 'string' ? source.text.split('\n') : [];
       const first = source.lines?.[0] || 1;
-      const excerpt = lines.length ? `<pre><code>${lines.slice(0,14).map((line,index)=>`<span class="line"><i>${first + index}</i>${escapeText(line) || ' '}</span>`).join('')}${lines.length > 14 ? `<span class="line more"><i></i>…</span>` : ''}</code></pre>` : '';
+      const excerpt = lines.length ? `<pre><code>${lines.slice(0,14).map((line,index)=>`<span class="line"><i>${escapeText(first + index)}</i>${escapeText(line) || ' '}</span>`).join('')}${lines.length > 14 ? `<span class="line more"><i></i>…</span>` : ''}</code></pre>` : '';
       const note = !source.path && (source.text || source.method) ? `<p class="source-note">${escapeText(source.text || '')}${source.method ? `<span>${escapeText(source.method)}</span>` : ''}</p>` : '';
       const number = /^\d+$/.test(link.textContent.trim()) ? link.textContent.trim() : '';
-      card.innerHTML = `<header><span class="source-icon" data-kind="${kind}" aria-hidden="true">${sourceIcons[kind]}</span><span class="source-head"><b>${escapeText(source.title || source.path || id)}</b>${where ? `<span class="source-where">${escapeText(where)}</span>` : ''}</span>${number ? `<span class="source-number">${number}</span>` : ''}</header>${excerpt}${note}${source.revision || source.url ? `<footer>${source.revision ? `<span class="source-pin">${say('Pinned at','固定在')} <code>${escapeText(String(source.revision).slice(0,7))}</code></span>` : '<span></span>'}${source.url ? `<a href="${escapeText(source.url)}" target="_blank" rel="noopener noreferrer">${say('Open source','打开原文')} ↗</a>` : ''}</footer>` : ''}`;
+      card.innerHTML = `<header><span class="source-icon" data-kind="${kind}" aria-hidden="true">${sourceIcons[kind]}</span><span class="source-head"><b>${escapeText(source.title || source.path || id)}</b>${where ? `<span class="source-where">${escapeText(where)}</span>` : ''}</span>${number ? `<span class="source-number">${escapeText(number)}</span>` : ''}</header>${excerpt}${note}${source.revision || source.url ? `<footer>${source.revision ? `<span class="source-pin">${say('Pinned at','固定在')} <code>${escapeText(String(source.revision).slice(0,7))}</code></span>` : '<span></span>'}${source.url ? `<a href="${escapeText(source.url)}" target="_blank" rel="noopener noreferrer">${say('Open source','打开原文')} ↗</a>` : ''}</footer>` : ''}`;
       card.hidden = false;
       const box = link.getBoundingClientRect(), width = Math.min(520,innerWidth - 24);
       card.style.width = `${width}px`;

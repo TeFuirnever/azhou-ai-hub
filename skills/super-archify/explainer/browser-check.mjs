@@ -10,6 +10,20 @@ async function evaluate(browser, expression, awaitPromise=false) {
 }
 const expression = fn => `(${fn.toString()})()`;
 
+// Pass selector data through CDP arguments, never through generated JavaScript.
+async function call(browser, fn, values = []) {
+  const session = await browser.sessionPromise;
+  const receiver = await browser.cdp.send('Runtime.evaluate', {expression:'globalThis',returnByValue:false}, session);
+  if (receiver.exceptionDetails || !receiver.result?.objectId) throw new Error('Cannot bind the browser execution context.');
+  const objectId = receiver.result.objectId;
+  try {
+    const result = await browser.cdp.send('Runtime.callFunctionOn', {objectId,functionDeclaration:fn.toString(),arguments:values.map(value=>({value})),returnByValue:true}, session);
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+    return result.result?.value;
+  } finally { await browser.cdp.send('Runtime.releaseObject', {objectId}, session); }
+}
+
+
 function measureNativePreviews() {
   const rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
   const visible=e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();return c.display!=='none'&&c.visibility!=='hidden'&&Number(c.opacity)!==0&&r.width>0&&r.height>0;};
@@ -143,7 +157,7 @@ export async function inspectNativeViewer(browser) {
 }
 
 async function press(browser,key) {const session=await browser.sessionPromise;const codes={Enter:13,Escape:27,' ':32};for(const type of ['keyDown','keyUp'])await browser.cdp.send('Input.dispatchKeyEvent',{type,key,code:key===' '?'Space':key,windowsVirtualKeyCode:codes[key],...(key==='Enter'&&type==='keyDown'?{text:'\r',unmodifiedText:'\r'}:{})},session);await evaluate(browser,'new Promise(resolve=>setTimeout(resolve,0))',true);}
-async function activate(browser,selector,key='Enter') {const exists=await evaluate(browser,`(function(){const e=document.querySelector(${JSON.stringify(selector)});if(!e)return false;e.scrollIntoView({block:'center'});e.focus();return document.activeElement===e;})()`);if(!exists)return false;await press(browser,key);return true;}
+async function activate(browser,selector,key='Enter') {const exists=await call(browser,function(selector){const e=document.querySelector(selector);if(!e)return false;e.scrollIntoView({block:'center'});e.focus();return document.activeElement===e;},[selector]);if(!exists)return false;await press(browser,key);return true;}
 
 export async function inspectExplainerBrowser(browser,options) {
   if (browser.resetPage) await browser.resetPage();
@@ -162,7 +176,7 @@ export async function inspectExplainerBrowser(browser,options) {
     for(let attempt=0;attempt<30;attempt++) {if(await evaluate(browser,"Boolean(document.querySelector('#diagram-dialog')?.dataset.nativeFocus)"))break;await new Promise(resolve=>setTimeout(resolve,100));}
     const frame=await evaluate(browser,"(function(){const d=document.querySelector('#diagram-dialog'),f=d.querySelector('iframe');return {open:d.open,frame:Boolean(f),sandbox:f?.getAttribute('sandbox'),loaded:d.dataset.nativeLoaded,ready:d.dataset.nativeReady,loadingHidden:d.querySelector('.dialog-loading')?.hidden,visible:document.visibilityState,frameRect:f?{width:f.getBoundingClientRect().width,height:f.getBoundingClientRect().height}:null,error:d.querySelector('.dialog-loading')?.textContent};})()");
     check('diagram-viewer',frame.open&&frame.frame,'Diagram activation did not open the canonical Viewer.',diagram,frame);
-    const focus=await evaluate(browser,`(function(){const link=document.querySelector(${JSON.stringify(selector)}),hash=link.dataset.diagramHash||'',edges=JSON.parse(link.dataset.diagramEdges||'[]'),bundle=JSON.parse(document.getElementById('archify-explainer-prepared').textContent),child=bundle.preparedDiagrams.diagrams[link.dataset.diagramLink||link.dataset.openDiagram],nodes=hash.startsWith('focus=')?[decodeURIComponent(hash.slice(6))]:hash.startsWith('route=')?hash.slice(6).split('~').map(decodeURIComponent):[...new Set((child.semantic?.edges||[]).filter(e=>edges.includes(e.id)).flatMap(e=>[e.from,e.to]))];let actual;try{actual=JSON.parse(document.querySelector('#diagram-dialog').dataset.nativeFocus||'null');}catch{}return {component:link.closest('[data-block-type]')?.id||link.dataset.diagramLink,nodes,edges,actual,frame:{ready:document.querySelector('#diagram-dialog').dataset.nativeReady,loaded:document.querySelector('#diagram-dialog').dataset.nativeLoaded,loadingHidden:document.querySelector('#diagram-dialog .dialog-loading').hidden}};})()`);
+    const focus=await call(browser,function(selector){const link=document.querySelector(selector),hash=link.dataset.diagramHash||'',edges=JSON.parse(link.dataset.diagramEdges||'[]'),bundle=JSON.parse(document.getElementById('archify-explainer-prepared').textContent),child=bundle.preparedDiagrams.diagrams[link.dataset.diagramLink||link.dataset.openDiagram],nodes=hash.startsWith('focus=')?[decodeURIComponent(hash.slice(6))]:hash.startsWith('route=')?hash.slice(6).split('~').map(decodeURIComponent):[...new Set((child.semantic?.edges||[]).filter(e=>edges.includes(e.id)).flatMap(e=>[e.from,e.to]))];let actual;try{actual=JSON.parse(document.querySelector('#diagram-dialog').dataset.nativeFocus||'null');}catch{}return {component:link.closest('[data-block-type]')?.id||link.dataset.diagramLink,nodes,edges,actual,frame:{ready:document.querySelector('#diagram-dialog').dataset.nativeReady,loaded:document.querySelector('#diagram-dialog').dataset.nativeLoaded,loadingHidden:document.querySelector('#diagram-dialog .dialog-loading').hidden}};},[selector]);
     const native=await inspectNativeViewer(browser);
     metrics.nativeViewer=native;
     interactionErrors.push(...native.errors);

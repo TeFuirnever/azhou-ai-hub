@@ -3848,5 +3848,381 @@
       "new_blind_holdout": false
     },
     "replay_harness_limitation": "Frozen evaluator reuses mutable inputs/<case>/projects/own evolution state. Avoid direct replay against the archived evidence root without complete state backup/restoration; absolute ownership paths prevent silently treating a copied fixture as identical. No canonical skill or evaluation criteria changed."
+  },
+  "upstream_integration_fixes": {
+    "schema": "azhou.archify.integration-fixes.v1",
+    "recorded_at": "2026-11-10T06:54:51.145150+00:00",
+    "pr_url": "https://github.com/TeFuirnever/azhou-ai-hub/pull/430",
+    "stage": "local_validation_before_required_CI",
+    "upstream_release": "v3.2.0",
+    "upstream_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+    "initial_codeql_findings": {
+      "total": 6,
+      "high": 4,
+      "medium": 2,
+      "alert_numbers": [
+        46,
+        47,
+        48,
+        49,
+        50,
+        51
+      ],
+      "interpretation": "Static reports are not exploitation history. Concrete boundary probes below use controlled prepared data and do not establish reachability from every normal authoring input.",
+      "per_boundary_limits": {
+        "reader": "Controlled probe overrides normally trusted locale/source metadata, including a line-number value that bypasses ordinary source validation. No normal authored-input exploit route asserted.",
+        "browser_selectors": "No actual injection was demonstrated against the old JSON.stringify expression. Function arguments remove the data/code construction boundary and retain actual Chrome behavior."
+      }
+    },
+    "separate_citation_revision_finding": true,
+    "classification": "bounded local source-integration safety/correctness fixes; not the C2 evolution mechanism",
+    "source_origin": {
+      "record_sha256": "999ead96f4849923472cecf13e72fa28666ea8f972c12a7c513defeffd7c4fc2",
+      "all_four_absent_at_original_hub_base": true,
+      "all_four_equal_official_target_before_patch": true,
+      "paths": [
+        {
+          "path": "skills/super-archify/explainer/reader.js",
+          "official_target_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
+          "current_local_sha256": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755"
+        },
+        {
+          "path": "skills/super-archify/explainer/render.mjs",
+          "official_target_sha256": "415c8c0638f42abc3b96f1b105453780678f1e33a9994f844cfbe4833670f25d",
+          "current_local_sha256": "3993aa9e6abd47f0bd903cf4254f465c331369f98e507523da7e9181be8eb21d"
+        },
+        {
+          "path": "skills/super-archify/explainer/browser-check.mjs",
+          "official_target_sha256": "cbbebfca2cb58cde0791f349e4f13490c0d085ce2f8653279139cf2aed334677",
+          "current_local_sha256": "02154602a97850c3f0ab5a55b18735d63d2b5d29fa87f6cf5dc9fc18efa9b6b9"
+        },
+        {
+          "path": "skills/super-archify/explainer/sources.mjs",
+          "official_target_sha256": "c6aae2ef90b6e49d16c1ccd5cfc5351a7716b8f9150e1c261dbd6ca8b8ca9ab5",
+          "current_local_sha256": "cbe349e5f7bf6203b1ae51ee2eb73ee5fb1bf399e23f0b301af1be41f8adae09"
+        }
+      ]
+    },
+    "current_vendor_manifest_sha256": "f07cf2994f8393c3e9b808b80129d5e8bcec859d6c7beb4425fd82579f5735cd",
+    "source_file_count": 203,
+    "package_file_count": 190,
+    "citation_revision_comparison": {
+      "record_sha256": "ce24cc90a1e59a0edbc78c4cf3724d82598c4f1ff540b0e7209016b55b92edc5",
+      "input_sha256": "2ac70441387b32459884b6ce17b3a6cd905fee2f0185497f9e8208d1d8f1514a",
+      "probe_sha256": "78043ed4361eba13a5309ac3d37880f63c1b18e5ed84eb4f53808deab3dfa693",
+      "aggregate": {
+        "baseline_passed": 4,
+        "candidate_passed": 6,
+        "total": 6,
+        "failure_to_pass": 2,
+        "success_to_failure": 0,
+        "four_baseline_success_outputs_identical": true,
+        "all_inputs_unchanged": true
+      },
+      "cases": [
+        {
+          "case_id": "citation-conflicting-explicit-pin",
+          "before_passed": false,
+          "after_passed": true,
+          "output_unchanged": false
+        },
+        {
+          "case_id": "citation-conflicting-derived-head",
+          "before_passed": false,
+          "after_passed": true,
+          "output_unchanged": false
+        },
+        {
+          "case_id": "citation-matching-pin",
+          "before_passed": true,
+          "after_passed": true,
+          "output_unchanged": true
+        },
+        {
+          "case_id": "citation-omitted-pin",
+          "before_passed": true,
+          "after_passed": true,
+          "output_unchanged": true
+        },
+        {
+          "case_id": "code-conflicting-pin-control",
+          "before_passed": true,
+          "after_passed": true,
+          "output_unchanged": true
+        },
+        {
+          "case_id": "citation-no-repository-control",
+          "before_passed": true,
+          "after_passed": true,
+          "output_unchanged": true
+        }
+      ],
+      "candidate_elapsed_seconds": null,
+      "limit": "Same six direct API cases and same real two-commit fixture; rule summary follows observations, not preregistration or blind holdout. Candidate standalone elapsed time unavailable."
+    },
+    "browser_boundary_probe": {
+      "run_record_sha256": "de288818604b5d58d2721b9a89f3aaecac3a79d464541f04f93b1d6a42e14cf7",
+      "results_sha256": "cd4a1815ee85307bc024ea29f61d37f45867b76f055ef435c40ae16dda9bceda",
+      "input_sha256": "5608fcd19c1c693c3487a3016e5d60a878ffcea350055a1bcca61bee2c415ae5",
+      "rules_sha256": "734cda4ef8ecc71053304c39f956fb7291e0dd341be6cd28bcd738dad368b888",
+      "probe_sha256": "69cdc40becc145da7c69052aedf67ef247d79ea9e8f6d91e8d4005d4e8d09d86",
+      "seconds": 6.600338790973183,
+      "variants": [
+        {
+          "label": "before_local_patch",
+          "passed": 3,
+          "total": 8,
+          "cases": [
+            {
+              "id": "normal_native",
+              "passed": true,
+              "artifact_sha256": "e8871401c3220e355002321aa2af0bcabdbdeb8758d961429c68fb9236a10467",
+              "observations": {
+                "print": true,
+                "noJavaScript": [
+                  {
+                    "theme": "light",
+                    "ok": true
+                  },
+                  {
+                    "theme": "dark",
+                    "ok": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": "reader_boundary",
+              "passed": false,
+              "artifact_sha256": "8801e234465be8de12577a139cf9fb3d4d5ed2c3821883ba8c1222845be2d932",
+              "observations": {
+                "markerCount": 7,
+                "handler": 1
+              }
+            },
+            {
+              "id": "css_comment_join_800",
+              "passed": false,
+              "artifact_sha256": "fbb96a9eb5c79e53a5a33d78129fb7f05b5809208fe4a0eb8dbf1e85b035131c",
+              "observations": {
+                "markerCount": 1,
+                "handler": 1,
+                "fill": "rgb(4, 5, 6)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_comment_join_1000",
+              "passed": false,
+              "artifact_sha256": "fbb96a9eb5c79e53a5a33d78129fb7f05b5809208fe4a0eb8dbf1e85b035131c",
+              "observations": {
+                "markerCount": 1,
+                "handler": 1,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            },
+            {
+              "id": "css_tag_join_800",
+              "passed": false,
+              "artifact_sha256": "c2d9f08f0f40e3d08e159ba8a2b7fbea029499951a14cd6901340450381367d0",
+              "observations": {
+                "markerCount": 1,
+                "handler": 1,
+                "fill": "rgb(4, 5, 6)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_tag_join_1000",
+              "passed": false,
+              "artifact_sha256": "c2d9f08f0f40e3d08e159ba8a2b7fbea029499951a14cd6901340450381367d0",
+              "observations": {
+                "markerCount": 1,
+                "handler": 1,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            },
+            {
+              "id": "css_valid_range_800",
+              "passed": true,
+              "artifact_sha256": "0c971f66c058bd6715cda3a283d54003f1e54ad7ee627a5dafd1bed40f08ed47",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(1, 2, 3)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_valid_range_1000",
+              "passed": true,
+              "artifact_sha256": "0c971f66c058bd6715cda3a283d54003f1e54ad7ee627a5dafd1bed40f08ed47",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            }
+          ]
+        },
+        {
+          "label": "after_local_patch",
+          "passed": 8,
+          "total": 8,
+          "cases": [
+            {
+              "id": "normal_native",
+              "passed": true,
+              "artifact_sha256": "969b1a990db4459a4833c46a893e971b628287f560bec8b396d7fd1c29b2ca6d",
+              "observations": {
+                "print": true,
+                "noJavaScript": [
+                  {
+                    "theme": "light",
+                    "ok": true
+                  },
+                  {
+                    "theme": "dark",
+                    "ok": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": "reader_boundary",
+              "passed": true,
+              "artifact_sha256": "f0cabd8b94f9341cb8f16d361a639a6209842416c812e5d634dc59133cf6c0e7",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0
+              }
+            },
+            {
+              "id": "css_comment_join_800",
+              "passed": true,
+              "artifact_sha256": "53a3f4709eba25dacfa8121dcfe0021e25fdb9dd18acd70ac997ba09a31b890d",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(1, 2, 3)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_comment_join_1000",
+              "passed": true,
+              "artifact_sha256": "53a3f4709eba25dacfa8121dcfe0021e25fdb9dd18acd70ac997ba09a31b890d",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            },
+            {
+              "id": "css_tag_join_800",
+              "passed": true,
+              "artifact_sha256": "cddffb05fa57e48024e74d38bb45ae9947740bf8dd3e74f66133d73eb3bb77ca",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(1, 2, 3)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_tag_join_1000",
+              "passed": true,
+              "artifact_sha256": "cddffb05fa57e48024e74d38bb45ae9947740bf8dd3e74f66133d73eb3bb77ca",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            },
+            {
+              "id": "css_valid_range_800",
+              "passed": true,
+              "artifact_sha256": "64058d4b2645a5f6848903d498df563b3e4a15644a557b932b83b3af27f1376d",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(1, 2, 3)",
+                "range": true
+              }
+            },
+            {
+              "id": "css_valid_range_1000",
+              "passed": true,
+              "artifact_sha256": "64058d4b2645a5f6848903d498df563b3e4a15644a557b932b83b3af27f1376d",
+              "observations": {
+                "markerCount": 0,
+                "handler": 0,
+                "fill": "rgb(4, 5, 6)",
+                "range": false
+              }
+            }
+          ]
+        }
+      ],
+      "limits": [
+        "Controlled prepared/DOM boundary inputs, not a demonstrated natural-user exploit route or security completeness proof.",
+        "Two CSS payload families are observed at two widths; counts are not independent natural tasks.",
+        "No natural model-quality, speed or recursive-improvement claim."
+      ]
+    },
+    "regression_checks": {
+      "new_unit_tests": {
+        "passed": 3,
+        "record_sha256": "8ab98f339890c2226a0557ce67dd3ef7b2544fba0cdd5735b94da0e20f68601a",
+        "seconds": 0.4975854169460945,
+        "log_sha256": "41e7b49685c0a1fb61461c9f38361e8c81fa989e1dce3c12b6f331779d46396f",
+        "revision_subcases": 7
+      },
+      "unchanged_upstream_browser_tests": {
+        "passed": 4,
+        "record_sha256": "109305c21bdfe7849cbcd6425102b9e7c419051beb6c11dd3179c949b2b938e2",
+        "test_sha256": "bd6557888e18f2238adf91e30f57216b157ead22ffdfd05d60f91650b23c96da",
+        "seconds": 12.634473083016928,
+        "log_sha256": "1e5dd45f05653702f35620c09b5fe3c8ea6e707a80eb532e05896ea1b4dade63"
+      },
+      "unchanged_upstream_functional_tests": {
+        "passed": 25,
+        "total": 25,
+        "record_sha256": "f61f50b4deb91974d069a041611cef9be7329abd390cc8b321df6404f61d1831",
+        "seconds": 3.4970771669759415,
+        "stdout_sha256": "eff8a2f7428f7205d3d1ad72a5847ec84e8c39ea6870a053468078eda30ec616"
+      }
+    },
+    "full_repository_verification": {
+      "exit": 0,
+      "passed_gates": 8,
+      "total_gates": 8,
+      "seconds": 76.2370231670211,
+      "unit_suites": [
+        665,
+        59,
+        45
+      ],
+      "log_sha256": "25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607",
+      "record_sha256": "8bfd3e4f8345a7cf441fa9be519945a33540806aa0db8c967a4089dff0fa8b30",
+      "known_native_event_sample_skip_preserved": true
+    },
+    "C2_approved_diff_unchanged": true,
+    "model_calls_in_deterministic_runners": 0,
+    "overall_orchestration_cost": "unknown",
+    "required_ci_authority": "The exact PR head check runs and review-thread state remain the merge authority; these local tests do not assert remote analysis success.",
+    "local_patch": {
+      "file_count": 5,
+      "baseline_commit": "b24a95d98a7078313117a935e64decd456fdc740",
+      "diff_sha256": "ae5497a426a3be1f615d529f2cd4eed074a15190576f38c6f35ec5e8e1e6c5b0",
+      "final_source_review_sha256": "8404973dcdbf36ea4d99fedb83c9cc0a02a3d8176368092e6161a8755d19855c",
+      "isolated_rollback_and_reapply_sha256": "e38303db2f4aaf4f89f1084f197e374cd9b9cc8afe9145eef917c1453200057e",
+      "isolated_rollback_and_reapply_passed": true
+    }
   }
 }

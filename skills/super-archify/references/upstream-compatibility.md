@@ -21,6 +21,9 @@ This map records the current upstream `archify/` baseline at tag `v3.2.0` (commi
 | `package-lock.json` | intentionally omitted | Existing development-only exclusion; no npm runtime installation required |
 | `package.json` npm scripts | adapted | Monorepo-relative scripts remain removed; runtime CLI does not invoke them |
 | Trailing whitespace | normalized | Existing whitespace-only adaptation in `assets/template.html` and `renderers/workflow/workflow-compiler.mjs` |
+| Explainer dynamic text and style boundaries | bounded local hardening | Reader text/attribute escaping, complete style unwrapping and raw-text terminator handling; DOM/source-card and native-preview behavior retained |
+| Explainer browser-check selectors | bounded local hardening | CDP function arguments carry selector data in the existing page context; focus/Enter/native-viewer controls retained |
+| Explicit repository citation revision | local correctness fix | Conflicting source/document revisions reject with `source-revision`; matching old pins, inferred HEAD and no-repository fallback retained |
 | Known upstream alert | retained limitation | The v3.1 CodeQL incomplete multi-character sanitization finding in `delta/architecture-delta.mjs` is unchanged at v3.2.0; no fix claim |
 | Upstream `license` and `metadata` frontmatter | adapted | Hub requires `name`, `description`, `invocation`; immutable source version and license live in provenance |
 | Illustrative output link | adapted | Existing `file:///abs/path/...html` example retained for repository link validation |

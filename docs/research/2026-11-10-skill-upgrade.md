@@ -77,6 +77,24 @@ archify 使用同一 workflow、官方稳定 manifest 和 explainer 输入，固
 
 默认 explainer 调用的 browser-check 确为 not-run；另行显式请求 Chrome 浏览器检查后，workflow 与 explainer 均完成 validate、deliver、check、browser-check 四项 gate。两者的 visualReview 均为 not-requested，不宣称独立视觉质量验收。explainer 示例的一项 scope-length 写作警告原样保留。完整输入、命令、产物、测试源 SHA 与运行包 190 文件摘要保存在 Git 外 archify-behavior.json 和 archify-source-tests.json。原始源码归档与 Git tree/blob 全量一致，未依赖有 300-file 上限的 compare API 来判定完整性。
 
+## 集成检查发现的本地兼容修复
+
+以上上游 A/B 结果对应归档的 B 提交，不覆盖后来新增的本地修复。[PR #430](https://github.com/TeFuirnever/azhou-ai-hub/pull/430) 首轮 CodeQL 报告 6 条新路径（4 high、2 medium），另有一次引用 revision 一致性检查发现。它们涉及 explainer 的 4 个新增文件，修复前均与正式 v3.2.0 原字节相同。该计数是静态报告，不表示 6 起已发生的利用事件。
+
+本地改动分别处理 reader 动态文本/属性转义、CSS HTML 结束标签边界、CDP 选择器参数传递，以及显式引用 revision 与文档 pin 冲突时的明确拒绝。每文件的来源摘要、实际打包摘要和取舍已进入 [provenance](../../skills/super-archify/references/provenance.md)、兼容映射与 vendor manifest；官方 commit、许可证、203 个来源文件及 190 个安装包文件数量保持。C2 三文件及其批准摘要不变，这些修复不归因于 RSI。
+
+| 配对或回归检查 | 修复前 | 修复后 | 解释 |
+|---|---:|---:|---|
+| 原 6 例 citation API 输入 | 4/6 | 6/6 | 两个冲突原先静默换成新 revision；现明确拒绝。另 4 个成功对照的完整 JSON 相同，全部输入对象未改 |
+| 真实 Chrome 的 8 个边界观察 | 3/8 | 8/8 | reader 受控 payload 原产生 7 个标记图片并触发 handler，现保持字面文本；两类 CSS payload 在两个宽度均被阻断，合法 CSS range 行为保留 |
+| 未改字节的上游功能回归 | — | 25/25 | 19 个原共同用例及 6 个 explainer/chart 用例，3.497s |
+| 未改字节的上游 Chrome 回归 | — | 4/4 | focus/Enter、native Viewer 节点/边、双主题、resize、打印/无 JS、走查，12.634s |
+| 新增定向单元回归 | — | 3/3 | revision 7 种情形、真实 render 的 HTML 边界、CDP 参数/错误/对象释放，0.498s |
+
+这些是控制输入下的 API/浏览器边界证据。reader 压力输入覆盖了通常可信的 locale/source 元数据，恶意行号绕过了正常源验证；旧 CDP JSON.stringify 表达式未被证明可注入，修复消除的是数据/代码拼接边界。reader/CSS 探针直接控制 prepared/DOM 数据，不能据此认定所有正常作者输入都能到达相同攻击路径；重复宽度不是独立自然样本。citation 的 6 例规则汇总在观察后形成，不冒充事前注册或盲测；候选独立耗时未记录，保持 unknown。浏览器边界探针总耗时 6.600s，不做速度结论。原始 HTML、DOM 结果、输入、规则和命令留在 Git 外，公开逐例布尔结果和摘要见机器证据。
+
+最终源码已再次执行全仓 verify，8/8 通过、76.237s，包含 665 项 Hub 单元测试及 59/45 两组现有包级测试；已知 native-event sample skip 保留。日志 SHA-256 为 `25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607`。这些本地结果不替代最终 PR head 的必需 CI 和审查线程状态。 五文件本地补丁另在隔离副本上完成 reverse-check、reverse 和 reapply，均恢复到预期字节；补丁与恢复摘要见机器证据。
+
 ## 一个候选：项目证据归属
 
 失效机制：现有 `cmd_propose` 按 mechanism/outcome 取证，却没有在 project scope 中核对 `project_id`；外项目信号可以凑足本项目门槛、触发 severe 例外，并被候选归档消费。来源是当前实际 CLI 受控复现，不是由历史复盘反推的自然事故。修复仅复用既有 `project_identity`，在统计前过滤项目归属；显式 global 行为保留。

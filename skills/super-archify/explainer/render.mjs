@@ -190,7 +190,9 @@ function previewPrefix(id) { return `preview-${id.replace(/[^A-Za-z0-9_-]/g,'-')
 // The preview sets text in page fonts and shows only the SVG, so font faces and rules that name a
 // class absent from the SVG (Viewer chrome, toolbars, cards) are dropped.
 function scopeNativeCss(styles, scope, prefix, svg = '') {
-  const css = styles.replace(/<style[^>]*>/gi,'').replace(/<\/style>/gi,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  // Unwrap complete native style elements; removing individual tags can join
+  // adversarial fragments into a new HTML tag. Raw CSS remains supported.
+  const css = String(styles).replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi,(_,body)=>body).replace(/\/\*[\s\S]*?\*\//g,'');
   const present = new Set(svg ? [...svg.matchAll(/\bclass="([^"]*)"/g)].flatMap(match => match[1].split(/\s+/)) : []);
   const applies = value => !svg || [...value.replace(/:not\([^)]*\)/g,'').matchAll(/\.([A-Za-z_][\w-]*)/g)].every(match => present.has(match[1]));
   const defaults = []; const systemDark = []; const systemLight = [];
@@ -219,5 +221,8 @@ function scopeNativeCss(styles, scope, prefix, svg = '') {
   }
   const scoped = rules(css);
   const light = systemLight.length ? systemLight : defaults;
-  return scoped + (systemLight.length ? `${scope}:not([data-theme]){${systemLight.join(';')}}` : '') + (systemDark.length ? `@media(prefers-color-scheme:dark){${scope}:not([data-theme]){${systemDark.join(';')}}}` : '') + (light.length ? `@media print{${scope},${scope}[data-theme],${scope}:not([data-theme]){${light.join(';')}}}` : '');
+  const result = scoped + (systemLight.length ? `${scope}:not([data-theme]){${systemLight.join(';')}}` : '') + (systemDark.length ? `@media(prefers-color-scheme:dark){${scope}:not([data-theme]){${systemDark.join(';')}}}` : '') + (light.length ? `@media print{${scope},${scope}[data-theme],${scope}:not([data-theme]){${light.join(';')}}}` : '');
+  // CSS strings may contain HTML's raw-text terminator after comment removal.
+  // Escape only the slash in that sequence; CSS range operators keep their meaning.
+  return result.replace(/<\/style/gi,'<\\/style');
 }
