@@ -338,6 +338,13 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.contains("--probe-page-replacement") {
+            let results = try await startupPageReplacementProbe()
+            for result in results {
+                print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            }
+            exit(results.allSatisfy { $0["recovered"] as? Bool == true } ? 0 : 1)
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--zcode-driver-interleave"),
            index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
             try await zcodeDriverInterleave(port: port)
@@ -801,7 +808,7 @@ struct StartupNativeTests {
             sleep: { fakeNow += $0 }
         ).run(payload: "test-only-probe", deadline: 1)
         expect(successful == .ready(runID: 7), "a controlled main page reaches startup-ready")
-        expect(successfulTransport.pagesCount == 2, "a temporarily unavailable page list is retried within the shared budget")
+        expect(successfulTransport.pagesCount == 4, "page discovery retries and rechecks identity before install and ready within the shared budget")
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
         expect(successfulTransport.payloadCount == 1, "startup installs its payload once")
         expect(successfulTransport.closeCount == 1, "startup closes its socket on readiness")
@@ -1022,6 +1029,7 @@ struct StartupNativeTests {
         }
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
+        checks += try await startupPageReplacementChecks()
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
         checks += try await zcodeRuntimeReviewChecks()
@@ -4363,4 +4371,337 @@ private func zcodeDriverInterleave(port: Int) async throws {
     precondition(expected == "safe" ? (inspectBusy && launchReady) : (!inspectBusy && !launchReady), "interleaving did not match expected driver behavior")
     let output: [String:Any] = ["variant":expected,"inspectBusy":inspectBusy,"launchReady":launchReady,"lockReacquired":true,"realHost":false]
     print(String(decoding: try JSONSerialization.data(withJSONObject: output,options:.sortedKeys),as:UTF8.self))
+}
+
+// An executable transport fixture: production URLSession discovery, CDP codec,
+// connector, install recorder and event capture; only HTTP/socket/host boundaries
+// are synthetic. All document generations deliberately start at runID 1.
+private final class StartupReplacementWorld: @unchecked Sendable {
+    let stage: String
+    let mode: String
+    let href = "app://-/index.html?initialRoute=%2F"
+    private let lock = NSLock()
+    private var generation = 0
+    private var statusCount = 0
+    private var clock: TimeInterval = 1
+    private var lockHeld = false
+    private(set) var installs: [String: Int] = [:]
+    private(set) var installReplyTimes: [String: TimeInterval] = [:]
+    private(set) var requests: [String] = []
+    private(set) var requestIDs: [Int] = []
+    private(set) var sockets: [StartupReplacementSocket] = []
+    private(set) var lockAcquires = 0
+    private(set) var lockReleases = 0
+    private(set) var requestsLocked = true
+    var cancel: (() -> Void)?
+    init(stage: String, mode: String = "replace") { self.stage = stage; self.mode = mode }
+    func time() -> TimeInterval { lock.lock(); defer { lock.unlock() }; return clock }
+    func advance(_ seconds: TimeInterval) { lock.lock(); clock += seconds; lock.unlock() }
+    func hasReplaced() -> Bool { lock.lock(); defer { lock.unlock() }; return generation > 0 }
+    func acquire() { lock.lock(); lockAcquires += 1; lockHeld = true; lock.unlock() }
+    func release() { lock.lock(); lockReleases += 1; lockHeld = false; lock.unlock() }
+    func pages() throws -> [[String: Any]] {
+        lock.lock(); defer { lock.unlock() }
+        clock += 0.01
+        func entry(_ id: String, type: String = "page", url: String? = nil) -> [String: Any] {
+            ["id": id, "type": type, "url": url ?? href,
+             "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
+        }
+        if generation == 0 { return [entry("page-a")] }
+        if mode == "raw-unavailable" { throw URLError(.badServerResponse) }
+        if ["cancel-list", "cancel-ready-list"].contains(mode) { cancel?(); throw URLError(.cancelled) }
+        switch mode {
+        case "same-target": return [entry("page-a")]
+        case "old-main": return [entry("page-a"), entry("page-b")]
+        case "old-avatar": return [entry("page-a", url: "app://-/index.html?initialRoute=avatar"), entry("page-b")]
+        case "old-worker": return [entry("page-a", type: "worker"), entry("page-b")]
+        case "ambiguous": return [entry("page-b"), entry("page-c")]
+        case "no-main": return [entry("worker", type: "worker")]
+        case "missing-id": return [entry("page-b"), ["type": "worker", "url": href]]
+        case "duplicate-id": return [entry("page-b"), entry("page-b", type: "worker")]
+        case "invalid-id": return [entry("page-b"), entry("bad id", type: "worker")]
+        case "socket-mismatch":
+            var value = entry("page-b"); value["webSocketDebuggerUrl"] = "ws://127.0.0.1:49221/devtools/page/other"; return [value]
+        case "foreign-socket":
+            var value = entry("page-b"); value["webSocketDebuggerUrl"] = "ws://127.0.0.1:49222/devtools/page/page-b"; return [value]
+        case "reuse": return [entry(generation > 1 ? "page-a" : "page-b")]
+        default: return [entry(generation > 1 ? "page-c" : "page-b")]
+        }
+    }
+    func socket(_ request: URLRequest) -> any WallpaperSocketTask {
+        let socket = StartupReplacementSocket(id: request.url!.lastPathComponent, world: self)
+        lock.lock(); sockets.append(socket); lock.unlock()
+        return socket
+    }
+    func reply(id: String, request: [String: Any]) throws -> Data {
+        lock.lock(); defer { lock.unlock() }
+        clock += 0.01
+        let expression = (request["params"] as? [String: Any])?["expression"] as? String ?? ""
+        let operation = expression.contains("Promise.resolve((") ? "install"
+            : expression == StartupConnector.inspectExpression ? "inspect"
+            : expression == StartupConnector.statusExpression ? "status" : "dispose"
+        requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
+        requestsLocked = requestsLocked && lockHeld
+        if operation == "install" { installs[id, default: 0] += 1 }
+        if id == "page-a", operation == "status" { statusCount += 1 }
+        let replaceNow = id == "page-a" && operation == stage && (stage != "status" || statusCount == 2)
+            || id == "page-b" && operation == "install" && ["chain", "reuse"].contains(mode)
+        func envelope(_ value: [String: Any]) -> [String: Any] {
+            ["id": request["id"]!, "result": ["result": ["value": value]]]
+        }
+        func data(_ value: [String: Any]) throws -> Data { try JSONSerialization.data(withJSONObject: value) }
+        var terminal: String?
+        if replaceNow {
+            generation += 1
+            switch mode {
+            case "context-lost": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."]])
+            case "mixed-error": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."], "result": ["exceptionDetails": [:]]])
+            case "ordinary-cdp": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Unrelated protocol failure"]])
+            case "js-exception": return try data(["id": request["id"]!, "result": ["exceptionDetails": [:]]])
+            case "wrong-id": return try data(["id": 9999, "result": ["result": ["value": [:]]]])
+            case "malformed-json": return Data("{".utf8)
+            case "bad-install": return try data(envelope(["installed": true, "alreadyActive": "invalid"]))
+            case "bad-status": return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]]))
+            case "missing-controller": return try data(envelope(["href": href, "missing": true]))
+            case "href-drift": return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false]))
+            case "cancel-task": withUnsafeCurrentTask { $0?.cancel() }; throw URLError(.networkConnectionLost)
+            case "cancel-error": throw URLError(.cancelled)
+            case "timeout-error": throw URLError(.timedOut)
+            case "handshake-404", "handshake-401": throw URLError(.badServerResponse)
+            case "posix-loss": throw NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNRESET))
+            case "deadline": clock = 5; throw URLError(.networkConnectionLost)
+            case "before-install": break
+            case "cancel-ready-list": terminal = "ready-replaced"
+            case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
+            default: throw URLError(.networkConnectionLost)
+            }
+        }
+        let value: [String: Any]
+        switch operation {
+        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present"]
+        case "install":
+            installReplyTimes[id] = clock
+            value = mode == "missing-new-receipt" && id == "page-b" ? ["installed": "invalid"]
+                : ["installed": true, "alreadyActive": id == "page-b" && mode == "already-active"]
+        case "status":
+            let completed = ["complete-replaced", "skip-replaced"].contains(terminal ?? "")
+            let failed = terminal == "failed-replaced"
+            let disposed = terminal == "disposed-replaced"
+            let ready = id != "page-a" || ["ready-replaced", "complete-replaced"].contains(terminal ?? "")
+            let phase = failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
+            let completion: Any = completed ? ["cause": terminal == "skip-replaced" ? "skip" : "natural",
+                                                "beforeReady": terminal == "skip-replaced"] : NSNull()
+            value = ["href": href, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": terminal == "run-drift" ? 2 : 1,
+                "ready": ready, "completed": completed, "overlay": !completed && !failed && !disposed,
+                "reason": failed ? "protocol-error" : "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": completion
+            ]]
+        default: value = ["disposed": true]
+        }
+        return try data(envelope(value))
+    }
+}
+
+private final class StartupReplacementSystem: StartupTargetSystem, StartupOperationLock {
+    let world: StartupReplacementWorld
+    init(_ world: StartupReplacementWorld) { self.world = world }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {}
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        if world.mode == "identity-drift", world.hasReplaced() {
+            throw StartupFailure(reason: "target-identity", message: "synthetic process generation changed")
+        }
+    }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
+        world.mode == "port-drift" && world.hasReplaced() ? [] : [49221]
+    }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { world.acquire(); return self }
+    func release() { world.release() }
+}
+
+private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Sendable {
+    let id: String
+    let world: StartupReplacementWorld
+    var maximumMessageSize = 0
+    var response: URLResponse? {
+        guard ["handshake-404", "handshake-401"].contains(world.mode) else { return nil }
+        return HTTPURLResponse(url: URL(string: "http://127.0.0.1:49221/devtools/page/\(id)")!,
+            statusCode: world.mode == "handshake-404" ? 404 : 401, httpVersion: nil, headerFields: nil)
+    }
+    private(set) var canceled = 0
+    private var pending: [String: Any] = [:]
+    init(id: String, world: StartupReplacementWorld) { self.id = id; self.world = world }
+    func resume() {}
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        guard case .string(let source) = message,
+              let request = try JSONSerialization.jsonObject(with: Data(source.utf8)) as? [String: Any] else {
+            throw URLError(.cannotParseResponse)
+        }
+        pending = request
+    }
+    func receive() async throws -> URLSessionWebSocketTask.Message { .data(try world.reply(id: id, request: pending)) }
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) { canceled += 1 }
+}
+
+private final class StartupReplacementURLProtocol: URLProtocol {
+    static var world: StartupReplacementWorld?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let world = Self.world, let url = request.url,
+              url.absoluteString == "http://127.0.0.1:49221/json/list" else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL)); return
+        }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: world.pages())
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
+                                           headerFields: ["Content-Type": "application/json"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: body)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+    override func stopLoading() {}
+}
+
+@MainActor
+private func startupReplacementScenario(stage: String, mode: String = "replace") async throws -> [String: Any] {
+    let world = StartupReplacementWorld(stage: stage, mode: mode)
+    StartupReplacementURLProtocol.world = world
+    defer { StartupReplacementURLProtocol.world = nil }
+    let task = Task { @MainActor () throws -> [String: Any] in
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StartupReplacementURLProtocol.self]
+        let base = WallpaperTransport(session: URLSession(configuration: configuration), socketFactory: world.socket)
+        let capture = NativeStartupCapture(targetPID: 4123)
+        var records: [[String: Any]] = []
+        let events = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 42,
+            launcherPath: "/synthetic/Agent-Skin.app", now: world.time, sink: { records.append($0) }))
+        events.begin(at: 0); events.targetOpened(pid: 4123, at: 0)
+        let recorder = CodexInstallObservation()
+        let transport = InstallObservingStartupTransport(
+            base: NativeStartupEventTransport(base: base, capture: capture, events: events, now: world.time), recorder: recorder)
+        let target = StartupTargetFacts(pid: 4123, bundle: URL(fileURLWithPath: "/synthetic/Codex.app"),
+            executable: URL(fileURLWithPath: "/synthetic/Codex.app/Contents/MacOS/Codex"),
+            bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
+        let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
+            transport: transport, now: world.time, sleep: { world.advance($0) })
+            .run(payload: "test-only-probe", deadline: 5)
+        let observation = capture.snapshot()
+        let final = events.resolve(outcome, observation: observation, at: world.time())
+        return ["stage": stage, "mode": mode, "recovered": outcome == .ready(runID: 1) && final == .ready,
+            "outcome": String(describing: outcome), "final": String(describing: final),
+            "installs": world.installs, "installSentCount": recorder.installSentCount,
+            "requests": world.requests, "requestIDs": world.requestIDs,
+            "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
+            "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
+            "currentPageID": observation.pageID ?? "", "installedAt": observation.installedAt ?? -1,
+            "installReplyTimes": world.installReplyTimes,
+            "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
+            "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
+            "events": records.map { $0["event"] as? String ?? "" }, "elapsed": world.time(),
+            "host": false, "productionConnectorAndCodec": true]
+    }
+    world.cancel = { task.cancel() }
+    return try await task.value
+}
+
+@MainActor
+private func startupPageReplacementProbe() async throws -> [[String: Any]] {
+    var results: [[String: Any]] = []
+    for stage in ["inspect", "install", "status"] { results.append(try await startupReplacementScenario(stage: stage)) }
+    return results
+}
+
+@MainActor
+private func startupPageReplacementChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: page replacement: \(label)") }; checks += 1
+    }
+    func common(_ r: [String: Any]) {
+        expect(r["lockAcquires"] as? Int == 1 && r["lockReleases"] as? Int == 1 && r["requestsLocked"] as? Bool == true,
+               "one operation lock covers every generation")
+        expect((r["socketCloses"] as? [Int] ?? []).allSatisfy { $0 == 1 }, "every socket closes once")
+        let ids = r["requestIDs"] as? [Int] ?? []
+        expect(ids == Array(1...max(1, ids.count)), "request IDs remain monotonic across sockets")
+        let installs = r["installs"] as? [String: Int] ?? [:]
+        expect(installs.values.allSatisfy { $0 == 1 }, "each target receives at most one installation")
+        expect(r["installSentCount"] as? Int == installs.values.reduce(0, +), "cumulative sent evidence is never reset")
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage); common(r)
+        let installs = r["installs"] as? [String: Int] ?? [:]
+        expect(r["recovered"] as? Bool == true && installs["page-b"] == 1 && installs["page-a", default: 0] == (stage == "inspect" ? 0 : 1),
+               "\(stage) resumes on a proven new target")
+        expect(r["readyPageIDs"] as? [String] == ["page-b"] && r["currentPageID"] as? String == "page-b",
+               "ready belongs only to B")
+        expect(r["installedAt"] as? Double == (r["installReplyTimes"] as? [String: Double])?["page-b"],
+               "B must supply its own installation timestamp")
+        expect(r["installationPageIDs"] as? [String] == (stage == "status" ? ["page-a", "page-b"] : ["page-b"]),
+               "identical run IDs never merge document evidence")
+        expect(!(r["requests"] as? [String] ?? []).contains("page-a:dispose"), "dead page cleanup never reaches the replacement")
+    }
+    let refusals = ["same-target", "old-main", "old-avatar", "old-worker", "ambiguous", "no-main", "missing-id", "duplicate-id",
+        "invalid-id", "socket-mismatch", "foreign-socket", "raw-unavailable", "missing-launch", "identity-drift", "port-drift",
+        "ordinary-cdp", "mixed-error", "handshake-401", "js-exception", "wrong-id", "malformed-json", "timeout-error", "cancel-error", "deadline"]
+    for mode in refusals {
+        let r = try await startupReplacementScenario(stage: mode == "handshake-401" ? "inspect" : "install", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) cannot authorize replacement")
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, mode: "cancel-task"); common(r)
+        expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")" && r["connections"] as? [String] == ["page-a"],
+               "cancellation during \(stage) never reconnects")
+    }
+    for mode in ["cancel-list", "cancel-ready-list", "bad-install", "bad-status", "missing-controller", "href-drift", "run-drift", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced"] {
+        let r = try await startupReplacementScenario(stage: mode == "bad-install" ? "install" : "status", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) remains terminal")
+    }
+    for mode in ["context-lost", "posix-loss", "handshake-404", "before-install", "ready-replaced", "chain"] {
+        let stage = ["before-install", "handshake-404"].contains(mode) ? "inspect" : mode == "ready-replaced" ? "status" : "install"
+        let r = try await startupReplacementScenario(stage: stage, mode: mode); common(r)
+        expect(r["recovered"] as? Bool == true, "\(mode) requires the same replacement proof")
+    }
+    for mode in ["already-present", "already-active", "missing-new-receipt", "reuse"] {
+        let r = try await startupReplacementScenario(stage: mode == "missing-new-receipt" ? "status" : "install", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a", "page-b"],
+               "\(mode) cannot invent ownership or reinstall a retired ID")
+        if mode == "already-present" {
+            expect((r["installs"] as? [String: Int])?["page-b"] == nil, "pre-existing B controller is preserved")
+        }
+        if mode == "missing-new-receipt" {
+            expect(r["installedAt"] as? Double == -1 && (r["readyPageIDs"] as? [String])?.isEmpty == true,
+                   "missing B receipt cannot inherit A's evidence")
+        }
+    }
+    let valid: [String: Any] = ["owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 1,
+        "ready": true, "completed": false, "overlay": true, "reason": "",
+        "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+    let capture = NativeStartupCapture(targetPID: 4123)
+    capture.bindPage("page-a")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 1, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 2, pageID: "page-a")
+    let oldObservation = capture.snapshot()
+    capture.bindPage("page-b")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 3, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 4, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 5, pageID: "page-b")
+    expect(capture.snapshot().installedAt == nil && capture.snapshot().status == nil,
+           "late A responses and B status without B installation are discarded")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 6, pageID: "page-b")
+    _ = capture.observe(["status": valid], at: 7, pageID: "page-b")
+    expect(capture.snapshot().installedAt == 6 && capture.snapshot().pageID == "page-b", "B establishes fresh capture evidence")
+    let stream = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 42,
+        launcherPath: "/synthetic/Agent-Skin.app", sink: { _ in }))
+    expect(!stream.bindPage(pid: 4123, pageID: "page-a"), "dormant event stream cannot authorize page binding")
+    stream.begin(at: 0); stream.targetOpened(pid: 4123, at: 0)
+    expect(stream.bindPage(pid: 4123, pageID: "page-a"), "first page binding is accepted")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 1, pageID: "page-a")
+    expect(stream.bindPage(pid: 4123, pageID: "page-b"), "replacement invalidates the old installation")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 2, pageID: "page-a")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 6, pageID: "page-b")
+    expect(stream.resolve(.ready(runID: 1), observation: oldObservation, at: 8) == .behaviorNotProven(reason: "protocol-error"),
+           "same PID and run ID cannot make an old-page observation satisfy new-page readiness")
+    return checks
 }

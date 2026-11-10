@@ -52,6 +52,10 @@ final class InstallObservingStartupTransport: StartupTransport {
         try await base.pages(port: port, timeout: timeout)
     }
 
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await base.targets(port: port, timeout: timeout)
+    }
+
     func connect(to url: URL, timeout: TimeInterval) throws {
         try base.connect(to: url, timeout: timeout)
     }
@@ -64,6 +68,7 @@ final class InstallObservingStartupTransport: StartupTransport {
     }
 
     func close() { base.close() }
+    func disconnectPage() { base.disconnectPage() }
 }
 
 /// App-owned assembly points (UI state, event stream, opening Codex). The driver

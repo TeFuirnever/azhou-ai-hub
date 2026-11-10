@@ -238,6 +238,9 @@ private func wallpaperTransportChecks() async throws -> Int {
     let pages = try await pagesTransport.pages(port: 49221)
     expect(pages.count == 1 && WallpaperValidation.mainPage(pages[0]),
            "the HTTP list is filtered to verified main pages")
+    let targets = try await pagesTransport.targets(port: 49221, timeout: 1)
+    expect(targets.count == pageList.count && targets.contains { $0["type"] as? String == "worker" },
+           "replacement proof retains the complete target list while wallpaper discovery stays filtered")
     expect(WallpaperTestURLProtocol.requests.first?.url?.absoluteString == "http://127.0.0.1:49221/json/list",
            "page discovery is confined to the selected IPv4 loopback port")
     pagesTransport.close()
@@ -325,6 +328,18 @@ private func wallpaperTransportChecks() async throws -> Int {
         _ = try await receiveFailureTransport.evaluate("source", timeout: 1)
     })
     receiveFailureTransport.close()
+
+    let unknownHandshakeSocket = FakeWallpaperSocket(responses: [], sendError: URLError(.badServerResponse))
+    let unknownHandshakeTransport = WallpaperTransport(session: session(), socketFactory: { _ in unknownHandshakeSocket })
+    try unknownHandshakeTransport.connect(to: endpoint, timeout: 1)
+    do {
+        _ = try await unknownHandshakeTransport.evaluate("source", timeout: 1)
+        fatalError("FAILED: an unclassified handshake error was accepted")
+    } catch let error as StartupFailure {
+        expect(error.reason == "protocol-error" && !error.pageConnectionLost,
+               "HTTP handshake failure without an explicit 404 cannot authorize replacement proof")
+    }
+    unknownHandshakeTransport.close()
 
     let missingSocketTransport = WallpaperTransport(session: session(), socketFactory: { _ in
         fatalError("socket factory must not run before connect")
@@ -1331,7 +1346,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     )
     let startupURL = "app://-/index.html?initialRoute=%2F"
     let page: [String: Any] = [
-        "type": "page", "url": startupURL,
+        "id": "unit-startup", "type": "page", "url": startupURL,
         "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/unit-startup",
     ]
     let nowAtZero: () -> TimeInterval = { 0 }
@@ -1478,6 +1493,13 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     )
     expect(pageWithoutSocket == .failed(reason: "page-unsupported"),
            "startup refuses a main page without its page-scoped socket")
+    for id in [NSNull(), "other-target"] as [Any] {
+        var unboundPage = page; unboundPage["id"] = id
+        let unbound = await run(FakeWallpaperSystem(), FakeWallpaperStartupTransport(pages: [unboundPage]),
+                                now: nowAtZero, sleep: noSleep)
+        expect(unbound == .failed(reason: "page-unsupported"),
+               "startup requires an explicit target ID matching its websocket")
+    }
     let nonPageSocket = await run(
         FakeWallpaperSystem(),
         FakeWallpaperStartupTransport(pages: [[
@@ -1935,20 +1957,23 @@ private final class FakeWallpaperSocket: WallpaperSocketTask, @unchecked Sendabl
     private var responses: [URLSessionWebSocketTask.Message]
     private let sendFails: Bool
     private let receiveFails: Bool
+    private let sendError: Error?
     private(set) var sentTexts: [String] = []
     private(set) var resumeCount = 0
     private(set) var cancelCount = 0
     var maximumMessageSize = 0
 
-    init(responses: [URLSessionWebSocketTask.Message], sendFails: Bool = false, receiveFails: Bool = false) {
+    init(responses: [URLSessionWebSocketTask.Message], sendFails: Bool = false, receiveFails: Bool = false, sendError: Error? = nil) {
         self.responses = responses
         self.sendFails = sendFails
         self.receiveFails = receiveFails
+        self.sendError = sendError
     }
 
     func resume() { resumeCount += 1 }
 
     func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        if let sendError { throw sendError }
         if sendFails { throw URLError(.cannotConnectToHost) }
         if case .string(let text) = message { sentTexts.append(text) }
     }

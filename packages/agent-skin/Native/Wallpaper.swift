@@ -397,6 +397,9 @@ enum StartupOutcome: Equatable {
 struct StartupFailure: LocalizedError {
     let reason: String
     let message: String
+    // Internal provenance only. A lost connection is not itself permission to
+    // retry: the connector must separately prove the old target has ended.
+    var pageConnectionLost = false
     var errorDescription: String? { message }
 }
 
@@ -706,9 +709,19 @@ enum WallpaperCommand {
 
 protocol StartupTransport: AnyObject {
     func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]]
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]]
     func connect(to url: URL, timeout: TimeInterval) throws
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any]
+    func disconnectPage()
     func close()
+}
+
+extension StartupTransport {
+    // Older test/adapter transports have no authority to prove target death.
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        throw StartupFailure(reason: "protocol-error", message: "此连接不提供完整目标清单。")
+    }
+    func disconnectPage() {}
 }
 
 final class StartupCDPRequestState {
@@ -754,6 +767,13 @@ enum StartupCDPProtocol {
         guard integer(responseID) == expectedID else {
             throw StartupFailure(reason: "protocol-error", message: "CDP 响应序号与当前待处理请求不匹配。")
         }
+        if answer["result"] == nil, let error = answer["error"] as? [String: Any],
+           let code = error["code"] as? NSNumber, CFGetTypeID(code) != CFBooleanGetTypeID(), code.doubleValue == -32000,
+           let message = error["message"] as? String,
+           ["Execution context was destroyed.", "Cannot find context with specified id",
+            "Inspected target navigated or closed"].contains(message) {
+            throw StartupFailure(reason: "protocol-error", message: "页面执行上下文已不可用。", pageConnectionLost: true)
+        }
         guard answer["error"] == nil,
               let result = answer["result"] as? [String: Any],
               result["exceptionDetails"] == nil,
@@ -784,12 +804,14 @@ protocol WallpaperOperationTransport: AnyObject {
 
 protocol WallpaperSocketTask: AnyObject {
     var maximumMessageSize: Int { get set }
+    var response: URLResponse? { get }
     func resume()
     func send(_ message: URLSessionWebSocketTask.Message) async throws
     func receive() async throws -> URLSessionWebSocketTask.Message
     func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
 }
 
+extension WallpaperSocketTask { var response: URLResponse? { nil } }
 extension URLSessionWebSocketTask: WallpaperSocketTask {}
 
 private final class URLSessionWallpaperPageSession: WallpaperPageSession {
@@ -835,27 +857,38 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
     func close() {
+        disconnectPage()
+        session.invalidateAndCancel()
+    }
+    func disconnectPage() {
         startupSocket?.cancel(with: .normalClosure, reason: nil)
         startupSocket = nil
-        session.invalidateAndCancel()
     }
     func pages(port: Int) async throws -> [[String: Any]] {
         try await pages(port: port, timeout: 2)
     }
     func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await targets(port: port, timeout: timeout).filter(WallpaperValidation.mainPage)
+    }
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try Task.checkCancellation()
         let url = URL(string: "http://127.0.0.1:\(port)/json/list")!
         var request = URLRequest(url: url); request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = timeout
         let data: Data
         let response: URLResponse
         do { (data, response) = try await session.data(for: request) }
         catch let error as CancellationError { throw error }
-        catch { throw WallpaperFailure(state: "endpoint-unavailable", chinese: "本机 Codex 调试端口暂时没有响应。", english: "The local Codex debugging port did not respond.") }
+        catch {
+            try Task.checkCancellation()
+            throw WallpaperFailure(state: "endpoint-unavailable", chinese: "本机 Codex 调试端口暂时没有响应。", english: "The local Codex debugging port did not respond.")
+        }
+        try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse, response.statusCode == 200, response.url == url,
               data.count < 2 * 1024 * 1024,
               let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw WallpaperFailure(state: "endpoint-unavailable", chinese: "该本机端口没有返回有效的页面调试列表。", english: "The local port did not return a valid page debugging list.")
         }
-        return entries.filter(WallpaperValidation.mainPage)
+        return entries
     }
     private func socketTask(for request: URLRequest) -> any WallpaperSocketTask {
         let task = socketFactory?(request) ?? session.webSocketTask(with: request)
@@ -882,6 +915,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
     }
 
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try Task.checkCancellation()
         let id = try startupRequests.begin()
         defer { startupRequests.finish() }
         guard let socket = startupSocket, timeout > 0 else {
@@ -903,6 +937,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
             try await socket.send(.string(String(decoding: data, as: UTF8.self)))
             while true {
                 let message = try await socket.receive()
+                try Task.checkCancellation()
                 let incoming: Data
                 switch message {
                 case .string(let text): incoming = Data(text.utf8)
@@ -914,11 +949,22 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
                 case .result(let value): return value
                 }
             }
+        } catch let error as CancellationError {
+            throw error
         } catch let failure as StartupFailure {
+            try Task.checkCancellation()
             throw failure
         } catch {
+            try Task.checkCancellation()
+            let network = error as NSError
+            let missingTarget = network.domain == NSURLErrorDomain && network.code == URLError.badServerResponse.rawValue &&
+                (socket.response as? HTTPURLResponse)?.statusCode == 404
+            let connectionLost = (network.domain == NSURLErrorDomain &&
+                [URLError.networkConnectionLost.rawValue, URLError.cannotConnectToHost.rawValue].contains(network.code)) ||
+                (network.domain == NSPOSIXErrorDomain && [Int(ECONNRESET), Int(ENOTCONN), Int(EPIPE)].contains(network.code)) || missingTarget
             throw StartupFailure(reason: expired.get() ? "attach-timeout" : "protocol-error",
-                                 message: expired.get() ? "CDP 请求超过本轮剩余时间。" : "CDP 连接或消息交换失败。")
+                                 message: expired.get() ? "CDP 请求超过本轮剩余时间。" : "CDP 连接或消息交换失败。",
+                                 pageConnectionLost: !expired.get() && connectionLost)
         }
     }
 
@@ -1071,92 +1117,152 @@ struct StartupConnector {
 
     func run(payload: String, deadline: TimeInterval) async -> StartupOutcome {
         do { return try await attach(payload: payload, deadline: deadline) }
-        catch let error as StartupFailure { return .failed(reason: error.reason) }
-        catch let error as WallpaperFailure {
-            if error.state == "busy" { return .partial(reason: "startup-active") }
-            if error.state == "inspection-timeout" { return .failed(reason: "attach-timeout") }
-            if ["target-mismatch", "target-changed", "signature-refused"].contains(error.state) {
-                return .failed(reason: "target-identity")
+        catch {
+            if Task.isCancelled || error is CancellationError { return .partial(reason: "startup-interrupted") }
+            if let failure = error as? StartupFailure { return .failed(reason: failure.reason) }
+            if let failure = error as? WallpaperFailure {
+                if failure.state == "busy" { return .partial(reason: "startup-active") }
+                if failure.state == "inspection-timeout" { return .failed(reason: "attach-timeout") }
+                if ["target-mismatch", "target-changed", "signature-refused"].contains(failure.state) {
+                    return .failed(reason: "target-identity")
+                }
             }
             return .failed(reason: "protocol-error")
-        } catch { return .failed(reason: "protocol-error") }
+        }
+    }
+
+    private struct Page {
+        let id: String
+        let socket: URL
+    }
+
+    private func requireBudget(_ deadline: TimeInterval) throws {
+        try Task.checkCancellation()
+        guard now() < deadline else {
+            throw StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过阶段或总预算。")
+        }
+    }
+
+    private func validateOwnership(_ deadline: TimeInterval) throws {
+        try requireBudget(deadline)
+        try system.validate(target, deadline: deadline)
+        try requireBudget(deadline)
+        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
+            throw StartupFailure(reason: "listener-mismatch", message: "Codex 调试端口归属已变化。")
+        }
+        try requireBudget(deadline)
+    }
+
+    private func page(_ entry: [String: Any]) throws -> Page {
+        guard let rawSocket = entry["webSocketDebuggerUrl"] as? String else {
+            throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面没有可核验的调试连接。")
+        }
+        let socket = try WallpaperValidation.pageSocket(rawSocket, port: expectedPort)
+        guard let id = entry["id"] as? String, !id.isEmpty, id == socket.lastPathComponent else {
+            throw StartupFailure(reason: "page-unsupported", message: "Codex 页面身份与调试连接不一致。")
+        }
+        return Page(id: id, socket: socket)
+    }
+
+    private func mainPages(_ entries: [[String: Any]]) throws -> [[String: Any]] {
+        let main = entries.filter(WallpaperValidation.mainPage)
+        guard main.count <= 1 else {
+            throw StartupFailure(reason: "ambiguous-main-page", message: "找到多个 Codex 主页面，本次启动接入已拒绝。")
+        }
+        return main
+    }
+
+    private func initialPage(deadline: TimeInterval) async throws -> Page {
+        while now() < deadline {
+            try validateOwnership(deadline)
+            let entries: [[String: Any]]
+            do { entries = try await transport.pages(port: expectedPort, timeout: min(1.2, deadline - now())) }
+            catch let error as WallpaperFailure where error.state == "endpoint-unavailable" {
+                try requireBudget(deadline)
+                try await sleep(min(0.15, max(0, deadline - now())))
+                continue
+            }
+            try validateOwnership(deadline)
+            if let entry = try mainPages(entries).first { return try page(entry) }
+            try await sleep(min(0.15, max(0, deadline - now())))
+        }
+        throw StartupFailure(reason: "attach-timeout", message: "在本轮预算内未找到唯一的 Codex 主页面。")
+    }
+
+    // An eligible connection failure only opens this proof step. The full list
+    // must exclude the retired target, including non-main pages and workers.
+    private func replacement(for old: Page, deadline: TimeInterval) async throws -> Page? {
+        guard let launchTime = target.launchTime, launchTime.isFinite, launchTime > 0 else { return nil }
+        while now() < deadline {
+            try validateOwnership(deadline)
+            let entries = try await transport.targets(port: expectedPort, timeout: min(1.2, deadline - now()))
+            try validateOwnership(deadline)
+            let ids = entries.compactMap { $0["id"] as? String }
+            guard ids.count == entries.count, ids.allSatisfy({ $0.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil }), Set(ids).count == ids.count else {
+                throw StartupFailure(reason: "protocol-error", message: "完整调试目标清单缺少唯一身份。")
+            }
+            guard !ids.contains(old.id) else { return nil }
+            if let entry = try mainPages(entries).first { return try page(entry) }
+            try await sleep(min(0.15, max(0, deadline - now())))
+        }
+        throw StartupFailure(reason: "attach-timeout", message: "等待替换主页面超过本轮预算。")
+    }
+
+    private func requireCurrentPage(_ selected: Page, deadline: TimeInterval) async throws {
+        try validateOwnership(deadline)
+        let entries = try await transport.pages(port: expectedPort, timeout: min(1.2, deadline - now()))
+        try validateOwnership(deadline)
+        if let entry = try mainPages(entries).first {
+            let current = try page(entry)
+            if current.id == selected.id, current.socket == selected.socket { return }
+        }
+        throw StartupFailure(reason: "protocol-error", message: "已选主页面不再是当前唯一主页面。", pageConnectionLost: true)
     }
 
     private func attach(payload: String, deadline: TimeInterval) async throws -> StartupOutcome {
         defer { transport.close() }
-        func requireBudget() throws {
-            guard now() < deadline else {
-                throw StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过阶段或总预算。")
-            }
-        }
         guard (1...65535).contains(expectedPort), !payload.isEmpty,
               payload.utf8.count < 24 * 1024 * 1024 else {
             throw StartupFailure(reason: "asset-invalid", message: "缺少有效的本地启动载荷。")
         }
         let operationLock = try system.acquireOperationLock(pid: target.pid)
         defer { operationLock.release() }
-        try requireBudget()
-        try system.validate(target, deadline: deadline)
-        try requireBudget()
-        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
-            throw StartupFailure(reason: "listener-mismatch", message: "指定调试端口不属于已核验的 Codex 主进程。")
+        var selected = try await initialPage(deadline: deadline)
+        var visited: Set<String> = []
+        var attempted: Set<String> = []
+        while true {
+            try validateOwnership(deadline)
+            guard visited.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
+            try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))
+            do {
+                return try await attachPage(selected, payload: payload, attempted: &attempted, deadline: deadline)
+            } catch let failure as StartupFailure where failure.pageConnectionLost {
+                try requireBudget(deadline)
+                guard let next = try await replacement(for: selected, deadline: deadline) else { throw failure }
+                try requireBudget(deadline)
+                // No await or old-page cleanup can cross this boundary. Request
+                // IDs keep increasing; captures are invalidated before B replies.
+                transport.disconnectPage()
+                selected = next
+            }
         }
-        try requireBudget()
+    }
 
-        var selectedPage: [String: Any]?
-        while now() < deadline {
-            try requireBudget()
-            guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
-                throw StartupFailure(reason: "listener-mismatch", message: "Codex 调试端口归属已变化。")
-            }
-            try requireBudget()
-            let remaining = deadline - now()
-            guard remaining > 0 else { break }
-            let pages: [[String: Any]]
-            do { pages = try await transport.pages(port: expectedPort, timeout: min(1.2, remaining)) }
-            catch let error as WallpaperFailure where error.state == "endpoint-unavailable" {
-                try await sleep(min(0.15, max(0, deadline - now())))
-                continue
-            }
-            let mainPages = pages.filter(WallpaperValidation.mainPage)
-            guard mainPages.count <= 1 else {
-                throw StartupFailure(reason: "ambiguous-main-page", message: "找到多个 Codex 主页面，本次启动接入已拒绝。")
-            }
-            if let page = mainPages.first { selectedPage = page; break }
-            try await sleep(min(0.15, max(0, deadline - now())))
-        }
-        guard let page = selectedPage else {
-            throw StartupFailure(reason: now() >= deadline ? "attach-timeout" : "page-pending",
-                                 message: "在本轮预算内未找到唯一的 Codex 主页面。")
-        }
-        guard let rawSocket = page["webSocketDebuggerUrl"] as? String else {
-            throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面没有可核验的调试连接。")
-        }
-        let pageSocket = try WallpaperValidation.pageSocket(rawSocket, port: expectedPort)
-        try system.validate(target, deadline: deadline)
-        try requireBudget()
-        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
-            throw StartupFailure(reason: "listener-mismatch", message: "选中主页面后调试端口归属已变化。")
-        }
-        try requireBudget()
-        try transport.connect(to: pageSocket, timeout: min(5, deadline - now()))
-
+    private func attachPage(_ selected: Page, payload: String, attempted: inout Set<String>,
+                            deadline: TimeInterval) async throws -> StartupOutcome {
+        try requireBudget(deadline)
         let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
+        try Task.checkCancellation()
         guard let href = inspected["href"] as? String,
               WallpaperValidation.mainPage(["type": "page", "url": href]),
               let controllerPresent = Self.boolean(inspected["controllerPresent"]) else {
             throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面在建立连接后已导航或不受支持。")
         }
-        guard !controllerPresent else {
-            return .partial(reason: "startup-active")
-        }
-        try system.validate(target, deadline: deadline)
-        try requireBudget()
-        guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
-            throw StartupFailure(reason: "listener-mismatch", message: "发送启动载荷前调试端口归属已变化。")
-        }
-        try requireBudget()
+        guard !controllerPresent else { return .partial(reason: "startup-active") }
+        try await requireCurrentPage(selected, deadline: deadline)
+        guard attempted.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
         let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: min(10, deadline - now()))
+        try Task.checkCancellation()
         guard let installed = Self.boolean(install["installed"]) else {
             throw StartupFailure(reason: "protocol-error", message: "启动载荷没有返回有效安装结果。")
         }
@@ -1176,12 +1282,10 @@ struct StartupConnector {
         var runID: Int?
         do {
             while now() < deadline {
-                let remaining = deadline - now()
-                guard remaining > 0 else { break }
-                let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, remaining))
-                guard response["href"] as? String == href else {
-                    return .partial(reason: "startup-interrupted")
-                }
+                try requireBudget(deadline)
+                let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, deadline - now()))
+                try Task.checkCancellation()
+                guard response["href"] as? String == href else { return .partial(reason: "startup-interrupted") }
                 guard let missing = Self.boolean(response["missing"]) else {
                     throw StartupFailure(reason: "protocol-error", message: "页面没有返回有效的控制器状态标记。")
                 }
@@ -1191,8 +1295,15 @@ struct StartupConnector {
                 }
                 if let runID, status.runID != runID { return .partial(reason: "startup-interrupted") }
                 if runID == nil { runID = status.runID }
-                if status.phase == "failed" || status.phase == "timeout" {
-                    return .failed(reason: status.reason)
+                if status.phase == "failed" || status.phase == "timeout" { return .failed(reason: status.reason) }
+                if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
+                if status.completed || status.ready {
+                    do { try await requireCurrentPage(selected, deadline: deadline) }
+                    catch let failure as StartupFailure where failure.pageConnectionLost && status.completed {
+                        // Completion and user skip are terminal, even if their
+                        // document has since ended. Never replay a finished run.
+                        return .partial(reason: "startup-interrupted")
+                    }
                 }
                 if status.completionCause == "skip", status.completed, !status.overlay {
                     return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
@@ -1200,18 +1311,19 @@ struct StartupConnector {
                 if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
                     return .ready(runID: status.runID)
                 }
-                if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
                 try await sleep(min(0.1, max(0, deadline - now())))
             }
         } catch {
-            await disposeOwnedController(href: href, deadline: deadline)
+            if !(error is CancellationError), (error as? StartupFailure)?.pageConnectionLost != true {
+                await disposeOwnedController(href: href, deadline: deadline)
+            }
             throw error
         }
         return .failed(reason: "attach-timeout")
     }
 
     private func disposeOwnedController(href: String, deadline: TimeInterval) async {
-        guard now() < deadline else { return }
+        guard !Task.isCancelled, now() < deadline else { return }
         do {
             try system.validate(target, deadline: deadline)
             guard now() < deadline,

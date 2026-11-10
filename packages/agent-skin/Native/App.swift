@@ -128,6 +128,7 @@ struct NativeStartupObservation {
     let installedAt: TimeInterval?
     let status: NativeStartupStatus?
     let statusAt: TimeInterval?
+    var pageID: String? = nil
 }
 
 final class NativeStartupCapture: @unchecked Sendable {
@@ -137,12 +138,21 @@ final class NativeStartupCapture: @unchecked Sendable {
     private var installedRunID: Int?
     private var status: NativeStartupStatus?
     private var statusAt: TimeInterval?
+    private var pageID: String?
 
     init(targetPID: Int32) { self.targetPID = targetPID }
 
-    func observe(_ response: [String: Any], at uptime: TimeInterval) -> (runID: Int, installedAt: TimeInterval)? {
+    func bindPage(_ id: String?) {
         lock.lock()
         defer { lock.unlock() }
+        pageID = id
+        installAt = nil; installedRunID = nil; status = nil; statusAt = nil
+    }
+
+    func observe(_ response: [String: Any], at uptime: TimeInterval, pageID: String? = nil) -> (runID: Int, installedAt: TimeInterval)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard self.pageID == pageID else { return nil }
 
         if NativeStartupStatus.boolean(response["installed"]) == true,
            NativeStartupStatus.boolean(response["alreadyActive"]) == false,
@@ -168,7 +178,7 @@ final class NativeStartupCapture: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return NativeStartupObservation(targetPID: targetPID, installedAt: installAt,
-                                        status: status, statusAt: statusAt)
+                                        status: status, statusAt: statusAt, pageID: pageID)
     }
 }
 
@@ -225,6 +235,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     private var openedPID: Int32?
     private var installedPID: Int32?
     private var installedRunID: Int?
+    private var pageID: String?
     private var exitEmitted = false
 
     init(writer: NativeEventWriter) { self.writer = writer }
@@ -249,14 +260,26 @@ final class NativeStartupEventStream: @unchecked Sendable {
         writer.emit("target-opened", fields: ["targetPID": Int(pid)], at: uptime)
     }
 
-    func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval) {
+    func bindPage(pid: Int32, pageID: String?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, openedPID == pid,
+              pendingFailure == nil, pendingInterruption == nil else { return false }
+        self.pageID = pageID
+        installedPID = nil; installedRunID = nil
+        return true
+    }
+
+    func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval, pageID: String? = nil) {
         lock.lock()
         defer { lock.unlock() }
         guard begun, finalOutcome == nil, !exitEmitted, pid > 0, runID > 0,
-              openedPID == pid, installedPID == nil else { return }
+              openedPID == pid, installedPID == nil, self.pageID == pageID else { return }
         installedPID = pid
         installedRunID = runID
-        writer.emit("startup-installed", fields: ["targetPID": Int(pid), "runId": runID], at: uptime)
+        var fields: [String: Any] = ["targetPID": Int(pid), "runId": runID]
+        if let pageID { fields["pageTargetID"] = pageID }
+        writer.emit("startup-installed", fields: fields, at: uptime)
     }
 
     func portError(operation: String, errno: Int32, at uptime: TimeInterval) {
@@ -302,7 +325,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
         } else {
             resolved = Self.finalOutcome(for: outcome, observation: observation,
                                          openedPID: openedPID, installedPID: installedPID,
-                                         installedRunID: installedRunID)
+                                         installedRunID: installedRunID, pageID: pageID)
         }
         finalOutcome = resolved
         emitFinal(resolved, outcome: outcome, observation: observation, at: uptime)
@@ -413,29 +436,32 @@ final class NativeStartupEventStream: @unchecked Sendable {
             }
         case .ready:
             guard let observation, let status = observation.status, let runID = installedRunID else { return }
-            writer.emit("startup-ready", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
-                                                    "ready": true, "phase": status.phase],
-                        at: observation.statusAt ?? uptime)
+            var fields: [String: Any] = ["targetPID": Int(observation.targetPID), "runId": runID,
+                                         "ready": true, "phase": status.phase]
+            if let pageID { fields["pageTargetID"] = pageID }
+            writer.emit("startup-ready", fields: fields, at: observation.statusAt ?? uptime)
         case .skipped:
             guard let observation, let status = observation.status, let runID = installedRunID,
                   let beforeReady = status.completionBeforeReady else { return }
-            writer.emit("startup-skipped", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
-                                                      "completed": true,
-                                                      "completion": ["cause": "skip", "beforeReady": beforeReady],
-                                                      "overlay": false],
-                        at: observation.statusAt ?? uptime)
+            var fields: [String: Any] = ["targetPID": Int(observation.targetPID), "runId": runID,
+                                         "completed": true,
+                                         "completion": ["cause": "skip", "beforeReady": beforeReady], "overlay": false]
+            if let pageID { fields["pageTargetID"] = pageID }
+            writer.emit("startup-skipped", fields: fields, at: observation.statusAt ?? uptime)
         case .partial(let reason), .behaviorNotProven(let reason):
             writer.emit(final.event, fields: ["reason": reason], at: uptime)
         }
     }
 
     private static func finalOutcome(for outcome: StartupOutcome, observation: NativeStartupObservation?,
-                                     openedPID: Int32?, installedPID: Int32?, installedRunID: Int?) -> NativeStartupFinalOutcome {
+                                     openedPID: Int32?, installedPID: Int32?, installedRunID: Int?,
+                                     pageID: String? = nil) -> NativeStartupFinalOutcome {
         switch outcome {
         case .activated(let pid):
             return pid > 0 ? .activated : .behaviorNotProven(reason: "target-identity")
         case .ready(let runID):
             guard let observation, let status = observation.status,
+                  observation.pageID == pageID,
                   observation.targetPID > 0, openedPID == observation.targetPID,
                   installedPID == observation.targetPID, installedRunID == runID,
                   runID > 0, status.runID == runID, status.ready,
@@ -445,6 +471,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
             return .ready
         case .skipped(let runID, let beforeReady):
             guard let observation, let status = observation.status,
+                  observation.pageID == pageID,
                   observation.targetPID > 0, openedPID == observation.targetPID,
                   installedPID == observation.targetPID, installedRunID == runID,
                   runID > 0, status.runID == runID, status.completed, !status.overlay,
@@ -477,6 +504,8 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
     private let capture: NativeStartupCapture
     private let events: NativeStartupEventStream
     private let now: () -> TimeInterval
+    private let pageLock = NSLock()
+    private var pageID: String?
 
     init(base: any StartupTransport, capture: NativeStartupCapture, events: NativeStartupEventStream,
          now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
@@ -490,16 +519,39 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
         try await base.pages(port: port, timeout: timeout)
     }
 
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await base.targets(port: port, timeout: timeout)
+    }
+
     func connect(to url: URL, timeout: TimeInterval) throws {
+        try Task.checkCancellation()
+        let id = url.lastPathComponent
+        guard events.bindPage(pid: capture.targetPID, pageID: id) else { throw CancellationError() }
+        capture.bindPage(id)
+        pageLock.lock(); pageID = id; pageLock.unlock()
         try base.connect(to: url, timeout: timeout)
     }
 
+    private func currentPageID() -> String? {
+        pageLock.lock(); defer { pageLock.unlock() }; return pageID
+    }
+
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let boundPageID = currentPageID()
         let response = try await base.evaluate(source, timeout: timeout)
-        if let installation = capture.observe(response, at: now()) {
-            events.startupInstalled(pid: capture.targetPID, runID: installation.runID, at: installation.installedAt)
+        try Task.checkCancellation()
+        if let installation = capture.observe(response, at: now(), pageID: boundPageID) {
+            events.startupInstalled(pid: capture.targetPID, runID: installation.runID,
+                                    at: installation.installedAt, pageID: boundPageID)
         }
         return response
+    }
+
+    func disconnectPage() {
+        base.disconnectPage()
+        pageLock.lock(); pageID = nil; pageLock.unlock()
+        capture.bindPage(nil)
+        _ = events.bindPage(pid: capture.targetPID, pageID: nil)
     }
 
     func close() { base.close() }
