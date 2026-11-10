@@ -172,6 +172,9 @@ def python_coverage(out: Path, sources: list[str]) -> dict:
     )
     suites = ["test-startup-build.py", "test-dsh-build.py", "test-install-macos.py", "test-codex-pet.py", "test-import-codex-pet.py"]
     suites += sorted(path.name for path in (ROOT / "tools").glob("test-production-*.py"))
+    # E2E tools have pure isolated unit suites; include their production code in the
+    # 95% denominator AND coverage execution. Real host L4/L5 remains excluded.
+    suites += ["test-e2e-tools.py", "test-ship-zcode.py"]
     for suite in suites:
         run([sys.executable, "-m", "coverage", "run", "--rcfile", str(config),
              str(ROOT / "tools" / suite)], out / (suite + ".log"))

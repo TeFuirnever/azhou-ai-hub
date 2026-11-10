@@ -539,13 +539,20 @@ def run_daily(plan: dict) -> dict:
     click_timeout = plan["steps"][1]["timeoutSeconds"]
     checks: list[dict] = []
     early_problems: list[str] = []
+    failure = {"kind": "e2e-daily", "schema": 1, "passed": False}
     try:
         start_line = len(_read_journal_lines(journal))
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(json.dumps({"journal": str(journal), "startLine": start_line}),
-                          encoding="utf-8")
-        subprocess.run([str(launcher)], capture_output=True, text=True,
-                       timeout=click_timeout, check=False)
+        with marker.open("x", encoding="utf-8") as stream:
+            json.dump({"journal": str(journal), "startLine": start_line}, stream)
+    except OSError as error:
+        return {**failure, "problems": [f"cannot acquire fresh run marker; existing content preserved: {error}"]}
+    try:
+        first_run = subprocess.run([str(launcher)], capture_output=True, text=True,
+                                   timeout=click_timeout, check=False)
+        if first_run.returncode != 0:
+            return {**failure, "launcherExit": first_run.returncode,
+                    "problems": ["first launcher failed"]}
         first_increment = _wait_for_exit(journal, start_line, wait)
         first_group, first_problem = _single_new_group(first_increment)
         cold = (assert_daily_chain(first_group, first_increment["problems"]) if first_group is not None
@@ -554,8 +561,11 @@ def run_daily(plan: dict) -> dict:
         snapshot = _collect_four_way(audit_step)
         checks.append(audit_four_way(**snapshot))
         second_start = first_increment["lineCount"]
-        subprocess.run([str(launcher)], capture_output=True, text=True,
-                       timeout=click_timeout, check=False)
+        second_run = subprocess.run([str(launcher)], capture_output=True, text=True,
+                                    timeout=click_timeout, check=False)
+        if second_run.returncode != 0:
+            return {**failure, "launcherExit": second_run.returncode,
+                    "problems": ["second launcher failed"]}
         second_increment = _wait_for_exit(journal, second_start, wait)
         second_group, second_problem = _single_new_group(second_increment)
         if second_group is not None:
@@ -568,6 +578,8 @@ def run_daily(plan: dict) -> dict:
                 {"records": []}, {"records": []}, [*second_increment["problems"], second_problem]))
         if first_group is None:
             early_problems.append(first_problem or "first increment produced no group")
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        return {**failure, "problems": [f"daily execution failed: {error}"]}
     finally:
         marker.unlink(missing_ok=True)
     report = assemble_daily_report(checks[0], checks[1], checks[2])

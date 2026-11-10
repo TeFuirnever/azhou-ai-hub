@@ -296,6 +296,8 @@ Agent Skin also has a package gate: `python packages/agent-skin/tools/test-unit-
 
 Agent Skin's ZCode end-to-end test system is landed behind one entry, `python packages/agent-skin/tools/e2e.py --layer quick|cold|daily|all`: the runner pins the working directory to its own worktree, passes child exit codes through untouched and journals its own runs. The quick layer — the L0 private-asset manifest gate plus the E2E-family unit suites — is the per-PR gate tier: it runs inside `python scripts/verify.py` as an agent-skin suite of `scripts/verify_packages.py`, so the same quick layer gates every PR locally and in CI, and the tracked manifest `packages/agent-skin/tools/private-assets.MANIFEST.expected` keeps its L0 gate runnable on artwork-free checkouts (strict wherever the private artwork is present). The real-host layers (disposable-profile cold start and the daily double-click) stay manual: they default to `--plan` and only execute with an explicit `--execute`. The ten incident families and their guard landings are indexed in [the E2E regression index](packages/agent-skin/evidence/e2e-regression-index.md).
 
+The E2E unit suites also exercise isolated execution and failure paths under the unchanged 95% per-language coverage gate; they do not certify a live host. Cold runs refuse pre-existing state directories, daily runs refuse an existing increment marker, and either launcher returning a nonzero exit fails the run even when journal records look successful. Failed cold runs retain their newly created evidence directory for inspection.
+
 - [Roadmap](docs/roadmap.md)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)

@@ -37,6 +37,8 @@ startup that the working directory's git toplevel equals its own worktree, runs
 every child without an intermediate pipe so the first failing exit code reaches the
 caller untouched, and appends its own record to `.local/e2e-run.jsonl`.
 
+Execution-path unit controls use synthetic journals, disposable test directories and mocked host commands. They run under the unchanged 95% per-language coverage gate; `probe_dom.mjs` has its own isolated Node unit suite. They do not certify L4/L5 live-host acceptance. Cold execution refuses an existing state path and retains newly created evidence on failure; daily execution reserves its marker exclusively. Nonzero launcher exits, timeouts and malformed probe JSON are failure results, not inferred success from journals.
+
 ## Incident families
 
 | Family | Representative incidents | Guard layer | Guard file or command | This round's new guard |

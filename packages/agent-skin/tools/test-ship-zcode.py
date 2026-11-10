@@ -379,5 +379,89 @@ class ShipChainTests(unittest.TestCase):
         self.assertEqual(receipt["workspace"], str(PACKAGE))
 
 
+
+class ShipInputValidationTests(unittest.TestCase):
+    """Validate receipt and stamp refusal paths using only synthetic data."""
+
+    def setUp(self):
+        self.module = load_module(TOOLS / "ship-zcode.py", "ship_input_validation")
+        self.temp = tempfile.TemporaryDirectory(prefix="agent-skin-ship-input-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.evidence = self.root / "evidence.json"
+        self.record = {"hostVersion": "fixture.1", "hostFingerprints": dict(HOST_FINGERPRINTS),
+                       "evidenceIDs": ["synthetic-unit-control"], "ownedAppearanceSurface": True,
+                       "persistentSettings": True, "observedAt": "2026-11-10T00:00:00Z"}
+        self.evidence.write_text(json.dumps(self.record), encoding="utf-8")
+
+    def test_evidence_refuses_missing_nonobject_and_invalid_contract_fields(self):
+        for path in (self.root / "absent", self.root):
+            with self.subTest(path=path), self.assertRaises(self.module.ShipFailure):
+                self.module.load_evidence(path, "abc")
+        samples = ["bad json", "[]", json.dumps({**self.record, "hostVersion": ""}),
+                   json.dumps({**self.record, "hostFingerprints": {}}),
+                   json.dumps({**self.record, "evidenceIDs": []}),
+                   json.dumps({**self.record, "ownedAppearanceSurface": False}),
+                   json.dumps({**self.record, "persistentSettings": False}),
+                   json.dumps({**self.record, "observedAt": ""}),
+                   json.dumps({**self.record, "observedAt": "not-a-date"}),
+                   json.dumps({**self.record, "recordID": "bad\nvalue"})]
+        for text in samples:
+            with self.subTest(text=text[:60]):
+                self.evidence.write_text(text, encoding="utf-8")
+                with self.assertRaises(self.module.ShipFailure):
+                    self.module.load_evidence(self.evidence, "abc")
+
+    def test_stamp_validation_refuses_each_mismatched_identity(self):
+        evidence = self.module.load_evidence(self.evidence, "abc")
+        digest = "a" * 64
+        stamp = self.module.build_stamp(evidence, digest)
+        self.module.validate_stamp(stamp, digest)
+        changes = [("schema", "bad"), ("contractVersion", "bad"), ("version", ""),
+                   ("infoSHA256", "bad"), ("recordID", ""), ("recordSHA256", "bad"),
+                   ("observedAt", "invalid-date"), ("payloadSHA256", "bad"),
+                   ("payloadSHA256", "b" * 64), ("evidenceIDs", []),
+                   ("ownedAppearanceSurface", False), ("persistentSettings", False)]
+        for field, value in changes:
+            with self.subTest(field=field, value=value), self.assertRaises(self.module.ShipFailure):
+                self.module.validate_stamp({**stamp, field: value}, digest)
+        for invalid in ([], {}, {**stamp, "unexpected": True}):
+            with self.assertRaises(self.module.ShipFailure):
+                self.module.validate_stamp(invalid, digest)
+        with mock.patch.object(self.module, "MAX_STAMP_BYTES", 1), self.assertRaises(self.module.ShipFailure):
+            self.module.validate_stamp(stamp, digest)
+
+    def test_marker_and_observation_reject_malformed_existing_data(self):
+        payload = self.root / "payload"
+        marker = payload / self.module.MARKER_RELATIVE
+        with self.assertRaises(self.module.ShipFailure):
+            self.module.read_build_marker(payload)
+        marker.parent.mkdir(parents=True)
+        for text in ("bad", "[]", '{"version":"1", "build":true}'):
+            marker.write_text(text, encoding="utf-8")
+            with self.assertRaises(self.module.ShipFailure):
+                self.module.read_build_marker(payload)
+        observation = self.root / "observation.json"
+        kwargs = dict(branch="fixture", commit="abc", fingerprints=HOST_FINGERPRINTS,
+                      digest="a" * 64, build_marker={"version": "1", "build": "2"})
+        for text in ("bad", "[]", "{}"):
+            observation.write_text(text, encoding="utf-8")
+            with self.assertRaises(self.module.ShipFailure):
+                self.module.write_observation_increment(observation, **kwargs)
+            self.assertEqual(observation.read_text(encoding="utf-8"), text)
+        with self.assertRaises(self.module.ShipFailure):
+            self.module.write_observation_increment(self.root, **kwargs)
+
+    def test_git_identity_and_cli_unexpected_failure_cannot_report_success(self):
+        with mock.patch.object(self.module.subprocess, "run",
+                return_value=subprocess.CompletedProcess([], 1, "", "synthetic git failure")), \
+                self.assertRaises(self.module.ShipFailure):
+            self.module.git_identity(self.root)
+        with mock.patch.object(self.module, "ship", side_effect=OSError("synthetic permission denial")), \
+                contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as outcome:
+            self.module.main([])
+        self.assertEqual(outcome.exception.code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

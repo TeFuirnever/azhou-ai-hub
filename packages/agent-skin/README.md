@@ -16,6 +16,8 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 ZCode 端到端测试系统已落地：`tools/e2e.py` 为唯一入口（`--layer quick|cold|daily|all`），启动即断言当前目录属于本次变更的 worktree，子命令 exit code 不经管道原样透传，并把自身运行记录追加到 `.local/e2e-run.jsonl`。quick 层（L0 私有资产清单门禁加 E2E 家族单测）定位为每 PR 门禁层：它作为 `scripts/verify_packages.py` 的 agent-skin 套件在 `scripts/verify.py` 内每 PR 运行；`tools/private-assets.MANIFEST.expected` 随仓库提供（assets 树按仓库政策保持零跟踪文件），无素材的 checkout 以显式 fresh-checkout 模式通过，存在任何私有素材即切换严格校验。cold/daily 真实宿主层默认 `--plan` 演练，仅在显式 `--execute` 下手动运行。十族事故（F1–F10）与守卫落点见 [E2E 事故回归索引](evidence/e2e-regression-index.md)。
 
+执行安全边界：cold 不删除已有状态目录，daily 不覆盖已有增量标记；任一启动器非零退出、执行超时或异常均判失败。失败 cold 保留其新建证据目录。执行路径单测只使用临时目录、合成事件和模拟宿主命令；它们纳入逐语言 95% 单元覆盖率，不替代 L4/L5 真实宿主验收。
+
 **唯一日常入口：`~/Applications/阿舟 AI 实验室.app`。** 构建生成隐藏的 `.build/azhou-payload` 安装载荷；安装验证成功后清理已核实的旧项目应用，项目 `dist` 不再保留第二份 `.app`。
 
 物理文件名与显示名称均使用新产品名。安装器先验证新入口，再按原有身份、来源、签名和指纹规则退役已归属的旧名入口 `阿舟启动 Codex.app`；内部 Bundle ID、可执行文件名、日志路径和存储键保持稳定。安装器不会仅因显示名相同而接管其他应用。

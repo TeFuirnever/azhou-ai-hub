@@ -249,7 +249,7 @@ def build_plan(*, profile: str, launcher: Path, state_root: Path, journal: Path,
         "launcher": str(launcher), "startsProcess": True,
         "steps": [
             {"id": "prepare", "action": "create disposable state root",
-             "path": str(state_root), "mode": "0o700", "removesExisting": True},
+             "path": str(state_root), "mode": "0o700", "removesExisting": False},
             {"id": "cold-launch", "action": "run launcher once with isolated state",
              "command": [str(launcher), LAUNCHER_ARGUMENTS[0], str(state_root),
                          LAUNCHER_ARGUMENTS[1], str(journal)],
@@ -267,37 +267,46 @@ def build_plan(*, profile: str, launcher: Path, state_root: Path, journal: Path,
 
 
 def run_cold_start(plan: dict) -> dict:
-    """Execute a plan. Real-launch path: never invoked by --plan and untested
-    against a live host in this change (L4 harness productization step)."""
+    """Execute against a newly owned state root; retain evidence on failure.
+
+    Isolated tests mock only the host/process boundary. They are not live-host
+    acceptance. An existing path is never removed to make a new run possible.
+    """
     state_root = Path(plan["steps"][0]["path"])
-    if state_root.exists():
-        shutil.rmtree(state_root)
-    state_root.mkdir(parents=True, mode=0o700)
+    failure = {"kind": "e2e-cold-start", "schema": 1, "passed": False}
+    try:
+        state_root.mkdir(parents=True, mode=0o700)
+    except OSError as error:
+        return {**failure, "problems": [f"cannot acquire fresh state root; existing content preserved: {error}"]}
     journal = Path(plan["steps"][4]["path"])
     launch = plan["steps"][1]
-    completed = subprocess.run(launch["command"], capture_output=True, text=True, timeout=120, check=False)
-    receipt = Path(plan["steps"][2]["path"])
-    budget = plan["steps"][2]["budgetSeconds"]
-    deadline = time.monotonic() + budget
-    while not receipt.is_file() and time.monotonic() < deadline:
-        time.sleep(0.2)
-    if not receipt.is_file():
-        return {"kind": "e2e-cold-start", "schema": 1, "passed": False,
-                "problems": [f"receipt never appeared within {budget}s"],
-                "launcherExit": completed.returncode, "stdout": completed.stdout[-2000:]}
-    probe_run = subprocess.run(plan["steps"][3]["command"], capture_output=True, text=True, timeout=60, check=False)
-    if probe_run.returncode != 0:
-        return {"kind": "e2e-cold-start", "schema": 1, "passed": False,
-                "problems": [f"probe failed: {probe_run.stderr.strip()}"]}
-    probe = json.loads(probe_run.stdout)
-    lines = journal.read_text(encoding="utf-8").splitlines() if journal.is_file() else []
-    records, problems = parse_event_lines(lines)
-    report = assemble_verdicts(records, probe, problems)
-    if state_root.exists():
-        shutil.rmtree(state_root)
-    report["disposed"] = not state_root.exists()
-    report["passed"] = report["passed"] and report["disposed"]
-    return report
+    try:
+        completed = subprocess.run(launch["command"], capture_output=True, text=True, timeout=120, check=False)
+        if completed.returncode != 0:
+            return {**failure, "launcherExit": completed.returncode,
+                    "problems": ["launcher failed; no successful journal may override its exit code"]}
+        receipt = Path(plan["steps"][2]["path"])
+        budget = plan["steps"][2]["budgetSeconds"]
+        deadline = time.monotonic() + budget
+        while not receipt.is_file() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        if not receipt.is_file():
+            return {**failure, "problems": [f"receipt never appeared within {budget}s"],
+                    "launcherExit": completed.returncode, "stdout": completed.stdout[-2000:]}
+        probe_run = subprocess.run(plan["steps"][3]["command"], capture_output=True, text=True, timeout=60, check=False)
+        if probe_run.returncode != 0:
+            return {**failure, "problems": [f"probe failed: {probe_run.stderr.strip()}"]}
+        probe = json.loads(probe_run.stdout)
+        lines = journal.read_text(encoding="utf-8").splitlines() if journal.is_file() else []
+        records, problems = parse_event_lines(lines)
+        report = assemble_verdicts(records, probe, problems)
+        if report["passed"]:
+            shutil.rmtree(state_root)
+        report["disposed"] = not state_root.exists()
+        report["passed"] = report["passed"] and report["disposed"]
+        return report
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        return {**failure, "problems": [f"cold-start execution failed: {error}"]}
 
 
 def main(argv: list[str] | None = None) -> int:

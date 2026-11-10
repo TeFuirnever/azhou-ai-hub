@@ -3,7 +3,8 @@
 
 Loads tools/e2e-cold-start.py as a module (same convention as
 test-functional-verdict.py) and exercises the journal-chain and probe-JSON
-assertions with synthetic inputs; no host, no CDP, no process is touched.
+assertions with synthetic inputs; host commands are mocked. Runner-contract
+tests use disposable Git/Python subprocesses, never a real host or CDP profile.
 E3 (daily-path) and E4 (runner) stages append their suites to this file.
 """
 from __future__ import annotations
@@ -775,6 +776,267 @@ class IdempotentSecondClickTests(unittest.TestCase):
                                                        receipt_before=green_receipt(), receipt_after=rewritten)
         self.assertTrue(verdict["receiptRewritten"])
         self.assertTrue(any("receipt was rewritten" in problem for problem in verdict["receiptProblems"]))
+
+
+
+class ExecutionSafetyRegressionTests(unittest.TestCase):
+    """Run the real orchestration over synthetic files and mocked host commands."""
+
+    def setUp(self):
+        from unittest import mock
+        self.mock = mock
+        self.temp = tempfile.TemporaryDirectory(prefix="agent-skin-execution-safety-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+
+    def cold_plan(self, name="disposable"):
+        state = self.root / name
+        return cold_start.build_plan(profile="disposable", launcher=self.root / "launcher",
+            state_root=state, journal=state / "events.jsonl", receipt=state / "receipt.json",
+            probe_tool=self.root / "probe.mjs", ready_wait_seconds=0)
+
+    def daily_plan(self):
+        return daily.build_plan(launcher=self.root / "launcher", journal=self.root / "daily.jsonl",
+            receipt=self.root / "receipt.json", marker=self.root / "marker.json",
+            probe_tool=self.root / "probe.mjs", lsof_bin="fixture-lsof",
+            ready_wait_seconds=0, click_timeout_seconds=1)
+
+    def test_cold_existing_state_is_preserved_without_launch(self):
+        plan = self.cold_plan()
+        state = Path(plan["steps"][0]["path"])
+        state.mkdir()
+        sentinel = state / "not-owned.txt"
+        sentinel.write_text("must survive", encoding="utf-8")
+        with self.mock.patch.object(cold_start.subprocess, "run") as process:
+            result = cold_start.run_cold_start(plan)
+        self.assertFalse(result["passed"])
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "must survive")
+        process.assert_not_called()
+
+    def test_cold_nonzero_exit_cannot_be_overridden_by_green_journal(self):
+        plan = self.cold_plan()
+        def launch(command, **kwargs):
+            if command[0] == str(self.root / "launcher"):
+                Path(plan["steps"][2]["path"]).write_text("{}", encoding="utf-8")
+                Path(plan["steps"][4]["path"]).write_text(
+                    "\n".join(json.dumps(x) for x in chain_records(*FULL_CHAIN)), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 7, "", "fixture failure")
+            return subprocess.CompletedProcess(command, 0, json.dumps(green_probe()), "")
+        with self.mock.patch.object(cold_start.subprocess, "run", side_effect=launch) as process:
+            result = cold_start.run_cold_start(plan)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["launcherExit"], 7)
+        self.assertEqual(process.call_count, 1)
+
+    def test_daily_existing_marker_is_preserved_without_launch(self):
+        plan = self.daily_plan()
+        marker = Path(plan["steps"][0]["path"])
+        marker.write_text("other run owns this", encoding="utf-8")
+        with self.mock.patch.object(daily.subprocess, "run") as process:
+            result = daily.run_daily(plan)
+        self.assertFalse(result["passed"])
+        self.assertEqual(marker.read_text(encoding="utf-8"), "other run owns this")
+        process.assert_not_called()
+
+    def test_daily_nonzero_first_launch_fails_and_removes_only_own_marker(self):
+        plan = self.daily_plan()
+        with self.mock.patch.object(daily.subprocess, "run",
+                return_value=subprocess.CompletedProcess([], 7, "", "fixture failure")) as process:
+            result = daily.run_daily(plan)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["launcherExit"], 7)
+        self.assertEqual(process.call_count, 1)
+        self.assertFalse(Path(plan["steps"][0]["path"]).exists())
+
+
+
+    def cold_process(self, plan, *, receipt=True, probe_code=0, probe_text=None, journal=True):
+        def run(command, **kwargs):
+            if command[0] == str(self.root / "launcher"):
+                if receipt:
+                    Path(plan["steps"][2]["path"]).write_text("{}", encoding="utf-8")
+                if journal:
+                    Path(plan["steps"][4]["path"]).write_text(
+                        "\n".join(json.dumps(x) for x in chain_records(*FULL_CHAIN)), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "synthetic launch", "")
+            self.assertEqual(command[0], "node")
+            return subprocess.CompletedProcess(command, probe_code,
+                json.dumps(green_probe()) if probe_text is None else probe_text, "synthetic probe error")
+        return run
+
+    def test_cold_success_checks_real_verdicts_and_disposes_only_new_state(self):
+        plan = self.cold_plan()
+        sentinel = self.root / "keep.txt"
+        sentinel.write_text("other work", encoding="utf-8")
+        with self.mock.patch.object(cold_start.subprocess, "run", side_effect=self.cold_process(plan)) as process:
+            result = cold_start.run_cold_start(plan)
+        self.assertTrue(result["passed"], result)
+        self.assertTrue(result["disposed"])
+        self.assertEqual(len(result["checks"]), 3)
+        self.assertEqual(process.call_count, 2)
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "other work")
+
+    def test_cold_failures_are_red_and_retain_owned_evidence(self):
+        cases = {"missing-receipt": {"receipt": False}, "probe-exit": {"probe_code": 3},
+                 "bad-json": {"probe_text": "bad"}, "bad-shape": {"probe_text": "[]"},
+                 "missing-journal": {"journal": False}}
+        for name, options in cases.items():
+            with self.subTest(name=name):
+                plan = self.cold_plan(name)
+                with self.mock.patch.object(cold_start.subprocess, "run", side_effect=self.cold_process(plan, **options)):
+                    result = cold_start.run_cold_start(plan)
+                self.assertFalse(result["passed"], result)
+                self.assertTrue(Path(plan["steps"][0]["path"]).is_dir())
+
+    def test_cold_receipt_poll_is_bounded_and_timeout_is_red(self):
+        plan = self.cold_plan("poll")
+        plan["steps"][2]["budgetSeconds"] = 1
+        with self.mock.patch.object(cold_start.subprocess, "run", side_effect=self.cold_process(plan, receipt=False)), \
+                self.mock.patch.object(cold_start.time, "monotonic", side_effect=[0, 0, 2]), \
+                self.mock.patch.object(cold_start.time, "sleep") as sleep:
+            result = cold_start.run_cold_start(plan)
+        self.assertFalse(result["passed"])
+        sleep.assert_called_once_with(0.2)
+        with self.mock.patch.object(cold_start.subprocess, "run",
+                side_effect=subprocess.TimeoutExpired(["fixture-launcher"], 120)):
+            result = cold_start.run_cold_start(self.cold_plan("timeout"))
+        self.assertFalse(result["passed"])
+        self.assertIn("execution failed", result["problems"][0])
+
+    def daily_process(self, plan, *, second_exit=0, emit=True):
+        clicks = 0
+        def run(command, **kwargs):
+            nonlocal clicks
+            if command[0] == str(self.root / "launcher"):
+                clicks += 1
+                Path(plan["receipt"]).write_text(json.dumps(green_receipt()), encoding="utf-8")
+                if emit:
+                    stages = COLD_STAGES if clicks == 1 else HOT_STAGES
+                    lines = daily_run_lines(62070 if clicks == 1 else 64502, stages,
+                                           outcome="startup-ready" if clicks == 1 else "activated")
+                    with Path(plan["journal"]).open("a", encoding="utf-8") as stream:
+                        stream.write("\n".join(lines) + "\n")
+                return subprocess.CompletedProcess(command, second_exit if clicks == 2 else 0, "", "")
+            if command[0] == "fixture-lsof":
+                return subprocess.CompletedProcess(command, 0, lsof_row() + "\n", "")
+            self.assertEqual(command[0], "node")
+            return subprocess.CompletedProcess(command, 0, json.dumps(green_probe()), "")
+        return run
+
+    def test_daily_success_uses_both_real_chain_verdicts_and_four_way_audit(self):
+        plan = self.daily_plan()
+        with self.mock.patch.object(daily.subprocess, "run", side_effect=self.daily_process(plan)) as process, \
+                self.mock.patch.object(daily.os, "kill") as signal:
+            result = daily.run_daily(plan)
+        self.assertTrue(result["passed"], result)
+        self.assertTrue(result["markerCleanedUp"])
+        self.assertEqual(len(result["checks"]), 3)
+        self.assertTrue(all(item["passed"] for item in result["checks"]))
+        signal.assert_called_once_with(TARGET_PID, 0)
+        self.assertEqual(process.call_count, 4)
+
+    def test_daily_second_exit_cannot_be_hidden_by_green_activation_journal(self):
+        plan = self.daily_plan()
+        with self.mock.patch.object(daily.subprocess, "run", side_effect=self.daily_process(plan, second_exit=4)), \
+                self.mock.patch.object(daily.os, "kill"):
+            result = daily.run_daily(plan)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["launcherExit"], 4)
+        self.assertFalse(Path(plan["marker"]).exists())
+
+    def test_daily_missing_groups_and_process_timeout_fail_closed(self):
+        plan = self.daily_plan()
+        with self.mock.patch.object(daily.subprocess, "run", side_effect=self.daily_process(plan, emit=False)), \
+                self.mock.patch.object(daily.os, "kill"):
+            result = daily.run_daily(plan)
+        self.assertFalse(result["passed"])
+        self.assertTrue(result["markerCleanedUp"])
+        self.assertTrue(result["problems"])
+        with self.mock.patch.object(daily.subprocess, "run",
+                side_effect=subprocess.TimeoutExpired(["fixture-launcher"], 1)):
+            result = daily.run_daily(plan)
+        self.assertFalse(result["passed"])
+        self.assertFalse(Path(plan["marker"]).exists())
+
+    def test_daily_snapshot_errors_and_wait_are_observable(self):
+        path = self.root / "receipt.json"
+        self.assertIsNone(daily._read_receipt(path)[0])
+        path.write_text("bad", encoding="utf-8")
+        self.assertIn("receipt invalid", daily._read_receipt(path)[1])
+        for error, alive in [(None, True), (PermissionError(), True), (ProcessLookupError(), False)]:
+            with self.subTest(error=type(error).__name__), \
+                    self.mock.patch.object(daily.os, "kill", side_effect=error):
+                self.assertEqual(daily._process_snapshot(TARGET_PID), {"pid": TARGET_PID, "alive": alive})
+        for code, text in [(4, ""), (0, "not-json")]:
+            with self.mock.patch.object(daily.subprocess, "run",
+                    return_value=subprocess.CompletedProcess([], code, text, "fixture-error")):
+                value, error = daily._probe_snapshot(["fixture-probe"])
+                self.assertIsNone(value)
+                self.assertTrue(error)
+        step = self.daily_plan()["steps"][3]
+        with self.mock.patch.object(daily, "_probe_snapshot", return_value=(None, "unavailable")), \
+                self.mock.patch.object(daily, "_lsof_lines") as lsof:
+            snapshot = daily._collect_four_way(step)
+        self.assertIsNone(snapshot["receipt"])
+        self.assertIsNone(snapshot["process"])
+        lsof.assert_not_called()
+        journal = self.root / "empty-journal"
+        with self.mock.patch.object(daily.time, "monotonic", side_effect=[0, 0, 2]), \
+                self.mock.patch.object(daily.time, "sleep") as sleep:
+            increment = daily._wait_for_exit(journal, 0, 1)
+        self.assertEqual(increment["groups"], [])
+        sleep.assert_called_once_with(0.2)
+
+    def test_entry_points_default_to_plan_and_propagate_execute_verdict(self):
+        for module, entry in [(cold_start, "run_cold_start"), (daily, "run_daily")]:
+            with self.subTest(module=module.__name__), \
+                    self.mock.patch.object(module.subprocess, "run") as process, \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(module.main(["--plan"]), 0)
+                plan = json.loads(output.getvalue())
+                self.assertFalse(plan["startsProcess"])
+                self.assertFalse(plan["executed"])
+                process.assert_not_called()
+            for passed, code in [(True, 0), (False, 2)]:
+                with self.mock.patch.object(module, entry, return_value={"passed": passed}) as run, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(module.main(["--execute"]), code)
+                    run.assert_called_once()
+
+    def test_runner_executes_exact_steps_and_preserves_failure_exit_codes(self):
+        tool = self.root / "fixture.py"
+        tool.write_text("# never executed", encoding="utf-8")
+        for arguments, script, child_code, expected in [
+                (["--layer", "quick"], tool, 0, 0),
+                (["--layer", "cold"], tool, 0, 0),
+                (["--layer", "daily", "--execute"], tool, -15, 143),
+                (["--layer", "quick"], self.root / "missing.py", 0, 1)]:
+            with self.subTest(arguments=arguments, expected=expected):
+                journal = self.root / "runner.jsonl"
+                step = {"fixture": (script, ["fixture-command"])}
+                outcome = {"id": "fixture", "exitCode": child_code, "durationSeconds": 0}
+                with self.mock.patch.object(e2e_runner, "worktree_verdict", return_value={"passed": True}), \
+                        self.mock.patch.object(e2e_runner, "layer_commands", return_value=step), \
+                        self.mock.patch.object(e2e_runner, "run_step", return_value=outcome) as run, \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(e2e_runner.main(arguments, cwd=self.root, root=self.root,
+                                                    record_path=journal), expected)
+                record = json.loads(journal.read_text(encoding="utf-8").splitlines()[-1])
+                self.assertEqual(record["exitCode"], expected)
+                self.assertEqual(run.call_count, 1 if script.is_file() else 0)
+
+    def test_malformed_records_and_partial_probe_data_are_rejected(self):
+        lines = ["", "bad", "[]", "{}", json.dumps({"schema": daily.EVENT_SCHEMA, "launcherPID": False})]
+        self.assertTrue(daily.parse_journal_increment(lines)["problems"])
+        records, problems = cold_start.parse_event_lines(lines)
+        self.assertTrue(problems)
+        for probe in (None, {}, {"entry": {}, "wallpaper": {}},
+                      {"entry": {"found": True, "shadowRoot": True, "label": ""}, "wallpaper": {}}):
+            self.assertFalse(daily.skin_in_place(probe)["passed"])
+        self.assertFalse(cold_start.assert_wallpaper_surfaces({})["passed"])
+        self.assertFalse(cold_start.assert_entry_chip({})["passed"])
+        self.assertEqual(daily.parse_lsof_listen(["", "COMMAND header", "short", "ZCode BAD x x x x x TCP invalid (LISTEN)"]), [])
+        self.assertFalse(daily.assert_daily_chain(None)["passed"])
 
 
 if __name__ == "__main__":

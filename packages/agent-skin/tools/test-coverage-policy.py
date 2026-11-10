@@ -12,6 +12,30 @@ SPEC.loader.exec_module(gate)
 
 
 class CoveragePolicyTests(unittest.TestCase):
+    def test_python_collection_includes_isolated_e2e_suites_without_real_host_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / "tools"
+            tools.mkdir()
+            (tools / "test-production-fixture.py").write_text("# isolated fixture\n")
+            output = root / "coverage"
+            output.mkdir()
+            fake_coverage = mock.MagicMock()
+            collector = fake_coverage.Coverage.return_value
+            collector.json_report.side_effect = lambda *, outfile: Path(outfile).write_text('{"files": {}}')
+            with mock.patch.dict("sys.modules", {"coverage": fake_coverage}), \
+                    mock.patch.object(gate, "ROOT", root), mock.patch.object(gate, "run") as run:
+                self.assertEqual(gate.python_coverage(output, ["tools/e2e.py"]), {})
+            commands = [call.args[0] for call in run.call_args_list]
+            names = [Path(command[-1]).name for command in commands]
+            self.assertIn("test-e2e-tools.py", names)
+            self.assertIn("test-ship-zcode.py", names)
+            self.assertIn("test-production-fixture.py", names)
+            self.assertEqual(len(names), len(set(names)))
+            self.assertTrue(all("--execute" not in command for command in commands))
+            self.assertNotIn("e2e.py", names)
+            collector.get_data.return_value.touch_files.assert_called_once_with([str(tools / "e2e.py")])
+
     def test_repeated_runs_preserve_distinct_reports(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
