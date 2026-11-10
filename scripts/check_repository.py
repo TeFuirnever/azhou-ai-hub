@@ -181,11 +181,11 @@ SKILL_BRAND_CONTRACTS = {
 }
 
 BASELINE_HASHES = {
-    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "6c0ca2236d3518ccaad710f6db8e9c4aa7af67b685dc699ad347ae42186951e1",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "8210a3cc1211283f71f068de99fd17e62fb9ce269ca6e693879ce6c30e31aff6",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "5c771ba2695a0d0dc54ef636531d61c916ed7f0f39db39827bbb330268f7648d",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "6bf4bbf171864f2c82a5f8b8cf441df043362e8790c69ddca38f207c38bb5f72",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "cd3f4bf5cdc59c3aa51db868801f7461563a4b4a58b72799a6753c1f863c4126",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "6d10fb626bf72c53acc0b567d754837532859751ebb7be49ccd2b0ecd441c59c",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "bcf5138f079cde8368d28c8011eee1f43b8fe2df86cc1754690a3e6c802e2c60",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "696233e82288514b944f888e7ee09f922b00dd1af9f9797fc0b95099639dd383",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "b77224988faceadd5d0e67f97202565964fa8bdebd45f56fb2d7500974c3f03a",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "62881879bc01ec24d92534f67f80e34d7734c8405c7178b10eff7bc018681652",
 }
 
 
@@ -630,6 +630,7 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
 RESIDUE_PROVENANCE_PATH_PATTERNS = (
     re.compile(r"^skills/[^/]+/references/(provenance|upstream-compatibility|neat-freak-compatibility)\.md$"),
     re.compile(r"^THIRD_PARTY_NOTICES\.md$"),
+    re.compile(r"^tests/archify-vendor-manifest\.json$"),
 )
 RESIDUE_COMPATIBILITY_COVERAGE_PATTERNS = (
     re.compile(r"^skills/[^/]+/scripts/[^/]+\.py$"),
@@ -734,6 +735,17 @@ def check_azhou_description_brand(root: Path) -> list[str]:
     return errors
 
 
+# Exact upstream protocol/path literals are not canonical package identities.
+# Keep this allowlist narrow: all other old-name occurrences in these same
+# files still fail. The vendor manifest independently binds the source bytes.
+UPSTREAM_IDENTITY_LITERALS = {
+    "skills/super-archify/bin/preview.mjs": ("const cliPath = path.join(here, 'archify.mjs');",),
+    "skills/super-archify/scripts/update-contract.mjs": ("export const SKILL_ID = 'archify';",),
+    "skills/super-archify/skill-release.json": ('"skillId": "archify"',),
+    "skills/super-archify/bin/archify.mjs": ("Use: archify patch explainer ",),
+}
+
+
 def check_rename_residue(files: list[Path], root: Path) -> list[str]:
     """Fail when a renamed-away canonical name leaks outside allowed surfaces."""
     errors: list[str] = []
@@ -753,7 +765,11 @@ def check_rename_residue(files: list[Path], root: Path) -> list[str]:
             continue
         for old_name, new_name in sorted(RENAMED_AWAY_SKILLS.items()):
             token = re.compile(rf"(?<![\w./-]){re.escape(old_name)}(?![\w-])")
-            if token.search(text):
+            candidate_text = text
+            if old_name == "archify":
+                for literal in UPSTREAM_IDENTITY_LITERALS.get(relative, ()):
+                    candidate_text = candidate_text.replace(literal, "")
+            if token.search(candidate_text):
                 errors.append(f"rename residue outside allowed surfaces: {relative}: {old_name} -> {new_name}")
     return errors
 

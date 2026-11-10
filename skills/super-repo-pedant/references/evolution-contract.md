@@ -25,7 +25,7 @@ observed -> corroborated -> proposed -> regression_ready
 
 - Ordinary change: at least two independent failures with the same mechanism.
 - Severe safety, authorization, or privacy failure: one occurrence may form a candidate.
-- Project scope is the default. Cross-project or global scope needs comparable evidence from at least two projects plus explicit human approval.
+- Project scope is the default. Before counting sessions or severe triggers, accept only signals whose recorded `project_id` matches the requested project's existing identity; this also applies to included signal files and copied local batches. Same-origin linked worktrees retain that shared identity. Cross-project or global scope needs comparable evidence from at least two projects plus explicit human approval.
 - Candidate generation writes only to an isolated proposal bundle. Hooks and observers never edit the live `SKILL.md`, references, project rules, global rules, or memory.
 - One candidate carries one falsifiable behavioral change. Mixed changes split into separate rounds.
 

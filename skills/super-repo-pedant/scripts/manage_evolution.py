@@ -369,10 +369,13 @@ def cmd_propose(args: argparse.Namespace) -> int:
         state_root = safe_state_root(project, args.state_root)
         source_paths = [state_root / "signals.jsonl", *[path.expanduser().resolve() for path in args.include_signal_file]]
         signals, parse_errors = read_jsonl(source_paths)
+        project_id = project_identity(project)
         matching = [
             signal
             for signal in signals
-            if signal["mechanism"] == args.mechanism and signal["outcome"] in {"partial", "failure"}
+            if signal["mechanism"] == args.mechanism
+            and signal["outcome"] in {"partial", "failure"}
+            and (args.scope == "global" or signal["project_id"] == project_id)
         ]
         sessions = {signal["session_digest"] for signal in matching}
         projects = {signal["project_id"] for signal in matching}
