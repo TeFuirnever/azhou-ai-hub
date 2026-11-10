@@ -1436,9 +1436,13 @@ struct StartupConnector {
         diagnostics(stage, fields.merging(proof) { current, _ in current })
     }
 
-    private func validateOwnership(_ deadline: TimeInterval) throws {
+    private func validateOwnership(_ deadline: TimeInterval, signature: Bool = false) throws {
         try requireBudget(deadline)
-        try system.validate(target, deadline: deadline)
+        if signature {
+            try system.validate(target, deadline: deadline)
+        } else {
+            try system.validateProcess(target, deadline: deadline)
+        }
         try requireBudget(deadline)
         guard try system.listeningPorts(target, deadline: deadline).contains(expectedPort) else {
             throw StartupFailure(reason: "listener-mismatch", message: "Codex 调试端口归属已变化。")
@@ -1547,13 +1551,14 @@ struct StartupConnector {
         }
         let operationLock = try system.acquireOperationLock(pid: target.pid)
         defer { operationLock.release() }
+        try validateOwnership(deadline, signature: true)
         var selected = try await initialPage(deadline: deadline)
         var visited: Set<String> = []
         var attempted: Set<String> = []
         var stage = "discover"
         do {
             while true {
-                try validateOwnership(deadline)
+                try validateOwnership(deadline, signature: true)
                 guard visited.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
                 stage = "connect"
                 try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))

@@ -4639,7 +4639,20 @@ private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Se
     var holdReference = false
     private let referenceLock = NSLock()
     private var heldReference: (CheckedContinuation<URLSessionWebSocketTask.Message, Never>, URLSessionWebSocketTask.Message)?
+    private var heldWaiters: [CheckedContinuation<Void, Never>] = []
     var isHoldingReference: Bool { referenceLock.lock(); defer { referenceLock.unlock() }; return heldReference != nil }
+    func waitUntilHeldReference() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            referenceLock.lock()
+            if heldReference != nil {
+                referenceLock.unlock()
+                continuation.resume()
+            } else {
+                heldWaiters.append(continuation)
+                referenceLock.unlock()
+            }
+        }
+    }
     func releaseReference() {
         referenceLock.lock(); let held = heldReference; heldReference = nil; referenceLock.unlock()
         if let held { held.0.resume(returning: held.1) }
@@ -4657,7 +4670,12 @@ private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Se
         let reply = URLSessionWebSocketTask.Message.data(try world.reply(id: id, request: pending))
         if holdReference, (pending["params"] as? [String: Any])?["expression"] as? String == WallpaperTransport.controllerReferenceExpression {
             return await withCheckedContinuation { continuation in
-                referenceLock.lock(); heldReference = (continuation, reply); referenceLock.unlock()
+                referenceLock.lock()
+                heldReference = (continuation, reply)
+                let waiters = heldWaiters
+                heldWaiters = []
+                referenceLock.unlock()
+                waiters.forEach { $0.resume() }
             }
         }
         return reply
@@ -4774,10 +4792,7 @@ private func startupControllerBindingChecks() async throws -> Int {
         catch is CancellationError { return "cancelled" }
         catch { return "other-error" }
     }
-    let until = ProcessInfo.processInfo.systemUptime + 1
-    while held?.isHoldingReference != true, ProcessInfo.processInfo.systemUptime < until {
-        try await Task.sleep(nanoseconds: 1_000_000)
-    }
+    await held?.waitUntilHeldReference()
     expect(held?.isHoldingReference == true, "the original controller capture is genuinely suspended")
     transport.disconnectPage()
     try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
