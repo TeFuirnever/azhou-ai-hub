@@ -3,7 +3,7 @@
 | Need | Maintained source |
 |---|---|
 | Understand product direction and tradeoffs | [Principles](principles.md) |
-| Review the Agent Skin E2E deferred architecture decisions | [E2E structural trade-offs (ADR-0001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
+| Review the Agent Skin E2E deferred architecture decisions | [E2E structural trade-offs (AS-E2E-001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Use optional project packages or diagnose imported Pet state | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |

@@ -1,7 +1,8 @@
-# ADR-0001: Defer two Agent Skin E2E structural simplifications
+# AS-E2E-001: Defer two Agent Skin E2E structural simplifications
 
 - **Status:** Accepted — defer; follow-up implementation not authorized by this ADR
 - **Decision date:** 2026-11-10
+- **Identifier:** `AS-E2E-001` — scoped to Agent Skin (`AS`) E2E tooling. `docs/decisions/` deliberately avoids bare `ADR-NNNN` numbers, which belong to the lazily created domain-modeling [`docs/adr/`](../agents/domain.md) numbering space, so the two namespaces can never collide on one ID.
 - **Scope:** Agent Skin E2E tooling proposed in [PR #432](https://github.com/TeFuirnever/azhou-ai-hub/pull/432)
 - **Source review:** `no-mistakes` run `01M72YYQ4TYCTFZ1HSR50KT74N`, reviewed HEAD `01d37f9027d7754863431a879924e26bbc78d239`
 - **Decision:** Keep PR #432 focused on observable E2E safety and regression coverage. Reassess the two simplifications as separate, behavior-preserving follow-ups.
