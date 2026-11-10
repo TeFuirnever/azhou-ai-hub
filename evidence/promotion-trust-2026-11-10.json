@@ -6,7 +6,7 @@
   "status": {
     "p0": "candidate integrity repair verified",
     "p1_isolation": "verified against pinned historical evaluator",
-    "p1_task_quality": "no supported improvement; limited diagnostic evidence",
+    "p1_task_quality": "no supported improvement; post-hoc in-scope subset of two related historical tasks",
     "p2": "stop",
     "live_promotion": "held; no human approval or application receipt"
   },
@@ -177,8 +177,16 @@
     "actors_context_fingerprints_unchanged": true,
     "judges_context_fingerprints_unchanged": false,
     "judging_control": "Ignored user-config file changed; writer and effect unknown; complete effective model context unavailable",
-    "final_instruction_markdown_matches_arm_B": true,
-    "post_actor_runtime_change": "Bytecode suppression; runtime scripts were not executed by actors"
+    "final_instruction_markdown_matches_arm_B": false,
+    "post_actor_runtime_change": "Bytecode suppression; runtime scripts were not executed by actors",
+    "cohort_status": "Original three-case cohort retained for audit; current in-scope benefit denominator is defined in scope_correction.",
+    "instruction_binding": {
+      "evaluated_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+      "original_candidate_markdown_matched_arm_B": true,
+      "governance_revision_has_later_contract_edits": true,
+      "actor_rerun_performed": false,
+      "old_results_do_not_certify_new_instructions": true
+    }
   },
   "engineering_review": {
     "fresh_reviewers": 3,
@@ -195,8 +203,10 @@
     "shared_validator_unchanged": true,
     "writer_attribution": "unknown",
     "restore_or_writeback_performed": false,
-    "status": "hold_shared_configuration_drift",
-    "limit": "Endpoint inventories, not a task-wide or transient-write guarantee"
+    "status": "environment_observation_not_global_blocker",
+    "limit": "Endpoint inventories, not a task-wide or transient-write guarantee",
+    "previous_status": "hold_shared_configuration_drift",
+    "disposition": "Unknown attribution preserved. Not technically resolved; no established dependency/cause blocks this independent governance/source repair. Check actual shared effects only for an affected authorized action; do not modify or revalidate pstack by default."
   },
   "verification": {
     "command": [
@@ -217,7 +227,8 @@
     "Judge outcomes are correlated assessments, not independent task samples.",
     "No reliable efficacy, speed, monetary saving or RSI claim follows.",
     "No measured human corrections or complete billed task cost is available.",
-    "Content digests do not authenticate a human or provide an atomic snapshot."
+    "Content digests do not authenticate a human or provide an atomic snapshot.",
+    "Post-hoc pstack exclusion leaves two related diagnostic cases, not a newly preregistered study; original three-case data and total incurred costs are retained."
   ],
   "source_files_sha256": {
     "README.md": "9b39a0b713814c2a5706495023511088f1e14c217d44cf3106a546a8e877f671",
@@ -264,5 +275,41 @@
     "engineering-review/judge-3/review-r3.json": "48516fa0fbcb91710654e3885c956372f170fcff21521a09f366471203e8abaf"
   },
   "external_evidence_locator": "azhou-promotion-trust-20261110",
-  "approval_rule": "AGENTS.md and docs/skill-standard.md require fresh exact-diff human approval; this summary confers none."
+  "approval_rule": "AGENTS.md and docs/skill-standard.md require fresh exact-diff human approval; this summary confers none.",
+  "scope_correction": {
+    "recorded_at": "2026-11-10T15:39:32.901798+00:00",
+    "basis": "Maintainer correction: pstack is excluded from Hub Skill upgrade and autonomous evolution.",
+    "post_hoc": true,
+    "new_preregistration": false,
+    "original_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+    "original_cohort_size": 3,
+    "excluded_case_ids": [
+      "hist-resume-guidance-422"
+    ],
+    "excluded_reason": "pstack maintenance task is out of the authorized skill upgrade/evolution scope, independent of its score",
+    "included_case_ids": [
+      "hist-scope-contract-421",
+      "hist-project-workflows-429"
+    ],
+    "eligible_case_count": 2,
+    "usable_tasks_of_2": {
+      "A": 1,
+      "B": 1
+    },
+    "original_case_results_preserved": true,
+    "original_raw_evidence_unchanged": true,
+    "all_incurred_costs_retained": true,
+    "new_model_runs": 0,
+    "quality_gain_supported": false,
+    "p2_decision": "stop; excluded pstack lineage cannot justify a new optimization candidate",
+    "raw_evidence_locator_unchanged": true
+  },
+  "evidence_binding": {
+    "source_files_sha256_scope": "Historical pre-governance source files; compare against original_candidate_commit, not current checkout.",
+    "original_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+    "engineering_review_scope": "The three reviews are retained as evidence for the original candidate only; no approval for this governance diff.",
+    "verification_scope": "The existing verification record is historical. New governance verification and exact diff are recorded separately.",
+    "new_human_approval": false,
+    "governance_evidence_locator": "azhou-skill-governance-20261110"
+  }
 }

@@ -150,7 +150,7 @@ Demo 严格区分产品行为与 benchmark 主张：合成 fixture 只证明合�
 - **主张必须有 gate。** 仓库权威 gate 执行完整确定性测试套件、4-case Super Repo Pedant 套件、5-case Excalidraw benchmark 完整性检查、Session Insights 合成会话存储接线完整性套件、JSON/链接/来源/凭据策略和空白检查。
 - **不伪装各宿主能力完全等价。** 当前维护的目标是 Codex、Claude Code、MiMo Code（命令 `mimo`）和 zcode；其他 harness 暂不支持。发现、调用、hook 与历史适配能力在[支持矩阵](docs/support-matrix.md)中分别列明。MiMo Code 有[本机 Skill 发现记录](evidence/mimocode-skill-discovery-2026-10-26.md)，模型调用及宿主适配尚未验证。
 - **逐 skill 平台汇总。** [docs/skill-platform-view.md](docs/skill-platform-view.md) 从支持矩阵派生出每个 skill 在各 harness 与操作系统上的汇总表；支持矩阵仍是唯一权威。
-- **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。
+- **历史不能静默改 live skill。** promotion 必须先有回归，再通过确定性检查、paired 多数、无安全回归和 exact-diff 人类批准。[范围与归因规则](docs/skill-standard.md#11-scope-and-attribution)将 pstack 排除在 Hub Skill 升级/演化之外，并将 hold 限于有证据关联的受影响动作；[评测规则](docs/skill-standard.md#41-evaluation-integrity)区分完整性修复与任务质量收益。
 - **来源边界公开。** 上游快照、vendored 资产和未授权 prior art 的排除记录见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
 ![Azhou AI Hub：公开的验证命令与一次本地验证结果。](assets/github/readme-proof.png)

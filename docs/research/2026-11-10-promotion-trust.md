@@ -2,11 +2,17 @@
 
 ## Decision
 
-Repair the source-binding and evaluator-isolation defects. Stop this optimization candidate after the diagnostic task pilot: it does not show a supported improvement in usable task artifacts. Do not add experience reuse, another Skill optimization layer, or higher-order RSI.
+Repair the source-binding and evaluator-isolation defects. Stop further behavior-optimization work after the diagnostic task pilot: it does not show a supported improvement in usable task artifacts. Do not add experience reuse, another Skill optimization layer, or higher-order RSI.
 
-This report separates deterministic integrity regressions, a copied replay of the pinned historical evaluator, and drafts for real historical tasks. Passing one does not establish the others. Live adoption remains held for fresh exact-diff human approval and unresolved shared host configuration drift.
+This report separates deterministic integrity regressions, a copied replay of the pinned historical evaluator, and drafts for real historical tasks. Passing one does not establish the others. Live adoption remains held for fresh exact-diff human approval. The historical host drift remains a qualified environment observation, not a demonstrated task-caused pstack change or an automatic blocker for independent source repair/review; the scope correction below supersedes that earlier disposition.
 
 Study baseline: `dc980c4e48e3533cef777e312695ef4ad36f87c6`. The delivery base is `b2b0bf0888a25552d88b463e4f104ed1ca7e37fb`, which adds the independent Agent Skin animation fix #431 in three non-overlapping files. The frozen study baseline is not relabeled. [The machine-readable summary](../../evidence/promotion-trust-2026-11-10.json) contains aggregate results and exact evidence digests. Raw prompts, outputs, reviews, candidates, host inventories and failed attempts remain outside Git.
+
+## Scope correction — 2026-11-10
+
+The maintainer reaffirmed that pstack and its bundled skills are outside Hub Skill upgrade/evolution scope. This is a **post-hoc scope correction**, not a new preregistration or a repeated trial. The original candidate `c3c99a018c40bc8bcc67aea797e77ed555492a00`, its three-case cohort, ratings, raw outputs and incurred costs remain preserved. Exclude `hist-resume-guidance-422` (pstack maintenance) from this task's benefit analysis; retain it only as historical audit material. The two eligible cases are #421 and #429: A and B each have **1/2 usable tasks**, with no supported quality gain. Neither an improvement from 1/3 to 1/2 nor a new failure hypothesis follows from changing the denominator.
+
+General host drift does not authorize pstack changes or broad revalidation. Unknown attribution remains unknown; any actual shared-dependency impact must be scoped and checked before the affected action. Judge-context uncertainty still limits the old pilot. This governance correction changes rules and derived report interpretation, not pstack, runtime code, frozen evaluators, original results or the prior candidate's history. Prior reviews and source digests remain bound to their original candidate; this new revision requires its own verification and exact-diff approval.
 
 ## P0 — actual content binding
 
@@ -38,15 +44,15 @@ The wrapper makes no model calls. Arbitrary child-runtime usage is not metered a
 
 ## P1 — traceable task-artifact pilot
 
-The chain was repository source evidence → Super Repo Pedant guidance → proposed documentation corrections. An independent case author froze source excerpts, historical pre-change documents, packets, criteria and withheld solutions before actor runs. These are reconstructed historical tasks from one repository, not new live tasks or independent natural failures. One packet includes historical pstack documentation; actors proposed text only and made no pstack writes.
+The chain was repository source evidence → Super Repo Pedant guidance → proposed documentation corrections. An independent case author froze source excerpts, historical pre-change documents, packets, criteria and withheld solutions before actor runs. These are reconstructed historical tasks from one repository, not new live tasks or independent natural failures. One packet includes historical pstack documentation; actors proposed text only and made no pstack writes. That packet is excluded from in-scope benefit claims after the maintainer scope correction; the table retains its original result for audit.
 
 | Task lineage | Historical source commit | A median / 16 | B median / 16 | Judge preferences | Usable A / B |
 | --- | --- | ---: | ---: | --- | --- |
 | Scope contract, #421 | `54e35bed231d15a57bf318348219b9f86339f3a8` | 15 | 14 | A, A, A | No / No |
-| Resume guidance, #422 | `523c83c670275f397b3f083c2226ca30f801fa38` | 14 | 14 | Tie, tie, tie | No / No |
+| Resume guidance, #422 (excluded: pstack) | `523c83c670275f397b3f083c2226ca30f801fa38` | 14 | 14 | Tie, tie, tie | No / No |
 | Project workflows, #429 | `79905b55c2ac78e265813c485955b9b568127ae9` | 16 | 16 | Tie, tie, tie | Yes / Yes |
 
-A used baseline Skill bytes; B used candidate bytes. All 14 instruction Markdown files supplied to B match the final candidate. A later runtime-only startup-cache repair is disclosed: these actors did not execute Python runtime scripts, and the frozen B snapshot was not replaced.
+A used baseline Skill bytes; B used candidate bytes. All 14 instruction Markdown files supplied to B matched the original candidate `c3c99a01`; the later governance contract changes were not evaluated by those actors. A later runtime-only startup-cache repair is disclosed: these actors did not execute Python runtime scripts, and the frozen B snapshot was not replaced.
 
 Requested model: `gpt-6.1-sol`, high reasoning, byte-fingerprinted Codex CLI 0.167.0. Each cell received one fresh ephemeral attempt, a 240-second wall limit and read-only, tool-disabled permissions. Concurrency was two. No hard token or currency cap was configured. Six of six actors completed with zero tool events, no repairs or resampling, and unchanged packets/arm bytes.
 
@@ -56,9 +62,11 @@ Three fresh same-model judges used withheld criteria and reversed A/B order. Eac
 - Both resume drafts remove unimplemented checkpoint design instead of retaining it as proposed intent. Each needs one material correction; one judge also identified a minor issue in both.
 - Both workflow drafts meet the frozen criteria without requested corrections.
 
-No out-of-scope edits or fabricated completed checks were reported in these drafts. That does not erase omissions or establish live execution safety. Correction units are reviewer estimates, not actual human edits/time. Both arms yield **1/3 usable tasks**.
+Against the original packet allowlists, judges reported no out-of-scope edit proposals or fabricated completed checks. That historical judgment does not make the pstack packet eligible under the corrected task scope. That does not erase omissions or establish live execution safety. Correction units are reviewer estimates, not actual human edits/time. The original cohort yields **1/3 usable tasks** in each arm; the post-hoc in-scope subset yields **1/2** in each arm. The original three-case count is retained only as historical reporting, not this task’s efficacy denominator.
 
 ### Observed cost and control limits
+
+The ledger below retains **all incurred runs**, including the excluded historical case; exclusion does not refund its cost. It is not a cost estimate for a fresh two-case experiment.
 
 | Work | Input tokens | Output tokens | Sum of run wall times |
 | --- | ---: | ---: | ---: |
@@ -73,15 +81,15 @@ Billed money, complete orchestration/development/review usage, and actual human 
 
 Actor context fingerprints matched. One user-configuration file changed during judging. Commands explicitly ignored user configuration and recorded role-file/binary digests remained stable, but complete effective model context was unavailable. Writer and effect are unknown. Original run records remain intact with a companion control qualification. No rerun was used to remove the unfavorable or uncontrolled observation.
 
-## Engineering review and host-state hold
+## Historical engineering review and host-state observations
 
 Three fresh engineering reviewers examined source with reversed order. Initial findings remain available. After the cache/input-ancestor fixes and test-only encoding addendum, all three prefer the candidate with no remaining blocking source finding in scope. They executed no repository code. These are engineering reviews, not human approval or task-quality votes.
 
-The task-wide comparison of 4,746 regular-file entries found three changed shared records: one Codex configuration and two Claude plugin registries. Attribution is unknown; no restore/writeback was performed. All 3,234 protected Git paths and the shared validator matched. Endpoint inventories cannot certify transient writes or unrecorded metadata. This remains a live-adoption hold; the narrower replay-interval equality does not erase it.
+The task-wide comparison of 4,746 regular-file entries found three changed shared records: one Codex configuration and two Claude plugin registries. Attribution is unknown; no restore/writeback was performed. All 3,234 protected Git paths and the shared validator matched. Endpoint inventories cannot certify transient writes or unrecorded metadata. The former blanket live-adoption hold is withdrawn as a scope-classification error, not marked technically resolved. It remains an unassigned environment observation, while uncertainty about judge controls continues to qualify the pilot. There is no established causal/dependency basis to block this independent governance/source repair or to trigger pstack upgrade, installation or revalidation. A later operation that actually changes a shared dependency must establish its own bounded impact evidence; the narrower replay-interval equality is not a global no-change claim.
 
 ## Validation and semantic impact
 
-Final runtime, test and contract bytes passed `python3 scripts/verify.py`: **716 Hub tests (one skipped), 59 model-router tests and 45 installer tests**, plus registered policy, benchmark-integrity and whitespace gates. This run preceded these two aggregate-only files. They receive separate policy/whitespace verification, and CI checks the exact committed head. Exact logs, commit/patch binding and recovery receipts stay outside Git to avoid self-reference.
+The original pre-governance runtime, test and contract bytes passed `python3 scripts/verify.py`: **716 Hub tests (one skipped), 59 model-router tests and 45 installer tests**, plus registered policy, benchmark-integrity and whitespace gates. This run preceded these two aggregate-only files. They receive separate policy/whitespace verification, and CI checks the exact committed head. Exact logs, commit/patch binding and recovery receipts stay outside Git to avoid self-reference. Those historical checks and reviews do not certify this later governance revision; it receives a fresh fixed-revision verification and approval packet without rewriting the original evidence.
 
 | Surface / owner | Consumers and state | Boundary |
 | --- | --- | --- |
@@ -95,6 +103,6 @@ The experimental Foundation scope command records four Git layers with explicit 
 
 ## P2 disposition and adoption
 
-**Stop further evolution for this candidate.** The proposed-intent loss is one historical lineage and a future hypothesis only. Do not tune on these held-out outputs or add another optimization mechanism.
+**Do not start another behavior-optimization candidate.** The proposed-intent loss came from the now-excluded pstack lineage and is retained only as historical audit context, not as a basis for this task’s further evolution. Do not tune on these held-out outputs or add another optimization mechanism.
 
 Integrity repairs have deterministic support of their own; do not attribute task-quality gains to them. Repository policy requires fresh exact-diff human approval before promotion. This report asserts no approval, live application or successful adoption. Later source changes require a new binding. Preserve the task branch and lease for review and recovery.

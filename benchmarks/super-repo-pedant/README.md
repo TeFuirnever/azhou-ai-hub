@@ -24,7 +24,7 @@ python3 benchmarks/super-repo-pedant/benchmark.py verify \
   --run benchmarks/super-repo-pedant/workspace/code-spec-conflict.run.json
 ```
 
-Each candidate starts as a fresh fixture copy and receives only the case prompt. Keep case assertions and expected behavior outside the candidate directory.
+Each candidate starts as a fresh fixture copy and receives only the case prompt. Keep case assertions and expected behavior outside the candidate directory. Follow [evaluation integrity](../../docs/skill-standard.md#41-evaluation-integrity): freeze rules and budgets before candidate edits, isolate development/selection/holdout by source, never run against original frozen evidence, and bind actual inputs/commands/artifacts to the tested revision. Post-hoc exclusions retain original results and incurred cost; they are not a newly preregistered success.
 
 `verify` accepts attempt `1` only. A usable first pass requires:
 
