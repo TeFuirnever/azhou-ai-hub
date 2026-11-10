@@ -668,6 +668,7 @@ protocol StartupOperationLock: AnyObject {
 protocol StartupTargetSystem {
     func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws
+    func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval,
                   diagnostics: ((String, [String: Any]) -> Void)?) throws
     func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int]
@@ -1596,6 +1597,9 @@ struct StartupConnector {
         guard !controllerPresent else { return .partial(reason: "startup-active") }
         stage = "recheck"
         _ = try await requireCurrentPage(selected, deadline: deadline)
+        // Every selected page keeps the original pre-install signature boundary,
+        // after the final read-only page proof and before any payload is sent.
+        try validateOwnership(deadline, signature: true)
         guard attempted.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
         stage = "install"
         let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: min(10, deadline - now()))
@@ -1981,7 +1985,7 @@ enum WallpaperCLI {
         }
         var sawEndpoint = false, lastState = "endpoint-unavailable"
         while now() - began < 28 {
-            try Task.checkCancellation(); try system.validateProcess(target, deadline: began + 30)
+            try Task.checkCancellation(); try system.validate(target, deadline: began + 30)
             let owned = try system.listeningPorts(target, deadline: began + 30)
             if let port = request.port, !owned.contains(port) {
                 throw WallpaperFailure(state: "endpoint-refused", chinese: "指定端口不是该 Codex 主进程独占的 IPv4 回环监听端口。", english: "The specified port is not an IPv4 loopback listener owned exclusively by this Codex main process.")
@@ -2003,7 +2007,7 @@ enum WallpaperCLI {
                     var states: [[String: Any]] = []
                     var retries: [[String: Any]] = []
                     for page in pages {
-                        try Task.checkCancellation(); try system.validateProcess(target, deadline: began + 30)
+                        try Task.checkCancellation(); try system.validate(target, deadline: began + 30)
                         guard try system.listeningPorts(target, deadline: began + 30).contains(port), let raw = page["webSocketDebuggerUrl"] as? String else {
                             throw WallpaperFailure(state: "endpoint-changed", chinese: "目标监听或页面地址已变化，停止本次壁纸操作。", english: "The target listener or page address changed; this wallpaper operation has stopped.")
                         }
@@ -2093,7 +2097,7 @@ enum WallpaperCLI {
                             result["port"] = port
                             return result
                         }
-                        try system.validateProcess(target, deadline: began + 30)
+                        try system.validate(target, deadline: began + 30)
                         if request.action == .apply && !WallpaperValidation.verifiedState(state, version: expectedVersion) {
                             var result = WallpaperValidation.applicationFailure(
                                 priorStates: states, failedState: state, totalPages: pages.count,

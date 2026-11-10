@@ -77,6 +77,8 @@ Codex 的主页面接续仅在本次尚未结束的接入操作内生效，始�
 
 就绪复查只对 `NSURLErrorDomain` 的 `timedOut`、`networkConnectionLost`、`cannotConnectToHost` 做原预算内的只读重试，间隔至多 150 毫秒，每轮仍复核进程启动身份和端口归属。HTTP 错误、重定向、响应大小或结构不合规不因复查而放行；已完成或跳过的 run 不进入等待。首次状态读取通过当前 CDP 会话持有控制器对象引用，不新增页面 global，断开或换页即清除，捕获与请求返回还须匹配原连接 generation，迟到回复不能把旧 objectId 写入新连接。等待后必须重新确认同一主页面、同一控制器和 run 的最新状态，不能使用等待前的 ready 快照；同页新控制器即使从 run ID 1 开始也按中断处理，不能释放新对象。异常清理也使用已持有的对象引用，在一次 CDP 调用内核对当前 global 与原对象相同后才释放；没有绑定证据时不重新捕获或清理当前对象。等待期间页面变化保守返回 partial，不借暂态清单故障授权重装；没有等待的既有页面换代路径仍按完整旧 ID 缺席证明处理。`StartupNativeTests.swift` 覆盖单次与永久故障、身份/端口/页面/run 变化、取消和终态；两个新增固定表达式由 Node VM 执行同对象与替换对象负例并计入覆盖率。
 
+启动接入的 discovery、replacement proof 与当前页 recheck 每轮仍新读进程/启动时间、ps 用户和执行路径、listener，并检查取消和同一绝对 deadline；这些只读轮询不重复完整 codesign。`validateProcess` 是真正的 `StartupTargetSystem` requirement，保留旧 adapter 的完整验证默认实现，production existential 才能派发到仅验证进程的方法。完整签名/ownership 保留在 operation lock 后首次发现之前、每个选定页面连接之前、每个页面最终同页 proof 之后立即发送载荷之前；异常 cleanup 的完整验证也保留。没有跨轮缓存成功签名，也没有改变换页证明、controller identity 或终态重播规则。独立 wallpaper apply/retry/restore 的三处旧 extension 调用改为显式完整 validate，保留它们原来实际执行的签名边界。生产 environment 注入回归统计真实 codesign 命令，证明单页成功固定 3 次、替换后的每代连接与安装各自验证、轮询次数不增加扫描，并覆盖边界拒绝、身份/端口/取消/预算变化和独立操作完整验证。控制器 capture 测试通过明确的 suspension 通知同步，不再使用一秒 wall-clock 忙等。
+
 宿主布局回归以脱敏的实际结构为依据：核对目标控件、影响可见性和尺寸的祖先样式、滚动容器与重建行为，不复制聊天内容。合成夹具需断言目标顺序和实际几何；选择器命中或备用入口可见不能代替目标位置通过。早期跳过回归会延迟挂载合成 app shell，并验证可交互控件到达后备用入口恢复；它不证明官方加载画面的 DOM 时序。交付分别记录测试载荷版本、安装版本和页面实际运行版本；实机结果仅在同版页面检查后判定，无法核实时保持待验收。
 
 `CI / Agent Skin full production UT coverage` 运行完整 UT 门禁，并进入聚合 Required 判定；现有 macOS 作业继续运行生成载荷浏览器功能回归。仓库通用 `python3 scripts/verify.py` 仍执行其原有完整检查，不能替代本页的包级覆盖率命令。提交/推送状态与远端 CI 结果另行报告，不因本地通过而推断远端已通过。
