@@ -8,7 +8,7 @@
 
 每种语言及整个包都须达到 **95% 行覆盖率**。判定使用原始计数，不以四舍五入后的百分比放行；分支和函数统计可用于诊断，但不代替行覆盖率。缺失报告、漏算生产文件、工具失败或 UT 失败均阻断。Node LCOV、Coverage.py、LLVM 和 Bash 覆盖率保留各自原始结果；不把浏览器 E2E、实机启动或人工审阅混入 UT。
 
-Swift 生成的固定 CDP JavaScript 也单独计量：既有 8 段为 `generated/Native-Wallpaper.<expression>.js`，ZCode 的状态与释放两段为 `generated/Native-ZCodeRuntime.<expression>.js`。前者由当前源码编译出的 UT 程序导出；后者从完整规范源码编译的测试程序发给自有合成 CDP 服务的 `Runtime.evaluate` 请求捕获原字节，绑定源码与输出 SHA，再由 Node VM 执行并测量。只执行 Swift 的字符串赋值不能算这些脚本的 UT。生成器、表达式和独立 JS 模块均不得漏算；缺少任何一段的执行报告会阻断。
+Swift 生成的固定 CDP JavaScript 也单独计量：Codex 的 10 段为 `generated/Native-Wallpaper.<expression>.js`，ZCode 的状态与释放两段为 `generated/Native-ZCodeRuntime.<expression>.js`。前者由当前源码编译出的 UT 程序导出；后者从完整规范源码编译的测试程序发给自有合成 CDP 服务的 `Runtime.evaluate` 请求捕获原字节，绑定源码与输出 SHA，再由 Node VM 执行并测量。只执行 Swift 的字符串赋值不能算这些脚本的 UT。生成器、表达式和独立 JS 模块均不得漏算；缺少任何一段的执行报告会阻断。
 
 启动载荷中的工厂接线和只读属性安装使用规范模块 `extension/bootstrap.mjs`，由生成器原样嵌入，并独立执行 UT。素材数据与模块调用包装不重复统计；生成器内部不得隐藏未经测量的手写函数。
 
@@ -71,6 +71,8 @@ python3 -B tools/test-installed-acceptance.py --cold-start --out .local/cold-acc
 共用生命周期改动走 FT-LIFECYCLE 三宿主检查。实机回执按宿主、运行模式和候选载荷分别记录。DSH Web 隔离配置能验证插件启动和设置交互，桌面模式另行验收。ZCode 回执目录与 Electron 用户配置是两个不同的隔离边界。
 
 Codex 的主页面接续仅在本次尚未结束的接入操作内生效，始终使用原总 deadline 和同一进程操作锁，不增加常驻观察器。请求中断本身不证明页面已销毁；Foundation WebSocket 握手的 `NSURLErrorDomain/-1011` 且实际 HTTP 状态为 404 或 500 时，仅允许进入替换证明，不以状态码认定页面已退休；401、其它状态和缺失响应仍拒绝；旧 target 从完整清单消失也可能滞后于连接失败，等待期间只做有界只读清单复核（进程与端口验证不变），旧 ID 尚在时不连接、安装或释放任何候选页，预算耗尽仍未消失则按 attach-timeout 拒绝。同一 target 的导航、控制器缺失或 run ID 漂移仍按中断处理。已观测到完成、跳过、失败或释放后不重新安装。安装发送总计不因换页清零，回复丢失仍保留未知安装状态；安装、就绪和跳过事件中的 `pageTargetID` 区分同一 PID 下重新从 run ID 1 开始的页面。最终就绪之前重新核对唯一当前 target；返回之后再发生的页面替换不属于本机制。动画控制器就绪和官方外壳可交互分别判断，不以固定等待或壁纸是否启用充当页面稳定证明。需要对单次真实冷启分类失败时，仅为该次启动设置环境变量 `AZHOU_STARTUP_DIAGNOSTICS=1`：启动器经既有日志通道追加有界且无内容的诊断记录（操作阶段、单调时间、页面 ID、原始传输错误 domain/code、存在时的 HTTP 状态、失败发生阶段与 pageConnectionLost 分类、复核清单的旧 ID 在场与合格主页面数）。该设施默认关闭，不改变公开失败类别，也不记录表达式、载荷或完整清单。
+
+就绪复查只对 `NSURLErrorDomain` 的 `timedOut`、`networkConnectionLost`、`cannotConnectToHost` 做原预算内的只读重试，间隔至多 150 毫秒，每轮仍复核进程启动身份和端口归属。HTTP 错误、重定向、响应大小或结构不合规不因复查而放行；已完成或跳过的 run 不进入等待。首次状态读取通过当前 CDP 会话持有控制器对象引用，不新增页面 global，断开或换页即清除，捕获与请求返回还须匹配原连接 generation，迟到回复不能把旧 objectId 写入新连接。等待后必须重新确认同一主页面、同一控制器和 run 的最新状态，不能使用等待前的 ready 快照；同页新控制器即使从 run ID 1 开始也按中断处理，不能释放新对象。异常清理也使用已持有的对象引用，在一次 CDP 调用内核对当前 global 与原对象相同后才释放；没有绑定证据时不重新捕获或清理当前对象。等待期间页面变化保守返回 partial，不借暂态清单故障授权重装；没有等待的既有页面换代路径仍按完整旧 ID 缺席证明处理。`StartupNativeTests.swift` 覆盖单次与永久故障、身份/端口/页面/run 变化、取消和终态；两个新增固定表达式由 Node VM 执行同对象与替换对象负例并计入覆盖率。
 
 宿主布局回归以脱敏的实际结构为依据：核对目标控件、影响可见性和尺寸的祖先样式、滚动容器与重建行为，不复制聊天内容。合成夹具需断言目标顺序和实际几何；选择器命中或备用入口可见不能代替目标位置通过。早期跳过回归会延迟挂载合成 app shell，并验证可交互控件到达后备用入口恢复；它不证明官方加载画面的 DOM 时序。交付分别记录测试载荷版本、安装版本和页面实际运行版本；实机结果仅在同版页面检查后判定，无法核实时保持待验收。
 

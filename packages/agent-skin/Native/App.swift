@@ -547,6 +547,10 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
         return response
     }
 
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try await base.disposeController(href: href, timeout: timeout)
+    }
+
     func disconnectPage() {
         base.disconnectPage()
         pageLock.lock(); pageID = nil; pageLock.unlock()

@@ -15,6 +15,7 @@ const APP_HREF = 'app://-/index.html?initialRoute=%2F';
 const EXPRESSION_KEYS = [
   'statusSource', 'applyGuardSource', 'retrySource', 'restoreSource',
   'inspectExpression', 'statusExpression', 'disposeExpression', 'installExpression',
+  'controllerReferenceExpression', 'boundStatusExpression',
 ];
 
 let generatedSources = {};
@@ -137,6 +138,93 @@ unitTest('inspect and status expressions expose the real controller status shape
     defineDataGlobal(context, '__azhouStartup', api);
     assert.throws(() => evaluate('statusExpression', context), /status getter/);
   });
+});
+
+unitTest('native status binds the original controller without writing page globals', async t => {
+  await t.test('a missing or accessor global is captured without invoking its getter', () => {
+    const context = pageContext();
+    let reads = 0;
+    defineGlobal(context, '__azhouStartup', { get() { reads++; return startupAPI(); } });
+    const reference = evaluate('controllerReferenceExpression', context);
+    assert.equal(reference.controller, null);
+    assert.deepEqual(plain(evaluate('boundStatusExpression', context).call(reference)), { href: APP_HREF, missing: true });
+    assert.equal(reads, 0);
+  });
+  await t.test('repeated reads use the retained API with fresh status', () => {
+    const context = pageContext();
+    let runId = 1;
+    let receiver;
+    const api = startupAPI({ status() { receiver = this; return validStartupState({ runId }); } });
+    defineDataGlobal(context, '__azhouStartup', api);
+    const globals = Reflect.ownKeys(context);
+    const reference = evaluate('controllerReferenceExpression', context);
+    const status = evaluate('boundStatusExpression', context);
+    assert.equal(reference.controller, api);
+    assert.equal(status.call(reference).status.runId, 1);
+    runId = 2;
+    assert.equal(status.call(reference).status.runId, 2);
+    assert.equal(receiver, api);
+    assert.deepEqual(Reflect.ownKeys(context), globals);
+  });
+  await t.test('replacement with identical owner and run ID never reads the new API', () => {
+    const context = pageContext();
+    const first = startupAPI({ status: () => validStartupState({ runId: 1 }) });
+    defineDataGlobal(context, '__azhouStartup', first);
+    const reference = evaluate('controllerReferenceExpression', context);
+    let newReads = 0;
+    defineDataGlobal(context, '__azhouStartup', startupAPI({ status() { newReads++; return validStartupState({ runId: 1 }); } }));
+    assert.deepEqual(plain(evaluate('boundStatusExpression', context).call(reference)), { href: APP_HREF, missing: true });
+    assert.equal(newReads, 0);
+  });
+  for (const change of ['navigate', 'delete', 'no-method', 'captured-missing']) {
+    await t.test(change + ' cannot reuse the captured status', () => {
+      const context = pageContext();
+      const api = startupAPI();
+      if (change !== 'captured-missing') defineDataGlobal(context, '__azhouStartup', api);
+      const reference = evaluate('controllerReferenceExpression', context);
+      if (change === 'navigate') context.location.href = 'app://-/index.html?initialRoute=settings';
+      if (change === 'delete') delete context.__azhouStartup;
+      if (change === 'no-method') Object.defineProperty(api, 'status', { value: false });
+      if (change === 'captured-missing') defineDataGlobal(context, '__azhouStartup', api);
+      assert.deepEqual(plain(evaluate('boundStatusExpression', context).call(reference)), { href: context.location.href, missing: true });
+    });
+  }
+});
+
+unitTest('bound native cleanup cannot dispose a replacement or an unproven controller', async t => {
+  await t.test('the held API is disposed atomically only while it is still current', () => {
+    const context = pageContext();
+    let calls = 0;
+    let receiver;
+    const api = startupAPI({ dispose() { calls++; receiver = this; return { disposed: true }; } });
+    defineDataGlobal(context, '__azhouStartup', api);
+    const reference = evaluate('controllerReferenceExpression', context);
+    const action = evaluate('boundStatusExpression', context);
+    assert.deepEqual(plain(action.call(reference, true, APP_HREF)), { disposed: true });
+    assert.equal(calls, 1);
+    assert.equal(receiver, api);
+    let replacementCalls = 0;
+    defineDataGlobal(context, '__azhouStartup', startupAPI({ dispose() { replacementCalls++; return { disposed: true }; } }));
+    assert.deepEqual(plain(action.call(reference, true, APP_HREF)), { disposed: false });
+    assert.equal(replacementCalls, 0);
+    assert.equal(calls, 1);
+  });
+  for (const change of ['owner', 'version', 'method', 'getter', 'href', 'missing']) {
+    await t.test(change + ' refuses cleanup without calling page accessors', () => {
+      const context = pageContext();
+      let calls = 0;
+      const api = startupAPI({ dispose() { calls++; return { disposed: true }; } });
+      if (change !== 'missing') defineDataGlobal(context, '__azhouStartup', api);
+      const reference = evaluate('controllerReferenceExpression', context);
+      if (change === 'owner') Object.defineProperty(api, 'owner', { value: 'foreign' });
+      if (change === 'version') Object.defineProperty(api, 'version', { value: 2 });
+      if (change === 'method') Object.defineProperty(api, 'dispose', { value: false });
+      if (change === 'getter') Object.defineProperty(api, 'dispose', { get() { calls++; return () => { calls++; }; } });
+      const href = change === 'href' ? 'app://-/index.html?initialRoute=settings' : APP_HREF;
+      assert.deepEqual(plain(evaluate('boundStatusExpression', context).call(reference, true, href)), { disposed: false });
+      assert.equal(calls, 0);
+    });
+  }
 });
 
 unitTest('the wallpaper status source validates page identity and reports owned application state', async t => {

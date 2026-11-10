@@ -1569,8 +1569,8 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
                                       now: nowAtZero, sleep: noSleep)
     expect(missingActiveFlag == .failed(reason: "protocol-error")
            && missingActiveFlagTransport.closeCount == 1
-           && missingActiveFlagTransport.disposeCount == 1,
-           "an incomplete install receipt triggers bounded cleanup before the protocol failure")
+           && missingActiveFlagTransport.disposeCount == 0,
+           "an incomplete install receipt cannot authorize cleanup without a retained controller binding")
     let alreadyActiveInstall = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],

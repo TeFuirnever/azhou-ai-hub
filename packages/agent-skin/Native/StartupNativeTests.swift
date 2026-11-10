@@ -419,6 +419,8 @@ struct StartupNativeTests {
                 "restoreSource": WallpaperCLI.restoreSource,
                 "inspectExpression": StartupConnector.inspectExpression,
                 "statusExpression": StartupConnector.statusExpression,
+                "controllerReferenceExpression": WallpaperTransport.controllerReferenceExpression,
+                "boundStatusExpression": WallpaperTransport.boundStatusExpression,
                 "disposeExpression": try StartupConnector.disposeExpression(href),
                 "installExpression": try StartupConnector.installExpression("({installed:true})", expectedHref: href),
             ]
@@ -994,11 +996,8 @@ struct StartupNativeTests {
         expect(malformedStatus == .failed(reason: "protocol-error"), "a malformed required status field is rejected")
         expect(malformedStatusTransport.disposeCount == 1 && malformedStatusTransport.closeCount == 1,
                "malformed status on the trusted installed controller attempts disposal before closing")
-        let disposalExpression = malformedStatusTransport.disposeExpressions.first ?? ""
-        expect(disposalExpression.contains("location.href !==")
-               && disposalExpression.contains("owner?.value !== 'azhou-codex-startup'")
-               && disposalExpression.contains("version?.value !== 1"),
-               "cleanup is guarded by the inspected document URL and exact controller owner/version")
+        expect(malformedStatusTransport.disposalHrefs == [startupURL],
+               "cleanup passes only the inspected document URL to the controller-bound transport")
 
         var expiredNow: TimeInterval = 0
         let expiredMalformedStatusTransport = FakeStartupTransport(
@@ -1050,6 +1049,7 @@ struct StartupNativeTests {
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
         checks += try await startupPageReplacementChecks()
+        checks += try await startupControllerBindingChecks()
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
         checks += try await zcodeRuntimeReviewChecks()
@@ -1099,7 +1099,7 @@ private final class FakeStartupTransport: StartupTransport {
     private(set) var payloadCount = 0
     private(set) var requestTimeouts: [TimeInterval] = []
     private(set) var disposeCount = 0
-    private(set) var disposeExpressions: [String] = []
+    private(set) var disposalHrefs: [String] = []
     private var pageResponses: [[String: Any]]
     private var evaluationResponses: [[String: Any]]
     private var pageFailures: Int
@@ -1136,7 +1136,6 @@ private final class FakeStartupTransport: StartupTransport {
         if expression.contains("test-only-probe") { payloadCount += 1 }
         if expression.contains("dispose.value.call(api)") {
             disposeCount += 1
-            disposeExpressions.append(expression)
         }
         afterEvaluation?(expression, index)
         if !evaluationResponses.isEmpty {
@@ -1144,6 +1143,10 @@ private final class FakeStartupTransport: StartupTransport {
             return lastEvaluation!
         }
         return repeatLastEvaluation ? lastEvaluation ?? [:] : [:]
+    }
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        disposalHrefs.append(href)
+        return try await evaluate(try StartupConnector.disposeExpression(href), timeout: timeout)
     }
     func close() { closeCount += 1 }
 }
@@ -4407,6 +4410,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private var clock: TimeInterval = 1
     private var lockHeld = false
     private(set) var installs: [String: Int] = [:]
+    private(set) var disposedControllers: [String] = []
     private(set) var installReplyTimes: [String: TimeInterval] = [:]
     private(set) var requests: [String] = []
     private(set) var requestIDs: [Int] = []
@@ -4417,6 +4421,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     var cancel: (() -> Void)?
     private var lagReadsLeft = 0
     private var waitReads = 0
+    private var recheckReads = 0
     init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil) {
         self.stage = stage; self.mode = mode
         self.handshakeStatus = handshakeStatus ?? ["handshake-404": 404, "handshake-401": 401][mode]
@@ -4425,6 +4430,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     func time() -> TimeInterval { lock.lock(); defer { lock.unlock() }; return clock }
     func advance(_ seconds: TimeInterval) { lock.lock(); clock += seconds; lock.unlock() }
     func hasReplaced() -> Bool { lock.lock(); defer { lock.unlock() }; return generation > 0 }
+    func recheckCount() -> Int { lock.lock(); defer { lock.unlock() }; return recheckReads }
     func acquire() { lock.lock(); lockAcquires += 1; lockHeld = true; lock.unlock() }
     func release() { lock.lock(); lockReleases += 1; lockHeld = false; lock.unlock() }
     func pages() throws -> [[String: Any]] {
@@ -4435,6 +4441,21 @@ private final class StartupReplacementWorld: @unchecked Sendable {
              "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
         }
         if generation == 0 { return [entry("page-a")] }
+        if mode.hasPrefix("recheck-") {
+            recheckReads += 1
+            let responseFailures = ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
+                                    "recheck-array", "recheck-json", "recheck-oversized"]
+            if !responseFailures.contains(mode), recheckReads == 1 || mode == "recheck-permanent" {
+                if mode == "recheck-cancel" { cancel?(); throw URLError(.cancelled) }
+                let code: URLError.Code = mode == "recheck-lost" ? .networkConnectionLost
+                    : mode == "recheck-connect" ? .cannotConnectToHost
+                    : mode == "recheck-unknown" ? .badServerResponse : .timedOut
+                throw URLError(code)
+            }
+            if mode == "recheck-page" { return [entry("page-b")] }
+            if mode == "recheck-ambiguous" { return [entry("page-a"), entry("page-b")] }
+            return [entry("page-a")]
+        }
         if ["raw-unavailable", "complete-blip", "ready-blip"].contains(mode) { throw URLError(.badServerResponse) }
         if ["cancel-list", "cancel-ready-list"].contains(mode) { cancel?(); throw URLError(.cancelled) }
         if mode.hasPrefix("lag-"), generation > 0 {
@@ -4473,12 +4494,41 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     func reply(id: String, request: [String: Any]) throws -> Data {
         lock.lock(); defer { lock.unlock() }
         clock += 0.01
-        let expression = (request["params"] as? [String: Any])?["expression"] as? String ?? ""
-        let operation = expression.contains("Promise.resolve((") ? "install"
+        let params = request["params"] as? [String: Any] ?? [:]
+        let expression = params["expression"] as? String ?? ""
+        let boundDisposal = ((params["arguments"] as? [[String: Any]])?.first?["value"] as? Bool) == true
+        let operation = request["method"] as? String == "Runtime.callFunctionOn" ? (boundDisposal ? "dispose" : "status")
+            : expression == WallpaperTransport.controllerReferenceExpression ? "reference"
+            : expression.contains("Promise.resolve((") ? "install"
             : expression == StartupConnector.inspectExpression ? "inspect"
             : expression == StartupConnector.statusExpression ? "status" : "dispose"
         requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
         requestsLocked = requestsLocked && lockHeld
+        // CDP Runtime.callFunctionOn has no execution timeout parameter. Its
+        // independent client timer bounds the request, unlike Runtime.evaluate.
+        if request["method"] as? String == "Runtime.callFunctionOn" {
+            let allowed: Set<String> = ["functionDeclaration", "objectId", "arguments", "silent", "returnByValue", "generatePreview",
+                "userGesture", "awaitPromise", "executionContextId", "objectGroup", "throwOnSideEffect", "uniqueContextId", "serializationOptions"]
+            if !Set(params.keys).isSubset(of: allowed) {
+                return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "error": ["code": -32602, "message": "Invalid parameters"]])
+            }
+        }
+        if operation == "reference" {
+            var remote: [String: Any] = ["type": "object", "objectId": "controller-" + id]
+            if mode == "reference-null" { remote = ["type": "object", "subtype": "null"] }
+            if mode == "reference-missing-id" { remote = ["type": "object"] }
+            if mode == "reference-wrong-type" { remote = ["type": "string", "objectId": "controller-" + id] }
+            if mode == "reference-large-id" { remote["objectId"] = String(repeating: "x", count: 1025) }
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "result": ["result": remote]])
+        }
+        if request["method"] as? String == "Runtime.callFunctionOn", params["objectId"] as? String != "controller-" + id {
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "error": ["code": -32000, "message": "foreign controller object"]])
+        }
+        if operation == "dispose" {
+            let replaced = mode == "recheck-controller-http" && recheckReads > 1
+            if !replaced { disposedControllers.append(id) }
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "result": ["result": ["value": ["disposed": !replaced]]]])
+        }
         if operation == "install" { installs[id, default: 0] += 1 }
         if id == "page-a", operation == "status" { statusCount += 1 }
         let replaceNow = id == "page-a" && operation == stage && (stage != "status" || statusCount == 2)
@@ -4491,7 +4541,8 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         if replaceNow {
             generation += 1
             if handshakeStatus != nil { throw URLError(.badServerResponse) }
-            switch mode {
+            if mode.hasPrefix("recheck-") { terminal = "ready-replaced" }
+            else { switch mode {
             case "context-lost": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."]])
             case "mixed-error": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."], "result": ["exceptionDetails": [:]]])
             case "ordinary-cdp": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Unrelated protocol failure"]])
@@ -4511,11 +4562,12 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "before-install": break
             case "cancel-ready-list": terminal = "ready-replaced"
             case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
-            case "ready-blip": terminal = "ready-replaced"
+            case "ready-blip", "recheck-once": terminal = "ready-replaced"
             case "complete-blip": terminal = "complete-replaced"
             default: throw URLError(.networkConnectionLost)
-            }
+            } }
         }
+        if mode.hasPrefix("recheck-"), generation > 0 { terminal = "ready-replaced" }
         let value: [String: Any]
         switch operation {
         case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present"]
@@ -4524,17 +4576,28 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             value = mode == "missing-new-receipt" && id == "page-b" ? ["installed": "invalid"]
                 : ["installed": true, "alreadyActive": id == "page-b" && mode == "already-active"]
         case "status":
+            if mode.hasPrefix("recheck-"), recheckReads > 1 {
+                if ["recheck-controller", "recheck-missing"].contains(mode) { return try data(envelope(["href": href, "missing": true])) }
+                if mode == "recheck-href" { return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false])) }
+                if mode == "recheck-schema" { return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]])) }
+                if mode == "recheck-complete" { terminal = "complete-replaced" }
+                if mode == "recheck-skip" { terminal = "skip-replaced" }
+                if mode == "recheck-failed" { terminal = "failed-replaced" }
+                if mode == "recheck-disposed" { terminal = "disposed-replaced" }
+                if mode == "recheck-run" { terminal = "run-drift" }
+            }
+            let timedOut = mode == "recheck-timeout" && recheckReads > 1
             let completed = ["complete-replaced", "skip-replaced"].contains(terminal ?? "")
             let failed = terminal == "failed-replaced"
             let disposed = terminal == "disposed-replaced"
-            let ready = id != "page-a" || ["ready-replaced", "complete-replaced"].contains(terminal ?? "")
-            let phase = failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
+            let ready = id != "page-a" || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
+            let phase = timedOut ? "timeout" : failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
             let completion: Any = completed ? ["cause": terminal == "skip-replaced" ? "skip" : "natural",
-                                                "beforeReady": terminal == "skip-replaced"] : NSNull()
+                                                "beforeReady": terminal == "skip-replaced" && mode != "recheck-skip"] : NSNull()
             value = ["href": href, "missing": false, "status": [
                 "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": terminal == "run-drift" ? 2 : 1,
-                "ready": ready, "completed": completed, "overlay": !completed && !failed && !disposed,
-                "reason": failed ? "protocol-error" : "",
+                "ready": ready, "completed": completed, "overlay": !completed && !failed && !disposed && !timedOut,
+                "reason": timedOut ? "overlay-timeout" : failed ? "protocol-error" : "",
                 "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": completion
             ]]
         default: value = ["disposed": true]
@@ -4548,12 +4611,14 @@ private final class StartupReplacementSystem: StartupTargetSystem, StartupOperat
     init(_ world: StartupReplacementWorld) { self.world = world }
     func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {}
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
-        if world.mode == "identity-drift", world.hasReplaced() {
+        if world.mode == "identity-drift" && world.hasReplaced()
+            || world.mode == "recheck-identity" && world.recheckCount() > 0 {
             throw StartupFailure(reason: "target-identity", message: "synthetic process generation changed")
         }
     }
     func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
-        world.mode == "port-drift" && world.hasReplaced() ? [] : [49221]
+        (world.mode == "port-drift" && world.hasReplaced()
+            || world.mode == "recheck-port" && world.recheckCount() > 0) ? [] : [49221]
     }
     func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { world.acquire(); return self }
     func release() { world.release() }
@@ -4570,6 +4635,14 @@ private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Se
     }
     private(set) var canceled = 0
     private var pending: [String: Any] = [:]
+    var holdReference = false
+    private let referenceLock = NSLock()
+    private var heldReference: (CheckedContinuation<URLSessionWebSocketTask.Message, Never>, URLSessionWebSocketTask.Message)?
+    var isHoldingReference: Bool { referenceLock.lock(); defer { referenceLock.unlock() }; return heldReference != nil }
+    func releaseReference() {
+        referenceLock.lock(); let held = heldReference; heldReference = nil; referenceLock.unlock()
+        if let held { held.0.resume(returning: held.1) }
+    }
     init(id: String, world: StartupReplacementWorld) { self.id = id; self.world = world }
     func resume() {}
     func send(_ message: URLSessionWebSocketTask.Message) async throws {
@@ -4579,7 +4652,15 @@ private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Se
         }
         pending = request
     }
-    func receive() async throws -> URLSessionWebSocketTask.Message { .data(try world.reply(id: id, request: pending)) }
+    func receive() async throws -> URLSessionWebSocketTask.Message {
+        let reply = URLSessionWebSocketTask.Message.data(try world.reply(id: id, request: pending))
+        if holdReference, (pending["params"] as? [String: Any])?["expression"] as? String == WallpaperTransport.controllerReferenceExpression {
+            return await withCheckedContinuation { continuation in
+                referenceLock.lock(); heldReference = (continuation, reply); referenceLock.unlock()
+            }
+        }
+        return reply
+    }
     func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) { canceled += 1 }
 }
 
@@ -4593,8 +4674,19 @@ private final class StartupReplacementURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL)); return
         }
         do {
-            let body = try JSONSerialization.data(withJSONObject: world.pages())
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
+            var body = try JSONSerialization.data(withJSONObject: world.pages())
+            var status = 200
+            var responseURL = url
+            if world.hasReplaced() {
+                if world.mode == "recheck-http401" { status = 401 }
+                if world.mode == "recheck-http503" || world.mode == "recheck-controller-http" && world.recheckCount() > 1 { status = 503 }
+                if world.mode == "recheck-redirect" { status = 302 }
+                if world.mode == "recheck-foreign-url" { responseURL = URL(string: "http://127.0.0.1:49222/json/list")! }
+                if world.mode == "recheck-array" { body = Data("{}".utf8) }
+                if world.mode == "recheck-json" { body = Data("{".utf8) }
+                if world.mode == "recheck-oversized" { body = Data(repeating: 32, count: 2 * 1024 * 1024) }
+            }
+            let response = HTTPURLResponse(url: responseURL, statusCode: status, httpVersion: nil,
                                            headerFields: ["Content-Type": "application/json"])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: body)
@@ -4629,13 +4721,16 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
         let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
             transport: transport, diagnostics: enabled ? { _, fields in diagnosticRecords.append(fields) } : nil,
-            now: world.time, sleep: { world.advance($0) })
+            now: world.time, sleep: {
+                world.advance($0)
+                if mode == "recheck-cancel-wait", world.recheckCount() > 0 { withUnsafeCurrentTask { $0?.cancel() } }
+            })
             .run(payload: "test-only-probe", deadline: 5)
         let observation = capture.snapshot()
         let final = events.resolve(outcome, observation: observation, at: world.time())
         return ["stage": stage, "mode": mode, "recovered": outcome == .ready(runID: 1) && final == .ready,
             "outcome": String(describing: outcome), "final": String(describing: final),
-            "installs": world.installs, "installSentCount": recorder.installSentCount,
+            "installs": world.installs, "installSentCount": recorder.installSentCount, "disposedControllers": world.disposedControllers,
             "requests": world.requests, "requestIDs": world.requestIDs,
             "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
             "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
@@ -4644,7 +4739,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
             "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
             "events": records.map { $0["event"] as? String ?? "" }, "elapsed": world.time(),
-            "diagnostics": diagnosticRecords,
+            "diagnostics": diagnosticRecords, "recheckReads": world.recheckCount(),
             "host": false, "productionConnectorAndCodec": true]
     }
     world.cancel = { task.cancel() }
@@ -4656,6 +4751,72 @@ private func startupPageReplacementProbe() async throws -> [[String: Any]] {
     var results: [[String: Any]] = []
     for stage in ["inspect", "install", "status"] { results.append(try await startupReplacementScenario(stage: stage)) }
     return results
+}
+
+@MainActor
+private func startupControllerBindingChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: controller generation: \(label)") }; checks += 1
+    }
+    let world = StartupReplacementWorld(stage: "never")
+    var held: StartupReplacementSocket?
+    let transport = WallpaperTransport(session: nil, socketFactory: { request in
+        let socket = world.socket(request) as! StartupReplacementSocket
+        if request.url?.lastPathComponent == "page-a" { socket.holdReference = true; held = socket }
+        return socket
+    })
+    defer { transport.close() }
+    try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-a")!, timeout: 5)
+    let old = Task { () -> String in
+        do { _ = try await transport.evaluate(StartupConnector.statusExpression, timeout: 5); return "accepted" }
+        catch is CancellationError { return "cancelled" }
+        catch { return "other-error" }
+    }
+    let until = ProcessInfo.processInfo.systemUptime + 1
+    while held?.isHoldingReference != true, ProcessInfo.processInfo.systemUptime < until {
+        try await Task.sleep(nanoseconds: 1_000_000)
+    }
+    expect(held?.isHoldingReference == true, "the original controller capture is genuinely suspended")
+    transport.disconnectPage()
+    try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
+    held?.releaseReference()
+    let outcome = await old.value
+    expect(outcome == "cancelled" && world.requests == ["page-a:reference"],
+           "a late A capture cannot commit its object ID or issue a request on B")
+    let result = try await transport.evaluate(StartupConnector.statusExpression, timeout: 5)
+    expect((result["status"] as? [String: Any])?["ready"] as? Bool == true
+        && world.requests == ["page-a:reference", "page-b:reference", "page-b:status"],
+        "B performs its own fresh capture and uses only B's object ID")
+    let disposed = try await transport.disposeController(href: world.href, timeout: 5)
+    expect(disposed["disposed"] as? Bool == true && world.disposedControllers == ["page-b"],
+        "cleanup after rebinding reaches only the newly bound controller")
+    transport.close()
+    let afterClose = try await transport.disposeController(href: world.href, timeout: 5)
+    expect(afterClose["disposed"] as? Bool == false && world.disposedControllers == ["page-b"],
+        "closed transports retain no cleanup authority")
+
+    let openingWorld = StartupReplacementWorld(stage: "never")
+    var openingTransport: WallpaperTransport?
+    var interruptOpening = true
+    let opening = WallpaperTransport(session: nil, socketFactory: { request in
+        let socket = openingWorld.socket(request)
+        if interruptOpening { interruptOpening = false; openingTransport?.disconnectPage() }
+        return socket
+    })
+    openingTransport = opening
+    defer { opening.close() }
+    var openingCancelled = false
+    do { try opening.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-a")!, timeout: 5) }
+    catch is CancellationError { openingCancelled = true }
+    expect(openingCancelled && openingWorld.sockets.first?.canceled == 1,
+        "invalidation while a socket is opening cancels the unpublished candidate")
+    try opening.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
+    let fresh = try await opening.evaluate(StartupConnector.statusExpression, timeout: 5)
+    expect((fresh["status"] as? [String: Any])?["ready"] as? Bool == true
+        && openingWorld.requests == ["page-b:reference", "page-b:status"],
+        "the next connection remains usable after interrupted socket creation")
+    return checks
 }
 
 @MainActor
@@ -4702,6 +4863,73 @@ private func startupPageReplacementChecks() async throws -> Int {
     for mode in ["cancel-list", "cancel-ready-list", "bad-install", "bad-status", "missing-controller", "href-drift", "run-drift", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced"] {
         let r = try await startupReplacementScenario(stage: mode == "bad-install" ? "install" : "status", mode: mode); common(r)
         expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) remains terminal")
+    }
+    // A temporary discovery transport error does not invalidate an already-owned
+    // ready controller. Recovery still needs a fresh same-page list and status.
+    for mode in ["recheck-once", "recheck-lost", "recheck-connect", "recheck-complete"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true); common(r)
+        let requests = r["requests"] as? [String] ?? []
+        expect(r["recovered"] as? Bool == true && r["connections"] as? [String] == ["page-a"]
+            && !requests.contains("page-a:dispose") && r["installs"] as? [String: Int] == ["page-a": 1],
+            "one timed-out ready proof must recover on the same page without disposal or installation replay")
+        expect(requests.filter { $0 == "page-a:reference" }.count == 1
+            && requests.filter { $0 == "page-a:status" }.count == 3 && r["recheckReads"] as? Int == 3,
+            "successful proof waits re-read exactly the retained controller before declaring readiness")
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first
+        let code = mode == "recheck-lost" ? -1005 : mode == "recheck-connect" ? -1004 : -1001
+        expect(diagnostic?["stage"] as? String == "recheck-wait" && diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == code && diagnostic?["httpStatus"] == nil,
+            "list diagnostics preserve only the actual transport domain and code")
+    }
+    let permanent = try await startupReplacementScenario(stage: "status", mode: "recheck-permanent"); common(permanent)
+    expect(permanent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+        && (permanent["elapsed"] as? Double ?? 6) <= 5 && (permanent["recheckReads"] as? Int ?? 0) > 1
+        && permanent["connections"] as? [String] == ["page-a"], "permanent failure consumes only the original deadline")
+    for mode in ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
+                 "recheck-array", "recheck-json", "recheck-oversized", "recheck-unknown"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")" && r["recheckReads"] as? Int == 1
+            && r["connections"] as? [String] == ["page-a"], "\(mode) cannot become a transient retry")
+        if mode == "recheck-http503" {
+            expect((r["diagnostics"] as? [[String: Any]])?.first?["httpStatus"] as? Int == 503,
+                "a rejected HTTP response retains its actual status without a response body")
+        }
+    }
+    for mode in ["recheck-controller", "recheck-missing", "recheck-href", "recheck-run", "recheck-disposed", "recheck-page",
+                 "recheck-cancel", "recheck-cancel-wait"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1]
+            && !(r["requests"] as? [String] ?? []).contains("page-a:dispose"),
+            "\(mode) never replays or disposes a changed controller while waiting for same-page proof")
+    }
+    for (mode, reason) in [("recheck-identity", "target-identity"), ("recheck-port", "listener-mismatch"),
+                           ("recheck-ambiguous", "ambiguous-main-page"), ("recheck-timeout", "overlay-timeout"),
+                           ("recheck-failed", "protocol-error"), ("recheck-schema", "protocol-error")] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"\(reason)\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1],
+            "\(mode) cannot reuse the earlier ready snapshot")
+    }
+    let waitedSkip = try await startupReplacementScenario(stage: "status", mode: "recheck-skip"); common(waitedSkip)
+    expect(waitedSkip["outcome"] as? String == "skipped(runID: 1, beforeReady: false)"
+        && !(waitedSkip["requests"] as? [String] ?? []).contains("page-a:dispose"), "a fresh skip after waiting remains terminal")
+    let unboundFailure = try await startupReplacementScenario(stage: "install", mode: "bad-install"); common(unboundFailure)
+    expect(unboundFailure["outcome"] as? String == "failed(reason: \"protocol-error\")"
+        && unboundFailure["disposedControllers"] as? [String] == []
+        && !(unboundFailure["requests"] as? [String] ?? []).contains("page-a:dispose"),
+        "failure before object binding cannot capture the current global merely for cleanup")
+    let swappedFailure = try await startupReplacementScenario(stage: "status", mode: "recheck-controller-http"); common(swappedFailure)
+    expect(swappedFailure["outcome"] as? String == "failed(reason: \"protocol-error\")"
+        && swappedFailure["disposedControllers"] as? [String] == []
+        && (swappedFailure["requests"] as? [String] ?? []).filter { $0 == "page-a:reference" }.count == 1,
+        "a failed list after a controller swap cannot acquire or dispose the new object")
+    for mode in ["reference-null", "reference-missing-id", "reference-wrong-type", "reference-large-id"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")"
+            && r["connections"] as? [String] == ["page-a"] && r["disposedControllers"] as? [String] == []
+            && !(r["requests"] as? [String] ?? []).contains("page-a:dispose"),
+            "\(mode) cannot bind a controller or fall back to disposing the current global")
     }
     for mode in ["complete-blip", "ready-blip"] {
         let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)

@@ -67,6 +67,10 @@ final class InstallObservingStartupTransport: StartupTransport {
         return try await base.evaluate(source, timeout: timeout)
     }
 
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try await base.disposeController(href: href, timeout: timeout)
+    }
+
     func close() { base.close() }
     func disconnectPage() { base.disconnectPage() }
 }
