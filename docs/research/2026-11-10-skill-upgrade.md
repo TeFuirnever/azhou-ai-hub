@@ -8,6 +8,8 @@
 
 稳定版采用官方非 draft、非 prerelease 的相关产品线发布，解析到 commit；不把默认分支 HEAD、文内版本或不同产品线当稳定升级。archify-dsh-v1.1.0 不属于 archify skill 产品线。archify 的默认分支许可证不能替代目标 tag：v3.1.0 与 v3.2.0 均为 MIT，原文已逐字核验。
 
+2026-11-10 16:24:30（Asia/Shanghai）交付前再次核对六个官方仓库：最新适用稳定发布及三个 tag 解引用后的 commit 均未改变；DSH 的 37 个 release 仍全部为 prerelease，ASD 与 eli5 来源仍无 release/tag。22 次官方 API 请求和 44 个原始输出文件已保存并读回校验，未用默认分支 HEAD 代替稳定发布。复核摘要为 96e34eda0dd1d3be562268e756c8473771002244b22ce4acfdb6e7b0540195c9。
+
 | 纳管 skill | 分类 | 判定 | 目标或保留来源 |
 |---|---|---|---|
 | agent-experience | adapted(project-local) | 无可认定稳定发布，保留 | 原固定来源；见 provenance 与机器清单 |
@@ -93,7 +95,19 @@ archify 使用同一 workflow、官方稳定 manifest 和 explainer 输入，固
 
 这些是控制输入下的 API/浏览器边界证据。reader 压力输入覆盖了通常可信的 locale/source 元数据，恶意行号绕过了正常源验证；旧 CDP JSON.stringify 表达式未被证明可注入，修复消除的是数据/代码拼接边界。reader/CSS 探针直接控制 prepared/DOM 数据，不能据此认定所有正常作者输入都能到达相同攻击路径；重复宽度不是独立自然样本。citation 的 6 例规则汇总在观察后形成，不冒充事前注册或盲测；候选独立耗时未记录，保持 unknown。浏览器边界探针总耗时 6.600s，不做速度结论。原始 HTML、DOM 结果、输入、规则和命令留在 Git 外，公开逐例布尔结果和摘要见机器证据。
 
-最终源码已再次执行全仓 verify，8/8 通过、76.237s，包含 665 项 Hub 单元测试及 59/45 两组现有包级测试；已知 native-event sample skip 保留。日志 SHA-256 为 `25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607`。这些本地结果不替代最终 PR head 的必需 CI 和审查线程状态。 五文件本地补丁另在隔离副本上完成 reverse-check、reverse 和 reapply，均恢复到预期字节；补丁与恢复摘要见机器证据。
+首轮本地兼容修复源码已再次执行全仓 verify，8/8 通过、76.237s，包含 665 项 Hub 单元测试及 59/45 两组现有包级测试；已知 native-event sample skip 保留。日志 SHA-256 为 `25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607`。这些本地结果不替代最终 PR head 的必需 CI 和审查线程状态。 五文件本地补丁另在隔离副本上完成 reverse-check、reverse 和 reapply，均恢复到预期字节；补丁与恢复摘要见机器证据。
+
+### Clipboard API 回退的后续修复
+
+后续审查发现，两处复制 handler 在 Clipboard API 缺失时把 undefined 当成成功，导致 Ask 关闭并假报复制，snippet 也误报成功。这里只加入共享 async 可用性检查，让 API 缺失和拒绝进入原有失败分支：Ask 保持弹窗并选中完整上下文文本供手动复制，snippet 显示失败；成功路径保留。该差量仅修改 reader 与一个仓库行为测试，属于上游集成兼容修复，不归因于 C2 或 RSI。
+
+冻结的同一六例（两个处理器 × 缺失/拒绝/成功）在真实 Chrome 的受控 API 状态下从 **4/6 到 6/6**，四个原成功对照保留；新增行为单测在旧 reader 上退出 1、修复后退出 0。原 paired run 未逐臂记录浏览器版本，这一限制保留。另做的认证复放使用未修改输入、规则与 probe，两臂实际 Browser.getVersion 完全相同：Chrome/157.0.8103.39、V8 15.7.112.23、protocol 1.3；仍为 4/6 与 6/6，两个 190 文件包仅 reader 不同，运行前后源字节稳定。原 paired 耗时 2.260/2.201s，认证复放 2.710/2.242s，分别保留，不推断速度收益。
+
+第一版探针误用没有复制按钮的 code block，1.217s 后中止；改用 snippet 并在 reader 修改前重新冻结，原失败记录保留。后续只整理测试空行，Python AST 相同，旧单测摘要与最终源码通过格式等价记录连接；最终全仓 verify 单独覆盖最终字节。最终两文件 diff SHA-256 为 `69da26120afc5f92f6bb1a48e02551348f249c84ec5c2e8746ca0e611de2eaa1`，隔离 reverse/check/reapply 四步均为 0，准确恢复旧版和候选字节。
+
+这些六条观察共用一个合成页面，Clipboard API 结果受控，不声称六个独立自然会话或实际系统剪贴板写入。probe 内模型调用/token/API 费用为 0，整项编排模型成本仍 unknown。原运行、认证复放、失败尝试、格式等价、最终 diff 与恢复记录分别绑定在机器证据中。
+
+剪贴板修复后的最终源码已执行全仓 verify：**8/8 门禁通过**，包含 **666 项 Hub 单元测试与 59/45 两组现有测试**，实际耗时 75.731s，日志 SHA-256 为 `b54625c2d796d0b2868a4fdf506953cf48765d9d60eb2349c9fb32c1c86ebb0e`。11 项源码、测试、manifest 与合同摘要在运行前后相同；该次 unittest 摘要报告 1 项 skip，未逐项打印原因。本任务未提供 native-event 实采样本，不声称宿主原生事件实弹验证。最终来源与公开摘要随后只补充这次实际结果，精确 PR head 的必需 CI 与线程仍是集成条件。
 
 ## 一个候选：项目证据归属
 

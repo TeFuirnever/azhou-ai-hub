@@ -247,6 +247,58 @@ console.log(JSON.stringify({local,official,renamedRejected}));
             self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(), receipt["artifact"]["sha256"])
 
 
+    def test_copy_handlers_keep_manual_fallback_when_clipboard_is_unavailable(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const source=fs.readFileSync(path.join(process.argv[1],'explainer/reader.js'),'utf8');
+let start=source.indexOf('  // Clipboard writes');
+if(start<0)start=source.indexOf("  all('[data-copy]')");
+const end=source.indexOf('  // Source cards:',start);
+assert.ok(start>=0&&end>start);
+const handlers=source.slice(start,end);
+for(const handler of ['snippet','ask'])for(const mode of ['missing','reject','success']){
+  const writes=[],notices=[];
+  const element=()=>({textContent:'',value:'',style:{},events:{},children:[],setAttribute(){},focus(){},addEventListener(event,fn){this.events[event]=fn;},append(child){this.children.push(child);},click(){this.events.click?.();},select(){this.selected=this.value;}});
+  const area=element(),quote=element(),where=element(),form=element(),head=element(),dialog=element(),copy=element();
+  copy.textContent='Copy';copy.closest=()=>({querySelector:()=>({textContent:'Original snippet'})});
+  form.requestSubmit=()=>form.events.submit({preventDefault(){}});
+  dialog.querySelector=selector=>({'textarea':area,'blockquote':quote,'.ask-where':where,'form':form}[selector]);
+  dialog.querySelectorAll=()=>[];dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};
+  const panel={id:'panel',dataset:{title:'Panel title'},querySelector:selector=>selector==='.panel-id'?{textContent:'1'}:head};
+  const document={body:{append(){}},createElement:tag=>tag==='dialog'?dialog:element(),querySelector:()=>({textContent:'Page title'}),addEventListener(){}};
+  const clipboard=mode==='missing'?undefined:{writeText(text){assert.equal(this,clipboard);writes.push(text);return mode==='reject'?Promise.reject(new Error('Denied')):Promise.resolve();}};
+  const words=new Proxy({askChips:['Explain this'],copy:'Copy',copied:'Copied',askCopied:'Question copied'},{get:(target,key)=>target[key]??String(key)});
+  vm.runInNewContext(handlers+'\nsetupAsk();',{
+    document,navigator:{clipboard,platform:'',userAgent:''},location:{protocol:'https:',href:'https://example.invalid/reader'},
+    all:selector=>selector==='[data-copy]'?[copy]:selector==='.panel'?[panel]:[],
+    words,english:true,say:en=>en,escapeText:String,notify:text=>notices.push(text),setTimeout(){},
+  });
+  if(handler==='snippet')copy.click();
+  else {head.children[0].click();area.value='Why?';form.requestSubmit();}
+  await new Promise(setImmediate);
+  assert.equal(writes.length,mode==='missing'?0:1,handler+' '+mode);
+  if(handler==='snippet'){
+    if(mode==='success'){assert.equal(writes[0],'Original snippet');assert.equal(copy.textContent,'Copied');assert.deepEqual(notices,[]);}
+    else {assert.equal(copy.textContent,'Copy');assert.deepEqual(notices,['Copy failed.']);}
+  }else{
+    const text=mode==='success'?writes[0]:area.value;
+    for(const context of ['Page title','ID: panel','Why?','https://example.invalid/reader'])assert.ok(text.includes(context),context);
+    if(mode==='success'){assert.equal(dialog.open,false);assert.deepEqual(notices,['Question copied']);}
+    else {assert.equal(dialog.open,true);assert.equal(area.selected,area.value);assert.deepEqual(notices,[]);}
+  }
+}
+console.log(JSON.stringify({checks:6,passed:true}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=10,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"checks": 6, "passed": True}, json.loads(result.stdout))
+
 
 @unittest.skipIf(shutil.which("node") is None, "node is not available")
 class ArchifyExplainerSecurityRegressionTest(unittest.TestCase):

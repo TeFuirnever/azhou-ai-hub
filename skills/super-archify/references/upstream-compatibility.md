@@ -24,6 +24,7 @@ This map records the current upstream `archify/` baseline at tag `v3.2.0` (commi
 | Explainer dynamic text and style boundaries | bounded local hardening | Reader text/attribute escaping, complete style unwrapping and raw-text terminator handling; DOM/source-card and native-preview behavior retained |
 | Explainer browser-check selectors | bounded local hardening | CDP function arguments carry selector data in the existing page context; focus/Enter/native-viewer controls retained |
 | Explicit repository citation revision | local correctness fix | Conflicting source/document revisions reject with `source-revision`; matching old pins, inferred HEAD and no-repository fallback retained |
+| Clipboard API unavailable or rejected | local compatibility fix | Both copy handlers enter their existing failure branch; Ask retains selected contextual text for manual copying, snippet reports failure, and successful copying remains covered by controls |
 | Known upstream alert | retained limitation | The v3.1 CodeQL incomplete multi-character sanitization finding in `delta/architecture-delta.mjs` is unchanged at v3.2.0; no fix claim |
 | Upstream `license` and `metadata` frontmatter | adapted | Hub requires `name`, `description`, `invocation`; immutable source version and license live in provenance |
 | Illustrative output link | adapted | Existing `file:///abs/path/...html` example retained for repository link validation |

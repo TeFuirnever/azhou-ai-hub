@@ -3853,7 +3853,7 @@
     "schema": "azhou.archify.integration-fixes.v1",
     "recorded_at": "2026-11-10T06:54:51.145150+00:00",
     "pr_url": "https://github.com/TeFuirnever/azhou-ai-hub/pull/430",
-    "stage": "local_validation_before_required_CI",
+    "stage": "final_local_validation_complete_required_CI_pending",
     "upstream_release": "v3.2.0",
     "upstream_commit": "208acba8d412335185b2056fedf54b3405df43fb",
     "initial_codeql_findings": {
@@ -3884,7 +3884,8 @@
         {
           "path": "skills/super-archify/explainer/reader.js",
           "official_target_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
-          "current_local_sha256": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755"
+          "current_local_sha256": "61c50334c072d7393f8ee0c60198e6a5e7c635d91a3175c09ac3616e7152b7f2",
+          "local_sha256_before_clipboard_followup": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755"
         },
         {
           "path": "skills/super-archify/explainer/render.mjs",
@@ -3903,7 +3904,7 @@
         }
       ]
     },
-    "current_vendor_manifest_sha256": "f07cf2994f8393c3e9b808b80129d5e8bcec859d6c7beb4425fd82579f5735cd",
+    "current_vendor_manifest_sha256": "a7a2a59420f6b9b08874bf6ad69583029d5f94a60fb315cfbc00fde12a606eb5",
     "source_file_count": 203,
     "package_file_count": 190,
     "citation_revision_comparison": {
@@ -4202,15 +4203,43 @@
       "exit": 0,
       "passed_gates": 8,
       "total_gates": 8,
-      "seconds": 76.2370231670211,
+      "seconds": 75.73075854196213,
       "unit_suites": [
-        665,
+        666,
         59,
         45
       ],
-      "log_sha256": "25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607",
-      "record_sha256": "8bfd3e4f8345a7cf441fa9be519945a33540806aa0db8c967a4089dff0fa8b30",
-      "known_native_event_sample_skip_preserved": true
+      "unit_suite_timings": [
+        {
+          "tests": 666,
+          "seconds": 64.12
+        },
+        {
+          "tests": 59,
+          "seconds": 0.865
+        },
+        {
+          "tests": 45,
+          "seconds": 1.29
+        }
+      ],
+      "log_sha256": "b54625c2d796d0b2868a4fdf506953cf48765d9d60eb2349c9fb32c1c86ebb0e",
+      "record_sha256": "4c27ed004d79f3b9090ca700d656049ef871e0d4e0ac375c228b30cd41c404d4",
+      "source_sha256": {
+        "skills/super-repo-pedant/scripts/manage_evolution.py": "9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d",
+        "tests/test_manage_evolution.py": "89f36d6a472a437a1fd560e81f3c54226ff2cb8782bb850aab5e4f91991908b4",
+        "skills/super-repo-pedant/references/evolution-contract.md": "74531c900bf783a9e3a78f41124948310813f800de3b8d45f4562742a8f87ee7",
+        "skills/super-archify/explainer/reader.js": "61c50334c072d7393f8ee0c60198e6a5e7c635d91a3175c09ac3616e7152b7f2",
+        "skills/super-archify/explainer/render.mjs": "3993aa9e6abd47f0bd903cf4254f465c331369f98e507523da7e9181be8eb21d",
+        "skills/super-archify/explainer/browser-check.mjs": "02154602a97850c3f0ab5a55b18735d63d2b5d29fa87f6cf5dc9fc18efa9b6b9",
+        "skills/super-archify/explainer/sources.mjs": "cbe349e5f7bf6203b1ae51ee2eb73ee5fb1bf399e23f0b301af1be41f8adae09",
+        "tests/test_archify.py": "c8f1bdb8ee115fc556f56d2b5e00d2fe0d5466654fe4c4caa22cef1fec4388e8",
+        "tests/archify-vendor-manifest.json": "a7a2a59420f6b9b08874bf6ad69583029d5f94a60fb315cfbc00fde12a606eb5",
+        "skills/super-archify/references/provenance.md": "d356702ce287ca8cee85eba9a98398a2b38da58ec766d096af3cdf4eb31d2e91",
+        "skills/super-archify/references/upstream-compatibility.md": "9f3042e7d7b00d13c965ea1470c96f4680ddc76114826dc90caeb945ac218ce7"
+      },
+      "unittest_reported_skips": 1,
+      "skip_reporting_limit": "Default unittest output reports one skip without its reason. This task supplied no native-event sample directory; no live native producer validation is claimed."
     },
     "C2_approved_diff_unchanged": true,
     "model_calls_in_deterministic_runners": 0,
@@ -4222,7 +4251,371 @@
       "diff_sha256": "ae5497a426a3be1f615d529f2cd4eed074a15190576f38c6f35ec5e8e1e6c5b0",
       "final_source_review_sha256": "8404973dcdbf36ea4d99fedb83c9cc0a02a3d8176368092e6161a8755d19855c",
       "isolated_rollback_and_reapply_sha256": "e38303db2f4aaf4f89f1084f197e374cd9b9cc8afe9145eef917c1453200057e",
-      "isolated_rollback_and_reapply_passed": true
+      "isolated_rollback_and_reapply_passed": true,
+      "ending_source_commit": "e63905340e8bcd8b53b1392a457b640118feb9c9"
+    },
+    "first_integration_fix_commit": "e63905340e8bcd8b53b1392a457b640118feb9c9",
+    "regression_checks_source_commit": "e63905340e8bcd8b53b1392a457b640118feb9c9",
+    "full_repository_verification_before_clipboard_followup": {
+      "exit": 0,
+      "passed_gates": 8,
+      "total_gates": 8,
+      "seconds": 76.2370231670211,
+      "unit_suites": [
+        665,
+        59,
+        45
+      ],
+      "log_sha256": "25f64c4409a04b290aeafa2df686e0be8cfe024ee386bf6792851c5a59c51607",
+      "record_sha256": "8bfd3e4f8345a7cf441fa9be519945a33540806aa0db8c967a4089dff0fa8b30",
+      "known_native_event_sample_skip_preserved": true
+    },
+    "clipboard_fallback_followup": {
+      "base_commit": "e63905340e8bcd8b53b1392a457b640118feb9c9",
+      "thread": "PRRT_kwDOUAdefs61l1yB",
+      "failure_mechanism": "Optional Clipboard API absence yields undefined; Promise.resolve(undefined) falsely takes copy-success callbacks. An environment limitation is misreported by the reader implementation.",
+      "change": "One async copyText helper explicitly rejects unavailable writeText; both existing handlers use the existing failure branch. Ask retains contextual selected text and remains open; snippet reports failure.",
+      "files_before": {
+        "skills/super-archify/explainer/reader.js": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755",
+        "tests/test_archify.py": "2bc7293862431b2f915afb8397f7c9a5c729fa6a94a2edae7f82620467ff2d06"
+      },
+      "files_after": {
+        "skills/super-archify/explainer/reader.js": "61c50334c072d7393f8ee0c60198e6a5e7c635d91a3175c09ac3616e7152b7f2",
+        "tests/test_archify.py": "c8f1bdb8ee115fc556f56d2b5e00d2fe0d5466654fe4c4caa22cef1fec4388e8"
+      },
+      "source_and_test_diff_sha256": "69da26120afc5f92f6bb1a48e02551348f249c84ec5c2e8746ca0e611de2eaa1",
+      "final_record_sha256": "923aaf48bbaf77a614c2ea88a868564fb7f1ca9eb9a79b6f1e3dfd4eaf2b19df",
+      "original_paired_browser": {
+        "before_passed": 4,
+        "after_passed": 6,
+        "observations_per_variant": 6,
+        "cases": [
+          {
+            "id": "snippet_missing",
+            "before": false,
+            "after": true
+          },
+          {
+            "id": "snippet_reject",
+            "before": true,
+            "after": true
+          },
+          {
+            "id": "snippet_success",
+            "before": true,
+            "after": true
+          },
+          {
+            "id": "ask_missing",
+            "before": false,
+            "after": true
+          },
+          {
+            "id": "ask_reject",
+            "before": true,
+            "after": true
+          },
+          {
+            "id": "ask_success",
+            "before": true,
+            "after": true
+          }
+        ],
+        "known_success_controls_retained": true,
+        "before_seconds": 2.2603515000082552,
+        "after_seconds": 2.2013037499855272
+      },
+      "original_browser_version_limit": "Original paired runs did not record per-arm CDP versions; the later authentication replay below supplies that binding only for its own executions.",
+      "authentication_replay": {
+        "same_CDP_version": true,
+        "before": {
+          "protocolVersion": "1.3",
+          "product": "Chrome/157.0.8103.39",
+          "revision": "@9a31f0acec1854d44e49a73fbf8017598151a583",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+          "jsVersion": "15.7.112.23"
+        },
+        "after": {
+          "protocolVersion": "1.3",
+          "product": "Chrome/157.0.8103.39",
+          "revision": "@9a31f0acec1854d44e49a73fbf8017598151a583",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+          "jsVersion": "15.7.112.23"
+        },
+        "before_passed": 4,
+        "after_passed": 6,
+        "source_manifest_sha256": "8c0e653703993133c914de9f942f0f39e0ac0939a7943381533e39cc7eb11383",
+        "frozen_inputs_rules_probe_unchanged": true,
+        "scope": "Instrumented authentication replay of the original frozen six observations. Original runs retained; exact CDP version claimed only for these two new runs."
+      },
+      "authentication_replay_record_sha256": "ebc853253a0c61cfea4d9a31f2390b83d8ce08314eac3f9d34c8e87ac67f282a",
+      "authentication_replay_seconds": {
+        "before": 2.7098269580164924,
+        "after": 2.242160584020894
+      },
+      "format_equivalence": {
+        "before_sha256": "db8e8e643c57cddf37100ba9c95311d1c8800ce359186296d7f20add8d326547",
+        "after_sha256": "c8f1bdb8ee115fc556f56d2b5e00d2fe0d5466654fe4c4caa22cef1fec4388e8",
+        "python_AST_equal": true,
+        "reason": "Only remove excess blank lines after the new test method; event logic, expectations and fixture unchanged."
+      },
+      "format_equivalence_sha256": "27dd2d08abcbb15b451a912d75319b481eef630159b1374082e87722351b31d7",
+      "regression_test": {
+        "command": [
+          "python3",
+          "-B",
+          "-m",
+          "unittest",
+          "tests.test_archify.ArchifyRuntimeRegressionTest.test_copy_handlers_keep_manual_fallback_when_clipboard_is_unavailable",
+          "-v"
+        ],
+        "baseline_exit": 1,
+        "candidate_exit": 0,
+        "asserted_event_paths": 6,
+        "final_format_binding": "The unit test ran before whitespace-only formatting; format-only.json proves identical Python AST. Root runs full verify on final bytes."
+      },
+      "isolated_rollback": {
+        "steps_all_zero": true,
+        "original_two_files_restored": true,
+        "candidate_two_files_reapplied": true,
+        "active_worktree_never_reverted": true,
+        "record_sha256": "f96c8c81928b9004c784965f90007b7847862db0aaf28b052097e9a6ffedc151",
+        "final_format_verified": true
+      },
+      "records": {
+        "frozen.json": "2367cd4c26357ca4b7d748364d77e4b833107523ed8b22fd37f80f628b3f1c58",
+        "before-run.json": "75cc91be552b6a4d277beac37a6cc396098e24451944c71c70f4571ab6d943b9",
+        "v2/frozen.json": "7aa693c26fa2d92ef4de2a47547711133db4d6e5073a6ae7cc9e334725721aea",
+        "v2/before-run.json": "13b08a110b0b569dad8308d4688f35fa8bf5cdc4cfe45ec6119dd32f8c042481",
+        "v2/before/results.json": "76eb749cd5fbc441fc60854dcb89f4ec364760bb4ad567c549053c6d06ba5ba5",
+        "v2/after/results.json": "9f8b0906b5593abb1f731fd314e18f81c221e2dac6c665821da4fac333786d28",
+        "unit-before.json": "d4a61ff1b0c2c52c6b921a4de2ebe50293a0285b552cccc6ca7186f94693d6b5",
+        "unit-after.json": "401b3c5e5f6fa3f39c4b29e0223b1c5029039fab395623655f4fc47d98107a24",
+        "browser-after.json": "454dba8793a7871293720f3a44151cccae41e27188675fd5efc8cc5c8dffa7c9",
+        "rollback-proof.json": "f96c8c81928b9004c784965f90007b7847862db0aaf28b052097e9a6ffedc151",
+        "resume-preflight.json": "5db17ef3aac82d02a19c760fe735459b67b502afb08b35653019ee8880ff6d35",
+        "resume-format-attempt.json": "3ea26f71c85a2c72818b3c374b42a8139d3600fd418a3a667842a7813d9f0c7c",
+        "format-only.json": "27dd2d08abcbb15b451a912d75319b481eef630159b1374082e87722351b31d7",
+        "version-wrapper.mjs": "afffa5e4242bb43ebad796c7ee54c0c4553b1b324fa103799110834892f2edd9",
+        "version-bound-source-manifest.json": "8c0e653703993133c914de9f942f0f39e0ac0939a7943381533e39cc7eb11383",
+        "version-binding.json": "ebc853253a0c61cfea4d9a31f2390b83d8ce08314eac3f9d34c8e87ac67f282a",
+        "before-version-bound-run.json": "d9807967dfb1d16a72029c5671874c5c22183ec8cf01dfeac44b956dbc6d5295",
+        "after-version-bound-run.json": "8937698ecf3bee027ee4385d45c9facffe7c239a5c89bc64b21ea417fc664b2f",
+        "v2/before-version-bound/results.json": "427403515bd994d2df23681643a081c63b2d924ad79b6f5b94518c48ba6db3fb",
+        "v2/after-version-bound/results.json": "403041e0a119dfb4b677198afa743276930d61ece8444497677e58aa0dca5fe7",
+        "v2/before-version-bound/browser-version.json": "d439ade48b00df22708815d9b59d5706a58f5784eea7c2a396b0e82e5235b2ec",
+        "v2/after-version-bound/browser-version.json": "d439ade48b00df22708815d9b59d5706a58f5784eea7c2a396b0e82e5235b2ec",
+        "pre-format/final-record.json": "ab35fdd11ab7389efda09a0da7e77cc1373ab4923d20cb8077c2709c6f8858f2",
+        "pre-format/rollback-proof.json": "f9071e33682e0bf8c4e353d873d2a57c46d85501817a3f1d1f0080368c90f0e5",
+        "pre-format/clipboard-fix.diff": "21f08cd6926a4995d2e436be89efb7090609985ba3821c72343c6a87eeea4783",
+        "final-rollback-summary.json": "b819d3ab61392222c441e3d730d1652ba41b4cd6d7b6825f9bb1da31210a57d1"
+      },
+      "cost": {
+        "model_calls_in_probe": 0,
+        "model_tokens_in_probe": 0,
+        "API_cost_in_probe": 0,
+        "orchestration_model_token_cost": "unavailable",
+        "included_failed_harness_attempt_seconds": 1.2173031250131316,
+        "note": "All process attempts retained, including initial fixture error and baseline negative unit test.",
+        "measured_execution_attempts": [
+          {
+            "name": "initial_fixture_error",
+            "record": "before-run.json",
+            "exit": 1,
+            "elapsed_seconds": 1.2173031250131316
+          },
+          {
+            "name": "original_before",
+            "record": "v2/before-run.json",
+            "exit": 0,
+            "elapsed_seconds": 2.2603515000082552
+          },
+          {
+            "name": "baseline_negative_unit",
+            "record": "unit-before.json",
+            "exit": 1,
+            "elapsed_seconds": 0.08878241700585932
+          },
+          {
+            "name": "candidate_unit",
+            "record": "unit-after.json",
+            "exit": 0,
+            "elapsed_seconds": 0.08257733297068626
+          },
+          {
+            "name": "original_after",
+            "record": "browser-after.json",
+            "exit": 0,
+            "elapsed_seconds": 2.2013037499855272
+          },
+          {
+            "name": "authentication_before",
+            "record": "before-version-bound-run.json",
+            "exit": 0,
+            "elapsed_seconds": 2.7098269580164924
+          },
+          {
+            "name": "authentication_after",
+            "record": "after-version-bound-run.json",
+            "exit": 0,
+            "elapsed_seconds": 2.242160584020894
+          },
+          {
+            "name": "pre_format_restore",
+            "record": "pre-format/rollback-proof.json",
+            "steps_exit": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "elapsed_seconds": 0.06955654197372496
+          },
+          {
+            "name": "final_format_restore",
+            "record": "rollback-proof.json",
+            "steps_exit": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "elapsed_seconds": 0.049435083055868745
+          }
+        ],
+        "sum_measured_execution_seconds": 10.92129729205044,
+        "unmeasured_attempts": [
+          {
+            "name": "whitespace_match_assertion",
+            "record": "resume-format-attempt.json",
+            "elapsed_seconds": null,
+            "scope": "Stopped before source write; no behavior probe ran."
+          },
+          {
+            "name": "remote_disconnects",
+            "elapsed_seconds": null,
+            "scope": "No retained unknown-command stage or active job on recovery; no process elapsed time is available."
+          }
+        ]
+      },
+      "limits": [
+        "Controlled Clipboard API outcomes in real Chrome with actual rendered event handlers; no natural end-user task or real OS clipboard claim.",
+        "Six observations share one synthetic explainer and browser/runtime; not six independent sessions.",
+        "First harness attempt accidentally used a repository code block, which has no copy button; it aborted before behavior evaluation. Correct v2 snippet fixture was frozen before any reader change; original attempt is preserved.",
+        "This is an upstream integration compatibility fix, not a new RSI/evolution mechanism.",
+        "Root owns provenance/vendor-manifest/public-record update and final full verify/CI. No source outside the named two paths was changed.",
+        "The known successful before/after Ask text includes its respective artifact path; semantic context fields and event outcomes are compared, not falsely claimed as byte-identical across differently named artifacts.",
+        "Original Chrome probes did not record per-arm CDP versions. Only the separate authentication replay has identical actual Browser.getVersion objects; original results are not retroactively version-attested."
+      ],
+      "classification": "bounded upstream integration compatibility fix; not the C2 evolution mechanism",
+      "authentication_replay_executions": [
+        {
+          "label": "before-version-bound",
+          "record_sha256": "d9807967dfb1d16a72029c5671874c5c22183ec8cf01dfeac44b956dbc6d5295",
+          "exit": 0,
+          "elapsed_seconds": 2.7098269580164924,
+          "stdout_sha256": "b1b6632a0288dbe0b2fb0587285b0b686d2d284370dc6ddc506182d9002a7ba6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "reader_sha256": "53d170c1ed7f4769f96e3bda310461270e68b42acdf65571d43b286686578755"
+        },
+        {
+          "label": "after-version-bound",
+          "record_sha256": "8937698ecf3bee027ee4385d45c9facffe7c239a5c89bc64b21ea417fc664b2f",
+          "exit": 0,
+          "elapsed_seconds": 2.242160584020894,
+          "stdout_sha256": "52dbb92435c5becfcf0d31724bd208f0211e2bc2a73fe6e35250d2513e7154a5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "reader_sha256": "61c50334c072d7393f8ee0c60198e6a5e7c635d91a3175c09ac3616e7152b7f2"
+        }
+      ]
     }
+  },
+  "release_evidence_final_recheck": {
+    "completed_at": "2026-11-10T08:24:30.065480+00:00",
+    "completed_at_local": "2026-11-10T16:24:30.065480+08:00",
+    "selection": "Official non-draft/non-prerelease release evidence; Archify DSH adapter is a separate product line. No default-branch HEAD is treated as stable.",
+    "unchanged": true,
+    "summary_sha256": "96e34eda0dd1d3be562268e756c8473771002244b22ce4acfdb6e7b0540195c9",
+    "readback_sha256": "597560578eb7ac8c24d05524f3b699ddd0ac47327954f7ca910a765001f7f15d",
+    "results": [
+      {
+        "repository": "tt-a1i/archify",
+        "releases_count": 24,
+        "tags_count": 25,
+        "prerelease_count": 1,
+        "excluded_product_line_tags": [
+          "archify-dsh-v1.1.0",
+          "archify-dsh-v1.0.0"
+        ],
+        "official_latest_tag": "v3.2.0",
+        "errors": [],
+        "expected_tag": "v3.2.0",
+        "expected_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "actual_commit": "208acba8d412335185b2056fedf54b3405df43fb",
+        "immutable_pin_unchanged": true,
+        "unchanged": true
+      },
+      {
+        "repository": "KKKKhazix/khazix-skills",
+        "releases_count": 2,
+        "tags_count": 5,
+        "prerelease_count": 0,
+        "excluded_product_line_tags": [],
+        "official_latest_tag": "v1.2.0",
+        "errors": [],
+        "expected_tag": "v1.2.0",
+        "expected_commit": "cfa3436d4d31db9b1340af3082a914adf92f023f",
+        "actual_commit": "cfa3436d4d31db9b1340af3082a914adf92f023f",
+        "immutable_pin_unchanged": true,
+        "unchanged": true
+      },
+      {
+        "repository": "zai-org/ZCode",
+        "releases_count": 3,
+        "tags_count": 4,
+        "prerelease_count": 0,
+        "excluded_product_line_tags": [],
+        "official_latest_tag": "v3.17.2",
+        "errors": [],
+        "expected_tag": "v3.17.2",
+        "expected_commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "actual_commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+        "immutable_pin_unchanged": true,
+        "unchanged": true
+      },
+      {
+        "repository": "deepseek-ai/deepseek-harness",
+        "releases_count": 37,
+        "tags_count": 38,
+        "prerelease_count": 37,
+        "excluded_product_line_tags": [],
+        "official_latest_tag": null,
+        "errors": [],
+        "still_without_formal_stable_release": true,
+        "unchanged": true
+      },
+      {
+        "repository": "TeFuirnever/asd-ste100-skill",
+        "releases_count": 0,
+        "tags_count": 0,
+        "prerelease_count": 0,
+        "excluded_product_line_tags": [],
+        "official_latest_tag": null,
+        "errors": [],
+        "still_without_formal_stable_release": true,
+        "unchanged": true
+      },
+      {
+        "repository": "anthropics/claude-plugins-community",
+        "releases_count": 0,
+        "tags_count": 0,
+        "prerelease_count": 0,
+        "excluded_product_line_tags": [],
+        "official_latest_tag": null,
+        "errors": [],
+        "still_without_formal_stable_release": true,
+        "unchanged": true
+      }
+    ]
   }
 }

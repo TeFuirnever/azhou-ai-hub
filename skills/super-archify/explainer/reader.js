@@ -522,9 +522,14 @@
       }));
     });
   }
+  // Clipboard writes must reject when the API is unavailable so the existing fallback runs.
+  async function copyText(text) {
+    if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(text);
+  }
   all('[data-copy]').forEach(button=>button.addEventListener('click',()=>{
     const text = button.closest('figure').querySelector('pre code').textContent;
-    Promise.resolve(navigator.clipboard?.writeText(text)).then(()=>{button.textContent = words.copied;setTimeout(()=>{button.textContent = words.copy;},1600);},()=>notify(say('Copy failed.','复制失败。')));
+    copyText(text).then(()=>{button.textContent = words.copied;setTimeout(()=>{button.textContent = words.copy;},1600);},()=>notify(say('Copy failed.','复制失败。')));
   }));
   // Follow-up questions: a reader asks about a panel, or about selected text in it, and copies a
   // message that names the page, the panel ID and the quote, so the agent can revise just that panel.
@@ -566,7 +571,7 @@
         ...(panel.id === 'answer' ? [] : [words.askPatch]),
       ];
       const text = lines.join('\n');
-      Promise.resolve(navigator.clipboard?.writeText(text)).then(()=>{ dialog.close(); notify(words.askCopied); },()=>{ area.value = text; area.select(); });
+      copyText(text).then(()=>{ dialog.close(); notify(words.askCopied); },()=>{ area.value = text; area.select(); });
     });
     all('.panel').forEach(panel=>{
       const button = document.createElement('button'); button.type = 'button'; button.className = 'ask-button interactive'; button.textContent = words.ask;
