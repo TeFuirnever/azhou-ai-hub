@@ -935,13 +935,17 @@ class PageController {
 
   expire(runId) {
     if (this.disposed || runId !== this.state.runId || !['loading', 'playing'].includes(this.state.phase)) return false;
+    const recoverable = this.state.phase === 'playing' && this.state.ready;
     this.watchdog = null;
     this.#disconnectBodyObserver();
     this.state.phase = 'timeout';
     this.state.overlay = false;
     this.state.reason = 'overlay-timeout';
     this.host.removeEventListener('message', this.onMessage);
-    this.#stopFrame();
+    // A prepared run can still expose settings when playback stalls. Its timeout
+    // remains authoritative; revealing the entry does not complete that run.
+    if (recoverable) this.#stopFrameAndRevealEntry();
+    else this.#stopFrame();
     return true;
   }
 
@@ -1028,7 +1032,9 @@ class PageController {
 
   #openSettings() {
     if (this.disposed || !this.installed) return false;
-    if (this.state.phase === 'complete') return this.#beginRun('settings');
+    const readyTimeout = this.state.phase === 'timeout'
+      && this.state.reason === 'overlay-timeout' && this.state.ready;
+    if (this.state.phase === 'complete' || readyTimeout) return this.#beginRun('settings');
     if (this.state.phase === 'settings') return false;
     if (this.state.phase === 'playing') {
       this.#rememberFocus();

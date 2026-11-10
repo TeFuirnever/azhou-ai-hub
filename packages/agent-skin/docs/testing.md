@@ -38,6 +38,7 @@ python3 -B tools/test-unit-coverage.py
 | FT-ICON-IDENTITY | 使用该宿主已批准的源图 SHA-256 构建，分别在预检前和预检后换入同尺寸的图，并用 Codex 摘要启动 ZCode 构建 | 正确摘要生成经校验的暂存图，替换图或宿主串图被拒绝，原载荷保留 | preflight UT 与真实构建命令的隔离用例。实际 Dock 图案、标签和点击按 FT-DOCK 现场核对 |
 | FT-COLD | 用户完整退出官方宿主，再从阿舟入口启动 | 恰好一次冷启动、控制器就绪、动画结束和壁纸生效；没有第二个宿主 | 原生协议 UT、生成载荷测试；`test-installed-acceptance.py --cold-start` 加视觉审阅 |
 | FT-LIFECYCLE | Codex、ZCode、DSH 正常完成；就绪前后页面移除浮层；设置浮层或 DSH 嵌入面板被移除；ZCode 收到终态失败 | 正常完成保持成功；浮层丢失撤销就绪并释放宿主；嵌入面板只清理和通知一次；原生等待不越过终态继续接受就绪 | macOS Required 路径中的三宿主浏览器回归与 ZCode 原生协议夹具 |
+| FT-PLAYBACK-TIMEOUT | 动画已 ready 但播放未结束，25 秒 watchdog 到期；宿主导航已存在或随后挂载；点击恢复的外观入口 | 保留 overlay-timeout、completed=false 和空 completion；释放旧浮层，布局可用时显示同一入口；点击只创建新的 settings run，不重播。未 ready、素材失败或已释放的控制器仍拒绝；旧 frame、run 消息和 watchdog 不得影响新设置会话 | `startup.test.mjs` 的超时与迟到消息回归；`test-startup-browser.mjs` 的实际动画准备、watchdog 边界、入口顺序/几何、真实点击、取消及焦点/inert 清理。合成定时器不证明锁屏视觉或自然播放完成 |
 | FT-HOT | 官方宿主保持运行，再打开阿舟入口 | 激活同一 PID；不重播、不覆盖控制器、不退出宿主 | 原生事件 UT；实机对照前后 PID、事件和页面 |
 | FT-LATE-SHELL | 页面外壳晚于 12 秒动画出现 | 动画准时结束，壁纸继续等待并生效，不重播动画 | `startup.test.mjs`、`test-startup-browser.mjs` 的生成载荷延迟场景 |
 | FT-SHELL-TIMEOUT | 60 秒内始终没有支持的页面外壳 | 返回 `shell-timeout`；临时观察器清理；不伪造成功 | 生成载荷完整超时测试 |
