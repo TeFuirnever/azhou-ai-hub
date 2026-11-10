@@ -51,7 +51,7 @@
   },
   "reviewer": {
     "name": "root with independent promotion_evidence_review",
-    "review_sha256": "8ff15849ed2c62eefa7359e09c6a52b6dd00f3dcaa6b4795126d83818c20cb5d",
+    "review_sha256": "35a59701c3980556f9f4f3837aac2173b2d3c7b6251c57b2404ca93ff551697f",
     "independent_review_sha256": "012db4ca819180fc16c1e7ff654ee548b08f41fea4b2fcfc30326dd4940fa076"
   },
   "gate": {
@@ -135,7 +135,13 @@
   "original_envelope": {
     "manifest_sha256": "38a775514a7e48e2faa4d89148bb216511166013eff92c605016bcd6828dd182",
     "records": 5036,
-    "preserved": true
+    "preserved": true,
+    "preservation_meaning": "Original frozen inputs, evaluator and historical run records/artifacts stayed unchanged. Fourteen generated fixture state entries temporarily drifted during authentication replay and were restored exactly from original run artifacts.",
+    "transient_fixture_state_mismatches": 14,
+    "restored_from_original_artifacts": true,
+    "recovery_record_sha256": "a1f6811071cb96e1f385a0270d203caa4abf53f75f2dd2371b59bcdaa3ebd963",
+    "incident_record_sha256": "c146045521649fe550fe0603939c1c287c05a417d6778e84365db9578a0d6cff",
+    "independent_recovery_review_sha256": "ec4c7f466a006131aa79066f52696482fb4368a54d5d98e1abbb8a492c5437a9"
   },
   "integration_record": "Implementation commit and PR squash history are the authority for landing; this approval receipt does not assert a future merge or global installation.",
   "public_receipt_authentication_replay": {
@@ -146,5 +152,6 @@
     "stdout_sha256": "facc89a74b3b3e62985605be3fbf299fa11caca624c13b861661ff6f4bda100b",
     "output_set_encoding": "SHA256 of exact UTF-8 stdout bytes emitted by frozen_evaluator.py. Its summary includes sixteen per-case record SHA256 values; those records bind actual inputs, CLI output and artifacts. This is a transitive result-set binding, not a hash of concatenated artifact bytes.",
     "new_blind_holdout": false
-  }
+  },
+  "replay_harness_limitation": "Frozen evaluator reuses mutable inputs/<case>/projects/own evolution state. Avoid direct replay against the archived evidence root without complete state backup/restoration; absolute ownership paths prevent silently treating a copied fixture as identical. No canonical skill or evaluation criteria changed."
 }

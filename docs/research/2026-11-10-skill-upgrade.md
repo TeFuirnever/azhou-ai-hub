@@ -149,11 +149,17 @@ B 全仓最终用时 65.606s，C2 用时 67.579s；相同机器单次测量不�
 
 ## 2026-11-10 exact-diff 决定
 
-用户对上一轮完整 C2 摘要与精确差异的最终审批请求作出明确批准。原始批准留在 Git 外，批准记录 SHA-256 为 `3feb817c71b3ab22b9afb00185a874fb5c7b7819afc4308d7d5385c03f3d0eff`；记录时间是本轮整理时间，不冒充消息的精确发送时间。当前 [演化决定](../../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json) 与 [机器证据](../../evidence/skill-upgrade-2026-11-10.json) 绑定实际 C2、三份原始 paired review、三份 R2 attestation、当前认证回放和保护检查。旧记录保持原样。
+用户对上一轮完整 C2 摘要与精确差异的最终审批请求作出明确批准。原始批准留在 Git 外，批准记录 SHA-256 为 `3feb817c71b3ab22b9afb00185a874fb5c7b7819afc4308d7d5385c03f3d0eff`；记录时间是本轮整理时间，不冒充消息的精确发送时间。当前 [演化决定](../../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json) 与 [机器证据](../../evidence/skill-upgrade-2026-11-10.json) 绑定实际 C2、三份原始 paired review、三份 R2 attestation、当前认证回放和保护检查。旧执行记录保持原样；生成夹具状态的回放副作用与精确恢复另记如下。
 
 普通失败的两来源门槛由分别设计、分别执行的工程开发验证与独立合成评测支持；当前 curated candidate 记录为 source=synthetic、source_type=controlled_execution、natural_history_sessions=0。这里的 2 是两个实际执行上下文，不是用例数或夹具内 session 数。独立运行发生在 C1 冻结之后，因此当前整理不追认“早期冻结时已具备两来源”，也不声称统计独立性。
 
 批准后按原冻结评价器再次执行 C2，16/16 通过，耗时 1.515s；它是认证回放，不是新增盲测。同期全仓 verify 8/8 通过、75.524s，日志 SHA-256 为 `2ca204a6468ed7ed4e5db7072e7fb9ab5dc8e613abc77e83cb642e4773fab13b`。gate 返回 promotable=true；应用前仍独立读取实际补丁字节并比对批准摘要，未将通用 gate 的声明校验当作实际字节验证。
+
+### 认证回放的夹具状态副作用
+
+交接完整性检查发现，本轮两次认证回放复用了原评价器的 inputs/<case>/projects/own/.azhou/super-repo-pedant/evolution 生成状态目录；评价器会先清理该目录、再生成 candidate/archive。原始清单中 14 项生成状态因此发生短暂漂移。此问题归于评测 harness 的状态隔离与本次编排，不是 C2 项目过滤逻辑，也不是冻结输入、答案或评价规则被改写。
+
+全部 14 项都在原已冻结 run artifacts 中找到 SHA-256、字节数和权限一致的副本。先完整保存 16 个回放后状态目录，再恢复原 30 个夹具状态文件；原 5,036 项清单复核全部匹配，原 manifest、冻结输入、评价器和历史执行记录未改。恢复记录 SHA-256 为 `a1f6811071cb96e1f385a0270d203caa4abf53f75f2dd2371b59bcdaa3ebd963`。回放结果与事件记录同时保留，不用恢复后的相等性声称从未发生过漂移。后续复现须先保存并恢复完整状态，或另行声明隔离路径映射；夹具包含绝对 ownership 路径，不能悄悄修改原冻结协议。
 
 ## 一手来源
 
