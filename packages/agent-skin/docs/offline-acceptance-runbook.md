@@ -38,6 +38,6 @@ ZCode 桌面自动更新（或任何宿主指纹漂移）后，身份门按设�
 
 1. 先亲眼看 `zcode-window.png`（捕获时无人审阅；本仓图像 Read 只回 CDN URL，主视觉 MCP 可能 401，备一条可用通道）。完成标准：确认为正常空主工作区。
 2. 核对 OBSERVATION 十步、closeout waitExit=0、UI exit 0。
-3. 组装 `zcode-validation.json`（真实值：recordSHA=OBSERVATION sha、payloadSHA=startup/install.js sha、宿主三指纹、evidenceIDs 用真实 RC 项），嵌入 `Resources/`，`codesign --force --sign -` 重签并 strict 校验。
-4. 替换安装 `~/Applications/阿舟 AI 实验室 for ZCode.app`，安装后逐项核验（签名、build 号、validation 内容）。
+3. 盖章与替换安装走主线链 `python3 tools/ship-zcode.py --evidence <本次 OBSERVATION.json> --install`：以真实验收记录组装 `zcode-validation.json`（recordSHA、实测 payloadSHA、宿主三指纹、真实 evidenceIDs；记录须显式声明 `ownedAppearanceSurface`/`persistentSettings`），重签、strict 校验后写入 `~/Applications/阿舟 AI 实验室 for ZCode.app`，stdout 输出全链回执。
+4. 安装后逐项核验（签名、build 号、validation 内容、回执 `ok=true`）。
 5. 收尾：`launchctl bootout` + 删 plist、evidence 回执、README build 号、提交。声明未验收项（原生冷启动入口、热附着按例保留）。

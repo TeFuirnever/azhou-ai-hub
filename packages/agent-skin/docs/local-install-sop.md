@@ -54,10 +54,10 @@ python3 tools/install-macos.py --check
 1. 核对安装的 ZCode 版本和指纹符合当前原生适配器支持范围。
 2. 对本次精确 `startup/install.js` 在真实 ZCode 窗口验证动画结束、壁纸、外观入口、设置保存和重新打开。记录原设置，用一个可恢复测试值验证持久化，再恢复原值并重新打开核验。
 3. 候选入口尚未具备证据时，使用经过检查的本地验收步骤验证实际载荷；固定应用、进程、页面和主 frame 的执行上下文后再注入。若当前工具不能建立这些绑定，保留待验收状态，不能用模拟通过或旧证据解锁。
-4. 按 `Native/ZCodeSkinRuntime.swift` 的证据合同生成 `zcode-validation.json`，绑定真实观察时间、原始记录及摘要、宿主指纹和本次载荷摘要。写入证明后重新签名，复核签名、证明和实际载荷一致。
-5. 保留并校验旧启动器。主线尚无受支持的 ZCode 安装事务或针对该目标的安装锁；Codex 安装器的锁和替换流程不能直接当作 ZCode 安装器使用。只有具备针对精确目标经过验证的人工事务（包含互斥、暂存校验、目标复核、原子替换、安装后检查和失败回滚）时才执行替换；否则暂停此端，保留原安装和验收证据。不要先删除目标再复制。
+4. 用主线盖章链 `python3 tools/ship-zcode.py --evidence <本次验收 OBSERVATION.json>`：它按 `Native/ZCodeSkinRuntime.swift` 的证据合同把真实观察记录及摘要、宿主指纹和实测 `startup/install.js` 摘要盖入 `zcode-validation.json`，随后重签、strict 校验并复核盖章与实测载荷一致；验收记录未显式声明 `ownedAppearanceSurface`/`persistentSettings` 为真时拒绝盖章，stdout 输出全链回执。
+5. 先另行备份并校验旧启动器，再用同一命令的显式 `--install` 替换入口（主线中唯一写入 `~/Applications` 的 ZCode 路径）：目标名取自 `tools/verify-artifacts.py` 钉定的安装名，拒绝符号链接目标，替换后 strict 复核并把安装步记入回执。该步没有安装锁、暂存原子替换或失败回滚，也不做 `azhou-install-registry` 登记（P9.1 未覆盖，另行跟踪）；Codex 安装器的锁和替换流程不能直接当作 ZCode 安装器使用。前置不满足时暂停此端，保留原安装和验收证据。
 
-当前规范包没有三端统一安装器；不要把其他未合并工作区的 `ship-zcode.py` 当作主线命令，也不要把临时验收脚本当作受支持的安装 API。
+当前规范包没有三端统一安装器；ZCode 候选盖章与安装已由主线命令 `tools/ship-zcode.py` 承担（守卫与事故族见 [E2E 事故回归索引](../evidence/e2e-regression-index.md)），临时验收脚本仍不是受支持的安装 API。
 
 完成条件：最终安装应用与签名后的候选一致，证明对应本载荷。随后从已安装入口验证冷启动；再次打开应激活同一宿主实例，不重播或重复注入。控制器就绪与动画完成分别观察。
 
