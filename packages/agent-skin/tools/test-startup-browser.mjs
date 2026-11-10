@@ -3895,8 +3895,8 @@ try {
     assert.equal(afterSkip.completed, true);
     assert.equal(afterSkip.skipped, true);
     assert.equal(afterSkip.stage, 'complete');
-    assert.equal(afterSkip.sceneRenderCount, beforeSkip.sceneRenderCount + 1,
-      'skip submits one completion frame before releasing scene resources');
+    assert.equal(afterSkip.sceneRenderCount, beforeSkip.sceneRenderCount,
+      'explicit skip must not redraw a possibly broken final frame before releasing resources');
     for (const key of ['liveImages', 'liveBitmaps', 'liveCanvases', 'livePaths', 'liveRAF']) {
       assert.equal(afterSkip.resources[key], 0, `skip releases ${key}`);
     }
@@ -3910,7 +3910,7 @@ try {
       const root=document.querySelector('[data-agent-skin-stage]');
       return root?.dataset.prewarmed==='true'&&root.dataset.playing==='true'
         ?window.launcherUI.report():false;
-    })()`), 10000, 'preview replay after the skipped completion frame');
+    })()`), 10000, 'preview replay after explicit skip without final rendering');
     await cdp.evaluate('window.launcherUI.pause()');
     assert.equal(replayStarted.completed, false);
     assert.ok(replayStarted.jsFrame.sceneRenderCount < afterSkip.sceneRenderCount,
@@ -3927,7 +3927,7 @@ try {
         scattered: { submissions: scatteredSecond.sceneRenderCount - identityThird.sceneRenderCount, seeks: 2 },
         drawing: { submissions: drawingSecond.sceneRenderCount - scatteredSecond.sceneRenderCount, seeks: 2 },
         portrait: { submissions: portraitSecond.sceneRenderCount - drawingSecond.sceneRenderCount, seeks: 3 },
-        skip: { completionFrameSubmitted: afterSkip.sceneRenderCount === beforeSkip.sceneRenderCount + 1,
+        skip: { noExtraFrameSubmitted: afterSkip.sceneRenderCount === beforeSkip.sceneRenderCount,
           releasedResources: afterSkip.resources },
         replay: { submissions: replayScatterSecond.sceneRenderCount - replayStarted.jsFrame.sceneRenderCount,
           stage: replayScatterSecond.stage },
