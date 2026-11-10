@@ -189,7 +189,7 @@ python3 -B tools/manage-codex-pet.py recover
 | `installed` / `already-installed` | 原生目录实际字节已核验；仍待刷新选择 |
 | `installed-with-recovery` | 已提交的新包经恢复完成；附带原异常及恢复说明 |
 | `stale-theme` | 候选或安装仍属于旧主题 |
-| `stale-package` | 安装内容独立有效且主题相同，但不是当前选中的图集 |
+| `stale-package` | 安装内容独立有效且主题相同，但图集或 manifest 与当前选中候选不同 |
 | `unknown-target` | 同名目标无法证明属于本项目或已被外部修改 |
 | `busy` | 有另一个操作持锁，本次没有强行修改 |
 | `install-failed` | 安装失败并已给出具体恢复结果；检查随附分层状态 |

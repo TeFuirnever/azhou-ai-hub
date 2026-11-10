@@ -4,7 +4,7 @@
 
 ## UT 范围与判定
 
-`tools/test-unit-coverage.py` 自动发现 JavaScript、Python、Swift、Bash 和 `.command` 生产源码。生产构建与安装工具、Pet 工具、原生适配器和新加入的源码都在统计范围内。测试程序、生成产物、私有素材、文档和测试夹具不进入生产代码分母。`wallpaper/preview.html` 是带自检按钮的合成宿主测试夹具；生产预览使用 `index.html` 加载已计入的独立 JS。CSS、HTML 标记和 JSON 配置没有可执行行覆盖率，分别通过浏览器、构建和功能用例验收。
+`tools/test-unit-coverage.py` 自动发现 JavaScript、Python、Swift、Bash 和 `.command` 生产源码。生产构建与安装工具、Pet 工具、原生适配器和新加入的源码都在统计范围内。测试程序、生成产物、私有素材和文档不进入生产代码分母。`wallpaper/preview.html` 是带自检按钮的合成宿主夹具，其独立交互脚本 `wallpaper/preview-controller.js` 也纳入 JavaScript 分母，由 `tools/preview-controller.unit.test.mjs` 在 Node 合成页面中执行计量；生产预览仍使用 `index.html` 加载已计入的独立 JS。CSS、HTML 标记和 JSON 配置没有可执行行覆盖率，分别通过浏览器、构建和功能用例验收。
 
 每种语言及整个包都须达到 **95% 行覆盖率**。判定使用原始计数，不以四舍五入后的百分比放行；分支和函数统计可用于诊断，但不代替行覆盖率。缺失报告、漏算生产文件、工具失败或 UT 失败均阻断。Node LCOV、Coverage.py、LLVM 和 Bash 覆盖率保留各自原始结果；不把浏览器 E2E、实机启动或人工审阅混入 UT。
 

@@ -6,11 +6,11 @@ The manager guards four durable artifacts and never talks to the host app:
 * a frozen theme snapshot handed to external ImageGen/hatch-pet generation,
 * a content-addressed candidate package rebuilt from a reviewed run,
 * an install transaction that swaps the pet directory inside CODEX_HOME,
-* recovery journals that let every interrupted swap resume from evidence.
+* recovery journals that bind automatic recovery to verifiable evidence.
 
-Image generation and visual review stay external on purpose. Each mutation
-is journaled before it lands, so an interrupted run replays instead of
-guessing. Requires Python 3.10+, Pillow with WebP support and a POSIX fs.
+Image generation and visual review stay external on purpose. Recovery needs
+matching recorded identities and contents; ambiguous state stays for review.
+Requires Python 3.10+, Pillow with WebP support and a POSIX fs.
 """
 from __future__ import annotations
 
