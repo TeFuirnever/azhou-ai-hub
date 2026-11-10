@@ -103,7 +103,8 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
   const workspaceSelector = '[data-app-shell-main-surface] :is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])';
   const footerSelector = '[data-app-shell-main-surface] [data-thread-scroll-footer]';
   const stickySelector = '[data-app-shell-main-surface] .thread-scroll-container .pointer-events-none.sticky.bottom-0';
-  const backgroundSelector = footerSelector + ' > :is([class^="_background_"],[class*=" _background_"])';
+  const backgroundSelector = footerSelector + ' > :is([class^="_background_"],[class*=" _background_"])'
+    + ',' + footerSelector + ' > [aria-hidden="true"].pointer-events-none:is([class^="background-"],[class*=" background-"])';
   const fadeSelector = stickySelector + ' > :is([class^="_background_"],[class*=" _background_"]):is([class^="_fade_"],[class*=" _fade_"])';
   const topSelector = '[data-app-shell-main-surface] :is([class^="_MainContentTopFade_"],[class*=" _MainContentTopFade_"])';
   const scrollUnknownSelector = '[data-app-shell-main-surface] .thread-scroll-container :is(:is([class^="_background_"],[class*=" _background_"]),:is([class^="_fade_"],[class*=" _fade_"]))';
