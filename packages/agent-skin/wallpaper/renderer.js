@@ -13,7 +13,10 @@ export async function installRenderer(payload) {
   const workspaceSelector = '[data-app-shell-main-surface] :is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])';
   const footerSelector = '[data-app-shell-main-surface] [data-thread-scroll-footer]';
   const token = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
-  const footerBackgroundSelector = footerSelector + ' > ' + token('_background_');
+  // Current ChatGPT builds use hyphenated CSS-module names. Admit only the
+  // observed hidden, non-interactive direct footer plate; unknown layers still fail.
+  const footerBackgroundSelector = footerSelector + ' > ' + token('_background_')
+    + ',' + footerSelector + ' > [aria-hidden="true"].pointer-events-none' + token('background-');
   const scrollSelector = '[data-app-shell-main-surface] .thread-scroll-container';
   const stickySelector = scrollSelector + ' .pointer-events-none.sticky.bottom-0';
   const footerFadeSelector = stickySelector + ' > ' + token('_background_') + token('_fade_');
