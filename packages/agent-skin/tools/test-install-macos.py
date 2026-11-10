@@ -865,6 +865,21 @@ class InstallerTests(unittest.TestCase):
         finally:
             os.close(descriptor)
 
+    def test_descriptor_fingerprint_orders_boundary_tree_like_package_fingerprint(self):
+        m = self.module
+        sample = self.base / 'boundary-fingerprint'
+        (sample / 'web').mkdir(parents=True)
+        (sample / 'web/index.html').write_text('page')
+        # 目录名恰是同级文件名的前缀，且下一字符 '.' 排在 '/' 之前：
+        # 组件序与 join 字符串序在此类树上分歧，fd 摘要必须与 fingerprint() 同序。
+        (sample / 'web.config').write_text('config')
+        (sample / 'zz last.txt').write_text('tail')
+        descriptor = os.open(sample, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            self.assertEqual(m._fingerprint_retirement_directory(descriptor), m.fingerprint(sample))
+        finally:
+            os.close(descriptor)
+
     def test_descriptor_fingerprint_rejects_changes_during_read(self):
         m = self.module
         sample = self.base / 'changing-fingerprint'
