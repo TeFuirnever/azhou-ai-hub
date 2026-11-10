@@ -299,7 +299,7 @@ Agent Skin also has a package gate: `python packages/agent-skin/tools/test-unit-
 - [Foundation CLI](docs/foundations.md)
 - [Treehouse worktree policy](docs/worktree-policy.md)
 - [Research behind this open-source surface](docs/research/2026-08-23-open-source-benchmark.md)
-- [2026-11-10 stable-source upgrade and candidate review](docs/research/2026-11-10-skill-upgrade.md) — source pins, paired executable evidence, pstack protection and pending exact-diff approval.
+- [2026-11-10 stable-source upgrade and candidate review](docs/research/2026-11-10-skill-upgrade.md) — source pins, paired executable evidence, pstack protection and the approved C2 implementation record.
 
 Contributions are welcome when they begin with a real failure or task and end with reproducible evidence. Read [CONTRIBUTING.md](CONTRIBUTING.md).
 

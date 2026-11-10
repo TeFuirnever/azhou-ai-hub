@@ -299,7 +299,7 @@ Agent Skin 另有包级门禁：在 macOS 执行 `python packages/agent-skin/too
 - [基础 CLI](docs/foundations.md)
 - [Treehouse worktree 规范](docs/worktree-policy.md)
 - [本次开源化对标研究](docs/research/2026-08-23-open-source-benchmark.md)
-- [2026-11-10 稳定来源升级与候选审查](docs/research/2026-11-10-skill-upgrade.md)：来源 pin、配对运行证据、pstack 保护与待完成的 exact-diff 审批。
+- [2026-11-10 稳定来源升级与候选审查](docs/research/2026-11-10-skill-upgrade.md)：来源 pin、配对运行证据、pstack 保护与已获 exact-diff 批准的 C2 实现记录。
 
 贡献应从真实失败或真实任务开始，以可复现证据结束。先读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

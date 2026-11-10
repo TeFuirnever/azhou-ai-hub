@@ -4,7 +4,7 @@
 
 ## 公开收据
 
-- [2026-11-10 skill 升级机器记录](skill-upgrade-2026-11-10.json) 与[审查说明](../docs/research/2026-11-10-skill-upgrade.md)：正式稳定来源、实际 A/B/C、独立合成验收、保护与恢复；C2 尚待 exact-diff 人类批准。
+- [2026-11-10 skill 升级机器记录](skill-upgrade-2026-11-10.json) 与[审查说明](../docs/research/2026-11-10-skill-upgrade.md)：正式稳定来源、实际 A/B/C、独立合成验收、保护与恢复；C2 已获 exact-diff 人类批准，见[受控演化决定](../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json)；该批准与整项上游同步及文档变更分别归因。
 
 - [2026-08-23 public install smoke](public-install-smoke-2026-08-23.md)：从公开 GitHub 默认分支发现并隔离安装两个 canonical skill；不升级为发布、跨 harness 或模型质量证明。
 - [2026-09-01 Foundation discovery/invocation on Claude Code](foundation-discovery-invocation-claude-2026-09-01.md)：四个 Foundation package 的项目级 link 安装、headless 主机发现与文档化只读调用；不升级为个人根安装、交互会话或跨 harness 一致性证明。

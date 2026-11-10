@@ -1,6 +1,6 @@
 # 2026-11-10 skill 升级审查记录
 
-本记录对应基线 `79905b55c2ac78e265813c485955b9b568127ae9`。工作只在 `codex/skill-upgrade-20261110` 的 Treehouse 租约中进行；main、安装态和 pstack 不以本记录获得修改授权。机器清单见 [skill-upgrade-2026-11-10.json](../../evidence/skill-upgrade-2026-11-10.json)。
+本记录对应基线 `79905b55c2ac78e265813c485955b9b568127ae9`。实现与评测在 `codex/skill-upgrade-20261110` 的 Treehouse 租约中完成。上游同步与 C2 实现分别提交；2026-11-10 的 exact-diff 批准仅绑定下述 C2 三文件补丁，整项 PR 还包含原任务授权的上游同步和必要记录。pstack 保护边界继续生效。机器清单见 [skill-upgrade-2026-11-10.json](../../evidence/skill-upgrade-2026-11-10.json)。
 
 ## 范围与稳定发布判定
 
@@ -32,7 +32,7 @@
 | feature-boundary-planner | adapted(project-local) | 已在最新稳定来源 | v3.17.2 @ a9fe401eede6e6e5e01be9048679c206fe6f02d9 |
 | record-browser-gif | adapted(project-local) | 无可认定稳定发布，保留 | 原固定来源；见 provenance 与机器清单 |
 | super-arch-doc | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
-| super-archify | faithful | 稳定版已同步至审查分支 | v3.2.0 @ 208acba8d412335185b2056fedf54b3405df43fb |
+| super-archify | faithful | 稳定版已同步至本变更 | v3.2.0 @ 208acba8d412335185b2056fedf54b3405df43fb |
 | super-asd-ste100 | faithful | 无可认定稳定发布，保留 | 原固定来源；见 provenance 与机器清单 |
 | super-ask-azhou | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
 | super-azhou-doctor | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
@@ -41,7 +41,7 @@
 | super-azhou-verify | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
 | super-eli5 | faithful | 无可认定稳定发布，保留 | 原固定来源；见 provenance 与机器清单 |
 | super-excalidraw-diagram | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
-| super-repo-pedant | adapted | 稳定版已同步至审查分支 | 仓库 v1.2.0 / skill 3.1.1 @ cfa3436d4d31db9b1340af3082a914adf92f023f |
+| super-repo-pedant | adapted | 稳定版已同步至本变更 | 仓库 v1.2.0 / skill 3.1.1 @ cfa3436d4d31db9b1340af3082a914adf92f023f |
 | super-session-insights | original | 原创，保留 | 原固定来源；见 provenance 与机器清单 |
 
 ## 上游三方迁移
@@ -103,7 +103,7 @@ backpass 的会话归属、去重、采样、预算、候选隔离、拒绝和�
 
 实验时冻结的 C1 三文件 diff SHA-256 为 `699841646943b92ee158cbb7de7e4566ac2caf2750f5ed31ffcc3ecc5610881e`。全仓编码政策随后发现新增测试 fixture 的一个 subprocess 缺少显式 UTF-8；C2 仅补此参数，不改变断言、冻结评价器、输入、答案或运行时。C1 与全部旧记录保留，不覆盖实验历史。
 
-最终待批准 C2 的三文件 diff SHA-256 为 **`d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059`**；C1→C2 单行 delta 为 `7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471`。两版的实际运行时均为 `9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d`。实际字节比对把原 A/B/C 运行结果绑定至相同运行时，不把 C1 整包差异冒充 C2 差异。
+已获 exact-diff 人类批准的 C2 三文件 diff SHA-256 为 **`d81dc19a7b323a87f52e2090c21f3e4386f45301109d0e92be235e57f71fe059`**；C1→C2 单行 delta 为 `7b93fc7aa08279c39dd5fe2814ca1654a97d30a6cb17ccb573750c152dbc5471`。两版的实际运行时均为 `9f2c60ce99652ce0f1b41b4525d6a2c2533e7ac3570a63b5448d01fdb971a77d`。实际字节比对把原 A/B/C 运行结果绑定至相同运行时，不把 C1 整包差异冒充 C2 差异。
 
 只有项目证据归属这一个机制候选被实现，未向其他技能盲目扩散。其他正式技能并无同一准入代码，工程技能的现有能力继续保留。
 
@@ -117,15 +117,17 @@ backpass 的会话归属、去重、采样、预算、候选隔离、拒绝和�
 
 三位评审使用独立上下文，X/Y 标签隐藏映射且第二位交换顺序；三位都选择候选，无已观察的回归。评审使用相同继承模型，不声称模型多样性或统计独立样本。初审要求补足归档后的原始行与 live sentinel 摘要；追加的单夹具核验确认 C 仅归档 2 条本项目合格记录、保留其余 5 条，所有 7 条的字段无丢失/重复，sentinel 与 runtime 字节保持。它不是新增留出样本；外部 include 文件为空、并发/中断等未被该补充覆盖。
 
-评审对 C2 的测试编码改动另出实际 diff 等价声明。投票不替代上述运行证据，也不构成人类批准。当前没有写入虚构 approval 或把历史 promoted 状态作为授权。
+评审对 C2 的测试编码改动另出实际 diff 等价声明。投票不替代上述运行证据，也不构成人类批准。原始评审中的 human_approval=false 保留；2026-11-10 的用户批准另行记录，不把投票或历史 promoted 状态作为人类授权。
 
 ## pstack 保护证据
 
-原始保护快照覆盖 18 个根路径、4,746 个普通文件、46,845,893 bytes；最终文件内容、大小和权限 **4,746/4,746 一致**，新增/删除/改变均为 0。前后规范化文件映射 SHA 为 `4524fc4aa96d72e5cbf63bf73356a3d314f193144ab3ab42ae8edc4d29d5fcd8`。leased worktree 内保护范围的 3,234 个 Git 纳管文件与基线及 main 全部一致，共享检查器中的 pstack AST 节点没有改变。
+上一轮审查的原始保护快照覆盖 18 个根路径、4,746 个普通文件、46,845,893 bytes；在该轮结束时，文件内容、大小和权限 **4,746/4,746 一致**，新增/删除/改变均为 0。前后规范化文件映射 SHA 为 `4524fc4aa96d72e5cbf63bf73356a3d314f193144ab3ab42ae8edc4d29d5fcd8`。leased worktree 内保护范围的 3,234 个 Git 纳管文件与基线及 main 全部一致，共享检查器中的 pstack AST 节点没有改变。
 
-Claude 注册的 pstack-azhouzhou 0.15.36 安装目录、marketplace 源、两侧 cache/config、模型配置及共享集成运行时均在保护清单内且未改变。两处初始快照之外的历史 target home 当前不存在，其回执为 removed；回执所指 0.9.102 历史源快照的 271 个清单文件仍相符。旧移除回执中的 Codex CLI 指纹与当前文件不同，当前文件 mtime 早于本次任务；该二进制未纳入初始快照，因此只报告历史差异，不归因于本次任务。
+上述原始审查窗口内，Claude 注册的 pstack-azhouzhou 0.15.36 安装目录、marketplace 源、两侧 cache/config、模型配置及共享集成运行时均在保护清单内且未改变。两处初始快照之外的历史 target home 当前不存在，其回执为 removed；回执所指 0.9.102 历史源快照的 271 个清单文件仍相符。旧移除回执中的 Codex CLI 指纹与当前文件不同，当前文件 mtime 早于本次任务；该二进制未纳入初始快照，因此只报告历史差异，不归因于本次任务。
 
 原快照未独立记录目录权限、根类型和符号链接文本；这些只补充为当前快照。没有运行/安装 pstack，没有声称 live 模型/服务或所有外部状态完全等价。保护结论由实际文件/配置/注册状态与相关现有测试支撑，范围之外保持未验证。
+
+批准阶段首次复核发现：Claude 共享 settings.json 与上一轮文件快照不同，其当前 SHA-256 为 `030f5781d03ea1b640633ac1ebacb458aefe2ec6a8efff61b67d14c73c857456`。仅有旧整文件摘要，无法还原或归因期间的设置变化；本次未写回该文件。当前 pstack enabled 值为 true，marketplace 引用摘要另有记录。以本轮首次快照为基线的提交前检查确认 4,746 个普通文件及 3,234 个受保护纳管文件均未改变；该结论不声称两轮之间所有配置始终相同。
 
 ## 尚未解决的证据限制
 
@@ -133,7 +135,7 @@ Claude 注册的 pstack-azhouzhou 0.15.36 安装目录、marketplace 源、两�
 2. 现有 promotion gate 只比较 evaluation/approval 声明的 hash，没有读实际 patch。当前受控变更实际 patch 后，gate 仍可宣告 promotable；本候选没有混入第二机制去修它。本次使用独立实际字节绑定，不把这个 gate 的自述当充分证据。
 3. project_id 来自既有信号，不是密码学认证；会话祖先归并、原始来源真实性等不是本候选覆盖范围。
 4. 尚未证明自然任务完成质量、人工修改成本或模型 token 改善；也没有改进后的系统生成下一代、固定改进器同预算对照，因此不称已验证 RSI。
-5. exact-diff 人类批准尚未发生，候选不得晋级；所有 skipped/pending/hold 明确保留。
+5. C2 的人类批准只解决本补丁的授权条件；既存 skip、历史来源缺口、通用 gate 缺陷和范围之外的能力结论仍保留。
 
 ## 验证与恢复入口
 
@@ -143,7 +145,15 @@ B 全仓最终用时 65.606s，C2 用时 67.579s；相同机器单次测量不�
 
 现有 pedant benchmark 实际登记 4 个 case，README 旧计数 3 已对齐注册表；其完整性通过不冒充模型效果。逐例运行、版本绑定、失败与重试均在 [机器证据](../../evidence/skill-upgrade-2026-11-10.json) 和 Git 外原始记录中可查。
 
-审查分支的上游同步与 C 候选分开保存。C2 只在租约工作区及 Git 外精确候选包存在；应用前重核相同 diff、测试和审批。恢复先执行 `git apply --check --reverse candidate-r2.diff`，通过后在拥有该变更的隔离目录反向应用；上游提交则通过新反向提交恢复，不 reset/clean 主工作区或改写公共历史。保留租约和 Git 外原始证据直到审批、集成或验证过的恢复交接。
+上游同步提交 `ddd914f76673efad666a51d17fbe0cec0a7f0e18` 与 C2 实现提交 `15cd81343eb18e760e03752e5d9b0cca1b1ec8b0` 分开保存。两提交之间的实际 binary diff SHA-256 与获批 C2 完全一致。公开收据是另一项记录变更，不能把整项 PR 的 diff 冒充获批的三文件补丁。恢复先执行 `git apply --check --reverse candidate-r2.diff`，通过后在拥有该变更的隔离目录反向应用；上游提交则通过新反向提交恢复，不 reset/clean 主工作区或改写公共历史。Git 外原始证据、上游 bundle 与 C2 精确补丁继续保留；仓库集成通过既有 PR、必需检查和 squash 流程，实际合并结果由 Git 历史证明。
+
+## 2026-11-10 exact-diff 决定
+
+用户对上一轮完整 C2 摘要与精确差异的最终审批请求作出明确批准。原始批准留在 Git 外，批准记录 SHA-256 为 `3feb817c71b3ab22b9afb00185a874fb5c7b7819afc4308d7d5385c03f3d0eff`；记录时间是本轮整理时间，不冒充消息的精确发送时间。当前 [演化决定](../../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json) 与 [机器证据](../../evidence/skill-upgrade-2026-11-10.json) 绑定实际 C2、三份原始 paired review、三份 R2 attestation、当前认证回放和保护检查。旧记录保持原样。
+
+普通失败的两来源门槛由分别设计、分别执行的工程开发验证与独立合成评测支持；当前 curated candidate 记录为 source=synthetic、source_type=controlled_execution、natural_history_sessions=0。这里的 2 是两个实际执行上下文，不是用例数或夹具内 session 数。独立运行发生在 C1 冻结之后，因此当前整理不追认“早期冻结时已具备两来源”，也不声称统计独立性。
+
+批准后按原冻结评价器再次执行 C2，16/16 通过，耗时 1.515s；它是认证回放，不是新增盲测。同期全仓 verify 8/8 通过、75.524s，日志 SHA-256 为 `2ca204a6468ed7ed4e5db7072e7fb9ab5dc8e613abc77e83cb642e4773fab13b`。gate 返回 promotable=true；应用前仍独立读取实际补丁字节并比对批准摘要，未将通用 gate 的声明校验当作实际字节验证。
 
 ## 一手来源
 
