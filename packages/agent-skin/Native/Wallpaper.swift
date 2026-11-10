@@ -394,12 +394,20 @@ enum StartupOutcome: Equatable {
     case failed(reason: String)
 }
 
+// Diagnostic primitives only: no NSError userInfo, message, URL or payload.
+struct StartupTransportError {
+    let domain: String
+    let code: Int
+    let httpStatus: Int?
+}
+
 struct StartupFailure: LocalizedError {
     let reason: String
     let message: String
     // Internal provenance only. A lost connection is not itself permission to
     // retry: the connector must separately prove the old target has ended.
     var pageConnectionLost = false
+    var transportError: StartupTransportError? = nil
     var errorDescription: String? { message }
 }
 
@@ -966,14 +974,20 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         } catch {
             try Task.checkCancellation()
             let network = error as NSError
-            let missingTarget = network.domain == NSURLErrorDomain && network.code == URLError.badServerResponse.rawValue &&
-                (socket.response as? HTTPURLResponse)?.statusCode == 404
+            let httpStatus = (socket.response as? HTTPURLResponse)?.statusCode
+            // Chromium may answer a retired page socket with either 404 or 500.
+            // The status only permits the connector's independent inventory proof.
+            let retiredTargetCandidate = network.domain == NSURLErrorDomain
+                && network.code == URLError.badServerResponse.rawValue
+                && httpStatus.map { [404, 500].contains($0) } == true
             let connectionLost = (network.domain == NSURLErrorDomain &&
                 [URLError.networkConnectionLost.rawValue, URLError.cannotConnectToHost.rawValue].contains(network.code)) ||
-                (network.domain == NSPOSIXErrorDomain && [Int(ECONNRESET), Int(ENOTCONN), Int(EPIPE)].contains(network.code)) || missingTarget
+                (network.domain == NSPOSIXErrorDomain && [Int(ECONNRESET), Int(ENOTCONN), Int(EPIPE)].contains(network.code)) || retiredTargetCandidate
             throw StartupFailure(reason: expired.get() ? "attach-timeout" : "protocol-error",
                                  message: expired.get() ? "CDP 请求超过本轮剩余时间。" : "CDP 连接或消息交换失败。",
-                                 pageConnectionLost: !expired.get() && connectionLost)
+                                 pageConnectionLost: !expired.get() && connectionLost,
+                                 transportError: StartupTransportError(domain: network.domain, code: network.code,
+                                                                       httpStatus: httpStatus))
         }
     }
 
@@ -1161,9 +1175,11 @@ struct StartupConnector {
         if let page { fields["page"] = page.id }
         if let error {
             let ns = error as NSError
-            fields["errorDomain"] = ns.domain
-            fields["errorCode"] = ns.code
-            fields["pageConnectionLost"] = (error as? StartupFailure)?.pageConnectionLost == true
+            let failure = error as? StartupFailure
+            fields["errorDomain"] = failure?.transportError?.domain ?? ns.domain
+            fields["errorCode"] = failure?.transportError?.code ?? ns.code
+            if let status = failure?.transportError?.httpStatus { fields["httpStatus"] = status }
+            fields["pageConnectionLost"] = failure?.pageConnectionLost == true
             if let failure = error as? WallpaperFailure { fields["state"] = failure.state }
         }
         diagnostics(stage, fields.merging(proof) { current, _ in current })
@@ -1278,8 +1294,8 @@ struct StartupConnector {
                     return try await attachPage(selected, payload: payload, attempted: &attempted, stage: &stage, deadline: deadline)
                 } catch let failure as StartupFailure where failure.pageConnectionLost {
                     try requireBudget(deadline)
+                    report(stage, page: selected, error: failure)
                     stage = "recover"
-                    report("recover", page: selected, error: failure)
                     guard let next = try await replacement(for: selected, deadline: deadline) else { throw failure }
                     try requireBudget(deadline)
                     // No await or old-page cleanup can cross this boundary. Request

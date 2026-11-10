@@ -338,6 +338,26 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--probe-startup-handshake"),
+           index + 1 < CommandLine.arguments.count,
+           let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
+            let socket = try WallpaperValidation.pageSocket(url.absoluteString, port: port)
+            let transport = WallpaperTransport()
+            defer { transport.close() }
+            try transport.connect(to: socket, timeout: 2)
+            do {
+                _ = try await transport.evaluate("({probe:true})", timeout: 2)
+                fatalError("a refused handshake must not evaluate JavaScript")
+            } catch let failure as StartupFailure {
+                let result: [String: Any] = ["candidate": failure.pageConnectionLost,
+                    "reason": failure.reason, "host": false,
+                    "errorDomain": failure.transportError?.domain ?? "",
+                    "errorCode": failure.transportError?.code ?? 0,
+                    "httpStatus": failure.transportError?.httpStatus ?? 0]
+                print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            }
+            return
+        }
         if CommandLine.arguments.contains("--probe-page-replacement") {
             let results = try await startupPageReplacementProbe()
             for result in results {
@@ -4379,6 +4399,7 @@ private func zcodeDriverInterleave(port: Int) async throws {
 private final class StartupReplacementWorld: @unchecked Sendable {
     let stage: String
     let mode: String
+    let handshakeStatus: Int?
     let href = "app://-/index.html?initialRoute=%2F"
     private let lock = NSLock()
     private var generation = 0
@@ -4396,8 +4417,9 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     var cancel: (() -> Void)?
     private var lagReadsLeft = 0
     private var waitReads = 0
-    init(stage: String, mode: String = "replace") {
+    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil) {
         self.stage = stage; self.mode = mode
+        self.handshakeStatus = handshakeStatus ?? ["handshake-404": 404, "handshake-401": 401][mode]
         lagReadsLeft = mode.hasPrefix("lag-") ? Int(String(mode.dropFirst(4))) ?? 0 : 0
     }
     func time() -> TimeInterval { lock.lock(); defer { lock.unlock() }; return clock }
@@ -4468,6 +4490,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         var terminal: String?
         if replaceNow {
             generation += 1
+            if handshakeStatus != nil { throw URLError(.badServerResponse) }
             switch mode {
             case "context-lost": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."]])
             case "mixed-error": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."], "result": ["exceptionDetails": [:]]])
@@ -4482,7 +4505,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "cancel-task": withUnsafeCurrentTask { $0?.cancel() }; throw URLError(.networkConnectionLost)
             case "cancel-error": throw URLError(.cancelled)
             case "timeout-error": throw URLError(.timedOut)
-            case "handshake-404", "handshake-401": throw URLError(.badServerResponse)
+            case "handshake-unknown": throw URLError(.badServerResponse)
             case "posix-loss": throw NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNRESET))
             case "deadline": clock = 5; throw URLError(.networkConnectionLost)
             case "before-install": break
@@ -4541,9 +4564,9 @@ private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Se
     let world: StartupReplacementWorld
     var maximumMessageSize = 0
     var response: URLResponse? {
-        guard ["handshake-404", "handshake-401"].contains(world.mode) else { return nil }
+        guard id == "page-a", let status = world.handshakeStatus else { return nil }
         return HTTPURLResponse(url: URL(string: "http://127.0.0.1:49221/devtools/page/\(id)")!,
-            statusCode: world.mode == "handshake-404" ? 404 : 401, httpVersion: nil, headerFields: nil)
+            statusCode: status, httpVersion: nil, headerFields: nil)
     }
     private(set) var canceled = 0
     private var pending: [String: Any] = [:]
@@ -4583,8 +4606,8 @@ private final class StartupReplacementURLProtocol: URLProtocol {
 
 @MainActor
 private func startupReplacementScenario(stage: String, mode: String = "replace",
-                                        diagnostics enabled: Bool = false) async throws -> [String: Any] {
-    let world = StartupReplacementWorld(stage: stage, mode: mode)
+                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil) async throws -> [String: Any] {
+    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus)
     StartupReplacementURLProtocol.world = world
     defer { StartupReplacementURLProtocol.world = nil }
     var diagnosticRecords: [[String: Any]] = []
@@ -4666,7 +4689,7 @@ private func startupPageReplacementChecks() async throws -> Int {
     }
     let refusals = ["same-target", "old-main", "old-avatar", "old-worker", "ambiguous", "no-main", "missing-id", "duplicate-id",
         "invalid-id", "socket-mismatch", "foreign-socket", "raw-unavailable", "missing-launch", "identity-drift", "port-drift",
-        "ordinary-cdp", "mixed-error", "handshake-401", "js-exception", "wrong-id", "malformed-json", "timeout-error", "cancel-error", "deadline"]
+        "ordinary-cdp", "mixed-error", "handshake-401", "handshake-unknown", "js-exception", "wrong-id", "malformed-json", "timeout-error", "cancel-error", "deadline"]
     for mode in refusals {
         let r = try await startupReplacementScenario(stage: mode == "handshake-401" ? "inspect" : "install", mode: mode); common(r)
         expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) cannot authorize replacement")
@@ -4721,7 +4744,7 @@ private func startupPageReplacementChecks() async throws -> Int {
         "an exhausted budget still refuses without a proof read")
     let observed = try await startupReplacementScenario(stage: "install", mode: "lag-1", diagnostics: true); common(observed)
     let diagnosticRecords = (observed["diagnostics"] as? [[String: Any]]) ?? []
-    let allowedKeys: Set<String> = ["stage", "at", "page", "errorDomain", "errorCode", "pageConnectionLost", "state",
+    let allowedKeys: Set<String> = ["stage", "at", "page", "errorDomain", "errorCode", "httpStatus", "pageConnectionLost", "state",
                                     "oldIDPresent", "eligibleMains", "uniqueIDs"]
     var serializedDiagnostics = ""
     for record in diagnosticRecords {
@@ -4737,15 +4760,51 @@ private func startupPageReplacementChecks() async throws -> Int {
         && (proofs[0]["eligibleMains"] as? Int) == 2 && (proofs[0]["uniqueIDs"] as? Bool) == true
         && (proofs[1]["oldIDPresent"] as? Bool) == false && (proofs[1]["eligibleMains"] as? Int) == 1,
         "proof diagnostics record the lagging read and the proven replacement inventory")
-    let recover = diagnosticRecords.first { ($0["stage"] as? String) == "recover" }
+    let recover = diagnosticRecords.first { ($0["stage"] as? String) == "install" }
     expect(recover?["page"] as? String == "page-a" && (recover?["pageConnectionLost"] as? Bool) == true
-        && (recover?["errorDomain"] as? String)?.isEmpty == false,
-        "the qualifying failure diagnostic carries page, classification and error identity")
+        && recover?["errorDomain"] as? String == NSURLErrorDomain
+        && recover?["errorCode"] as? Int == URLError.networkConnectionLost.rawValue
+        && recover?["httpStatus"] == nil,
+        "the qualifying failure preserves its original stage and network identity")
     expect(!StartupDiagnosticsPolicy.isEnabled(environment: [:])
         && !StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "0"])
         && !StartupDiagnosticsPolicy.isEnabled(environment: ["UNRELATED": "1"])
         && StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "1"]),
         "startup diagnostics stay disabled unless the invocation opts in exactly")
+    for (status, accepted) in [(404, true), (500, true), (401, false), (503, false)] {
+        let r = try await startupReplacementScenario(stage: "inspect", diagnostics: true, handshakeStatus: status); common(r)
+        expect(r["recovered"] as? Bool == accepted
+            && r["connections"] as? [String] == (accepted ? ["page-a", "page-b"] : ["page-a"]),
+            "handshake \(status) changes only candidate qualification, not independent replacement proof")
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first { $0["stage"] as? String == "inspect" }
+        expect(diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == -1011 && diagnostic?["httpStatus"] as? Int == status
+            && diagnostic?["pageConnectionLost"] as? Bool == accepted,
+            "handshake diagnostics preserve original NSError identity, status and inspect stage")
+    }
+    for mode in ["persist", "ambiguous", "duplicate-id", "identity-drift", "port-drift", "cancel-wait"] {
+        let r = try await startupReplacementScenario(stage: "inspect", mode: mode, handshakeStatus: 500); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"]
+            && (r["installs"] as? [String: Int])?["page-b"] == nil,
+            "HTTP 500 never bypasses \(mode) proof refusal or cancellation")
+        if mode == "persist" {
+            expect(r["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+                && (r["elapsed"] as? Double ?? 0) >= 5 && (r["elapsed"] as? Double ?? 99) <= 5.1,
+                "HTTP 500 with a still-live old ID only consumes the original bounded proof budget")
+        }
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, diagnostics: true); common(r)
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first { $0["pageConnectionLost"] as? Bool == true }
+        expect(diagnostic?["stage"] as? String == stage && diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == -1005 && diagnostic?["httpStatus"] == nil,
+            "each transport failure keeps its originating \(stage) instead of relabeling it recover")
+    }
+    let posix = try await startupReplacementScenario(stage: "install", mode: "posix-loss", diagnostics: true); common(posix)
+    let posixRecord = (posix["diagnostics"] as? [[String: Any]])?.first { $0["pageConnectionLost"] as? Bool == true }
+    expect(posixRecord?["errorDomain"] as? String == NSPOSIXErrorDomain
+        && posixRecord?["errorCode"] as? Int == Int(ECONNRESET) && posixRecord?["httpStatus"] == nil,
+        "non-HTTP transport failures preserve numeric provenance without inventing status")
     for mode in ["context-lost", "posix-loss", "handshake-404", "before-install", "ready-replaced", "chain"] {
         let stage = ["before-install", "handshake-404"].contains(mode) ? "inspect" : mode == "ready-replaced" ? "status" : "install"
         let r = try await startupReplacementScenario(stage: stage, mode: mode); common(r)
