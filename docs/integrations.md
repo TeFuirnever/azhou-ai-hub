@@ -107,6 +107,8 @@ Model sheets in automatically loaded rule locations still inject instructions af
 
 For updates to existing daily installations, follow the [local install SOP](../packages/agent-skin/docs/local-install-sop.md). The test-entry adapter below keeps its existing ownership boundary.
 
+The ZCode host layer is retired from this package: its last supported version was `0.9.0/build 41`, installed ZCode skins are frozen installs, the [README exit statement](../README.md#retired-surfaces) carries the uninstall guidance, and the persisted/protocol identifiers that installed-state migrations depend on keep their historical names ([decision record](decisions/hub-retirement-physical-deletion.md)).
+
 The canonical package is `packages/agent-skin/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
 
 ```sh
