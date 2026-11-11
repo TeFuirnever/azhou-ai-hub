@@ -1717,7 +1717,6 @@ final class PlayerStage {
     }
 
     func cancelWatchdog() { watchdog?.cancel() }
-    func cancelCaptures() { captures.forEach { $0.cancel() } }
     func cancelAllTimers() { watchdog?.cancel(); captures.forEach { $0.cancel() } }
 
     func presentReady() { presentation?.showReady() }
@@ -1948,8 +1947,6 @@ final class ExitLedger {
     var smokeResultSucceeded = false
 
     init(smokeOnly: Bool) { self.smokeOnly = smokeOnly }
-
-    var isSmokeRun: Bool { smokeOnly }
 
     /// 关闭即失败：smoke 未验证完成时以退出码 1 记账。
     func markSmokeFailureExit() {

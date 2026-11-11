@@ -56,7 +56,7 @@
 
 ## 基线澄清（2026-11-08）
 
-上表的“上游行数”实际是 **2026-10-26 本地源工作树快照的行数**，不是上游固定提交中同路径文件的行数。该快照包含当时尚未提交和未跟踪的维护内容；因此，表内逐行重合只证明与本地迁移快照相同，不能单独证明那些行出自上游固定提交或判定其权利归属。
+上表原表头的“上游行数”（现名“本地源快照行数”）实际是 **2026-10-26 本地源工作树快照的行数**，不是上游固定提交中同路径文件的行数。该快照包含当时尚未提交和未跟踪的维护内容；因此，表内逐行重合只证明与本地迁移快照相同，不能单独证明那些行出自上游固定提交或判定其权利归属。
 
 对来源仓库固定提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` 执行 `git ls-tree -r --name-only` 可核验：其中有 `Native/App.swift`、`tools/build-extension.sh` 和 `tools/build-macos.sh`；没有同路径的 `tools/manage-codex-pet.py`、`tools/install-macos.py`、`pet/theme.json` 和 `Native/Wallpaper.swift`。上游也有不同路径的 `extension/wallpaper.css` 和 `extension/renderer.mjs`，因此不能仅凭同路径缺失排除改名、移动或其他来源。
 
