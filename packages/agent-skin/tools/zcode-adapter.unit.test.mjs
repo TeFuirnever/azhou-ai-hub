@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createZCodePageAdapter } from '../extension/hosts/zcode.mjs';
+import { createWallpaperApplicator } from '../wallpaper/apply.js';
+import { webcrypto } from 'node:crypto';
 const base='file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html';
 function host(url=base){const h={location:{href:url},indexedDB:{own:true},crypto:{randomUUID:()=>'synthetic-page-nonce'}};h.top=h;return h;}
 test('constructor stores only, matches installed top-level main page',()=>{
@@ -96,6 +98,17 @@ test('wallpaper shell refuses absent or ambiguous main and respects cancellation
  assert(Object.isFrozen(a.controllerWallpaper));assert(Object.isFrozen(a.wallpaper));assert(Object.isFrozen(a.wallpaper.attributes));
  assert.equal(a.wallpaper.validPage(h),true);assert.equal(a.wallpaper.shellState(()=>false),'cancelled');assert.equal(a.wallpaper.shellState(()=>true),'ready');assert.deepEqual(a.wallpaper.surfaces(h),[main]);
  count=2;assert.equal(a.wallpaper.shellState(()=>true),null);assert.deepEqual(a.wallpaper.surfaces(h),[]);h.location.href='https://invalid/';assert.deepEqual(a.wallpaper.surfaces(h),[]);assert.equal(a.wallpaper.validPage(h),false);
+});
+
+test('wallpaper applicator accepts the actual stable ZCode adapter', async () => {
+ const h=host();const main={closest:()=>null};
+ const root={querySelectorAll:s=>s==='main'?[main]:[{}]};
+ h.document={getElementById:()=>root};h.crypto={subtle:webcrypto.subtle,randomUUID:()=> 'synthetic-page-nonce'};h.atob=globalThis.atob;
+ const adapter=createZCodePageAdapter(h),calls=[];
+ const apply=createWallpaperApplicator(value=>{calls.push(value);return {applied:true};},{version:'1',css:'',pageAdapter:adapter},h);
+ assert.deepEqual(await apply({image:'data:image/png;base64,AA==',strength:42},()=>true),{applied:true});
+ assert.equal(calls.length,1);assert.equal(calls[0].pageAdapter,adapter);
+ assert.equal(calls[0].imageSHA256,'6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d');
 });
 
 test('native metadata token never echoes URL bootstrap values',()=>{

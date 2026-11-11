@@ -162,6 +162,7 @@ class BuildPreflightTests(unittest.TestCase):
 
     def prepare_build(self):
         shutil.copy2(TOOLS / "build-macos.sh", self.root / "tools/build-macos.sh")
+        shutil.copy2(TOOLS / "build-lock.py", self.root / "tools/build-lock.py")
         shutil.copy2(PACKAGE / ".gitignore", self.root / ".gitignore")
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
 
@@ -223,6 +224,9 @@ class BuildPreflightTests(unittest.TestCase):
         success = subprocess.run(command, cwd=self.root, capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(success.returncode, 73, success.stderr)
         self.assertIn("approved snapshot reached converter", success.stderr)
+        retained_stages = set((self.root / ".build").glob("azhou-stage.*"))
+        self.assertEqual(len(retained_stages), 1)
+        self.assertTrue(next(iter(retained_stages)).joinpath("approved-icon.png").is_file())
 
         preflight = self.root / "tools/build-preflight.py"
         source = preflight.read_text(encoding="utf-8")
@@ -237,7 +241,7 @@ class BuildPreflightTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("图标源图与已批准的 SHA-256 不符", result.stderr)
         self.assertEqual(receipt.read_bytes(), b"existing payload")
-        self.assertFalse(list((self.root / ".build").glob("azhou-stage.*")))
+        self.assertEqual(set((self.root / ".build").glob("azhou-stage.*")), retained_stages)
 
     def test_legacy_codex_config_is_valid_but_zcode_requires_its_own_input(self):
         path = self.root / "theme-config.json"

@@ -31,124 +31,157 @@ struct WallpaperValidationTests {
                    "wallpaper failure exposes its localized description")
         try expect(StartupFailure(reason: "sample", message: "Startup failed").errorDescription == "Startup failed",
                    "startup failure exposes its diagnostic description")
-        try expect(try WallpaperValidation.loopbackPorts("p123\nn127.0.0.1:49221\n", pid: 123) == [49221], "exact PID loopback listener")
-        try expect(try WallpaperValidation.loopbackPorts("p123\nn127.0.0.1:49221\nn*:49221\n", pid: 123).isEmpty, "wildcard on the same port is refused")
-        try expect(try WallpaperValidation.loopbackPorts("p123\nn[::1]:49221\nn192.168.1.2:49222\n", pid: 123).isEmpty, "non-IPv4-loopback listeners are refused")
-        try expect(try WallpaperValidation.loopbackPorts("p123\nn127.0.0.1:0\nn127.0.0.1:65536\n", pid: 123).isEmpty, "invalid discovered ports")
-        try expect(try WallpaperValidation.loopbackPorts("", pid: 123).isEmpty, "no CDP listener")
-        try expect(try WallpaperValidation.loopbackPorts("xignored\np123\nnmalformed\nn127.0.0.1:49221\n", pid: 123) == [49221],
-                   "unknown and malformed listener rows do not add endpoints")
-        refuses("wrong listener owner") { _ = try WallpaperValidation.loopbackPorts("p124\nn127.0.0.1:49221\n", pid: 123) }
-        refuses("malformed listener owner") { _ = try WallpaperValidation.loopbackPorts("pnot-a-pid\nn127.0.0.1:49221\n", pid: 123) }
-        refuses("missing listener owner") { _ = try WallpaperValidation.loopbackPorts("n127.0.0.1:49221\n", pid: 123) }
-
-        func page(_ url: String, _ type: String = "page") -> [String: Any] { ["type": type, "url": url] }
-        try expect(WallpaperValidation.mainPage(page("app://-/index.html?initialRoute=%2F")), "official main page")
-        try expect(WallpaperValidation.mainPage(page("app://-/index.html?theme=dark")), "missing route defaults to the main page")
-        try expect(!WallpaperValidation.mainPage(page("https://example.com/index.html")), "web content is excluded")
-        try expect(!WallpaperValidation.mainPage(page("app://other/index.html")), "other app origin is excluded")
-        try expect(!WallpaperValidation.mainPage(page("app://-/index.html", "iframe")), "child target is excluded")
-        for route in ["avatar", "quick-chat", "detached", "mini", "popover", "notification"] {
-            try expect(!WallpaperValidation.mainPage(page("app://-/index.html?initialRoute=/\(route)")), "auxiliary route \(route)")
+        let listeners: [(String, [Int], String)] = [
+            ("p123\nn127.0.0.1:49221\n", [49221], "loopback port"),
+            ("p123\nn127.0.0.1:49221\nn*:49221\n", [], "wildcard conflict"),
+            ("p123\nn[::1]:49221\nn192.168.1.2:49222\n", [], "other interfaces"),
+            ("p123\nn127.0.0.1:0\nn127.0.0.1:65536\n", [], "invalid ports"),
+            ("", [], "missing listener"),
+            ("xignored\np123\nnmalformed\nn127.0.0.1:49221\n", [49221], "unknown rows"),
+        ]
+        for (records, expected, label) in listeners {
+            try expect(try WallpaperValidation.loopbackPorts(records, pid: 123) == expected, label)
         }
-        try expect(try WallpaperValidation.pageSocket("ws://127.0.0.1:49221/devtools/page/AB12-34", port: 49221).host == "127.0.0.1", "exact local page socket")
-        for socket in [
+        for (records, label) in [
+            ("p124\nn127.0.0.1:49221\n", "wrong owner"),
+            ("pnot-a-pid\nn127.0.0.1:49221\n", "malformed owner"),
+            ("n127.0.0.1:49221\n", "missing owner"),
+        ] {
+            refuses(label) { _ = try WallpaperValidation.loopbackPorts(records, pid: 123) }
+        }
+
+        let pageCases: [(String, String, Bool)] = [
+            ("app://-/index.html?initialRoute=%2F", "page", true),
+            ("app://-/index.html?theme=dark", "page", true),
+            ("https://example.com/index.html", "page", false),
+            ("app://other/index.html", "page", false),
+            ("app://-/index.html", "iframe", false),
+        ]
+        for (url, type, expected) in pageCases {
+            let target: [String: Any] = ["type": type, "url": url]
+            try expect(WallpaperValidation.mainPage(target) == expected, "page selection: \(url) / \(type)")
+        }
+        for route in ["avatar", "quick-chat", "detached", "mini", "popover", "notification"] {
+            let target: [String: Any] = ["type": "page", "url": "app://-/index.html?initialRoute=/\(route)"]
+            try expect(WallpaperValidation.mainPage(target) == false, "auxiliary page: \(route)")
+        }
+        let validSocket = try WallpaperValidation.pageSocket("ws://127.0.0.1:49221/devtools/page/AB12-34", port: 49221)
+        try expect(validSocket.host == "127.0.0.1", "local page socket retains the IPv4 host")
+        let rejectedSockets = [
             "ws://localhost:49221/devtools/page/AB", "ws://127.0.0.1:49222/devtools/page/AB",
             "wss://127.0.0.1:49221/devtools/page/AB", "ws://user@127.0.0.1:49221/devtools/page/AB",
             "ws://127.0.0.1:49221/devtools/browser/AB", "ws://127.0.0.1:49221/devtools/page/",
-            "ws://127.0.0.1:49221/devtools/page/AB?redirect=x", "ws://127.0.0.1:49221/devtools/page/AB#x"
-        ] { refuses("nonexact socket \(socket)") { _ = try WallpaperValidation.pageSocket(socket, port: 49221) } }
-
-        let state: [String: Any] = [
-            "applied": true, "version": "0.7.1", "imageDecoded": true,
-            "matchedSurfaces": 3, "transparentSurfaces": 3, "backgroundMatched": true,
-            "coverMatched": true, "fixedViewport": true, "rootClear": true,
-            "workspaceBackgroundClear": true, "footerSurfaces": 2, "footerBackgroundClear": true,
-            "footerFadeSurfaces": 1, "footerFadeClear": true, "topFadeSurfaces": 1, "topFadeClear": true, "decorationEffectsClear": true,
-            "unsupportedDecorations": [String](),
+            "ws://127.0.0.1:49221/devtools/page/AB?redirect=x", "ws://127.0.0.1:49221/devtools/page/AB#x",
         ]
-        try expect(WallpaperValidation.verifiedState(state, version: "0.7.1"), "complete renderer acknowledgement")
-        try expect(!WallpaperValidation.verifiedState(state, version: "0.7.0"), "version mismatch is not success")
-        for key in ["applied", "imageDecoded", "matchedSurfaces", "transparentSurfaces",
-                    "backgroundMatched", "version", "rootClear", "workspaceBackgroundClear",
-                    "coverMatched", "fixedViewport", "footerSurfaces", "footerBackgroundClear",
-                    "footerFadeSurfaces", "footerFadeClear", "topFadeSurfaces", "topFadeClear", "decorationEffectsClear", "unsupportedDecorations"] {
-            var missing = state; missing.removeValue(forKey: key)
-            try expect(!WallpaperValidation.verifiedState(missing, version: "0.7.1"), "missing \(key) is not success")
-        }
-        // Contradictory reports keep applied=true; independent fields must win.
-        for key in ["imageDecoded", "backgroundMatched", "rootClear", "workspaceBackgroundClear",
-                    "coverMatched", "fixedViewport", "footerBackgroundClear", "footerFadeClear", "topFadeClear", "decorationEffectsClear"] {
-            var broken = state; broken[key] = false
-            try expect(!WallpaperValidation.verifiedState(broken, version: nil), "false \(key) overrides stale applied=true")
-        }
-        for count in [0, -1, 0.5, true, "3", Double.infinity, 1e30] as [Any] {
-            var invalid = state; invalid["matchedSurfaces"] = count
-            try expect(!WallpaperValidation.verifiedState(invalid, version: "0.7.1"), "invalid matched surface count")
-        }
-        for key in ["footerSurfaces", "footerFadeSurfaces", "topFadeSurfaces"] {
-            for count in [-1, 0.5, true, "1"] as [Any] {
-                var invalid = state; invalid[key] = count
-                try expect(!WallpaperValidation.verifiedState(invalid, version: nil), "invalid decoration count")
+        for candidate in rejectedSockets {
+            refuses("page socket must be exact: \(candidate)") {
+                _ = try WallpaperValidation.pageSocket(candidate, port: 49221)
             }
         }
-        var incomplete = state; incomplete["transparentSurfaces"] = 2
-        try expect(!WallpaperValidation.verifiedState(incomplete, version: nil), "partial shell coverage is not success")
-        var home = state; home["footerSurfaces"] = 0; home["footerFadeSurfaces"] = 0
-        try expect(WallpaperValidation.verifiedState(home, version: nil), "a non-chat route may legitimately have no footer")
-        var unsupported = state; unsupported["unsupportedDecorations"] = ["unknown-decoration"]
-        try expect(!WallpaperValidation.verifiedState(unsupported, version: nil), "unknown painted decoration fails closed")
-        var malformedReasons = state; malformedReasons["unsupportedDecorations"] = "none"
-        try expect(!WallpaperValidation.verifiedState(malformedReasons, version: nil), "malformed diagnostic list is not success")
-        var forged = state; forged["applied"] = 1
-        try expect(!WallpaperValidation.verifiedState(forged, version: "0.7.1"), "numeric applied flag is not a Boolean acknowledgement")
-        forged = state; forged["footerFadeClear"] = 1
-        try expect(!WallpaperValidation.verifiedState(forged, version: nil), "numeric visual flag is not a Boolean acknowledgement")
-        var malformed = state; malformed["version"] = "untrusted renderer text"
-        try expect(!WallpaperValidation.verifiedState(malformed, version: nil), "diagnostic version is a bounded version string")
-        let legacy: [String: Any] = ["applied": true, "version": "0.7.0", "imageDecoded": true,
-                                   "matchedSurfaces": 3, "backgroundMatched": true]
-        try expect(!WallpaperValidation.verifiedState(legacy, version: nil), "old partial acknowledgement cannot certify the new contract")
-        try expect(!WallpaperValidation.verifiedPages([], version: nil), "empty page set is not success")
-        try expect(WallpaperValidation.verifiedPages([state, state], version: nil), "all verified pages share a version")
-        try expect(!WallpaperValidation.verifiedPages([state, unsupported], version: nil), "one failed page fails aggregation")
-        var differentVersion = state; differentVersion["version"] = "0.7.2"
-        try expect(!WallpaperValidation.verifiedPages([state, differentVersion], version: nil), "mixed renderer versions are not one success")
-        try expect(!WallpaperValidation.verifiedPages(Array(repeating: state, count: 13), version: nil), "oversized page set is refused")
+
+        var acknowledgement: [String: Any] = [:]
+        let positiveFlags = ["applied", "imageDecoded", "backgroundMatched", "coverMatched", "fixedViewport",
+                             "rootClear", "workspaceBackgroundClear", "footerBackgroundClear", "footerFadeClear",
+                             "topFadeClear", "decorationEffectsClear"]
+        for name in positiveFlags { acknowledgement[name] = true }
+        for (name, count) in [("matchedSurfaces", 3), ("transparentSurfaces", 3), ("footerSurfaces", 2),
+                              ("footerFadeSurfaces", 1), ("topFadeSurfaces", 1)] {
+            acknowledgement[name] = count
+        }
+        acknowledgement["version"] = "0.7.1"
+        acknowledgement["unsupportedDecorations"] = [String]()
+        let state = acknowledgement
+        try expect(WallpaperValidation.verifiedState(state, version: "0.7.1"), "complete acknowledgement succeeds")
+        try expect(!WallpaperValidation.verifiedState(state, version: "0.7.0"), "wrong renderer version fails")
+        for name in positiveFlags + ["matchedSurfaces", "transparentSurfaces", "footerSurfaces", "footerFadeSurfaces",
+                                     "topFadeSurfaces", "version", "unsupportedDecorations"] {
+            var sample = state
+            sample[name] = nil
+            try expect(!WallpaperValidation.verifiedState(sample, version: "0.7.1"), "missing acknowledgement field: \(name)")
+        }
+        for name in positiveFlags where name != "applied" {
+            var sample = state
+            sample[name] = false
+            try expect(!WallpaperValidation.verifiedState(sample, version: nil), "false field overrides applied: \(name)")
+        }
+        for value in [0, -1, 0.5, true, "3", Double.infinity, 1e30] as [Any] {
+            var sample = state
+            sample["matchedSurfaces"] = value
+            try expect(!WallpaperValidation.verifiedState(sample, version: "0.7.1"), "invalid matched surface count")
+        }
+        for name in ["footerSurfaces", "footerFadeSurfaces", "topFadeSurfaces"] {
+            for value in [-1, 0.5, true, "1"] as [Any] {
+                var sample = state
+                sample[name] = value
+                try expect(!WallpaperValidation.verifiedState(sample, version: nil), "invalid count for \(name)")
+            }
+        }
+        var sample = state
+        sample["transparentSurfaces"] = 2
+        try expect(!WallpaperValidation.verifiedState(sample, version: nil), "partial coverage fails")
+        sample = state
+        sample["footerSurfaces"] = 0
+        sample["footerFadeSurfaces"] = 0
+        try expect(WallpaperValidation.verifiedState(sample, version: nil), "footer is optional outside chat")
+        var unsupported = state
+        unsupported["unsupportedDecorations"] = ["unknown-decoration"]
+        try expect(!WallpaperValidation.verifiedState(unsupported, version: nil), "unknown decoration fails")
+        sample = state
+        sample["unsupportedDecorations"] = "none"
+        try expect(!WallpaperValidation.verifiedState(sample, version: nil), "decoration list must be an array")
+        for name in ["applied", "footerFadeClear"] {
+            sample = state
+            sample[name] = 1
+            try expect(!WallpaperValidation.verifiedState(sample, version: name == "applied" ? "0.7.1" : nil), "numeric flag fails: \(name)")
+        }
+        sample = state
+        sample["version"] = "untrusted renderer text"
+        try expect(!WallpaperValidation.verifiedState(sample, version: nil), "version diagnostics reject unbounded text")
+        let partialLegacy: [String: Any] = ["applied": true, "version": "0.7.0", "imageDecoded": true,
+                                            "matchedSurfaces": 3, "backgroundMatched": true]
+        try expect(!WallpaperValidation.verifiedState(partialLegacy, version: nil), "partial old state fails")
+        let pageSets: [([[String: Any]], Bool, String)] = [([], false, "empty"), ([state, state], true, "verified"),
+            ([state, unsupported], false, "one failed"), (Array(repeating: state, count: 13), false, "oversized")]
+        for (pages, expected, label) in pageSets {
+            try expect(WallpaperValidation.verifiedPages(pages, version: nil) == expected, "page set aggregation: \(label)")
+        }
+        sample = state
+        sample["version"] = "0.7.2"
+        try expect(!WallpaperValidation.verifiedPages([state, sample], version: nil), "mixed page versions fail")
+
         var untrusted = unsupported
         untrusted["unsupportedDecorations"] = ["private page text must never be forwarded"]
         let diagnostic = WallpaperValidation.diagnostic(untrusted, index: 2, version: nil)
         let diagnosticJSON = String(decoding: try JSONSerialization.data(withJSONObject: diagnostic), as: UTF8.self)
-        try expect(!diagnosticJSON.contains("private page text"), "diagnostics do not forward arbitrary renderer strings")
-        try expect(diagnostic["unsupportedDecorationCount"] as? Int == 1, "diagnostics preserve bounded issue counts")
+        try expect(!diagnosticJSON.contains("private page text"), "private renderer text is omitted")
+        try expect(diagnostic["unsupportedDecorationCount"] as? Int == 1, "issue count remains available")
         try expect((diagnostic["verificationIssues"] as? [String])?.contains("unsupported-decorations") == true,
-                   "diagnostics name the fixed failure category")
-        var rejectedCandidate = state; rejectedCandidate["footerFadeClear"] = false
-        let partial = WallpaperValidation.applicationFailure(priorStates: [state], failedState: rejectedCandidate,
+                   "diagnostic identifies the fixed issue category")
+        var rejected = state
+        rejected["footerFadeClear"] = false
+        let result = WallpaperValidation.applicationFailure(priorStates: [state], failedState: rejected,
             totalPages: 3, version: "0.7.1", failureState: "renderer-not-applied")
-        try expect(partial["applied"] as? Bool == false, "partial apply cannot report overall success")
-        try expect(partial["completedPageCount"] as? Int == 1 && partial["uninspectedPageCount"] as? Int == 1,
-                   "failed apply preserves completed and uninspected counts")
-        let failedPages = partial["pages"] as? [[String: Any]] ?? []
-        try expect(failedPages.count == 2 && failedPages[1]["pageIndex"] as? Int == 1,
-                   "failed apply preserves the rejected page index")
-        try expect((failedPages[1]["verificationIssues"] as? [String])?.contains("footerFadeClear-not-confirmed") == true,
-                   "failed apply preserves the specific visual failure")
-        let exception = WallpaperValidation.applicationFailure(priorStates: [state], failedState: nil,
+        try expect(result["applied"] as? Bool == false, "partial apply is not success")
+        try expect(result["completedPageCount"] as? Int == 1 && result["uninspectedPageCount"] as? Int == 1,
+                   "completed and uninspected page counts remain visible")
+        let failed = result["pages"] as? [[String: Any]] ?? []
+        try expect(failed.count == 2 && failed[1]["pageIndex"] as? Int == 1, "rejected page index remains visible")
+        try expect((failed[1]["verificationIssues"] as? [String])?.contains("footerFadeClear-not-confirmed") == true,
+                   "specific visual failure remains visible")
+        let thrown = WallpaperValidation.applicationFailure(priorStates: [state], failedState: nil,
             totalPages: 2, version: "0.7.1", failureState: "renderer-rejected")
-        let exceptionPages = exception["pages"] as? [[String: Any]] ?? []
-        try expect(exceptionPages.count == 2 && exception["verifiedPageCount"] as? Int == 1,
-                   "a renderer exception preserves earlier successful pages")
-        try expect((exceptionPages[1]["verificationIssues"] as? [String]) == ["renderer-state-unavailable"],
-                   "a renderer exception reports unavailable state without inventing details")
-        let fallbackFailure = WallpaperValidation.applicationFailure(priorStates: [], failedState: nil,
+        let thrownPages = thrown["pages"] as? [[String: Any]] ?? []
+        try expect(thrownPages.count == 2 && thrown["verifiedPageCount"] as? Int == 1,
+                   "an exception retains earlier verified pages")
+        try expect((thrownPages[1]["verificationIssues"] as? [String]) == ["renderer-state-unavailable"],
+                   "an exception reports unavailable state")
+        let fallback = WallpaperValidation.applicationFailure(priorStates: [], failedState: nil,
             totalPages: 0, version: nil, failureState: "untrusted exception text")
-        let fallbackPages = fallbackFailure["pages"] as? [[String: Any]] ?? []
-        try expect(fallbackFailure["state"] as? String == "renderer-not-applied"
-                   && fallbackFailure["uninspectedPageCount"] as? Int == 0,
-                   "unknown renderer failure categories use the fixed safe fallback")
+        let fallbackPages = fallback["pages"] as? [[String: Any]] ?? []
+        try expect(fallback["state"] as? String == "renderer-not-applied" && fallback["uninspectedPageCount"] as? Int == 0,
+                   "unknown failures use the bounded fallback")
         try expect(fallbackPages.first?["failureState"] as? String == "renderer-not-applied",
-                   "fallback page diagnostics do not forward exception text")
+                   "page fallback does not forward exception text")
 
         for code in ["shell-timeout", "shell-unsupported", "invalid-local-payload", "invalid-local-image",
                      "image-decode-failed", "image-decode-timeout", "unsupported-shell-no-surfaces",
@@ -363,6 +396,18 @@ private func wallpaperTransportChecks() async throws -> Int {
     expect(pageSocket.cancelCount == 1, "closing a page session cancels its socket")
     pageTransport.close()
 
+    let interleavedSocket = FakeWallpaperSocket(responses: [
+        .string("{\"method\":\"Runtime.consoleAPICalled\"}"),
+        .string("{\"id\":99,\"result\":{\"result\":{\"value\":{\"wrong\":true}}}}"),
+        .data(Data("{\"id\":1,\"result\":{\"result\":{\"value\":{\"page\":true}}}}".utf8)),
+    ])
+    let interleavedTransport = WallpaperTransport(session: session(), socketFactory: { _ in interleavedSocket })
+    let interleavedPage = interleavedTransport.pageSession(endpoint)
+    let interleavedState = try await interleavedPage.evaluate("page status", timeout: 1)
+    expect(interleavedState["page"] as? Bool == true && interleavedState["wrong"] == nil,
+           "page sessions ignore events and other request IDs before accepting a binary response")
+    interleavedPage.close(); interleavedTransport.close()
+
     let errorSocket = FakeWallpaperSocket(responses: [
         .string("{\"id\":1,\"result\":{\"exceptionDetails\":{\"exception\":{\"description\":\"AZHOU_WALLPAPER:unsupported-shell-no-surfaces\"}}}}"),
     ])
@@ -464,11 +509,29 @@ private func wallpaperJournalChecks() throws -> Int {
     expect(WallpaperJournal.latest(requestID: "second", directory: journal)?["state"] as? String == "restored",
            "the newest record replaces the latest result")
 
-    try Data(repeating: 0x78, count: 2 * 1024 * 1024 + 1).write(to: logURL)
+    let padding = String(repeating: "x", count: 800_000)
+    for index in 0..<3 {
+        WallpaperJournal.record(["requestID": "large-\(index)", "padding": padding], directory: journal)
+    }
+    let oversizedOwnedLog = try Data(contentsOf: logURL)
+    expect(oversizedOwnedLog.count > 2 * 1024 * 1024, "owned journal crosses the rotation threshold")
     WallpaperJournal.record(["requestID": "bounded", "state": "applied"], directory: journal)
     let boundedLog = try Data(contentsOf: logURL)
     expect(boundedLog.count < 4_096 && String(decoding: boundedLog, as: UTF8.self).contains("bounded"),
            "an oversized journal log is truncated before appending")
+
+    let oversizedDirectory = root.appendingPathComponent("oversized-record", isDirectory: true)
+    let oversizedPayload: [String: Any] = ["requestID": "oversized", "padding": String(repeating: "x", count: 1024 * 1024 + 1024)]
+    expect(!WallpaperJournal.record(oversizedPayload, directory: oversizedDirectory),
+           "a record past the per-record write limit is refused")
+    expect(!FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("latest.json").path)
+           && !FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("wallpaper.jsonl").path),
+           "a refused oversized record leaves no journal files")
+    expect(WallpaperJournal.record(["requestID": "within-limit"], directory: oversizedDirectory),
+           "a record within the per-record write limit is still accepted")
+    expect(FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("latest.json").path)
+           && FileManager.default.fileExists(atPath: oversizedDirectory.appendingPathComponent("wallpaper.jsonl").path),
+           "an accepted bounded record publishes the journal files")
 
     try Data("not-json".utf8).write(to: latestURL)
     expect(WallpaperJournal.latest(requestID: "bounded", directory: journal) == nil,
@@ -516,6 +579,438 @@ private func wallpaperJournalChecks() throws -> Int {
            "append-only journal opens refuse a symbolic-link log")
     expect(WallpaperJournal.latest(requestID: "linked-log", directory: logLinkDirectory)?["requestID"] as? String == "linked-log",
            "latest-result recording remains available when the append-only log is blocked")
+
+    let largeDirectory = root.appendingPathComponent("large-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: largeDirectory, withIntermediateDirectories: true)
+    let largeURL = largeDirectory.appendingPathComponent("latest.json")
+    let largeData = try JSONSerialization.data(withJSONObject: ["requestID": "large", "padding": String(repeating: "x", count: 1024 * 1024)])
+    try largeData.write(to: largeURL)
+    expect(WallpaperJournal.latest(requestID: "large", directory: largeDirectory) == nil,
+           "oversized latest results are not read as valid")
+    expect((try? Data(contentsOf: largeURL)) == largeData, "oversized latest data is retained")
+
+    let readDirectory = root.appendingPathComponent("chunked-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "chunked", "state": "applied"], directory: readDirectory)
+    var readCalls = 0
+    let chunked = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { fd, buffer, count in
+        readCalls += 1
+        if readCalls == 1 { errno = EINTR; return -1 }
+        return Darwin.read(fd, buffer, min(count, 7))
+    }
+    expect(chunked?["state"] as? String == "applied" && readCalls > 2,
+           "latest retries interrupted and short reads")
+    let failedRead = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { _, _, _ in errno = EIO; return -1 }
+    expect(failedRead == nil, "latest refuses an I/O error")
+    let readPath = readDirectory.appendingPathComponent("latest.json")
+    let savedPath = readDirectory.appendingPathComponent("saved-latest.json")
+    var replaced = false
+    let replacedRead = WallpaperJournal.latest(requestID: "chunked", directory: readDirectory) { fd, buffer, count in
+        let result = Darwin.read(fd, buffer, count)
+        if result > 0 && !replaced {
+            try? FileManager.default.moveItem(at: readPath, to: savedPath)
+            try? Data("foreign synthetic bytes".utf8).write(to: readPath)
+            replaced = true
+        }
+        return result
+    }
+    expect(replaced && replacedRead == nil, "latest refuses a path replaced during reading")
+    expect((try? Data(contentsOf: readPath)) == Data("foreign synthetic bytes".utf8)
+           && FileManager.default.fileExists(atPath: savedPath.path), "latest preserves both replaced files")
+
+    let fifoDirectory = root.appendingPathComponent("fifo-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: fifoDirectory, withIntermediateDirectories: true)
+    let fifoLatest = fifoDirectory.appendingPathComponent("latest.json")
+    expect(mkfifo(fifoLatest.path, 0o600) == 0, "synthetic latest FIFO is created")
+    expect(WallpaperJournal.latest(requestID: "fifo", directory: fifoDirectory) == nil, "latest refuses a FIFO")
+    WallpaperJournal.record(["requestID": "fifo"], directory: fifoDirectory)
+    var fifoInfo = stat()
+    expect(lstat(fifoLatest.path, &fifoInfo) == 0 && fifoInfo.st_mode & mode_t(S_IFMT) == mode_t(S_IFIFO),
+           "record preserves an existing latest FIFO")
+
+    let fifoLogDirectory = root.appendingPathComponent("fifo-log-journal", isDirectory: true)
+    try FileManager.default.createDirectory(at: fifoLogDirectory, withIntermediateDirectories: true)
+    let fifoLog = fifoLogDirectory.appendingPathComponent("wallpaper.jsonl")
+    expect(mkfifo(fifoLog.path, 0o600) == 0, "synthetic append FIFO is created")
+    let fifoReader = Darwin.open(fifoLog.path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+    expect(fifoReader >= 0, "synthetic FIFO reader opens")
+    defer { Darwin.close(fifoReader) }
+    WallpaperJournal.record(["requestID": "fifo-log"], directory: fifoLogDirectory)
+    var fifoBytes = [UInt8](repeating: 0, count: 512)
+    let fifoCount = Darwin.read(fifoReader, &fifoBytes, fifoBytes.count)
+    expect(fifoCount <= 0, "record never appends data to a FIFO even when it has a reader")
+    expect(WallpaperJournal.latest(requestID: "fifo-log", directory: fifoLogDirectory) != nil,
+           "latest remains available when append FIFO is refused")
+
+    let switchedDirectory = root.appendingPathComponent("switched-log-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "before"], directory: switchedDirectory)
+    let switchedLog = switchedDirectory.appendingPathComponent("wallpaper.jsonl")
+    let savedLog = switchedDirectory.appendingPathComponent("saved.jsonl")
+    let priorLog = try Data(contentsOf: switchedLog)
+    var didSwitch = false
+    WallpaperJournal.record(["requestID": "after"], directory: switchedDirectory, openLog: { path, flags, mode in
+        let fd = Darwin.open(path, flags, mode)
+        if fd >= 0 {
+            try? FileManager.default.moveItem(at: switchedLog, to: savedLog)
+            try? Data("foreign synthetic log".utf8).write(to: switchedLog)
+            didSwitch = true
+        }
+        return fd
+    })
+    expect(didSwitch && (try? Data(contentsOf: savedLog)) == priorLog,
+           "append refuses an open descriptor after its path is replaced")
+    expect((try? Data(contentsOf: switchedLog)) == Data("foreign synthetic log".utf8),
+           "append preserves the foreign replacement")
+
+    let foreignLatestDir = root.appendingPathComponent("foreign-latest", isDirectory: true)
+    try FileManager.default.createDirectory(at: foreignLatestDir, withIntermediateDirectories: true)
+    let foreignLatest = foreignLatestDir.appendingPathComponent("latest.json")
+    let foreignLatestBytes = Data("{\"requestID\":\"legacy\",\"state\":\"kept\"}".utf8)
+    try foreignLatestBytes.write(to: foreignLatest)
+    WallpaperJournal.record(["requestID": "new"], directory: foreignLatestDir)
+    expect((try? Data(contentsOf: foreignLatest)) == foreignLatestBytes, "an unbound latest file is not replaced")
+    expect(WallpaperJournal.latest(requestID: "legacy", directory: foreignLatestDir)?["state"] as? String == "kept",
+           "an unbound legacy latest remains readable")
+    expect(!FileManager.default.fileExists(atPath: foreignLatestDir.appendingPathComponent("wallpaper.jsonl").path),
+           "an unbound latest prevents subsequent log creation")
+
+    let foreignLogDir = root.appendingPathComponent("foreign-log", isDirectory: true)
+    try FileManager.default.createDirectory(at: foreignLogDir, withIntermediateDirectories: true)
+    let foreignLog = foreignLogDir.appendingPathComponent("wallpaper.jsonl")
+    let foreignLogBytes = Data(repeating: 0x78, count: 2 * 1024 * 1024 + 1)
+    try foreignLogBytes.write(to: foreignLog)
+    WallpaperJournal.record(["requestID": "new"], directory: foreignLogDir)
+    expect((try? Data(contentsOf: foreignLog)) == foreignLogBytes, "an unbound oversized log is not truncated")
+    expect(WallpaperJournal.latest(requestID: "new", directory: foreignLogDir) != nil,
+           "an independently safe latest remains available when the log is foreign")
+
+    let editedDir = root.appendingPathComponent("edited-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: editedDir)
+    let editedLatest = editedDir.appendingPathComponent("latest.json")
+    let editedLog = editedDir.appendingPathComponent("wallpaper.jsonl")
+    let editedLogBefore = try Data(contentsOf: editedLog)
+    let editedLatestBytes = Data("foreign in-place change".utf8)
+    try editedLatestBytes.write(to: editedLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: editedDir)
+    expect((try? Data(contentsOf: editedLatest)) == editedLatestBytes, "a changed bound latest is preserved")
+    expect((try? Data(contentsOf: editedLog)) == editedLogBefore, "a changed latest prevents log updates")
+
+    let editedLogDir = root.appendingPathComponent("edited-log", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: editedLogDir)
+    let editedLogPath = editedLogDir.appendingPathComponent("wallpaper.jsonl")
+    let editedLogBytes = Data("foreign edited log".utf8)
+    try editedLogBytes.write(to: editedLogPath)
+    WallpaperJournal.record(["requestID": "later"], directory: editedLogDir)
+    expect((try? Data(contentsOf: editedLogPath)) == editedLogBytes, "a changed bound log is preserved")
+
+    let hardlinkDir = root.appendingPathComponent("hardlink-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: hardlinkDir)
+    let hardlinkLatest = hardlinkDir.appendingPathComponent("latest.json")
+    let hardlinkAlias = hardlinkDir.appendingPathComponent("alias")
+    try FileManager.default.linkItem(at: hardlinkLatest, to: hardlinkAlias)
+    let hardlinkBefore = try Data(contentsOf: hardlinkLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: hardlinkDir)
+    expect((try? Data(contentsOf: hardlinkLatest)) == hardlinkBefore && (try? Data(contentsOf: hardlinkAlias)) == hardlinkBefore,
+           "a bound file with an extra hard link is not modified")
+
+    let copiedDir = root.appendingPathComponent("copied-latest", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: copiedDir)
+    let copiedLatest = copiedDir.appendingPathComponent("latest.json")
+    let savedOriginal = copiedDir.appendingPathComponent("saved-original")
+    let copiedFile = copiedDir.appendingPathComponent("copy")
+    try FileManager.default.copyItem(at: copiedLatest, to: copiedFile)
+    try FileManager.default.moveItem(at: copiedLatest, to: savedOriginal)
+    try FileManager.default.moveItem(at: copiedFile, to: copiedLatest)
+    let copiedBytes = try Data(contentsOf: copiedLatest)
+    WallpaperJournal.record(["requestID": "later"], directory: copiedDir)
+    expect((try? Data(contentsOf: copiedLatest)) == copiedBytes && FileManager.default.fileExists(atPath: savedOriginal.path),
+           "a copied file cannot inherit inode-bound ownership")
+
+    let extraMetadataDir = root.appendingPathComponent("extra-metadata", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: extraMetadataDir)
+    let extraLatest = extraMetadataDir.appendingPathComponent("latest.json")
+    let extraLog = extraMetadataDir.appendingPathComponent("wallpaper.jsonl")
+    let extraBefore = try Data(contentsOf: extraLatest), extraLogBefore = try Data(contentsOf: extraLog)
+    let extraFD = Darwin.open(extraLatest.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+    let extraValue = Data("synthetic user attribute".utf8)
+    let setExtra = extraValue.withUnsafeBytes { fsetxattr(extraFD, "com.example.user-data", $0.baseAddress, $0.count, 0, 0) }
+    expect(extraFD >= 0 && setExtra == 0, "synthetic extra extended attribute is installed")
+    Darwin.close(extraFD)
+    WallpaperJournal.record(["requestID": "later"], directory: extraMetadataDir)
+    let checkExtraFD = Darwin.open(extraLatest.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let extraLength = fgetxattr(checkExtraFD, "com.example.user-data", nil, 0, 0, 0)
+    Darwin.close(checkExtraFD)
+    expect((try? Data(contentsOf: extraLatest)) == extraBefore && (try? Data(contentsOf: extraLog)) == extraLogBefore
+           && extraLength == extraValue.count, "unrecognized extended attributes are preserved")
+
+    let aclDir = root.appendingPathComponent("acl-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: aclDir)
+    let aclLatest = aclDir.appendingPathComponent("latest.json")
+    let aclLog = aclDir.appendingPathComponent("wallpaper.jsonl")
+    let aclBefore = try Data(contentsOf: aclLatest), aclLogBefore = try Data(contentsOf: aclLog)
+    let chmod = Process()
+    chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+    chmod.arguments = ["+a", "everyone deny write", aclLatest.path]
+    try chmod.run(); chmod.waitUntilExit()
+    expect(chmod.terminationStatus == 0, "synthetic ACL is installed")
+    WallpaperJournal.record(["requestID": "later"], directory: aclDir)
+    let aclFD = Darwin.open(aclLatest.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let actualACL = acl_get_fd_np(aclFD, ACL_TYPE_EXTENDED)
+    expect((try? Data(contentsOf: aclLatest)) == aclBefore && (try? Data(contentsOf: aclLog)) == aclLogBefore
+           && actualACL != nil, "an ACL-bearing file is preserved")
+    if let actualACL { acl_free(UnsafeMutableRawPointer(actualACL)) }
+    Darwin.close(aclFD)
+
+    let permissionsDir = root.appendingPathComponent("permissions-journal", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: permissionsDir)
+    let permissionsLatest = permissionsDir.appendingPathComponent("latest.json")
+    let permissionBefore = try Data(contentsOf: permissionsLatest)
+    try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: permissionsLatest.path)
+    WallpaperJournal.record(["requestID": "later"], directory: permissionsDir)
+    let permissionMode = try FileManager.default.attributesOfItem(atPath: permissionsLatest.path)[.posixPermissions] as? NSNumber
+    expect((try? Data(contentsOf: permissionsLatest)) == permissionBefore && permissionMode?.intValue == 0o644,
+           "a changed permission mode is preserved rather than repaired")
+
+    let lockSwapDir = root.appendingPathComponent("lock-swap", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: lockSwapDir)
+    let lockLatest = lockSwapDir.appendingPathComponent("latest.json")
+    let lockBefore = try Data(contentsOf: lockLatest)
+    let lockPath = lockSwapDir.appendingPathComponent(".azhou-wallpaper.lock")
+    let lockSaved = lockSwapDir.appendingPathComponent("saved-lock")
+    var lockChanged = false
+    var lockIO = WallpaperJournal.IO()
+    lockIO.step = { phase in
+        if phase == "staged-latest" && !lockChanged {
+            try? FileManager.default.moveItem(at: lockPath, to: lockSaved)
+            try? Data("foreign lock".utf8).write(to: lockPath)
+            lockChanged = true
+        }
+    }
+    WallpaperJournal.record(["requestID": "later"], directory: lockSwapDir, io: lockIO)
+    expect(lockChanged && (try? Data(contentsOf: lockLatest)) == lockBefore,
+           "replacing the locked name prevents publication")
+    expect((try? Data(contentsOf: lockPath)) == Data("foreign lock".utf8)
+           && FileManager.default.fileExists(atPath: lockSaved.path), "replaced lock entries are retained")
+
+    for phase in ["append-log", "appended-log"] {
+        let changedLogDir = root.appendingPathComponent("change-" + phase, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: changedLogDir)
+        let changedLogPath = changedLogDir.appendingPathComponent("wallpaper.jsonl")
+        let replacement = Data("foreign in-place log".utf8)
+        var changed = false
+        var io = WallpaperJournal.IO()
+        io.step = { observed in
+            if observed == phase && !changed {
+                try? replacement.write(to: changedLogPath)
+                changed = true
+            }
+        }
+        WallpaperJournal.record(["requestID": "later"], directory: changedLogDir, io: io)
+        expect(changed && (try? Data(contentsOf: changedLogPath)) == replacement,
+               "concurrent log changes are retained at " + phase)
+        WallpaperJournal.record(["requestID": "retry"], directory: changedLogDir)
+        expect((try? Data(contentsOf: changedLogPath)) == replacement, "unverified log blocks retry at " + phase)
+    }
+
+    let metadataRaceDir = root.appendingPathComponent("append-extra-metadata", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: metadataRaceDir)
+    let metadataRaceLog = metadataRaceDir.appendingPathComponent("wallpaper.jsonl")
+    var metadataRaceChanged = false
+    var metadataRaceIO = WallpaperJournal.IO()
+    metadataRaceIO.step = { phase in
+        if phase == "appended-log" && !metadataRaceChanged {
+            let fd = Darwin.open(metadataRaceLog.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+            let value = Data("do not remove".utf8)
+            metadataRaceChanged = value.withUnsafeBytes { fsetxattr(fd, "com.example.added", $0.baseAddress, $0.count, 0, 0) } == 0
+            Darwin.close(fd)
+        }
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: metadataRaceDir, io: metadataRaceIO)
+    let metadataRaceBytes = try Data(contentsOf: metadataRaceLog)
+    WallpaperJournal.record(["requestID": "retry"], directory: metadataRaceDir)
+    let metadataCheckFD = Darwin.open(metadataRaceLog.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let metadataLength = fgetxattr(metadataCheckFD, "com.example.added", nil, 0, 0, 0)
+    Darwin.close(metadataCheckFD)
+    expect(metadataRaceChanged && metadataLength > 0 && (try? Data(contentsOf: metadataRaceLog)) == metadataRaceBytes,
+           "new metadata after append is preserved and never silently adopted")
+
+    let appendFailureDir = root.appendingPathComponent("append-sync-failure", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: appendFailureDir)
+    let appendFailureLog = appendFailureDir.appendingPathComponent("wallpaper.jsonl")
+    var syncCalls = 0
+    var appendFailureIO = WallpaperJournal.IO()
+    appendFailureIO.sync = { fd in
+        syncCalls += 1
+        if syncCalls == 4 { errno = EIO; return -1 }
+        return fsync(fd)
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: appendFailureDir, io: appendFailureIO)
+    let partialLog = try Data(contentsOf: appendFailureLog)
+    expect(syncCalls == 4 && String(decoding: partialLog, as: UTF8.self).contains("second"),
+           "an append sync failure retains the written bytes")
+    WallpaperJournal.record(["requestID": "retry"], directory: appendFailureDir)
+    expect((try? Data(contentsOf: appendFailureLog)) == partialLog, "a log with stale binding is not rewritten on retry")
+
+    let stagedDir = root.appendingPathComponent("unknown-stage", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: stagedDir)
+    let stagedLatest = stagedDir.appendingPathComponent("latest.json")
+    let stagedBefore = try Data(contentsOf: stagedLatest)
+    let foreignStage = stagedDir.appendingPathComponent(".azhou-wallpaper-stage")
+    try Data("unknown stage".utf8).write(to: foreignStage)
+    WallpaperJournal.record(["requestID": "later"], directory: stagedDir)
+    expect((try? Data(contentsOf: stagedLatest)) == stagedBefore && (try? Data(contentsOf: foreignStage)) == Data("unknown stage".utf8),
+           "an unverified fixed stage blocks further writes and is preserved")
+
+    for phase in ["staged-latest", "published-latest", "cleanup-latest"] {
+        let swapDir = root.appendingPathComponent("swap-" + phase, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: swapDir)
+        let latest = swapDir.appendingPathComponent("latest.json")
+        let log = swapDir.appendingPathComponent("wallpaper.jsonl")
+        let originalLatest = try Data(contentsOf: latest), originalLog = try Data(contentsOf: log)
+        let stage = swapDir.appendingPathComponent(".azhou-wallpaper-stage")
+        let saved = swapDir.appendingPathComponent("saved")
+        var changed = false
+        var io = WallpaperJournal.IO()
+        io.step = { observed in
+            if observed == phase && !changed {
+                let target = phase == "staged-latest" ? latest : stage
+                try? FileManager.default.moveItem(at: target, to: saved)
+                try? Data("foreign swapped bytes".utf8).write(to: target)
+                changed = true
+            }
+        }
+        WallpaperJournal.record(["requestID": "new"], directory: swapDir, io: io)
+        expect(changed, "fault was injected at " + phase)
+        let preservedForeign = ((try? Data(contentsOf: stage)) == Data("foreign swapped bytes".utf8))
+            || ((try? Data(contentsOf: latest)) == Data("foreign swapped bytes".utf8))
+        expect(preservedForeign, "unknown file is preserved at " + phase)
+        expect((try? Data(contentsOf: saved)) == originalLatest, "old latest is retained at " + phase)
+        expect((try? Data(contentsOf: log)) == originalLog, "log remains unchanged at " + phase)
+        let beforeRetry = try Data(contentsOf: stage)
+        WallpaperJournal.record(["requestID": "retry"], directory: swapDir)
+        expect((try? Data(contentsOf: stage)) == beforeRetry, "unknown stage blocks retry at " + phase)
+    }
+
+    for failure in ["marker", "sync", "partial-write"] {
+        let failedDir = root.appendingPathComponent("write-failure-" + failure, isDirectory: true)
+        var io = WallpaperJournal.IO()
+        var calls = 0
+        if failure == "marker" { io.setMarker = { _, _ in false } }
+        if failure == "sync" { io.sync = { _ in errno = EIO; return -1 } }
+        if failure == "partial-write" {
+            io.writeChunk = { fd, bytes, count in
+                calls += 1
+                if calls > 1 { errno = EIO; return -1 }
+                return Darwin.write(fd, bytes, min(count, 7))
+            }
+        }
+        WallpaperJournal.record(["requestID": "failure"], directory: failedDir, io: io)
+        let stage = failedDir.appendingPathComponent(".azhou-wallpaper-stage")
+        expect(FileManager.default.fileExists(atPath: stage.path), "failed stage is retained for " + failure)
+        expect(!FileManager.default.fileExists(atPath: failedDir.appendingPathComponent("latest.json").path),
+               "failed write does not publish latest for " + failure)
+        let stageBytes = try Data(contentsOf: stage)
+        WallpaperJournal.record(["requestID": "retry"], directory: failedDir)
+        expect((try? Data(contentsOf: stage)) == stageBytes, "retry preserves the failed stage for " + failure)
+    }
+
+    let missingMarkerDir = root.appendingPathComponent("missing-marker", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: missingMarkerDir)
+    let missingMarkerLatest = missingMarkerDir.appendingPathComponent("latest.json")
+    let missingMarkerLog = missingMarkerDir.appendingPathComponent("wallpaper.jsonl")
+    let missingMarkerBefore = try Data(contentsOf: missingMarkerLatest), missingMarkerLogBefore = try Data(contentsOf: missingMarkerLog)
+    let missingMarkerFD = Darwin.open(missingMarkerLatest.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+    expect(missingMarkerFD >= 0 && fremovexattr(missingMarkerFD, "com.azhou.agent-skin.wallpaper.v1", 0) == 0,
+           "synthetic ownership marker is removed")
+    Darwin.close(missingMarkerFD)
+    WallpaperJournal.record(["requestID": "later"], directory: missingMarkerDir)
+    expect((try? Data(contentsOf: missingMarkerLatest)) == missingMarkerBefore && (try? Data(contentsOf: missingMarkerLog)) == missingMarkerLogBefore,
+           "a missing ownership marker preserves latest and log")
+
+    for failure in ["rename", "unlink", "directory-sync"] {
+        let failureDir = root.appendingPathComponent("publish-failure-" + failure, isDirectory: true)
+        WallpaperJournal.record(["requestID": "original"], directory: failureDir)
+        let latest = failureDir.appendingPathComponent("latest.json")
+        let log = failureDir.appendingPathComponent("wallpaper.jsonl")
+        let oldLatest = try Data(contentsOf: latest), oldLog = try Data(contentsOf: log)
+        let stage = failureDir.appendingPathComponent(".azhou-wallpaper-stage")
+        var io = WallpaperJournal.IO()
+        var syncCount = 0
+        if failure == "rename" { io.rename = { _, _, _, _, _ in errno = EIO; return -1 } }
+        if failure == "unlink" { io.unlink = { _, _, _ in errno = EIO; return -1 } }
+        if failure == "directory-sync" {
+            io.sync = { fd in syncCount += 1; if syncCount == 3 { errno = EIO; return -1 }; return fsync(fd) }
+        }
+        WallpaperJournal.record(["requestID": "new"], directory: failureDir, io: io)
+        expect((try? Data(contentsOf: log)) == oldLog, "publication failure keeps the prior log for " + failure)
+        if failure == "rename" {
+            expect((try? Data(contentsOf: latest)) == oldLatest && FileManager.default.fileExists(atPath: stage.path),
+                   "rename failure preserves the old latest and new stage")
+        } else if failure == "unlink" {
+            expect((try? Data(contentsOf: stage)) == oldLatest && WallpaperJournal.latest(requestID: "new", directory: failureDir) != nil,
+                   "unlink failure retains the old stage and published latest")
+        } else {
+            expect(syncCount == 3 && WallpaperJournal.latest(requestID: "new", directory: failureDir) != nil,
+                   "directory sync failure reports a possibly published latest")
+        }
+        if failure != "directory-sync" {
+            let stageBefore = try Data(contentsOf: stage)
+            WallpaperJournal.record(["requestID": "retry"], directory: failureDir)
+            expect((try? Data(contentsOf: stage)) == stageBefore, "failed publication stage blocks retry for " + failure)
+        }
+    }
+
+    let collisionDir = root.appendingPathComponent("target-collision", isDirectory: true)
+    try FileManager.default.createDirectory(at: collisionDir, withIntermediateDirectories: true)
+    let collisionTarget = collisionDir.appendingPathComponent("latest.json")
+    var collisionIO = WallpaperJournal.IO()
+    collisionIO.step = { phase in
+        if phase == "staged-latest" { try? Data("foreign target".utf8).write(to: collisionTarget) }
+    }
+    WallpaperJournal.record(["requestID": "new"], directory: collisionDir, io: collisionIO)
+    expect((try? Data(contentsOf: collisionTarget)) == Data("foreign target".utf8),
+           "exclusive first publication preserves a concurrently created target")
+    expect(FileManager.default.fileExists(atPath: collisionDir.appendingPathComponent(".azhou-wallpaper-stage").path),
+           "first publication collision retains the staged object")
+
+    let markerFailureDir = root.appendingPathComponent("append-marker-failure", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: markerFailureDir)
+    let markerFailureLog = markerFailureDir.appendingPathComponent("wallpaper.jsonl")
+    var markerCalls = 0
+    var markerIO = WallpaperJournal.IO()
+    let normalMarker = markerIO.setMarker
+    markerIO.setMarker = { fd, data in
+        markerCalls += 1
+        return markerCalls == 2 ? false : normalMarker(fd, data)
+    }
+    WallpaperJournal.record(["requestID": "second"], directory: markerFailureDir, io: markerIO)
+    let unboundAppend = try Data(contentsOf: markerFailureLog)
+    expect(markerCalls == 2 && String(decoding: unboundAppend, as: UTF8.self).contains("second"),
+           "marker update failure preserves appended bytes")
+    WallpaperJournal.record(["requestID": "retry"], directory: markerFailureDir)
+    expect((try? Data(contentsOf: markerFailureLog)) == unboundAppend,
+           "marker update failure blocks future modification of the log")
+
+    let lockedDir = root.appendingPathComponent("held-lock", isDirectory: true)
+    WallpaperJournal.record(["requestID": "original"], directory: lockedDir)
+    let lockedLatest = lockedDir.appendingPathComponent("latest.json")
+    let lockedBefore = try Data(contentsOf: lockedLatest)
+    let lockedFD = Darwin.open(lockedDir.appendingPathComponent(".azhou-wallpaper.lock").path, O_RDWR | O_CLOEXEC)
+    expect(lockedFD >= 0 && flock(lockedFD, LOCK_EX | LOCK_NB) == 0, "synthetic cooperating lock is held")
+    WallpaperJournal.record(["requestID": "later"], directory: lockedDir)
+    expect((try? Data(contentsOf: lockedLatest)) == lockedBefore, "a busy lock prevents journal changes")
+    flock(lockedFD, LOCK_UN); Darwin.close(lockedFD)
+
+    let shortDir = root.appendingPathComponent("short-write", isDirectory: true)
+    var shortIO = WallpaperJournal.IO()
+    var shortCalls = 0
+    shortIO.writeChunk = { fd, bytes, count in
+        shortCalls += 1
+        if shortCalls == 1 { errno = EINTR; return -1 }
+        return Darwin.write(fd, bytes, min(count, 7))
+    }
+    WallpaperJournal.record(["requestID": "short"], directory: shortDir, io: shortIO)
+    expect(shortCalls > 2 && WallpaperJournal.latest(requestID: "short", directory: shortDir) != nil,
+           "short writes are completed before publication")
 
     return checks
 }
@@ -1319,7 +1814,7 @@ private func wallpaperCommandChecks() throws -> Int {
         expectedVersion: "0.9.0",
         sourceLoader: { "unused-test-payload" },
         sleep: { _ in },
-        journal: { _ in },
+        journal: { _ in true },
         output: { _ in }
     )
     expect(cancelled == 2, "the cancellation fixture enters the helper's rejected-request exit path")
@@ -1966,7 +2461,8 @@ private func wallpaperCLIRunChecks() -> Int {
         checks += 1
     }
     func run(_ arguments: [String], resolver: any WallpaperTargetResolver,
-             system: FakeWallpaperSystem, transport: FakeWallpaperOperationTransport)
+             system: FakeWallpaperSystem, transport: FakeWallpaperOperationTransport,
+             journalComplete: Bool = true)
         -> (Int32, [String: Any]?, [[String: Any]]) {
         var output: Data?
         var journal: [[String: Any]] = []
@@ -1974,7 +2470,7 @@ private func wallpaperCLIRunChecks() -> Int {
             arguments, resolver: resolver, system: system, transportFactory: { transport },
             now: { ProcessInfo.processInfo.systemUptime }, expectedVersion: "0.9.0",
             sourceLoader: { "unused-test-payload" }, sleep: { _ in },
-            journal: { journal.append($0) }, output: { output = $0 }
+            journal: { journal.append($0); return journalComplete }, output: { output = $0 }
         )
         let result = output.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         return (code, result, journal)
@@ -2006,6 +2502,21 @@ private func wallpaperCLIRunChecks() -> Int {
            "CLI output adds request timing while status avoids journal writes")
     expect(statusTransport.closeCount == 1 && statusSession.closeCount == 1,
            "CLI completion closes the injected page and transport resources")
+
+    let applySession = FakeWallpaperPageSession(responses: [
+        WallpaperCLI.applyGuardSource: ["state": "ready"],
+        "unused-test-payload": goodState,
+        WallpaperCLI.statusSource: goodState,
+    ])
+    let incomplete = run(["--wallpaper-helper", "--action", "apply", "--target-pid", "4123",
+                          "--target-bundle", "/tmp/Codex.app", "--port", "49221"],
+                         resolver: FakeWallpaperTargetResolver(), system: FakeWallpaperSystem(),
+                         transport: FakeWallpaperOperationTransport(pages: [page], session: applySession),
+                         journalComplete: false)
+    expect(incomplete.0 == 0 && incomplete.1?["state"] as? String == "applied"
+           && incomplete.1?["journalStatus"] as? String == "not-recorded"
+           && incomplete.2.count == 1 && incomplete.2[0]["journalStatus"] == nil,
+           "CLI reports an incomplete journal without changing a successful wallpaper result")
 
     let invalid = run(["--wallpaper-helper", "--action", "invalid"], resolver: FakeWallpaperTargetResolver(),
                       system: FakeWallpaperSystem(),

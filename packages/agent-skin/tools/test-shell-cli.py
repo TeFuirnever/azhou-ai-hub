@@ -122,6 +122,17 @@ esac
 if [[ "${1:-}" == "-c" ]]; then exec "${REAL_PYTHON3:?}" "$@"; fi
 case "${1:-}" in
   tools/build-preflight.py) exec "${REAL_PYTHON3:?}" "$@" ;;
+  tools/build-lock.py)
+    if [[ "${2:-}" == "--run" ]]; then
+      export _AZHOU_BUILD_LOCK_FD=999
+      if [[ "${3:-}" == "zcode" ]]; then
+        exec "$AGENT_SKIN_TEST_BASH" "$AGENT_SKIN_TEST_SOURCE_ROOT/tools/build-macos.sh" --host zcode
+      fi
+      exec "$AGENT_SKIN_TEST_BASH" "$AGENT_SKIN_TEST_SOURCE_ROOT/tools/build-macos.sh"
+    fi
+    [[ "${2:-}" == "--verify" ]] || exit 95
+    exit 0
+    ;;
   tools/verify-artifacts.py)
     if [[ "${2:-}" == "--host" ]]; then
       [[ "${3:-}" == "zcode" ]] || exit 94
@@ -130,10 +141,18 @@ case "${1:-}" in
     case "${2:-}" in
       --write-bundle-info) mkdir -p "$3/Contents"; : > "$3/Contents/Info.plist" ;;
       --write-marker) mkdir -p "$3/Contents/Resources"; : > "$3/Contents/Resources/azhou-build.json" ;;
-      --publish)
+      --stage-identity) printf '%s' 'synthetic-identity' ;;
+      --seal-stage) cat >/dev/null; printf '%s' 'synthetic-receipt' ;;
+      --publish-build)
+        cat >/dev/null
         if [[ "${FAKE_PRESERVE_STAGE:-0}" == "1" ]]; then
           : > "$(dirname "$3")/.preserve-original"
         fi
+        ;;
+      --cleanup-stage)
+        cat >/dev/null
+        [[ ! -e "$3/.preserve-original" ]] || exit 1
+        rm -rf -- "$3"
         ;;
       --check-inputs) ;;
       *) exit 92 ;;
@@ -419,7 +438,7 @@ exit status.exitstatus
             ), ()),
             "build-zcode-missing-icon": (1, "", "identity.iconInput",
                                          ("tools/build-preflight.py --host zcode",), ("xcrun", "sips")),
-            "build-preserve-stage": (0, "", "原子回滚未完成", ("--publish",), ()),
+            "build-preserve-stage": (1, "", "暂存无法确认安全清理", ("--publish-build",), ()),
             "build-xcrun-failure": (18, "", "", ("xcrun",), ("codesign", "--publish")),
             "build-codesign-failure": (19, "", "", ("codesign",), ("--publish",)),
             "install-check": (23, "", "", ("tools/install-macos.py --check",), ("xcrun",)),
@@ -471,7 +490,7 @@ exit status.exitstatus
             "installer ran before successful build/signing"
         for name in ("build-xcrun-failure", "install-build-failure"):
             fixture = next(Path(case["fixture"]) for case in case_specs if case["name"] == name)
-            assert not list((fixture / ".build").glob("azhou-stage.*")), f"{name}: failed stage was not cleaned"
+            assert list((fixture / ".build").glob("azhou-stage.*")), f"{name}: failed stage was not preserved"
         for name in ("preview-success", "preview-failure"):
             event = (output_root / name / "events.log").read_text(
                 encoding="utf-8", errors="replace").splitlines()[0]

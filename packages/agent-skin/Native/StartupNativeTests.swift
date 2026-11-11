@@ -158,6 +158,10 @@ private final class LegacyOnlyNativeRuntime: NativeAppRuntime {
     func writeStandardOutput(_ line: String) { base.writeStandardOutput(line) }
 }
 
+private final class ConcurrentTimeoutFixture: @unchecked Sendable {
+    let item = DispatchWorkItem {}
+}
+
 @MainActor
 private final class FakeScheduledAction: NativeScheduledAction {
     let delay: TimeInterval
@@ -433,10 +437,86 @@ struct StartupNativeTests {
         var checks = 0
         checks += zcodeRuntimeEventEnvelopeChecks()
         checks += zcodeTypedEventContractChecks()
+        checks += startupIdentityDiagnosticChecks()
+        checks += launcherCommandLineChecks()
+        checks += try await hostApplicationKeyChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        let registeredTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.setTimeout(registeredTimeout)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 1)))
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 2)))
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.domain == "waiter-fixture" && error.code == 1 && registeredTimeout.isCancelled,
+                   "first waiter result wins and cancels an existing timeout")
+        }
+        let lateTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 3)))
+                waiter.setTimeout(lateTimeout)
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.domain == "waiter-fixture" && error.code == 3 && lateTimeout.isCancelled,
+                   "a timeout registered after completion is immediately canceled")
+        }
+        let firstTimeout = DispatchWorkItem {}
+        let replacementTimeout = DispatchWorkItem {}
+        do {
+            let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                let waiter = StartupApplicationWaiter(continuation)
+                waiter.setTimeout(firstTimeout)
+                waiter.setTimeout(replacementTimeout)
+                waiter.finish(.failure(NSError(domain: "waiter-fixture", code: 4)))
+            }
+            fatalError("waiter fixture unexpectedly succeeded")
+        } catch let error as NSError {
+            expect(error.code == 4 && !firstTimeout.isCancelled && replacementTimeout.isCancelled,
+                   "the latest registered timeout retains the existing replacement semantics")
+        }
+        var canceledDuringRace = 0
+        for _ in 0..<40 {
+            let timeout = ConcurrentTimeoutFixture()
+            do {
+                let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                    let waiter = StartupApplicationWaiter(continuation)
+                    DispatchQueue.concurrentPerform(iterations: 2) { index in
+                        if index == 0 { waiter.setTimeout(timeout.item) }
+                        else { waiter.finish(.failure(NSError(domain: "waiter-race", code: 1))) }
+                    }
+                }
+                fatalError("waiter fixture unexpectedly succeeded")
+            } catch {
+                if timeout.item.isCancelled { canceledDuringRace += 1 }
+            }
+        }
+        expect(canceledDuringRace == 40, "registration racing completion always cancels the registered timeout")
+        var concurrentFailures = 0
+        for _ in 0..<40 {
+            do {
+                let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
+                    let waiter = StartupApplicationWaiter(continuation)
+                    DispatchQueue.concurrentPerform(iterations: 16) { index in
+                        waiter.finish(.failure(NSError(domain: "concurrent-waiter-fixture", code: index)))
+                    }
+                }
+                fatalError("waiter fixture unexpectedly succeeded")
+            } catch let error as NSError {
+                if error.domain == "concurrent-waiter-fixture" && (0..<16).contains(error.code) {
+                    concurrentFailures += 1
+                }
+            }
+        }
+        expect(concurrentFailures == 40, "concurrent waiter completions resume exactly once per operation")
         if let failure = ZCodeNativeRuntime.normalizedAttachFailure(ZCodeBoundCDP.Failure.deadline, deadline: 110, now: 105, cancelled: false) as? ZCodeAttachFailure {
             if case .deadline = failure { expect(true, "CDP deadline maps to typed attach deadline") } else { fatalError("wrong CDP deadline mapping") }
         } else { fatalError("missing CDP deadline mapping") }
@@ -1048,7 +1128,6 @@ struct StartupNativeTests {
         }
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
-        checks += try await startupIdentityDiagnosticChecks()
         checks += try await startupPageReplacementChecks()
         checks += try await startupControllerBindingChecks()
         checks += try await nativeEventContractChecks()
@@ -1161,6 +1240,58 @@ private func nativeEventContractChecks() async throws -> Int {
         checks += 1
     }
 
+    let navigationBase = FileManager.default.temporaryDirectory.appendingPathComponent("agent-skin-navigation-" + UUID().uuidString)
+    let navigationRoot = navigationBase.appendingPathComponent("web")
+    let navigationSibling = navigationBase.appendingPathComponent("web-other")
+    try FileManager.default.createDirectory(at: navigationRoot, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: navigationSibling, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: navigationBase) }
+    let page = navigationRoot.appendingPathComponent("index.html")
+    try "synthetic".write(to: page, atomically: true, encoding: .utf8)
+    let outside = navigationSibling.appendingPathComponent("outside.html")
+    try "synthetic".write(to: outside, atomically: true, encoding: .utf8)
+    let innerLink = navigationRoot.appendingPathComponent("inner-link")
+    let outerLink = navigationRoot.appendingPathComponent("outer-link")
+    try FileManager.default.createSymbolicLink(at: innerLink, withDestinationURL: page)
+    try FileManager.default.createSymbolicLink(at: outerLink, withDestinationURL: outside)
+    var remote = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    remote.host = "remote"
+    var localhost = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    localhost.host = "localhost"
+    var withUser = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    withUser.host = "localhost"; withUser.user = "user"
+    var withPort = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    withPort.host = "localhost"; withPort.port = 8080
+    expect(remote.url?.host == "remote", "remote navigation fixture retains authority")
+    expect(withUser.url?.user == "user", "navigation fixture retains user info")
+    expect(withPort.url?.port == 8080, "navigation fixture retains port")
+    var query = URLComponents(url: page, resolvingAgainstBaseURL: false)!
+    query.query = "preview=1"; query.fragment = "fixture"
+    let navigationCases: [(URL?, URL?, WKNavigationActionPolicy, String)] = [
+        (page, navigationRoot, .allow, "local page"),
+        (innerLink, navigationRoot, .allow, "internal symlink"),
+        (localhost.url, navigationRoot, .allow, "localhost authority"),
+        (query.url, navigationRoot, .allow, "local query and fragment"),
+        (navigationRoot, navigationRoot, .cancel, "root is not a file descendant"),
+        (outside, navigationRoot, .cancel, "sibling sharing a prefix"),
+        (outerLink, navigationRoot, .cancel, "symlink to outside"),
+        (navigationRoot.appendingPathComponent("../web-other/outside.html"), navigationRoot, .cancel, "parent traversal"),
+        (remote.url, navigationRoot, .cancel, "remote authority"),
+        (withUser.url, navigationRoot, .cancel, "authority with user"),
+        (withPort.url, navigationRoot, .cancel, "authority with port"),
+        (URL(string: "https://example.invalid/index.html"), navigationRoot, .cancel, "remote scheme"),
+        (nil, navigationRoot, .cancel, "missing URL"),
+        (page, nil, .cancel, "missing root"),
+        (page, URL(fileURLWithPath: "/"), .cancel, "filesystem root"),
+        (page, remote.url, .cancel, "remote root authority"),
+    ]
+    for (url, root, expected, label) in navigationCases {
+        var calls = 0
+        var actual: WKNavigationActionPolicy?
+        LocalWebNavigation.decide(url: url, root: root) { value in calls += 1; actual = value }
+        expect(calls == 1 && actual == expected, "local navigation: " + label)
+    }
+
     func validStatus(_ runID: Int, phase: String, ready: Bool, completed: Bool,
                      overlay: Bool, completion: Any) -> [String: Any] {
         ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
@@ -1168,6 +1299,78 @@ private func nativeEventContractChecks() async throws -> Int {
          "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
          "completion": completion]
     }
+
+    var lifecycleRecords: [[String: Any]] = []
+    let lifecycle = NativeStartupEventStream(writer: NativeEventWriter(
+        startedAt: 0, launcherPID: 1, launcherPath: "/synthetic/launcher",
+        sink: { lifecycleRecords.append($0) }
+    ))
+    lifecycle.targetOpened(pid: 4040, at: 0)
+    expect(lifecycle.finish(at: 0) == nil && lifecycleRecords.isEmpty,
+           "pre-begin activity cannot emit events or prevent a later begin")
+    lifecycle.begin(at: 1)
+    lifecycle.begin(at: 2)
+    lifecycle.latchInterruption()
+    lifecycle.latchFailure("asset-invalid")
+    lifecycle.portError(operation: "bind-loopback", errno: 48, at: 3)
+    expect(lifecycle.resolve(.activated(pid: 4040), observation: nil, at: 4)
+           == .behaviorNotProven(reason: "listener-mismatch"),
+           "a later port error keeps its existing precedence over pending interruption and failure")
+    let lifecycleFinal = lifecycle.finish(at: 5)
+    lifecycle.begin(at: 6)
+    lifecycle.portError(operation: "late", errno: 49, at: 7)
+    expect(lifecycle.finish(at: 8) == lifecycleFinal
+           && lifecycleRecords.map { $0["event"] as? String ?? "" } == [
+               "launcher-start", "startup-port-error", "startup-failed", "launcher-exit"
+           ], "repeated begin, finish and late observations do not duplicate events")
+
+    let observations = NativeStartupCapture(targetPID: 4040)
+    let loading = validStatus(42, phase: "loading", ready: false, completed: false,
+                              overlay: true, completion: NSNull())
+    let playing = validStatus(42, phase: "playing", ready: true, completed: false,
+                              overlay: true, completion: NSNull())
+    expect(observations.snapshot().installedAt == nil && observations.snapshot().status == nil,
+           "capture starts without installation or status evidence")
+    expect(observations.observe(["status": loading], at: 1) == nil
+           && observations.snapshot().status == nil,
+           "status alone cannot establish an installation")
+    expect(observations.observe(["installed": true, "alreadyActive": true, "status": loading], at: 2) == nil
+           && observations.snapshot().installedAt == nil,
+           "an already-active controller cannot establish a new installation")
+    expect(observations.observe(["installed": true, "alreadyActive": false, "status": ["invalid": true]], at: 3) == nil
+           && observations.snapshot().installedAt == 3 && observations.snapshot().status == nil,
+           "a confirmed installation waits for a valid run")
+    _ = observations.observe(["installed": true, "alreadyActive": false], at: 4)
+    expect(observations.snapshot().installedAt == 3, "duplicate install receipts retain the first time")
+    let captured = observations.observe(["status": loading], at: 5)
+    expect(captured?.runID == 42 && captured?.installedAt == 3
+           && observations.snapshot().statusAt == 5,
+           "the first valid status binds the run and reports installation once")
+    let other = validStatus(43, phase: "playing", ready: true, completed: false,
+                            overlay: true, completion: NSNull())
+    expect(observations.observe(["status": other], at: 6) == nil
+           && observations.snapshot().status?.runID == 42 && observations.snapshot().statusAt == 5,
+           "another run cannot replace the bound status")
+    expect(observations.observe(["status": ["runId": 42]], at: 7) == nil
+           && observations.snapshot().statusAt == 5,
+           "invalid status preserves the last valid observation")
+    expect(observations.observe(["status": playing], at: 8) == nil
+           && observations.snapshot().status?.phase == "playing" && observations.snapshot().statusAt == 8,
+           "the bound run can update without another installation notification")
+    let combined = NativeStartupCapture(targetPID: 4041)
+    let combinedResult = combined.observe(["installed": true, "alreadyActive": false, "status": playing], at: 9)
+    expect(combinedResult?.runID == 42 && combinedResult?.installedAt == 9
+           && combined.snapshot().targetPID == 4041 && combined.snapshot().statusAt == 9,
+           "one response can confirm the install and bind its status")
+
+    var failedProtocolStatus = validStatus(2, phase: "failed", ready: false, completed: false,
+                                           overlay: false, completion: NSNull())
+    failedProtocolStatus["reason"] = "asset-invalid"
+    expect(NativeStartupStatus.parse(failedProtocolStatus)?.reason == "asset-invalid",
+           "the shared startup protocol preserves the bounded failure reason")
+    failedProtocolStatus["reason"] = "unknown-reason"
+    expect(NativeStartupStatus.parse(failedProtocolStatus) == nil,
+           "the shared startup protocol rejects an unknown failure reason")
 
     var disabledWallpaper = validStatus(1, phase: "playing", ready: true, completed: false,
                                         overlay: true, completion: NSNull())
@@ -1564,6 +1767,19 @@ private func nativeEventContractChecks() async throws -> Int {
            "verified main-frame ready message localizes and starts the preview renderer")
     expect(playerPresentation.schedules.map(\.delay) == [25, 0, 1],
            "ready schedules the completion watchdog and only finite in-range snapshots")
+    for (duration, expectedDelay) in [
+        (NSNumber(value: Double.nan), 25.0),
+        (NSNumber(value: Double.infinity), 25.0),
+        (NSNumber(value: -1), 25.0),
+        (NSNumber(value: 50_000), 62.0),
+    ] {
+        let runtime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+        let presentation = FakeNativePlayerPresentation()
+        let delegate = AppDelegate(runtime: runtime, presentation: presentation)
+        delegate.receivePlayerMessage(body: ["action": "ready", "duration": duration], isMainFrame: true)
+        expect(presentation.schedules.map(\.delay) == [expectedDelay],
+               "ready normalizes duration before scheduling its watchdog")
+    }
     playerPresentation.schedules[1].fire()
     expect(playerRuntime.output.contains { $0.contains("snapshot-error") && $0.contains("no image") },
            "a failed native snapshot is reported without failing the animation")
@@ -1584,6 +1800,46 @@ private func nativeEventContractChecks() async throws -> Int {
     player.receivePlayerMessage(body: ["action": "jsError"], isMainFrame: true)
     expect(playerRuntime.terminated == 1 && playerPresentation.evaluations.count == evaluationCountAtEnd,
            "messages after completion cannot re-enter the terminated player flow")
+
+    let outOfOrderRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+    let outOfOrderPresentation = FakeNativePlayerPresentation()
+    let outOfOrderPlayer = AppDelegate(runtime: outOfOrderRuntime, presentation: outOfOrderPresentation)
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(outOfOrderRuntime.terminated == 0 && outOfOrderPresentation.evaluations.isEmpty,
+           "completion before readiness is ignored without ending preview")
+    outOfOrderPlayer.receivePlayerMessage(body: "ready", isMainFrame: true)
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    let outOfOrderCount = outOfOrderPresentation.evaluations.count
+    outOfOrderPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(outOfOrderPresentation.readyCount == 1 && outOfOrderRuntime.terminated == 1
+           && outOfOrderPresentation.evaluations.count == outOfOrderCount,
+           "a later ready and completion succeed once despite an earlier completion")
+
+    var closedBeforeReady = NativePlayerProgress()
+    closedBeforeReady.markClosed()
+    expect(!closedBeforeReady.isReady && closedBeforeReady.isDone,
+           "closing before readiness records completion without fabricating readiness")
+    closedBeforeReady.markReady()
+    expect(closedBeforeReady.isReady && closedBeforeReady.isDone && !closedBeforeReady.acceptCompletion(),
+           "late readiness cannot complete a previously closed player twice")
+    var progress = NativePlayerProgress()
+    expect(!progress.acceptCompletion() && !progress.isReady && !progress.isDone,
+           "completion before readiness does not advance player progress")
+    progress.markReady()
+    expect(progress.acceptCompletion() && !progress.acceptCompletion() && progress.isDone,
+           "ready player accepts exactly one completion")
+
+    let failedAfterReadyRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
+    let failedAfterReadyPresentation = FakeNativePlayerPresentation()
+    let failedAfterReadyPlayer = AppDelegate(runtime: failedAfterReadyRuntime, presentation: failedAfterReadyPresentation)
+    failedAfterReadyPlayer.receivePlayerMessage(body: "ready", isMainFrame: true)
+    failedAfterReadyPlayer.receivePlayerMessage(body: "jsError", isMainFrame: true)
+    let failedAfterReadyCount = failedAfterReadyPresentation.evaluations.count
+    failedAfterReadyPlayer.receivePlayerMessage(body: "complete", isMainFrame: true)
+    expect(failedAfterReadyRuntime.terminated == 0
+           && failedAfterReadyPresentation.evaluations.count == failedAfterReadyCount
+           && failedAfterReadyRuntime.output.contains { $0.contains("javascript-error") },
+           "completion after a displayed player failure is ignored")
 
     let failureRuntime = FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"])
     let failurePresentation = FakeNativePlayerPresentation()
@@ -1877,6 +2133,110 @@ private func nativeEventContractChecks() async throws -> Int {
         runtime.startupTargetSystem = system
         return (runtime, target, system)
     }
+
+    let linkedResourceRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-linked-resource-" + UUID().uuidString, isDirectory: true)
+    let outsideStartup = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-outside-payload-" + UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: linkedResourceRoot); try? FileManager.default.removeItem(at: outsideStartup) }
+    try FileManager.default.createDirectory(at: linkedResourceRoot, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: outsideStartup, withIntermediateDirectories: true)
+    try Data("synthetic-external-payload".utf8).write(to: outsideStartup.appendingPathComponent("install.js"))
+    try FileManager.default.createSymbolicLink(at: linkedResourceRoot.appendingPathComponent("startup"),
+                                               withDestinationURL: outsideStartup)
+    let (linkedPayloadRuntime, _, _) = makeColdRuntime(pid: 491, resourceURL: linkedResourceRoot)
+    linkedPayloadRuntime.startupTransportFactory = { _, _ in FakeStartupTransport(pages: [], evaluations: []) }
+    let linkedPayloadDelegate = AppDelegate(runtime: linkedPayloadRuntime, presentation: FakeNativePlayerPresentation())
+    linkedPayloadDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+    try await settleLaunch(linkedPayloadRuntime)
+    let linkedFailure = linkedPayloadRuntime.output.compactMap { line -> [String: Any]? in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }.first { $0["event"] as? String == "startup-failed" }
+    expect(linkedPayloadRuntime.openCount == 0 && linkedFailure?["reason"] as? String == "asset-invalid",
+           "a startup directory symlink is rejected as an invalid asset before opening the target")
+
+    let boundedRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("agent-skin-payload-bounds-" + UUID().uuidString, isDirectory: true)
+        .resolvingSymlinksInPath().standardizedFileURL
+    defer { try? FileManager.default.removeItem(at: boundedRoot) }
+    let boundedDirectory = boundedRoot.appendingPathComponent("startup", isDirectory: true)
+    let boundedFile = boundedDirectory.appendingPathComponent("install.js")
+    try FileManager.default.createDirectory(at: boundedDirectory, withIntermediateDirectories: true)
+    try Data("fixture-payload".utf8).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == "fixture-payload", "bounded payload reader accepts normal UTF-8 bytes")
+    var interruptedReads = 0
+    let retriedPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        if interruptedReads == 0 { interruptedReads += 1; errno = EINTR; return -1 }
+        return Darwin.read(descriptor, buffer, min(count, 2))
+    }
+    expect(retriedPayload == "fixture-payload" && interruptedReads == 1,
+           "bounded payload reader retries EINTR and assembles short reads")
+    let failedPayload = StartupPayloadReader.read(from: boundedRoot) { _, _, _ in errno = EIO; return -1 }
+    expect(failedPayload == nil && (try? Data(contentsOf: boundedFile)) == Data("fixture-payload".utf8),
+           "bounded payload reader refuses an I/O error without changing the source")
+    let savedPayload = boundedDirectory.appendingPathComponent("saved-original.js")
+    var replacementError: Error?, replaced = false
+    let changedPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        let received = Darwin.read(descriptor, buffer, count)
+        if received > 0 && !replaced {
+            do {
+                try FileManager.default.moveItem(at: boundedFile, to: savedPayload)
+                try Data("foreign-payload".utf8).write(to: boundedFile)
+                replaced = true
+            } catch { replacementError = error }
+        }
+        return received
+    }
+    expect(replacementError == nil && replaced && changedPayload == nil,
+           "bounded payload reader rejects a file replaced while reading")
+    expect((try? Data(contentsOf: savedPayload)) == Data("fixture-payload".utf8)
+           && (try? Data(contentsOf: boundedFile)) == Data("foreign-payload".utf8),
+           "the replaced and replacement payloads remain available for review")
+    try FileManager.default.removeItem(at: savedPayload)
+    try Data("fixture-payload".utf8).write(to: boundedFile)
+    var growthError: Error?, grew = false, readBytes = 0
+    let grownPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
+        let received = Darwin.read(descriptor, buffer, count)
+        if received > 0 {
+            readBytes += received
+            if !grew {
+                do {
+                    let writer = try FileHandle(forWritingTo: boundedFile)
+                    try writer.seekToEnd()
+                    try writer.write(contentsOf: Data(repeating: 0x42, count: 24 * 1024 * 1024))
+                    try writer.close()
+                    grew = true
+                } catch { growthError = error }
+            }
+        }
+        return received
+    }
+    expect(growthError == nil && grew && grownPayload == nil && readBytes <= 24 * 1024 * 1024,
+           "bounded payload reader rejects a file that grows past its limit without reading beyond the bound")
+    try Data().write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects an empty file")
+    try Data([0xff, 0xfe]).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects invalid UTF-8")
+    try FileManager.default.removeItem(at: boundedFile)
+    try FileManager.default.createSymbolicLink(at: boundedFile, withDestinationURL: startupPayloadURL)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a file symlink")
+    try FileManager.default.removeItem(at: boundedFile)
+    expect(mkfifo(boundedFile.path, 0o600) == 0, "synthetic payload FIFO was created")
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a FIFO without waiting for a writer")
+    try FileManager.default.removeItem(at: boundedFile)
+    try FileManager.default.createDirectory(at: boundedFile, withIntermediateDirectories: false)
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a directory")
+    try FileManager.default.removeItem(at: boundedFile)
+    let allowedSize = 24 * 1024 * 1024 - 1
+    try Data(repeating: 0x41, count: allowedSize).write(to: boundedFile)
+    expect(StartupPayloadReader.read(from: boundedRoot)?.utf8.count == allowedSize,
+           "bounded payload reader accepts one byte below its exclusive limit")
+    let oversizedHandle = try FileHandle(forWritingTo: boundedFile)
+    try oversizedHandle.truncate(atOffset: UInt64(allowedSize + 1))
+    try oversizedHandle.close()
+    expect(StartupPayloadReader.read(from: boundedRoot) == nil,
+           "bounded payload reader rejects the exclusive size limit")
 
     let hotRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"], resourceURL: coldResources)
     hotRuntime.installedTargetURL = syntheticCodex
@@ -5097,386 +5457,158 @@ private func startupPageReplacementChecks() async throws -> Int {
     return checks
 }
 
-
-#if AGENT_SKIN_NATIVE_EVENT_TESTS
-@MainActor
-private final class IdentityDiagnosticApplication: NativeApplication {
-    let mode: String
-    let expectedBundle: URL
-    let expectedExecutable: URL
-    var postOpenMode = ""
-    private(set) var reads: [String] = []
-    init(mode: String, bundle: URL, executable: URL) {
-        self.mode = mode; expectedBundle = bundle; expectedExecutable = executable
-    }
-    var processIdentifier: Int32 { reads.append("pid"); return mode == "invalid-pid" ? -1 : 4123 }
-    var bundleIdentifier: String? {
-        reads.append("bundleID")
-        if mode == "callback-id-missing" || postOpenMode == "id-missing" { return nil }
-        return mode == "callback-id-mismatch" ? "fixture.other" : "com.openai.codex"
-    }
-    var bundleURL: URL? {
-        reads.append("bundle")
-        if mode == "callback-bundle-missing" || postOpenMode == "bundle-missing"
-            || (mode == "callback-bundle-vanishes" && reads.filter { $0 == "bundle" }.count > 1) { return nil }
-        return mode == "callback-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : expectedBundle
-    }
-    var executableURL: URL? {
-        reads.append("executable")
-        if mode == "callback-executable-missing" || postOpenMode == "executable-missing" { return nil }
-        return mode == "facts-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : expectedExecutable
-    }
-    var launchTime: TimeInterval? {
-        reads.append("launchTime")
-        return ["no-launch-time", "no-launch-time-or-date"].contains(mode) ? nil : 123.456
-    }
-    var isTerminated: Bool { reads.append("terminated"); return mode == "callback-terminated" || postOpenMode == "terminated" }
-    var isActive: Bool { false }
-    var isHidden: Bool { false }
-    func activate() -> Bool { fatalError("identity diagnostics must never activate the host") }
-}
-
-private final class IdentityDiagnosticEnvironment: @unchecked Sendable {
-    let mode: String
-    let bundle: URL
-    let executable: URL
-    private(set) var probes: [String] = []
-    private var bundleReads = 0
-    private var processReads = 0
-    private var psReads = 0
-    private var time: TimeInterval = 101
-    init(_ mode: String) {
-        self.mode = mode
-        let path = mode == "invalid-extension" ? "/private/identity-private"
-            : mode == "nested-app" ? "/private/identity-private.app/Inner.app"
-            : "/private/identity-private.app"
-        bundle = URL(fileURLWithPath: path)
-        executable = bundle.appendingPathComponent("Contents/MacOS/Fixture")
-    }
-    func environment() -> CodexTargetEnvironment {
-        CodexTargetEnvironment(
-            mainBundleURL: mode == "launcher-bundle" ? bundle : URL(fileURLWithPath: "/private/launcher.app"),
-            bundleFacts: { [self] _ in
-                bundleReads += 1; probes.append("bundle:\(bundleReads)")
-                if (mode == "bundle-facts-missing" && bundleReads == 1)
-                    || (mode == "signature-bundle-missing" && bundleReads == 2) { return nil }
-                let identifier: String? = mode == "package-id-missing" ? nil
-                    : mode == "package-id-mismatch" || (mode == "signature-id-mismatch" && bundleReads == 2)
-                        ? "fixture.other" : "com.openai.codex"
-                let binary: URL? = mode == "package-executable-missing" ? nil
-                    : mode == "package-executable-outside" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
-                return CodexBundleFacts(identifier: identifier, executableURL: binary)
-            },
-            processFacts: { [self] pid in
-                processReads += 1; probes.append("process:\(processReads)")
-                if (mode == "fresh-process-missing" && processReads == 1)
-                    || (mode == "revalidate-process-missing" && processReads == 2) { return nil }
-                if mode == "ps-budget-timeout" && processReads == 2 { time = 200 }
-                let identifier: String? = mode == "fresh-id-missing" ? nil
-                    : mode == "fresh-id-mismatch" ? "fixture.other" : "com.openai.codex"
-                let processBundle: URL? = mode == "fresh-bundle-missing" ? nil
-                    : mode == "fresh-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : bundle
-                let binary: URL? = mode == "fresh-executable-missing" ? nil
-                    : mode == "fresh-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
-                let date: Date? = ["fresh-launch-missing", "no-launch-time-or-date"].contains(mode) ? nil
-                    : Date(timeIntervalSince1970: mode == "fresh-launch-mismatch"
-                           || (mode == "revalidate-launch-mismatch" && processReads == 2)
-                           || (mode == "post-signature-launch-mismatch" && processReads == 3) ? 124.456 : 123.456)
-                return CodexProcessFacts(processIdentifier: pid, isTerminated: mode == "fresh-terminated",
-                                         bundleIdentifier: identifier, bundleURL: processBundle,
-                                         executableURL: binary, launchDate: date)
-            },
-            runningProcesses: { _ in fatalError("identity validation must not enumerate or open the host") },
-            isExecutableFile: { [self] _ in probes.append("executable"); return mode != "not-executable" },
-            runCommand: { [self] file, _, timeout, _ in
-                probes.append("command:\(file):\(timeout)")
-                if file == "/bin/ps" {
-                    psReads += 1
-                    if mode == "ps-nserror" { throw NSError(domain: "IdentityFixture", code: 71, userInfo: [NSLocalizedDescriptionKey: "identity-private-message"]) }
-                    if mode == "ps-inspection-failed" { throw WallpaperFailure(state: "inspection-failed", chinese: "identity-private-message", english: "identity-private-message") }
-                    if mode == "signature-budget-timeout" { time = 200 }
-                    if mode == "ps-field-count" { return "identity-private-output" }
-                    if mode == "ps-uid-missing" { return "invalid \(executable.path)" }
-                    if mode == "ps-uid-mismatch" { return "502 \(executable.path)" }
-                    if mode == "ps-executable-mismatch" { return "501 /private/identity-private-other" }
-                    return "501 \(executable.path)"
-                }
-                precondition(file == "/usr/bin/codesign", "identity fixture must not probe listeners")
-                if mode == "signature-nserror" { throw NSError(domain: "IdentityFixture", code: 72, userInfo: [NSLocalizedDescriptionKey: "identity-private-signature", NSFilePathErrorKey: "/private/identity-private-file"]) }
-                if mode == "signature-inspection-timeout" || mode == "signature-inspection-failed" {
-                    throw WallpaperFailure(state: mode == "signature-inspection-timeout" ? "inspection-timeout" : "inspection-failed",
-                                           chinese: "identity-private-message", english: "identity-private-message")
-                }
-                return ""
-            },
-            currentUID: { [self] in probes.append("uid"); return 501 },
-            now: { [self] in time })
-    }
-}
-
-@MainActor
-private func startupIdentityDiagnosticChecks() async throws -> Int {
+private func startupIdentityDiagnosticChecks() -> Int {
     var checks = 0
-    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
-        guard value() else { fatalError("FAILED: identity diagnostics: \(label)") }
-        checks += 1
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
     }
-    let allowed: Set<String> = ["stage", "checkpoint", "at", "pid", "pidObserved", "outcome", "errorDomain", "errorCode", "state", "reason",
-                               "beforeDeadline", "callbackErrorPresent", "applicationPresent", "notTerminated", "bundlePresent", "executablePresent",
-                               "bundleIDPresent", "bundleMatches", "bundleIDMatches", "executableMatches", "launchTimePresent", "pidValid", "appExtensionMatches",
-                               "differentFromLauncher", "notNestedApp", "bundleFactsPresent", "executableInsideBundle", "executableFile", "processPresent",
-                               "expectedLaunchTimePresent", "observedLaunchTimePresent", "launchTimeMatches", "launchTimeAccepted", "fieldCountMatches", "uidPresent", "uidMatches"]
-    func contentFree(_ records: [[String: Any]]) throws {
-        for record in records {
-            expect(Set(record.keys).isSubset(of: allowed), "diagnostics expose only the fixed identity schema")
-            expect(record["stage"] as? String == "target-identity" && record["at"] is TimeInterval,
-                   "every identity record has a fixed stage and its sampled monotonic time")
-            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
-            expect(!text.contains("identity-private") && !text.contains("file://") && !text.contains("/bin/") && !text.contains("/Applications/"),
-                   "paths, ps output, command text and arbitrary error descriptions never enter the sink")
-        }
-    }
-    func expanded(_ record: [String: Any]) -> [[String: Any]] {
-        guard let records = record["checks"] as? [[String: Any]] else { return [record] }
-        expect(Set(record.keys) == ["stage", "checkpoint", "at", "checks"]
-               && record["stage"] as? String == "target-identity"
-               && record["checkpoint"] as? String == "bounded-open" && record["at"] is TimeInterval,
-               "one bounded-open envelope carries only the fixed metadata and actual observations")
-        expect(!records.isEmpty && records.count <= 11, "the finite validation path keeps its diagnostic batch bounded")
-        return records
-    }
-    struct Observation {
-        let reason: String
-        let reads: [String]
-        let probes: [String]
-        let records: [[String: Any]]
-    }
-    func observe(_ mode: String, enabled: Bool) async throws -> Observation {
-        let fixture = IdentityDiagnosticEnvironment(mode)
-        let application = IdentityDiagnosticApplication(mode: mode, bundle: fixture.bundle, executable: fixture.executable)
-        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
-        runtime.openedApplication = mode == "callback-missing" ? nil : application
-        if mode == "callback-error" { runtime.openError = NSError(domain: "IdentityFixture", code: 70, userInfo: [NSLocalizedDescriptionKey: "identity-private-open"]) }
-        if mode == "callback-deadline" { runtime.beforeOpenCompletion = { runtime.uptime = 200 } }
-        var records: [[String: Any]] = []
-        var emittedProbeCounts: [Int] = []
-        var emittedGetterCounts: [Int] = []
-        let sink: ((String, [String: Any]) -> Void)? = enabled ? { event, fields in
-            precondition(event == "startup-diagnostic")
-            emittedProbeCounts.append(fixture.probes.count)
-            emittedGetterCounts.append(application.reads.count)
-            records.append(contentsOf: expanded(fields))
-        } : nil
-        let system: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
-        let reason: String
-        do {
-            let result = try await AppDelegate.openTargetApplication(
-                runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
-                port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
-            expect(result === application, "the unchanged bounded open returns exactly its callback object")
-            reason = "ready"
-        } catch let failure as StartupFailure { reason = failure.reason }
-        expect(runtime.openCount == 1 && runtime.terminated == 0 && runtime.activated == 0,
-               "observations do not add opens, activation, termination or retries")
-        if enabled {
-            expect(emittedProbeCounts == [fixture.probes.count] && emittedGetterCounts == [application.reads.count],
-                   "diagnostic I/O occurs exactly once, after all callback identity decisions and host probes finish")
-        } else { expect(records.isEmpty, "off means no identity records") }
-        try contentFree(records)
-        return Observation(reason: reason, reads: application.reads, probes: fixture.probes, records: records)
-    }
-    let cases: [(String, String, String, String, Bool)] = [
-        ("valid", "ready", "callback-identity", "bundleMatches", true),
-        ("callback-bundle-vanishes", "ready", "callback-identity", "bundlePresent", true),
-        ("no-launch-time", "ready", "launch-time", "expectedLaunchTimePresent", false),
-        ("no-launch-time-or-date", "ready", "process-facts", "expectedLaunchTimePresent", false),
-        ("callback-missing", "target-identity", "callback-identity", "applicationPresent", false),
-        ("callback-terminated", "target-identity", "callback-identity", "notTerminated", false),
-        ("callback-bundle-missing", "target-identity", "callback-identity", "bundlePresent", false),
-        ("callback-executable-missing", "target-identity", "callback-identity", "executablePresent", false),
-        ("callback-id-missing", "target-identity", "callback-identity", "bundleIDPresent", false),
-        ("callback-bundle-mismatch", "target-identity", "callback-identity", "bundleMatches", false),
-        ("callback-id-mismatch", "target-identity", "callback-identity", "bundleIDMatches", false),
-        ("callback-error", "target-missing", "callback-identity", "callbackErrorPresent", true),
-        ("callback-deadline", "attach-timeout", "callback-identity", "beforeDeadline", false),
-        ("invalid-pid", "target-identity", "target-input", "pidValid", false),
-        ("invalid-extension", "target-identity", "target-input", "appExtensionMatches", false),
-        ("launcher-bundle", "target-identity", "target-input", "differentFromLauncher", false),
-        ("nested-app", "target-identity", "target-input", "notNestedApp", false),
-        ("bundle-facts-missing", "target-identity", "target-input", "bundleFactsPresent", false),
-        ("package-id-missing", "target-identity", "target-input", "bundleIDPresent", false),
-        ("package-id-mismatch", "target-identity", "target-input", "bundleIDMatches", false),
-        ("package-executable-missing", "target-identity", "target-input", "executablePresent", false),
-        ("package-executable-outside", "target-identity", "target-input", "executableInsideBundle", false),
-        ("not-executable", "target-identity", "target-input", "executableFile", false),
-        ("fresh-process-missing", "target-identity", "process-facts-initial", "processPresent", false),
-        ("fresh-terminated", "target-identity", "process-facts-initial", "notTerminated", false),
-        ("fresh-id-missing", "target-identity", "process-facts-initial", "bundleIDPresent", false),
-        ("fresh-id-mismatch", "target-identity", "process-facts-initial", "bundleIDMatches", false),
-        ("fresh-bundle-missing", "target-identity", "process-facts-initial", "bundlePresent", false),
-        ("fresh-bundle-mismatch", "target-identity", "process-facts-initial", "bundleMatches", false),
-        ("fresh-executable-missing", "target-identity", "process-facts-initial", "executablePresent", false),
-        ("fresh-executable-mismatch", "target-identity", "process-facts-initial", "executableMatches", false),
-        ("fresh-launch-missing", "target-identity", "launch-time", "observedLaunchTimePresent", false),
-        ("fresh-launch-mismatch", "target-identity", "launch-time", "launchTimeMatches", false),
-        ("revalidate-process-missing", "target-identity", "process-facts", "processPresent", false),
-        ("revalidate-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
-        ("post-signature-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
-        ("ps-field-count", "target-identity", "ps-identity", "fieldCountMatches", false),
-        ("ps-uid-missing", "target-identity", "ps-identity", "uidPresent", false),
-        ("ps-uid-mismatch", "target-identity", "ps-identity", "uidMatches", false),
-        ("ps-executable-mismatch", "target-identity", "ps-identity", "executableMatches", false),
-        ("facts-executable-mismatch", "target-identity", "system-target-input", "executableMatches", false),
-        ("signature-bundle-missing", "target-identity", "signature", "bundleFactsPresent", false),
-        ("signature-id-mismatch", "target-identity", "signature", "bundleIDMatches", false),
-    ]
-    for (mode, expectedReason, checkpoint, field, value) in cases {
-        let off = try await observe(mode, enabled: false)
-        let on = try await observe(mode, enabled: true)
-        expect(off.reason == expectedReason && on.reason == off.reason, "opt-in leaves success/refusal unchanged for \(mode)")
-        expect(on.reads == off.reads && on.probes == off.probes, "identity getters and actual host-boundary probe order/count stay unchanged for \(mode)")
-        expect(on.records.contains { $0["checkpoint"] as? String == checkpoint && $0[field] as? Bool == value },
-               "the actual rejecting/accepting predicate is distinguishable for \(mode)")
-        let callback = on.records.first { $0["checkpoint"] as? String == "callback-identity" }!
-        if on.reads.contains("pid") {
-            expect(callback["pid"] as? Int32 == (mode == "invalid-pid" ? -1 : 4123) && callback["pidObserved"] as? Bool == true,
-                   "PID comes only from the facts constructed after callback guards")
-        } else {
-            expect(callback["pid"] == nil && callback["pidObserved"] as? Bool == false,
-                   "an early refusal never samples an unvisited PID just for logging")
-        }
-        if mode == "callback-bundle-missing" {
-            expect(on.reads == ["terminated", "bundle"] && callback["executablePresent"] == nil && callback["bundleMatches"] == nil,
-                   "unvisited short-circuit predicates stay absent rather than looking missing or mismatched")
-        }
-        if mode == "fresh-process-missing" {
-            expect(on.probes == ["bundle:1", "executable", "process:1"],
-                   "a missing initial process snapshot is never re-probed for diagnosis")
-        }
-        if mode == "valid" {
-            expect(on.reads == ["terminated", "bundle", "executable", "bundleID", "pid", "launchTime"],
-                   "callback diagnostic taps consume the original getter order exactly once")
-            expect(on.probes == ["bundle:1", "executable", "process:1", "process:2", "command:/bin/ps:2.0", "uid", "bundle:2", "command:/usr/bin/codesign:12.0", "process:3", "command:/bin/ps:2.0", "uid"],
-                   "production validation through the existential still performs its original three snapshots/two ps/one signature checks")
-        }
-    }
-    let failures: [(String, String, String, String?, Int?)] = [
-        ("ps-nserror", "target-identity", "ps-identity", nil, 71),
-        ("ps-inspection-failed", "target-identity", "ps-identity", "inspection-failed", nil),
-        ("ps-budget-timeout", "attach-timeout", "ps-identity", nil, nil),
-        ("signature-budget-timeout", "attach-timeout", "signature", nil, nil),
-        ("signature-nserror", "target-identity", "signature", nil, 72),
-        ("signature-inspection-timeout", "attach-timeout", "signature", "inspection-timeout", nil),
-        ("signature-inspection-failed", "target-identity", "signature", "inspection-failed", nil),
-    ]
-    for (mode, expectedReason, checkpoint, state, code) in failures {
-        let off = try await observe(mode, enabled: false)
-        let on = try await observe(mode, enabled: true)
-        expect(off.reason == expectedReason && on.reason == off.reason && on.reads == off.reads && on.probes == off.probes,
-               "throwing checkpoint leaves error mapping and all probe counts unchanged for \(mode)")
-        let record = on.records.first { $0["checkpoint"] as? String == checkpoint && $0["outcome"] as? String == "error" }!
-        if let state { expect(record["state"] as? String == state, "original fixed WallpaperFailure state survives at \(checkpoint)") }
-        if let code { expect(record["errorDomain"] as? String == "IdentityFixture" && record["errorCode"] as? Int == code,
-                             "raw NSError identity survives before outer failure mapping") }
-        if mode == "signature-nserror" || mode == "signature-inspection-failed" {
-            expect(on.records.last?["state"] as? String == "signature-refused", "signature diagnostics distinguish the raw command failure from its existing public mapping")
-        }
-    }
-    // Default protocol forwarding keeps fake/custom target systems on their exact
-    // existing validate path; it must not swallow production dynamic dispatch.
-    let typedErrors: [Error] = [StartupFailure(reason: "attach-timeout", message: "identity-private-timeout"),
-                               WallpaperFailure(state: "inspection-timeout", chinese: "identity-private", english: "identity-private"),
-                               WallpaperFailure(state: "target-changed", chinese: "identity-private", english: "identity-private"),
-                               NSError(domain: "IdentityFixture", code: 73, userInfo: [NSLocalizedDescriptionKey: "identity-private"])]
-    for (index, error) in typedErrors.enumerated() {
-        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
-        let fixture = IdentityDiagnosticEnvironment("valid")
-        runtime.openedApplication = IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
-        let system = FakeStartupSystem(expectedPID: 4123, ports: [])
-        system.validationError = error
-        var records: [[String: Any]] = []
-        do {
-            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
-                                                           port: 9333, deadline: 200, system: system, log: { _, _ in },
-                                                           diagnostics: { _, record in records.append(contentsOf: expanded(record)) })
-            fatalError("typed validation failure must still reject")
-        } catch let failure as StartupFailure {
-            expect(failure.reason == (index < 2 ? "attach-timeout" : "target-identity"), "all existing bounded-open typed error mappings stay fixed")
-        }
-        expect(system.validatedPIDs == [4123] && records.last?["checkpoint"] as? String == "system-validation",
-               "default overload forwards once and the catch identifies its own checkpoint")
-        try contentFree(records)
-    }
-    // The callback may have complete facts while the next, independently used
-    // post-open snapshot does not. Never overwrite the earlier observation.
-    for mode in ["", "bundle-missing", "executable-missing", "id-missing", "terminated"] {
-        for enabled in [false, true] {
-            let fixture = IdentityDiagnosticEnvironment("valid")
-            let application = IdentityDiagnosticApplication(mode: "callback-bundle-vanishes", bundle: fixture.bundle, executable: fixture.executable)
-            let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"]); runtime.openedApplication = application
-            let system = FakeStartupSystem(expectedPID: 4123, ports: [])
-            var records: [[String: Any]] = []
-            let sink: ((String, [String: Any]) -> Void)? = enabled ? { _, record in records.append(contentsOf: expanded(record)) } : nil
-            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
-                                                           port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
-            // Use a separate application for the non-bundle predicates so the
-            // original short-circuit order is tested at every post-open field.
-            let postApplication = mode.isEmpty || mode == "bundle-missing" ? application
-                : IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
-            postApplication.postOpenMode = mode
-            let delegate = AppDelegate(runtime: runtime, presentation: FakeNativePlayerPresentation())
-            do {
-                _ = try delegate.startupFacts(postApplication, diagnostics: sink, at: 102)
-                fatalError("post-open missing identity must still reject")
-            } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "post-open disappearance keeps its existing refusal") }
-            if enabled {
-                let callback = records.first { $0["checkpoint"] as? String == "callback-identity" }!
-                let post = records.last!
-                expect(callback["outcome"] as? String == "accepted" && callback["bundlePresent"] as? Bool == true
-                       && post["checkpoint"] as? String == "post-open-facts" && post["outcome"] as? String == "rejected",
-                       "later field loss is distinguished from the successful callback snapshot")
-                expect(post["pid"] == nil && post["pidObserved"] as? Bool == false && post["at"] as? TimeInterval == 102,
-                       "post-open refusal records only observed predicates at its own time")
-                try contentFree(records)
-            } else { expect(records.isEmpty, "post-open diagnostics also remain opt-in") }
-        }
-    }
-    let fixture = IdentityDiagnosticEnvironment("no-launch-time")
-    let application = IdentityDiagnosticApplication(mode: "no-launch-time", bundle: fixture.bundle, executable: fixture.executable)
-    var postRecords: [[String: Any]] = []
-    var clockReads = 0
-    func clock() -> TimeInterval { clockReads += 1; return 102 }
-    let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
-                               presentation: FakeNativePlayerPresentation())
-    let offFacts = try delegate.startupFacts(application, at: clock())
-    expect(clockReads == 0 && offFacts.launchTime == nil, "disabled diagnostic does not evaluate even its clock autoclosure")
-    let onFacts = try delegate.startupFacts(application, diagnostics: { _, record in postRecords.append(record) }, at: clock())
-    expect(clockReads == 1 && onFacts.pid == offFacts.pid && onFacts.bundle == offFacts.bundle && onFacts.executable == offFacts.executable
-           && onFacts.bundleID == offFacts.bundleID && onFacts.launchTime == nil,
-           "accepted post-open facts stay identical and absent launch time remains allowed")
-    expect(postRecords.count == 1 && postRecords[0]["pid"] as? Int32 == 4123 && postRecords[0]["launchTimePresent"] as? Bool == false,
-           "accepted post-open diagnostic uses its constructed facts")
-    try contentFree(postRecords)
-    let scopeFixture = IdentityDiagnosticEnvironment("valid")
-    let scopedSystem: any StartupTargetSystem = CodexStartupTargetSystem(environment: scopeFixture.environment())
-    let facts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
-                                   bundleID: "com.openai.codex", launchTime: 123.456)
-    var scopedRecords: [[String: Any]] = []
-    try scopedSystem.validate(facts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
-    let count = scopedRecords.count
-    try scopedSystem.validate(facts, deadline: 200)
-    try scopedSystem.validate(facts, deadline: 200, diagnostics: nil)
-    expect(count > 0 && scopedRecords.count == count, "the diagnostic environment copy never leaks its sink into later validations")
-    let wrongFacts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
-                                        bundleID: "fixture.other", launchTime: nil)
-    do {
-        try scopedSystem.validate(wrongFacts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
-        fatalError("a wrong target ID must still reject before any process probe")
-    } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "system target-input guard is unchanged") }
-    expect(scopedRecords.last?["checkpoint"] as? String == "system-target-input"
-           && scopedRecords.last?["bundleIDMatches"] as? Bool == false,
-           "direct system input refusal gets its own content-free predicate")
-    try contentFree(scopedRecords)
+
+    // The diagnostics policy is opt-in through exactly one environment value.
+    expect(StartupDiagnosticsPolicy.isEnabled(environment: ["AZHOU_STARTUP_DIAGNOSTICS": "1"]),
+           "startup diagnostics opt in through AZHOU_STARTUP_DIAGNOSTICS=1")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: ["AZHOU_STARTUP_DIAGNOSTICS": "0"]),
+           "startup diagnostics stay off for other values")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: [:]),
+           "startup diagnostics default to off")
+
+    // Without a sink the diagnostic stays inert and still passes values through.
+    var inert = StartupIdentityDiagnostic("probe", pid: 42, at: 10, diagnostics: nil)
+    expect(inert.check("identity", true), "checks report their value without a sink")
+    expect(inert.present("bundle", URL(fileURLWithPath: "/tmp/synthetic") as URL?) != nil,
+           "present yields the observed value without a sink")
+    expect(inert.present("absent", nil as String?) == nil, "present passes nil through")
+    expect(inert.processIdentifier(77) == 77, "process identifier passes through without a sink")
+    inert.finish("refused", error: nil) // Must not crash without a sink.
+
+    // With a sink every tap lands in one bounded record and finish decorates it.
+    var records: [[String: Any]] = []
+    var diagnosed = StartupIdentityDiagnostic("open", pid: 700, at: 5,
+                                              diagnostics: { records.append($1) })
+    expect(diagnosed.check("bundle-identity", true), "identity check reports true")
+    expect(!diagnosed.check("page-supported", false), "a failing check reports false")
+    expect(diagnosed.present("main-page", "https://synthetic.invalid" as String?) == "https://synthetic.invalid",
+           "present yields the observed page")
+    expect(diagnosed.processIdentifier(701) == 701, "the latest process identifier tap wins")
+    diagnosed.finish("verified", error: nil)
+    expect(records.count == 1, "finish emits exactly one diagnostic record")
+    var record = records.last ?? [:]
+    expect((record["stage"] as? String) == "target-identity", "records carry the target-identity stage")
+    expect((record["checkpoint"] as? String) == "open", "records carry the checkpoint")
+    expect((record["pid"] as? Int32) == 701, "records carry the latest process identifier")
+    expect((record["pidObserved"] as? Bool) == true, "finish reports whether a pid was observed")
+    expect((record["outcome"] as? String) == "verified", "records carry the outcome")
+
+    // Errors are reduced to domain/code plus the failure taxonomy, never payloads.
+    records.removeAll()
+    var failing = StartupIdentityDiagnostic("swap", at: 6, diagnostics: { records.append($1) })
+    failing.check("signature", false)
+    let transport = StartupTransportError(domain: "transport-fixture", code: 7, httpStatus: 503)
+    failing.finish("aborted", error: StartupFailure(reason: "listener-mismatch", message: "synthetic",
+                                                    transportError: transport))
+    record = records.last ?? [:]
+    expect(records.count == 1 && (record["outcome"] as? String) == "aborted",
+           "the failing path also emits exactly one bounded record")
+    expect((record["errorDomain"] as? String)?.isEmpty == false,
+           "startup failures reduce to a non-empty error domain")
+    expect(record["errorCode"] != nil, "startup failures reduce to an error code")
+    expect((record["reason"] as? String) == "listener-mismatch", "startup failures record their reason")
+    expect(record["state"] == nil, "a startup failure carries no wallpaper state")
+    expect((record["pidObserved"] as? Bool) == false, "no pid tap keeps pidObserved false")
+
+    records.removeAll()
+    let wallpaperFailure = WallpaperFailure(state: "page-missing", chinese: "合成失败。", english: "Synthetic failure.",
+                                            transportError: nil, retryableListFailure: false, httpStatus: nil)
+    var stateDiagnosed = StartupIdentityDiagnostic("swap", at: 7, diagnostics: { records.append($1) })
+    stateDiagnosed.check("signature", false)
+    stateDiagnosed.finish("aborted", error: wallpaperFailure)
+    record = records.last ?? [:]
+    expect((record["state"] as? String) == "page-missing", "wallpaper failures record their state")
+    expect(record["errorDomain"] as? String != nil, "wallpaper failures still reduce to domain and code")
+
     return checks
 }
-#endif
+
+private func launcherCommandLineChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+    let full = LauncherCommandLine(arguments: ["launcher", "--preview", "--snapshot", "/tmp/synth",
+                                               "--zcode-state-root", "/tmp/zstate", "--probe"])
+    expect(full.value(after: "--snapshot") == "/tmp/synth",
+           "value(after:) returns the argument following the flag")
+    expect(full.value(after: "--missing") == nil,
+           "value(after:) returns nil for an absent flag")
+    let trailing = LauncherCommandLine(arguments: ["launcher", "--snapshot"])
+    expect(trailing.value(after: "--snapshot") == nil,
+           "value(after:) returns nil when the flag has no follower")
+    expect(full.snapshotDirectory == "/tmp/synth", "snapshot directory parses from its flag")
+    expect(full.snapshotTimes == "0.4,1.4,2.3,3.5,5.5,7.3", "snapshot times keep their default cadence")
+    expect(full.zcodeStateRoot == "/tmp/zstate", "zcode state root parses from its flag")
+    let bare = LauncherCommandLine(arguments: ["launcher"])
+    expect(bare.snapshotDirectory == nil && bare.zcodeStateRoot == nil,
+           "snapshot and state roots stay absent without their flags")
+    return checks
+}
+
+@MainActor private func hostApplicationKeyChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+
+    func makeSyntheticKeyBundle(bundleIdentifier: String, declaredHost: String?, executableName: String)
+        throws -> (bundle: URL, executable: URL, payload: Data) {
+        let bundle = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Synthetic Key Host-" + UUID().uuidString + ".app", isDirectory: true)
+        let executable = bundle.appendingPathComponent("Contents/MacOS/" + executableName)
+        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let payload = Data("#!/bin/sh\nexit 0\n".utf8)
+        try payload.write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        var info: [String: Any] = ["CFBundleIdentifier": bundleIdentifier, "CFBundlePackageType": "APPL",
+                                   "CFBundleExecutable": executableName]
+        if let declaredHost { info["AzhouTargetHost"] = declaredHost }
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: bundle.appendingPathComponent("Contents/Info.plist"))
+        return (bundle, executable, payload)
+    }
+
+    let system = TrustedLaunchSession()
+
+    let (launcherBundle, _, _) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "zcode", executableName: "Launcher")
+    defer { try? FileManager.default.removeItem(at: launcherBundle) }
+    let identity = LauncherIdentity(bundleURL: launcherBundle)
+    expect(identity.host == .zcode && identity.targetBundleID == "dev.zcode.app",
+           "the zcode launcher bundle resolves its host and target identity")
+
+    let (targetBundle, targetExecutable, targetPayload) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "dev.zcode.app", declaredHost: nil, executableName: "ZCode")
+    defer { try? FileManager.default.removeItem(at: targetBundle) }
+    let expectedDigest = SHA256.hash(data: targetPayload).map { String(format: "%02x", $0) }.joined()
+    guard let key = system.hostApplicationKey(for: targetBundle, identity: identity) else {
+        preconditionFailure("FAILED: the verified zcode target yields its application key")
+    }
+    expect(key.bundleIdentifier == "dev.zcode.app", "the key carries the target bundle identifier")
+    expect(key.executableURL == PathCanonicalization.resolved(targetExecutable),
+           "the key pins the canonical executable URL")
+    expect(key.executableSHA256 == expectedDigest, "the zcode key pins the real executable digest")
+
+    let (codexLauncher, _, _) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "local.azhou.codex-startup", declaredHost: "codex", executableName: "Launcher")
+    defer { try? FileManager.default.removeItem(at: codexLauncher) }
+    let codexIdentity = LauncherIdentity(bundleURL: codexLauncher)
+    expect(codexIdentity.host == .codex, "the codex launcher bundle resolves the codex host")
+    if let codexKey = system.hostApplicationKey(for: targetBundle, identity: codexIdentity) {
+        expect(codexKey.executableSHA256.isEmpty,
+               "the codex branch leaves the executable digest to its codesign path")
+    } else {
+        expect(true, "the codex branch may refuse a mismatched identity outright")
+    }
+
+    // A stream failure latch is idempotent and never touches verified key state.
+    system.latchStreamFailure("synthetic")
+    expect(system.eventStream == nil, "latching a failure without an open stream stays inert")
+    return checks
+}

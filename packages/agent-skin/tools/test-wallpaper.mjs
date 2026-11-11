@@ -5,11 +5,13 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { CDP } from './test-startup-browser-cdp.mjs';
+import { canRemoveProfile, profileIdentity, removeOwnedProfile, trackOwnedChild } from './test-startup-browser-process.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const options = { chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', image: 'wallpaper-scene-q-v3.png',
@@ -35,7 +37,7 @@ const report = { schema: 1, scope: 'synthetic Codex-like DOM in isolated headles
     'Screenshots are visual evidence, not performance measurements; no GPU/pipeline performance claim.',
     'Cover fills the viewport by cropping; computed coverage does not certify character proportions, face visibility or text readability.',
     'Source pixels, screenshot pixels and calculated upscale are reported separately; no native-Retina-resolution claim.'] };
-let server, chrome, profile, cdp, chromeError = '', stopping = false;
+let server, chrome, chromeOwner, profile, identity, cdp, chromeError = '', completed = false, cleanupPromise;
 
 function safeError(error) {
   return String(error?.message || error).replace(/data:image\/[^\s"']+/g, '[private image omitted]').slice(0, 1800);
@@ -54,65 +56,39 @@ async function check(name, operation) {
   try { const details = await operation(); report.checks.push({ name, passed: true, elapsedMs: Date.now() - start, details }); }
   catch (error) { report.checks.push({ name, passed: false, elapsedMs: Date.now() - start, error: safeError(error) }); }
 }
-class CDP {
-  constructor(socket) {
-    this.socket = socket; this.nextID = 1; this.pending = new Map();
-    socket.addEventListener('message', event => {
-      const value = JSON.parse(String(event.data));
-      if (!value.id || !this.pending.has(value.id)) return;
-      const pending = this.pending.get(value.id); this.pending.delete(value.id); clearTimeout(pending.timer);
-      value.error ? pending.reject(new Error(value.error.message)) : pending.resolve(value.result);
-    });
-    socket.addEventListener('close', () => {
-      for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Fixture CDP closed')); }
-      this.pending.clear();
-    });
-  }
-  static async open(address, expectedPort) {
-    const url = new URL(address);
-    assert.equal(url.protocol, 'ws:'); assert.equal(url.hostname, '127.0.0.1'); assert.equal(Number(url.port), expectedPort);
-    assert.ok(url.pathname.startsWith('/devtools/page/'));
-    const socket = new WebSocket(address);
-    await new Promise((resolveOpen, reject) => {
-      const timer = setTimeout(() => { socket.close(); reject(new Error('Fixture WebSocket timeout')); }, 5000);
-      socket.addEventListener('open', () => { clearTimeout(timer); resolveOpen(); }, { once: true });
-      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Fixture WebSocket failed')); }, { once: true });
-    });
-    return new CDP(socket);
-  }
-  call(method, params = {}) {
-    const id = this.nextID++;
-    return new Promise((resolveCall, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Fixture CDP timeout: ' + method)); }, 12000);
-      this.pending.set(id, { resolve: resolveCall, reject, timer });
-      this.socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  async evaluate(expression) {
-    const result = await this.call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, timeout: 10000 });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    return result.result?.value;
-  }
-  close() { this.socket.close(); }
-}
-
-async function cleanup() {
-  if (stopping) return;
-  stopping = true;
-  try { cdp?.close(); } catch {}
-  if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
-    const exited = new Promise(resolveExit => chrome.once('exit', resolveExit));
-    chrome.kill('SIGTERM');
-    await Promise.race([exited, delay(2500)]);
-    if (chrome.exitCode === null && chrome.signalCode === null) { chrome.kill('SIGKILL'); await Promise.race([exited, delay(1500)]); }
-  }
-  if (server) { server.closeAllConnections(); await new Promise(resolveClose => server.close(resolveClose)); }
-  if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
-  report.cleanup = { ownChromeStopped: !chrome || chrome.exitCode !== null || chrome.signalCode !== null,
-    temporaryProfileRemoved: !!profile, serverClosed: !server?.listening };
+function cleanup() {
+  if (cleanupPromise) return cleanupPromise;
+  cleanupPromise = (async () => {
+    const errors = [];
+    try { cdp?.close(); } catch (error) { errors.push(safeError(error)); }
+    let stopped = !chrome;
+    try { if (chromeOwner) stopped = await chromeOwner.stop(); }
+    catch (error) { errors.push(safeError(error)); }
+    try {
+      if (server) { server.closeAllConnections(); await new Promise(resolveClose => server.close(resolveClose)); }
+    } catch (error) { errors.push(safeError(error)); }
+    let removed = false;
+    if (profile && canRemoveProfile({ stopped, completed, fatalError: report.fatalError,
+      checks: report.checks, errors }) && report.checks.length > 0) {
+      try { removed = await removeOwnedProfile(profile, identity); }
+      catch (error) { errors.push(safeError(error)); }
+    }
+    report.cleanup = { ownChromeStopped: stopped, temporaryProfileRemoved: removed,
+      serverClosed: !server?.listening, ...(profile && !removed ? { preservedProfilePath: profile } : {}),
+      ...(errors.length ? { errors } : {}) };
+  })();
+  return cleanupPromise;
 }
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => { cleanup().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143)); });
+  process.once(signal, () => {
+    report.fatalError = 'Interrupted by ' + signal;
+    cleanup().then(async () => {
+      report.finishedAt = new Date().toISOString(); report.passed = false;
+      await mkdir(options.out, { recursive: true });
+      await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+      console.error(JSON.stringify({ passed: false, report: join(options.out, 'report.json'), cleanup: report.cleanup }));
+    }).finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
+  });
 }
 
 try {
@@ -123,6 +99,7 @@ try {
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'), readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'), readFile(join(ROOT, 'assets/private', options.image)),
   ]);
+  const previewController = await readFile(join(ROOT, 'wallpaper/preview-controller.js'), 'utf8');
   const imageSHA256 = createHash('sha256').update(imageBytes).digest('hex');
   const mime = options.image.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
   const payload = { version: '0.9.0', preview: true, css, imageSHA256, image: 'data:' + mime + ';base64,' + imageBytes.toString('base64') };
@@ -149,6 +126,7 @@ try {
   const routes = new Map([
     ['/wallpaper/preview.html', ['text/html; charset=utf-8', preview]],
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', renderer]],
+    ['/wallpaper/preview-controller.js', ['text/javascript; charset=utf-8', previewController]],
     ['/wallpaper/wallpaper.css', ['text/css; charset=utf-8', css]],
     ['/assets/private/' + options.image, [mime, imageBytes]],
     ['/fixture-base.css', ['text/css; charset=utf-8', baseCSS]],
@@ -167,10 +145,12 @@ try {
   await new Promise((resolveListen, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolveListen); });
   const origin = 'http://127.0.0.1:' + server.address().port;
   profile = await mkdtemp(join(tmpdir(), 'azhou-wallpaper-fixture-'));
+  identity = await profileIdentity(profile);
   const chromeArgs = ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
     '--disable-default-apps', '--disable-sync', '--disable-extensions', '--disable-component-update', '--no-pings',
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + profile, '--window-size=1512,889', 'about:blank'];
   chrome = spawn(options.chrome, chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+  chromeOwner = trackOwnedChild(chrome);
   chrome.on('error', error => { chromeError = safeError(error); });
   chrome.stderr.on('data', chunk => { chromeError = (chromeError + chunk.toString()).slice(-6000); });
   const debugPort = await until(async () => {
@@ -216,11 +196,22 @@ try {
   await dimensions(1512, 889);
   await navigate('/wallpaper/preview.html?image=' + encodeURIComponent(options.image));
   await until(() => cdp.evaluate('(()=>{if(globalThis.__wallpaperFixtureError)throw new Error(__wallpaperFixtureError);return !!globalThis.__wallpaperFixture && !!globalThis.__azhouWallpaper?.status().applied;})()'), 10000, 'decoded fixture wallpaper');
+  await check('fixture request cleanup on send failure', async () => {
+    const socket = { addEventListener() {}, send() { throw new Error('synthetic send failure'); } };
+    const client = new CDP(socket);
+    await assert.rejects(client.call('Synthetic.failure'), /synthetic send failure/);
+    assert.equal(client.pending.size, 0);
+    socket.send = () => { throw null; };
+    const falsy = await client.call('Synthetic.falsy').then(() => 'resolved', error => error);
+    assert.equal(falsy, null);
+    assert.equal(client.pending.size, 0);
+    return { pendingRequests: client.pending.size };
+  });
   if (baseline) {
     await check('captured 0.7.0 falsely reports success with independent fades', async () => {
       try {
         await cdp.evaluate('__azhouWallpaper.dispose()');
-        const state = await cdp.evaluate('(async()=>{' + baseline.installer + '\nreturn await installRenderer(' + JSON.stringify(baseline.payload) + ');})()');
+        const state = await cdp.evaluate('(async()=>{' + baseline.installer + '\nconst state=await installRenderer(' + JSON.stringify(baseline.payload) + ');window.__wallpaperFixtureBaseline=globalThis.__azhouWallpaper;return state;})()');
         const inspected = await onFixture(() => {
           const fade = document.getElementById('fixture-fade');
           return { inFooter: !!fade.closest('[data-thread-scroll-footer]'), gradient: getComputedStyle(fade).backgroundImage,
@@ -231,7 +222,12 @@ try {
         assert.ok(inspected.gradient.includes('linear-gradient')); assert.ok(inspected.topGradient.includes('linear-gradient'));
         await onFixture(() => { document.getElementById('result').textContent = '0.7.0 基线：状态成功，但独立渐变仍覆盖背景'; });
         return { state, inspected, screenshot: await screenshot('00-baseline-fade-0.7.0.png') };
-      } finally { await cdp.evaluate('__wallpaperFixture.apply()'); }
+      } finally {
+        await cdp.evaluate(`(()=>{const api=window.__wallpaperFixtureBaseline;
+          delete window.__wallpaperFixtureBaseline;
+          if(api&&globalThis.__azhouWallpaper===api)api.dispose();})()`);
+        await cdp.evaluate('__wallpaperFixture.apply()');
+      }
     });
   }
   await check('decoded image and matched shell/background', async () => {
@@ -640,7 +636,109 @@ try {
     return result;
   });
 
+  await check('preview restore cancels in-flight initial apply', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      globalThis.__azhouWallpaper?.dispose();
+      const decode=Image.prototype.decode; let resume;
+      Image.prototype.decode=function(){return decode.call(this).then(()=>new Promise(resolve=>{resume=resolve;}));};
+      try {
+        document.getElementById('apply').click();
+        const end=Date.now()+3000; while(!resume&&Date.now()<end) await new Promise(r=>setTimeout(r,10));
+        if(!resume) throw new Error('decode not reached');
+        document.getElementById('restore').click(); resume();
+        await new Promise(r=>setTimeout(r,300));
+        return {active:!!globalThis.__azhouWallpaper,styles:document.querySelectorAll('#azhou-wallpaper-style').length};
+      } finally { Image.prototype.decode=decode; globalThis.__azhouWallpaper?.dispose(); }
+    })()`);
+    assert.deepEqual(result,{active:false,styles:0});
+    await cdp.evaluate('__wallpaperFixture.apply()');
+    return result;
+  });
+  await check('preview controls recover after check failure', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      const original=Image.prototype.decode; let fail;
+      Image.prototype.decode=function(){return new Promise((resolve,reject)=>{fail=reject;});};
+      const pending=__wallpaperFixture.runChecks().then(()=>false,()=>true);
+      const disabled=['theme','apply','restore','checks'].every(id=>document.getElementById(id).disabled);
+      try {
+        const end=Date.now()+3000; while(!fail&&Date.now()<end) await new Promise(r=>setTimeout(r,10));
+        if(!fail) throw new Error('decode not reached');
+        fail(new Error('synthetic decode failure'));
+        const rejected=await pending;
+        const enabled=['theme','apply','restore','checks'].every(id=>!document.getElementById(id).disabled);
+        return {disabled,enabled,rejected};
+      } finally { Image.prototype.decode=original; globalThis.__azhouWallpaper?.dispose(); }
+    })()`);
+    assert.deepEqual(result,{disabled:true,enabled:true,rejected:true});
+    await cdp.evaluate('__wallpaperFixture.apply()');
+    return result;
+  });
+  await check('stale controller cannot update a replaced app root', async () => {
+    const result = await onFixture(() => {
+      const api = globalThis.__azhouWallpaper;
+      const html = document.documentElement;
+      const root = document.getElementById('root');
+      const replacement = document.createElement('div');
+      replacement.id = 'root';
+      const before = html.style.getPropertyValue('--azhou-wallpaper-surface');
+      try {
+        root.replaceWith(replacement);
+        const updated = api.updateSurface('rgb(40, 50, 60)');
+        return { updated, before, after: html.style.getPropertyValue('--azhou-wallpaper-surface'),
+          currentRoot: document.getElementById('root') === replacement,
+          ownerSame: globalThis.__azhouWallpaper === api };
+      } finally { replacement.replaceWith(root); }
+    });
+    assert.equal(result.updated, false);
+    assert.equal(result.after, result.before);
+    assert.equal(result.currentRoot, true);
+    assert.equal(result.ownerSame, true);
+    return result;
+  });
   await check('fixture built-in lifecycle/rollback checks', () => cdp.evaluate('__wallpaperFixture.runChecks()').then(result => { assert.equal(result.passed, true); return result; }));
+  await check('failed replacement keeps only a verified working previous controller', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      const current=globalThis.__azhouWallpaper, style=document.getElementById('azhou-wallpaper-style');
+      const before=document.documentElement.style.getPropertyValue('--azhou-wallpaper-image');
+      const previous={...current};
+      Object.defineProperty(previous,'__azhouWallpaperBaseline_071',{value:current.__azhouWallpaperBaseline_071});
+      Object.defineProperty(previous,'__azhouWallpaperRelease_071',{value(){throw new Error('synthetic release failure');}});
+      globalThis.__azhouWallpaper=previous;
+      let error='';try{await __wallpaperFixture.installRenderer(__wallpaperFixture.payload);}catch(value){error=String(value.message);}
+      const outcome={error,same:globalThis.__azhouWallpaper===previous,applied:previous.status().applied,
+        imageSame:document.documentElement.style.getPropertyValue('--azhou-wallpaper-image')===before,
+        styleSame:document.getElementById('azhou-wallpaper-style')===style,enabled:!style.disabled};
+      globalThis.__azhouWallpaper=current;
+      return outcome;
+    })()`);
+    assert.deepEqual(result,{error:'synthetic release failure',same:true,applied:true,imageSame:true,styleSame:true,enabled:true});
+    return result;
+  });
+  await check('moved ZCode surface remains untouched during cleanup', async () => {
+    const result = await cdp.evaluate(`(async()=>{
+      globalThis.__azhouWallpaper?.dispose();
+      const root=document.getElementById('root'), main=root.querySelector('main');
+      const parent=main.parentNode, next=main.nextSibling, marker='data-azhou-zcode-wallpaper-surface';
+      const foreign=document.createElement('div');document.body.appendChild(foreign);
+      const ports={validPage:()=>true,shellState:()=> 'ready',surfaces:()=>[main],
+        attributes:{surfaceMarker:marker,observeFilter:['class','style']},
+        css:'html[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+        scope:'synthetic fixture'};
+      const adapter={controllerWallpaper:{owner:'azhou.zcode-startup-animation'},wallpaper:ports};
+      try {
+        const applied=await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,pageAdapter:adapter});
+        foreign.appendChild(main);
+        globalThis.__azhouWallpaper.dispose();
+        return {applied:applied.applied,movedMarker:main.getAttribute(marker),rootMarker:root.getAttribute(marker),
+          hasController:Object.hasOwn(globalThis,'__azhouWallpaper')};
+      } finally {
+        parent.insertBefore(main,next);main.removeAttribute(marker);root.removeAttribute(marker);foreign.remove();
+        globalThis.__azhouWallpaper?.dispose();await __wallpaperFixture.apply();
+      }
+    })()`);
+    assert.deepEqual(result,{applied:true,movedMarker:'active',rootMarker:null,hasController:false});
+    return result;
+  });
   await check('scoped surface tokens, composer, code and input remain intact', async () => {
     const result = await cdp.evaluate(`(async()=>{
       __azhouWallpaper.dispose();
@@ -784,13 +882,14 @@ try {
     const outcome = await cdp.evaluate(expression);
     assert.equal(outcome.rejected, true); assert.ok(outcome.error.includes('unexpected-page')); assert.equal(outcome.styleCount, 0); return outcome;
   });
+  completed = true;
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1800);
 } finally {
   try { await cleanup(); } catch (error) { report.cleanupError = safeError(error); }
   report.finishedAt = new Date().toISOString();
-  report.passed = !report.fatalError && !report.cleanupError && report.cleanup?.ownChromeStopped
+  report.passed = !report.fatalError && !report.cleanupError && !report.cleanup?.errors?.length && report.cleanup?.ownChromeStopped
     && report.cleanup.temporaryProfileRemoved && report.cleanup.serverClosed
     && report.checks.length > 0 && report.checks.every(item => item.passed);
   await mkdir(options.out, { recursive: true });

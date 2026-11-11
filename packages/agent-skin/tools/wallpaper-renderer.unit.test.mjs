@@ -296,6 +296,59 @@ async function onPage(options, operation) {
   try { return await operation(page); } finally { page.restore(); }
 }
 
+test('uncommitted image resources are released on unexpected synchronous failures', async t => {
+  await t.test('image construction failure releases the allocated URL', async () => onPage({}, async page => {
+    globalThis.Image = function Image() { throw new Error('injected image construction failure'); };
+    await assert.rejects(installRenderer(page.payload), /injected image construction failure/);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+  await t.test('invalid prior baseline preserves the controller and releases the new URL', async () => onPage({}, async page => {
+    const previous = { owner: 'azhou.codex-startup-animation', version: '0.9.0', status() {}, dispose() {},
+      __azhouWallpaperBaseline_071: { attribute: null, properties: {} } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: previous });
+    await assert.rejects(installRenderer(page.payload));
+    assert.equal(globalThis.__azhouWallpaper, previous);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.image.src, '');
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  }));
+  await t.test('style construction failure leaves a working controller attached', async () => onPage({}, async page => {
+    let disposals = 0;
+    const previous = { owner: 'azhou.codex-startup-animation', version: '0.9.0', status() { return { applied: true }; }, dispose() { disposals++; } };
+    Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: previous });
+    const oldStyle = page.document.createElement('style');
+    oldStyle.id = STYLE_ID;
+    oldStyle.setAttribute('data-azhou-owner', previous.owner);
+    page.head.appendChild(oldStyle);
+    const create = page.document.createElement;
+    page.document.createElement = function(tag) {
+      if (tag === 'style') throw new Error('injected style construction failure');
+      return create.call(this, tag);
+    };
+    await assert.rejects(installRenderer(page.payload), /injected style construction failure/);
+    assert.equal(globalThis.__azhouWallpaper, previous);
+    assert.equal(disposals, 0);
+    assert.equal(oldStyle.isConnected, true);
+    assert.equal(oldStyle.id, STYLE_ID);
+    assert.equal(oldStyle.disabled, false);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+  }));
+  await t.test('style construction failure releases the URL and preserves host state', async () => onPage({}, async page => {
+    const create = page.document.createElement;
+    page.document.createElement = function(tag) {
+      if (tag === 'style') throw new Error('injected style construction failure');
+      return create.call(this, tag);
+    };
+    await assert.rejects(installRenderer(page.payload), /injected style construction failure/);
+    assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+    assert.equal(page.image.src, '');
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+});
+
 test('the renderer applies one decoded local scene, reports a stable receipt, and restores the host baseline', async () => {
   await onPage({ originalAttribute: 'host', originalImage: 'url(host-image)', originalWash: 'host-wash',
     originalSurface: '#fafafa' }, async page => {
@@ -339,6 +392,35 @@ test('surface updates preserve host-owned values or priorities through disposal'
       assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), [scenario.value, scenario.priority]);
       api.dispose();
       assert.deepEqual(page.root.style.properties.get(PROPERTY_SURFACE), [scenario.value, scenario.priority]);
+    }));
+  }
+});
+
+test('surface update refuses stale page and controller ownership', async t => {
+  for (const kind of ['document-root', 'app-replaced', 'app-detached', 'controller-replaced', 'controller-accessor']) {
+    await t.test(kind, async () => onPage({}, async page => {
+      await installRenderer(page.payload);
+      const api = globalThis.__azhouWallpaper;
+      const oldValue = page.root.style.getPropertyValue(PROPERTY_SURFACE);
+      const originalGet = page.document.getElementById;
+      const foreign = { owner: 'foreign' };
+      try {
+        if (kind === 'document-root') page.document.documentElement = new Node('foreign-html');
+        if (kind === 'app-replaced') page.document.getElementById = id => id === 'root' ? new Node('foreign-app') : originalGet.call(page.document, id);
+        if (kind === 'app-detached') page.applicationRoot.isConnected = false;
+        if (kind === 'controller-replaced') globalThis.__azhouWallpaper = foreign;
+        if (kind === 'controller-accessor') Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, get() { throw new Error('foreign getter'); } });
+        const result = api.updateSurface('rgb(40, 50, 60)');
+        assert.deepEqual({ result, value: page.root.style.getPropertyValue(PROPERTY_SURFACE) },
+          { result: false, value: oldValue });
+        if (kind === 'controller-replaced') assert.equal(globalThis.__azhouWallpaper, foreign);
+      } finally {
+        page.document.documentElement = page.root;
+        page.document.getElementById = originalGet;
+        page.applicationRoot.isConnected = true;
+        Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: api });
+        api.dispose();
+      }
     }));
   }
 });
@@ -483,7 +565,137 @@ test('a canceled page closes a pending validation bitmap before any style commit
   });
 });
 
+test('native and bitmap decoders settle once under interleaving', async t => {
+  await t.test('native success still wins after an invalid bitmap', async () => onPage({ bitmap: 'reject', timeout: 'controlled' }, async page => {
+    let resolveNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise(resolve => { resolveNative = resolve; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true);
+    page.fireTimer(250);
+    await Promise.resolve();
+    resolveNative();
+    assert.equal((await installation).applied, true);
+    assert.equal(page.bitmapOperations.length, 1);
+    assert.equal(page.timers.size, 0);
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('fallback success survives a later native rejection', async () => onPage({ bitmap: 'ok', timeout: 'controlled' }, async page => {
+    let rejectNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise((_resolve, reject) => { rejectNative = reject; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(250), true);
+    page.fireTimer(250);
+    assert.equal((await installation).applied, true);
+    rejectNative(new Error('late native failure'));
+    await Promise.resolve();
+    assert.equal(globalThis.__azhouWallpaper.status().applied, true);
+    assert.equal(page.timers.size, 0);
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('late native success after timeout cannot install', async () => onPage({ timeout: 'controlled' }, async page => {
+    let resolveNative;
+    page.image.decode = () => { page.image.complete = true; return new Promise(resolve => { resolveNative = resolve; }); };
+    const installation = installRenderer(page.payload);
+    assert.equal(await page.waitForTimer(4000), true);
+    page.fireTimer(4000);
+    await assert.rejects(installation, { code: 'image-decode-timeout' });
+    resolveNative();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.timers.size, 0);
+  }));
+  await t.test('synchronous native decoder throw is sanitized', async () => onPage({ timeout: 'controlled' }, async page => {
+    page.image.decode = () => { throw new Error('decoder detail'); };
+    await assert.rejects(installRenderer(page.payload), { code: 'image-decode-failed' });
+    assert.equal(page.revoked.length, 1);
+    assert.equal(page.timers.size, 0);
+  }));
+  for (const nativeOutcome of ['success', 'failure']) {
+    await t.test('late bitmap closes after native ' + nativeOutcome, async () => onPage({ bitmap: 'pending', timeout: 'controlled' }, async page => {
+      let resolveNative, rejectNative;
+      page.image.decode = () => { page.image.complete = true; return new Promise((resolve, reject) => { resolveNative = resolve; rejectNative = reject; }); };
+      const installation = installRenderer(page.payload);
+      assert.equal(await page.waitForTimer(250), true);
+      page.fireTimer(250);
+      assert.equal(page.bitmapOperations.length, 1);
+      if (nativeOutcome === 'success') {
+        resolveNative();
+        assert.equal((await installation).applied, true);
+      } else {
+        rejectNative(new Error('native failure'));
+        await assert.rejects(installation, { code: 'image-decode-failed' });
+      }
+      const bitmap = { width: page.image.naturalWidth, height: page.image.naturalHeight,
+        closed: false, close() { this.closed = true; } };
+      page.bitmapOperations[0].resolve(bitmap);
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(bitmap.closed, true);
+      assert.equal(page.timers.size, 0);
+      if (nativeOutcome === 'success') globalThis.__azhouWallpaper.dispose();
+      assert.equal(page.revoked.length, 1);
+    }));
+  }
+});
+
 test('decode and page identity are checked again after the image resolves', async t => {
+  await t.test('surface remains the validated value if the caller changes it during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => {
+      payload.surface = 'not-a-color';
+      page.image.complete = true;
+    };
+    await installRenderer(payload);
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '#10121c');
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('validated style and digest survive mutation during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload, strength: 42 };
+    page.image.decode = async () => {
+      payload.css = CSS + '@import url(https://example.invalid/foreign.css);';
+      payload.strength = 999;
+      payload.imageSHA256 = 'b'.repeat(64);
+      page.image.complete = true;
+    };
+    const result = await installRenderer(payload);
+    assert.equal(page.styleElements.find(style => style.isConnected).textContent, CSS);
+    assert.equal(result.imageSHA256, HASH);
+    assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('var(--azhou-base) 76%'));
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('the validated digest remains fixed for the controller lifetime', async () => onPage({}, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => { payload.imageSHA256 = 'b'.repeat(64); page.image.complete = true; };
+    const result = await installRenderer(payload);
+    assert.equal(result.imageSHA256, HASH);
+    payload.imageSHA256 = 'c'.repeat(64);
+    assert.equal(globalThis.__azhouWallpaper.status().imageSHA256, HASH);
+    assert.equal(globalThis.__azhouWallpaper.dispose().imageSHA256, HASH);
+  }));
+  await t.test('the validated strength remains fixed during decode', async () => onPage({}, async page => {
+    const payload = { ...page.payload, strength: 42 };
+    page.image.decode = async () => { payload.strength = 999; page.image.complete = true; };
+    await installRenderer(payload);
+    assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('var(--azhou-base) 76%'));
+    globalThis.__azhouWallpaper.dispose();
+  }));
+  await t.test('the original cancellation callback remains authoritative during decode', async () => onPage({}, async page => {
+    let current = true;
+    const payload = { ...page.payload, isCurrent: () => current };
+    page.image.decode = async () => { current = false; payload.isCurrent = () => true; page.image.complete = true; };
+    await assert.rejects(installRenderer(payload), { code: 'page-changed-during-decode' });
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  }));
+  await t.test('preview permission remains bound to the initial request', async () => onPage({
+    url: 'http://127.0.0.1/wallpaper/preview.html', preview: true,
+  }, async page => {
+    const payload = { ...page.payload };
+    page.image.decode = async () => { payload.preview = false; page.image.complete = true; };
+    assert.equal((await installRenderer(payload)).applied, true);
+    globalThis.__azhouWallpaper.dispose();
+  }));
   await t.test('invalid base64', async () => onPage({}, async page => {
     await assert.rejects(installRenderer({ ...page.payload, image: 'data:image/png;base64,====' }), { code: 'invalid-local-image' });
   }));
@@ -692,6 +904,53 @@ test('ZCode renderer uses only its validated main surface and restores owned att
   } finally { fixture.restore(); }
 });
 
+test('ZCode adapter capabilities stay bound during image decoding', async t => {
+  for (const field of ['css', 'validPage', 'shellState', 'surfaces']) {
+    await t.test(field, async () => {
+      const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+      try {
+        const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+        main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+        const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+        const originalCSS = ports.css, originalScope = ports.scope;
+        const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+        const decode = fixture.image.decode;
+        fixture.image.decode = async function () {
+          await decode.call(this);
+          if (field === 'css') { ports.css = '@import url(https://example.invalid/foreign.css);'; ports.scope = 'changed'; }
+          if (field === 'validPage') ports.validPage = () => false;
+          if (field === 'shellState') ports.shellState = () => 'unsupported';
+          if (field === 'surfaces') ports.surfaces = () => [];
+        };
+        const result = await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+        assert.equal(result.applied, true);
+        assert.equal(result.verificationScope, originalScope);
+        assert.equal(fixture.styleElements.find(style => style.isConnected).textContent, CSS + originalCSS);
+        globalThis.__azhouWallpaper.dispose();
+      } finally { fixture.restore(); }
+    });
+  }
+});
+
+test('bound adapter methods retain their receiver and recheck current page state', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    let pageAllowed = true;
+    const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+    ports.validPage = function () { assert.equal(this, ports); return pageAllowed; };
+    ports.shellState = function () { assert.equal(this, ports); return 'ready'; };
+    ports.surfaces = function () { assert.equal(this, ports); return [main]; };
+    for (const operation of [ports.validPage, ports.shellState, ports.surfaces]) operation.call = () => { throw new Error('not the callable operation'); };
+    const decode = fixture.image.decode;
+    fixture.image.decode = async function () { await decode.call(this); pageAllowed = false; };
+    const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+    await assert.rejects(installRenderer({ ...fixture.payload, pageAdapter: adapter }), { code: 'page-changed-during-decode' });
+    assert.equal(fixture.styleElements.filter(style => style.isConnected).length, 0);
+  } finally { fixture.restore(); }
+});
+
 test('ZCode refuses protected, ambiguous or foreign-marked surfaces before styling', async () => {
   for (const mode of ['protected', 'ambiguous', 'foreign']) {
     const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
@@ -733,4 +992,205 @@ test('ZCode does not overwrite a surface marker changed during decode or before 
       assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
     } finally { fixture.restore(); }
   }
+});
+
+test('replacement hook throwing before side effects keeps the previous wallpaper usable', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {}, status() { return { applied: true }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release failed before change'); } });
+  Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+  await assert.rejects(installRenderer(page.payload), /release failed before change/);
+  assert.equal(globalThis.__azhouWallpaper, old);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(oldStyle.disabled, false);
+  assert.equal(page.revoked.length, 1);
+}));
+
+test('recovered previous controller keeps its original property descriptor', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {}, status() { return { applied: true }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release failed'); } });
+  const before = { configurable: true, writable: true, enumerable: false, value: old };
+  Object.defineProperty(globalThis, '__azhouWallpaper', before);
+  await assert.rejects(installRenderer(page.payload), /release failed/);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper'), before);
+}));
+
+test('a failed release restores only a verifiably usable previous controller', async () => {
+  for (const mode of ['disposed', 'status-throws', 'style-removed', 'style-mutated', 'foreign-controller']) {
+    await onPage({}, async page => {
+      const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+      oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation');
+      oldStyle.textContent = 'old owned CSS'; page.head.appendChild(oldStyle);
+      const foreign = { foreign: true };
+      let oldUsable = true;
+      const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {},
+        status() { if (mode === 'status-throws') throw new Error('old status unavailable'); return { applied: oldUsable }; } };
+      Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() {
+        if (mode === 'disposed') oldUsable = false;
+        if (mode === 'style-removed') oldStyle.remove();
+        if (mode === 'style-mutated') oldStyle.textContent = 'foreign edit';
+        if (mode === 'foreign-controller') globalThis.__azhouWallpaper = foreign;
+        throw new Error('release interrupted');
+      } });
+      Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+      await assert.rejects(installRenderer(page.payload), /release interrupted/, mode);
+      assert.notEqual(globalThis.__azhouWallpaper, old, mode);
+      assert.equal(globalThis.__azhouWallpaper, mode === 'foreign-controller' ? foreign : undefined, mode);
+      assert.equal(page.revoked.length, 1, mode);
+      if (mode === 'style-mutated') assert.equal(oldStyle.textContent, 'foreign edit');
+      if (mode === 'disposed' || mode === 'status-throws') {
+        assert.equal(oldStyle.disabled, true, mode);
+        assert.equal(oldStyle.id, '', mode);
+      }
+    });
+  }
+});
+
+test('a real previous renderer disposed before its style removal fails is not restored', async () => onPage({}, async page => {
+  await installRenderer(page.payload);
+  const old = globalThis.__azhouWallpaper;
+  const oldStyle = page.document.getElementById(STYLE_ID);
+  oldStyle.remove = () => { throw new Error('old style removal failed'); };
+  await assert.rejects(installRenderer(page.payload), /old style removal failed/);
+  assert.equal(old.status().applied, false);
+  assert.equal(globalThis.__azhouWallpaper, undefined);
+  assert.equal(oldStyle.disabled, true);
+  assert.equal(oldStyle.id, '');
+  assert.equal(page.revoked.length, 1);
+}));
+
+
+test('recovery does not change an owner installed by the previous status callback', async () => onPage({}, async page => {
+  const oldStyle = page.document.createElement('style'); oldStyle.id = STYLE_ID;
+  oldStyle.setAttribute('data-azhou-owner', 'azhou.codex-startup-animation'); page.head.appendChild(oldStyle);
+  const foreign = { foreign: true };
+  const old = { owner: 'azhou.codex-startup-animation', version: '0.9.0', dispose() {},
+    status() { globalThis.__azhouWallpaper = foreign; return { applied: false }; } };
+  Object.defineProperty(old, '__azhouWallpaperRelease_071', { value() { throw new Error('release interrupted'); } });
+  Object.defineProperty(globalThis, '__azhouWallpaper', { configurable: true, writable: true, value: old });
+  await assert.rejects(installRenderer(page.payload), /release interrupted/);
+  assert.equal(globalThis.__azhouWallpaper, foreign);
+  assert.equal(oldStyle.disabled, false);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(page.revoked.length, 1);
+}));
+
+test('failed release restores the original values and a working real controller', async () => onPage({}, async page => {
+  const fixtureImage = globalThis.Image;
+  const fixtureComputedStyle = globalThis.getComputedStyle;
+  let created = 0, urls = 0;
+  globalThis.Image = function Image() {
+    if (created++ === 0) return new fixtureImage();
+    return { complete: false, naturalWidth: 2048, naturalHeight: 1024, src: '',
+      async decode() { this.complete = true; } };
+  };
+  globalThis.URL.createObjectURL = () => `blob:recovery-${++urls}`;
+  globalThis.getComputedStyle = (node, pseudo) => {
+    const computed = fixtureComputedStyle(node, pseudo);
+    return node === page.document.body ? { ...computed,
+      backgroundImage: `linear-gradient(red,blue), ${page.root.style.getPropertyValue(PROPERTY_IMAGE)}` } : computed;
+  };
+  await installRenderer(page.payload);
+  const real = globalThis.__azhouWallpaper;
+  const oldStyle = page.document.getElementById(STYLE_ID);
+  const imageBefore = page.root.style.properties.get(PROPERTY_IMAGE);
+  const previous = { ...real };
+  Object.defineProperty(previous, '__azhouWallpaperBaseline_071', { value: real.__azhouWallpaperBaseline_071 });
+  Object.defineProperty(previous, '__azhouWallpaperRelease_071', { value() { throw new Error('release interrupted'); } });
+  globalThis.__azhouWallpaper = previous;
+  await assert.rejects(installRenderer(page.payload), /release interrupted/);
+  assert.equal(globalThis.__azhouWallpaper, previous);
+  assert.equal(previous.status().applied, true);
+  assert.deepEqual(page.root.style.properties.get(PROPERTY_IMAGE), imageBefore);
+  assert.equal(oldStyle.id, STYLE_ID);
+  assert.equal(oldStyle.disabled, false);
+  assert.deepEqual(page.revoked, ['blob:recovery-2']);
+}));
+
+test('ZCode dispose preserves markers on a surface moved outside the original root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; let inside = true;
+    fixture.applicationRoot.contains = node => node === main && inside;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    const style = fixture.document.getElementById(STYLE_ID);
+    inside = false;
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(style.isConnected, false);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});
+
+test('ZCode dispose leaves markers on a former application root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    const oldLookup = fixture.document.getElementById;
+    const foreignRoot = new Node('replacement-root');
+    fixture.document.getElementById = id => id === 'root' ? foreignRoot : oldLookup(id);
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(foreignRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});
+
+test('dispose does not restore styles on a former document root', async () => onPage({}, async page => {
+  await installRenderer(page.payload);
+  const oldRoot = page.root;
+  const image = oldRoot.style.getPropertyValue(PROPERTY_IMAGE);
+  const foreignRoot = new Node('replacement-html');
+  page.document.documentElement = foreignRoot;
+  globalThis.__azhouWallpaper.dispose();
+  assert.equal(oldRoot.getAttribute(ATTRIBUTE), 'active');
+  assert.equal(oldRoot.style.getPropertyValue(PROPERTY_IMAGE), image);
+  assert.equal(foreignRoot.getAttribute(ATTRIBUTE), null);
+  assert.equal(globalThis.__azhouWallpaper, undefined);
+}));
+
+test('ZCode dispose preserves a detached recorded surface', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  try {
+    const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    await installRenderer({ ...fixture.payload, pageAdapter: adapter });
+    main.isConnected = false;
+    globalThis.__azhouWallpaper.dispose();
+    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(globalThis.__azhouWallpaper, undefined);
+  } finally { fixture.restore(); }
+});
+
+test('an incumbent that fully disposes during decode is refused, not silently replaced', async () => {
+  await onPage({}, async page => {
+    await installRenderer(page.payload);
+    const incumbent = globalThis.__azhouWallpaper;
+    const decode = page.image.decode;
+    page.image.decode = async function () {
+      await incumbent.dispose();
+      await decode.call(this);
+    };
+    await assert.rejects(installRenderer(page.payload), { code: 'namespace-changed-during-decode' });
+    assert.equal(Object.hasOwn(globalThis, '__azhouWallpaper'), false, 'the disposed incumbent is not revived');
+    assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_SURFACE), '');
+    assert.equal(page.revoked.length, 2, 'each attempt releases its own Blob URL');
+  });
 });

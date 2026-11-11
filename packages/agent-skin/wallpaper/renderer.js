@@ -1,515 +1,644 @@
-/* Serialized by the local builder; the function has no module-scope dependency.
-   Only this page's appearance is changed. No chat text, storage or network is read. */
-export async function installRenderer(payload) {
+/* Built for one-shot serialization by the local builder: a single function,
+   no imports, nothing evaluated at module scope. Installation restyles this
+   page and nothing else — chat text, storage and the network stay unread.
+
+   Every installRenderer call walks one explicit request lifecycle:
+     admit    – five admission gates (host binding, page, brief, shell, incumbent controller)
+     lease    – one Blob URL whose ownership never outlives the attempt
+     decode   – native decode with a pixel-checked bitmap cross-examination
+     reconfirm– the world the brief was admitted to is re-checked after the await
+     compose  – wash gradient, host-state snapshots, candidate stylesheet
+     probe    – a named set of verification checks, assembled into the receipt
+     transact – one synchronous handover (suspend, style, verify, replace/inherit)
+     recover  – a ladder that revives or suspends the resident sheet on failure
+   Nothing reaches the page before the probe accepts the composed candidate. */
+export async function installRenderer(offered) {
   'use strict';
-  const VERSION = '0.9.0', LEGACY_VERSIONS = new Set(['0.8.0', '0.7.1']);
-  let OWNER = 'azhou.codex-startup-animation';
-  const STYLE_ID = 'azhou-wallpaper-style', ATTRIBUTE = 'data-azhou-wallpaper';
-  const IMAGE_PROPERTY = '--azhou-wallpaper-image', WASH_PROPERTY = '--azhou-wallpaper-wash';
+
+  const BUILD = '0.9.0';
+  const SUPERSEDED = new Set(['0.8.0', '0.7.1']);
+  let controllerOwner = 'azhou.codex-startup-animation';
+
+  // Names this build answers to: the sheet identity, the activation attribute,
+  // the three root custom properties and the two controller handshake keys.
+  const SHEET_ID = 'azhou-wallpaper-style';
+  const SHEET_OWNER_ATTRIBUTE = 'data-azhou-owner';
+  const ACTIVATION = 'data-azhou-wallpaper';
+  const SCENE_PROPERTY = '--azhou-wallpaper-image';
+  const TINT_PROPERTY = '--azhou-wallpaper-wash';
   const SURFACE_PROPERTY = '--azhou-wallpaper-surface';
-  const BASELINE_KEY = '__azhouWallpaperBaseline_071', RELEASE_KEY = '__azhouWallpaperRelease_071';
-  const root = document.documentElement;
-  const surfaceSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
-  const workspaceSelector = '[data-app-shell-main-surface] :is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])';
-  const footerSelector = '[data-app-shell-main-surface] [data-thread-scroll-footer]';
-  const token = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
+  const CONTROLLER_SLOT = '__azhouWallpaper';
+  const BASELINE_KEY = '__azhouWallpaperBaseline_071';
+  const RELEASE_KEY = '__azhouWallpaperRelease_071';
+
+  const html = document.documentElement;
+
+  // Selector directory. Host shells are located only through these anchors;
+  // anything the anchors do not name is diagnosed, never styled.
+  const directory = {
+    shellSurfaces: '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]',
+    workspace: '[data-app-shell-main-surface] :is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])',
+    threadFooter: '[data-app-shell-main-surface] [data-thread-scroll-footer]',
+    scrollTrack: '[data-app-shell-main-surface] .thread-scroll-container',
+    protectedRegions: '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
+      + '[contenteditable="true"],textarea,input,button,select',
+  };
+  const generatedLayer = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
   // Current ChatGPT builds use hyphenated CSS-module names. Admit only the
   // observed hidden, non-interactive direct footer plate; unknown layers still fail.
-  const footerBackgroundSelector = footerSelector + ' > ' + token('_background_')
-    + ',' + footerSelector + ' > [aria-hidden="true"].pointer-events-none' + token('background-');
-  const scrollSelector = '[data-app-shell-main-surface] .thread-scroll-container';
-  const stickySelector = scrollSelector + ' .pointer-events-none.sticky.bottom-0';
-  const footerFadeSelector = stickySelector + ' > ' + token('_background_') + token('_fade_');
-  const topFadeSelector = '[data-app-shell-main-surface] ' + token('_MainContentTopFade_');
-  const protectedSelector = '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
-    + '[contenteditable="true"],textarea,input,button,select';
-  const problem = reason => Object.assign(new Error('AZHOU_WALLPAPER: ' + reason), {
+  directory.footerPlate = directory.threadFooter + ' > ' + generatedLayer('_background_')
+    + ',' + directory.threadFooter + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-');
+  directory.stickyShade = directory.scrollTrack + ' .pointer-events-none.sticky.bottom-0';
+  directory.footerFade = directory.stickyShade + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_');
+  directory.topFade = '[data-app-shell-main-surface] ' + generatedLayer('_MainContentTopFade_');
+  directory.scrollLayers = directory.scrollTrack + ' :is('
+    + generatedLayer('_background_') + ',' + generatedLayer('_fade_') + ')';
+
+  const deny = reason => Object.assign(new Error('AZHOU_WALLPAPER: ' + reason), {
     code: reason.split(':', 1)[0],
   });
-  function decodeBitmapPixels(image, bitmap) {
-    let canvas;
+  // Own-property read that deliberately ignores accessors: a throwing getter on
+  // the controller slot must be observed as "no controller", never as a crash.
+  const slotValue = (holder, key) => {
+    if (!holder || typeof holder !== 'object') return undefined;
+    const own = Object.getOwnPropertyDescriptor(holder, key);
+    return own && Object.hasOwn(own, 'value') ? own.value : undefined;
+  };
+
+  // ── Gate 1: host binding ────────────────────────────────────────────────
+  // A host adapter must arrive complete: half a port bundle is treated as a
+  // foreign installation, so the whole adapter is refused rather than patched.
+  const previewFlag = offered?.preview;
+  const isCurrent = slotValue(offered, 'isCurrent');
+  const hostAdapter = slotValue(offered, 'pageAdapter');
+  const ports = slotValue(hostAdapter, 'wallpaper');
+  const portAttributes = slotValue(ports, 'attributes');
+  const binding = {
+    validPage: slotValue(ports, 'validPage'), shellState: slotValue(ports, 'shellState'),
+    surfaces: slotValue(ports, 'surfaces'), css: slotValue(ports, 'css'), scope: slotValue(ports, 'scope'),
+    surfaceMarker: slotValue(portAttributes, 'surfaceMarker'),
+    observeFilter: slotValue(portAttributes, 'observeFilter'),
+  };
+  const hostBound = !!ports && typeof ports === 'object'
+    && typeof binding.validPage === 'function' && typeof binding.shellState === 'function'
+    && typeof binding.surfaces === 'function' && typeof binding.css === 'string'
+    && typeof binding.scope === 'string' && !!portAttributes && typeof binding.surfaceMarker === 'string'
+    && Array.isArray(binding.observeFilter);
+  if (hostAdapter && !hostBound) throw deny('invalid-host-adapter');
+  const surfaceMarker = hostBound ? binding.surfaceMarker : null;
+  if (hostBound) controllerOwner = slotValue(slotValue(hostAdapter, 'controllerWallpaper'), 'owner') ?? controllerOwner;
+
+  // ── Gate 2: page identity ───────────────────────────────────────────────
+  function pageAdmitted() {
+    if (window.top !== window) return false;
+    if (hostBound) return Reflect.apply(binding.validPage, ports, [globalThis]);
+    const here = new URL(location.href), route = here.searchParams.get('initialRoute') || '/';
+    if (here.protocol === 'app:' && here.hostname === '-' && here.pathname === '/index.html') {
+      return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
+    }
+    // Generated production payloads never set this flag; it exists so the two
+    // fixture routes below can opt in.
+    return previewFlag === true && (
+      (here.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(here.hostname))
+      || (here.protocol === 'file:' && here.pathname.endsWith('/wallpaper/preview.html'))
+    );
+  }
+  if (!pageAdmitted()) throw deny('unexpected-page');
+
+  // ── Gate 3: the brief ───────────────────────────────────────────────────
+  // The brief is copied once, so caller mutations during the asynchronous
+  // decode can no longer influence what gets installed or reported.
+  const brief = {
+    version: offered?.version, css: offered?.css, image: offered?.image,
+    imageSHA256: offered?.imageSHA256, strength: offered?.strength, surface: offered?.surface,
+  };
+  const rejectedColorShapes = [
+    /[;{}]/,                                                         // style delimiters
+    /\bvar\s*\(/i,                                                   // custom-property indirection
+    /^(?:currentcolor|inherit|initial|unset|revert(?:-layer)?)$/i,   // non-literal keywords
+  ];
+  const colorPlausible = value => {
+    if (typeof value !== 'string') return false;
+    const color = value.trim();
+    if (!color || color.length > 100) return false;
+    if (rejectedColorShapes.some(shape => shape.test(color))) return false;
+    let hostAccepts = false;
     try {
-      if (!bitmap || typeof bitmap.close !== 'function'
-          || bitmap.width !== image.naturalWidth || bitmap.height !== image.naturalHeight) return false;
-      canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) return false;
-      context.drawImage(bitmap, 0, 0, 1, 1);
-      const pixel = context.getImageData(0, 0, 1, 1)?.data;
-      return !!pixel && pixel.length >= 4
-        && [pixel[0], pixel[1], pixel[2], pixel[3]].every(Number.isFinite);
+      hostAccepts = typeof globalThis.CSS?.supports === 'function' && globalThis.CSS.supports('color', color);
+    } catch { hostAccepts = false; }
+    return hostAccepts;
+  };
+  if (!offered || brief.version !== BUILD || typeof brief.css !== 'string'
+      || !brief.css.includes('[data-azhou-wallpaper="active"]')
+      || !brief.css.includes('--azhou-style-ready')
+      || /@import\b|url\(\s*['"]?(?:https?:|\/\/)/i.test(brief.css)
+      || typeof brief.imageSHA256 !== 'string' || !/^[0-9a-f]{64}$/.test(brief.imageSHA256)
+      || (brief.surface !== undefined && !colorPlausible(brief.surface))
+      || (brief.strength !== undefined && (!Number.isInteger(brief.strength) || brief.strength < 0 || brief.strength > 75))) {
+    throw deny('invalid-local-payload');
+  }
+  let surfaceTint = typeof brief.surface === 'string' ? brief.surface.trim() : null;
+  const encodedScene = typeof brief.image === 'string'
+    && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(brief.image);
+  if (!encodedScene || brief.image.length > 16 * 1024 * 1024) throw deny('invalid-local-image');
+
+  // ── Gate 4: shell ───────────────────────────────────────────────────────
+  const shell = document.getElementById('root');
+  const liveSurfaces = () => {
+    if (!shell) return [];
+    if (!hostBound) return [...shell.querySelectorAll(directory.shellSurfaces)];
+    const nominated = Reflect.apply(binding.surfaces, ports, [globalThis]);
+    return Array.isArray(nominated) && nominated.length === 1 && nominated.every(node => node?.isConnected
+      && shell.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nominated : [];
+  };
+  const shellUsable = () => hostBound
+    ? Reflect.apply(binding.shellState, ports, [isCurrent, globalThis]) === 'ready' && liveSurfaces().length === 1
+    : !!shell?.querySelector('[data-app-shell-frame]')
+      && !!shell?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
+  if (!document.body || !shell || !shellUsable()) throw deny('unsupported-shell-no-surfaces');
+
+  // ── Gate 5: incumbent controller ────────────────────────────────────────
+  const acceptsVersion = version => version === BUILD || (!hostBound && SUPERSEDED.has(version));
+  const seatedController = () => {
+    const placement = Object.getOwnPropertyDescriptor(globalThis, CONTROLLER_SLOT);
+    return {
+      placement,
+      seated: placement && Object.hasOwn(placement, 'value') ? placement.value : null,
+    };
+  };
+  const controllerLegible = seated => !!seated && slotValue(seated, 'owner') === controllerOwner
+    && acceptsVersion(slotValue(seated, 'version'))
+    && typeof slotValue(seated, 'dispose') === 'function' && typeof slotValue(seated, 'status') === 'function';
+  const { placement: incumbentPlacement, seated: incumbent } = seatedController();
+  if (incumbentPlacement && !controllerLegible(incumbent)) throw deny('namespace-conflict');
+  const markersAccounted = seated => {
+    if (!hostBound) return true;
+    const ledger = slotValue(slotValue(seated, BASELINE_KEY), 'zcodeAttributes');
+    return [shell, ...liveSurfaces()].every(node => {
+      const marked = node.getAttribute(surfaceMarker);
+      return marked === null || (marked === 'active' && ledger instanceof Map && ledger.has(node));
+    });
+  };
+  if (!markersAccounted(incumbent)) throw deny('namespace-conflict');
+  const residentSheet = document.getElementById(SHEET_ID);
+  if (residentSheet && (!incumbent || residentSheet.getAttribute(SHEET_OWNER_ATTRIBUTE) !== controllerOwner)) {
+    throw deny('style-id-conflict');
+  }
+
+  // ── Lease: one Blob URL with a single owner ─────────────────────────────
+  // A Blob URL also sidesteps the token-size cap browsers impose on custom
+  // properties, so the host has to permit blob: images for a scene to land.
+  let sceneBytes;
+  try { sceneBytes = Uint8Array.from(atob(encodedScene[2]), character => character.charCodeAt(0)); }
+  catch { throw deny('invalid-local-image'); }
+  const sceneURL = URL.createObjectURL(new Blob([sceneBytes], { type: 'image/' + encodedScene[1] }));
+  let scene, sheetCommitted = false, urlRelinquished = false;
+  const relinquishURL = () => {
+    if (urlRelinquished) return;
+    urlRelinquished = true;
+    URL.revokeObjectURL(sceneURL);
+    if (scene) scene.src = '';
+  };
+
+  // ── Decode: native promise first, pixel evidence second, deadline third ─
+  // Evidence, never a styling decision: a stuck native decode may be
+  // corroborated by drawing a bitmap onto a one-pixel scratch canvas and
+  // reading that pixel back.
+  function bitmapEvidence(element, bitmap) {
+    let scratch = null;
+    try {
+      const measurable = !!bitmap && typeof bitmap.close === 'function'
+        && bitmap.width === element.naturalWidth && bitmap.height === element.naturalHeight;
+      if (!measurable) return false;
+      scratch = document.createElement('canvas');
+      scratch.width = 1;
+      scratch.height = 1;
+      const raster = scratch.getContext('2d', { willReadFrequently: true });
+      if (!raster) return false;
+      raster.drawImage(bitmap, 0, 0, 1, 1);
+      const sample = raster.getImageData(0, 0, 1, 1)?.data ?? [];
+      return sample.length >= 4
+        && [sample[0], sample[1], sample[2], sample[3]].every(Number.isFinite);
     } catch { return false; }
     finally {
-      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      if (scratch) { scratch.width = 0; scratch.height = 0; }
       try { bitmap?.close?.(); } catch {}
     }
   }
-  function decodeImage(image) {
-    let decodeTimer;
-    let fallbackTimer;
-    let rejectFallback;
-    const nativeDecodeState = { value: 'pending' };
-    const clearFallback = reason => {
-      if (fallbackTimer !== undefined) {
-        clearTimeout(fallbackTimer);
-        fallbackTimer = undefined;
-      }
-      rejectFallback?.(reason);
-    };
-    const nativeOperation = (() => {
-      try { return image.decode(); }
-      catch (error) { return Promise.reject(error); }
-    })();
-    const nativeDecode = Promise.resolve(nativeOperation).then(() => {
-      nativeDecodeState.value = 'resolved';
-      clearFallback(problem('native-decode-complete'));
-      return true;
-    }, error => {
-      nativeDecodeState.value = 'rejected';
-      clearFallback(error);
-      throw error;
-    });
-    let decoded = nativeDecode;
-    if (typeof globalThis.createImageBitmap === 'function') {
-      const bitmapFallback = new Promise((resolve, reject) => {
-        rejectFallback = reject;
-        fallbackTimer = setTimeout(() => {
-          fallbackTimer = undefined;
-          if (nativeDecodeState.value !== 'pending' || !image.complete
-              || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
-            reject(problem('image-decode-fallback-unavailable'));
-            return;
-          }
-          let operation;
-          try { operation = globalThis.createImageBitmap(image); }
-          catch (error) { reject(error); return; }
-          Promise.resolve(operation).then(bitmap => {
-            if (decodeBitmapPixels(image, bitmap)) resolve(true);
-            else reject(problem('image-decode-fallback-invalid'));
-          }, reject);
+  function decodeWithCrossCheck(element) {
+    return new Promise((resolve, reject) => {
+      let decided = false;
+      let crossCheck, deadline;
+      const decide = (failure = null) => {
+        if (decided) return;
+        decided = true;
+        clearTimeout(crossCheck);
+        clearTimeout(deadline);
+        if (failure) reject(failure);
+        else resolve(true);
+      };
+      let native;
+      try { native = element.decode(); }
+      catch (failure) { native = Promise.reject(failure); }
+      Promise.resolve(native).then(() => decide(), failure => decide(failure || deny('image-decode-failed')));
+      if (typeof globalThis.createImageBitmap === 'function') {
+        crossCheck = setTimeout(() => {
+          const readyForEvidence = !decided && element.complete
+            && element.naturalWidth > 0 && element.naturalHeight > 0;
+          if (!readyForEvidence) return;
+          let attempt;
+          try { attempt = globalThis.createImageBitmap(element); }
+          catch { return; }
+          Promise.resolve(attempt).then(bitmap => {
+            if (bitmapEvidence(element, bitmap)) decide();
+          }, () => {});
         }, 250);
-      });
-      decoded = Promise.any([nativeDecode, bitmapFallback]).catch(error => {
-        if (error instanceof AggregateError && error.errors?.length) throw error.errors[0];
-        throw error;
-      });
-    }
-    return Promise.race([decoded, new Promise((_, reject) => {
-      decodeTimer = setTimeout(() => reject(problem('image-decode-timeout')), 4000);
-    })]).finally(() => {
-      clearTimeout(decodeTimer);
-      if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
-      rejectFallback?.(problem('image-decode-finished'));
+      }
+      deadline = setTimeout(() => decide(deny('image-decode-timeout')), 4000);
     });
-  }
-  function validSurface(value) {
-    if (typeof value !== 'string') return false;
-    const color = value.trim();
-    if (!color || color.length > 100 || /[;{}]/.test(color) || /\bvar\s*\(/i.test(color)
-      || /^(?:currentcolor|inherit|initial|unset|revert(?:-layer)?)$/i.test(color)) return false;
-    try { return typeof globalThis.CSS?.supports === 'function' && globalThis.CSS.supports('color', color); }
-    catch { return false; }
-  }
-  const ownValue = (object, name) => {
-    if (!object || typeof object !== 'object') return undefined;
-    const descriptor = Object.getOwnPropertyDescriptor(object, name);
-    return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
-  };
-  const pageAdapter = ownValue(payload, 'pageAdapter');
-  const ports = ownValue(pageAdapter, 'wallpaper');
-  // The ports group is atomic: an adapter that declares it must supply every
-  // member, and the neutral renderer refuses the whole adapter otherwise.
-  const adapter = !!ports && typeof ports === 'object'
-    && typeof ownValue(ports, 'validPage') === 'function'
-    && typeof ownValue(ports, 'shellState') === 'function'
-    && typeof ownValue(ports, 'surfaces') === 'function'
-    && typeof ownValue(ports, 'css') === 'string' && typeof ownValue(ports, 'scope') === 'string'
-    && !!ownValue(ports, 'attributes') && typeof ownValue(ownValue(ports, 'attributes'), 'surfaceMarker') === 'string'
-    && Array.isArray(ownValue(ownValue(ports, 'attributes'), 'observeFilter'));
-  if (pageAdapter && !adapter) throw problem('invalid-host-adapter');
-  const surfaceMarker = adapter ? ports.attributes.surfaceMarker : null;
-  if (adapter) OWNER = ownValue(ownValue(pageAdapter, 'controllerWallpaper'), 'owner') ?? OWNER;
-  const knownVersion = version => version === VERSION || (!adapter && LEGACY_VERSIONS.has(version));
-  function validPage() {
-    if (window.top !== window) return false;
-    if (adapter) return ports.validPage(globalThis);
-    const url = new URL(location.href), route = url.searchParams.get('initialRoute') || '/';
-    if (url.protocol === 'app:' && url.hostname === '-' && url.pathname === '/index.html') {
-      return !/avatar|quick.chat|detached|mini|popover|notification/i.test(route);
-    }
-    // The generated production payload never contains this fixture-only flag.
-    return payload?.preview === true && (
-      (url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname))
-      || (url.protocol === 'file:' && url.pathname.endsWith('/wallpaper/preview.html'))
-    );
-  }
-  if (!validPage()) throw problem('unexpected-page');
-  if (!payload || payload.version !== VERSION || typeof payload.css !== 'string'
-      || !payload.css.includes('[data-azhou-wallpaper="active"]')
-      || !payload.css.includes('--azhou-style-ready')
-      || /@import\b|url\(\s*['"]?(?:https?:|\/\/)/i.test(payload.css)
-      || typeof payload.imageSHA256 !== 'string' || !/^[0-9a-f]{64}$/.test(payload.imageSHA256)
-      || (payload.surface !== undefined && !validSurface(payload.surface))
-      || (payload.strength !== undefined && (!Number.isInteger(payload.strength) || payload.strength < 0 || payload.strength > 75))) {
-    throw problem('invalid-local-payload');
-  }
-  let surface = typeof payload.surface === 'string' ? payload.surface.trim() : null;
-  let surfaceOwned = false;
-  const imageMatch = typeof payload.image === 'string'
-    && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(payload.image);
-  if (!imageMatch || payload.image.length > 16 * 1024 * 1024) throw problem('invalid-local-image');
-  const applicationRoot = document.getElementById('root');
-  const currentSurfaces = () => {
-    if (!applicationRoot) return [];
-    if (!adapter) return [...applicationRoot.querySelectorAll(surfaceSelector)];
-    const nodes = ports.surfaces(globalThis);
-    return Array.isArray(nodes) && nodes.length === 1 && nodes.every(node => node?.isConnected
-      && applicationRoot.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nodes : [];
-  };
-  const shellReady = () => adapter
-    ? ports.shellState(ownValue(payload, 'isCurrent'), globalThis) === 'ready' && currentSurfaces().length === 1
-    : !!applicationRoot?.querySelector('[data-app-shell-frame]')
-      && !!applicationRoot?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
-  if (!document.body || !applicationRoot
-      || !shellReady()) {
-    throw problem('unsupported-shell-no-surfaces');
-  }
-  const previousDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper');
-  const previous = previousDescriptor && Object.hasOwn(previousDescriptor, 'value')
-    ? previousDescriptor.value : null;
-  if (previousDescriptor && (!previous || ownValue(previous, 'owner') !== OWNER
-      || !knownVersion(ownValue(previous, 'version'))
-      || typeof ownValue(previous, 'dispose') !== 'function' || typeof ownValue(previous, 'status') !== 'function')) {
-    throw problem('namespace-conflict');
-  }
-  const ownsSurfaceMarkers = current => {
-    if (!adapter) return true;
-    const recorded = ownValue(ownValue(current, BASELINE_KEY), 'zcodeAttributes');
-    return [applicationRoot, ...currentSurfaces()].every(node => {
-      const value = node.getAttribute(surfaceMarker);
-      return value === null || (value === 'active' && recorded instanceof Map && recorded.has(node));
-    });
-  };
-  if (!ownsSurfaceMarkers(previous)) throw problem('namespace-conflict');
-  const existingStyle = document.getElementById(STYLE_ID);
-  if (existingStyle && (!previous || existingStyle.getAttribute('data-azhou-owner') !== OWNER)) {
-    throw problem('style-id-conflict');
-  }
-  // Decode before replacing a working installation. Blob URLs keep the image
-  // out of CSS custom-property token-size limits; the host must allow blob: images.
-  let bytes;
-  try { bytes = Uint8Array.from(atob(imageMatch[2]), char => char.charCodeAt(0)); }
-  catch { throw problem('invalid-local-image'); }
-  const imageURL = URL.createObjectURL(new Blob([bytes], { type: 'image/' + imageMatch[1] }));
-  const image = new Image();
-  try {
-    image.src = imageURL;
-    await decodeImage(image);
-    if (!image.naturalWidth || !image.naturalHeight) throw problem('empty-image');
-  } catch (error) {
-    URL.revokeObjectURL(imageURL);
-    image.src = '';
-    if (error?.code === 'image-decode-timeout') throw problem('image-decode-timeout');
-    throw problem('image-decode-failed');
   }
 
-  if ((typeof ownValue(payload, 'isCurrent') === 'function' && !ownValue(payload, 'isCurrent')())
-      || !validPage() || !applicationRoot.isConnected
-      || !shellReady()) {
-    URL.revokeObjectURL(imageURL); image.src = '';
-    throw problem('page-changed-during-decode');
-  }
-  // Re-read after the async decode: another apply may have completed meanwhile.
-  const activeDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__azhouWallpaper');
-  const active = activeDescriptor && Object.hasOwn(activeDescriptor, 'value') ? activeDescriptor.value : null;
-  if (activeDescriptor && (!active || ownValue(active, 'owner') !== OWNER
-      || !knownVersion(ownValue(active, 'version'))
-      || typeof ownValue(active, 'dispose') !== 'function' || typeof ownValue(active, 'status') !== 'function')) {
-    URL.revokeObjectURL(imageURL); image.src = '';
-    throw problem('namespace-changed-during-decode');
-  }
-  if (active !== previous) {
-    URL.revokeObjectURL(imageURL); image.src = '';
-    throw problem('namespace-changed-during-decode');
-  }
-  if (!ownsSurfaceMarkers(active)) {
-    URL.revokeObjectURL(imageURL); image.src = '';
-    throw problem('namespace-changed-during-decode');
-  }
-  const latestStyle = document.getElementById(STYLE_ID);
-  if (latestStyle && (!active || latestStyle.getAttribute('data-azhou-owner') !== OWNER)) {
-    URL.revokeObjectURL(imageURL); image.src = '';
-    throw problem('style-id-conflict-after-decode');
-  }
-  const strength = payload.strength ?? 42;
-  const washStops = [24, 18, 12, 16, 30, 65, 70];
-  const washScale = strength / 42;
-  const wash = 'linear-gradient(90deg,' + washStops.map((opacity, index) => {
-    const visible = Math.min(100, Math.round(opacity * washScale));
-    return 'color-mix(in srgb, var(--azhou-base) ' + (100 - visible) + '%, transparent) '
-      + ['0%', '22%', '36%', '62%', '73%', '87%', '100%'][index];
-  }).join(',') + ')';
-  const captureOriginal = () => ({
-    attribute: root.getAttribute(ATTRIBUTE),
-    // The baseline key stays `zcodeAttributes` verbatim: live 0.9.0 ZCode
-    // installs must transfer their recorded baselines across a replacement.
-    zcodeAttributes: adapter ? new Map([applicationRoot, ...currentSurfaces()].map(node => [node, node.getAttribute(surfaceMarker)])) : undefined,
-    properties: new Map([IMAGE_PROPERTY, WASH_PROPERTY, SURFACE_PROPERTY].map(name => [
-      name, [root.style.getPropertyValue(name), root.style.getPropertyPriority(name)],
-    ])),
-  });
-  const rollbackOriginal = captureOriginal();
-  const previousOriginal = previous ? ownValue(previous, BASELINE_KEY) ?? rollbackOriginal : rollbackOriginal;
-  const transferredOriginal = {
-    attribute: previousOriginal.attribute,
-    properties: new Map(previousOriginal.properties),
-    zcodeAttributes: adapter ? new Map([...(previousOriginal.zcodeAttributes ?? []),
-      ...[...(rollbackOriginal.zcodeAttributes ?? [])].filter(([node]) => !previousOriginal.zcodeAttributes?.has(node))]) : undefined,
-  };
-  if (!transferredOriginal.properties.has(SURFACE_PROPERTY)) {
-    transferredOriginal.properties.set(SURFACE_PROPERTY,
-      [...rollbackOriginal.properties.get(SURFACE_PROPERTY)]);
-  }
-  const priorStyleID = latestStyle?.id;
-  const priorStyleDisabled = latestStyle?.disabled;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.setAttribute('data-azhou-owner', OWNER);
-  const styleText = payload.css + (adapter ? ports.css : '');
-  style.textContent = styleText;
-  let disposed = false, committed = false, api;
-  let original = rollbackOriginal;
-  const transparent = color => color === 'transparent'
-    || /^rgba\([^)]*,\s*0(?:\.0+)?\)$/.test(color)
-    || /^color\([^)]*\/\s*0(?:\.0+)?\)$/.test(color);
-  const noEffect = value => !value || value === 'none';
-  const writeSurface = value => {
-    root.style.setProperty(SURFACE_PROPERTY, value);
-    surfaceOwned = root.style.getPropertyValue(SURFACE_PROPERTY) === value
-      && root.style.getPropertyPriority(SURFACE_PROPERTY) === '';
-  };
-  const protectedNode = node => !!node.closest(protectedSelector);
-  const decorativeNodes = selector => [...applicationRoot.querySelectorAll(selector)]
-    .filter(node => node.isConnected && !protectedNode(node));
-  // Read only known decorative nodes and their generated planes. No selectors,
-  // text, input values or image URLs are included in the diagnostic result.
-  function planes(node) {
-    const own = getComputedStyle(node);
-    if (own.display === 'none' || own.visibility === 'hidden' || Number(own.opacity) === 0
-        || node.getClientRects().length === 0) return [];
-    return [own, ...['::before', '::after'].map(pseudo => getComputedStyle(node, pseudo))
-      .filter(style => style.content !== 'none' && style.content !== 'normal'
-        && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0)];
-  }
-  const backgroundClear = style => transparent(style.backgroundColor) && noEffect(style.backgroundImage);
-  const effectsClear = style => noEffect(style.boxShadow) && noEffect(style.filter)
-    && noEffect(style.backdropFilter) && noEffect(style.webkitBackdropFilter)
-    && noEffect(style.maskImage) && noEffect(style.webkitMaskImage);
-  const clearBackgrounds = nodes => nodes.every(node => planes(node).every(backgroundClear));
-  const clearEffects = nodes => nodes.every(node => planes(node)
-    .every(style => backgroundClear(style) && effectsClear(style)));
-  function unsupportedDecorations(known) {
-    const unsupported = new Set();
-    const inspect = (node, category, requirePosition = true) => {
-      if (known.has(node) || protectedNode(node) || node.querySelector(protectedSelector)) return;
-      const computed = getComputedStyle(node);
-      if (computed.pointerEvents !== 'none'
-          || (requirePosition && !['absolute', 'fixed', 'sticky'].includes(computed.position))) return;
-      if (planes(node).some(style => !backgroundClear(style) || !effectsClear(style))) unsupported.add(category);
-    };
-    // This second check deliberately does not reuse the successful fade selector:
-    // a renamed child in the inspected sticky wrapper must not self-certify.
-    for (const parent of applicationRoot.querySelectorAll(stickySelector)) {
-      inspect(parent, 'unmatched-sticky-decoration', false);
-      for (const child of parent.children) inspect(child, 'unmatched-sticky-decoration', false);
-    }
-    for (const parent of applicationRoot.querySelectorAll(footerSelector)) {
-      for (const child of parent.children) inspect(child, 'unmatched-footer-decoration');
-    }
-    for (const node of applicationRoot.querySelectorAll(scrollSelector + ' :is('
-        + token('_background_') + ',' + token('_fade_') + ')')) {
-      inspect(node, 'unmatched-scroll-decoration');
-    }
-    // Three fixed categories at most. Unknown layers are diagnosed, never styled.
-    return [...unsupported].sort();
-  }
-  function status() {
-    if (disposed) return { version: VERSION, applied: false, imageDecoded: false,
-      matchedSurfaces: 0, transparentSurfaces: 0, backgroundMatched: false,
-      rootClear: false, workspaceBackgroundClear: false, coverMatched: false, fixedViewport: false,
-      footerSurfaces: 0, footerBackgroundClear: false, footerFadeSurfaces: 0, footerFadeClear: false,
-      topFadeSurfaces: 0, topFadeClear: false, decorationEffectsClear: false, unsupportedDecorations: [],
-      reason: 'disposed', imageSHA256: payload.imageSHA256 };
-    const surfaces = currentSurfaces().filter(node => node.isConnected);
-    const bodyStyle = getComputedStyle(document.body);
-    const transparentSurfaces = surfaces.filter(node => {
-      const computed = getComputedStyle(node);
-      return transparent(computed.backgroundColor) && computed.backgroundImage === 'none';
-    }).length;
-    const workspace = [...applicationRoot.querySelectorAll(workspaceSelector)];
-    const workspaceBackgroundClear = workspace.every(node => {
-      const pseudo = getComputedStyle(node, '::before');
-      return pseudo.display === 'none' || pseudo.content === 'none'
-        || (transparent(pseudo.backgroundColor) && pseudo.backgroundImage === 'none');
-    });
-    // The 32px scroll fade is a sibling branch, not a footer descendant. The
-    // separate top fade has the same opaque-surface assumption. Inspect all
-    // three groups, including generated planes, without touching the composer.
-    const footerSurfaces = decorativeNodes(footerSelector + ',' + footerBackgroundSelector);
-    const footerFadeSurfaces = decorativeNodes(footerFadeSelector);
-    const topFadeSurfaces = decorativeNodes(topFadeSelector);
-    const footerBackgroundClear = clearBackgrounds(footerSurfaces);
-    const footerFadeClear = clearBackgrounds(footerFadeSurfaces);
-    const topFadeClear = clearBackgrounds(topFadeSurfaces);
-    const decorations = new Set([...footerSurfaces, ...footerFadeSurfaces, ...topFadeSurfaces]);
-    const decorationEffectsClear = clearEffects([...decorations]);
-    const unsupported = unsupportedDecorations(decorations);
-    const imageDecoded = image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
-    const backgroundMatched = bodyStyle.backgroundImage.includes(imageURL)
-      && bodyStyle.getPropertyValue('--azhou-style-ready').trim() === 'ready';
-    const washMatched = root.style.getPropertyValue(WASH_PROPERTY) === wash
-      && root.style.getPropertyPriority(WASH_PROPERTY) === '';
-    // The second layer is the scene. A decoded image alone does not establish
-    // that it fills the viewport rather than retaining the old corner size.
-    const coverMatched = bodyStyle.backgroundSize.split(',')[1]?.trim() === 'cover';
-    const fixedViewport = bodyStyle.backgroundAttachment.split(',').every(value => value.trim() === 'fixed');
-    const rootStyle = getComputedStyle(applicationRoot);
-    const rootClear = transparent(rootStyle.backgroundColor) && rootStyle.backgroundImage === 'none';
-    const styleCount = document.querySelectorAll('#' + STYLE_ID).length;
-    const applied = validPage() && imageDecoded && style.isConnected && styleCount === 1 && root.getAttribute(ATTRIBUTE) === 'active'
-      && surfaces.length > 0 && transparentSurfaces === surfaces.length
-      && rootClear && workspaceBackgroundClear && footerBackgroundClear && backgroundMatched
-      && washMatched
-      && footerFadeClear && topFadeClear && decorationEffectsClear && unsupported.length === 0
-      && coverMatched && fixedViewport;
-    return {
-      version: VERSION, applied, imageDecoded, matchedSurfaces: surfaces.length,
-      backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear, workspaceBackgroundClear,
-      footerSurfaces: footerSurfaces.length, footerBackgroundClear,
-      footerFadeSurfaces: footerFadeSurfaces.length, footerFadeClear,
-      topFadeSurfaces: topFadeSurfaces.length, topFadeClear, decorationEffectsClear,
-      unsupportedDecorations: unsupported,
-      imageSHA256: payload.imageSHA256,
-      image: { width: image.naturalWidth, height: image.naturalHeight, displayMode: 'cover',
-        viewport: { width: innerWidth, height: innerHeight },
-        devicePixelRatio: devicePixelRatio || 1,
-        rasterScale: Math.max(innerWidth / image.naturalWidth, innerHeight / image.naturalHeight)
-          * Math.max(1, devicePixelRatio || 1),
-        position: bodyStyle.backgroundPosition.split(',')[1]?.trim() },
-      styleCount,
-      persistentAnimation: false,
-      verificationScope: adapter ? ports.scope
-        : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
-    };
-  }
-  function dispose() {
-    if (disposed) return status();
-    disposed = true;
-    if (style.isConnected && style.parentNode === document.head && style.id === STYLE_ID && style.disabled === false
-        && style.getAttribute('data-azhou-owner') === OWNER && style.textContent === styleText) style.remove();
-    for (const [node, value] of original.zcodeAttributes ?? []) {
-      if (node.getAttribute(surfaceMarker) !== 'active') continue;
-      if (value === null) node.removeAttribute(surfaceMarker);
-      else node.setAttribute(surfaceMarker, value);
-    }
-    if (root.getAttribute(ATTRIBUTE) === 'active') {
-      if (original.attribute === null) root.removeAttribute(ATTRIBUTE);
-      else root.setAttribute(ATTRIBUTE, original.attribute);
-    }
-    for (const [name, [value, priority]] of original.properties) {
-      const writtenValue = name === IMAGE_PROPERTY ? 'url(' + JSON.stringify(imageURL) + ')'
-        : name === WASH_PROPERTY ? wash : surface;
-      if (typeof writtenValue !== 'string') continue;
-      if (root.style.getPropertyValue(name) !== writtenValue || root.style.getPropertyPriority(name) !== '') continue;
-      if (value) root.style.setProperty(name, value, priority);
-      else root.style.removeProperty(name);
-    }
-    URL.revokeObjectURL(imageURL);
-    image.src = '';
-    if (globalThis.__azhouWallpaper === api) delete globalThis.__azhouWallpaper;
-    return status();
-  }
-  const releaseForReplacement = () => {
-    disposed = true;
-    const temporarilyRenamed = style.id === '' && style.disabled === true;
-    if (style.isConnected && style.parentNode === document.head && (style.id === STYLE_ID && style.disabled === false || temporarilyRenamed)
-        && style.getAttribute('data-azhou-owner') === OWNER && style.textContent === styleText) style.remove();
-    URL.revokeObjectURL(imageURL);
-    image.src = '';
-    if (globalThis.__azhouWallpaper === api) delete globalThis.__azhouWallpaper;
-  };
-  function updateSurface(value) {
-    if (disposed || !validSurface(value)) return false;
-    const currentValue = root.style.getPropertyValue(SURFACE_PROPERTY);
-    const currentPriority = root.style.getPropertyPriority(SURFACE_PROPERTY);
-    const originalSurface = rollbackOriginal.properties.get(SURFACE_PROPERTY);
-    const stillOwned = surfaceOwned
-      ? currentValue === surface && currentPriority === ''
-      : currentValue === originalSurface[0] && currentPriority === originalSurface[1];
-    if (!stillOwned) return false;
-    const nextSurface = value.trim();
-    if (nextSurface !== surface || !surfaceOwned) {
-      writeSurface(nextSurface);
-      surface = nextSurface;
-    }
-    return surfaceOwned;
-  }
-  api = { owner: OWNER, version: VERSION, status, dispose, restore: dispose, updateSurface };
-  Object.defineProperty(api, RELEASE_KEY, { value: releaseForReplacement });
   try {
-    // This synchronous transaction cannot paint between disabling and validation.
-    // Keep the old sheet attached, so a failed candidate can restore it without
-    // re-inserting an inline stylesheet under a potentially stricter CSP.
-    if (latestStyle) { latestStyle.disabled = true; latestStyle.removeAttribute('id'); }
-    for (const node of rollbackOriginal.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
-    root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
-    root.style.setProperty(WASH_PROPERTY, wash);
-    if (surface !== null) writeSurface(surface);
-    root.setAttribute(ATTRIBUTE, 'active');
-    document.head.appendChild(style);
-    let result = status();
-    if (!result.applied) throw problem('styles-not-effective: ' + JSON.stringify(result));
-    if (active) {
-      const release = active[RELEASE_KEY];
-      if (typeof release === 'function') {
-        original = transferredOriginal;
-        Object.defineProperty(api, BASELINE_KEY, { value: original });
-        globalThis.__azhouWallpaper = api;
-        release.call(active);
-      } else {
-        active.dispose();
-        // An installed 0.7.1 payload predating conditional restore remains a
-        // known legacy owner. Let its own dispose restore the host baseline.
-        original = captureOriginal();
-        original.properties.set(WASH_PROPERTY, [...rollbackOriginal.properties.get(WASH_PROPERTY)]);
-        original.properties.set(SURFACE_PROPERTY, [...rollbackOriginal.properties.get(SURFACE_PROPERTY)]);
-        root.style.setProperty(IMAGE_PROPERTY, 'url(' + JSON.stringify(imageURL) + ')');
-        root.style.setProperty(WASH_PROPERTY, wash);
-        if (surface !== null) writeSurface(surface);
-        root.setAttribute(ATTRIBUTE, 'active');
-        result = status();
-        if (!result.applied) throw problem('styles-not-effective-after-replacement');
-        Object.defineProperty(api, BASELINE_KEY, { value: original });
-        globalThis.__azhouWallpaper = api;
+    // ── Decode the leased scene ───────────────────────────────────────────
+    scene = new Image();
+    try {
+      scene.src = sceneURL;
+      await decodeWithCrossCheck(scene);
+      if (!scene.naturalWidth || !scene.naturalHeight) throw deny('scene-without-extent');
+    } catch (failure) {
+      relinquishURL();
+      throw deny(failure?.code === 'image-decode-timeout' ? 'image-decode-timeout' : 'image-decode-failed');
+    }
+
+    // ── Reconfirm: the page the brief was admitted to still exists ────────
+    if ((typeof isCurrent === 'function' && !isCurrent())
+        || !pageAdmitted() || !shell.isConnected
+        || !shellUsable()) {
+      relinquishURL();
+      throw deny('page-changed-during-decode');
+    }
+    // The await left a window: read the slot again in case another apply
+    // settled inside it. Both readings must agree with admission time — a
+    // seat that vanished mid-decode is as much a change as a foreign one.
+    const { placement: livePlacement, seated: activeNow } = seatedController();
+    if (livePlacement && !controllerLegible(activeNow)) {
+      relinquishURL();
+      throw deny('namespace-changed-during-decode');
+    }
+    if (activeNow !== incumbent) {
+      relinquishURL();
+      throw deny('namespace-changed-during-decode');
+    }
+    if (!markersAccounted(activeNow)) {
+      relinquishURL();
+      throw deny('namespace-changed-during-decode');
+    }
+    const settledSheet = document.getElementById(SHEET_ID);
+    if (settledSheet && (!activeNow || settledSheet.getAttribute(SHEET_OWNER_ATTRIBUTE) !== controllerOwner)) {
+      relinquishURL();
+      throw deny('style-id-conflict-after-decode');
+    }
+
+    // ── Compose: wash, snapshots, candidate sheet ─────────────────────────
+    const tint = brief.strength ?? 42;
+    const tintRatio = tint / 42;
+    const tintRamp = [
+      { mix: 24, at: '0%' }, { mix: 18, at: '22%' }, { mix: 12, at: '36%' },
+      { mix: 16, at: '62%' }, { mix: 30, at: '73%' }, { mix: 65, at: '87%' }, { mix: 70, at: '100%' },
+    ];
+    const tintGradient = 'linear-gradient(90deg,' + tintRamp.map(({ mix, at }) => {
+      const shown = Math.min(100, Math.round(mix * tintRatio));
+      return 'color-mix(in srgb, var(--azhou-base) ' + (100 - shown) + '%, transparent) ' + at;
+    }).join(',') + ')';
+    const snapshotHostState = () => ({
+      attribute: html.getAttribute(ACTIVATION),
+      // The snapshot field is named `zcodeAttributes` on purpose: replacements
+      // inherit recorded baselines from live 0.9.0 ZCode installs through
+      // that exact key.
+      zcodeAttributes: hostBound
+        ? new Map([shell, ...liveSurfaces()].map(node => [node, node.getAttribute(surfaceMarker)]))
+        : undefined,
+      properties: new Map([SCENE_PROPERTY, TINT_PROPERTY, SURFACE_PROPERTY].map(name => [
+        name, [html.style.getPropertyValue(name), html.style.getPropertyPriority(name)],
+      ])),
+    });
+    const entrySnapshot = snapshotHostState();
+    const inheritedRaw = incumbent ? slotValue(incumbent, BASELINE_KEY) ?? entrySnapshot : entrySnapshot;
+    const inheritedSnapshot = {
+      attribute: inheritedRaw.attribute,
+      properties: new Map(inheritedRaw.properties),
+      zcodeAttributes: hostBound ? new Map([...(inheritedRaw.zcodeAttributes ?? []),
+        ...[...(entrySnapshot.zcodeAttributes ?? [])].filter(([node]) => !inheritedRaw.zcodeAttributes?.has(node))]) : undefined,
+    };
+    if (!inheritedSnapshot.properties.has(SURFACE_PROPERTY)) {
+      inheritedSnapshot.properties.set(SURFACE_PROPERTY,
+        [...entrySnapshot.properties.get(SURFACE_PROPERTY)]);
+    }
+    const residentSheetID = settledSheet?.id;
+    const residentSheetEnabled = settledSheet?.disabled;
+    const residentSheetText = settledSheet?.textContent;
+    const candidate = document.createElement('style');
+    candidate.id = SHEET_ID;
+    candidate.setAttribute(SHEET_OWNER_ATTRIBUTE, controllerOwner);
+    const candidateText = brief.css + (hostBound ? binding.css : '');
+    candidate.textContent = candidateText;
+
+    // ── Controller state and verification probe ───────────────────────────
+    let retired = false, controller, releaseAttempted = false, surfaceOwned = false;
+    let restoreSnapshot = entrySnapshot;
+    const publishSurface = value => {
+      html.style.setProperty(SURFACE_PROPERTY, value);
+      surfaceOwned = html.style.getPropertyValue(SURFACE_PROPERTY) === value
+        && html.style.getPropertyPriority(SURFACE_PROPERTY) === '';
+    };
+    const zeroAlphaColor = [/^rgba\([^)]*,\s*0(?:\.0+)?\)$/, /^color\([^)]*\/\s*0(?:\.0+)?\)$/];
+    const isTransparent = color => color === 'transparent'
+      || zeroAlphaColor.some(shape => shape.test(color));
+    const isNeutral = value => !value || value === 'none';
+    const insideProtectedRegion = node => !!node.closest(directory.protectedRegions);
+    const decorativeWithin = selector => [...shell.querySelectorAll(selector)]
+      .filter(node => node.isConnected && !insideProtectedRegion(node));
+    // Diagnostics read only the named decorative layers and their generated
+    // planes; selector text, typed values and image links never enter the
+    // report.
+    const layerPainted = layer => layer.display !== 'none' && layer.visibility !== 'hidden'
+      && Number(layer.opacity) !== 0;
+    const generatedContent = layer => layer.content !== 'none' && layer.content !== 'normal';
+    function paintedPlanes(node) {
+      const primary = getComputedStyle(node);
+      if (!layerPainted(primary) || node.getClientRects().length === 0) return [];
+      const generated = ['::before', '::after'].map(pseudo => getComputedStyle(node, pseudo))
+        .filter(generatedContent)
+        .filter(layerPainted);
+      return [primary, ...generated];
+    }
+    const backgroundQuiet = layer => isTransparent(layer.backgroundColor) && isNeutral(layer.backgroundImage);
+    const effectsQuiet = layer => isNeutral(layer.boxShadow) && isNeutral(layer.filter)
+      && isNeutral(layer.backdropFilter) && isNeutral(layer.webkitBackdropFilter)
+      && isNeutral(layer.maskImage) && isNeutral(layer.webkitMaskImage);
+    const backgroundsQuiet = nodes => nodes.every(node => paintedPlanes(node).every(backgroundQuiet));
+    const planesFullyQuiet = nodes => nodes.every(node => paintedPlanes(node)
+      .every(layer => backgroundQuiet(layer) && effectsQuiet(layer)));
+    function unclassifiedLayers(accounted) {
+      const flagged = new Set();
+      const classify = (node, category, requirePositioning = true) => {
+        if (accounted.has(node) || insideProtectedRegion(node) || node.querySelector(directory.protectedRegions)) return;
+        const computed = getComputedStyle(node);
+        if (computed.pointerEvents !== 'none'
+            || (requirePositioning && !['absolute', 'fixed', 'sticky'].includes(computed.position))) return;
+        if (paintedPlanes(node).some(layer => !backgroundQuiet(layer) || !effectsQuiet(layer))) flagged.add(category);
+      };
+      // The wrapper sweep intentionally ignores the selector that already
+      // matched: a child renamed inside the sticky wrapper has to fail its own
+      // check instead of inheriting this pass.
+      for (const wrapper of shell.querySelectorAll(directory.stickyShade)) {
+        classify(wrapper, 'unmatched-sticky-decoration', false);
+        for (const child of wrapper.children) classify(child, 'unmatched-sticky-decoration', false);
       }
+      for (const plate of shell.querySelectorAll(directory.threadFooter)) {
+        for (const child of plate.children) classify(child, 'unmatched-footer-decoration');
+      }
+      for (const node of shell.querySelectorAll(directory.scrollLayers)) {
+        classify(node, 'unmatched-scroll-decoration');
+      }
+      // The catalogue stops at these three names; anything unrecognized is
+      // reported, never papered over with CSS.
+      return [...flagged].sort();
     }
-    if (!active) {
-      Object.defineProperty(api, BASELINE_KEY, { value: original });
-      globalThis.__azhouWallpaper = api;
-    } else if (typeof ownValue(api, BASELINE_KEY) !== 'object') {
-      Object.defineProperty(api, BASELINE_KEY, { value: original });
+    function probe() {
+      if (retired) return { version: BUILD, applied: false, imageDecoded: false,
+        matchedSurfaces: 0, transparentSurfaces: 0, backgroundMatched: false,
+        rootClear: false, workspaceBackgroundClear: false, coverMatched: false, fixedViewport: false,
+        footerSurfaces: 0, footerBackgroundClear: false, footerFadeSurfaces: 0, footerFadeClear: false,
+        topFadeSurfaces: 0, topFadeClear: false, decorationEffectsClear: false, unsupportedDecorations: [],
+        reason: 'disposed', imageSHA256: brief.imageSHA256 };
+      const surfaces = liveSurfaces().filter(node => node.isConnected);
+      const bodyLayer = getComputedStyle(document.body);
+      const transparentSurfaces = surfaces.filter(node => {
+        const computed = getComputedStyle(node);
+        return isTransparent(computed.backgroundColor) && computed.backgroundImage === 'none';
+      }).length;
+      const workspacePanes = [...shell.querySelectorAll(directory.workspace)];
+      const workspaceBackgroundClear = workspacePanes.every(node => {
+        const pseudo = getComputedStyle(node, '::before');
+        return pseudo.display === 'none' || pseudo.content === 'none'
+          || (isTransparent(pseudo.backgroundColor) && pseudo.backgroundImage === 'none');
+      });
+      // Scroll shading hangs on a sibling branch rather than inside the
+      // footer, and the top fade rests on the same opaque-surface premise.
+      // All three groups — generated planes included — are inspected while
+      // the composer stays untouched.
+      const footerSurfaces = decorativeWithin(directory.threadFooter + ',' + directory.footerPlate);
+      const footerFadeSurfaces = decorativeWithin(directory.footerFade);
+      const topFadeSurfaces = decorativeWithin(directory.topFade);
+      const footerBackgroundClear = backgroundsQuiet(footerSurfaces);
+      const footerFadeClear = backgroundsQuiet(footerFadeSurfaces);
+      const topFadeClear = backgroundsQuiet(topFadeSurfaces);
+      const decorations = new Set([...footerSurfaces, ...footerFadeSurfaces, ...topFadeSurfaces]);
+      const decorationEffectsClear = planesFullyQuiet([...decorations]);
+      const unknownLayers = unclassifiedLayers(decorations);
+      const imageDecoded = scene.complete && scene.naturalWidth > 0 && scene.naturalHeight > 0;
+      const backgroundMatched = bodyLayer.backgroundImage.includes(sceneURL)
+        && bodyLayer.getPropertyValue('--azhou-style-ready').trim() === 'ready';
+      const washMatched = html.style.getPropertyValue(TINT_PROPERTY) === tintGradient
+        && html.style.getPropertyPriority(TINT_PROPERTY) === '';
+      // Background layer two is the scene itself: successful decoding says
+      // nothing about whether the scene covers the viewport or still sits in
+      // some earlier corner-sized box.
+      const coverMatched = bodyLayer.backgroundSize.split(',')[1]?.trim() === 'cover';
+      const fixedViewport = bodyLayer.backgroundAttachment.split(',').every(value => value.trim() === 'fixed');
+      const shellLayer = getComputedStyle(shell);
+      const rootClear = isTransparent(shellLayer.backgroundColor) && shellLayer.backgroundImage === 'none';
+      const styleCount = document.querySelectorAll('#' + SHEET_ID).length;
+      const applied = pageAdmitted() && imageDecoded && candidate.isConnected && styleCount === 1
+        && html.getAttribute(ACTIVATION) === 'active'
+        && surfaces.length > 0 && transparentSurfaces === surfaces.length
+        && rootClear && workspaceBackgroundClear && footerBackgroundClear && backgroundMatched
+        && washMatched
+        && footerFadeClear && topFadeClear && decorationEffectsClear && unknownLayers.length === 0
+        && coverMatched && fixedViewport;
+      return {
+        version: BUILD, applied, imageDecoded, matchedSurfaces: surfaces.length,
+        backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear,
+        workspaceBackgroundClear,
+        footerSurfaces: footerSurfaces.length, footerBackgroundClear,
+        footerFadeSurfaces: footerFadeSurfaces.length, footerFadeClear,
+        topFadeSurfaces: topFadeSurfaces.length, topFadeClear, decorationEffectsClear,
+        unsupportedDecorations: unknownLayers,
+        imageSHA256: brief.imageSHA256,
+        image: { width: scene.naturalWidth, height: scene.naturalHeight, displayMode: 'cover',
+          viewport: { width: innerWidth, height: innerHeight },
+          devicePixelRatio: devicePixelRatio || 1,
+          rasterScale: Math.max(innerWidth / scene.naturalWidth, innerHeight / scene.naturalHeight)
+            * Math.max(1, devicePixelRatio || 1),
+          position: bodyLayer.backgroundPosition.split(',')[1]?.trim() },
+        styleCount,
+        persistentAnimation: false,
+        verificationScope: hostBound ? binding.scope
+          : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
+      };
     }
-    committed = true;
-    return result;
-  } catch (error) {
-    dispose();
-    if (!committed && active && globalThis.__azhouWallpaper === active && latestStyle?.isConnected
-        && latestStyle.id === '' && latestStyle.disabled === true) {
-      latestStyle.id = priorStyleID;
-      latestStyle.disabled = priorStyleDisabled;
+
+    // ── Controller lifecycle ──────────────────────────────────────────────
+    function dispose() {
+      if (retired) return probe();
+      retired = true;
+      const sheetStillAuthored = candidate.isConnected && candidate.parentNode === document.head
+        && candidate.id === SHEET_ID && candidate.disabled === false
+        && candidate.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
+        && candidate.textContent === candidateText;
+      if (sheetStillAuthored) candidate.remove();
+      const shellStillCurrent = !hostBound || (shell.isConnected && document.getElementById('root') === shell);
+      for (const [node, marked] of restoreSnapshot.zcodeAttributes ?? []) {
+        const markerRestorable = shellStillCurrent && node.isConnected
+          && (node === shell || shell.contains(node))
+          && node.getAttribute(surfaceMarker) === 'active';
+        if (!markerRestorable) continue;
+        if (marked === null) node.removeAttribute(surfaceMarker);
+        else node.setAttribute(surfaceMarker, marked);
+      }
+      if (document.documentElement === html) {
+        if (html.getAttribute(ACTIVATION) === 'active') {
+          if (restoreSnapshot.attribute === null) html.removeAttribute(ACTIVATION);
+          else html.setAttribute(ACTIVATION, restoreSnapshot.attribute);
+        }
+        for (const [name, [value, priority]] of restoreSnapshot.properties) {
+          const asWritten = name === SCENE_PROPERTY ? 'url(' + JSON.stringify(sceneURL) + ')'
+            : name === TINT_PROPERTY ? tintGradient : surfaceTint;
+          if (typeof asWritten !== 'string') continue;
+          const uneditedSinceCommit = html.style.getPropertyValue(name) === asWritten
+            && html.style.getPropertyPriority(name) === '';
+          if (!uneditedSinceCommit) continue;
+          if (value) html.style.setProperty(name, value, priority);
+          else html.style.removeProperty(name);
+        }
+      }
+      relinquishURL();
+      if (globalThis[CONTROLLER_SLOT] === controller) delete globalThis[CONTROLLER_SLOT];
+      return probe();
     }
-    throw error;
+    // Replacement path: the successor already took the slot, so this teardown
+    // removes only what this controller verifiably still owns.
+    const handOverForReplacement = () => {
+      retired = true;
+      const sheetStillAuthored = candidate.isConnected && candidate.parentNode === document.head
+        && (candidate.id === SHEET_ID && candidate.disabled === false
+          || candidate.id === '' && candidate.disabled === true)
+        && candidate.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
+        && candidate.textContent === candidateText;
+      if (sheetStillAuthored) candidate.remove();
+      relinquishURL();
+      if (globalThis[CONTROLLER_SLOT] === controller) delete globalThis[CONTROLLER_SLOT];
+    };
+    function updateSurface(value) {
+      if (retired || slotValue(globalThis, CONTROLLER_SLOT) !== controller
+          || document.documentElement !== html || !shell.isConnected
+          || document.getElementById('root') !== shell || !colorPlausible(value)) return false;
+      const valueNow = html.style.getPropertyValue(SURFACE_PROPERTY);
+      const priorityNow = html.style.getPropertyPriority(SURFACE_PROPERTY);
+      const untouched = entrySnapshot.properties.get(SURFACE_PROPERTY);
+      const stillOurs = surfaceOwned
+        ? valueNow === surfaceTint && priorityNow === ''
+        : valueNow === untouched[0] && priorityNow === untouched[1];
+      if (!stillOurs) return false;
+      const next = value.trim();
+      if (next !== surfaceTint || !surfaceOwned) {
+        publishSurface(next);
+        surfaceTint = next;
+      }
+      return surfaceOwned;
+    }
+    controller = { owner: controllerOwner, version: BUILD, status: probe, dispose, restore: dispose, updateSurface };
+    Object.defineProperty(controller, RELEASE_KEY, { value: handOverForReplacement });
+
+    // ── Transaction: one synchronous handover ─────────────────────────────
+    try {
+      // Nothing can paint between suspending the resident sheet and validating
+      // the candidate. The resident sheet stays attached so a failed candidate
+      // can bring it back without re-adding an inline style element that a
+      // stricter content-security policy might reject.
+      if (settledSheet) { settledSheet.disabled = true; settledSheet.removeAttribute('id'); }
+      for (const node of entrySnapshot.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
+      html.style.setProperty(SCENE_PROPERTY, 'url(' + JSON.stringify(sceneURL) + ')');
+      html.style.setProperty(TINT_PROPERTY, tintGradient);
+      if (surfaceTint !== null) publishSurface(surfaceTint);
+      html.setAttribute(ACTIVATION, 'active');
+      document.head.appendChild(candidate);
+      let outcome = probe();
+      if (!outcome.applied) throw deny('styles-not-effective: ' + JSON.stringify(outcome));
+      if (activeNow) {
+        const stepAside = activeNow[RELEASE_KEY];
+        if (typeof stepAside === 'function') {
+          restoreSnapshot = inheritedSnapshot;
+          Object.defineProperty(controller, BASELINE_KEY, { value: restoreSnapshot });
+          globalThis[CONTROLLER_SLOT] = controller;
+          releaseAttempted = true;
+          stepAside.call(activeNow);
+        } else {
+          activeNow.dispose();
+          // A legacy install from before conditional restore remains a known
+          // owner: its own dispose just restored the host baseline it
+          // remembered, so the snapshot is retaken from the live page.
+          restoreSnapshot = snapshotHostState();
+          restoreSnapshot.properties.set(TINT_PROPERTY, [...entrySnapshot.properties.get(TINT_PROPERTY)]);
+          restoreSnapshot.properties.set(SURFACE_PROPERTY, [...entrySnapshot.properties.get(SURFACE_PROPERTY)]);
+          html.style.setProperty(SCENE_PROPERTY, 'url(' + JSON.stringify(sceneURL) + ')');
+          html.style.setProperty(TINT_PROPERTY, tintGradient);
+          if (surfaceTint !== null) publishSurface(surfaceTint);
+          html.setAttribute(ACTIVATION, 'active');
+          outcome = probe();
+          if (!outcome.applied) throw deny('styles-not-effective-after-replacement');
+          Object.defineProperty(controller, BASELINE_KEY, { value: restoreSnapshot });
+          globalThis[CONTROLLER_SLOT] = controller;
+        }
+      }
+      if (!activeNow) {
+        Object.defineProperty(controller, BASELINE_KEY, { value: restoreSnapshot });
+        globalThis[CONTROLLER_SLOT] = controller;
+      } else if (typeof slotValue(controller, BASELINE_KEY) !== 'object') {
+        Object.defineProperty(controller, BASELINE_KEY, { value: restoreSnapshot });
+      }
+      sheetCommitted = true;
+      return outcome;
+    } catch (error) {
+      // Recovery ladder. Revival is offered only when the resident sheet was
+      // verifiably suspended by this attempt and the slot still points here;
+      // otherwise the incumbent is left exactly as the failure left it.
+      const residentSuspendedIntact = !!settledSheet && settledSheet.isConnected
+        && settledSheet.parentNode === document.head && settledSheet.id === ''
+        && settledSheet.disabled === true
+        && settledSheet.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
+        && settledSheet.textContent === residentSheetText;
+      const canRevive = releaseAttempted && globalThis[CONTROLLER_SLOT] === controller
+        && residentSuspendedIntact;
+      if (canRevive) restoreSnapshot = entrySnapshot;
+      dispose();
+      if (canRevive && !Object.hasOwn(globalThis, CONTROLLER_SLOT)) {
+        settledSheet.id = residentSheetID;
+        settledSheet.disabled = residentSheetEnabled;
+        let incumbentUsable = false;
+        try { incumbentUsable = Reflect.apply(slotValue(activeNow, 'status'), activeNow, [])?.applied === true; } catch {}
+        const residentRevivedIntact = settledSheet.isConnected && settledSheet.parentNode === document.head
+          && settledSheet.id === residentSheetID && settledSheet.disabled === residentSheetEnabled
+          && settledSheet.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
+          && settledSheet.textContent === residentSheetText;
+        if (incumbentUsable && !Object.hasOwn(globalThis, CONTROLLER_SLOT)) {
+          // Re-seat the incumbent under its original descriptor, not a plain
+          // assignment: observers may be watching how the slot is defined.
+          Object.defineProperty(globalThis, CONTROLLER_SLOT, livePlacement);
+        } else if (!Object.hasOwn(globalThis, CONTROLLER_SLOT) && residentRevivedIntact) {
+          settledSheet.disabled = true;
+          settledSheet.removeAttribute('id');
+        }
+      } else if (!releaseAttempted && !sheetCommitted && activeNow
+          && globalThis[CONTROLLER_SLOT] === activeNow && !!settledSheet?.isConnected
+          && settledSheet.id === '' && settledSheet.disabled === true) {
+        settledSheet.id = residentSheetID;
+        settledSheet.disabled = residentSheetEnabled;
+      }
+      throw error;
+    }
+  } finally {
+    if (!sheetCommitted) relinquishURL();
   }
 }

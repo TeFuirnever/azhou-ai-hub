@@ -59,7 +59,7 @@ class AgentSkinComponentTests(unittest.TestCase):
             [name for name in current["build_inputs"] if name not in legacy_inputs],
             ["Native/InstallRegistryCore.swift", "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
              "Native/ZCodeSkinDriver.swift", "Native/ZCodeSkinRuntime.swift",
-             "tools/build-preflight.py", "tools/build-startup.py", "tools/build-dsh-plugin.py",
+             "tools/build-lock.py", "tools/build-preflight.py", "tools/build-startup.py", "tools/build-dsh-plugin.py",
              "tools/build-startup-assets.swift", "hub-package.json", "extension/renderer.mjs",
              "extension/codex-page-adapter.mjs", "extension/hosts/zcode.mjs", "extension/hosts/dsh.mjs",
              "extension/bootstrap.mjs",

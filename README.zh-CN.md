@@ -99,7 +99,7 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)：沿用已完成控制器最近请求的图片和强度，不重播动画。状态检查仍只读，并报告有限的失败原因码；不替换不受支持或其他所有者的控制器。
+Agent Skin 提供显式[壁纸重试](packages/agent-skin/README.md#wallpaper-recovery)。输入核验和恢复边界见[原生启动与私有素材](packages/agent-skin/README.md#安装与启动)、[安装与构建生命周期](packages/agent-skin/docs/installation-lifecycle.md)及 [DSH 构建约定](packages/agent-skin/docs/dsh-plugin.md)。
 
 当前源码增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
 
@@ -112,6 +112,8 @@ Agent Skin 原生维护 helper 新增显式[壁纸重试](packages/agent-skin/RE
 原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告和 [2026-10-26 本地交接](evidence/optional-integrations-local-handoff-2026-10-26.md)只描述当时检查的输入与宿主，不代表当前安装归属；维护或迁移前须分别核查已安装 App 和 Pet 的回执。合成适配器测试及过去的宿主观察不能证明后续构建已完成完整冷启动、无障碍、视觉或用户验收。
 
 2026-10-26 的 Pet 回执指向保留的 `codex-startup-animation` 源目录；将源码复制到 Agent Skin 不会转移 Pet 属主。维护前核查当前 Pet 回执，并在必要的接管经过审阅前保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+
+Pet 输入、审阅、候选选择与恢复规则统一见 [Pet 操作说明](packages/agent-skin/docs/codex-pet.md)。
 
 ## Skills
 

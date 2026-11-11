@@ -80,6 +80,43 @@ class CandidateImportTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, code)
         return str(raised.exception)
 
+    def test_source_with_replaced_bound_selected_directory_is_rejected(self):
+        selected = PET.selected_package(self.source)
+        saved = self.fixture.root / "saved-source-candidate"
+        selected.rename(saved)
+        shutil.copytree(saved, selected)
+        before_source, before_target = tree_bytes(self.source), tree_bytes(self.target)
+        self.assertNotEqual(selected.stat().st_ino, saved.stat().st_ino)
+        self.assert_pet_error(lambda: IMPORT.build_plan(self.source, self.target), "source-conflict")
+        self.assertEqual(tree_bytes(self.source), before_source)
+        self.assertEqual(tree_bytes(self.target), before_target)
+        self.assertTrue(saved.is_dir())
+
+    def test_completed_import_rejects_replaced_bound_target_directory(self):
+        _, plan_id, _, _ = IMPORT.build_plan(self.source, self.target)
+        self.assertEqual(IMPORT.apply_import(self.source, self.target, plan_id)["status"], "imported")
+        selected = PET.selected_package(self.target)
+        saved = self.fixture.root / "saved-target-candidate"
+        selected.rename(saved)
+        shutil.copytree(saved, selected)
+        before_source, before_target = tree_bytes(self.source), tree_bytes(self.target)
+        self.assertNotEqual(selected.stat().st_ino, saved.stat().st_ino)
+        self.assert_pet_error(lambda: IMPORT.build_plan(self.source, self.target), "source-conflict")
+        self.assertEqual(tree_bytes(self.source), before_source)
+        self.assertEqual(tree_bytes(self.target), before_target)
+        self.assertTrue(saved.is_dir())
+
+    def test_duplicate_source_selection_stops_plan_without_writes(self):
+        selection = PET.state_dir(self.source) / 'selection.json'
+        text = selection.read_text()
+        self.assertIn('"package":', text)
+        selection.write_text(text.replace('"package":', '"package": "unknown", "package":', 1))
+        source_before, target_before = tree_bytes(self.source), tree_bytes(self.target)
+        result = self.cli(code=2)
+        self.assertEqual(result['status'], 'invalid')
+        self.assertEqual(tree_bytes(self.source), source_before)
+        self.assertEqual(tree_bytes(self.target), target_before)
+
     def test_default_plan_is_read_only(self):
         source_before = tree_bytes(self.source)
         target_before = tree_bytes(self.target)
@@ -137,6 +174,27 @@ class CandidateImportTests(unittest.TestCase):
         result = self.cli(code=2)
         self.assertEqual(result["status"], "invalid")
         self.assertIn("视觉审阅未通过", result["error"])
+        self.assertEqual(tree_bytes(self.target), target_before)
+
+    def test_contradictory_warning_is_not_imported_even_with_matching_receipt(self):
+        package = PET.selected_package(self.source)
+        semantics_path = package / "qa/direction-semantics.json"
+        semantics = json.loads(semantics_path.read_bytes())
+        semantics["directions"][1].update(verdict="warning", ok=False)
+        semantics_path.write_bytes(PET.json_bytes(semantics))
+        review_path = package / "qa/visual-qa.json"
+        review = json.loads(review_path.read_bytes())
+        review.update(labeledLoopReviewed=True, blindResolution={"decision": "accept", "severity": "minor"})
+        review_path.write_bytes(PET.json_bytes(review))
+        receipt_path = package / "package-receipt.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["qaSHA256"]["qa/direction-semantics.json"] = PET.sha(semantics_path.read_bytes())
+        receipt["qaSHA256"]["qa/visual-qa.json"] = PET.sha(review_path.read_bytes())
+        receipt_path.write_bytes(PET.json_bytes(receipt))
+        source_before, target_before = tree_bytes(self.source), tree_bytes(self.target)
+        result = self.cli(code=2)
+        self.assertEqual(result["status"], "invalid")
+        self.assertEqual(tree_bytes(self.source), source_before)
         self.assertEqual(tree_bytes(self.target), target_before)
 
     def test_captured_package_read_window_must_match_verified_receipt(self):
@@ -297,15 +355,16 @@ class CandidateImportTests(unittest.TestCase):
                               "recovery-required")
         self.assertEqual(sentinel.read_text(), "preserve this foreign same-owner stage")
         (state / "package-journal.json").unlink()
-        PET.remove_tree(stage)
+        sentinel.unlink()
+        stage.rmdir()
 
         matching_name = ".stage-" + "b" * 32
         matching_stage = state / matching_name
         matching_stage.mkdir()
-        (matching_stage / "partial-package-file").write_text("owned by this plan")
+        planned = {name: b"synthetic plan file" for name in PET.stage_file_names("package")}
+        (matching_stage / "pet.json").write_bytes(planned["pet.json"])
         PET.atomic_json(state / "package-journal.json",
-                        {"owner": PET.OWNER, "projectRoot": str(self.target), "petId": PET.PET_ID,
-                         "stage": matching_name, "operationId": plan_id})
+                        PET.stage_journal(self.target, matching_stage, "package", planned, plan_id))
 
         resumed = IMPORT.apply_import(self.source, self.target, plan_id)
         self.assertEqual(resumed["status"], "imported")

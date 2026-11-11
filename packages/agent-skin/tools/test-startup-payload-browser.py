@@ -31,6 +31,7 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path, help="isolated browser evidence output directory")
     parser.add_argument("--chrome", type=Path, help="optional Chrome executable path")
     parser.add_argument("--only", action="append", default=[], help="run one named browser check; may be repeated")
+    parser.add_argument("--legacy-fixture", choices=("actual", "synthetic"), default="actual")
     args = parser.parse_args()
     args.out = args.out.resolve()
     if sys.platform != "darwin" or shutil.which("xcrun") is None:
@@ -43,10 +44,11 @@ def main() -> int:
         root = (Path(temporary) / "agent-skin").resolve()
         helpers = build_test_helpers()
         helpers.clone_source_tree(root)
-        legacy_wallpaper = Path(temporary) / "codex-startup-animation/wallpaper"
-        legacy_wallpaper.mkdir(parents=True)
-        shutil.copy2(LEGACY_PACKAGE / "wallpaper/wallpaper.css", legacy_wallpaper / "wallpaper.css")
-        shutil.copy2(LEGACY_PACKAGE / "wallpaper/renderer.js", legacy_wallpaper / "renderer.js")
+        if args.legacy_fixture == "actual":
+            legacy_wallpaper = Path(temporary) / "codex-startup-animation/wallpaper"
+            legacy_wallpaper.mkdir(parents=True)
+            shutil.copy2(LEGACY_PACKAGE / "wallpaper/wallpaper.css", legacy_wallpaper / "wallpaper.css")
+            shutil.copy2(LEGACY_PACKAGE / "wallpaper/renderer.js", legacy_wallpaper / "renderer.js")
         bundle = root / ".build/azhou-stage.browser/azhou-payload"
         bundle.mkdir(parents=True)
         builder = helpers.load_module(root / "tools/build-startup.py", "agent_skin_payload_browser_builder")
@@ -73,7 +75,8 @@ def main() -> int:
             if assessed.returncode:
                 return assessed.returncode
         browser_test = root / "tools/test-startup-browser.mjs"
-        command = [node, str(browser_test), "--generated-payload", str(payload), "--out", str(args.out)]
+        command = [node, str(browser_test), "--generated-payload", str(payload), "--out", str(args.out),
+                   "--legacy-fixture", args.legacy_fixture]
         if args.chrome:
             command.extend(("--chrome", str(args.chrome)))
         for name in args.only:

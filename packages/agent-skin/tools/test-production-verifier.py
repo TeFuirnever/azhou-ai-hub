@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import signal
 import struct
 import subprocess
 import sys
@@ -224,6 +225,42 @@ class VerifierApiTests(unittest.TestCase):
             link.unlink()
         self.assertIn("assets/private/working.png", self.verifier.source_inputs())
 
+    def test_source_inputs_reject_pending_asset_transaction_before_and_after_scan(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-asset-journal-") as temporary:
+            root = Path(temporary).resolve()
+            private = root / "assets/private"
+            private.mkdir(parents=True)
+            (private / "working.png").write_bytes(b"synthetic")
+            state = root / ".local/agent-skin-asset-preparation"
+            state.mkdir(parents=True)
+            journal = state / ".azhou-assets-transaction.json"
+            original = self.verifier.checked_descendants
+            with mock.patch.object(self.verifier, "ROOT", root), mock.patch.object(self.verifier, "INPUT_FILES", ()):
+                journal.write_bytes(b"preserve transaction")
+                with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
+                    self.verifier.source_inputs()
+                self.assertEqual(journal.read_bytes(), b"preserve transaction")
+                journal.unlink()
+                def insert_after_scan(path):
+                    yield from original(path)
+                    journal.write_bytes(b"appeared during scan")
+                with mock.patch.object(self.verifier, "checked_descendants", side_effect=insert_after_scan):
+                    with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
+                        self.verifier.source_inputs()
+                self.assertEqual(journal.read_bytes(), b"appeared during scan")
+                journal.unlink()
+                self.assertIn("assets/private/working.png", self.verifier.source_inputs())
+
+    def test_source_snapshot_hashes_large_private_inputs_exactly(self):
+        path = self.root / "assets/private/synthetic-large.bin"
+        data = b"synthetic-input" * 100_000
+        path.write_bytes(data)
+        try:
+            inputs = self.verifier.source_inputs()
+            self.assertEqual(inputs["assets/private/synthetic-large.bin"], hashlib.sha256(data).hexdigest())
+        finally:
+            path.unlink()
+
     def test_marker_reader_validates_schema_digest_paths_identity_and_version(self):
         marker_path = self.bundle / self.verifier.MARKER
         original = marker_path.read_bytes()
@@ -263,6 +300,103 @@ class VerifierApiTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "符号链接"):
             self.verifier.read_marker(path)
         marker_path.write_bytes(original)
+
+    @unittest.skipIf(os.name == "nt", "requires POSIX file modes and symlinks")
+    def test_fingerprint_matches_fixed_tree_and_rejects_special_entries(self):
+        tree = self.case_dir / "fingerprint-golden"
+        tree.mkdir()
+        for name, data, mode in (
+            (".hidden/empty", b"", 0o600),
+            ("alpha.txt", b"alpha", 0o644),
+            ("large.bin", b"chunk" * 300_000, 0o640),
+            ("sub/运行.sh", b"#!/bin/sh\n", 0o755),
+        ):
+            path = tree / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            path.chmod(mode)
+        expected = "4d595f4cc2dcdeabb59041540f85efaa6f8285b515a049a3ca223d8538f633a7"
+        self.assertEqual(self.verifier.fingerprint(tree), expected)
+        (tree / "empty-directory").mkdir()
+        self.assertEqual(self.verifier.fingerprint(tree), expected)
+        (tree / "alpha.txt").chmod(0o600)
+        self.assertNotEqual(self.verifier.fingerprint(tree), expected)
+        (tree / "alpha.txt").chmod(0o644)
+        link = tree / "linked"
+        link.symlink_to(tree / "sub", target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, "符号链接"):
+            self.verifier.fingerprint(tree)
+        link.unlink()
+        if hasattr(os, "mkfifo"):
+            pipe = tree / "pipe"
+            os.mkfifo(pipe)
+            with self.assertRaisesRegex(RuntimeError, "非普通包内容"):
+                self.verifier.fingerprint(tree)
+
+    def test_fingerprint_propagates_directory_io_errors(self):
+        tree = self.case_dir / "fingerprint-io-error"
+        (tree / "unreadable").mkdir(parents=True)
+        original_scandir = os.scandir
+        for blocked in (tree, tree / "unreadable"):
+            for code in (5, 13):
+                with self.subTest(blocked=blocked, errno=code):
+                    def scan(path):
+                        if Path(path) == blocked:
+                            raise OSError(code, "synthetic directory read failure")
+                        return original_scandir(path)
+
+                    with mock.patch("os.scandir", side_effect=scan):
+                        with self.assertRaises(OSError) as raised:
+                            self.verifier.fingerprint(tree)
+                    self.assertEqual(raised.exception.errno, code)
+
+    def test_verification_rejects_unreadable_trees(self):
+        private = self.root / "assets/private"
+        private_child = private / "synthetic-scan-error"
+        private_child.mkdir()
+        self.addCleanup(private_child.rmdir)
+        plugin = self.case_dir / "unreadable-plugin"
+        (plugin / "locale").mkdir(parents=True)
+        checks = (
+            (self.bundle, lambda: self.verifier.require(self.bundle, self.verifier.IDENTITY)),
+            (self.bundle / "Contents", lambda: self.verifier.require(self.bundle, self.verifier.IDENTITY)),
+            (private, self.verifier.source_inputs),
+            (private_child, self.verifier.source_inputs),
+            (plugin, lambda: self.verifier.verify_dsh_plugin(plugin)),
+            (plugin / "locale", lambda: self.verifier.verify_dsh_plugin(plugin)),
+        )
+        original_scandir = os.scandir
+        for blocked, operation in checks:
+            for code in (5, 13):
+                with self.subTest(blocked=blocked, errno=code):
+                    def scan(path):
+                        if Path(path) == blocked:
+                            raise OSError(code, "synthetic directory read failure")
+                        return original_scandir(path)
+
+                    with mock.patch("os.scandir", side_effect=scan):
+                        with self.assertRaises(OSError) as raised:
+                            operation()
+                    self.assertEqual(raised.exception.errno, code)
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'requires POSIX FIFO support')
+    def test_identity_refuses_fifo_info_plist_without_blocking(self):
+        app = self.case_dir / 'fifo-identity.app'
+        contents = app / 'Contents'
+        contents.mkdir(parents=True)
+        os.mkfifo(contents / 'Info.plist')
+
+        def timed_out(_signal, _frame):
+            raise TimeoutError('identity validation blocked on FIFO')
+
+        previous = signal.signal(signal.SIGALRM, timed_out)
+        signal.alarm(3)
+        try:
+            with self.assertRaisesRegex(RuntimeError, '不是普通文件'):
+                self.verifier.identity(app)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, previous)
 
     def test_package_identity_fingerprint_and_icon_boundaries(self):
         with self.assertRaisesRegex(RuntimeError, "非实体应用目录"):

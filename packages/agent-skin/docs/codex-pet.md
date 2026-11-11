@@ -23,7 +23,7 @@
 
 ## 依赖与入口
 
-需要 Python 3.10+、带 WebP 解码能力的 Pillow，以及 POSIX 文件锁。先使用已经存在的运行环境；脚本不安装依赖。
+需要 Python 3.10+、带 WebP 解码能力的 Pillow，以及 POSIX 文件锁。目录发布还要求 macOS `renamex_np` 或 Linux `renameat2` 的排他重命名能力；接口或文件系统不支持时停止并保留待核对内容。本次排他发布仅在 macOS 本地验证，Linux 尚未实测。先使用已经存在的运行环境；脚本不安装依赖。
 
 ```bash
 python3 -c 'from PIL import features; print(features.check("webp"))'
@@ -68,7 +68,7 @@ python3 -B tools/manage-codex-pet.py prepare
 
 修订算法为：按上述固定顺序构造 `inputs=[{"path":...,"sha256":...}, ...]`，对 `{"schemaVersion":1,"inputs":inputs}` 的 UTF-8 规范 JSON 计算 SHA256。规范 JSON 使用 `sort_keys=True`、`ensure_ascii=False`、`separators=(",", ":")`。图片相同而 `style.css` 或 `theme.json` 变化，同样产生新修订。
 
-快照是事实记录，不代表已经生成或已经视觉验收。准备阶段不会安装任何 pet。
+快照本身必须明确声明整数 `schemaVersion: 1`；缺失、非整数或未知版本不会被按 v1 推测解释，原文件保留待核对。快照是事实记录，不代表已经生成或已经视觉验收。准备阶段不会安装任何 pet。 返回前会重新核对冻结输入和当前主题，并检查任务说明是包含该主题修订的非空 UTF-8 普通文件。说明缺失、无法核验或修订不匹配时保留原文件并报冲突；发布后主题变化则保留快照并要求重新准备。
 
 ### 2. 由 ImageGen/hatch-pet 生成与审阅
 
@@ -94,7 +94,7 @@ python3 -B tools/manage-codex-pet.py package \
   --snapshot /absolute/path/to/theme-snapshot.json
 ```
 
-`package` 只在项目私有目录产生候选，不安装到原生目录。选择记录原子更新，候选由完整 `themeRevision-atlasSHA256` 命名。常规清理只保留当前和上一份已审阅候选；未知内容不会被直接删除。冻结输入保留为来源记录，不属于可随意清理的事务暂存。
+选择记录、标准目录名及实际候选的主题和图集摘要必须一致；状态、验证、安装和交接发现冲突时会停止并保留内容。 若回据含目录身份，已选候选和导入来源、目标须与当前实体匹配；字段缺失的已选旧候选仍可读取和原位复用，不能按新绑定认领或清理。字段存在但缺损或不匹配时报告 `source-conflict` 并保留现场。`package` 只在项目私有目录产生候选，不安装到原生目录。选择记录原子更新，候选由完整 `themeRevision-atlasSHA256` 命名。常规清理只保留当前和上一份已审阅候选；未知内容不会被直接删除。 新候选发布后，先完成受限历史清理并重新核验候选，才更新选择；清理失败保留旧选择和新候选，已经完成的清理不回滚。若选择替换后目录同步失败，选择可能已改变，需检查实际记录。冻结输入保留为来源记录，不属于可随意清理的事务暂存。
 
 ### 4. 同步原生目录
 
@@ -102,6 +102,10 @@ python3 -B tools/manage-codex-pet.py package \
 python3 -B tools/manage-codex-pet.py sync
 python3 -B tools/manage-codex-pet.py status
 ```
+
+当已安装 Pet 与候选图集、主题相同但 manifest 不同时，`status` 显示 `stale-package`，安装返回 `source-conflict` 并保留原对象，需核对来源；不能仅凭图集和主题称为已安装。
+
+候选目录按主题修订和图集摘要命名。同名候选仅在既有 QA、快照和 manifest 摘要均与本次提交的字节一致时复用；证据不同则返回 `source-conflict`，保留旧候选、当前选择和新材料待核对。现有命名不能为相同图集与主题并列保存不同审阅版本；不要自行删除旧候选来绕过冲突。
 
 `sync` 只安装主题仍匹配的已审阅候选。也可为 `sync` 同时提供 `--run` 与 `--snapshot`，在同一次项目锁内完成验证、打包与安装。没有候选或主题变更时返回 `generation-required`，指向 `prepare → ImageGen/hatch-pet → 审阅 → package/validate → sync`，不会自动生图。
 
@@ -133,7 +137,7 @@ python3 -B tools/manage-codex-pet.py status
 }
 ```
 
-盲测报告带 `warnings` 或 `reviewRequired:true` 时，也要求上述审阅结论。任何明确 fail、未确认方向或 cardinal warning 都不能由这个例外放行。
+盲测报告带 `warnings` 或 `reviewRequired:true` 时，也要求上述审阅结论。任何明确 fail/failed、`ok:false`、`pass:false`、非空 `failures`、未确认方向或 cardinal warning 都不能由这个例外放行；矛盾证据需重新审阅，工具不自动改写原件。
 
 脚本独立解码真实 WebP，并重新计算字节摘要和 RGBA 像素摘要；校验 74 个占用格都有角色与透明背景、14 个未用格完全透明、全透明像素无 RGB 残留。结果分别报告 `occupiedCells:74`、`renderedCells:73`、`animationCells:57`、`lookDirectionCells:16`、`neutralCells:1`、`unusedCells:14`；兼容字段 `usedCells` 表示物理占用格数 74。尺寸正确的坏图、只剩合法 PNG 头的坏图、9 行中间图集、缺失的 neutral 格、错主题审阅或错图片审阅均会被拒绝。整个图集的 SHA256 与独立视觉审阅绑定，因此即使只在审阅后改变辅助格，也会因字节摘要失配被拒绝。QA 自报的宽高或摘要不能替代独立解码和实际摘要检查。
 
@@ -156,9 +160,17 @@ azhou-agent-lab/
 
 变更命令先取项目锁，安装再取用户级目标锁；两个项目不能并发改同一目标。锁冲突返回 `busy`，不杀进程、不强占锁。安装前后均检查当前主题，避免生成期间主题变化后仍默默安装旧图。
 
-候选构建使用有限暂存及原子选择记录。安装的隐藏 stage/previous 目录放在 `CODEX_HOME` 根目录，处于 `pets/` 扫描范围之外；同时要求两者属于同一文件系统。实际原生 loader 会枚举 `pets/` 下所有目录，隐藏目录也不能用于存放含 `pet.json` 的事务副本，否则刷新时可能出现重复 pet。`pets/` 下只保留正式目标，以及不会被目录扫描当作 pet 的日志和锁文件。
+候选构建使用有限暂存及原子选择记录。新候选的回执绑定创建时的目录设备与身份，仅自动清理仍匹配且内容完整的旧候选；旧版未绑定或身份变化的候选保留待核对。安装的隐藏 stage/previous 目录放在 `CODEX_HOME` 根目录，处于 `pets/` 扫描范围之外；同时要求两者属于同一文件系统。实际原生 loader 会枚举 `pets/` 下所有目录，隐藏目录也不能用于存放含 `pet.json` 的事务副本，否则刷新时可能出现重复 pet。`pets/` 下只保留正式目标，以及不会被目录扫描当作 pet 的日志和锁文件。
 
 持久事务日志记录 `stagingLocation:"codex-home"`；交换后同步两个父目录。在新包完成独立读回、日志提交之前保留上一份安装。普通异常尝试恢复上一包；提交后的清理中断会完成已经提交的安装，不假称恢复旧包。旧版或未知暂存布局不会被猜测为当前布局，而是报告需人工核对。
+
+回执发布失败时，仅清理仍与已完成写入的文件身份和内容一致的临时文件；部分写入或无法核验的内容会保留，需人工检查。发布后原临时名被重新占用时不予删除。
+
+快照、候选包及安装暂存的恢复清理只处理事务日志中列出的文件；安装恢复在处理目标或备份前也会复验暂存；发现计划外条目会保留并停止，日志仍在。已删除的计划内文件不会自动恢复；如果只剩陌生文件或空目录，需人工核对，不能假称事务已回滚。历史候选和安装恢复目标、备份也在原来源验证前捕获精确文件计划，删除前复核身份和摘要；完整对象缺少计划文件时停止。计划名称下的同字节替换及最后一次检查后的竞态仍不能完全识别。
+
+快照、候选包、备份及安装发布使用排他重命名；目标在发布时出现会保留冲突对象，不覆盖它。源路径仍可能在最终检查和重命名之间被其他同用户进程替换；不要并发修改事务目录。
+
+Pet 审核、状态、回据和恢复日志的 JSON 不接受任意层级的重复字段；发现后停止并保留原件，旧日志也需人工核对。Pet 输入捕获会核对文件实体、长度、修改时间和状态变更时间；读取时发现变化会停止，不能排除最后核验后的并发改动。候选或已安装的 Pet manifest 不是 JSON 对象时，状态检查分别报告无效或 `unknown-target`，安装停止并保留文件。已安装回据的主题修订必须是 64 位小写十六进制摘要；缺失或格式错误时在创建升级事务、移动旧目标前报 `unknown-target` 并保留原件。安装标记为已提交之前会将发布后目录的图集、主题与 manifest 三项摘要全部对照候选；发生冲突时保留未提交日志和无法核验的对象。新事务分别记录候选和旧安装的图集、主题修订及 manifest 摘要；恢复时须与实际对象及属主一致。缺少这些绑定的旧日志、未知状态、未知或不匹配的暂存内容会保留并报告 `recovery-required`，不能仅凭同名、图集或自报属主删除。人工核对日志、目标、备份和来源后再决定恢复方式；不要批量删除待核对目录。snapshot、package 和 install 暂存必须匹配事务记录的目录设备与 inode；已有暂存的旧日志若缺少该绑定，需人工核对。候选暂存至少有一个完整文件且写到已记录文件边界时可自动恢复；空暂存、缺少绑定、部分写入或内容变化则保留。读取使用不跟随末级链接的文件描述符并检查前后身份；父目录替换、同用户伪造元数据、最后一次检查后的并发替换、断电和部分删除仍不受完整保护。
 
 ```bash
 python3 -B tools/manage-codex-pet.py recover
@@ -177,13 +189,13 @@ python3 -B tools/manage-codex-pet.py recover
 | `installed` / `already-installed` | 原生目录实际字节已核验；仍待刷新选择 |
 | `installed-with-recovery` | 已提交的新包经恢复完成；附带原异常及恢复说明 |
 | `stale-theme` | 候选或安装仍属于旧主题 |
-| `stale-package` | 安装内容独立有效且主题相同，但不是当前选中的图集 |
+| `stale-package` | 安装内容独立有效且主题相同，但图集或 manifest 与当前选中候选不同 |
 | `unknown-target` | 同名目标无法证明属于本项目或已被外部修改 |
 | `busy` | 有另一个操作持锁，本次没有强行修改 |
 | `install-failed` | 安装失败并已给出具体恢复结果；检查随附分层状态 |
 | `recovery-required` | 仍有未完成事务或无法安全恢复，不能宣称全部恢复 |
 
-`status` 分别给出 source、package、installed、runtime。安装层另含 `bytesVerified`、`matchesCurrentTheme` 和 `matchesSelectedPackage`；相同主题修订不等于安装了相同图集。错误输出也尽可能附带只读状态快照。
+`status` 分别给出 source、package、installed、runtime。 主题或候选快照的结构、输入路径或摘要格式损坏时，相应状态报告 invalid 并保留数据。安装层另含 `bytesVerified`、`matchesCurrentTheme` 和 `matchesSelectedPackage`；相同主题修订不等于安装了相同图集。错误输出也尽可能附带只读状态快照。
 
 退出码：成功命令为 `0`，拒绝/校验/安装错误为 `2`，需要生成为 `3`，锁冲突为 `4`，需要恢复为 `5`。`prepare` 成功产生快照时返回 `0`，输出的业务状态仍是 `generation-required`，表示下一步需要生成。
 

@@ -93,6 +93,49 @@ test('an existing supported shell receives a verified image and the renderer res
   assert.equal(fixture.timers.length, 0);
 });
 
+test('the image digest and appearance use one snapshot during asynchronous preparation', async t => {
+  await t.test('input changes while the image digest is pending', async () => {
+    let finishDigest;
+    const digest = { subtle: { digest: (...args) => new Promise((resolve, reject) => {
+      finishDigest = () => webcrypto.subtle.digest(...args).then(resolve, reject);
+    }) } };
+    const fixture = createHost({ shell: true, digest });
+    const renderer = rendererRecorder();
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
+    const input = { ...VALUE };
+    const pending = apply(input);
+    await waitFor(() => typeof finishDigest === 'function');
+    Object.assign(input, { image: 'data:image/png;base64,AQ==', strength: 72, surface: 'white' });
+    finishDigest();
+    assert.deepEqual(await pending, { applied: true, imageDecoded: true });
+    assert.equal(renderer.calls.length, 1);
+    assert.equal(renderer.calls[0].image, VALUE.image);
+    assert.equal(renderer.calls[0].imageSHA256, expectedDigest());
+    assert.equal(renderer.calls[0].strength, VALUE.strength);
+    assert.equal(renderer.calls[0].surface, VALUE.surface);
+  });
+
+  await t.test('input changes while the supported shell is mounting', async () => {
+    const fixture = createHost();
+    const renderer = rendererRecorder();
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
+    const input = { ...VALUE };
+    const pending = apply(input);
+    await waitFor(() => fixture.observers.length === 1);
+    Object.assign(input, { image: 'data:image/png;base64,AQ==', strength: 72, surface: 'white' });
+    fixture.mountRoot();
+    fixture.setAttribute('data-app-shell-frame');
+    fixture.setAttribute('data-app-shell-main-surface');
+    fixture.observers[0].trigger();
+    assert.deepEqual(await pending, { applied: true, imageDecoded: true });
+    assert.equal(renderer.calls.length, 1);
+    assert.equal(renderer.calls[0].image, VALUE.image);
+    assert.equal(renderer.calls[0].imageSHA256, expectedDigest());
+    assert.equal(renderer.calls[0].strength, VALUE.strength);
+    assert.equal(renderer.calls[0].surface, VALUE.surface);
+  });
+});
+
 test('a late attribute-based shell is awaited without expiring a naturally completed caller', async () => {
   const fixture = createHost();
   const renderer = rendererRecorder();
@@ -273,6 +316,126 @@ test('invalid input is typed while digest and renderer failures stay at their or
   });
 });
 
+
+test('a changing host adapter cannot cross the asynchronous apply boundary', async t => {
+  const unsupported = { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported', imageDecoded: false };
+  function adapterFor(shellState) {
+    return { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: {
+      validPage: () => true, shellState, surfaces: () => [], css: 'original', scope: 'original',
+      attributes: { surfaceMarker: 'data-test-surface', observeFilter: ['class'] },
+    } };
+  }
+  await t.test('CSS changes while digest is pending', async () => {
+    let finishDigest;
+    const digest = { subtle: { digest: (...args) => new Promise((resolve, reject) => {
+      finishDigest = () => webcrypto.subtle.digest(...args).then(resolve, reject);
+    }) } };
+    const fixture = createHost({ digest }), renderer = rendererRecorder();
+    const adapter = adapterFor(() => 'ready');
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    const pending = apply(VALUE);
+    await waitFor(() => typeof finishDigest === 'function');
+    adapter.wallpaper.css = 'foreign'; finishDigest();
+    assert.deepEqual(await pending, unsupported);
+    assert.equal(renderer.calls.length, 0);
+  });
+  for (const field of ['validPage', 'shellState', 'scope', 'wallpaper', 'attributes', 'marker', 'controller']) {
+    await t.test(field + ' changes while digest is pending', async () => {
+      let finishDigest;
+      const digest = { subtle: { digest: (...args) => new Promise((resolve, reject) => {
+        finishDigest = () => webcrypto.subtle.digest(...args).then(resolve, reject);
+      }) } };
+      const fixture = createHost({ digest }), renderer = rendererRecorder();
+      const adapter = adapterFor(() => 'ready');
+      const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+      const pending = apply(VALUE);
+      await waitFor(() => typeof finishDigest === 'function');
+      if (field === 'validPage') adapter.wallpaper.validPage = () => false;
+      if (field === 'shellState') adapter.wallpaper.shellState = () => 'ready';
+      if (field === 'scope') adapter.wallpaper.scope = 'foreign';
+      if (field === 'wallpaper') adapter.wallpaper = { ...adapter.wallpaper };
+      if (field === 'attributes') adapter.wallpaper.attributes = { ...adapter.wallpaper.attributes };
+      if (field === 'marker') adapter.wallpaper.attributes.surfaceMarker = 'foreign';
+      if (field === 'controller') adapter.controllerWallpaper = { ...adapter.controllerWallpaper };
+      finishDigest();
+      assert.deepEqual(await pending, unsupported);
+      assert.equal(renderer.calls.length, 0);
+    });
+  }
+  await t.test('cancellation keeps precedence when the adapter also changes', async () => {
+    let finishDigest, current = true;
+    const digest = { subtle: { digest: (...args) => new Promise((resolve, reject) => {
+      finishDigest = () => webcrypto.subtle.digest(...args).then(resolve, reject);
+    }) } };
+    const fixture = createHost({ digest }), renderer = rendererRecorder();
+    const adapter = adapterFor(() => 'ready');
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    const pending = apply(VALUE, () => current);
+    await waitFor(() => typeof finishDigest === 'function');
+    adapter.wallpaper.css = 'foreign'; current = false; finishDigest();
+    assert.deepEqual(await pending, { applied: false, reason: 'operation-cancelled' });
+    assert.equal(renderer.calls.length, 0);
+  });
+  await t.test('surface method changes while shell is pending', async () => {
+    const fixture = createHost(), renderer = rendererRecorder();
+    let ready = false;
+    const adapter = adapterFor(() => ready ? 'ready' : null);
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    const pending = apply(VALUE);
+    await waitFor(() => fixture.observers.length === 1);
+    adapter.wallpaper.surfaces = () => ['foreign']; ready = true; fixture.observers[0].trigger();
+    assert.deepEqual(await pending, unsupported);
+    assert.equal(renderer.calls.length, 0);
+    assert.equal(fixture.observers[0].disconnected, true);
+    assert.equal(fixture.timers[0].cleared, true);
+  });
+  await t.test('adapter change immediately after timeout is reported as unsupported', async () => {
+    const fixture = createHost(), renderer = rendererRecorder();
+    const adapter = adapterFor(() => null);
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    const pending = apply(VALUE);
+    await waitFor(() => fixture.timers.length === 1);
+    fixture.timers[0].fire();
+    adapter.wallpaper.css = 'foreign';
+    assert.deepEqual(await pending, unsupported);
+    assert.equal(renderer.calls.length, 0);
+  });
+  await t.test('shell callback changes owner during its own execution', async () => {
+    const fixture = createHost(), renderer = rendererRecorder();
+    const adapter = adapterFor(() => { adapter.controllerWallpaper.owner = 'foreign'; return 'ready'; });
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    assert.deepEqual(await apply(VALUE), unsupported);
+    assert.equal(renderer.calls.length, 0);
+  });
+  await t.test('observer filter changes while shell is pending', async () => {
+    const fixture = createHost(), renderer = rendererRecorder();
+    let ready = false;
+    const adapter = adapterFor(() => ready ? 'ready' : null);
+    const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+    const pending = apply(VALUE);
+    await waitFor(() => fixture.observers.length === 1);
+    adapter.wallpaper.attributes.observeFilter.push('foreign');
+    assert.deepEqual(fixture.observers[0].options.attributeFilter, ['class']);
+    ready = true; fixture.observers[0].trigger();
+    assert.deepEqual(await pending, unsupported);
+    assert.equal(renderer.calls.length, 0);
+  });
+});
+
+test('a stable mutable adapter keeps its receiver and can be changed between requests', async () => {
+  const fixture = createHost(), renderer = rendererRecorder();
+  const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: {
+    shellState() { assert.equal(this, adapter.wallpaper); return 'ready'; }, css: 'first',
+    attributes: { surfaceMarker: 'data-test-surface', observeFilter: ['class'] },
+  } };
+  adapter.wallpaper.attributes.observeFilter.every = null;
+  const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
+  assert.equal((await apply(VALUE)).applied, true);
+  assert.equal(renderer.calls[0].pageAdapter, adapter);
+  adapter.wallpaper.css = 'next request';
+  assert.equal((await apply(VALUE)).applied, true);
+  assert.equal(renderer.calls[1].pageAdapter, adapter);
+});
 
 test('ZCode uses its explicit shell port and passes the same bound adapter to the renderer', async () => {
   const fixture = createHost({ shell: false });

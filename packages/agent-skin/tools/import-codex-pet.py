@@ -82,8 +82,7 @@ def source_evidence(project):
     selection = PET.parse(selection_raw)
     require(isinstance(selection, dict) and set(selection) == {"package", "themeRevision", "atlasSHA256"},
             "源项目 selection.json 格式未知", "unknown-target")
-    package = PET.selected_package(project)
-    first_facts, first_receipt = PET.check_package(package, project, require_current=True)
+    package, first_facts, first_receipt = PET.verified_selected_package(project, require_current=True)
     require(package.parent == PET.child(state, "packages") and
             package.name == f"{first_facts['themeRevision']}-{first_facts['atlasSHA256']}",
             "源项目选择未指向标准候选包", "unknown-target")
@@ -98,7 +97,7 @@ def source_evidence(project):
             "selected 候选的 theme snapshot 与源项目冻结快照不一致", "unknown-target")
 
     current, inputs, config = PET.theme_facts(project)
-    second_facts, second_receipt = PET.check_package(package, project, require_current=True)
+    second_package, second_facts, second_receipt = PET.verified_selected_package(project, require_current=True)
     captured_receipt = PET.parse(package_blobs["package-receipt.json"])
     captured_snapshot = PET.parse(package_blobs["theme-snapshot.json"])
     captured_manifest = PET.parse(package_blobs["pet.json"])
@@ -108,7 +107,7 @@ def source_evidence(project):
                                          current["themeRevision"])
     captured_facts = {"themeRevision": current["themeRevision"], **captured_atlas,
                       "manifestSHA256": PET.sha(package_blobs["pet.json"])}
-    require(first_facts == second_facts and first_receipt == second_receipt and
+    require(package == second_package and first_facts == second_facts and first_receipt == second_receipt and
             captured_receipt == second_receipt and captured_facts == first_facts and
             captured_qa_hashes == captured_receipt.get("qaSHA256") and
             captured_receipt.get("atlasSHA256") == captured_atlas["atlasSHA256"] and
@@ -248,7 +247,9 @@ def verify_target_package(target, source, plan):
     if not package_exists:
         require(not selection_exists, "目标 selection 指向缺失候选", "unknown-target")
         return False
-    facts, _ = PET.check_package(destination, target, require_current=True)
+    facts, target_receipt = PET.check_package(destination, target, require_current=True)
+    require("directoryIdentity" not in target_receipt or PET.package_directory_matches(destination, target_receipt),
+            "目标候选的目录身份不匹配，保留待核对", "source-conflict")
     require(facts["themeRevision"] == source["themeRevision"] and
             facts["atlasSHA256"] == source["atlasSHA256"] and
             facts["manifestSHA256"] == source["manifestSHA256"],
@@ -541,8 +542,7 @@ def apply_import(source_root, target_root, expected_plan_id):
             require(final_source == plan_after_recovery["source"] and final_source == source and
                     all(final_blobs[name] == blobs[name] for name in PET.QA_FILES + ("spritesheet.webp",)),
                     "导入期间 source 候选或 QA 发生变化", "source-conflict")
-            final_facts, _ = PET.check_package(PET.selected_package(target_root), target_root,
-                                               require_current=True)
+            _, final_facts, _ = PET.verified_selected_package(target_root, require_current=True)
             require(final_facts["themeRevision"] == source["themeRevision"] and
                     final_facts["atlasSHA256"] == source["atlasSHA256"] and
                     final_facts["manifestSHA256"] == source["manifestSHA256"],

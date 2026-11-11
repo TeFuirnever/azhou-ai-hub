@@ -99,7 +99,7 @@ python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-Agent Skin's native maintenance helper also provides an explicit [wallpaper retry](packages/agent-skin/README.md#wallpaper-recovery): it reuses the completed controller's last image and strength without replaying the animation. Status remains read-only and reports bounded failure codes; unsupported or foreign controllers are not replaced.
+Agent Skin provides an explicit [wallpaper retry](packages/agent-skin/README.md#wallpaper-recovery). Input checks and recovery limits are documented under [native startup and private assets](packages/agent-skin/README.md#安装与启动), the [installation and build lifecycle](packages/agent-skin/docs/installation-lifecycle.md), and the [DSH build contract](packages/agent-skin/docs/dsh-plugin.md).
 
 The current source adds keyboard isolation for settings, theme-consistent background previews, actionable image errors, and an in-page retry for startup wallpaper failures. Image dimensions are checked before decoding when the bounded header can be parsed; final decoding and size validation still apply. Real-host, accessibility, and user acceptance remain separate from automated checks.
 
@@ -112,6 +112,8 @@ During Hub pstack removal, keep the target `CODEX_HOME` free of concurrent nativ
 The original startup-animation source has no recorded open-source license grant. The separately attributed Dream image parser is MIT-licensed, but that grant does not cover the rest of Agent Skin. The Hub root license does not cover either original package source; do not publish the combined source or binaries until redistribution permission is clarified. Private artwork stays outside Git. The 2026-10-25 acceptance report and [2026-10-26 local handoff](evidence/optional-integrations-local-handoff-2026-10-26.md) describe their inspected inputs and host, not current installation ownership. Check the installed App and Pet receipts separately before maintenance or migration. Synthetic adapter tests and past host observations do not establish full cold-start, accessibility, visual or user acceptance for a later build.
 
 The 2026-10-26 Pet receipt names the retained `codex-startup-animation` source; copying its files into Agent Skin does not transfer Pet ownership. Check the current Pet receipt before maintenance, and keep the legacy root until any required handoff has been reviewed. See [Pet maintenance](docs/integrations.md#pet-maintenance-after-the-import). Installed-byte checks do not prove host selection or playback.
+
+Pet input, review, selection and recovery rules are maintained in the [Pet runbook](packages/agent-skin/docs/codex-pet.md).
 
 ## Skills
 

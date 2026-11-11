@@ -5,12 +5,14 @@ import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
-import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { validateCheckSelection } from './startup-browser-selection.mjs';
+import { CDP, navigateWithLoad } from './test-startup-browser-cdp.mjs';
+import { canRemoveProfile, profileIdentity, removeOwnedProfile, trackOwnedChild } from './test-startup-browser-process.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageMetadata = JSON.parse(await readFile(join(ROOT, 'hub-package.json'), 'utf8'));
@@ -18,20 +20,23 @@ const options = {
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   out: join(ROOT, '.build/startup-browser-evidence'),
   generatedPayload: null,
+  legacyFixture: 'actual',
   only: [],
 };
 for (let index = 2; index < process.argv.length; index++) {
   const key = process.argv[index];
   if (key === '--help') {
-    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--only <exact check name>]');
+    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--legacy-fixture actual|synthetic] [--only <exact check name>]');
     process.exit(0);
   }
-  if (!['--chrome', '--out', '--generated-payload', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  if (!['--chrome', '--out', '--generated-payload', '--legacy-fixture', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
   const value = process.argv[++index];
   if (key === '--only') options.only.push(value);
   else if (key === '--generated-payload') options.generatedPayload = value;
+  else if (key === '--legacy-fixture') options.legacyFixture = value;
   else options[key.slice(2)] = value;
 }
+if (!['actual', 'synthetic'].includes(options.legacyFixture)) throw new Error('Unknown legacy fixture: ' + options.legacyFixture);
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
@@ -45,6 +50,7 @@ const report = {
   checks: [],
   screenshots: [],
   limitations: [
+    ...(options.legacyFixture === 'synthetic' ? ['The legacy wallpaper is a synthetic ownership and disposal model; image decoding, real legacy CSS and visual behavior are not represented.'] : []),
     'The app:// page identity is supplied through a local host adapter; no Codex process, profile, transport or user content is accessed.',
     'The wallpaper fixture uses one generated-in-test PNG pixel. The animation fixture separately generates synthetic PNGs and contours; it does not validate private or branded source art.',
     'The cold-start wallpaper check withholds and reinserts the synthetic shell in this local host; it models delayed shell mount timing but does not establish official Codex mount timing.',
@@ -57,7 +63,10 @@ let server;
 let chrome;
 let profile;
 let cdp;
-let stopping = false;
+let cleanupPromise;
+let chromeOwner;
+let profileOwner;
+let suiteCompleted = false;
 let chromeError = '';
 
 function safeError(error) {
@@ -94,91 +103,6 @@ async function check(name, operation) {
   }
 }
 
-class CDP {
-  constructor(socket) {
-    this.socket = socket;
-    this.nextID = 1;
-    this.pending = new Map();
-    this.eventWaiters = new Set();
-    socket.addEventListener('message', event => {
-      let value;
-      try { value = JSON.parse(event.data); } catch { return; }
-      if (value.method) {
-        for (const waiter of this.eventWaiters) {
-          if (waiter.method !== value.method) continue;
-          let matches = false;
-          try { matches = waiter.predicate(value.params); } catch (error) {
-            clearTimeout(waiter.timer);
-            this.eventWaiters.delete(waiter);
-            waiter.reject(error);
-            continue;
-          }
-          if (!matches) continue;
-          clearTimeout(waiter.timer);
-          this.eventWaiters.delete(waiter);
-          waiter.resolve(value.params);
-        }
-        return;
-      }
-      if (!value.id || !this.pending.has(value.id)) return;
-      const pending = this.pending.get(value.id);
-      this.pending.delete(value.id);
-      clearTimeout(pending.timer);
-      value.error ? pending.reject(new Error(value.error.message)) : pending.resolve(value.result);
-    });
-    socket.addEventListener('close', () => {
-      for (const pending of this.pending.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error('Fixture CDP closed'));
-      }
-      this.pending.clear();
-    });
-  }
-  static async open(address, expectedPort) {
-    const url = new URL(address);
-    assert.equal(url.protocol, 'ws:');
-    assert.equal(url.hostname, '127.0.0.1');
-    assert.equal(Number(url.port), expectedPort);
-    assert.ok(url.pathname.startsWith('/devtools/page/'));
-    const socket = new WebSocket(address);
-    await new Promise((resolveOpen, reject) => {
-      const timer = setTimeout(() => { socket.close(); reject(new Error('Fixture WebSocket timeout')); }, 5000);
-      socket.addEventListener('open', () => { clearTimeout(timer); resolveOpen(); }, { once: true });
-      socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Fixture WebSocket failed')); }, { once: true });
-    });
-    return new CDP(socket);
-  }
-  call(method, params = {}) {
-    const id = this.nextID++;
-    return new Promise((resolveCall, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Fixture CDP timeout: ' + method)); }, 12000);
-      this.pending.set(id, { resolve: resolveCall, reject, timer });
-      this.socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  waitForEvent(method, predicate = () => true, timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
-      const waiter = { method, predicate, resolve, reject, timer: null };
-      waiter.timer = setTimeout(() => {
-        this.eventWaiters.delete(waiter);
-        reject(new Error('Timed out waiting for CDP event ' + method));
-      }, timeoutMs);
-      this.eventWaiters.add(waiter);
-    });
-  }
-  async evaluate(expression) {
-    const result = await this.call('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-      timeout: 10000,
-    });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    return result.result?.value;
-  }
-  close() { this.socket.close(); }
-}
-
 async function dispatchTab(shiftKey = false) {
   const key = {
     key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 48,
@@ -195,29 +119,38 @@ async function dispatchEnter() {
   await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
 }
 
-async function cleanup() {
-  if (stopping) return;
-  stopping = true;
-  try { cdp?.close(); } catch {}
-  if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
-    const exited = new Promise(resolveExit => chrome.once('exit', resolveExit));
-    chrome.kill('SIGTERM');
-    await Promise.race([exited, delay(2000)]);
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      chrome.kill('SIGKILL');
-      await Promise.race([exited, delay(1000)]);
+function cleanup() {
+  if (cleanupPromise) return cleanupPromise;
+  cleanupPromise = (async () => {
+    const errors = [];
+    try { cdp?.close(); } catch (error) { errors.push(error); }
+    let stopped = !chrome;
+    if (chromeOwner) {
+      try { stopped = await chromeOwner.stop(); } catch (error) { errors.push(error); }
     }
-  }
-  if (server) {
-    server.closeAllConnections();
-    await new Promise(resolveClose => server.close(resolveClose));
-  }
-  if (profile) await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
-  report.cleanup = {
-    ownChromeStopped: !chrome || chrome.exitCode !== null || chrome.signalCode !== null,
-    temporaryProfileRemoved: !!profile,
-    serverClosed: !server?.listening,
-  };
+    if (server?.listening) {
+      try { server.closeAllConnections(); } catch (error) { errors.push(error); }
+      try { await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose())); }
+      catch (error) { errors.push(error); }
+    }
+    let removed = false;
+    if (profile && canRemoveProfile({ stopped, completed: suiteCompleted, fatalError: report.fatalError,
+      checks: report.checks, errors })) {
+      try { removed = await removeOwnedProfile(profile, profileOwner); } catch (error) { errors.push(error); }
+    }
+    report.cleanup = {
+      ownChromeStopped: stopped,
+      temporaryProfileRemoved: removed,
+      profilePath: profile && !removed ? profile : null,
+      errors: errors.map(safeError),
+      serverClosed: !server?.listening,
+    };
+    if (!stopped || (profile && !removed) || errors.length) {
+      throw new Error('Fixture cleanup incomplete; inspect the retained or partially removed profile: '
+        + errors.map(safeError).join('; '));
+    }
+  })();
+  return cleanupPromise;
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -237,8 +170,10 @@ try {
     readFile(join(ROOT, 'extension/codex-page-adapter.mjs'), 'utf8'),
     readFile(join(ROOT, 'image-settings.js'), 'utf8'),
     readFile(join(ROOT, 'localization.js'), 'utf8'),
-    readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
-    readFile(join(ROOT, '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
+    options.legacyFixture === 'synthetic' ? Promise.resolve('/* synthetic fixture */')
+      : readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
+    readFile(join(ROOT, options.legacyFixture === 'synthetic' ? 'tools/test-synthetic-legacy-wallpaper.mjs'
+      : '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
     options.generatedPayload ? readFile(options.generatedPayload, 'utf8') : Promise.resolve(null),
   ]);
@@ -255,7 +190,7 @@ try {
   const helperExpressions = JSON.parse(helperExpressionJSON);
   assert.deepEqual(Object.keys(helperExpressions).sort(), ['applyGuardSource', 'restoreSource', 'retrySource', 'statusSource']);
   assert.ok(Object.values(helperExpressions).every(value => typeof value === 'string' && value.length > 0));
-  const scriptStart = preview.lastIndexOf('<script type="module">');
+  const scriptStart = preview.lastIndexOf('<script type="module" src="./preview-controller.js">');
   const scriptEnd = preview.indexOf('</script>', scriptStart) + '</script>'.length;
   assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'The local preview fixture has a replaceable module entry');
   const fixtureHTML = preview.slice(0, scriptStart)
@@ -329,6 +264,7 @@ try {
         const value = Number(width);
         if (!Number.isInteger(value) || value < 140 || value > 280) return false;
         shell.style.gridTemplateColumns = value + 'px minmax(0,1fr)';
+        sidebar.style.flexBasis = value + 'px';
         window.dispatchEvent(new Event('resize'));
         return true;
       };
@@ -824,6 +760,7 @@ try {
   await new Promise((resolveListen, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolveListen); });
   const origin = 'http://127.0.0.1:' + server.address().port;
   profile = await mkdtemp(join(tmpdir(), 'azhou-startup-browser-'));
+  profileOwner = await profileIdentity(profile);
   const animationPreviewDir = join(profile, 'agent-skin-preview');
   const animationDefaultsDir = join(animationPreviewDir, 'assets/defaults');
   await mkdir(animationDefaultsDir, { recursive: true });
@@ -958,6 +895,7 @@ try {
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + profile,
     '--window-size=1512,889', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  chromeOwner = trackOwnedChild(chrome);
   chrome.on('error', error => { chromeError = safeError(error); });
   chrome.stderr.on('data', chunk => { chromeError = (chromeError + chunk.toString()).slice(-4000); });
   const debugPort = await until(async () => {
@@ -990,19 +928,14 @@ try {
   };
 
   async function navigate(path) {
-    const loaded = cdp.waitForEvent('Page.loadEventFired');
-    const result = await cdp.call('Page.navigate', { url: origin + path });
-    assert.ok(!result.errorText, result.errorText);
-    await loaded;
+    await navigateWithLoad(cdp, origin + path);
     const expectedURL = origin + path;
     await until(() => cdp.evaluate(`document.readyState === 'complete' && location.href === ${JSON.stringify(expectedURL)}`),
       10000, 'synthetic host page load');
     await until(() => cdp.evaluate('window.__startupInstallResult !== undefined'), 10000, 'real PageController install');
   }
   async function navigateFreshRecoveryFixture(path) {
-    const unloaded = cdp.waitForEvent('Page.loadEventFired');
-    await cdp.call('Page.navigate', { url: 'about:blank' });
-    await unloaded;
+    await navigateWithLoad(cdp, 'about:blank');
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate(path);
   }
@@ -2458,7 +2391,7 @@ try {
   });
 
   await navigate('/fixture.html?legacy=1&legacy-only=1');
-  await check('compiled native helpers recognize the exact legacy wallpaper without a controller and restore it', async () => {
+  await check('compiled native helpers recognize the ' + (options.legacyFixture === 'synthetic' ? 'synthetic' : 'exact') + ' legacy wallpaper without a controller and restore it', async () => {
     const before = await evaluateNativeHelper('statusSource', { startup: 'none' });
     assert.equal(before.applied, true);
     assert.deepEqual(before.startup, { installed: false });
@@ -2480,7 +2413,7 @@ try {
     { label: 'later host wash edit', query: '', editWash: true, expectedWash: 'host-later', expectedPriority: 'important' },
   ]) {
     await navigate('/fixture.html?legacy=1' + scenario.query);
-    await check('frozen legacy wallpaper replacement restores ' + scenario.label, async () => {
+    await check((options.legacyFixture === 'synthetic' ? 'synthetic' : 'frozen') + ' legacy wallpaper replacement restores ' + scenario.label, async () => {
       const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
         legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
       assert.equal(setup.legacyError, '', JSON.stringify(setup));
@@ -2521,7 +2454,7 @@ try {
     { label: 'host surface important baseline', query: '&legacy-surface=host-important', expectedSurface: '#fafafa', expectedPriority: 'important' },
   ]) {
     await navigate('/fixture.html?legacy=1' + scenario.query);
-    await check('frozen legacy wallpaper replacement restores ' + scenario.label, async () => {
+    await check((options.legacyFixture === 'synthetic' ? 'synthetic' : 'frozen') + ' legacy wallpaper replacement restores ' + scenario.label, async () => {
       const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
         legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
       assert.equal(setup.legacyError, '', JSON.stringify(setup));
@@ -6506,6 +6439,7 @@ try {
   report.passed = report.checks.some(item => item.passed)
     && report.checks.every(item => item.passed || item.skipped)
     && selection.valid;
+  suiteCompleted = true;
 } catch (error) {
   report.fatalError = safeError(error);
   if (chromeError && !cdp) report.ownChromeStartupError = chromeError.slice(-1200);

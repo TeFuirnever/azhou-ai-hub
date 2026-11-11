@@ -11,8 +11,10 @@ from pathlib import Path, PurePosixPath
 import plistlib
 import re
 import shutil
+import stat
 import struct
 import subprocess
+import sys
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -224,7 +226,7 @@ def configure_build_host(host):
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
     'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift', 'Native/ZCodeSkinDriver.swift', 'Native/ZCodeSkinRuntime.swift',
-    'tools/build-macos.sh', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
+    'tools/build-macos.sh', 'tools/build-lock.py', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-dsh-plugin.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
     'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs',
@@ -317,13 +319,72 @@ MAX_ENTRY_AVATAR_DATA_URL_BYTES = 2 * 1024 * 1024
 MAX_ARTWORK_DATA_URL_BYTES = 12 * 1024 * 1024
 
 
+import stat
+
+
+def _require_identity_fd_support():
+    if (not {os.open, os.stat}.issubset(os.supports_dir_fd) or os.stat not in os.supports_follow_symlinks
+            or any(not hasattr(os, name) for name in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK'))):
+        raise RuntimeError('系统缺少安全读取应用身份所需的目录描述符支持。')
+
+
+def identity_at_fd(root_fd):
+    _require_identity_fd_support()
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    contents = os.open('Contents', flags | os.O_DIRECTORY, dir_fd=root_fd)
+    try:
+        info_fd = os.open('Info.plist', flags | os.O_NONBLOCK, dir_fd=contents)
+        try:
+            before = os.fstat(info_fd)
+            if not stat.S_ISREG(before.st_mode):
+                raise RuntimeError('应用 Info.plist 不是普通文件。')
+            data = bytearray()
+            remaining = before.st_size + 1
+            while remaining:
+                chunk = os.read(info_fd, min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                data.extend(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(info_fd)
+            current = os.stat('Info.plist', dir_fd=contents, follow_symlinks=False)
+            fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_mode')
+            if (any(getattr(before, key) != getattr(after, key) for key in fields)
+                    or any(getattr(after, key) != getattr(current, key) for key in fields)):
+                raise RuntimeError('应用 Info.plist 在核验期间发生变化。')
+            info = plistlib.loads(data)
+        finally:
+            os.close(info_fd)
+        current = os.stat('Contents', dir_fd=root_fd, follow_symlinks=False)
+        actual = os.fstat(contents)
+        if (current.st_dev, current.st_ino) != (actual.st_dev, actual.st_ino):
+            raise RuntimeError('应用 Contents 目录在核验期间发生变化。')
+        return (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')), info
+    finally:
+        os.close(contents)
+
+
 def identity(path):
     path = Path(path)
     if path.is_symlink() or not path.is_dir():
         raise RuntimeError(f'拒绝处理非实体应用目录：{path}')
-    with (path / 'Contents/Info.plist').open('rb') as stream:
-        info = plistlib.load(stream)
-    return (info.get('CFBundleIdentifier'), info.get('CFBundleExecutable')), info
+    _require_identity_fd_support()
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        result = identity_at_fd(descriptor)
+        actual, current = os.fstat(descriptor), os.stat(path, follow_symlinks=False)
+        if (actual.st_dev, actual.st_ino) != (current.st_dev, current.st_ino):
+            raise RuntimeError(f'应用目录在核验期间发生变化：{path}')
+        return result
+    finally:
+        os.close(descriptor)
+
+
+def checked_descendants(path):
+    def fail_scan(error):
+        raise error
+    for directory, subdirectories, files in os.walk(path, followlinks=False, onerror=fail_scan):
+        yield from (Path(directory) / name for name in (*subdirectories, *files))
 
 
 def require(path, expected):
@@ -331,7 +392,7 @@ def require(path, expected):
     actual, info = identity(path)
     if actual != expected:
         raise RuntimeError(f'身份不符，保留未处理：{path}；实际 {actual!r}，预期 {expected!r}')
-    if any(item.is_symlink() for item in path.rglob('*')):
+    if any(item.is_symlink() for item in checked_descendants(path)):
         raise RuntimeError(f'拒绝处理含符号链接的启动器：{path}')
     executable = path / 'Contents/MacOS' / expected[1]
     if not executable.is_file() or not os.access(executable, os.X_OK):
@@ -345,7 +406,7 @@ def fingerprint(path):
     if path.is_symlink() or not path.is_dir():
         raise RuntimeError(f'拒绝计算非实体目录的指纹：{path}')
     digest = hashlib.sha256()
-    for item in sorted(path.rglob('*')):
+    for item in sorted(checked_descendants(path)):
         if item.is_symlink():
             raise RuntimeError(f'拒绝含符号链接的启动器：{item}')
         if item.is_file():
@@ -368,12 +429,25 @@ def aggregate_inputs(inputs):
     return digest.hexdigest()
 
 
+def require_no_asset_transaction(root):
+    local = root / '.local'
+    state = local / 'agent-skin-asset-preparation'
+    if local.is_symlink() or (local.exists() and not local.is_dir()):
+        raise RuntimeError('Asset transaction state has an unsafe .local path; preserve it for review.')
+    if state.is_symlink() or (state.exists() and not state.is_dir()):
+        raise RuntimeError('Asset transaction state is not a regular directory; preserve it for review.')
+    journal = state / '.azhou-assets-transaction.json'
+    if journal.exists() or journal.is_symlink():
+        raise RuntimeError('Private asset preparation is incomplete; run prepare-azhou-assets.py --recover.')
+
+
 def source_inputs():
+    require_no_asset_transaction(ROOT)
     files = [ROOT / name for name in INPUT_FILES]
     private = ROOT / 'assets/private'
     if private.is_symlink() or not private.is_dir():
         raise RuntimeError('缺少实体私有素材目录 assets/private。')
-    for item in private.rglob('*'):
+    for item in checked_descendants(private):
         if item.is_symlink():
             raise RuntimeError(f'拒绝通过符号链接构建素材：{item}')
         if item.is_file():
@@ -385,6 +459,7 @@ def source_inputs():
         if path.is_symlink() or not path.is_file():
             raise RuntimeError(f'缺少实体构建输入：{path}')
         inputs[path.relative_to(ROOT).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    require_no_asset_transaction(ROOT)
     return inputs
 
 
@@ -477,6 +552,242 @@ def swap(left, right):
     operation.restype = ctypes.c_int
     if operation(os.fsencode(left), os.fsencode(right), 2) != 0:
         raise OSError(ctypes.get_errno(), '原子替换失败，旧产物保持原位')
+
+
+def tree_receipt(path):
+    """Capture directories and regular file identity/content without following links."""
+    root = Path(path)
+    root_stat = root.lstat()
+    if not stat.S_ISDIR(root_stat.st_mode):
+        raise RuntimeError(f'拒绝核验非实体目录：{root}')
+    entries = []
+    for item in sorted(checked_descendants(root)):
+        info = item.lstat()
+        relative = item.relative_to(root).as_posix()
+        if stat.S_ISDIR(info.st_mode):
+            entries.append((relative, 'directory', info.st_dev, info.st_ino, info.st_mode & 0o777))
+        elif stat.S_ISREG(info.st_mode):
+            fd = os.open(item, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+            try:
+                opened = os.fstat(fd)
+                if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    raise RuntimeError(f'文件在核验时发生替换：{item}')
+                with os.fdopen(fd, 'rb', closefd=False) as stream:
+                    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+                after = os.fstat(fd)
+                if (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                    raise RuntimeError(f'文件在核验时发生变化：{item}')
+            finally:
+                os.close(fd)
+            entries.append((relative, 'file', info.st_dev, info.st_ino, info.st_mode & 0o777, digest))
+        else:
+            raise RuntimeError(f'拒绝清理含链接或非常规条目的目录：{item}')
+    current = root.lstat()
+    if (root_stat.st_dev, root_stat.st_ino) != (current.st_dev, current.st_ino):
+        raise RuntimeError(f'目录在核验时发生替换：{root}')
+    return (root_stat.st_dev, root_stat.st_ino, root_stat.st_mode & 0o777, entries)
+
+
+def require_tree(path, expected):
+    if tree_receipt(path) != expected:
+        raise RuntimeError(f'目录身份或内容发生变化，保留未处理：{path}')
+
+
+def rename_exclusive(source, destination):
+    libc = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
+    operation = libc.renamex_np
+    operation.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+    operation.restype = ctypes.c_int
+    if operation(os.fsencode(source), os.fsencode(destination), 4) != 0:
+        raise OSError(ctypes.get_errno(), '排他发布失败，保留现有对象')
+
+
+def stage_root_identity(path):
+    root = Path(path).absolute()
+    build = ROOT / '.build'
+    if root.parent != build or not root.name.startswith('azhou-stage.') or build.is_symlink():
+        raise RuntimeError(f'拒绝不属于本项目的构建暂存目录：{root}')
+    parent, info = build.lstat(), root.lstat()
+    if not stat.S_ISDIR(parent.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise RuntimeError(f'暂存根或构建目录不是实体目录：{root}')
+    return {'root': str(root), 'build': [parent.st_dev, parent.st_ino], 'stage': [info.st_dev, info.st_ino]}
+
+
+def seal_stage(path, identity, approved_icon):
+    if stage_root_identity(path) != identity:
+        raise RuntimeError(f'构建暂存目录已替换，保留：{path}')
+    root = Path(path)
+    receipt = tree_receipt(root)
+    names = {entry[0] for entry in receipt[3] if '/' not in entry[0]}
+    expected = {PAYLOAD.name, 'azhou-install-registry', 'AzhouAppIcon.iconset'}
+    if approved_icon:
+        expected.add('approved-icon.png')
+    if names != expected:
+        raise RuntimeError(f'构建暂存含未知或缺失对象，保留：{root}')
+    types = {entry[0]: entry[1] for entry in receipt[3] if '/' not in entry[0]}
+    if (types.get(PAYLOAD.name) != 'directory' or types.get('AzhouAppIcon.iconset') != 'directory'
+            or types.get('azhou-install-registry') != 'file'
+            or (approved_icon and types.get('approved-icon.png') != 'file')):
+        raise RuntimeError(f'构建暂存对象类型无效，保留：{root}')
+    icon_files = {f'AzhouAppIcon.iconset/icon_{size}x{size}{suffix}.png'
+                  for size in (16, 32, 128, 256, 512) for suffix in ('', '@2x')}
+    actual_icons = {entry[0] for entry in receipt[3] if entry[0].startswith('AzhouAppIcon.iconset/')}
+    if actual_icons != icon_files or any(entry[1] != 'file' for entry in receipt[3] if entry[0] in icon_files):
+        raise RuntimeError(f'构建图标目录含未知或缺失对象，保留：{root}')
+    if stage_root_identity(root) != identity:
+        raise RuntimeError(f'封存期间暂存根发生变化，保留：{root}')
+    leftovers = [entry for entry in receipt[3]
+                 if entry[0] != PAYLOAD.name and not entry[0].startswith(PAYLOAD.name + '/')
+                 and entry[0] != 'azhou-install-registry']
+    registry = next(entry for entry in receipt[3] if entry[0] == 'azhou-install-registry')
+    return {'identity': identity, 'remaining': leftovers, 'registry': list(registry[2:])}
+
+
+def cleanup_stage(path, sealed):
+    if not isinstance(sealed, dict) or stage_root_identity(path) != sealed.get('identity'):
+        raise RuntimeError(f'暂存根身份不符，保留：{path}')
+    current = tree_receipt(path)
+    if json.dumps(current[3], ensure_ascii=False) != json.dumps(sealed.get('remaining'), ensure_ascii=False):
+        raise RuntimeError(f'暂存剩余内容发生变化，保留：{path}')
+    if stage_root_identity(path) != sealed['identity']:
+        raise RuntimeError(f'暂存根在清理前变化，保留：{path}')
+    shutil.rmtree(path)
+
+
+def file_receipt(path):
+    info = Path(path).lstat()
+    if not stat.S_ISREG(info.st_mode):
+        raise RuntimeError(f'拒绝处理非普通文件，保留：{path}')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    try:
+        opened = os.fstat(fd)
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_size', 'st_mtime_ns')
+        def same(left, right):
+            return all(getattr(left, field) == getattr(right, field) for field in fields)
+        if not stat.S_ISREG(opened.st_mode) or not same(info, opened):
+            raise RuntimeError(f'文件身份发生变化，保留：{path}')
+        hasher = hashlib.sha256()
+        while chunk := os.read(fd, 64 * 1024):
+            hasher.update(chunk)
+        digest = hasher.hexdigest()
+        after = os.fstat(fd)
+        current = Path(path).lstat()
+        if not same(opened, after) or not same(after, current):
+            raise RuntimeError(f'文件内容或身份发生变化，保留：{path}')
+    finally:
+        os.close(fd)
+    return [info.st_dev, info.st_ino, info.st_mode & 0o777, digest]
+
+
+def require_file(path, receipt):
+    if file_receipt(path) != receipt:
+        raise RuntimeError(f'文件身份或内容发生变化，保留：{path}')
+
+
+def registry_receipt_path(receipt):
+    device, inode, _, digest = receipt
+    return ROOT / '.build' / f'.azhou-registry-{device}-{inode}-{digest}.json'
+
+
+def registry_receipt_data(receipt):
+    return {'projectRoot': str(ROOT), 'file': receipt, 'kind': 'azhou-install-registry'}
+
+
+def verify_registry_receipt(receipt):
+    path = registry_receipt_path(receipt)
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f'已有注册工具缺少来源回执，保留未替换：{REGISTRY_TOOL}')
+    with path.open('r', encoding='utf-8') as stream:
+        if json.load(stream) != registry_receipt_data(receipt):
+            raise RuntimeError(f'注册工具来源回执不匹配，保留：{path}')
+
+
+def create_registry_receipt(receipt):
+    path = registry_receipt_path(receipt)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(registry_receipt_data(receipt), stream, ensure_ascii=False, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except FileExistsError:
+        verify_registry_receipt(receipt)
+
+
+def publish_build(staged, sealed):
+    staged = staged_path(staged)
+    root = staged.parent
+    identity = sealed.get('identity') if isinstance(sealed, dict) else None
+    if stage_root_identity(root) != identity:
+        raise RuntimeError(f'暂存根身份不符，保留：{root}')
+    source = root / 'azhou-install-registry'
+    if PAYLOAD.is_symlink():
+        raise RuntimeError(f'载荷是符号链接，保留：{PAYLOAD}')
+    previous_payload = tree_receipt(PAYLOAD) if PAYLOAD.exists() else None
+    new = sealed.get('registry')
+    require_file(source, new)
+    if REGISTRY_TOOL.is_symlink():
+        raise RuntimeError(f'注册工具是符号链接，保留：{REGISTRY_TOOL}')
+    old = file_receipt(REGISTRY_TOOL) if REGISTRY_TOOL.exists() else None
+    reused = False
+    if old is not None:
+        try:
+            verify_registry_receipt(old)
+        except RuntimeError:
+            if old[2:] != new[2:]:
+                raise
+            reused = True  # Identical executable stays untouched; ownership is not asserted.
+    create_registry_receipt(new)
+    marker = root / '.registry-transaction.json'
+    with marker.open('x', encoding='utf-8') as stream:
+        json.dump({'projectRoot': str(ROOT), 'stage': str(root), 'new': new, 'old': old, 'reused': reused}, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    marker_info = marker.lstat()
+
+    def remove_marker():
+        current = marker.lstat()
+        if (current.st_dev, current.st_ino) != (marker_info.st_dev, marker_info.st_ino):
+            raise RuntimeError(f'注册事务标记发生变化，保留：{marker}')
+        marker.unlink()
+
+    require_file(source, new)
+    if old is None:
+        rename_exclusive(source, REGISTRY_TOOL)
+    elif not reused:
+        require_file(REGISTRY_TOOL, old)
+        swap(source, REGISTRY_TOOL)
+    try:
+        require_file(REGISTRY_TOOL, old if reused else new)
+        if old is not None:
+            require_file(source, new if reused else old)
+        publish(staged)
+    except BaseException as error:
+        try:
+            if stage_root_identity(root) != identity:
+                raise RuntimeError('暂存根已变化')
+            if previous_payload is None:
+                if PAYLOAD.exists() or PAYLOAD.is_symlink():
+                    raise RuntimeError('载荷状态未恢复')
+            else:
+                require_tree(PAYLOAD, previous_payload)
+            require_file(REGISTRY_TOOL, old if reused else new)
+            if old is None:
+                rename_exclusive(REGISTRY_TOOL, source)
+            elif not reused:
+                require_file(source, old)
+                swap(source, REGISTRY_TOOL)
+                require_file(REGISTRY_TOOL, old)
+            require_file(source, new)
+            remove_marker()
+        except BaseException as rollback_error:
+            raise RuntimeError(f'注册工具回滚未确认；保留事务与暂存，请核对：{root}') from rollback_error
+        raise error
+    require_file(REGISTRY_TOOL, old if reused else new)
+    if old is not None:
+        require_file(source, new if reused else old)
+        source.unlink()
+    remove_marker()
 
 
 def verify_icon(path, info):
@@ -589,10 +900,10 @@ def verify_dsh_plugin(path):
         raise RuntimeError(f'DSH 插件包含符号链接：{package}')
     if not package.is_dir():
         raise RuntimeError(f'DSH 插件包缺失或不是实体目录：{package}')
-    for item in package.rglob('*'):
+    for item in checked_descendants(package):
         if item.is_symlink():
             raise RuntimeError(f'DSH 插件包含符号链接：{item}')
-    present = sorted(item.relative_to(package).as_posix() for item in package.rglob('*') if item.is_file())
+    present = sorted(item.relative_to(package).as_posix() for item in checked_descendants(package) if item.is_file())
     if present != sorted(DSH_PLUGIN_PACKAGE_ENTRIES):
         raise RuntimeError(f'DSH 插件包文件清单与固定集合不符：{package}')
 
@@ -1134,40 +1445,60 @@ def publish(staged):
     staged = staged_path(staged)
     verify_product(staged)
     check_inputs(staged)
+    new_tree = tree_receipt(staged)
     if PAYLOAD.is_symlink():
         raise RuntimeError('拒绝替换符号链接构建载荷。')
     if PAYLOAD.exists():
-        # Every affected existing object must be this project's verified payload.
         verify_product(PAYLOAD, current_source=False)
+        old_tree = tree_receipt(PAYLOAD)
         marker = staged.parent / '.preserve-original'
-        marker.write_text(str(staged) + '\n', encoding='utf-8')
+        with marker.open('x', encoding='utf-8') as stream:
+            stream.write(str(staged) + '\n')
+        marker_identity = marker.lstat()
+        require_tree(staged, new_tree)
+        require_tree(PAYLOAD, old_tree)
+        swap(staged, PAYLOAD)
         try:
-            swap(staged, PAYLOAD)
-        except BaseException:
-            marker.unlink()
-            raise
-        try:
+            require_tree(staged, old_tree)
+            require_tree(PAYLOAD, new_tree)
             verify_product(PAYLOAD)
-        except BaseException as verification_error:
+            check()
+            require_tree(staged, old_tree)
+            require_tree(PAYLOAD, new_tree)
+        except BaseException as error:
             try:
+                require_tree(staged, old_tree)
+                require_tree(PAYLOAD, new_tree)
                 swap(staged, PAYLOAD)
+                require_tree(staged, new_tree)
+                require_tree(PAYLOAD, old_tree)
             except BaseException as rollback_error:
-                raise RuntimeError(f'发布校验失败且回滚未完成；原载荷保留在 {staged}，请保留该临时目录。') from rollback_error
+                raise RuntimeError(f'发布或回滚未确认，保留两处载荷和标记，请核对：{staged}、{PAYLOAD}') from rollback_error
+            current_marker = marker.lstat()
+            if (current_marker.st_dev, current_marker.st_ino) != (marker_identity.st_dev, marker_identity.st_ino):
+                raise RuntimeError(f'恢复标记发生变化，保留待核对：{marker}') from error
             marker.unlink()
-            raise verification_error
+            raise error
+        current_marker = marker.lstat()
+        if (current_marker.st_dev, current_marker.st_ino) != (marker_identity.st_dev, marker_identity.st_ino):
+            raise RuntimeError(f'恢复标记发生变化，保留待核对：{marker}')
+        shutil.rmtree(staged)
         marker.unlink()
     else:
-        os.replace(staged, PAYLOAD)
+        rename_exclusive(staged, PAYLOAD)
         try:
+            require_tree(PAYLOAD, new_tree)
             verify_product(PAYLOAD)
-        except Exception:
-            os.rename(PAYLOAD, staged)
-            raise
-    # Never touch dist or installed .app paths here. The installer verifies the
-    # new installed app before retiring its proven old entrances.
-    check()
-    if staged.exists():
-        shutil.rmtree(staged)
+            check()
+            require_tree(PAYLOAD, new_tree)
+        except BaseException as error:
+            try:
+                require_tree(PAYLOAD, new_tree)
+                rename_exclusive(PAYLOAD, staged)
+                require_tree(staged, new_tree)
+            except BaseException as rollback_error:
+                raise RuntimeError(f'首次发布恢复未确认，保留待核对：{staged}、{PAYLOAD}') from rollback_error
+            raise error
 
 
 if __name__ == '__main__':
@@ -1175,15 +1506,21 @@ if __name__ == '__main__':
     parser.add_argument('--host', choices=('codex', 'zcode'), default='codex')
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--publish', metavar='STAGED_PAYLOAD')
+    actions.add_argument('--publish-build', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-marker', metavar='STAGED_PAYLOAD')
     actions.add_argument('--write-bundle-info', metavar='STAGED_PAYLOAD')
     actions.add_argument('--check-inputs', metavar='STAGED_PAYLOAD')
     actions.add_argument('--verify-dsh-plugin', metavar='DSH_PLUGIN_DIR')
+    actions.add_argument('--stage-identity', metavar='STAGE_ROOT')
+    actions.add_argument('--seal-stage', metavar='STAGE_ROOT')
+    actions.add_argument('--cleanup-stage', metavar='STAGE_ROOT')
     options = parser.parse_args()
     configure_build_host(options.host)
     try:
         if options.publish:
             publish(options.publish)
+        elif options.publish_build:
+            publish_build(options.publish_build, json.load(sys.stdin))
         elif options.write_marker:
             write_marker(options.write_marker, approved_icon_sha256=os.environ.get('AZHOU_APPROVED_ICON_SHA256'))
         elif options.write_bundle_info:
@@ -1192,6 +1529,13 @@ if __name__ == '__main__':
             check_inputs(options.check_inputs)
         elif options.verify_dsh_plugin:
             verify_dsh_plugin(options.verify_dsh_plugin)
+        elif options.stage_identity:
+            print(json.dumps(stage_root_identity(options.stage_identity)))
+        elif options.seal_stage:
+            print(json.dumps(seal_stage(options.seal_stage, json.load(sys.stdin),
+                                        bool(os.environ.get('AZHOU_APPROVED_ICON_SHA256')))))
+        elif options.cleanup_stage:
+            cleanup_stage(options.cleanup_stage, json.load(sys.stdin))
         else:
             check()
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, plistlib.InvalidFileException) as error:
