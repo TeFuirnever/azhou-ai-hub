@@ -1,12 +1,12 @@
 // Shared skin host contract (agent-skin-zcode-contract/v0.1).
+// The contract string keeps its historical name: it was first defined for the
+// retired ZCode host and installed-state receipts still carry it verbatim.
 // Neutral value types and the host factory gate table shared by every host
 // adapter. This file stays free of every Codex adapter type (target systems,
 // CDP transports, debugger sockets); those live only inside CodexSkinDriver.
-//
-// DESIGN source: .planning/agent-skin-zcode/spec.md §6.2, §7.2 and §7.3.
 import Foundation
 
-enum SkinHostID: String, Sendable { case codex, zcode }
+enum SkinHostID: String, Sendable { case codex }
 
 enum SkinSurface: String, Sendable { case application, mainWindow }
 
@@ -106,7 +106,6 @@ struct SkinAssemblyDependencies {
 
     // Constructors only capture dependencies; actual resources are taken per operation.
     let makeCodexDriver: (BoundHostInputs) -> any SkinHostDriver
-    let makeZCodeDriver: ((BoundHostInputs) -> any SkinHostDriver)?
 }
 
 @MainActor
@@ -117,6 +116,8 @@ enum HostAssembly {
 
 enum SkinHostContract {
     /// Contract identity recorded by the shared checkpoint (agent-skin-zcode C0).
+    /// Frozen name: the contract originated on the retired ZCode host and
+    /// installed-state records depend on this exact string.
     static let version = "agent-skin-zcode-contract/v0.1"
 
     /// Legacy v1 controller protocol has no instance identity; receipts that must
@@ -219,19 +220,12 @@ enum SkinHostFactory {
         }
         // 4. unverified/unsupported findings pass through; the factory never blocks
         //    operations that do not use those capabilities.
-        // 5. Only .codex and .zcode constructors; a missing constructor refuses and
-        //    never silently falls back to Codex.
+        // 5. Only the .codex constructor; a missing constructor refuses.
         let boundInputs = BoundHostInputs(identity: observed, findings: findings,
                                           contractVersion: contractVersion)
         switch host {
         case .codex:
             return .ready(dependencies.makeCodexDriver(boundInputs))
-        case .zcode:
-            guard let makeZCodeDriver = dependencies.makeZCodeDriver else {
-                return refusal(.implementationUnavailable,
-                               "no verified ZCode driver constructor is available")
-            }
-            return .ready(makeZCodeDriver(boundInputs))
         }
         // 6. The returned driver owns immutable bound inputs; every operation
         //    re-checks the request identity and live process/document generation.

@@ -1706,13 +1706,13 @@ test('an injected settings namespace replaces database name, version, store and 
   const fixture = makeFixture({
     indexedDB,
     settingsNamespace: {
-      databaseName: 'azhou-zcode-host', databaseVersion: 3, storeName: 'zcode-settings', settingsKey: 'images-v3',
+      databaseName: 'azhou-synthetic-host', databaseVersion: 3, storeName: 'synthetic-settings', settingsKey: 'images-v3',
     },
   });
   await fixture.api.load(record);
-  assert.deepEqual(seen.opens, [{ name: 'azhou-zcode-host', version: 3 }],
+  assert.deepEqual(seen.opens, [{ name: 'azhou-synthetic-host', version: 3 }],
     'an injected namespace replaces the database name and version');
-  assert.ok(seen.stores.length > 0 && seen.stores.every(store => store === 'zcode-settings'),
+  assert.ok(seen.stores.length > 0 && seen.stores.every(store => store === 'synthetic-settings'),
     'an injected namespace replaces the object store');
   assert.ok(seen.keys.length > 0 && seen.keys.every(({ key }) => key === 'images-v3'),
     'an injected namespace replaces the record key');

@@ -64,8 +64,6 @@ class BuildPreflightTests(unittest.TestCase):
         self.entry_avatar.write_bytes(b"entry-avatar")
         self.icon_source.parent.mkdir(parents=True, exist_ok=True)
         self.icon_source.write_bytes(png_header(1024, 1024))
-        self.zcode_icon = self.root / theme["hostIcons"]["zcode"]
-        self.zcode_icon.write_bytes(png_header(1024, 1024))
         (self.root / ".build").mkdir()
         (self.root / "dist").mkdir()
         self.run_returncode = 0
@@ -113,42 +111,29 @@ class BuildPreflightTests(unittest.TestCase):
         self.assertEqual(result.exception.code, 0)
         self.assertEqual(json.loads(stdout.getvalue()), self.module.load_theme(self.root))
 
-    def test_host_selection_reaches_preflight_cli_and_embedded_theme(self):
-        for host, icon in (("zcode", self.zcode_icon), ("codex", self.icon_source)):
-            with self.subTest(host=host):
-                run_patch, output_patch = self.fake_git()
-                stdout = io.StringIO()
-                with run_patch, output_patch, contextlib.redirect_stdout(stdout):
-                    self.assertEqual(self.module.main(self.root, argv=["--host", host]), 0)
-                theme = json.loads(stdout.getvalue())
-                self.assertEqual(theme["identity"]["iconInput"], icon.relative_to(self.root).as_posix())
-                self.assertEqual(set(theme), {"identity", "startup", "wallpaper"})
-                expected_name = "阿舟 AI 实验室 for ZCode.app" if host == "zcode" else "阿舟 AI 实验室.app"
-                self.assertEqual(theme["identity"]["installationName"], expected_name)
-                artifacts = load_module(self.root / "tools/verify-artifacts.py", "icon_theme_validation")
-                self.assertEqual(artifacts.validate_embedded_theme_config(
-                    theme, theme["identity"]["version"], theme["identity"]["build"]), theme)
+    def test_preflight_theme_matches_the_embedded_theme_contract(self):
+        run_patch, output_patch = self.fake_git()
+        stdout = io.StringIO()
+        with run_patch, output_patch, contextlib.redirect_stdout(stdout):
+            self.assertEqual(self.module.main(self.root, argv=[]), 0)
+        theme = json.loads(stdout.getvalue())
+        self.assertEqual(theme["identity"]["iconInput"], self.icon_source.relative_to(self.root).as_posix())
+        self.assertEqual(set(theme), {"identity", "startup", "wallpaper"})
+        self.assertEqual(theme["identity"]["installationName"], "阿舟 AI 实验室.app")
+        artifacts = load_module(self.root / "tools/verify-artifacts.py", "icon_theme_validation")
+        self.assertEqual(artifacts.validate_embedded_theme_config(
+            theme, theme["identity"]["version"], theme["identity"]["build"]), theme)
 
-        artifacts.configure_build_host("zcode")
-        self.assertEqual(artifacts.load_theme_config(self.root)["identity"]["iconInput"],
-                         self.zcode_icon.relative_to(self.root).as_posix())
-        artifacts.configure_build_host("codex")
-        self.assertEqual(artifacts.load_theme_config(self.root)["identity"]["iconInput"],
+    def test_approved_digest_is_checked_against_the_icon_source(self):
+        digest = hashlib.sha256(self.icon_source.read_bytes()).hexdigest()
+        run_patch, output_patch = self.fake_git()
+        stdout = io.StringIO()
+        with run_patch, output_patch, contextlib.redirect_stdout(stdout), \
+                mock.patch.dict(os.environ, {"AZHOU_APPROVED_ICON_SHA256": digest.upper()}):
+            self.assertEqual(self.module.main(self.root, argv=[]), 0)
+        self.assertEqual(json.loads(stdout.getvalue())["identity"]["iconInput"],
                          self.icon_source.relative_to(self.root).as_posix())
-
-    def test_approved_digest_is_checked_against_the_selected_host_icon(self):
-        self.zcode_icon.write_bytes(self.zcode_icon.read_bytes() + b"zcode fixture")
-        for host, icon in (("codex", self.icon_source), ("zcode", self.zcode_icon)):
-            with self.subTest(host=host):
-                digest = hashlib.sha256(icon.read_bytes()).hexdigest()
-                run_patch, output_patch = self.fake_git()
-                stdout = io.StringIO()
-                with run_patch, output_patch, contextlib.redirect_stdout(stdout), \
-                        mock.patch.dict(os.environ, {"AZHOU_APPROVED_ICON_SHA256": digest.upper()}):
-                    self.assertEqual(self.module.main(self.root, argv=["--host", host]), 0)
-                self.assertEqual(json.loads(stdout.getvalue())["identity"]["iconInput"],
-                                 icon.relative_to(self.root).as_posix())
-                self.assertNotIn(digest, stdout.getvalue().lower())
+        self.assertNotIn(digest, stdout.getvalue().lower())
 
     def test_rejects_invalid_approved_digest(self):
         for digest in ("", "not-a-digest"):
@@ -170,26 +155,18 @@ class BuildPreflightTests(unittest.TestCase):
         self.prepare_build()
         approved_digest = hashlib.sha256(self.icon_source.read_bytes()).hexdigest()
         self.icon_source.write_bytes(png_header(1024, 1024) + b"unapproved fixture")
-        self.zcode_icon.write_bytes(png_header(1024, 1024) + b"ZCode fixture")
-        payloads = []
-        for host, args, name in (
-            ("codex", [], "azhou-payload"),
-            ("zcode", ["--host", "zcode"], "azhou-zcode-payload"),
-        ):
-            with self.subTest(host=host):
-                payload = self.root / ".build" / name
-                payload.mkdir()
-                payloads.append(payload)
-                receipt = payload / "fixture-receipt"
-                receipt.write_bytes(b"existing payload")
-                result = subprocess.run(
-                    ["bash", "tools/build-macos.sh", *args], cwd=self.root, capture_output=True, text=True,
-                    env={**os.environ, "AZHOU_APPROVED_ICON_SHA256": approved_digest}, timeout=30,
-                )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(f"{host} 图标源图与已批准的 SHA-256 不符", result.stderr)
-                self.assertEqual(receipt.read_bytes(), b"existing payload")
-                self.assertCountEqual((self.root / ".build").iterdir(), payloads)
+        payload = self.root / ".build" / "azhou-payload"
+        payload.mkdir()
+        receipt = payload / "fixture-receipt"
+        receipt.write_bytes(b"existing payload")
+        result = subprocess.run(
+            ["bash", "tools/build-macos.sh"], cwd=self.root, capture_output=True, text=True,
+            env={**os.environ, "AZHOU_APPROVED_ICON_SHA256": approved_digest}, timeout=30,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("图标源图与已批准的 SHA-256 不符", result.stderr)
+        self.assertEqual(receipt.read_bytes(), b"existing payload")
+        self.assertCountEqual((self.root / ".build").iterdir(), [payload])
 
     def test_build_binds_the_staged_icon_to_the_approval_after_preflight(self):
         self.prepare_build()
@@ -243,62 +220,27 @@ class BuildPreflightTests(unittest.TestCase):
         self.assertEqual(receipt.read_bytes(), b"existing payload")
         self.assertEqual(set((self.root / ".build").glob("azhou-stage.*")), retained_stages)
 
-    def test_legacy_codex_config_is_valid_but_zcode_requires_its_own_input(self):
+    def test_legacy_codex_config_is_valid_and_retired_host_icons_are_rejected(self):
         path = self.root / "theme-config.json"
         original = path.read_text()
         theme = json.loads(original)
-        del theme["hostIcons"]
+        theme.pop("hostIcons", None)
         path.write_text(json.dumps(theme))
         self.assertEqual(self.module.load_theme(self.root)["identity"]["iconInput"],
                          self.icon_source.relative_to(self.root).as_posix())
-        with self.assertRaisesRegex(RuntimeError, "explicit hostIcons.zcode"):
-            self.module.load_theme(self.root, host="zcode")
+        with open(self.root / "theme-config.json", "w", encoding="utf-8") as stream:
+            json.dump({**json.loads(original), "hostIcons": {}}, stream)
+        with self.assertRaisesRegex(RuntimeError, "unsupported top-level shape"):
+            self.module.load_theme(self.root)
         path.write_text(original)
-        self.zcode_icon.unlink()
-        with self.assertRaisesRegex(RuntimeError, "identity.iconInput"):
-            self.module.load_theme(self.root, host="zcode")
-        self.module.load_theme(self.root, host="codex")
+        self.module.load_theme(self.root)
 
-    def test_host_icon_map_rejects_unknown_unsafe_and_shared_paths(self):
-        path = self.root / "theme-config.json"
-        original = json.loads(path.read_text())
-        cases = (
-            (None, "exactly zcode"), ({}, "exactly zcode"),
-            ({"codex": "assets/private/other.png"}, "exactly zcode"),
-            ({"zcode": 3}, "relative assets/private"),
-            ({"zcode": "/tmp/icon.png"}, "inside assets/private"),
-            ({"zcode": "assets/private/../icon.png"}, "inside assets/private"),
-            ({"zcode": original["identity"]["iconInput"]}, "must be distinct"),
-            ({"zcode": original["identity"]["entryAvatarInput"]}, "must be distinct"),
-        )
-        for mapping, message in cases:
-            with self.subTest(mapping=mapping):
-                path.write_text(json.dumps({**original, "hostIcons": mapping}))
-                with self.assertRaisesRegex(RuntimeError, message):
-                    self.module.load_theme(self.root)
-        path.write_text(json.dumps(original))
-
-    def test_zcode_private_input_and_payload_reject_symlinks(self):
-        outside = Path(self.temporary.name) / "outside.png"
-        outside.write_bytes(png_header(1024, 1024))
-        self.zcode_icon.unlink()
-        self.zcode_icon.symlink_to(outside)
-        with self.assertRaisesRegex(RuntimeError, "cannot pass through a symlink"):
-            self.module.load_theme(self.root, host="zcode")
-        self.zcode_icon.unlink()
-        self.zcode_icon.write_bytes(png_header(1024, 1024))
-        payload = self.root / ".build/azhou-zcode-payload"
+    def test_build_payload_directory_rejects_symlinks(self):
+        payload = self.root / ".build/azhou-payload"
         payload.symlink_to(Path(self.temporary.name), target_is_directory=True)
         run_patch, output_patch = self.fake_git()
-        with run_patch, output_patch, self.assertRaisesRegex(SystemExit, "azhou-zcode-payload"):
-            self.module.preflight(self.root, host="zcode")
-
-    def test_invalid_host_is_rejected_by_api_and_cli(self):
-        with self.assertRaisesRegex(RuntimeError, "Unsupported build host"):
-            self.module.preflight(self.root, host="other")
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
-            self.module.main(self.root, argv=["--host", "other"])
-        self.assertEqual(error.exception.code, 2)
+        with run_patch, output_patch, self.assertRaisesRegex(SystemExit, "azhou-payload"):
+            self.module.preflight(self.root)
 
     def test_symlinked_build_roots_and_tracked_outputs_stop_before_ignore_checks(self):
         target = Path(self.temporary.name) / "outside"

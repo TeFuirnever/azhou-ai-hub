@@ -109,7 +109,6 @@ class DshPluginBuildTests(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertEqual(client.count(needle), count)
         self.assertNotIn("createCodexPageAdapter(", client)
-        self.assertNotIn("createZCodePageAdapter(", client)
         self.assertNotIn("((controllerMetadata) => {", client)
         self.assertLess(len(client.encode("utf-8")), 24 * 1024 * 1024)
 
@@ -165,7 +164,7 @@ class DshPluginBuildTests(unittest.TestCase):
             return mutate
 
         cases = (
-            (mutate_client(lambda text: text.replace("createDSHPageAdapter", "createZCodePageAdapter")),
+            (mutate_client(lambda text: text.replace("createDSHPageAdapter", "createRetitledPageAdapter")),
              "恰好绑定一次|外来适配器"),
             (mutate_client(lambda text: text + "\nexport function leak() {}\n"), "模块导入|external"),
             (mutate_client(lambda text: text + "\nfetch('https://example.invalid/x');\n"), "外部资源|external"),
@@ -631,7 +630,7 @@ class DshPluginBuildTests(unittest.TestCase):
         self.assertEqual(report["dshPlugin"], str(self.destination))
         self.assertEqual(report["version"], self.manifest["appVersion"])
 
-    def test_frozen_codex_and_zcode_fixture_builds_still_verify(self):
+    def test_frozen_codex_fixture_builds_still_verify(self):
         codex, artifacts = self.helpers.build_staged_product(self.root, "dsh-round-codex")
         info = {"CFBundleShortVersionString": APP_VERSION, "CFBundleVersion": APP_BUILD}
         inputs = artifacts.source_inputs()
@@ -639,26 +638,6 @@ class DshPluginBuildTests(unittest.TestCase):
                   "inputSHA256": artifacts.aggregate_inputs(inputs), "inputs": inputs}
         artifacts.verify_startup(codex, info, marker)
         artifacts.verify_wallpaper(codex, info, marker)
-
-        zcode_stage = self.root / ".build/azhou-stage.dsh-round-zcode/azhou-zcode-payload"
-        zcode_stage.mkdir(parents=True)
-        builder = load_module(self.root / "tools/build-startup.py", "agent_skin_dsh_round_zcode_builder")
-        with mock.patch.object(subprocess, "check_output", return_value="arm64\n"), \
-                mock.patch.object(subprocess, "run", side_effect=self.vision):
-            manifest = builder.build_startup(zcode_stage, root=self.root, host="zcode")
-        self.assertEqual(manifest["targetHost"], "zcode")
-        wallpaper = load_module(self.root / "tools/build-wallpaper.py", "agent_skin_dsh_round_zcode_wallpaper")
-        with mock.patch.object(subprocess, "check_output", return_value="arm64\n"), \
-                mock.patch.object(subprocess, "run", side_effect=self.vision):
-            wallpaper.package(zcode_stage, host="zcode")
-        verifier = load_module(self.root / "tools/verify-artifacts.py", "agent_skin_dsh_round_zcode_verifier")
-        verifier.configure_build_host("zcode")
-        verifier.verify_startup(zcode_stage, info, marker)
-        verifier.verify_wallpaper(zcode_stage, info, marker)
-        payload = (zcode_stage / "Contents/Resources/startup/install.js").read_text(encoding="utf-8")
-        self.assertTrue(payload.startswith("((controllerMetadata) => {"))
-        self.assertNotIn("createDSHPageAdapter(", payload)
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -714,17 +714,17 @@ try {
     assert.deepEqual(result,{error:'synthetic release failure',same:true,applied:true,imageSame:true,styleSame:true,enabled:true});
     return result;
   });
-  await check('moved ZCode surface remains untouched during cleanup', async () => {
+  await check('moved host surface remains untouched during cleanup', async () => {
     const result = await cdp.evaluate(`(async()=>{
       globalThis.__azhouWallpaper?.dispose();
       const root=document.getElementById('root'), main=root.querySelector('main');
-      const parent=main.parentNode, next=main.nextSibling, marker='data-azhou-zcode-wallpaper-surface';
+      const parent=main.parentNode, next=main.nextSibling, marker='data-azhou-synthetic-wallpaper-surface';
       const foreign=document.createElement('div');document.body.appendChild(foreign);
       const ports={validPage:()=>true,shellState:()=> 'ready',surfaces:()=>[main],
         attributes:{surfaceMarker:marker,observeFilter:['class','style']},
-        css:'html[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+        css:'html[data-azhou-wallpaper="active"] #root[data-azhou-synthetic-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-synthetic-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
         scope:'synthetic fixture'};
-      const adapter={controllerWallpaper:{owner:'azhou.zcode-startup-animation'},wallpaper:ports};
+      const adapter={controllerWallpaper:{owner:'azhou.synthetic-startup-animation'},wallpaper:ports};
       try {
         const applied=await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,pageAdapter:adapter});
         foreign.appendChild(main);

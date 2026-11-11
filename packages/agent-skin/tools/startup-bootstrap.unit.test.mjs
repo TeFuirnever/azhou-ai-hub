@@ -133,7 +133,7 @@ test('bootstrap forwards the page adapter to the applicator only when wallpaper 
     ['wallpaper ports', Object.freeze({ identify: () => ({ kind: 'matched' }),
       wallpaper: Object.freeze({ shellState() {} }) }), true],
     ['no wallpaper ports', Object.freeze({ identify: () => ({ kind: 'matched' }),
-      controllerOwner: 'azhou-zcode-startup' }), false],
+      controllerOwner: 'azhou-dsh-startup' }), false],
   ]) {
     calls.length = 0;
     bootstrapStartup({

@@ -2024,7 +2024,6 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         self.assertTrue(payload.endswith("})()\n"))
         self.assertEqual(payload.count("function createDSHPageAdapter("), 1)
         self.assertNotIn("createCodexPageAdapter(", payload)
-        self.assertNotIn("createZCodePageAdapter(", payload)
         self.assertFalse(payload.startswith("((controllerMetadata) => {"))
         self.assertIn('const pageAdapter = createDSHPageAdapter(globalThis, { build: { version: APP_VERSION, '
                       'buildNumber: "' + verifier.BUILD + '" }, sidebarEntry: false }, {', payload)
@@ -2071,8 +2070,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
                      "PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS",
                      "PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS",
                      "LEGACY_STARTUP_REQUIRED_INPUTS",
-                     "STARTUP_REQUIRED_INPUTS",
-                     "ZCODE_STARTUP_REQUIRED_INPUTS"):
+                     "STARTUP_REQUIRED_INPUTS"):
             frozen = getattr(verifier, name)
             with self.subTest(input_set=name):
                 self.assertNotIn("extension/hosts/dsh.mjs", frozen)

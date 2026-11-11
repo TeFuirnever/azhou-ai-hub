@@ -17,7 +17,6 @@
 // 状态所有权与数据流方向。消息的“语法验证”与“状态机推进”由此分离：解码层
 // 无副作用，执行层只消费已验证的语义值。
 
-import CryptoKit
 import AppKit
 import WebKit
 import Darwin
@@ -50,7 +49,6 @@ struct LauncherCommandLine {
 
     var snapshotDirectory: String? { value(after: "--snapshot") }
     var snapshotTimes: String { value(after: "--snapshot-times") ?? "0.4,1.4,2.3,3.5,5.5,7.3" }
-    var zcodeStateRoot: String? { value(after: "--zcode-state-root") }
     var arguments: [String] { raw }
 }
 
@@ -68,7 +66,7 @@ struct LauncherIdentity {
     /// 实例锁与 duplicate-entry 检测使用的启动器 bundle id；身份不明时仍需
     /// 一个稳定的非法标识，让锁路径可预测但永不匹配合法宿主。
     let launcherBundleID: String
-    /// 受信启动的目标应用 bundle id（ZCode 或 Codex）。
+    /// 受信启动的目标应用 bundle id（Codex）。
     let targetBundleID: String
 
     init(bundleURL: URL) {
@@ -78,9 +76,6 @@ struct LauncherIdentity {
             declaredHost: bundle?.object(forInfoDictionaryKey: "AzhouTargetHost"))
         self.host = resolved
         switch resolved {
-        case .zcode:
-            launcherBundleID = "local.azhou.zcode-startup"
-            targetBundleID = "dev.zcode.app"
         case .codex:
             launcherBundleID = "local.azhou.codex-startup"
             targetBundleID = "com.openai.codex"
@@ -140,7 +135,7 @@ final class NativeEventWriter: @unchecked Sendable {
     }
 }
 
-/// 启动器遥测编排：自由事件（旧 log 路径）、smoke 门控事件、ZCode 运行时诊断
+/// 启动器遥测编排：自由事件（旧 log 路径）、smoke 门控事件
 /// 与可选 JSONL sink 的唯一属主。事件信封字段在这里集中补齐。
 @MainActor
 final class LauncherJournal {
@@ -185,11 +180,6 @@ final class LauncherJournal {
     func recordSmoke(_ event: String, _ fields: [String: Any] = [:]) {
         guard smokeOnly else { return }
         eventWriter.emit(event, fields: fields)
-    }
-
-    /// ZCode 运行时诊断走与入口生命周期一致的严格信封，不额外补字段。
-    func emitRuntimeDiagnostic(_ fields: [String: Any]) {
-        eventWriter.emit("zcode-runtime", fields: fields, at: runtime.uptime)
     }
 
     func emitProbe(targetPath: String, targetBundleID: String,
@@ -464,23 +454,6 @@ final class NativeStartupEventStream: @unchecked Sendable {
         }
     }
 
-    /// ZCode 驱动交回的是类型化控制器回执，不是 Codex 状态捕获：证据只保留
-    /// 回执里真实存在的字段，不虚构 Codex 阶段、complete 事件或更早的时间戳。
-    @discardableResult
-    func resolveZCode(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
-                      at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
-        underLock { () -> NativeStartupFinalOutcome? in
-            guard case .running = stage else { return nil }
-            var fields: [String: Any] = ["host": "zcode", "evidence": "typed-controller-receipt",
-                                         "completion_not_inferred": true]
-            let decided = typedVerdict(result, expectedApplication: expectedApplication, fields: &fields)
-            stage = .decided(decided)
-            if let reason = decided.reason { fields["reason"] = reason }
-            writer.emit(decided.event, fields: fields, at: uptime)
-            return decided
-        }
-    }
-
     /// 离场：已定局则补 launcher-exit；仍在进行中则先按挂起结论定局（无挂起时
     /// 失败关闭为 partial）。重复调用幂等并返回同一终局。
     @discardableResult
@@ -516,42 +489,6 @@ final class NativeStartupEventStream: @unchecked Sendable {
         return Self.outcomeRequiringEvidence(for: outcome, observation: observation,
                                              openedPID: openedPID, installedPID: installedPID,
                                              installedRunID: installedRunID, pageID: pageID)
-    }
-
-    /// 类型化裁决（锁内调用）：宿主不符直接拒绝；成功结论必须由通过核验的
-    /// 回执/进程代支撑；失败族折叠回既有词表。
-    private func typedVerdict(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
-                              fields: inout [String: Any]) -> NativeStartupFinalOutcome {
-        if let pendingFailure { return .behaviorNotProven(reason: pendingFailure) }
-        if let pendingInterruption { return .partial(reason: pendingInterruption) }
-        guard expectedApplication.host == .zcode else { return .behaviorNotProven(reason: "target-identity") }
-        switch result {
-        case .activated(let process):
-            guard Self.matchesExpectedGeneration(process, expectedApplication) else {
-                return .behaviorNotProven(reason: "target-identity")
-            }
-            fields["targetPID"] = Int(process.pid)
-            return .activated
-        case .ready(let receipt, let runID):
-            guard runID > 0, let receiptFields = Self.verifiedReceiptFields(receipt, expectedApplication) else {
-                return .behaviorNotProven(reason: "protocol-error")
-            }
-            fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
-            fields["runId"] = runID; fields["ready"] = true
-            return .ready
-        case .skipped(let page, let runID, let beforeReady):
-            guard runID > 0, case .present(.instance(let receipt), let acquisition) = page,
-                  let receiptFields = Self.verifiedReceiptFields(receipt, expectedApplication) else {
-                return .behaviorNotProven(reason: "protocol-error")
-            }
-            fields.merge(receiptFields, uniquingKeysWith: { _, new in new })
-            fields["runId"] = runID; fields["beforeReady"] = beforeReady
-            fields["acquisition"] = acquisition == .created ? "created" : "alreadyActive"
-            return .skipped
-        case .partial, .failed, .refused:
-            return Self.outcomeRequiringEvidence(for: startupLegacyOutcome(from: result), observation: nil,
-                                                 openedPID: nil, installedPID: nil, installedRunID: nil)
-        }
     }
 
     /// 终局事件；ready/skipped 只在拥有配套观测时才发，缺证不发也不降级。
@@ -629,33 +566,6 @@ final class NativeStartupEventStream: @unchecked Sendable {
             "startup-interrupted", "settings-conflict", "operation-timeout"
         ]
         return allowed.contains(reason) ? reason : "protocol-error"
-    }
-
-    private static func matchesExpectedGeneration(_ process: HostProcessGeneration,
-                                                  _ expected: HostApplicationKey) -> Bool {
-        process.pid > 0 && process.launchTime.map { $0.isFinite && $0 > 0 } == true &&
-            process.executableURL == expected.executableURL
-    }
-
-    /// 回执核验：位置绑定期望应用与进程代、owner/protocolVersion 为已知组合、
-    /// 实例 ID 是合法 UUID、载荷哈希是小写十六进制 64 位、文档令牌非空。
-    /// 文档令牌本身不落日志，只落其 SHA-256。
-    private static func verifiedReceiptFields(_ receipt: ControllerReceipt,
-                                              _ expected: HostApplicationKey) -> [String: Any]? {
-        guard receipt.location.application == expected,
-              matchesExpectedGeneration(receipt.location.process, expected),
-              receipt.owner == "azhou-zcode-startup", receipt.protocolVersion == 1,
-              receipt.controllerInstanceID.utf8.count == 36,
-              UUID(uuidString: receipt.controllerInstanceID) != nil,
-              receipt.payloadSHA256.utf8.count == 64,
-              receipt.payloadSHA256.allSatisfy({ "0123456789abcdef".contains($0) }),
-              !receipt.location.documentToken.isEmpty else { return nil }
-        return ["targetPID": Int(receipt.location.process.pid), "owner": receipt.owner,
-                "version": receipt.protocolVersion, "controllerInstanceID": receipt.controllerInstanceID,
-                "createdByOperationID": receipt.createdByOperationID.uuidString,
-                "payloadSHA256": receipt.payloadSHA256,
-                "documentTokenSHA256": SHA256.hash(data: Data(receipt.location.documentToken.utf8))
-                    .map { String(format: "%02x", $0) }.joined()]
     }
 }
 
@@ -1036,8 +946,6 @@ protocol NativeAppRuntime: AnyObject {
     func urlForApplication(bundleIdentifier: String) -> URL?
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void)
-    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
-                         completion: @escaping ((any NativeApplication)?, Error?) -> Void)
     func acquireInstanceLock(identifier: String) -> NativeLockAcquisition
     func allocateLoopbackPort() throws -> Int
     func makeStartupTargetSystem() -> any StartupTargetSystem
@@ -1048,17 +956,6 @@ protocol NativeAppRuntime: AnyObject {
     func terminate()
     func exit(code: Int32)
     func writeStandardOutput(_ line: String)
-}
-
-extension NativeAppRuntime {
-    /// 只实现了原始 open 方法的旧运行时不得静默丢弃环境隔离：非空环境直接拒绝。
-    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
-                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
-        guard environment.isEmpty else {
-            completion(nil, NSError(domain: "local.azhou.zcode-startup", code: 1)); return
-        }
-        openApplication(at: url, debuggingPort: debuggingPort, completion: completion)
-    }
 }
 
 /// 系统调用返回值的可核验包装：ensured 将非零结果就地转成带操作名的类型化
@@ -1124,20 +1021,15 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
     }
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
-        requestLaunch(url, configuration: launchConfiguration(debuggingPort: debuggingPort, environment: nil),
-                      completion: completion)
-    }
-    func openApplication(at url: URL, debuggingPort: Int, environment: [String: String],
-                         completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
-        requestLaunch(url, configuration: launchConfiguration(debuggingPort: debuggingPort, environment: environment),
+        requestLaunch(url, configuration: launchConfiguration(debuggingPort: debuggingPort),
                       completion: completion)
     }
 
-    /// 组装 NSWorkspace 打开配置。环境参数只用于 ZCode 隔离启动：显式环境 ⇒
-    /// 激活启动；空字典不覆盖继承环境（日常启动保持用户自己的 profile）。
-    private func launchConfiguration(debuggingPort: Int, environment: [String: String]?) -> NSWorkspace.OpenConfiguration {
+    /// 组装 NSWorkspace 打开配置：日常启动不覆盖继承环境（保持用户自己的
+    /// profile），也不激活启动。
+    private func launchConfiguration(debuggingPort: Int) -> NSWorkspace.OpenConfiguration {
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = environment != nil
+        configuration.activates = false
         configuration.hides = false
         configuration.hidesOthers = false
         configuration.createsNewApplicationInstance = false
@@ -1145,7 +1037,6 @@ final class SystemNativeAppRuntime: NativeAppRuntime {
         configuration.addsToRecentItems = false
         configuration.arguments = ["--remote-debugging-address=127.0.0.1",
                                     "--remote-debugging-port=\(debuggingPort)"]
-        if let environment, !environment.isEmpty { configuration.environment = environment }
         return configuration
     }
 
@@ -1437,13 +1328,10 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
 
 // MARK: - 资产与导航
 
-/// 入口身份判定：ZCode 启动器必须显式声明 zcode；既有 Codex/旧入口缺省为
-/// Codex；任何其他组合（错误声明、陌生 bundle）拒绝，绝不猜宿主。
+/// 入口身份判定：既有 Codex/旧入口缺省为 Codex；任何其他组合（错误声明、
+/// 陌生 bundle）拒绝，绝不猜宿主。
 enum NativeEntryIdentity {
     static func host(bundleIdentifier: String?, declaredHost: Any?) -> SkinHostID? {
-        if bundleIdentifier == "local.azhou.zcode-startup" {
-            return declaredHost as? String == "zcode" ? .zcode : nil
-        }
         guard let declaredHost else { return .codex } // 既有 Codex/旧入口。
         return declaredHost as? String == "codex" && bundleIdentifier == "local.azhou.codex-startup" ? .codex : nil
     }
@@ -1828,8 +1716,7 @@ final class TrustedLaunchSession {
     /// 每个候选都过完整核验链，取首个通过者。
     private func resolveInstalledTarget(runtime: any NativeAppRuntime, identity: LauncherIdentity) -> URL? {
         var candidates = runtime.runningApplications(bundleIdentifier: identity.targetBundleID).compactMap { $0.bundleURL }
-        candidates += identity.host == .zcode ? [URL(fileURLWithPath: "/Applications/ZCode.app")]
-            : [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
+        candidates += [URL(fileURLWithPath: "/Applications/ChatGPT.app"), URL(fileURLWithPath: "/Applications/Codex.app")]
         if let url = runtime.urlForApplication(bundleIdentifier: identity.targetBundleID) { candidates.append(url) }
         return candidates.compactMap { Self.verifiedBundle($0, runtime: runtime, identity: identity) }.first
     }
@@ -1862,32 +1749,20 @@ final class TrustedLaunchSession {
         return executable
     }
 
-    /// 安装身份键：bundle id、版本、构建号来自已核验 bundle；可执行哈希仅 ZCode
-    /// 分支计算（Codex 链路按操作分支做 codesign 核验，不在组装期伪造摘要）。
+    /// 安装身份键：bundle id、版本、构建号来自已核验 bundle；可执行哈希留空
+    /// （Codex 链路按操作分支做 codesign 核验，不在组装期伪造摘要）。
     func hostApplicationKey(for url: URL, identity: LauncherIdentity) -> HostApplicationKey? {
         guard let bundle = Bundle(url: url), let bundleID = bundle.bundleIdentifier,
               let executable = bundle.executableURL.map({ PathCanonicalization.resolved($0) }),
               executable.path.hasPrefix(PathCanonicalization.resolved(url).appendingPathComponent("Contents/MacOS").path + "/"),
               let host = identity.host else { return nil }
-        // ZCode 必须给出可计算的真实指纹；读不到可执行文件时整体拒绝。
-        var executableHash = ""
-        if host == .zcode {
-            guard let digest = Self.executableSHA256(of: executable) else { return nil }
-            executableHash = digest
-        }
         let info = bundle.infoDictionary ?? [:]
         return HostApplicationKey(
             host: host, bundleURL: PathCanonicalization.resolved(url), executableURL: executable,
             bundleIdentifier: bundleID,
             version: (info["CFBundleShortVersionString"] as? String) ?? "",
             build: (info["CFBundleVersion"] as? String) ?? "",
-            executableSHA256: executableHash)
-    }
-
-    /// ZCode 安装指纹：读入可执行文件计算 SHA-256（十六进制小写）。
-    private static func executableSHA256(of executable: URL) -> String? {
-        guard let bytes = try? Data(contentsOf: executable) else { return nil }
-        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            executableSHA256: "")
     }
 
     /// 生产载荷：资源目录缺失或读取防御未通过都以 asset-invalid 拒绝。
@@ -2260,7 +2135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     // MARK: 受信启动
 
     /// 启动受信会话：目标发现与核验 → 唯一性检查 → 交给共享宿主工厂执行。
-    /// 完成后按宿主阵营走类型化（ZCode）或既有（Codex）终局。
+    /// 完成后走既有（Codex）终局。
     private func beginTrustedLaunch() {
         guard !session.startupRequested, !exitLedger.terminating else { return }
         session.beginEventStream(writer: journal.eventWriter, at: runtime.uptime)
@@ -2283,11 +2158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             guard let self else { return }
             let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
             self.session.opening = false
-            if expectedApplication.host == .zcode {
-                self.finishZCodeStartup(result, expectedApplication: expectedApplication, promoted: self.exitLedger.promoted)
-            } else {
-                self.concludeStartupRun(startupLegacyOutcome(from: result))
-            }
+            self.concludeStartupRun(startupLegacyOutcome(from: result))
         }
     }
 
@@ -2379,16 +2250,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                                 recorder: installObservation))
                     },
                     installObservation: installObservation, assembly: assembly)
-            },
-            makeZCodeDriver: { [weak self] inputs in
-                guard let self else { return PlaceholderUnavailableDriver() }
-                let stateRoot = self.commandLine.zcodeStateRoot.map { URL(fileURLWithPath: $0) }
-                    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Azhou AI Lab/ZCode")
-                let bridge = ZCodeNativeRuntime(inputs: inputs, runtime: hostRuntime, readPayload: { [weak self] in
-                    guard let self else { throw StartupFailure(reason: "asset-invalid", message: "入口生命周期已结束。") }
-                    return try self.session.productionPayload(runtime: self.runtime)
-                }, stateRoot: stateRoot, onEvent: { [weak self] fields in self?.journal.emitRuntimeDiagnostic(fields) })
-                return ZCodeSkinDriver(inputs: inputs, assembly: bridge.makeAssembly())
             })
         switch SkinHostFactory.make(host: expectedApplication.host,
                                     expectedApplication: expectedApplication,
@@ -2426,8 +2287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     /// 逐能力证据表：只在该能力确有具名验证来源时标 verified；缺证如实
     /// unverified。签名核验在 preflight/validate 分支内执行，组装期不声称。
     private func capabilityFindings(for key: HostApplicationKey, contractVersion: String) -> [CapabilityFinding] {
-        if key.host == .zcode { return ZCodeNativeRuntime.findings(for: key, resources: runtime.resourceURL) }
-        return codexCapabilityFindings(for: key, contractVersion: contractVersion)
+        codexCapabilityFindings(for: key, contractVersion: contractVersion)
     }
 
     private func codexCapabilityFindings(for key: HostApplicationKey,
@@ -2469,15 +2329,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         session.beginEventStream(writer: journal.eventWriter, at: runtime.uptime)
         guard let final = session.concludeEventStream(outcome, at: runtime.uptime) else { return }
         carryOutFinalOutcome(final, promoted: exitLedger.promoted)
-    }
-
-    /// ZCode 路径的终局（模块内可见：生命周期测试驱动真实终局/退出路径）。
-    func finishZCodeStartup(_ result: SkinLaunchResult, expectedApplication: HostApplicationKey,
-                            promoted: Bool) {
-        session.beginEventStream(writer: journal.eventWriter, at: runtime.uptime)
-        guard let final = session.eventStream?.resolveZCode(result, expectedApplication: expectedApplication,
-                                                            at: runtime.uptime) else { return }
-        carryOutFinalOutcome(final, promoted: promoted)
     }
 
     /// 终局编排：ready/skipped 尝试激活目标；失败两档按晋升与否决定可见错误
@@ -2573,11 +2424,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         stage.presentError(title: stage.displayLocale.displayName, message: message,
                            closeTitle: stage.displayLocale.closeTitle)
         exitLedger.terminating = true; runtime.terminate()
-    }
-
-    /// ZCode 运行时诊断出口：复用严格信封，不添加额外字段。
-    func emitZCodeRuntimeEvent(_ fields: [String: Any]) {
-        journal.emitRuntimeDiagnostic(fields)
     }
 
     // MARK: 应用生命周期

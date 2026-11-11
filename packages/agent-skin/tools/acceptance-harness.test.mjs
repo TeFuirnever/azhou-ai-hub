@@ -10,7 +10,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { colorAlpha, ensureDir, mainPageTargets, parseTargets, singleMainPage, stripUrlForMatch, wallpaperBlockers } from './acceptance-harness.mjs';
 
-const RENDERER = 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html';
+const RENDERER = 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html';
 
 test('stripUrlForMatch removes query and fragment in one pass', () => {
   assert.equal(stripUrlForMatch(RENDERER + '?locale=en-GB'), RENDERER);
@@ -29,7 +29,7 @@ test('parseTargets passes arrays through and rejects non-JSON with the stable co
 test('mainPageTargets matches the query-string renderer URL and ignores the rest', () => {
   const targets = [
     { type: 'page', url: RENDERER + '?locale=en-GB' },
-    { type: 'page', url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/other.html?locale=zh' },
+    { type: 'page', url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/other.html?locale=zh' },
     { type: 'iframe', url: RENDERER },
     { type: 'worker', url: RENDERER + '?lang=en' },
     { type: 'page' },

@@ -857,9 +857,9 @@ struct StartupIdentityDiagnostic {
 /// bounded and symlink-safe JSONL handling. A logging failure never blocks startup.
 enum StartupEventJournal {
     static func directory(host: SkinHostID?) -> URL {
-        let name = host == .zcode ? "AzhouZCodeStartup" : "AzhouCodexStartup"
+        _ = host // Retained for the historical call shape; every entry now logs under the Codex directory.
         return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/\(name)", isDirectory: true)
+            .appendingPathComponent("Library/Logs/AzhouCodexStartup", isDirectory: true)
     }
 
     private static func isLink(_ url: URL) -> Bool {
@@ -2061,6 +2061,9 @@ enum WallpaperCLI {
             english: "Removed startup decoration and settings entry from this page. Saved values were preserved. Codex and its debug port were left unchanged."
         )
     }
+    // The emitted expressions below answer only to the frozen legacy wallpaper
+    // owner "azhou.codex-startup-animation" (inherited from codex-startup-animation);
+    // installed 0.9.0 controllers still carry that owner string verbatim.
     static let statusSource = """
     (() => { const u = new URL(location.href);
       if (window.top !== window || u.protocol !== 'app:' || u.hostname !== '-' || u.pathname !== '/index.html'

@@ -19,7 +19,6 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'dist'  # Legacy location; only the installer may retire its apps.
-ACTIVE_HOST = 'codex'
 LEGACY_NAME = '阿舟启动 Codex.app'
 IDENTITY = ('local.azhou.codex-startup', 'AzhouCodexStartup')
 LEGACY = {
@@ -30,6 +29,8 @@ KNOWN_IDENTITIES = (IDENTITY, *LEGACY.values())
 PAYLOAD = ROOT / '.build/azhou-payload'
 REGISTRY_TOOL = ROOT / '.build/azhou-install-registry'
 MARKER = Path('Contents/Resources/azhou-build.json')
+# Frozen installed-state owner identity; installed receipts and registry records
+# depend on this exact historical string (inherited from codex-startup-animation).
 PROJECT_ID = 'azhou.codex-startup-animation'
 ICON_NAME = 'AzhouAppIcon.icns'
 
@@ -104,8 +105,7 @@ def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
 
 
 def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
-    if set(config) not in ({'identity', 'startup', 'wallpaper'},
-                           {'identity', 'startup', 'wallpaper', 'hostIcons'}):
+    if set(config) != {'identity', 'startup', 'wallpaper'}:
         raise RuntimeError('theme-config.json has an unsupported top-level shape.')
     identity = config.get('identity')
     if not isinstance(identity, dict) or set(identity) != {
@@ -123,13 +123,6 @@ def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
     entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
     if icon_input == entry_avatar_input:
         raise RuntimeError('theme-config.json iconInput and entryAvatarInput must be distinct assets.')
-    if 'hostIcons' in config:
-        host_icons = config['hostIcons']
-        if not isinstance(host_icons, dict) or set(host_icons) != {'zcode'}:
-            raise RuntimeError('theme-config.json hostIcons must define exactly zcode.')
-        zcode_icon = _private_input_path(host_icons['zcode'], 'hostIcons.zcode')
-        if zcode_icon in (icon_input, entry_avatar_input):
-            raise RuntimeError('hostIcons.zcode must be distinct from the Codex icon and entry avatar.')
 
     startup = config.get('startup')
     if not isinstance(startup, dict) or set(startup) != {'durationMs', 'text'}:
@@ -196,12 +189,6 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
     config = _read_source_json(root, 'theme-config.json', 'theme config')
     package = load_package_metadata(root)
     theme = _validate_theme_config_data(config, package['runtime_version'], package['runtime_build'])
-    if ACTIVE_HOST == 'zcode':
-        if 'hostIcons' not in config:
-            raise RuntimeError('ZCode builds require an explicit hostIcons.zcode private icon.')
-        theme['identity']['iconInput'] = config['hostIcons']['zcode']
-        theme['identity']['appName'] = {'zh-CN': '阿舟 AI 实验室 for ZCode', 'en': 'Azhou AI Lab for ZCode'}
-        theme['identity']['installationName'] = '阿舟 AI 实验室 for ZCode.app'
     if require_inputs:
         _private_input(root, theme['identity']['iconInput'], 'identity.iconInput', required=True)
         _private_input(root, theme['identity']['entryAvatarInput'], 'identity.entryAvatarInput', required=True)
@@ -210,26 +197,15 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
 
 VERSION, BUILD = (load_package_metadata(ROOT)[key] for key in ('runtime_version', 'runtime_build'))
 NAME = load_theme_config(ROOT)['identity']['installationName']
-def configure_build_host(host):
-    """Fixed two-entry build selection; default Codex identity stays unchanged."""
-    global ACTIVE_HOST, IDENTITY, KNOWN_IDENTITIES, PROJECT_ID, PAYLOAD, NAME
-    if host not in ('codex', 'zcode'):
-        raise RuntimeError('Unsupported build host.')
-    ACTIVE_HOST = host
-    IDENTITY = ('local.azhou.zcode-startup', 'AzhouZCodeStartup') if host == 'zcode' else ('local.azhou.codex-startup', 'AzhouCodexStartup')
-    KNOWN_IDENTITIES = (IDENTITY,) if host == 'zcode' else (IDENTITY, *LEGACY.values())
-    PROJECT_ID = 'azhou.zcode-startup-animation' if host == 'zcode' else 'azhou.codex-startup-animation'
-    PAYLOAD = ROOT / ('.build/azhou-zcode-payload' if host == 'zcode' else '.build/azhou-payload')
-    NAME = load_theme_config(ROOT)['identity']['installationName']
 
 
 INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
-    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift', 'Native/ZCodeSkinDriver.swift', 'Native/ZCodeSkinRuntime.swift',
+    'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift',
     'tools/build-macos.sh', 'tools/build-lock.py', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-dsh-plugin.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
-    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs', 'extension/hosts/zcode.mjs',
+    'extension/renderer.mjs', 'extension/codex-page-adapter.mjs',
     'extension/hosts/dsh.mjs', 'extension/bootstrap.mjs',
     'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
@@ -244,7 +220,6 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
-ZCODE_STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/zcode.mjs')
 # A web plugin package, never a macOS bundle.
 DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs', 'tools/build-dsh-plugin.py')
 DSH_PLUGIN_PACKAGE_NAME = 'azhou-agent-skin'
@@ -509,13 +484,13 @@ def write_marker(path, *, approved_icon_sha256=None):
         approved = approved_icon_sha256.lower()
         icon_input = load_theme_config(ROOT)['identity']['iconInput']
         if inputs.get(icon_input) != approved:
-            raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
+            raise RuntimeError('图标源图与已批准的 SHA-256 不符，未发布。')
         # Render from the verified copy even if the original changes after recording inputs.
         icon_snapshot = path.parent / 'approved-icon.png'
         shutil.copyfile(ROOT / icon_input, icon_snapshot)
         with icon_snapshot.open('rb') as stream:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != approved:
-                raise RuntimeError(f'{ACTIVE_HOST} 图标源图与已批准的 SHA-256 不符，未发布。')
+                raise RuntimeError('图标源图与已批准的 SHA-256 不符，未发布。')
     marker = {
         'schema': 1, 'projectID': PROJECT_ID, 'projectRoot': str(ROOT),
         'bundleID': IDENTITY[0], 'executable': IDENTITY[1],
@@ -836,8 +811,6 @@ def write_bundle_info(path):
         'LSUIElement': True,
         'NSHighResolutionCapable': True,
     }
-    if ACTIVE_HOST == 'zcode':
-        info['AzhouTargetHost'] = 'zcode'
     with info_path.open('wb') as stream:
         plistlib.dump(info, stream, fmt=plistlib.FMT_XML, sort_keys=False)
     resources = contents / 'Resources'
@@ -876,15 +849,7 @@ def verify_wallpaper(path, info, marker):
 
 
     wallpaper_host = manifest.get('targetHost', 'codex')
-    wallpaper_script = script.read_text(encoding='utf-8')
-    if wallpaper_host == 'zcode':
-        if (manifest.get('adapterSHA256') != marker['inputs'].get('extension/hosts/zcode.mjs')
-                or 'function createZCodePageAdapter(' not in wallpaper_script
-                or 'const pageAdapter = createZCodePageAdapter(globalThis);' not in wallpaper_script
-                or 'wallpaperPayload.pageAdapter = pageAdapter;' not in wallpaper_script
-                or 'return await installRenderer(wallpaperPayload);' not in wallpaper_script):
-            raise RuntimeError('ZCode wallpaper adapter/entry binding is invalid.')
-    elif wallpaper_host != 'codex' or 'createZCodePageAdapter(' in wallpaper_script:
+    if wallpaper_host != 'codex':
         raise RuntimeError('Wallpaper host label does not match its adapter entry.')
 
 
@@ -973,7 +938,7 @@ def verify_dsh_plugin(path):
     for needle in bound_once:
         if client.count(needle) != 1:
             raise RuntimeError(f'DSH 插件 client.js 必须恰好绑定一次：{needle!r}')
-    if ('createCodexPageAdapter(' in client or 'createZCodePageAdapter(' in client
+    if ('createCodexPageAdapter(' in client
             or '((controllerMetadata) => {' in client
             or re.search(r'^\s*(?:import|export)\s', client, re.M)
             or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', client)
@@ -1171,11 +1136,9 @@ def verify_startup(path, info, marker, *, current_source=True):
 
     source_inputs = manifest.get('sourceInputs')
     target_host = manifest.get('targetHost', 'codex')
-    if target_host not in ('codex', 'zcode'):
+    if target_host != 'codex':
         raise RuntimeError('Startup manifest targetHost is invalid.')
-    if target_host == 'zcode' and manifest.get('entrypoint') != 'controller-metadata-factory/v1':
-        raise RuntimeError('ZCode startup must bind its explicit metadata factory entrypoint.')
-    current_startup_inputs = frozenset(ZCODE_STARTUP_REQUIRED_INPUTS if target_host == 'zcode' else STARTUP_REQUIRED_INPUTS)
+    current_startup_inputs = frozenset(STARTUP_REQUIRED_INPUTS)
     if current_source:
         allowed_theme_inputs = {current_startup_inputs}
     else:
@@ -1196,8 +1159,6 @@ def verify_startup(path, info, marker, *, current_source=True):
             allowed_theme_inputs.add(frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
         if expected_version == '0.9.0' and expected_build in {'11', '12'}:
             allowed_theme_inputs.add(frozenset(PREVIOUS_THEME_STARTUP_REQUIRED_INPUTS))
-    if target_host == 'zcode':
-        allowed_theme_inputs = {current_startup_inputs}
     allowed_source_inputs = set(allowed_theme_inputs)
     if not current_source and (expected_version, expected_build) == ('0.9.0', '10'):
         allowed_source_inputs.add(frozenset(LEGACY_STARTUP_REQUIRED_INPUTS))
@@ -1338,14 +1299,9 @@ def verify_startup(path, info, marker, *, current_source=True):
                        and 'return installStartup(installAnimation, host);' in script)
     page_adapter_entry = ('return bootstrapStartup({' in script
                           and 'return installStartup(installAnimation, host, pageAdapter);' in script)
-    if target_host == 'codex' and ('createZCodePageAdapter(' in script or script.startswith('((controllerMetadata) => {')):
-        raise RuntimeError('Codex startup cannot carry a ZCode factory or adapter entry.')
-    zcode_factory_entry = (target_host == 'zcode' and page_adapter_entry
-                           and script.startswith('((controllerMetadata) => {\n') and script.rstrip().endswith('})')
-                           and 'const pageAdapter = createZCodePageAdapter(globalThis, { controllerMetadata }, {' in script
-                           and 'function createZCodePageAdapter(' in script
-                           and 'function createCodexPageAdapter(' not in script)
-    if (target_host == 'zcode' and not zcode_factory_entry) or (target_host == 'codex' and not (legacy_entry or bootstrap_entry or page_adapter_entry)):
+    if script.startswith('((controllerMetadata) => {'):
+        raise RuntimeError('Codex startup cannot carry a controller-metadata factory entry.')
+    if target_host == 'codex' and not (legacy_entry or bootstrap_entry or page_adapter_entry):
         raise RuntimeError('startup/install.js 未从完整 Page Controller 安装入口返回结果。')
     return manifest
 
@@ -1503,7 +1459,6 @@ def publish(staged):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--host', choices=('codex', 'zcode'), default='codex')
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--publish', metavar='STAGED_PAYLOAD')
     actions.add_argument('--publish-build', metavar='STAGED_PAYLOAD')
@@ -1515,7 +1470,6 @@ if __name__ == '__main__':
     actions.add_argument('--seal-stage', metavar='STAGE_ROOT')
     actions.add_argument('--cleanup-stage', metavar='STAGE_ROOT')
     options = parser.parse_args()
-    configure_build_host(options.host)
     try:
         if options.publish:
             publish(options.publish)

@@ -1,4 +1,6 @@
 // Codex page adapter (agent-skin-zcode-contract/v0.1).
+// The contract/storage string above is frozen under its historical ZCode-era
+// name; installed 0.9.0 state carries it verbatim and must keep migrating.
 // The Codex host strategy previously inlined in extension/renderer.mjs moved here
 // unchanged: main-page identification, host appearance tokens with their existing
 // fallbacks, the appearance entry with its navigation-anchor discovery, and the

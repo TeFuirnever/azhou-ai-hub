@@ -733,7 +733,6 @@ try {
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
     ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
     ['/extension/hosts/dsh.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/dsh.mjs'), 'utf8')]],
-    ['/extension/hosts/zcode.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/zcode.mjs'), 'utf8')]],
   ]);
   if (generatedPayloadRoute !== null) {
     routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);
@@ -6333,9 +6332,7 @@ try {
         window.__DSH_BOOT__ = {};
         adapter = createDSHPageAdapter(host, {sidebarEntry:false});
       } else {
-        const href = kind === 'zcode'
-          ? 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
-          : 'app://-/index.html?initialRoute=%2F';
+        const href = 'app://-/index.html?initialRoute=%2F';
         host = new Proxy(window, {get(target, name) {
           if (name === 'top') return host;
           if (name === 'location') return new URL(href);
@@ -6343,16 +6340,8 @@ try {
           return ['addEventListener','removeEventListener','setTimeout','clearTimeout','getComputedStyle','matchMedia'].includes(name)
             ? value.bind(target) : value;
         }});
-        if (kind === 'zcode') {
-          const {createZCodePageAdapter} = await import('/extension/hosts/zcode.mjs');
-          adapter = createZCodePageAdapter(host, {controllerMetadata:{
-            controllerInstanceID:crypto.randomUUID(), createdByOperationID:crypto.randomUUID(),
-            payloadSHA256:'a'.repeat(64), documentToken:'fixture-document',
-          }});
-        } else {
-          const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
-          adapter = createCodexPageAdapter(host);
-        }
+        const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+        adapter = createCodexPageAdapter(host);
       }
       const evidence = window.lifecycleFixture = {disposed:0,closed:0};
       const payload = (_win, _doc, _location, _performance, _indexedDB, _Image, _Path2D, _URL,
@@ -6373,7 +6362,7 @@ try {
     assert.equal(state.phase, 'loading');
   }
 
-  for (const kind of ['codex', 'zcode', 'dsh']) {
+  for (const kind of ['codex', 'dsh']) {
     await check(kind + ' startup and settings lifecycle contract', async () => {
       await startLifecycleFixture(kind);
       const completed = await cdp.evaluate(`(() => {

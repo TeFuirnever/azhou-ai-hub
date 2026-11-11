@@ -240,7 +240,7 @@ final class CodexSkinDriver: SkinHostDriver {
         }
         // Known limit (C0): page state stays explicitly unobserved — this build
         // performs no implicit cold start and never installs a controller to probe a
-        // page; page-level observation is deferred to the ZCode page-observation work.
+        // page; page-level observation stays with the shared contract's typed results.
         return .observed(process: process,
                          page: .notObserved(reason: "known limit (C0): page observation requires an attachment attempt; page-level observation is deferred to the page-observation ticket"))
     }

@@ -2,6 +2,8 @@ import CoreServices
 import Darwin
 import Foundation
 
+// Frozen installed-state owner identity inherited from codex-startup-animation;
+// registry records depend on this exact string.
 private let projectID = "azhou.codex-startup-animation"
 private let currentIdentity = ("local.azhou.codex-startup", "AzhouCodexStartup")
 private let knownBundleIDs = ["local.azhou.codex-startup", "local.aemeath.startup", "local.aemeath.extension"]
