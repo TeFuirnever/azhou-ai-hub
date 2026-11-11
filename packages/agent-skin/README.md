@@ -265,11 +265,11 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 
 ## 同主题原生 Codex pet
 
-原项目新增了 **「阿舟 · Agent 实验室」** 原生 Codex pet（ID：`azhou-agent-lab`）。私有图集、冻结主题、审阅证据和安装状态不在此副本；已安装 Pet 的回执仍属于 `packages/codex-startup-animation/`。本副本中的 Pet 工具不能接管该安装。
+原项目新增了 **「阿舟 · Agent 实验室」** 原生 Codex pet（ID：`azhou-agent-lab`）。本包的 Pet 工具链（manage/import 脚本、runbook 与测试）是 2026-11 独立重写后的唯一维护版本；私有图集、冻结主题与审阅证据保存在各项目根的忽略目录。旧根 `packages/codex-startup-animation/` 所装 Pet 回执的属主迁移按 [原生 pet 说明](docs/codex-pet.md) 的 `handoff` 链路执行：隔离预演与机器实况回执见 [交接记录](evidence/codex-pet-legacy-root-handoff-2026-11-11.md)，正式接管以维护者对该回执的审阅为准。
 
 ```bash
-python3 -B ../codex-startup-animation/tools/manage-codex-pet.py status
-python3 -B ../codex-startup-animation/tools/manage-codex-pet.py sync
+python3 -B tools/manage-codex-pet.py status
+python3 -B tools/manage-codex-pet.py sync
 ```
 
 `sync` 会安装已生成、审阅且与当前主题匹配的候选包，可能修改用户级 `CODEX_HOME`。主题变更或没有候选时报告 `generation-required`：先用 `prepare` 冻结输入，再通过 ImageGen/hatch-pet 生成与审阅；脚本本身不调用生图 API。迁移与本轮验证未运行 `sync`，也未观察宿主选择后的实际播放。

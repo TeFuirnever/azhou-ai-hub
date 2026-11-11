@@ -14,7 +14,6 @@ import tempfile
 
 PACKAGE = Path(__file__).resolve().parents[1]
 BUILD_TEST = PACKAGE / "tools/test-startup-build.py"
-LEGACY_PACKAGE = PACKAGE.parent / "codex-startup-animation"
 GENERATED_ONLY_CHECK = "generated startup wallpaper failure is visible near the appearance entry"
 
 
@@ -29,7 +28,6 @@ def load_build_helpers():
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--legacy-fixture", choices=("actual", "synthetic"), default="actual")
     args = parser.parse_args()
     if sys.platform != "darwin" or shutil.which("xcrun") is None:
         print("FAILED: isolated browser selection CLI integration requires macOS and xcrun", file=sys.stderr)
@@ -47,12 +45,6 @@ def main() -> int:
         if (package_root / ".build").exists():
             raise AssertionError("source clone unexpectedly copied the host .build directory")
 
-        if args.legacy_fixture == "actual":
-            legacy_wallpaper = temporary_root / "codex-startup-animation/wallpaper"
-            legacy_wallpaper.mkdir(parents=True)
-            for name in ("wallpaper.css", "renderer.js"):
-                shutil.copy2(LEGACY_PACKAGE / "wallpaper" / name, legacy_wallpaper / name)
-
         native = subprocess.run(
             [sys.executable, "-B", "tools/test-startup-native.py"], cwd=package_root, check=False,
         )
@@ -66,8 +58,7 @@ def main() -> int:
         output = temporary_root / "browser-selection-report"
         runner = package_root / "tools/test-startup-browser.mjs"
         result = subprocess.run(
-            [node, str(runner), "--only", GENERATED_ONLY_CHECK, "--out", str(output),
-             "--legacy-fixture", args.legacy_fixture],
+            [node, str(runner), "--only", GENERATED_ONLY_CHECK, "--out", str(output)],
             cwd=package_root, check=False, capture_output=True, text=True,
         )
         if result.returncode != 1:
