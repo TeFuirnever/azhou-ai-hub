@@ -437,6 +437,7 @@ struct StartupNativeTests {
         var checks = 0
         checks += zcodeRuntimeEventEnvelopeChecks()
         checks += zcodeTypedEventContractChecks()
+        checks += startupIdentityDiagnosticChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
@@ -5451,5 +5452,76 @@ private func startupPageReplacementChecks() async throws -> Int {
     stream.startupInstalled(pid: 4123, runID: 1, at: 6, pageID: "page-b")
     expect(stream.resolve(.ready(runID: 1), observation: oldObservation, at: 8) == .behaviorNotProven(reason: "protocol-error"),
            "same PID and run ID cannot make an old-page observation satisfy new-page readiness")
+    return checks
+}
+
+private func startupIdentityDiagnosticChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+
+    // The diagnostics policy is opt-in through exactly one environment value.
+    expect(StartupDiagnosticsPolicy.isEnabled(environment: ["AZHOU_STARTUP_DIAGNOSTICS": "1"]),
+           "startup diagnostics opt in through AZHOU_STARTUP_DIAGNOSTICS=1")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: ["AZHOU_STARTUP_DIAGNOSTICS": "0"]),
+           "startup diagnostics stay off for other values")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: [:]),
+           "startup diagnostics default to off")
+
+    // Without a sink the diagnostic stays inert and still passes values through.
+    var inert = StartupIdentityDiagnostic("probe", pid: 42, at: 10, diagnostics: nil)
+    expect(inert.check("identity", true), "checks report their value without a sink")
+    expect(inert.present("bundle", URL(fileURLWithPath: "/tmp/synthetic") as URL?) != nil,
+           "present yields the observed value without a sink")
+    expect(inert.present("absent", nil as String?) == nil, "present passes nil through")
+    expect(inert.processIdentifier(77) == 77, "process identifier passes through without a sink")
+    inert.finish("refused", error: nil) // Must not crash without a sink.
+
+    // With a sink every tap lands in one bounded record and finish decorates it.
+    var records: [[String: Any]] = []
+    var diagnosed = StartupIdentityDiagnostic("open", pid: 700, at: 5,
+                                              diagnostics: { records.append($1) })
+    expect(diagnosed.check("bundle-identity", true), "identity check reports true")
+    expect(!diagnosed.check("page-supported", false), "a failing check reports false")
+    expect(diagnosed.present("main-page", "https://synthetic.invalid" as String?) == "https://synthetic.invalid",
+           "present yields the observed page")
+    expect(diagnosed.processIdentifier(701) == 701, "the latest process identifier tap wins")
+    diagnosed.finish("verified", error: nil)
+    expect(records.count == 1, "finish emits exactly one diagnostic record")
+    var record = records.last ?? [:]
+    expect((record["stage"] as? String) == "target-identity", "records carry the target-identity stage")
+    expect((record["checkpoint"] as? String) == "open", "records carry the checkpoint")
+    expect((record["pid"] as? Int32) == 701, "records carry the latest process identifier")
+    expect((record["pidObserved"] as? Bool) == true, "finish reports whether a pid was observed")
+    expect((record["outcome"] as? String) == "verified", "records carry the outcome")
+
+    // Errors are reduced to domain/code plus the failure taxonomy, never payloads.
+    records.removeAll()
+    var failing = StartupIdentityDiagnostic("swap", at: 6, diagnostics: { records.append($1) })
+    failing.check("signature", false)
+    let transport = StartupTransportError(domain: "transport-fixture", code: 7, httpStatus: 503)
+    failing.finish("aborted", error: StartupFailure(reason: "listener-mismatch", message: "synthetic",
+                                                    transportError: transport))
+    record = records.last ?? [:]
+    expect(records.count == 1 && (record["outcome"] as? String) == "aborted",
+           "the failing path also emits exactly one bounded record")
+    expect((record["errorDomain"] as? String)?.isEmpty == false,
+           "startup failures reduce to a non-empty error domain")
+    expect(record["errorCode"] != nil, "startup failures reduce to an error code")
+    expect((record["reason"] as? String) == "listener-mismatch", "startup failures record their reason")
+    expect(record["state"] == nil, "a startup failure carries no wallpaper state")
+    expect((record["pidObserved"] as? Bool) == false, "no pid tap keeps pidObserved false")
+
+    records.removeAll()
+    let wallpaperFailure = WallpaperFailure(state: "page-missing", chinese: "合成失败。", english: "Synthetic failure.",
+                                            transportError: nil, retryableListFailure: false, httpStatus: nil)
+    var stateDiagnosed = StartupIdentityDiagnostic("swap", at: 7, diagnostics: { records.append($1) })
+    stateDiagnosed.check("signature", false)
+    stateDiagnosed.finish("aborted", error: wallpaperFailure)
+    record = records.last ?? [:]
+    expect((record["state"] as? String) == "page-missing", "wallpaper failures record their state")
+    expect(record["errorDomain"] as? String != nil, "wallpaper failures still reduce to domain and code")
+
     return checks
 }
