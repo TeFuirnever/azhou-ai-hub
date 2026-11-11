@@ -184,6 +184,7 @@ struct WallpaperValidationTests {
 
         checks += try wallpaperJournalChecks()
         checks += try codexTargetEnvironmentChecks()
+        checks += try identityFailureTraceChecks()
         checks += try await startupSignatureBoundaryChecks()
         checks += try await standaloneSignatureBoundaryChecks()
         checks += try await wallpaperStartupBoundaryChecks()
@@ -959,6 +960,115 @@ private func wallpaperCoordinatorChecks() async throws -> Int {
            && expiredSession.evaluatedSources.isEmpty,
            "retry does not start a page request after its bounded evaluation budget is exhausted")
 
+    return checks
+}
+
+private func identityFailureTraceChecks() throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: failure-only identity trace: \(label)") }; checks += 1
+    }
+    let full = "AZHOU_STARTUP_DIAGNOSTICS"
+    let failures = "AZHOU_STARTUP_IDENTITY_FAILURES"
+    let policies: [([String: String], Bool, Bool)] = [
+        ([:], false, false), ([failures: "1"], false, true),
+        ([failures: "0"], false, false), ([failures: "true"], false, false), ([failures: ""], false, false),
+        ([full: "1"], true, false), ([full: "1", failures: "1"], true, false),
+        ([full: "0", failures: "1"], false, true)
+    ]
+    for (environment, expectedFull, expectedFailures) in policies {
+        expect(StartupDiagnosticsPolicy.isEnabled(environment: environment) == expectedFull
+               && StartupDiagnosticsPolicy.identityFailuresEnabled(environment: environment) == expectedFailures,
+               "only exact independent opt-ins enable diagnostics, with the existing full mode taking precedence")
+    }
+    let bundle = URL(fileURLWithPath: "/private/Agent-Skin-Identity-Trace-Fixture.app")
+    let executable = bundle.appendingPathComponent("Contents/MacOS/Fixture")
+    let facts = StartupTargetFacts(pid: 4123, bundle: bundle, executable: executable,
+                                   bundleID: "com.openai.codex", launchTime: 123.456)
+    let raw = NSError(domain: "IdentityCommandFixture", code: 91,
+                      userInfo: [NSLocalizedDescriptionKey: "identity-private-command", NSFilePathErrorKey: "/private/identity-private-file"])
+    for enabled in [false, true] {
+        let fixture = FakeCodexTargetEnvironmentState(bundle: bundle, executable: executable)
+        fixture.commandErrors["/bin/ps"] = raw
+        let base: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
+        var records: [[String: Any]] = []
+        let trace = StartupIdentityFailureTrace { _, record in records.append(record) }
+        let system: any StartupTargetSystem = enabled ? base.observingIdentityFailures(trace) : base
+        do {
+            try system.validate(facts, deadline: 200)
+            fatalError("a process command error must still escape")
+        } catch {
+            expect(error as NSError === raw, "failure-only preserves the original raw thrown NSError object")
+        }
+        expect(records.isEmpty && fixture.commandCalls.count == 1 && fixture.commandCalls[0].file == "/bin/ps"
+               && fixture.commandCalls[0].timeout == 2,
+               "capturing a refusal performs no I/O, new command or retry before the outer verdict")
+        trace.finish(reason: "target-identity", at: 101)
+        if enabled {
+            expect(records.count == 1 && records[0]["checkpoint"] as? String == "ps-identity"
+                   && records[0]["failedPredicate"] as? String == "command-threw"
+                   && records[0]["errorDomain"] as? String == raw.domain && records[0]["errorCode"] as? Int == raw.code
+                   && records[0]["state"] == nil && records[0]["pid"] as? Int32 == facts.pid,
+                   "a production existential retains raw process-command provenance and its already known PID")
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: records[0]), as: UTF8.self)
+            expect(!text.contains("identity-private") && !text.contains("Contents/MacOS") && !text.contains("userInfo"),
+                   "the rejection schema does not serialize arbitrary Error contents or filesystem paths")
+        } else { expect(records.isEmpty, "an unobserved production system cannot capture into a separate trace") }
+    }
+
+    let signatureError = NSError(domain: "IdentityCommandFixture", code: 92,
+                                 userInfo: [NSLocalizedDescriptionKey: "identity-private-signature"])
+    for enabled in [false, true] {
+        let fixture = FakeCodexTargetEnvironmentState(bundle: bundle, executable: executable)
+        fixture.commandErrors["/usr/bin/codesign"] = signatureError
+        let base: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
+        var records: [[String: Any]] = []
+        let trace = StartupIdentityFailureTrace { _, record in records.append(record) }
+        let system: any StartupTargetSystem = enabled ? base.observingIdentityFailures(trace) : base
+        do {
+            try system.validate(facts, deadline: 200)
+            fatalError("a signature command error must retain its refusal")
+        } catch let error as WallpaperFailure { expect(error.state == "signature-refused", "existing signature remapping remains typed and unchanged") }
+        expect(records.isEmpty && fixture.commandCalls.map(\.file) == ["/bin/ps", "/usr/bin/codesign"],
+               "signature observation does not add another scan or emit before the catch has mapped the failure")
+        trace.finish(reason: "target-identity", at: 101)
+        if enabled {
+            expect(records.count == 1 && records[0]["checkpoint"] as? String == "signature"
+                   && records[0]["failedPredicate"] as? String == "command-threw"
+                   && records[0]["errorDomain"] as? String == signatureError.domain
+                   && records[0]["errorCode"] as? Int == signatureError.code && records[0]["state"] == nil,
+                   "diagnostics retain the original signature NSError before its public WallpaperFailure mapping")
+        } else { expect(records.isEmpty, "off remains silent on signature refusal") }
+    }
+
+    // Leave a direct observed success unsealed, then make only the original
+    // system fail. A leaked environment would capture and emit that later error.
+    let scope = FakeCodexTargetEnvironmentState(bundle: bundle, executable: executable)
+    let original: any StartupTargetSystem = CodexStartupTargetSystem(environment: scope.environment())
+    var laterRecords: [[String: Any]] = []
+    let scopedTrace = StartupIdentityFailureTrace { _, record in laterRecords.append(record) }
+    try original.observingIdentityFailures(scopedTrace).validate(facts, deadline: 200)
+    scope.commandErrors["/bin/ps"] = raw
+    for operation in 0..<3 {
+        do {
+            switch operation {
+            case 0: try original.validate(facts, deadline: 200)
+            case 1: try original.validateProcess(facts, deadline: 200)
+            default: _ = try original.listeningPorts(facts, deadline: 200)
+            }
+            fatalError("later original-system process failure must still reject")
+        } catch { expect(error as NSError === raw, "the original system retains every actual validation boundary") }
+    }
+    scopedTrace.finish(reason: "target-identity", at: 102)
+    expect(laterRecords.isEmpty, "the per-open environment copy cannot observe later full/process/listener validations")
+
+    // Reject unknown checkpoint labels instead of turning arbitrary input into
+    // diagnostic metadata. This exercises the serializer's fixed schema contract.
+    var unknownRecords: [[String: Any]] = []
+    let unknown = StartupIdentityFailureTrace { _, record in unknownRecords.append(record) }
+    unknown.capture("identity-private-unregistered", predicate: .commandThrew, pid: 4123, error: raw)
+    unknown.finish(reason: "target-identity", at: 102)
+    expect(unknownRecords.isEmpty, "unregistered checkpoint strings cannot enter failure output")
     return checks
 }
 
@@ -2352,6 +2462,7 @@ private final class FakeCodexTargetEnvironmentState: @unchecked Sendable {
     var now: TimeInterval = 100
     var commandResponses: [String: String] = [:]
     var commandFailures: [String: String] = [:]
+    var commandErrors: [String: NSError] = [:]
     var commandCalls: [FakeCodexCommandInvocation] = []
     var runningProcessIdentifiers: [String] = []
     var afterCommand: ((String) -> Void)?
@@ -2398,6 +2509,7 @@ private final class FakeCodexTargetEnvironmentState: @unchecked Sendable {
             runCommand: { [self] file, arguments, timeout, emptyExit in
                 commandCalls.append(FakeCodexCommandInvocation(file: file, arguments: arguments,
                                                                timeout: timeout, emptyExit: emptyExit))
+                if let error = commandErrors[file] { throw error }
                 if let state = commandFailures[file] {
                     throw WallpaperFailure(state: state, chinese: "fixture failure", english: "fixture failure")
                 }

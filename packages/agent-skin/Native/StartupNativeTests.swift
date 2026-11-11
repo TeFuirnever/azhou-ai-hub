@@ -12,12 +12,13 @@ private final class FakeNativeApplication: NativeApplication {
     let bundleIdentifier: String?
     let bundleURL: URL?
     let executableURL: URL?
-    let launchTime: TimeInterval?
+    var launchTime: TimeInterval?
     var isTerminated = false
     var isActive = false
     var isHidden = false
     var activationResult = true
     private(set) var activationCount = 0
+    var onActivate: (() -> Void)?
 
     init(pid: Int32, bundleIdentifier: String?, bundleURL: URL?, executableURL: URL? = nil,
          launchTime: TimeInterval? = nil) {
@@ -27,7 +28,7 @@ private final class FakeNativeApplication: NativeApplication {
         self.executableURL = executableURL
         self.launchTime = launchTime
     }
-    func activate() -> Bool { activationCount += 1; return activationResult }
+    func activate() -> Bool { activationCount += 1; onActivate?(); return activationResult }
 }
 
 @MainActor
@@ -51,6 +52,8 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     var openError: Error?
     var beforeOpenCompletion: (() -> Void)?
     var deferOpenCompletion = false
+    var retainOpenCompletionForReplay = false
+    private var replayOpenCompletion: (((any NativeApplication)?, Error?) -> Void)?
     private var pendingOpenCompletion: (((any NativeApplication)?, Error?) -> Void)?
     private(set) var openCount = 0
     private(set) var openedPorts: [Int] = []
@@ -65,6 +68,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     var allocationError: Error?
     private(set) var acquiredLock: FakeNativeInstanceLock?
     private(set) var terminated = 0
+    var onTerminate: (() -> Void)?
     private(set) var activated = 0
     private(set) var accessoryPolicyChanges = 0
     private(set) var output: [String] = []
@@ -85,6 +89,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     func openApplication(at url: URL, debuggingPort: Int,
                          completion: @escaping ((any NativeApplication)?, Error?) -> Void) {
         openCount += 1; openedPorts.append(debuggingPort)
+        if retainOpenCompletionForReplay { replayOpenCompletion = completion }
         beforeOpenCompletion?()
         if deferOpenCompletion {
             pendingOpenCompletion = completion
@@ -100,6 +105,11 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     func completePendingOpen() {
         let completion = pendingOpenCompletion
         pendingOpenCompletion = nil
+        completion?(openedApplication, openError)
+    }
+    func replayLastOpen() {
+        let completion = replayOpenCompletion
+        replayOpenCompletion = nil
         completion?(openedApplication, openError)
     }
     func acquireInstanceLock(identifier: String) -> NativeLockAcquisition {
@@ -122,7 +132,7 @@ private final class FakeNativeAppRuntime: NativeAppRuntime {
     func systemFallbackLocale() -> NativeDisplayLocale { .english }
     func setAccessoryPolicy() { accessoryPolicyChanges += 1 }
     func activateIgnoringOtherApps() { activated += 1 }
-    func terminate() { terminated += 1 }
+    func terminate() { terminated += 1; onTerminate?() }
     func exit(code: Int32) { processExitCode = code }
     func writeStandardOutput(_ line: String) { output.append(line) }
     private(set) var processExitCode: Int32 = 0
@@ -185,6 +195,8 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     private(set) var createdPlayers: [(NativeDisplayLocale, String, String, Bool)] = []
     private(set) var loadedPlayers: [(URL, URL)] = []
     var evaluationResult: (Any?, Error?) = ("{}", nil)
+    var heldEvaluationSources: Set<String> = []
+    private var heldEvaluations: [String: [(Any?, Error?) -> Void]] = [:]
     var snapshotResult: (NSImage?, Error?) = (nil, nil)
 
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
@@ -199,7 +211,14 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     func orderOut() { orderedOutCount += 1 }
     func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
         evaluations.append(source)
-        completion?(evaluationResult.0, evaluationResult.1)
+        if let completion, heldEvaluationSources.contains(source) {
+            heldEvaluations[source, default: []].append(completion)
+        } else { completion?(evaluationResult.0, evaluationResult.1) }
+    }
+    func completeHeldEvaluation(_ source: String, error: Error? = nil) {
+        precondition(heldEvaluations[source]?.isEmpty == false, "expected held evaluation completion")
+        let completion = heldEvaluations[source]!.removeFirst()
+        completion(evaluationResult.0, error ?? evaluationResult.1)
     }
     func fadeOut(duration: TimeInterval, completion: @escaping () -> Void) {
         fadeDurations.append(duration)
@@ -1048,7 +1067,10 @@ struct StartupNativeTests {
         }
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
+        checks += try await startupColdHandoffRegression()
+        checks += try await startupColdHandoffChecks()
         checks += try await startupIdentityDiagnosticChecks()
+        checks += try await startupIdentityFailureLifecycleChecks()
         checks += try await startupPageReplacementChecks()
         checks += try await startupControllerBindingChecks()
         checks += try await nativeEventContractChecks()
@@ -1801,6 +1823,9 @@ private func nativeEventContractChecks() async throws -> Int {
                                                bundleURL: syntheticCodex, executableURL: executable, launchTime: 19)
     retiredTarget.isTerminated = true
     coldRuntime.applications = [retiredTarget]
+    coldRuntime.beforeOpenCompletion = { [weak coldRuntime, weak coldTarget] in
+        if let coldTarget { coldRuntime?.applications.append(coldTarget) }
+    }
     let coldTargetSystem = FakeStartupSystem(expectedPID: 45, ports: [45678])
     coldRuntime.startupTargetSystem = coldTargetSystem
     let coldStartupURL = "app://-/index.html?initialRoute=%2F"
@@ -1815,6 +1840,12 @@ private func nativeEventContractChecks() async throws -> Int {
                 "ready": true, "completed": false, "overlay": true, "reason": "",
                 "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
                 "completion": NSNull()
+            ]],
+            ["href": coldStartupURL, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 31,
+                "ready": true, "completed": true, "overlay": false, "reason": "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                "completion": ["cause": "natural", "beforeReady": false]
             ]]
         ]
     )
@@ -1823,8 +1854,10 @@ private func nativeEventContractChecks() async throws -> Int {
                                     now: { coldRuntime.uptime })
     }
     let coldDelegate = AppDelegate(runtime: coldRuntime, presentation: FakeNativePlayerPresentation())
+    let coldFinished = ColdHandoffSignal()
+    coldRuntime.onTerminate = { coldFinished.signal() }
     coldDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
-    try await settleLaunch(coldRuntime)
+    await coldFinished.wait("existing cold App terminal boundary")
     coldDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
     let coldFailureEvent = coldRuntime.output.first(where: { $0.contains("startup-failed") }) ?? "none"
     let coldTargetLocation = [coldTarget.bundleURL?.path ?? "nil", coldTarget.executableURL?.path ?? "nil"].joined(separator: "/")
@@ -2660,9 +2693,11 @@ private func skinHostContractChecks() async throws -> Int {
          "webSocketDebuggerUrl": "ws://127.0.0.1:9333/devtools/page/selected-page"]
     }
     func statusBody(runID: Int, phase: String, ready: Bool) -> [String: Any] {
-        ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
-         "ready": ready, "completed": false, "overlay": true, "reason": "",
-         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+        let complete = phase == "complete"
+        return ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
+                "ready": ready, "completed": complete, "overlay": !complete, "reason": "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                "completion": complete ? ["cause": "natural", "beforeReady": false] as Any : NSNull()]
     }
     let installedApp = FakeNativeApplication(
         pid: 5321, bundleIdentifier: "com.openai.codex",
@@ -2678,6 +2713,7 @@ private func skinHostContractChecks() async throws -> Int {
             ["href": installURL, "controllerPresent": false],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "complete", ready: true)],
         ])
     var readyOpening: [Bool] = []
     let readyObservation = CodexInstallObservation()
@@ -2861,6 +2897,7 @@ private func skinHostContractChecks() async throws -> Int {
             ["href": installURL, "controllerPresent": false],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "complete", ready: true)],
         ])
     let busyAssembly = CodexSkinAssembly(
         preflightBundle: { _, _ in }, activateExisting: { _ in false },
@@ -3215,6 +3252,8 @@ private func skinHostContractChecks() async throws -> Int {
                                                ["installed": true, "alreadyActive": false],
                                                ["href": installURL, "missing": false,
                                                 "status": statusBody(runID: 12, phase: "playing", ready: true)],
+                                               ["href": installURL, "missing": false,
+                                                "status": statusBody(runID: 12, phase: "complete", ready: true)],
                                            ]),
                                            findings: verifiedCodexFindings(codexKey))
     async let busyFirstLaunch = busyDisableDriver.launch(
@@ -5145,6 +5184,7 @@ private final class IdentityDiagnosticEnvironment: @unchecked Sendable {
     private var processReads = 0
     private var psReads = 0
     private var time: TimeInterval = 101
+    private(set) var clockReads = 0
     init(_ mode: String) {
         self.mode = mode
         let path = mode == "invalid-extension" ? "/private/identity-private"
@@ -5210,8 +5250,27 @@ private final class IdentityDiagnosticEnvironment: @unchecked Sendable {
                 return ""
             },
             currentUID: { [self] in probes.append("uid"); return 501 },
-            now: { [self] in time })
+            now: { [self] in clockReads += 1; return time })
     }
+}
+
+/// The wrapper records configuration timing, but every validation still crosses
+/// the real production existential so a static-extension hook cannot pass.
+private struct IdentityDiagnosticScopedSystem: StartupTargetSystem {
+    let base: any StartupTargetSystem
+    let configured: (StartupIdentityFailureTrace) -> Void
+    func observingIdentityFailures(_ trace: StartupIdentityFailureTrace) -> any StartupTargetSystem {
+        configured(trace)
+        return base.observingIdentityFailures(trace)
+    }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws { try base.preflightBundle(bundle, deadline: deadline) }
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws { try base.validate(target, deadline: deadline) }
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval, diagnostics: ((String, [String: Any]) -> Void)?) throws {
+        try base.validate(target, deadline: deadline, diagnostics: diagnostics)
+    }
+    func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws { try base.validateProcess(target, deadline: deadline) }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] { try base.listeningPorts(target, deadline: deadline) }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { try base.acquireOperationLock(pid: pid) }
 }
 
 @MainActor
@@ -5250,8 +5309,23 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
         let reads: [String]
         let probes: [String]
         let records: [[String: Any]]
+        let failureRecords: [[String: Any]]
+        let clockReads: Int
     }
-    func observe(_ mode: String, enabled: Bool) async throws -> Observation {
+    func failureContentFree(_ records: [[String: Any]]) throws {
+        let allowed: Set<String> = ["stage", "mode", "checkpoint", "failedPredicate", "finalReason", "at",
+                                    "pidObserved", "pid", "errorDomain", "errorCode", "state", "reason"]
+        for record in records {
+            expect(Set(record.keys).isSubset(of: allowed) && record["stage"] as? String == "target-identity"
+                   && record["mode"] as? String == "failure-only" && record["at"] is TimeInterval,
+                   "failure records expose only the fixed, bounded rejection schema")
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+            expect(!text.contains("identity-private") && !text.contains("file://") && !text.contains("/bin/")
+                   && !text.contains("/Applications/") && record["errorDomain"] is String && record["errorCode"] is Int,
+                   "failure records contain original numeric error provenance without paths, descriptions, commands or userInfo")
+        }
+    }
+    func observe(_ mode: String, enabled: Bool, failureOnly: Bool = false) async throws -> Observation {
         let fixture = IdentityDiagnosticEnvironment(mode)
         let application = IdentityDiagnosticApplication(mode: mode, bundle: fixture.bundle, executable: fixture.executable)
         let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
@@ -5261,18 +5335,31 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
         var records: [[String: Any]] = []
         var emittedProbeCounts: [Int] = []
         var emittedGetterCounts: [Int] = []
+        var failureRecords: [[String: Any]] = []
+        var failureProbeCounts: [Int] = []
+        var failureGetterCounts: [Int] = []
+        var configuredOpenCounts: [Int] = []
+        let failureSink: ((String, [String: Any]) -> Void)? = failureOnly ? { event, record in
+            precondition(event == "startup-diagnostic")
+            failureProbeCounts.append(fixture.probes.count)
+            failureGetterCounts.append(application.reads.count)
+            failureRecords.append(record)
+        } : nil
         let sink: ((String, [String: Any]) -> Void)? = enabled ? { event, fields in
             precondition(event == "startup-diagnostic")
             emittedProbeCounts.append(fixture.probes.count)
             emittedGetterCounts.append(application.reads.count)
             records.append(contentsOf: expanded(fields))
         } : nil
-        let system: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
+        let system: any StartupTargetSystem = IdentityDiagnosticScopedSystem(
+            base: CodexStartupTargetSystem(environment: fixture.environment()),
+            configured: { _ in configuredOpenCounts.append(runtime.openCount) })
         let reason: String
         do {
             let result = try await AppDelegate.openTargetApplication(
                 runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
-                port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
+                port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink,
+                failureDiagnostics: failureSink)
             expect(result === application, "the unchanged bounded open returns exactly its callback object")
             reason = "ready"
         } catch let failure as StartupFailure { reason = failure.reason }
@@ -5282,8 +5369,19 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
             expect(emittedProbeCounts == [fixture.probes.count] && emittedGetterCounts == [application.reads.count],
                    "diagnostic I/O occurs exactly once, after all callback identity decisions and host probes finish")
         } else { expect(records.isEmpty, "off means no identity records") }
+        expect(configuredOpenCounts == (failureOnly && !enabled ? [0] : []),
+               "only failure-only mode configures a production copy, exactly once before the open request")
+        if failureOnly && !enabled && reason != "ready" {
+            expect(failureRecords.count == 1 && failureProbeCounts == [fixture.probes.count]
+                   && failureGetterCounts == [application.reads.count],
+                   "failure I/O happens once after the actual refusal and every required read")
+        } else {
+            expect(failureRecords.isEmpty, "success, ordinary off, and full-precedence modes produce no failure-only record")
+        }
         try contentFree(records)
-        return Observation(reason: reason, reads: application.reads, probes: fixture.probes, records: records)
+        try failureContentFree(failureRecords)
+        return Observation(reason: reason, reads: application.reads, probes: fixture.probes, records: records,
+                           failureRecords: failureRecords, clockReads: fixture.clockReads)
     }
     let cases: [(String, String, String, String, Bool)] = [
         ("valid", "ready", "callback-identity", "bundleMatches", true),
@@ -5330,9 +5428,38 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
         ("signature-bundle-missing", "target-identity", "signature", "bundleFactsPresent", false),
         ("signature-id-mismatch", "target-identity", "signature", "bundleIDMatches", false),
     ]
+    let refusalNames = [
+        "applicationPresent": "application-missing", "notTerminated": "terminated", "bundlePresent": "bundle-missing",
+        "executablePresent": "executable-missing", "bundleIDPresent": "bundle-id-missing", "bundleMatches": "bundle-mismatch",
+        "bundleIDMatches": "bundle-id-mismatch", "callbackErrorPresent": "callback-error", "beforeDeadline": "deadline-expired",
+        "pidValid": "pid-invalid", "appExtensionMatches": "app-extension-mismatch", "differentFromLauncher": "launcher-bundle",
+        "notNestedApp": "nested-app", "bundleFactsPresent": "bundle-facts-missing", "executableInsideBundle": "executable-outside-bundle",
+        "executableFile": "not-executable", "processPresent": "process-missing", "executableMatches": "executable-mismatch",
+        "observedLaunchTimePresent": "launch-time-missing", "launchTimeMatches": "launch-time-mismatch",
+        "launchTimeAccepted": "launch-time-mismatch", "fieldCountMatches": "ps-field-count", "uidPresent": "uid-unparseable",
+        "uidMatches": "uid-mismatch"
+    ]
     for (mode, expectedReason, checkpoint, field, value) in cases {
         let off = try await observe(mode, enabled: false)
         let on = try await observe(mode, enabled: true)
+        let failures = try await observe(mode, enabled: false, failureOnly: true)
+        expect(failures.reason == off.reason && failures.reads == off.reads && failures.probes == off.probes
+               && failures.clockReads == off.clockReads,
+               "failure-only keeps the exact off-mode outcome, getter/probe order and budget clock count for \(mode)")
+        if expectedReason != "ready" {
+            let refusal = failures.failureRecords.first!
+            expect(refusal["checkpoint"] as? String == checkpoint && refusal["failedPredicate"] as? String == refusalNames[field]
+                   && refusal["finalReason"] as? String == expectedReason,
+                   "only the actual first required failed predicate is named for \(mode)")
+            expect(refusal["pidObserved"] as? Bool == off.reads.contains("pid")
+                   && (off.reads.contains("pid") ? refusal["pid"] as? Int32 == (mode == "invalid-pid" ? -1 : 4123) : refusal["pid"] == nil),
+                   "failure-only never samples a PID that the original guard did not reach")
+        } else {
+            expect(failures.failureRecords.isEmpty, "accepted nullable launch time and all successful checks remain silent")
+        }
+        if mode == "ps-uid-missing" {
+            expect(failures.probes.last == "uid", "an unparseable UID still evaluates the original currentUID right-hand side")
+        }
         expect(off.reason == expectedReason && on.reason == off.reason, "opt-in leaves success/refusal unchanged for \(mode)")
         expect(on.reads == off.reads && on.probes == off.probes, "identity getters and actual host-boundary probe order/count stay unchanged for \(mode)")
         expect(on.records.contains { $0["checkpoint"] as? String == checkpoint && $0[field] as? Bool == value },
@@ -5354,6 +5481,8 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
                    "a missing initial process snapshot is never re-probed for diagnosis")
         }
         if mode == "valid" {
+            expect(off.clockReads == 3 && failures.clockReads == 3,
+                   "the independent budget oracle is exactly two ps clocks and one signature clock")
             expect(on.reads == ["terminated", "bundle", "executable", "bundleID", "pid", "launchTime"],
                    "callback diagnostic taps consume the original getter order exactly once")
             expect(on.probes == ["bundle:1", "executable", "process:1", "process:2", "command:/bin/ps:2.0", "uid", "bundle:2", "command:/usr/bin/codesign:12.0", "process:3", "command:/bin/ps:2.0", "uid"],
@@ -5372,6 +5501,16 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
     for (mode, expectedReason, checkpoint, state, code) in failures {
         let off = try await observe(mode, enabled: false)
         let on = try await observe(mode, enabled: true)
+        let failureOnly = try await observe(mode, enabled: false, failureOnly: true)
+        let firstFailure = failureOnly.failureRecords.first!
+        expect(failureOnly.reason == off.reason && failureOnly.reads == off.reads && failureOnly.probes == off.probes
+               && failureOnly.clockReads == off.clockReads && firstFailure["checkpoint"] as? String == checkpoint
+               && firstFailure["failedPredicate"] as? String == (mode.contains("budget") ? "budget-expired" : "command-threw"),
+               "failure-only distinguishes a budget refusal from a command throw without another clock or command")
+        if let state { expect(firstFailure["state"] as? String == state, "the raw typed failure is retained before the outer map") }
+        if let code { expect(firstFailure["errorDomain"] as? String == "IdentityFixture"
+                            && firstFailure["errorCode"] as? Int == code && firstFailure["state"] == nil,
+                            "raw NSError domain/code are not replaced by the enclosing signature-refused failure") }
         expect(off.reason == expectedReason && on.reason == off.reason && on.reads == off.reads && on.probes == off.probes,
                "throwing checkpoint leaves error mapping and all probe counts unchanged for \(mode)")
         let record = on.records.first { $0["checkpoint"] as? String == checkpoint && $0["outcome"] as? String == "error" }!
@@ -5381,6 +5520,13 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
         if mode == "signature-nserror" || mode == "signature-inspection-failed" {
             expect(on.records.last?["state"] as? String == "signature-refused", "signature diagnostics distinguish the raw command failure from its existing public mapping")
         }
+    }
+    for mode in ["valid", "callback-bundle-missing", "ps-nserror"] {
+        let full = try await observe(mode, enabled: true)
+        let both = try await observe(mode, enabled: true, failureOnly: true)
+        expect(full.reason == both.reason && full.reads == both.reads && full.probes == both.probes
+               && full.clockReads == both.clockReads && both.failureRecords.isEmpty,
+               "full diagnostics take precedence even when both explicit sinks are supplied")
     }
     // Default protocol forwarding keeps fake/custom target systems on their exact
     // existing validate path; it must not swallow production dynamic dispatch.
@@ -5479,4 +5625,912 @@ private func startupIdentityDiagnosticChecks() async throws -> Int {
     try contentFree(scopedRecords)
     return checks
 }
+
+
+@MainActor
+private func startupIdentityFailureLifecycleChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: identity failure scope: \(label)") }; checks += 1
+    }
+    func drainCallbacks() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+    // Legacy systems use the requirement's default-self adapter and still invoke
+    // their original validation once. The catch captures only its actual error.
+    let errors: [Error] = [
+        StartupFailure(reason: "attach-timeout", message: "identity-private-timeout"),
+        WallpaperFailure(state: "inspection-timeout", chinese: "identity-private", english: "identity-private"),
+        WallpaperFailure(state: "target-changed", chinese: "identity-private", english: "identity-private"),
+        NSError(domain: "IdentityFixture", code: 73, userInfo: [NSLocalizedDescriptionKey: "identity-private"])
+    ]
+    for (index, error) in errors.enumerated() {
+        for enabled in [false, true] {
+            let fixture = IdentityDiagnosticEnvironment("valid")
+            let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+            runtime.openedApplication = IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+            let system = FakeStartupSystem(expectedPID: 4123, ports: [])
+            system.validationError = error
+            var records: [[String: Any]] = []
+            let sink: ((String, [String: Any]) -> Void)? = enabled ? { _, record in records.append(record) } : nil
+            let expectedReason = index < 2 ? "attach-timeout" : "target-identity"
+            do {
+                _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex",
+                    url: fixture.bundle, port: 9333, deadline: 200, system: system, log: { _, _ in }, failureDiagnostics: sink)
+                fatalError("a legacy validation failure must still refuse")
+            } catch let failure as StartupFailure { expect(failure.reason == expectedReason, "the original typed mapping is retained") }
+            expect(system.validatedPIDs == [4123] && runtime.openCount == 1, "default adapters add no validation or open")
+            if enabled {
+                let original = error as NSError
+                expect(records.count == 1 && records[0]["checkpoint"] as? String == "system-validation"
+                       && records[0]["failedPredicate"] as? String == "validation-threw"
+                       && records[0]["errorDomain"] as? String == original.domain && records[0]["errorCode"] as? Int == original.code
+                       && records[0]["finalReason"] as? String == expectedReason,
+                       "the outer catch retains an uninstrumented adapter's exact error provenance")
+            } else { expect(records.isEmpty, "legacy off remains silent") }
+        }
+    }
+    // A timeout wins without needing a callback. A later callback is still
+    // classified by the original path, but cannot revive this sealed trace.
+    let timeoutFixture = IdentityDiagnosticEnvironment("valid")
+    let timeoutRuntime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+    timeoutRuntime.deferOpenCompletion = true
+    timeoutRuntime.openedApplication = IdentityDiagnosticApplication(mode: "valid", bundle: timeoutFixture.bundle, executable: timeoutFixture.executable)
+    var timeoutRecords: [[String: Any]] = []
+    do {
+        _ = try await AppDelegate.openTargetApplication(runtime: timeoutRuntime, targetBundleID: "com.openai.codex",
+            url: timeoutFixture.bundle, port: 9333, deadline: timeoutRuntime.uptime + 0.001,
+            system: CodexStartupTargetSystem(environment: timeoutFixture.environment()), log: { _, _ in },
+            failureDiagnostics: { _, record in timeoutRecords.append(record) })
+        fatalError("the existing stage timer must refuse without a callback")
+    } catch let failure as StartupFailure { expect(failure.reason == "attach-timeout", "timer outcome is unchanged") }
+    timeoutRuntime.uptime = 200
+    timeoutRuntime.completePendingOpen()
+    await drainCallbacks()
+    expect(timeoutRuntime.openCount == 1 && timeoutRecords.isEmpty && timeoutFixture.probes.isEmpty,
+           "a callback after timer refusal cannot log an identity failure or perform late identity probes")
+
+    let budgetFixture = IdentityDiagnosticEnvironment("valid")
+    let budgetRuntime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+    let budgetBase: any StartupTargetSystem = CodexStartupTargetSystem(environment: budgetFixture.environment())
+    var budgetTraces: [StartupIdentityFailureTrace] = []
+    var budgetRecords: [[String: Any]] = []
+    let budgetSystem = IdentityDiagnosticScopedSystem(base: budgetBase, configured: { budgetTraces.append($0) })
+    do {
+        _ = try await AppDelegate.openTargetApplication(runtime: budgetRuntime, targetBundleID: "com.openai.codex",
+            url: budgetFixture.bundle, port: 9333, deadline: budgetRuntime.uptime, system: budgetSystem, log: { _, _ in },
+            failureDiagnostics: { _, record in budgetRecords.append(record) })
+        fatalError("an exhausted initial budget cannot open")
+    } catch let failure as StartupFailure { expect(failure.reason == "attach-timeout", "initial budget still wins before NSWorkspace") }
+    expect(budgetRuntime.openCount == 0 && budgetTraces.count == 1, "configuration precedes the request without adding an open")
+    let wrongFacts = StartupTargetFacts(pid: 4123, bundle: budgetFixture.bundle, executable: budgetFixture.executable,
+                                       bundleID: "fixture.other", launchTime: nil)
+    do {
+        try budgetBase.observingIdentityFailures(budgetTraces[0]).validate(wrongFacts, deadline: 200)
+        fatalError("stale scope input must still be rejected")
+    } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "closing observations never weakens validation") }
+    var lateClockReads = 0
+    func lateClock() -> TimeInterval { lateClockReads += 1; return 201 }
+    budgetTraces[0].finish(reason: "target-identity", at: lateClock())
+    expect(budgetRecords.isEmpty && lateClockReads == 0, "run exit seals even a pre-request budget failure")
+
+    let successFixture = IdentityDiagnosticEnvironment("valid")
+    let successRuntime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+    successRuntime.retainOpenCompletionForReplay = true
+    let successApplication = IdentityDiagnosticApplication(mode: "valid", bundle: successFixture.bundle, executable: successFixture.executable)
+    successRuntime.openedApplication = successApplication
+    var successRecords: [[String: Any]] = []
+    let result = try await AppDelegate.openTargetApplication(runtime: successRuntime, targetBundleID: "com.openai.codex",
+        url: successFixture.bundle, port: 9333, deadline: 200,
+        system: CodexStartupTargetSystem(environment: successFixture.environment()), log: { _, _ in },
+        failureDiagnostics: { _, record in successRecords.append(record) })
+    successRuntime.openedApplication = nil
+    successRuntime.replayLastOpen()
+    await drainCallbacks()
+    expect(result === successApplication && successRecords.isEmpty && successRuntime.openCount == 1,
+           "success seals the trace before a repeated callback can invent a refusal")
+
+    // Reuse the original production system, not a previously observed copy.
+    // First process absence, subsequent success and a third callback refusal
+    // must belong to three independent open scopes.
+    let sharedFixture = IdentityDiagnosticEnvironment("fresh-process-missing")
+    let sharedBase: any StartupTargetSystem = CodexStartupTargetSystem(environment: sharedFixture.environment())
+    var traces: [StartupIdentityFailureTrace] = []
+    var sharedRecords: [[String: Any]] = []
+    for (mode, expected) in [("valid", "target-identity"), ("valid", "ready"), ("callback-terminated", "target-identity")] {
+        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+        let app = IdentityDiagnosticApplication(mode: mode, bundle: sharedFixture.bundle, executable: sharedFixture.executable)
+        runtime.openedApplication = app
+        let system = IdentityDiagnosticScopedSystem(base: sharedBase, configured: { trace in
+            expect(runtime.openCount == 0, "each scoped production copy is configured before its own request")
+            traces.append(trace)
+        })
+        var reason = "ready"
+        do {
+            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex",
+                url: sharedFixture.bundle, port: 9333, deadline: 200, system: system, log: { _, _ in },
+                failureDiagnostics: { _, record in sharedRecords.append(record) })
+        } catch let error as StartupFailure { reason = error.reason }
+        expect(reason == expected && runtime.openCount == 1, "each open retains its own unchanged result")
+    }
+    expect(Set(traces.map(ObjectIdentifier.init)).count == 3 && sharedRecords.count == 2
+           && sharedRecords[0]["checkpoint"] as? String == "process-facts-initial"
+           && sharedRecords[1]["failedPredicate"] as? String == "terminated",
+           "a successful intervening open neither reuses nor emits an earlier scope's failure")
+
+    let postCases: [(String, String, [String])] = [
+        ("terminated", "terminated", ["terminated"]),
+        ("bundle-missing", "bundle-missing", ["terminated", "bundle"]),
+        ("executable-missing", "executable-missing", ["terminated", "bundle", "executable"]),
+        ("id-missing", "bundle-id-missing", ["terminated", "bundle", "executable", "bundleID"])
+    ]
+    for (mode, predicate, expectedReads) in postCases {
+        for enabled in [false, true] {
+            let fixture = IdentityDiagnosticEnvironment("valid")
+            let app = IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+            app.postOpenMode = mode
+            var records: [[String: Any]] = []
+            var clocks = 0
+            func clock() -> TimeInterval {
+                clocks += 1
+                expect(app.reads == expectedReads, "post-open diagnostic clock is sampled only after its exact guard refuses")
+                return 102
+            }
+            let sink: ((String, [String: Any]) -> Void)? = enabled ? { _, record in records.append(record) } : nil
+            do {
+                let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
+                                           presentation: FakeNativePlayerPresentation())
+                _ = try delegate.startupFacts(app, failureDiagnostics: sink, at: clock())
+                fatalError("post-open identity loss must refuse")
+            } catch let error as StartupFailure { expect(error.reason == "target-identity", "post-open rejection remains unchanged") }
+            expect(app.reads == expectedReads && clocks == (enabled ? 1 : 0),
+                   "post-open keeps the original short circuit and adds a timestamp only after an opted-in rejection")
+            if enabled {
+                expect(records.count == 1 && records[0]["checkpoint"] as? String == "post-open-facts"
+                       && records[0]["failedPredicate"] as? String == predicate && records[0]["pid"] == nil
+                       && records[0]["pidObserved"] as? Bool == false && records[0]["at"] as? TimeInterval == 102,
+                       "post-open refusal never borrows the callback's PID or a previous trace")
+            } else { expect(records.isEmpty, "post-open ordinary off emits nothing") }
+        }
+    }
+    let nullable = IdentityDiagnosticEnvironment("no-launch-time")
+    let nullableApp = IdentityDiagnosticApplication(mode: "no-launch-time", bundle: nullable.bundle, executable: nullable.executable)
+    var nullableRecords: [[String: Any]] = []
+    var nullableClockReads = 0
+    func nullableClock() -> TimeInterval { nullableClockReads += 1; return 102 }
+    let nullableDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
+                                       presentation: FakeNativePlayerPresentation())
+    let nullableFacts = try nullableDelegate.startupFacts(nullableApp,
+        failureDiagnostics: { _, record in nullableRecords.append(record) }, at: nullableClock())
+    expect(nullableFacts.launchTime == nil && nullableRecords.isEmpty && nullableClockReads == 0
+           && nullableApp.reads == ["terminated", "bundle", "executable", "bundleID", "pid", "launchTime"],
+           "successful post-open with absent launch time allocates no record and reads no diagnostic clock")
+    let bothApp = IdentityDiagnosticApplication(mode: "callback-bundle-missing", bundle: nullable.bundle, executable: nullable.executable)
+    var fullRecords: [[String: Any]] = []
+    var bothFailureRecords: [[String: Any]] = []
+    do {
+        let bothDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
+                                       presentation: FakeNativePlayerPresentation())
+        _ = try bothDelegate.startupFacts(bothApp, diagnostics: { _, record in fullRecords.append(record) },
+            failureDiagnostics: { _, record in bothFailureRecords.append(record) }, at: 102)
+        fatalError("both-sink post-open failure still refuses")
+    } catch let error as StartupFailure { expect(error.reason == "target-identity", "dual-sink post-open mapping is unchanged") }
+    expect(fullRecords.count == 1 && bothFailureRecords.isEmpty, "post-open also gives unchanged full diagnostics precedence")
+    return checks
+}
+#endif
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+
+// BEGIN COLD HANDOFF COMPATIBLE REGRESSION
+// These fixtures and the first regression use only the pre-handoff public App
+// interface. The exact same bytes can execute against 9cf and the candidate.
+private final class ColdHandoffSignal: @unchecked Sendable {
+    private let mutex = NSLock()
+    private var signalled = false
+    private var waiters: [UUID: (CheckedContinuation<Bool, Never>, DispatchWorkItem)] = [:]
+    func signal() {
+        mutex.lock(); signalled = true
+        let pending = Array(waiters.values); waiters.removeAll(); mutex.unlock()
+        for (continuation, expiry) in pending { expiry.cancel(); continuation.resume(returning: true) }
+    }
+    private func expire(_ id: UUID) {
+        mutex.lock(); let pending = waiters.removeValue(forKey: id); mutex.unlock()
+        pending?.0.resume(returning: false)
+    }
+    func wait(_ label: String) async {
+        let received = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let id = UUID()
+            let expiry = DispatchWorkItem { [weak self] in self?.expire(id) }
+            mutex.lock()
+            if signalled { mutex.unlock(); continuation.resume(returning: true) }
+            else {
+                waiters[id] = (continuation, expiry); mutex.unlock()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: expiry)
+            }
+        }
+        precondition(received, "Missing deterministic handoff signal: \(label)")
+    }
+}
+
+private final class ColdHandoffGate: @unchecked Sendable {
+    let entered = ColdHandoffSignal()
+    let released = ColdHandoffSignal()
+    func suspend() async { entered.signal(); await released.wait("release held external response") }
+    func release() { released.signal() }
+}
+
+private enum ColdHandoffPageState: Equatable {
+    case loading, playing, natural, skipBefore, skipAfter, settings, timeout, failed, disposed, malformed, missing, otherRun
+}
+
+private struct ColdHandoffSnapshot {
+    let held: Bool
+    let acquires: Int
+    let releases: Int
+    let closes: Int
+    let disconnects: Int
+    let connections: [String]
+    let installs: [String: Int]
+    let disposed: [String]
+    let skins: [String: Bool]
+    let statuses: [String: Int]
+    let inventoryReads: Int
+    let deadlines: [TimeInterval]
+    let timeouts: [TimeInterval]
+}
+
+// External host/page state, not a copy of the connector algorithm. Tests change
+// documents only in activation callbacks or while an explicit response is held.
+// Complete inventory deliberately retains a retired A as a worker until the
+// test removes it, so filtering to main pages is not a valid absence proof.
+private final class ColdHandoffWorld: StartupTransport, StartupTargetSystem, StartupOperationLock, @unchecked Sendable {
+    let facts: StartupTargetFacts
+    let href = "app://-/index.html?initialRoute=%2F"
+    let foreground = ColdHandoffSignal()
+    let closed = ColdHandoffSignal()
+    private let mutex = NSLock()
+    private var clock: TimeInterval = 100
+    private var current = "page-a"
+    private var inventory = ["page-a"]
+    private var connected: String?
+    private var states: [String: ColdHandoffPageState] = ["page-a": .playing]
+    private var statusGates: [String: [ColdHandoffGate]] = [:]
+    private var pageGates: [ColdHandoffGate] = []
+    private var inventoryGates: [ColdHandoffGate] = []
+    private var held = false
+    private var acquires = 0, releases = 0, closes = 0, disconnects = 0, inventoryReads = 0
+    private var connections: [String] = [], disposed: [String] = []
+    private var installs: [String: Int] = [:], statuses: [String: Int] = [:]
+    private var skins: [String: Bool] = [:]
+    private var deadlines: [TimeInterval] = [], timeouts: [TimeInterval] = []
+    private var livePID: Int32
+    private var liveStart: TimeInterval?
+    private var ownsPort = true
+    private var statusFailure: Error?
+    private var pageFailure: Error?
+
+    init(facts: StartupTargetFacts) { self.facts = facts; livePID = facts.pid; liveStart = facts.launchTime }
+    private func locked<T>(_ body: () throws -> T) rethrows -> T {
+        mutex.lock(); defer { mutex.unlock() }; return try body()
+    }
+    func snapshot() -> ColdHandoffSnapshot {
+        locked { .init(held: held, acquires: acquires, releases: releases, closes: closes, disconnects: disconnects,
+                       connections: connections, installs: installs, disposed: disposed, skins: skins,
+                       statuses: statuses, inventoryReads: inventoryReads, deadlines: deadlines, timeouts: timeouts) }
+    }
+    func time() -> TimeInterval { locked { clock } }
+    func advance(_ seconds: TimeInterval) { locked { clock += seconds } }
+    func state(_ value: ColdHandoffPageState, page: String = "page-a") { locked { states[page] = value } }
+    func replace(with page: String = "page-b", retainOld: Bool = false, state: ColdHandoffPageState = .playing) {
+        locked {
+            let old = current; current = page; inventory = retainOld ? [old, page] : [page]; states[page] = state
+        }
+    }
+    func removeRetiredPage() { locked { inventory = [current] } }
+    func changePID() { locked { livePID += 1 } }
+    func changeStart() { locked { liveStart = (liveStart ?? 0) + 1 } }
+    func losePort() { locked { ownsPort = false } }
+    func failStatus(_ error: Error) { locked { statusFailure = error } }
+    func failPages(_ error: Error) { locked { pageFailure = error } }
+    func holdStatus(_ gate: ColdHandoffGate, page: String = "page-a") { locked { statusGates[page, default: []].append(gate) } }
+    func holdPages(_ gate: ColdHandoffGate) { locked { pageGates.append(gate) } }
+    func holdInventory(_ gate: ColdHandoffGate) { locked { inventoryGates.append(gate) } }
+    private func entry(_ id: String, type: String = "page") -> [String: Any] {
+        ["id": id, "type": type, "url": href,
+         "webSocketDebuggerUrl": "ws://127.0.0.1:45678/devtools/page/\(id)"]
+    }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {}
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        try locked {
+            deadlines.append(deadline)
+            guard target.pid == livePID, target.launchTime == nil || target.launchTime == liveStart else {
+                throw StartupFailure(reason: "target-identity", message: "external process generation changed")
+            }
+        }
+    }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
+        locked { deadlines.append(deadline); return ownsPort ? [45678] : [] }
+    }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock {
+        locked { precondition(!held && pid == facts.pid); held = true; acquires += 1 }
+        return self
+    }
+    func release() { locked { precondition(held); held = false; releases += 1 } }
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        let gate = locked { () -> ColdHandoffGate? in
+            timeouts.append(timeout); return pageGates.isEmpty ? nil : pageGates.removeFirst()
+        }
+        if let gate { await gate.suspend() }
+        return try locked {
+            if let pageFailure { throw pageFailure }
+            return [entry(current)]
+        }
+    }
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        let gate = locked { () -> ColdHandoffGate? in
+            timeouts.append(timeout); inventoryReads += 1
+            return inventoryGates.isEmpty ? nil : inventoryGates.removeFirst()
+        }
+        if let gate { await gate.suspend() }
+        return locked { inventory.map { entry($0, type: $0 == current ? "page" : "worker") } }
+    }
+    func connect(to url: URL, timeout: TimeInterval) throws {
+        locked { connected = url.lastPathComponent; connections.append(url.lastPathComponent); timeouts.append(timeout) }
+    }
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let gate = locked { () -> ColdHandoffGate? in
+            timeouts.append(timeout)
+            guard source == StartupConnector.statusExpression, let id = connected else { return nil }
+            statuses[id, default: 0] += 1
+            return statusGates[id, default: []].isEmpty ? nil : statusGates[id]!.removeFirst()
+        }
+        if let gate { await gate.suspend() }
+        return try locked {
+            guard held, let id = connected, id == current else {
+                throw StartupFailure(reason: "protocol-error", message: "external page ended", pageConnectionLost: true)
+            }
+            if source == StartupConnector.inspectExpression {
+                return ["href": href, "controllerPresent": installs[id, default: 0] > 0]
+            }
+            if source.contains("cold-handoff-test-payload") {
+                installs[id, default: 0] += 1; skins[id] = true
+                return ["installed": true, "alreadyActive": false]
+            }
+            precondition(source == StartupConnector.statusExpression, "unexpected external CDP operation")
+            if let statusFailure { throw statusFailure }
+            let value = states[id] ?? .loading
+            if value == .missing { return ["href": href, "missing": true] }
+            if value == .malformed { return ["href": href, "missing": false, "status": ["owner": "azhou-codex-startup"]] }
+            let completed = [.natural, .skipBefore, .skipAfter].contains(value)
+            let ready = ![.loading, .skipBefore, .failed, .disposed].contains(value)
+            let phase: String
+            switch value {
+            case .loading: phase = "loading"
+            case .natural, .skipBefore, .skipAfter: phase = "complete"
+            case .settings: phase = "settings"
+            case .timeout: phase = "timeout"
+            case .failed: phase = "failed"
+            case .disposed: phase = "disposed"
+            default: phase = "playing"
+            }
+            let completion: Any = completed
+                ? ["cause": value == .natural ? "natural" : "skip", "beforeReady": value == .skipBefore] : NSNull()
+            return ["href": href, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": phase,
+                "runId": value == .otherRun ? 2 : 1, "ready": ready, "completed": completed,
+                "overlay": ["loading", "playing", "settings"].contains(phase),
+                "reason": value == .timeout ? "overlay-timeout" : value == .failed ? "asset-invalid" : "",
+                "wallpaper": ["applied": skins[id] == true, "reason": "", "imageDecoded": true], "completion": completion
+            ]]
+        }
+    }
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        locked {
+            guard held, let id = connected, id == current, href == self.href else { return ["disposed": false] }
+            disposed.append(id); skins[id] = false; return ["disposed": true]
+        }
+    }
+    func disconnectPage() { locked { connected = nil; disconnects += 1 } }
+    func close() { locked { connected = nil; closes += 1 }; closed.signal() }
+}
+
+@MainActor
+private func coldHandoffEvents(_ runtime: FakeNativeAppRuntime) -> [[String: Any]] {
+    runtime.output.compactMap { line in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+}
+
+@MainActor
+private final class ColdHandoffFixture {
+    let root: URL
+    let runtime: FakeNativeAppRuntime
+    let target: FakeNativeApplication
+    let world: ColdHandoffWorld
+    let presentation = FakeNativePlayerPresentation()
+    let delegate: AppDelegate
+    let terminated = ColdHandoffSignal()
+    let opened = ColdHandoffSignal()
+    let promoted: Bool
+    init(promoted: Bool = false) throws {
+        self.promoted = promoted
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("cold-handoff-" + UUID().uuidString)
+        let bundle = root.appendingPathComponent("Synthetic Codex.app")
+        let executable = bundle.appendingPathComponent("Contents/MacOS/Codex")
+        let resources = root.appendingPathComponent("resources")
+        for directory in [executable.deletingLastPathComponent(), resources.appendingPathComponent("startup"), resources.appendingPathComponent("web")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "com.openai.codex",
+            "CFBundlePackageType": "APPL", "CFBundleExecutable": "Codex"], format: .xml, options: 0)
+            .write(to: bundle.appendingPathComponent("Contents/Info.plist"))
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        try Data("cold-handoff-test-payload".utf8).write(to: resources.appendingPathComponent("startup/install.js"))
+        try Data("<!doctype html><title>cold fixture</title>".utf8).write(to: resources.appendingPathComponent("web/index.html"))
+        runtime = FakeNativeAppRuntime(arguments: promoted ? ["agent-skin", "--preview"] : ["agent-skin"], resourceURL: resources)
+        runtime.uptime = ProcessInfo.processInfo.systemUptime
+        runtime.installedTargetURL = bundle
+        target = FakeNativeApplication(pid: 6543, bundleIdentifier: "com.openai.codex", bundleURL: bundle,
+                                       executableURL: executable, launchTime: 29)
+        let retiredTarget = FakeNativeApplication(pid: 6544, bundleIdentifier: "com.openai.codex", bundleURL: bundle,
+                                                  executableURL: executable, launchTime: 28)
+        retiredTarget.isTerminated = true
+        runtime.applications = [retiredTarget]
+        let facts = StartupTargetFacts(pid: 6543, bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
+                                       executable: executable.resolvingSymlinksInPath().standardizedFileURL,
+                                       bundleID: "com.openai.codex", launchTime: 29)
+        world = ColdHandoffWorld(facts: facts)
+        delegate = AppDelegate(runtime: runtime, presentation: presentation)
+        runtime.openedApplication = target
+        runtime.startupTargetSystem = world
+        let opened = self.opened
+        runtime.beforeOpenCompletion = { [weak runtime, weak target] in
+            if let target { runtime?.applications = [target] }; opened.signal()
+        }
+        let world = self.world
+        runtime.startupTransportFactory = { [runtime] capture, events in
+            NativeStartupEventTransport(base: world, capture: capture, events: events, now: { runtime.uptime })
+        }
+        let terminated = self.terminated
+        runtime.onTerminate = { terminated.signal() }
+        onForeground {}
+    }
+    func onForeground(_ action: @escaping () -> Void) {
+        let world = self.world
+        target.onActivate = { [weak runtime] in
+            guard let runtime else { preconditionFailure("fixture runtime released during handoff") }
+            let events = coldHandoffEvents(runtime).compactMap { $0["event"] as? String }
+            let snapshot = world.snapshot()
+            precondition(!events.contains("startup-ready") && snapshot.held && snapshot.closes == 0,
+                         "Cold foreground must precede terminal-ready and retain the operation lock and transport")
+            action(); world.foreground.signal()
+        }
+    }
+    func start(completeBeforeCold: Bool = false, closeBeforeCold: Bool = false) {
+        delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        if promoted {
+            delegate.receivePlayerMessage(body: ["action": "ready", "duration": 12_000], isMainFrame: true)
+            _ = delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false)
+            if completeBeforeCold { delegate.receivePlayerMessage(body: ["action": "complete", "skipped": false], isMainFrame: true) }
+            if closeBeforeCold { _ = delegate.windowShouldClose(NSWindow()) }
+        }
+    }
+    func tearDown() {
+        delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        target.onActivate = nil; runtime.beforeOpenCompletion = nil; runtime.startupTransportFactory = nil; runtime.onTerminate = nil
+        try? FileManager.default.removeItem(at: root)
+    }
+}
+
+@MainActor
+private func startupColdHandoffRegression() async throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        precondition(value(), label); checks += 1
+    }
+    let fixture = try ColdHandoffFixture()
+    defer { fixture.tearDown() }
+    let gate = ColdHandoffGate()
+    fixture.onForeground { fixture.world.holdStatus(gate) }
+    fixture.start()
+    await gate.entered.wait("post-foreground status request")
+    expect(fixture.target.activationCount == 1 && fixture.world.snapshot().held,
+           "the first ready foreground remains inside the owning operation")
+    expect(fixture.runtime.terminated == 0 && !coldHandoffEvents(fixture.runtime).contains { $0["event"] as? String == "startup-ready" },
+           "a held post-foreground response cannot commit ready or exit")
+    fixture.world.state(.natural)
+    gate.release()
+    await fixture.terminated.wait("natural completion reaches the App exit")
+    let snapshot = fixture.world.snapshot()
+    expect(snapshot.installs == ["page-a": 1] && snapshot.connections == ["page-a"] && snapshot.disposed.isEmpty,
+           "same-page natural completion neither reinstalls nor disposes the usable controller")
+    expect(snapshot.acquires == 1 && snapshot.releases == 1 && snapshot.closes == 1 && !snapshot.held,
+           "normal completion releases each operation resource once")
+    expect(fixture.target.activationCount == 1 && fixture.runtime.terminated == 1,
+           "the final ready adapter does not request a second activation or exit")
+    let records = coldHandoffEvents(fixture.runtime)
+    let activation = records.firstIndex { $0["event"] as? String == "target-activation-request" }
+    let ready = records.firstIndex { $0["event"] as? String == "startup-ready" }
+    expect(activation != nil && ready != nil && activation! < ready!,
+           "event append order places foreground before final ready")
+    expect(records[ready!]["phase"] as? String == "complete", "the final ready observation is the fresh completed run")
+    fixture.delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+    fixture.delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+    let final = coldHandoffEvents(fixture.runtime)
+    expect(final.filter { $0["event"] as? String == "player-terminated" }.count == 1
+           && final.filter { $0["event"] as? String == "launcher-exit" }.count == 1,
+           "duplicate teardown cannot duplicate terminal journal records")
+    expect(fixture.runtime.acquiredLock?.releaseCount == 1 && fixture.presentation.stopCount == 1
+           && fixture.presentation.removedHandlers == ["launcher"], "the App releases its own presentation and instance lock once")
+    return checks
+}
+// END COLD HANDOFF COMPATIBLE REGRESSION
+
+#endif
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+
+@MainActor
+private func startupColdHandoffChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) { precondition(value(), label); checks += 1 }
+    func names(_ fixture: ColdHandoffFixture) -> [String] { coldHandoffEvents(fixture.runtime).compactMap { $0["event"] as? String } }
+    func heldTask(_ fixture: ColdHandoffFixture) -> Task<Void, Never> {
+        guard let task = fixture.delegate.launchTask else { preconditionFailure("cold operation did not retain its Task") }
+        return task
+    }
+    func world() -> ColdHandoffWorld {
+        ColdHandoffWorld(facts: StartupTargetFacts(pid: 6543, bundle: URL(fileURLWithPath: "/synthetic/Codex.app"),
+            executable: URL(fileURLWithPath: "/synthetic/Codex.app/Contents/MacOS/Codex"),
+            bundleID: "com.openai.codex", launchTime: 29))
+    }
+    func connector(_ world: ColdHandoffWorld) -> StartupConnector {
+        StartupConnector(target: world.facts, expectedPort: 45678, system: world, transport: world,
+                         now: { world.time() }, sleep: { world.advance($0) })
+    }
+    let lost = StartupFailure(reason: "protocol-error", message: "external retired target", pageConnectionLost: true)
+
+    // The external activation action retires A. Inventory remains non-authorizing
+    // until a separate test action removes its worker ID from the complete list.
+    for finalState: ColdHandoffPageState in [.natural, .malformed] {
+        let fixture = try ColdHandoffFixture()
+        defer { fixture.tearDown() }
+        let firstInventory = ColdHandoffGate(), secondInventory = ColdHandoffGate(), firstBStatus = ColdHandoffGate()
+        fixture.onForeground {
+            fixture.world.replace(retainOld: true)
+            fixture.world.holdInventory(firstInventory); fixture.world.holdInventory(secondInventory)
+            fixture.world.holdStatus(firstBStatus, page: "page-b")
+        }
+        fixture.start(); let task = heldTask(fixture)
+        await firstInventory.entered.wait("first complete inventory after external A retirement")
+        expect(fixture.world.snapshot().installs == ["page-a": 1] && fixture.world.snapshot().held,
+               "B cannot install while the old target is still present in complete inventory")
+        firstInventory.release()
+        await secondInventory.entered.wait("old worker ID was observed and recovery waited")
+        expect(fixture.world.snapshot().installs["page-b"] == nil && fixture.runtime.terminated == 0,
+               "an old non-main target still blocks replacement after the first inventory response")
+        fixture.world.removeRetiredPage(); secondInventory.release()
+        await firstBStatus.entered.wait("B installed only after independent old-ID absence")
+        expect(fixture.world.snapshot().connections == ["page-a", "page-b"]
+               && fixture.world.snapshot().installs == ["page-a": 1, "page-b": 1]
+               && fixture.world.snapshot().disconnects == 1 && fixture.target.activationCount == 1,
+               "one operation reconnects once and never repeats foreground or either payload")
+        expect(!names(fixture).contains("startup-ready") && fixture.runtime.terminated == 0,
+               "B's pending controller cannot inherit A's terminal success")
+        fixture.world.state(finalState, page: "page-b"); firstBStatus.release()
+        await task.value
+        let snapshot = fixture.world.snapshot()
+        if finalState == .natural {
+            expect(names(fixture).filter { $0 == "startup-ready" }.count == 1 && snapshot.disposed.isEmpty,
+                   "fresh B natural completion commits one successful final ready")
+            expect(coldHandoffEvents(fixture.runtime).first { $0["event"] as? String == "startup-ready" }?["pageTargetID"] as? String == "page-b",
+                   "final readiness is attributed to the replacement document")
+        } else {
+            expect(names(fixture).contains("startup-failed") && !names(fixture).contains("startup-ready")
+                   && snapshot.disposed == ["page-b"] && snapshot.skins["page-b"] == false,
+                   "A's verified-ready exemption does not protect B's malformed unready controller")
+        }
+        expect(snapshot.releases == 1 && snapshot.closes == 1 && fixture.runtime.terminated == 1,
+               "replacement success and refusal both close the owning scope once")
+    }
+
+    // Local completion and remote completion have separate owners. Exercise both
+    // orderings, including local completion before the launch Task enters cold.
+    for mode in ["complete", "window-close", "early-complete", "early-window-close", "activation-refused"] {
+        let fixture = try ColdHandoffFixture(promoted: true)
+        defer { fixture.tearDown() }
+        let gate = ColdHandoffGate()
+        fixture.target.activationResult = mode != "activation-refused"
+        fixture.onForeground { fixture.world.holdStatus(gate) }
+        fixture.start(completeBeforeCold: mode == "early-complete", closeBeforeCold: mode == "early-window-close")
+        let task = heldTask(fixture)
+        await gate.entered.wait("promoted remote handoff response")
+        if mode == "window-close" { _ = fixture.delegate.windowShouldClose(NSWindow()) }
+        else if !mode.hasPrefix("early-") {
+            fixture.delegate.receivePlayerMessage(body: ["action": "complete", "skipped": true], isMainFrame: true)
+        }
+        expect(fixture.presentation.fadeDurations.isEmpty && fixture.runtime.terminated == 0
+               && !names(fixture).contains("startup-ready") && !names(fixture).contains("startup-skipped"),
+               "local completion/close cannot cross a pending cold operation or fabricate remote skip (\(mode))")
+        expect(fixture.presentation.schedules.allSatisfy(\.cancelled),
+               "all completed local-stage watchdogs are cancelled, including early completion (\(mode))")
+        fixture.presentation.schedules.forEach { $0.fire() }
+        expect(!names(fixture).contains("failure") && fixture.runtime.terminated == 0,
+               "the former local watchdog cannot overwrite a pending remote handoff (\(mode))")
+        fixture.world.state(mode == "window-close" ? .settings : .natural)
+        gate.release(); await task.value
+        expect(fixture.target.activationCount == 1, "cold activation refusal is also one attempt (\(mode))")
+        if mode == "activation-refused" {
+            expect(fixture.presentation.fadeDurations.isEmpty && fixture.runtime.terminated == 0
+                   && coldHandoffEvents(fixture.runtime).contains { $0["event"] as? String == "failure" && $0["reason"] as? String == "activation-rejected" },
+                   "promoted refusal retains its existing visible failure without retrying activation")
+        } else {
+            expect(fixture.presentation.fadeDurations == [0.28] && fixture.runtime.terminated == 1
+                   && names(fixture).filter { $0 == "startup-ready" }.count == 1,
+                   "only the remote boundary releases the promoted handoff (\(mode))")
+        }
+    }
+
+
+    // A refused ordinary cold activation is still a single attempt. Before-ready
+    // skip retains its separate final activation boundary.
+    do {
+        let fixture = try ColdHandoffFixture(); defer { fixture.tearDown() }
+        fixture.target.activationResult = false
+        fixture.onForeground { fixture.world.state(.natural) }
+        fixture.start(); let task = heldTask(fixture); await task.value
+        let requests = coldHandoffEvents(fixture.runtime).filter { $0["event"] as? String == "target-activation-request" }
+        expect(fixture.target.activationCount == 1 && requests.count == 1 && requests[0]["allowed"] as? Bool == false
+               && fixture.runtime.terminated == 1 && names(fixture).filter { $0 == "startup-ready" }.count == 1
+               && !names(fixture).contains("failure"), "ordinary cold retains allowed=false without retry or invented failure")
+    }
+    do {
+        let fixture = try ColdHandoffFixture(); defer { fixture.tearDown() }
+        fixture.world.state(.skipBefore); fixture.target.activationResult = false
+        fixture.target.onActivate = {
+            precondition(names(fixture).contains("startup-skipped") && !fixture.world.snapshot().held,
+                         "before-ready skip retains its original final activation boundary")
+        }
+        fixture.start(); let task = heldTask(fixture); await task.value
+        expect(fixture.target.activationCount == 1 && fixture.runtime.terminated == 1
+               && names(fixture).filter { $0 == "startup-skipped" }.count == 1 && !names(fixture).contains("startup-ready"),
+               "before-ready skip stays skipped and its final activation is one attempt")
+    }
+    // Preserve the original cold expected-nil permission without weakening hot.
+    for mode in ["cold-nil-known", "cold-known-same", "cold-known-different", "cold-known-nil", "hot-nil-known"] {
+        let fixture = try ColdHandoffFixture(); defer { fixture.tearDown() }
+        if mode.contains("nil-known") { fixture.target.launchTime = nil }
+        if mode.hasPrefix("hot") { fixture.runtime.applications = [fixture.target] }
+        fixture.runtime.applicationOverride = { [weak target = fixture.target] _ in
+            target?.launchTime = mode == "cold-known-nil" ? nil : mode == "cold-known-different" ? 30 : 29
+            return target
+        }
+        fixture.onForeground { fixture.world.state(.natural) }
+        fixture.start(); let task = heldTask(fixture); await task.value
+        let accepted = mode == "cold-nil-known" || mode == "cold-known-same"
+        expect(fixture.target.activationCount == (accepted ? 1 : 0)
+               && names(fixture).contains(accepted ? "startup-ready" : "startup-failed"),
+               "cold nil compatibility and unchanged hot strict optional identity (\(mode))")
+        if !accepted {
+            expect(coldHandoffEvents(fixture.runtime).contains { $0["event"] as? String == "startup-failed" && $0["reason"] as? String == "target-identity" },
+                   "known changed/missing start and hot nil-to-known retain target-identity refusal")
+        }
+        expect(fixture.runtime.openCount == (mode.hasPrefix("hot") ? 0 : 1), "identity comparison cannot create an extra launch (\(mode))")
+    }
+    // Hold replay and promotion independently; let the older replay reply arrive
+    // only after promotion has started cold and local completion or Quit occurred.
+    for (lateAfterQuit, lateError) in [(false, false), (false, true), (true, false), (true, true)] {
+        let fixture = try ColdHandoffFixture(promoted: true); defer { fixture.tearDown() }
+        let gate = ColdHandoffGate()
+        fixture.presentation.heldEvaluationSources = ["window.launcherUI.replay()", "window.launcherUI.promoteLaunch()"]
+        fixture.onForeground { fixture.world.holdStatus(gate) }; fixture.start()
+        expect(fixture.runtime.openCount == 0 && fixture.delegate.launchTask == nil,
+               "neither held local evaluation has authorized a launch")
+        fixture.presentation.completeHeldEvaluation("window.launcherUI.promoteLaunch()")
+        let task = heldTask(fixture)
+        await gate.entered.wait("cold started while older replay completion remains pending")
+        if lateAfterQuit {
+            _ = fixture.delegate.applicationShouldTerminate(NSApplication.shared)
+            fixture.delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        } else { fixture.delegate.receivePlayerMessage(body: ["action": "complete", "skipped": false], isMainFrame: true) }
+        let scheduleCount = fixture.presentation.schedules.count
+        let recordsBeforeLate = coldHandoffEvents(fixture.runtime).count
+        fixture.presentation.completeHeldEvaluation("window.launcherUI.replay()",
+                                                    error: lateError ? NSError(domain: "ColdHandoffLateReplay", code: 1) : nil)
+        expect(fixture.presentation.schedules.count == scheduleCount && fixture.presentation.schedules.allSatisfy(\.cancelled)
+               && fixture.runtime.openCount == 1 && coldHandoffEvents(fixture.runtime).count == recordsBeforeLate,
+               "late replay cannot re-arm, relaunch, or log after completed cold stage/Quit (quit=\(lateAfterQuit), error=\(lateError))")
+        fixture.presentation.schedules.forEach { $0.fire() }
+        if lateAfterQuit { fixture.world.replace() } else { fixture.world.state(.natural) }
+        gate.release(); await task.value
+        expect(fixture.world.snapshot().closes == 1 && fixture.world.snapshot().releases == 1 && fixture.target.activationCount == 1,
+               "late local replies cannot change remote ownership or activation count")
+        expect(names(fixture).contains("startup-ready") == !lateAfterQuit, "only non-cancelled remote completion can commit ready")
+    }
+
+    // Save the real App-owned Task before Quit, then await that exact handle after
+    // delivering the late callback. No timing guess stands in for Task completion.
+    for mode in ["quit-open", "quit-status", "close-status"] {
+        let fixture = try ColdHandoffFixture()
+        defer { fixture.tearDown() }
+        let gate = ColdHandoffGate()
+        if mode == "quit-open" { fixture.runtime.deferOpenCompletion = true }
+        else { fixture.onForeground { fixture.world.holdStatus(gate) } }
+        fixture.start(); let task = heldTask(fixture)
+        if mode == "quit-open" { await fixture.opened.wait("deferred NSWorkspace completion") }
+        else { await gate.entered.wait("late response held across Quit") }
+        if mode == "close-status" {
+            fixture.delegate.receivePlayerMessage(body: ["action": "close"], isMainFrame: true)
+            fixture.delegate.receivePlayerMessage(body: ["action": "close"], isMainFrame: true)
+        } else { _ = fixture.delegate.applicationShouldTerminate(NSApplication.shared) }
+        expect(task.isCancelled, "user close/Quit cancels the exact retained launch task (\(mode))")
+        fixture.delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        let recordsAtQuit = coldHandoffEvents(fixture.runtime).count
+        if mode == "quit-open" { fixture.runtime.completePendingOpen() }
+        else { fixture.world.replace(); gate.release() }
+        await task.value
+        fixture.delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        let snapshot = fixture.world.snapshot()
+        expect(fixture.delegate.launchTask == nil && !names(fixture).contains("startup-ready")
+               && coldHandoffEvents(fixture.runtime).count == recordsAtQuit,
+               "late open/status work cannot append a final result after Quit and journal teardown (\(mode))")
+        expect(snapshot.installs["page-b"] == nil && snapshot.inventoryReads == 0 && snapshot.disposed.isEmpty,
+               "cancelled work cannot recover or dispose a page after Quit (\(mode))")
+        if mode == "quit-open" {
+            expect(snapshot.installs.isEmpty && snapshot.acquires == 0 && snapshot.closes == 0
+                   && fixture.target.activationCount == 0, "late open cannot construct or use a connector")
+        } else {
+            expect(snapshot.installs == ["page-a": 1] && snapshot.acquires == 1 && snapshot.releases == 1
+                   && snapshot.closes == 1 && fixture.target.activationCount == 1,
+                   "late status releases the pre-existing operation once without another activation")
+        }
+        expect(fixture.runtime.terminated == (mode == "close-status" ? 1 : 0)
+               && fixture.runtime.acquiredLock?.releaseCount == 1 && fixture.presentation.stopCount == 1,
+               "late completion does not terminate twice or repeat instance/presentation cleanup (\(mode))")
+    }
+
+    // A terminal result grants no replay authority even when its page proof has
+    // not returned yet. The mutation occurs outside the connector while held.
+    for terminal: ColdHandoffPageState in [.natural, .skipBefore, .skipAfter, .settings] {
+        let fixture = world(), status = ColdHandoffGate(), proof = ColdHandoffGate()
+        fixture.holdStatus(status)
+        var foregrounds = 0
+        let task = Task { @MainActor in
+            await connector(fixture).run(payload: "cold-handoff-test-payload", deadline: 110,
+                                         foreground: { foregrounds += 1 })
+        }
+        await status.entered.wait("terminal status before final proof")
+        fixture.state(terminal); fixture.holdPages(proof); status.release()
+        await proof.entered.wait("authoritative proof after terminal status")
+        fixture.replace(); proof.release()
+        let outcome = await task.value
+        expect(outcome == .partial(reason: "startup-interrupted") && foregrounds == 0
+               && fixture.snapshot().inventoryReads == 0 && fixture.snapshot().installs == ["page-a": 1]
+               && fixture.snapshot().disposed.isEmpty,
+               "observed terminal/settings status cannot authorize rebind after failed proof (\(terminal))")
+    }
+    for terminal: ColdHandoffPageState in [.natural, .settings] {
+        for cancel in [false, true] {
+            let fixture = world(); fixture.state(terminal)
+            let outcome = await connector(fixture).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: {
+                fixture.replace()
+                if cancel { throw CancellationError() }
+                throw lost
+            })
+            expect(outcome == .partial(reason: "startup-interrupted") && fixture.snapshot().inventoryReads == 0
+                   && fixture.snapshot().installs == ["page-a": 1] && fixture.snapshot().disposed.isEmpty,
+                   "a handoff throw/cancel cannot revive replacement after observed \(terminal)")
+        }
+    }
+
+    for finalState: ColdHandoffPageState in [.natural, .settings, .skipAfter, .timeout, .failed, .disposed, .missing, .otherRun, .malformed, .loading] {
+        let fixture = world()
+        var foregrounds = 0
+        let outcome = await connector(fixture).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: {
+            foregrounds += 1; fixture.state(finalState)
+        })
+        let expected: StartupOutcome
+        switch finalState {
+        case .natural, .settings: expected = .ready(runID: 1)
+        case .skipAfter: expected = .skipped(runID: 1, beforeReady: false)
+        case .timeout: expected = .failed(reason: "overlay-timeout")
+        case .failed: expected = .failed(reason: "asset-invalid")
+        case .malformed: expected = .failed(reason: "protocol-error")
+        case .loading: expected = .failed(reason: "attach-timeout")
+        default: expected = .partial(reason: "startup-interrupted")
+        }
+        expect(outcome == expected && foregrounds == 1 && fixture.snapshot().disposed.isEmpty
+               && fixture.snapshot().skins["page-a"] == true,
+               "fresh \(finalState) stays authoritative while preserving this verified-ready controller")
+        expect(fixture.snapshot().statuses["page-a", default: 0] >= 2 && fixture.snapshot().releases == 1
+               && fixture.snapshot().closes == 1, "no final result uses the pre-handoff ready snapshot (\(finalState))")
+    }
+
+    // Failure after a verified ready must stay a failure without deleting the
+    // usable UI. Before any verified ready, the same protocol error still cleans.
+    for beforeReady in [false, true] {
+        let fixture = world()
+        if beforeReady { fixture.state(.malformed) }
+        let outcome = await connector(fixture).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: {
+            fixture.failStatus(StartupFailure(reason: "protocol-error", message: "external status refusal"))
+        })
+        expect(outcome == .failed(reason: "protocol-error")
+               && fixture.snapshot().disposed == (beforeReady ? ["page-a"] : [])
+               && fixture.snapshot().skins["page-a"] == !beforeReady,
+               "cleanup authority distinguishes unready partial installation from verified-ready UI")
+    }
+    let invalidList = world()
+    let invalidListResult = await connector(invalidList).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: {
+        invalidList.failPages(WallpaperFailure(state: "endpoint-unavailable", chinese: "拒绝", english: "Refused", httpStatus: 503))
+    })
+    expect(invalidListResult == .failed(reason: "protocol-error") && invalidList.snapshot().disposed.isEmpty
+           && invalidList.snapshot().skins["page-a"] == true, "a post-ready invalid HTTP list remains refusal without controller disposal")
+
+    for terminal in [false, true] {
+        for change in ["pid", "start", "listener"] {
+            let fixture = world()
+            let outcome = await connector(fixture).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: {
+                if change == "pid" { fixture.changePID() }
+                else if change == "start" { fixture.changeStart() }
+                else { fixture.losePort() }
+                if terminal { fixture.state(.natural) }
+            })
+            let expected: StartupOutcome = terminal
+                ? .partial(reason: "startup-interrupted")
+                : .failed(reason: change == "listener" ? "listener-mismatch" : "target-identity")
+            let snapshot = fixture.snapshot()
+            expect(outcome == expected && snapshot.installs == ["page-a": 1]
+                   && snapshot.disposed.isEmpty && snapshot.skins["page-a"] == true
+                   && snapshot.inventoryReads == 0 && snapshot.releases == 1 && snapshot.closes == 1,
+                   "fresh proof refuses changed \(change): playing keeps typed failure; terminal keeps partial without rebind or disposal (terminal=\(terminal))")
+        }
+    }
+    let expired = world()
+    var expiryForegrounds = 0
+    let expiredResult = await connector(expired).run(payload: "cold-handoff-test-payload", deadline: 100.25, foreground: { expiryForegrounds += 1 })
+    expect(expiredResult == .failed(reason: "attach-timeout") && expiryForegrounds == 1
+           && expired.time() == 100.25 && expired.snapshot().deadlines.allSatisfy { $0 == 100.25 }
+           && expired.snapshot().timeouts.allSatisfy { $0 > 0 && $0 <= 0.25 }
+           && expired.snapshot().disposed.isEmpty, "playing cannot extend the original absolute deadline or turn cached ready into success")
+    let noNewBudget = world()
+    let noNewBudgetResult = await connector(noNewBudget).run(payload: "cold-handoff-test-payload", deadline: 100.2, foreground: {
+        noNewBudget.replace(retainOld: true)
+    })
+    expect(noNewBudgetResult == .failed(reason: "attach-timeout") && noNewBudget.time() == 100.2
+           && noNewBudget.snapshot().installs["page-b"] == nil && noNewBudget.snapshot().releases == 1,
+           "waiting for retired-ID absence spends the same deadline and never starts B on stale authority")
+    let cancelled = world(), held = ColdHandoffGate()
+    let cancelTask = Task { @MainActor in
+        await connector(cancelled).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: { cancelled.holdStatus(held) })
+    }
+    await held.entered.wait("bound status awaiting cancellation")
+    cancelTask.cancel(); held.release()
+    let cancelledResult = await cancelTask.value
+    expect(cancelledResult == .partial(reason: "startup-interrupted") && cancelled.snapshot().disposed.isEmpty
+           && cancelled.snapshot().releases == 1 && cancelled.snapshot().closes == 1,
+           "cancellation after ready retains the UI and releases the original resources once")
+
+    // If terminal was already observed before foreground, a later nonterminal
+    // status of that same run cannot erase that observation and reopen recovery.
+    let regressed = world(); regressed.state(.natural)
+    let regressedResult = await connector(regressed).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: { regressed.state(.playing) })
+    expect(regressedResult == .partial(reason: "startup-interrupted") && regressed.snapshot().inventoryReads == 0
+           && regressed.snapshot().disposed.isEmpty, "terminal-to-playing regression never regains replacement authority")
+    let handoffExpired = world()
+    let handoffExpiredResult = await connector(handoffExpired).run(payload: "cold-handoff-test-payload", deadline: 101, foreground: { handoffExpired.advance(1) })
+    expect(handoffExpiredResult == .failed(reason: "attach-timeout") && handoffExpired.snapshot().statuses["page-a"] == 1
+           && handoffExpired.snapshot().disposed.isEmpty, "a handoff that consumes the deadline cannot issue a late fresh read")
+    let skip = world(); skip.state(.skipBefore)
+    var skipForegrounds = 0
+    let skipped = await connector(skip).run(payload: "cold-handoff-test-payload", deadline: 110, foreground: { skipForegrounds += 1 })
+    expect(skipped == .skipped(runID: 1, beforeReady: true) && skipForegrounds == 0 && skip.snapshot().disposed.isEmpty,
+           "before-ready remote skip preserves its original skip result without inventing ready or replay")
+    return checks
+}
+
 #endif

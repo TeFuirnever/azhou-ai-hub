@@ -268,6 +268,7 @@ struct CodexTargetEnvironment: @unchecked Sendable {
     let currentUID: () -> UInt32
     let now: () -> TimeInterval
     var identityDiagnostics: ((String, [String: Any]) -> Void)? = nil
+    var identityFailureTrace: StartupIdentityFailureTrace? = nil
 
     static var live: CodexTargetEnvironment {
         CodexTargetEnvironment(
@@ -307,38 +308,38 @@ private struct WallpaperTarget: Sendable {
          environment: CodexTargetEnvironment = .live) throws {
         let realBundle = Self.real(bundle)
         var diagnostic = StartupIdentityDiagnostic("target-input", pid: pid, at: environment.now(),
-                                                   diagnostics: environment.identityDiagnostics)
-        guard diagnostic.check("pidValid", pid > 0),
-              diagnostic.check("appExtensionMatches", realBundle.pathExtension.lowercased() == "app"),
-              diagnostic.check("differentFromLauncher", realBundle != Self.real(environment.mainBundleURL)),
-              diagnostic.check("notNestedApp", !realBundle.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") })),
-              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(realBundle)),
-              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier) == "com.openai.codex"),
-              let binary = diagnostic.present("executablePresent", package.executableURL.map(Self.real)),
-              diagnostic.check("executableInsideBundle", binary.path.hasPrefix(realBundle.appendingPathComponent("Contents/MacOS").path + "/")),
-              diagnostic.check("executableFile", environment.isExecutableFile(binary)) else {
+                                                   diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        guard diagnostic.check("pidValid", pid > 0, refusal: .pidInvalid),
+              diagnostic.check("appExtensionMatches", realBundle.pathExtension.lowercased() == "app", refusal: .appExtensionMismatch),
+              diagnostic.check("differentFromLauncher", realBundle != Self.real(environment.mainBundleURL), refusal: .launcherBundle),
+              diagnostic.check("notNestedApp", !realBundle.deletingLastPathComponent().pathComponents.contains(where: { $0.lowercased().hasSuffix(".app") }), refusal: .nestedApp),
+              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(realBundle), refusal: .bundleFactsMissing),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier, refusal: .bundleIDMissing) == "com.openai.codex", refusal: .bundleIDMismatch),
+              let binary = diagnostic.present("executablePresent", package.executableURL.map(Self.real), refusal: .executableMissing),
+              diagnostic.check("executableInsideBundle", binary.path.hasPrefix(realBundle.appendingPathComponent("Contents/MacOS").path + "/"), refusal: .executableOutsideBundle),
+              diagnostic.check("executableFile", environment.isExecutableFile(binary), refusal: .notExecutable) else {
             let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
             diagnostic.finish("rejected", error: failure)
             throw failure
         }
         diagnostic.finish("accepted")
         diagnostic = StartupIdentityDiagnostic("process-facts-initial", pid: pid, at: environment.now(),
-                                               diagnostics: environment.identityDiagnostics)
-        guard let app = diagnostic.present("processPresent", environment.processFacts(pid)),
-              diagnostic.check("notTerminated", !app.isTerminated),
-              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier) == "com.openai.codex"),
-              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL).map(Self.real) == realBundle),
-              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL).map(Self.real) == binary) else {
+                                               diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        guard let app = diagnostic.present("processPresent", environment.processFacts(pid), refusal: .processMissing),
+              diagnostic.check("notTerminated", !app.isTerminated, refusal: .terminated),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier, refusal: .bundleIDMissing) == "com.openai.codex", refusal: .bundleIDMismatch),
+              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL, refusal: .bundleMissing).map(Self.real) == realBundle, refusal: .bundleMismatch),
+              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL, refusal: .executableMissing).map(Self.real) == binary, refusal: .executableMismatch) else {
             let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标 PID、真实应用路径或主可执行文件不匹配；未连接壁纸。", english: "The target PID, real app path, or main executable did not match; wallpaper was not connected.")
             diagnostic.finish("rejected", error: failure)
             throw failure
         }
         diagnostic.finish("accepted")
         diagnostic = StartupIdentityDiagnostic("launch-time", pid: pid, at: environment.now(),
-                                               diagnostics: environment.identityDiagnostics)
+                                               diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
         if let launchTime = diagnostic.present("expectedLaunchTimePresent", launchTime) {
-            guard let date = diagnostic.present("observedLaunchTimePresent", app.launchDate),
-                  diagnostic.check("launchTimeMatches", abs(date.timeIntervalSince1970 - launchTime) < 0.01) else {
+            guard let date = diagnostic.present("observedLaunchTimePresent", app.launchDate, refusal: .launchTimeMissing),
+                  diagnostic.check("launchTimeMatches", abs(date.timeIntervalSince1970 - launchTime) < 0.01, refusal: .launchTimeMismatch) else {
                 let failure = WallpaperFailure(state: "target-changed", chinese: "Codex 进程已变化；未连接壁纸。", english: "The Codex process changed; wallpaper was not connected.")
                 diagnostic.finish("rejected", error: failure)
                 throw failure
@@ -357,30 +358,33 @@ private struct WallpaperTarget: Sendable {
     }
     func validate(deadline: TimeInterval? = nil) throws {
         var diagnostic = StartupIdentityDiagnostic("process-facts", pid: pid, at: environment.now(),
-                                                   diagnostics: environment.identityDiagnostics)
-        guard let app = diagnostic.present("processPresent", environment.processFacts(pid)),
-              diagnostic.check("notTerminated", !app.isTerminated),
-              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier) == "com.openai.codex"),
-              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL).map(Self.real) == bundle),
-              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL).map(Self.real) == executable),
+                                                   diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        guard let app = diagnostic.present("processPresent", environment.processFacts(pid), refusal: .processMissing),
+              diagnostic.check("notTerminated", !app.isTerminated, refusal: .terminated),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", app.bundleIdentifier, refusal: .bundleIDMissing) == "com.openai.codex", refusal: .bundleIDMismatch),
+              diagnostic.check("bundleMatches", diagnostic.present("bundlePresent", app.bundleURL, refusal: .bundleMissing).map(Self.real) == bundle, refusal: .bundleMismatch),
+              diagnostic.check("executableMatches", diagnostic.present("executablePresent", app.executableURL, refusal: .executableMissing).map(Self.real) == executable, refusal: .executableMismatch),
               diagnostic.check("launchTimeAccepted", diagnostic.present("expectedLaunchTimePresent", launchDate) == nil
-                               || diagnostic.present("observedLaunchTimePresent", app.launchDate) == launchDate) else {
+                               || diagnostic.present("observedLaunchTimePresent", app.launchDate, refusal: .launchTimeMissing) == launchDate, refusal: .launchTimeMismatch) else {
             let failure = WallpaperFailure(state: "target-changed", chinese: "已核实的 Codex 进程已退出或发生变化。", english: "The verified Codex process exited or changed.")
             diagnostic.finish("rejected", error: failure)
             throw failure
         }
         diagnostic.finish("accepted")
         diagnostic = StartupIdentityDiagnostic("ps-identity", pid: pid, at: environment.now(),
-                                               diagnostics: environment.identityDiagnostics)
+                                               diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        let timeout: TimeInterval
+        do { timeout = try commandTimeout(2, deadline: deadline) }
+        catch { diagnostic.finish("error", error: error, refusal: .budgetExpired); throw error }
         let process: String
         do {
             process = try environment.runCommand("/bin/ps", ["-ww", "-p", String(pid), "-o", "uid=", "-o", "comm="],
-                                                 try commandTimeout(2, deadline: deadline), nil)
-        } catch { diagnostic.finish("error", error: error); throw error }
+                                                 timeout, nil)
+        } catch { diagnostic.finish("error", error: error, refusal: .commandThrew); throw error }
         let fields = process.trimmingCharacters(in: .whitespacesAndNewlines).split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
-        guard diagnostic.check("fieldCountMatches", fields.count == 2),
-              diagnostic.check("uidMatches", diagnostic.present("uidPresent", UInt32(fields[0])) == environment.currentUID()),
-              diagnostic.check("executableMatches", Self.real(URL(fileURLWithPath: String(fields[1]))) == executable) else {
+        guard diagnostic.check("fieldCountMatches", fields.count == 2, refusal: .psFieldCount),
+              diagnostic.check("uidMatches", diagnostic.present("uidPresent", UInt32(fields[0]), refusal: .uidUnparseable) == environment.currentUID(), refusal: .uidMismatch),
+              diagnostic.check("executableMatches", Self.real(URL(fileURLWithPath: String(fields[1]))) == executable, refusal: .executableMismatch) else {
             let failure = WallpaperFailure(state: "target-mismatch", chinese: "目标进程用户或执行路径与已核实的 Codex 不符。", english: "The target process user or executable path does not match the verified Codex.")
             diagnostic.finish("rejected", error: failure)
             throw failure
@@ -407,10 +411,10 @@ private enum StartupBundleSignature {
                        diagnosticPID: Int32? = nil) throws {
         let resolved = bundle.resolvingSymlinksInPath().standardizedFileURL
         var diagnostic = StartupIdentityDiagnostic("signature", pid: diagnosticPID, at: environment.now(),
-                                                   diagnostics: environment.identityDiagnostics)
-        guard diagnostic.check("appExtensionMatches", resolved.pathExtension.lowercased() == "app"),
-              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(resolved)),
-              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier) == "com.openai.codex") else {
+                                                   diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        guard diagnostic.check("appExtensionMatches", resolved.pathExtension.lowercased() == "app", refusal: .appExtensionMismatch),
+              let package = diagnostic.present("bundleFactsPresent", environment.bundleFacts(resolved), refusal: .bundleFactsMissing),
+              diagnostic.check("bundleIDMatches", diagnostic.present("bundleIDPresent", package.identifier, refusal: .bundleIDMissing) == "com.openai.codex", refusal: .bundleIDMismatch) else {
             let failure = WallpaperFailure(state: "signature-refused", chinese: "Codex 应用路径或 Bundle ID 无效。", english: "The Codex app path or bundle ID is invalid.")
             diagnostic.finish("rejected", error: failure)
             throw failure
@@ -420,17 +424,17 @@ private enum StartupBundleSignature {
             do {
                 timeout = try StartupBudget.boundedTimeout(maximum: 12, stageDeadline: deadline,
                                                            totalDeadline: deadline, now: environment.now())
-            } catch { diagnostic.finish("error", error: error); throw error }
+            } catch { diagnostic.finish("error", error: error, refusal: .budgetExpired); throw error }
         } else { timeout = 12 }
         do {
             _ = try environment.runCommand("/usr/bin/codesign",
                                            ["--verify", "--deep", "--strict", "-R", requirement, resolved.path],
                                            timeout, nil)
         } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
-            diagnostic.finish("error", error: error)
+            diagnostic.finish("error", error: error, refusal: .commandThrew)
             throw error
         } catch {
-            diagnostic.finish("error", error: error)
+            diagnostic.finish("error", error: error, refusal: .commandThrew)
             throw WallpaperFailure(state: "signature-refused", chinese: "Codex 应用签名未通过 Apple 锚点、Bundle ID 和 Team ID 核验。", english: "The Codex app signature did not pass Apple anchor, bundle ID, and team ID verification.")
         }
         diagnostic.finish("accepted")
@@ -529,6 +533,70 @@ enum StartupDiagnosticsPolicy {
     static func isEnabled(environment: [String: String]) -> Bool {
         environment[environmentKey] == "1"
     }
+    static let identityFailuresEnvironmentKey = "AZHOU_STARTUP_IDENTITY_FAILURES"
+    static func identityFailuresEnabled(environment: [String: String]) -> Bool {
+        environment[identityFailuresEnvironmentKey] == "1" && !isEnabled(environment: environment)
+    }
+}
+
+/// One open owns this trace. Required predicates are observed by value, but a
+/// record is created only after an existing refusal or throw. Full diagnostics
+/// take precedence; this mode never enables their success-path snapshots.
+final class StartupIdentityFailureTrace {
+    enum Predicate: String {
+        case deadlineExpired = "deadline-expired", callbackError = "callback-error"
+        case applicationMissing = "application-missing", terminated = "terminated"
+        case bundleMissing = "bundle-missing", executableMissing = "executable-missing"
+        case bundleIDMissing = "bundle-id-missing", bundleMismatch = "bundle-mismatch"
+        case executableMismatch = "executable-mismatch", bundleIDMismatch = "bundle-id-mismatch"
+        case pidInvalid = "pid-invalid", appExtensionMismatch = "app-extension-mismatch"
+        case launcherBundle = "launcher-bundle", nestedApp = "nested-app"
+        case bundleFactsMissing = "bundle-facts-missing", executableOutsideBundle = "executable-outside-bundle"
+        case notExecutable = "not-executable", processMissing = "process-missing"
+        case launchTimeMissing = "launch-time-missing", launchTimeMismatch = "launch-time-mismatch"
+        case psFieldCount = "ps-field-count", uidUnparseable = "uid-unparseable", uidMismatch = "uid-mismatch"
+        case commandThrew = "command-threw", budgetExpired = "budget-expired", validationThrew = "validation-threw"
+    }
+    private enum Checkpoint: String {
+        case callback = "callback-identity", target = "target-input", initial = "process-facts-initial"
+        case launch = "launch-time", process = "process-facts", ps = "ps-identity"
+        case systemTarget = "system-target-input", signature = "signature"
+        case validation = "system-validation", postOpen = "post-open-facts"
+    }
+    private struct Refusal {
+        let checkpoint: Checkpoint
+        let predicate: Predicate
+        let pid: Int32?
+        let error: Error
+    }
+    private let sink: (String, [String: Any]) -> Void
+    private var refusal: Refusal?
+    private var closed = false
+
+    init(sink: @escaping (String, [String: Any]) -> Void) { self.sink = sink }
+
+    func capture(_ checkpoint: String, predicate: Predicate, pid: Int32?, error: Error) {
+        guard !closed, refusal == nil, let checkpoint = Checkpoint(rawValue: checkpoint) else { return }
+        refusal = Refusal(checkpoint: checkpoint, predicate: predicate, pid: pid, error: error)
+    }
+    func seal() { closed = true; refusal = nil }
+
+    func finish(reason: String?, at: @autoclosure () -> TimeInterval) {
+        guard !closed else { return }
+        closed = true
+        guard let reason, let refusal else { self.refusal = nil; return }
+        self.refusal = nil
+        let original = refusal.error as NSError
+        var record: [String: Any] = [
+            "stage": "target-identity", "mode": "failure-only", "checkpoint": refusal.checkpoint.rawValue,
+            "failedPredicate": refusal.predicate.rawValue, "finalReason": reason, "at": at(),
+            "pidObserved": refusal.pid != nil, "errorDomain": original.domain, "errorCode": original.code
+        ]
+        if let pid = refusal.pid { record["pid"] = pid }
+        if let error = refusal.error as? WallpaperFailure { record["state"] = error.state }
+        if let error = refusal.error as? StartupFailure { record["reason"] = error.reason }
+        sink("startup-diagnostic", record)
+    }
 }
 
 /// Taps only the values consumed by an existing identity check. Missing keys
@@ -536,29 +604,47 @@ enum StartupDiagnosticsPolicy {
 /// descriptions, command output, or error userInfo enter this diagnostic.
 struct StartupIdentityDiagnostic {
     private let diagnostics: ((String, [String: Any]) -> Void)?
+    private let failureTrace: StartupIdentityFailureTrace?
+    private let checkpoint: String
+    private var observedPID: Int32?
+    private var failedPredicate: StartupIdentityFailureTrace.Predicate?
     private var fields: [String: Any] = [:]
 
     init(_ checkpoint: String, pid: Int32? = nil, at: @autoclosure () -> TimeInterval,
-         diagnostics: ((String, [String: Any]) -> Void)?) {
+         diagnostics: ((String, [String: Any]) -> Void)?,
+         failureTrace: StartupIdentityFailureTrace? = nil) {
         self.diagnostics = diagnostics
+        self.failureTrace = failureTrace
+        self.checkpoint = checkpoint
+        self.observedPID = pid
         if diagnostics != nil {
             fields = ["stage": "target-identity", "checkpoint": checkpoint, "at": at()]
             if let pid { fields["pid"] = pid }
         }
     }
-    mutating func check(_ field: String, _ value: Bool) -> Bool {
+    mutating func check(_ field: String, _ value: Bool,
+                        refusal: StartupIdentityFailureTrace.Predicate? = nil) -> Bool {
         if diagnostics != nil { fields[field] = value }
+        if !value, let refusal, failedPredicate == nil { failedPredicate = refusal }
         return value
     }
-    mutating func present<T>(_ field: String, _ value: T?) -> T? {
-        _ = check(field, value != nil)
+    mutating func present<T>(_ field: String, _ value: T?,
+                            refusal: StartupIdentityFailureTrace.Predicate? = nil) -> T? {
+        _ = check(field, value != nil, refusal: refusal)
         return value
     }
     mutating func processIdentifier(_ value: Int32) -> Int32 {
         if diagnostics != nil { fields["pid"] = value }
+        observedPID = value
         return value
     }
-    func finish(_ outcome: String, error: Error? = nil) {
+    func finish(_ outcome: String, error: Error? = nil,
+                refusal: StartupIdentityFailureTrace.Predicate? = nil,
+                failureTrace providedTrace: StartupIdentityFailureTrace? = nil) {
+        if (outcome == "rejected" || outcome == "error"), let error,
+           let predicate = refusal ?? failedPredicate {
+            (providedTrace ?? failureTrace)?.capture(checkpoint, predicate: predicate, pid: observedPID, error: error)
+        }
         guard let diagnostics else { return }
         var record = fields
         record["outcome"] = outcome
@@ -668,6 +754,7 @@ protocol StartupOperationLock: AnyObject {
 protocol StartupTargetSystem {
     func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws
+    func observingIdentityFailures(_ trace: StartupIdentityFailureTrace) -> any StartupTargetSystem
     func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval,
                   diagnostics: ((String, [String: Any]) -> Void)?) throws
@@ -676,6 +763,7 @@ protocol StartupTargetSystem {
 }
 
 extension StartupTargetSystem {
+    func observingIdentityFailures(_ trace: StartupIdentityFailureTrace) -> any StartupTargetSystem { self }
     func validate(_ target: StartupTargetFacts, deadline: TimeInterval,
                   diagnostics: ((String, [String: Any]) -> Void)?) throws {
         try validate(target, deadline: deadline)
@@ -726,17 +814,23 @@ struct CodexStartupTargetSystem: StartupTargetSystem {
 
     init(environment: CodexTargetEnvironment = .live) { self.environment = environment }
 
+    func observingIdentityFailures(_ trace: StartupIdentityFailureTrace) -> any StartupTargetSystem {
+        var observed = environment
+        observed.identityFailureTrace = trace
+        return CodexStartupTargetSystem(environment: observed)
+    }
+
     private func target(_ facts: StartupTargetFacts, deadline: TimeInterval? = nil) throws -> WallpaperTarget {
         var diagnostic = StartupIdentityDiagnostic("system-target-input", pid: facts.pid, at: environment.now(),
-                                                   diagnostics: environment.identityDiagnostics)
-        guard diagnostic.check("bundleIDMatches", facts.bundleID == "com.openai.codex") else {
+                                                   diagnostics: environment.identityDiagnostics, failureTrace: environment.identityFailureTrace)
+        guard diagnostic.check("bundleIDMatches", facts.bundleID == "com.openai.codex", refusal: .bundleIDMismatch) else {
             let failure = StartupFailure(reason: "target-identity", message: "目标 Bundle ID 与 Codex 不符。")
             diagnostic.finish("rejected", error: failure)
             throw failure
         }
         let target = try WallpaperTarget(pid: facts.pid, bundle: facts.bundle, launchTime: facts.launchTime,
                                          commandDeadline: deadline, environment: environment)
-        guard diagnostic.check("executableMatches", target.executable == facts.executable) else {
+        guard diagnostic.check("executableMatches", target.executable == facts.executable, refusal: .executableMismatch) else {
             let failure = StartupFailure(reason: "target-identity", message: "目标主可执行文件与核验路径不符。")
             diagnostic.finish("rejected", error: failure)
             throw failure
@@ -1391,8 +1485,11 @@ struct StartupConnector {
         self.sleep = sleep
     }
 
-    func run(payload: String, deadline: TimeInterval) async -> StartupOutcome {
-        do { return try await attach(payload: payload, deadline: deadline) }
+    // Only the Codex cold driver supplies foreground. Other connector consumers
+    // retain their existing first-ready boundary.
+    func run(payload: String, deadline: TimeInterval,
+             foreground: (@MainActor () throws -> Void)? = nil) async -> StartupOutcome {
+        do { return try await attach(payload: payload, deadline: deadline, foreground: foreground) }
         catch {
             if Task.isCancelled || error is CancellationError { return .partial(reason: "startup-interrupted") }
             if let failure = error as? StartupFailure { return .failed(reason: failure.reason) }
@@ -1544,7 +1641,8 @@ struct StartupConnector {
         }
     }
 
-    private func attach(payload: String, deadline: TimeInterval) async throws -> StartupOutcome {
+    private func attach(payload: String, deadline: TimeInterval,
+                        foreground: (@MainActor () throws -> Void)?) async throws -> StartupOutcome {
         defer { transport.close() }
         guard (1...65535).contains(expectedPort), !payload.isEmpty,
               payload.utf8.count < 24 * 1024 * 1024 else {
@@ -1556,6 +1654,7 @@ struct StartupConnector {
         var selected = try await initialPage(deadline: deadline)
         var visited: Set<String> = []
         var attempted: Set<String> = []
+        var foregroundAttempted = false
         var stage = "discover"
         do {
             while true {
@@ -1564,7 +1663,9 @@ struct StartupConnector {
                 stage = "connect"
                 try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))
                 do {
-                    return try await attachPage(selected, payload: payload, attempted: &attempted, stage: &stage, deadline: deadline)
+                    return try await attachPage(selected, payload: payload, attempted: &attempted,
+                                                foregroundAttempted: &foregroundAttempted, foreground: foreground,
+                                                stage: &stage, deadline: deadline)
                 } catch let failure as StartupFailure where failure.pageConnectionLost {
                     try requireBudget(deadline)
                     report(stage, page: selected, error: failure)
@@ -1584,6 +1685,7 @@ struct StartupConnector {
     }
 
     private func attachPage(_ selected: Page, payload: String, attempted: inout Set<String>,
+                            foregroundAttempted: inout Bool, foreground: (@MainActor () throws -> Void)?,
                             stage: inout String, deadline: TimeInterval) async throws -> StartupOutcome {
         try requireBudget(deadline)
         stage = "inspect"
@@ -1621,6 +1723,10 @@ struct StartupConnector {
         guard !alreadyActive else { return .partial(reason: "startup-active") }
 
         var runID: Int?
+        // Both facts belong only to this selected page and retained controller.
+        // A replacement starts unready; it never inherits A's cleanup exemption.
+        var verifiedReady = false
+        var terminalObserved = false
         do {
             while now() < deadline {
                 try requireBudget(deadline)
@@ -1639,6 +1745,9 @@ struct StartupConnector {
                 if runID == nil { runID = status.runID }
                 if status.phase == "failed" || status.phase == "timeout" { return .failed(reason: status.reason) }
                 if status.phase == "disposed" { return .partial(reason: "startup-interrupted") }
+                let boundary = status.completed || (foreground != nil && status.phase == "settings")
+                if terminalObserved && !boundary { return .partial(reason: "startup-interrupted") }
+                terminalObserved = terminalObserved || boundary
                 if status.completed || status.ready {
                     stage = "recheck"
                     do {
@@ -1653,7 +1762,7 @@ struct StartupConnector {
                         // Completion and user skip are terminal, even if their
                         // document has since ended or its proof failed. Never
                         // replay a finished run.
-                        guard status.completed, !(error is CancellationError) else { throw error }
+                        guard terminalObserved, !(error is CancellationError) else { throw error }
                         return .partial(reason: "startup-interrupted")
                     }
                 }
@@ -1661,12 +1770,29 @@ struct StartupConnector {
                     return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
                 }
                 if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
-                    return .ready(runID: status.runID)
+                    if let foreground {
+                        verifiedReady = true
+                        if !foregroundAttempted {
+                            try requireBudget(deadline)
+                            foregroundAttempted = true
+                            try await foreground()
+                            try requireBudget(deadline)
+                            // Activation is not a renderer fence. Read the same
+                            // bound controller/run again before any final result.
+                            continue
+                        }
+                        if status.phase != "playing" { return .ready(runID: status.runID) }
+                    } else {
+                        return .ready(runID: status.runID)
+                    }
                 }
                 try await sleep(min(0.1, max(0, deadline - now())))
             }
         } catch {
-            if !(error is CancellationError), (error as? StartupFailure)?.pageConnectionLost != true {
+            if terminalObserved, (error as? StartupFailure)?.pageConnectionLost == true {
+                return .partial(reason: "startup-interrupted")
+            }
+            if !verifiedReady, !(error is CancellationError), (error as? StartupFailure)?.pageConnectionLost != true {
                 await disposeOwnedController(href: href, deadline: deadline)
             }
             throw error

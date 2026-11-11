@@ -186,6 +186,7 @@ final class CodexSkinDriver: SkinHostDriver {
                 validate: { try system.validate($0, deadline: budget.preflightDeadline) },
                 activate: { try self.assembly.activateExisting($0) },
                 coldStart: {
+                    try Task.checkCancellation()
                     let payload = try self.readPayload()
                     guard self.runtime.uptime < budget.totalDeadline else {
                         throw StartupFailure(reason: "attach-timeout", message: "Codex 启动已超过 60 秒总预算。")
@@ -195,6 +196,7 @@ final class CodexSkinDriver: SkinHostDriver {
                     self.assembly.onOpeningChanged(true)
                     let app = try await self.assembly.openApplication(self.inputs.identity.key.bundleURL,
                                                                       port, attachDeadline, system)
+                    try Task.checkCancellation()
                     self.assembly.onOpeningChanged(false)
                     self.assembly.onTargetOpened(app)
                     let facts = try self.assembly.startupFacts(app)
@@ -207,13 +209,23 @@ final class CodexSkinDriver: SkinHostDriver {
                     }
                     self.installObservation.reset()
                     return await self.makeConnector(facts, port, system, capture, eventStream)
-                        .run(payload: payload, deadline: attachDeadline)
+                        .run(payload: payload, deadline: attachDeadline, foreground: {
+                            try Task.checkCancellation()
+                            guard self.runtime.uptime < attachDeadline else {
+                                throw StartupFailure(reason: "attach-timeout", message: "目标交接超过当前阶段预算。")
+                            }
+                            _ = try self.assembly.activateExisting(facts)
+                        })
                 }
             )
-        } catch let error as StartupFailure {
-            outcome = .failed(reason: error.reason)
         } catch {
-            outcome = .failed(reason: "protocol-error")
+            if Task.isCancelled || error is CancellationError {
+                outcome = .partial(reason: "startup-interrupted")
+            } else if let failure = error as? StartupFailure {
+                outcome = .failed(reason: failure.reason)
+            } else {
+                outcome = .failed(reason: "protocol-error")
+            }
         }
         assembly.onOpeningChanged(false)
         return Self.bridge(outcome, request: request, key: inputs.identity.key,

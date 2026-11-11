@@ -1168,6 +1168,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var lockFailureReason: String?
     private var ready = false, opening = false, requested = false, done = false
     private var terminating = false, failed = false, activated = false, promoted = false
+    // Cold handoff caches an attempt, including a refusal. Hot/ZCode keep their
+    // existing activation policy; opening continues to mean NSWorkspace only.
+    private var codexCold = false
+    private var coldActivationAttempted = false
+    private(set) var launchTask: Task<Void, Never>?
+    private var teardownFinished = false
     private var startupRequested = false, processExitCode: Int32 = 0
     private var startupEventStream: NativeStartupEventStream?
     private var startupCapture: NativeStartupCapture?
@@ -1183,6 +1189,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     )
     private lazy var startupDiagnostics: ((String, [String: Any]) -> Void)? =
         StartupDiagnosticsPolicy.isEnabled(environment: ProcessInfo.processInfo.environment)
+            ? { [weak self] _, fields in self?.log("startup-diagnostic", fields) }
+            : nil
+    private lazy var startupFailureDiagnostics: ((String, [String: Any]) -> Void)? =
+        StartupDiagnosticsPolicy.identityFailuresEnabled(environment: ProcessInfo.processInfo.environment)
             ? { [weak self] _, fields in self?.log("startup-diagnostic", fields) }
             : nil
     init(runtime: (any NativeAppRuntime)? = nil,
@@ -1361,6 +1371,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             presentation?.showReady()
             presentation?.evaluateJavaScript(preview ? "window.launcherUI.replay()" : "window.launcherUI.beginLaunch()") { [weak self] _, error in
                 guard let self, !self.terminating else { return }
+                // A late replay reply cannot restart a completed cold local stage.
+                guard !(self.codexCold && self.done) else { return }
                 if let error { self.fail(error.localizedDescription, "playback-start-error"); return }
                 if self.smokeTest { self.logSmokeEvent("playback-start", ["durationSeconds": duration]) }
                 else { self.log("playback-start", ["durationSeconds": duration, "window": self.windowGeometry()]) }
@@ -1400,8 +1412,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     }
                     self.terminating = true; self.runtime.terminate()
                 }
-            } else { finishIfReady("animation-complete") }
+            } else {
+                if codexCold { watchdog?.cancel() }
+                finishIfReady("animation-complete")
+            }
         case "close":
+            launchTask?.cancel()
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
             terminating = true; runtime.terminate()
@@ -1412,14 +1428,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func startupFacts(_ app: any NativeApplication,
                      diagnostics: ((String, [String: Any]) -> Void)? = nil,
+                     failureDiagnostics: ((String, [String: Any]) -> Void)? = nil,
                      at: @autoclosure () -> TimeInterval = ProcessInfo.processInfo.systemUptime) throws -> StartupTargetFacts {
         var diagnostic = StartupIdentityDiagnostic("post-open-facts", at: at(), diagnostics: diagnostics)
-        guard diagnostic.check("notTerminated", !app.isTerminated),
-              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
-              let executable = diagnostic.present("executablePresent", app.executableURL),
-              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier) else {
+        guard diagnostic.check("notTerminated", !app.isTerminated, refusal: .terminated),
+              let bundle = diagnostic.present("bundlePresent", app.bundleURL, refusal: .bundleMissing),
+              let executable = diagnostic.present("executablePresent", app.executableURL, refusal: .executableMissing),
+              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier, refusal: .bundleIDMissing) else {
             let failure = StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
-            diagnostic.finish("rejected", error: failure)
+            // This independent snapshot allocates its trace only after refusing.
+            let trace = diagnostics == nil ? failureDiagnostics.map { StartupIdentityFailureTrace(sink: $0) } : nil
+            diagnostic.finish("rejected", error: failure, failureTrace: trace)
+            trace?.finish(reason: failure.reason, at: at())
             throw failure
         }
         let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
@@ -1464,9 +1484,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard running.isEmpty || (running.count == 1 && matching.count == 1) else {
             finishStartup(.failed(reason: "target-identity"), promoted: promoted); return
         }
-        Task { @MainActor [weak self] in
+        launchTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer { self.launchTask = nil }
+            guard !Task.isCancelled, !self.terminating else { return }
             let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
+            guard !Task.isCancelled, !self.terminating else { return }
             self.opening = false
             if expectedApplication.host == .zcode {
                 self.finishZCodeStartup(result, expectedApplication: expectedApplication, promoted: self.promoted)
@@ -1572,14 +1595,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 guard let self else {
                     throw StartupFailure(reason: "target-identity", message: "启动入口已结束。")
                 }
+                try Task.checkCancellation()
+                guard !self.terminating else { throw CancellationError() }
                 guard let app = self.runtime.application(processIdentifier: facts.pid), !app.isTerminated,
                       app.bundleIdentifier == facts.bundleID,
                       app.bundleURL.map({ self.real($0) }) == facts.bundle,
                       app.executableURL.map({ self.real($0) }) == facts.executable,
-                      app.launchTime == facts.launchTime else {
+                      (self.codexCold && facts.launchTime == nil
+                       || app.launchTime == facts.launchTime) else {
                     throw StartupFailure(reason: "target-identity", message: "已核验的 Codex 进程发生变化。")
                 }
                 self.target = app
+                if self.codexCold { return self.activateOnce("startup-ready-handoff") }
                 let activated = app.activate()
                 self.activated = activated
                 return activated
@@ -1590,15 +1617,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             },
             openApplication: { [weak self] url, port, deadline, openSystem in
                 guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
+                try Task.checkCancellation()
+                guard !self.terminating else { throw CancellationError() }
                 return try await self.openCodex(url, port: port, deadline: deadline, system: openSystem)
             },
             onTargetOpened: { [weak self] app in self?.target = app },
             onCaptureReady: { [weak self] capture in self?.startupCapture = capture },
             eventStream: { [weak self] in self?.startupEventStream },
-            onOpeningChanged: { [weak self] value in self?.opening = value },
+            onOpeningChanged: { [weak self] value in
+                guard let self else { return }
+                self.opening = value
+                if value {
+                    self.codexCold = true
+                    // Local completion may precede the task entering cold open.
+                    if self.done { self.watchdog?.cancel() }
+                }
+            },
             startupFacts: { [weak self] app in
                 guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
-                return try self.startupFacts(app, diagnostics: self.startupDiagnostics, at: self.runtime.uptime)
+                return try self.startupFacts(app, diagnostics: self.startupDiagnostics,
+                                             failureDiagnostics: self.startupFailureDiagnostics, at: self.runtime.uptime)
             },
             performDisable: nil)
         let dependencies = SkinAssemblyDependencies(
@@ -1680,7 +1718,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         try await Self.openTargetApplication(runtime: runtime, targetBundleID: targetID, url: url,
                                              port: port, deadline: deadline, system: system,
                                              log: { [weak self] event, fields in self?.log(event, fields) },
-                                             diagnostics: startupDiagnostics)
+                                             diagnostics: startupDiagnostics, failureDiagnostics: startupFailureDiagnostics)
     }
 
     /// Shared bounded application-open routine (same order and failures as the
@@ -1691,8 +1729,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         runtime: any NativeAppRuntime, targetBundleID: String, url: URL, port: Int,
         deadline: TimeInterval, system: any StartupTargetSystem,
         log: @escaping (String, [String: Any]) -> Void,
-        diagnostics: ((String, [String: Any]) -> Void)? = nil
+        diagnostics: ((String, [String: Any]) -> Void)? = nil,
+        failureDiagnostics: ((String, [String: Any]) -> Void)? = nil
     ) async throws -> any NativeApplication {
+        // Configure this open before NSWorkspace is asked to launch. The original
+        // system remains untouched for preflight and every later connector call.
+        let failureTrace = diagnostics == nil ? failureDiagnostics.map { StartupIdentityFailureTrace(sink: $0) } : nil
+        let observedSystem: any StartupTargetSystem = failureTrace.map { system.observingIdentityFailures($0) } ?? system
+        defer { failureTrace?.seal() }
         let openTimeout = try StartupBudget.boundedTimeout(
             maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
             now: runtime.uptime
@@ -1700,6 +1744,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return try await withCheckedThrowingContinuation { continuation in
             let waiter = StartupApplicationWaiter(continuation)
             let timeout = DispatchWorkItem {
+                failureTrace?.seal()
                 waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
             }
             waiter.setTimeout(timeout)
@@ -1713,32 +1758,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         // process query. This finite validation path produces at most 11 checks;
                         // the single batch is emitted only once this callback verdict is final.
                         var checks: [[String: Any]] = []
+                        var failureReason: String?
                         let observations: ((String, [String: Any]) -> Void)? = diagnostics.map { _ in
                             { _, record in checks.append(record) }
                         }
                         defer {
+                            failureTrace?.finish(reason: failureReason, at: now)
                             diagnostics?("startup-diagnostic", ["stage": "target-identity", "checkpoint": "bounded-open",
                                                                  "at": now, "checks": checks])
                         }
-                        var diagnostic = StartupIdentityDiagnostic("callback-identity", at: now, diagnostics: observations)
-                        guard diagnostic.check("beforeDeadline", now < deadline) else {
+                        var diagnostic = StartupIdentityDiagnostic("callback-identity", at: now, diagnostics: observations, failureTrace: failureTrace)
+                        guard diagnostic.check("beforeDeadline", now < deadline, refusal: .deadlineExpired) else {
                             let failure = StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")
                             diagnostic.finish("rejected", error: failure)
+                            failureReason = failure.reason
                             return failure
                         }
                         if diagnostic.check("callbackErrorPresent", error != nil) {
-                            diagnostic.finish("error", error: error)
+                            diagnostic.finish("error", error: error, refusal: .callbackError)
+                            failureReason = "target-missing"
                             return StartupFailure(reason: "target-missing", message: "Codex 启动失败。")
                         }
-                        guard let app = diagnostic.present("applicationPresent", app),
-                              diagnostic.check("notTerminated", !app.isTerminated),
-                              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
-                              let executable = diagnostic.present("executablePresent", app.executableURL),
-                              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier),
-                              diagnostic.check("bundleMatches", bundle.resolvingSymlinksInPath().standardizedFileURL == url),
-                              diagnostic.check("bundleIDMatches", bundleID == targetBundleID) else {
+                        guard let app = diagnostic.present("applicationPresent", app, refusal: .applicationMissing),
+                              diagnostic.check("notTerminated", !app.isTerminated, refusal: .terminated),
+                              let bundle = diagnostic.present("bundlePresent", app.bundleURL, refusal: .bundleMissing),
+                              let executable = diagnostic.present("executablePresent", app.executableURL, refusal: .executableMissing),
+                              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier, refusal: .bundleIDMissing),
+                              diagnostic.check("bundleMatches", bundle.resolvingSymlinksInPath().standardizedFileURL == url, refusal: .bundleMismatch),
+                              diagnostic.check("bundleIDMatches", bundleID == targetBundleID, refusal: .bundleIDMismatch) else {
                             let failure = StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")
                             diagnostic.finish("rejected", error: failure)
+                            failureReason = failure.reason
                             return failure
                         }
                         let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
@@ -1747,19 +1797,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                                                        bundleID: bundleID,
                                                        launchTime: diagnostic.present("launchTimePresent", app.launchTime))
                         diagnostic.finish("accepted")
-                        let validation = StartupIdentityDiagnostic("system-validation", pid: facts.pid, at: now, diagnostics: observations)
+                        let validation = StartupIdentityDiagnostic("system-validation", pid: facts.pid, at: now, diagnostics: observations, failureTrace: failureTrace)
                         do {
-                            try system.validate(facts, deadline: deadline, diagnostics: observations)
+                            try observedSystem.validate(facts, deadline: deadline, diagnostics: observations)
                             validation.finish("accepted")
                             return nil
                         } catch let failure as StartupFailure where failure.reason == "attach-timeout" {
-                            validation.finish("error", error: failure)
+                            validation.finish("error", error: failure, refusal: .validationThrew)
+                            failureReason = failure.reason
                             return failure
                         } catch let failure as WallpaperFailure where failure.state == "inspection-timeout" {
-                            validation.finish("error", error: failure)
+                            validation.finish("error", error: failure, refusal: .validationThrew)
+                            failureReason = "attach-timeout"
                             return StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")
                         } catch {
-                            validation.finish("error", error: error)
+                            validation.finish("error", error: error, refusal: .validationThrew)
+                            failureReason = "target-identity"
                             return StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")
                         }
                     }()
@@ -1797,12 +1850,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         case .activated:
             break
         case .ready:
-            if let target, !target.isTerminated {
+            if codexCold {
+                _ = activateOnce("startup-ready")
+            } else if let target, !target.isTerminated {
                 activated = target.activate()
                 log("target-activation-after-startup", ["allowed": activated, "targetPID": Int(target.processIdentifier)])
             }
         case .skipped:
-            if let target, !target.isTerminated { activated = target.activate() }
+            if codexCold { _ = activateOnce("startup-skipped") }
+            else if let target, !target.isTerminated { activated = target.activate() }
         case .partial(let reason), .behaviorNotProven(let reason):
             if promoted { fail(startupMessage(reason), reason) }
             else { terminating = true; runtime.terminate() }
@@ -1821,8 +1877,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     @discardableResult
     private func activateOnce(_ reason: String) -> Bool {
+        if codexCold && coldActivationAttempted { return activated }
         if activated { return true }
-        guard let target, !target.isTerminated else { return false }
+        guard !terminating, let target, !target.isTerminated else { return false }
+        if codexCold { coldActivationAttempted = true }
         let result = target.activate()
         activated = result
         log("target-activation-request", ["reason": reason, "allowed": result, "target": appInfo(target)])
@@ -1831,7 +1889,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func finishIfReady(_ reason: String) {
         guard done, !preview, !terminating, !failed else { return }
         if let target, target.isTerminated { fail(displayLocale.message(for: "target-exited"), "target-exited"); return }
-        guard !opening, let target, !target.isTerminated else {
+        guard !(codexCold && startupEventStream?.isPending == true),
+              !opening, let target, !target.isTerminated else {
             presentation?.evaluateJavaScript("window.launcherUI.waiting()", completion: nil)
             log("waiting-for-target"); return
         }
@@ -1906,14 +1965,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if preview || failed {
+            guard !terminating else { return false }
+            launchTask?.cancel()
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
             terminating = true; runtime.terminate()
         }
-        else { done = true; log("window-close-as-skip"); finishIfReady("window-close") }
+        else {
+            done = true
+            if codexCold { watchdog?.cancel() }
+            log("window-close-as-skip"); finishIfReady("window-close")
+        }
         return false
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        launchTask?.cancel()
         if !terminating {
             if smokeTest && !smokeResultSucceeded { failed = true; processExitCode = 1 }
             if startupEventStream?.isPending == true { startupEventStream?.latchInterruption() }
@@ -1923,6 +1989,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return .terminateNow
     }
     func applicationWillTerminate(_ notification: Notification) {
+        guard !teardownFinished else { return }
+        teardownFinished = true
+        terminating = true
+        launchTask?.cancel()
         watchdog?.cancel(); snapshots.forEach { $0.cancel() }
         if smokeTest {
             if !smokeResultSucceeded { failed = true; processExitCode = max(processExitCode, 1) }
