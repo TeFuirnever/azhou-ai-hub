@@ -424,7 +424,7 @@ def load_snapshot(project, path):
     snapshot = parse(raw)
     frozen_revision = snapshot_metadata(snapshot)
     for record in snapshot["inputs"]:
-        frozen_copy = child(path.parent, "inputs").joinpath(record["path"])
+        frozen_copy = child(path.parent, Path("inputs") / record["path"])
         require(sha(read(frozen_copy)) == record["sha256"],
                 f"冻结输入与记录摘要不符：{record['path']}")
     current, _, config = theme_facts(project)

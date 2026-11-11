@@ -567,10 +567,10 @@ def tree_receipt(path):
         if stat.S_ISDIR(info.st_mode):
             entries.append((relative, 'directory', info.st_dev, info.st_ino, info.st_mode & 0o777))
         elif stat.S_ISREG(info.st_mode):
-            fd = os.open(item, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            fd = os.open(item, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
             try:
                 opened = os.fstat(fd)
-                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
                     raise RuntimeError(f'文件在核验时发生替换：{item}')
                 with os.fdopen(fd, 'rb', closefd=False) as stream:
                     digest = hashlib.file_digest(stream, 'sha256').hexdigest()
