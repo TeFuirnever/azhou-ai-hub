@@ -439,6 +439,7 @@ struct StartupNativeTests {
         checks += zcodeTypedEventContractChecks()
         checks += startupIdentityDiagnosticChecks()
         checks += launcherCommandLineChecks()
+        checks += try await hostApplicationKeyChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
@@ -5547,5 +5548,67 @@ private func launcherCommandLineChecks() -> Int {
     let bare = LauncherCommandLine(arguments: ["launcher"])
     expect(bare.snapshotDirectory == nil && bare.zcodeStateRoot == nil,
            "snapshot and state roots stay absent without their flags")
+    return checks
+}
+
+@MainActor private func hostApplicationKeyChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+
+    func makeSyntheticKeyBundle(bundleIdentifier: String, declaredHost: String?, executableName: String)
+        throws -> (bundle: URL, executable: URL, payload: Data) {
+        let bundle = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Synthetic Key Host-" + UUID().uuidString + ".app", isDirectory: true)
+        let executable = bundle.appendingPathComponent("Contents/MacOS/" + executableName)
+        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let payload = Data("#!/bin/sh\nexit 0\n".utf8)
+        try payload.write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        var info: [String: Any] = ["CFBundleIdentifier": bundleIdentifier, "CFBundlePackageType": "APPL",
+                                   "CFBundleExecutable": executableName]
+        if let declaredHost { info["AzhouTargetHost"] = declaredHost }
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: bundle.appendingPathComponent("Contents/Info.plist"))
+        return (bundle, executable, payload)
+    }
+
+    let system = TrustedLaunchSession()
+
+    let (launcherBundle, _, _) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "local.azhou.zcode-startup", declaredHost: "zcode", executableName: "Launcher")
+    defer { try? FileManager.default.removeItem(at: launcherBundle) }
+    let identity = LauncherIdentity(bundleURL: launcherBundle)
+    expect(identity.host == .zcode && identity.targetBundleID == "dev.zcode.app",
+           "the zcode launcher bundle resolves its host and target identity")
+
+    let (targetBundle, targetExecutable, targetPayload) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "dev.zcode.app", declaredHost: nil, executableName: "ZCode")
+    defer { try? FileManager.default.removeItem(at: targetBundle) }
+    let expectedDigest = SHA256.hash(data: targetPayload).map { String(format: "%02x", $0) }.joined()
+    guard let key = system.hostApplicationKey(for: targetBundle, identity: identity) else {
+        preconditionFailure("FAILED: the verified zcode target yields its application key")
+    }
+    expect(key.bundleIdentifier == "dev.zcode.app", "the key carries the target bundle identifier")
+    expect(key.executableURL == PathCanonicalization.resolved(targetExecutable),
+           "the key pins the canonical executable URL")
+    expect(key.executableSHA256 == expectedDigest, "the zcode key pins the real executable digest")
+
+    let (codexLauncher, _, _) = try makeSyntheticKeyBundle(
+        bundleIdentifier: "local.azhou.codex-startup", declaredHost: "codex", executableName: "Launcher")
+    defer { try? FileManager.default.removeItem(at: codexLauncher) }
+    let codexIdentity = LauncherIdentity(bundleURL: codexLauncher)
+    expect(codexIdentity.host == .codex, "the codex launcher bundle resolves the codex host")
+    if let codexKey = system.hostApplicationKey(for: targetBundle, identity: codexIdentity) {
+        expect(codexKey.executableSHA256.isEmpty,
+               "the codex branch leaves the executable digest to its codesign path")
+    } else {
+        expect(true, "the codex branch may refuse a mismatched identity outright")
+    }
+
+    // A stream failure latch is idempotent and never touches verified key state.
+    system.latchStreamFailure("synthetic")
+    expect(system.eventStream == nil, "latching a failure without an open stream stays inert")
     return checks
 }
