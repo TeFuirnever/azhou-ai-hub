@@ -438,6 +438,7 @@ struct StartupNativeTests {
         checks += zcodeRuntimeEventEnvelopeChecks()
         checks += zcodeTypedEventContractChecks()
         checks += startupIdentityDiagnosticChecks()
+        checks += launcherCommandLineChecks()
         func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
@@ -5523,5 +5524,28 @@ private func startupIdentityDiagnosticChecks() -> Int {
     expect((record["state"] as? String) == "page-missing", "wallpaper failures record their state")
     expect(record["errorDomain"] as? String != nil, "wallpaper failures still reduce to domain and code")
 
+    return checks
+}
+
+private func launcherCommandLineChecks() -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        precondition(condition(), label); checks += 1
+    }
+    let full = LauncherCommandLine(arguments: ["launcher", "--preview", "--snapshot", "/tmp/synth",
+                                               "--zcode-state-root", "/tmp/zstate", "--probe"])
+    expect(full.value(after: "--snapshot") == "/tmp/synth",
+           "value(after:) returns the argument following the flag")
+    expect(full.value(after: "--missing") == nil,
+           "value(after:) returns nil for an absent flag")
+    let trailing = LauncherCommandLine(arguments: ["launcher", "--snapshot"])
+    expect(trailing.value(after: "--snapshot") == nil,
+           "value(after:) returns nil when the flag has no follower")
+    expect(full.snapshotDirectory == "/tmp/synth", "snapshot directory parses from its flag")
+    expect(full.snapshotTimes == "0.4,1.4,2.3,3.5,5.5,7.3", "snapshot times keep their default cadence")
+    expect(full.zcodeStateRoot == "/tmp/zstate", "zcode state root parses from its flag")
+    let bare = LauncherCommandLine(arguments: ["launcher"])
+    expect(bare.snapshotDirectory == nil && bare.zcodeStateRoot == nil,
+           "snapshot and state roots stay absent without their flags")
     return checks
 }
