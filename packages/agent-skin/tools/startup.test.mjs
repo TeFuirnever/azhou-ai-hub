@@ -969,6 +969,124 @@ test('the loading watchdog releases a never-ready overlay and keeps a typed time
   assert.equal(controlled.host.__azhouStartup.status().ready, false);
 });
 
+test('a ready playback timeout keeps its receipt and reopens settings through the appearance entry', () => {
+  const controlled = controlledHost();
+  addAppearanceNavigation(controlled);
+  const runs = [];
+  let disposedFrames = 0;
+  const payload = function (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, SEND, frameSpec) {
+    runs.push({ ...frameSpec, send: SEND });
+    SEND({ type: 'azhou-startup', action: 'ready', runId: frameSpec.runId });
+    return { dispose() { disposedFrames++; } };
+  };
+  installStartup(payload, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  const firstFrame = controlled.frames[0];
+  const watchdog = controlled.timers.find(timer => timer.delay === 25_000);
+  const entry = controlled.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  const button = appearanceButton(controlled);
+  assert.equal(api.status().phase, 'playing');
+  assert.equal(entry.style.display, 'none');
+
+  watchdog.callback();
+  const timedOut = api.status();
+  assert.equal(timedOut.phase, 'timeout');
+  assert.equal(timedOut.reason, 'overlay-timeout');
+  assert.equal(timedOut.ready, true);
+  assert.equal(timedOut.completed, false);
+  assert.equal(timedOut.completion, null);
+  assert.equal(timedOut.overlay, false);
+  assert.equal(firstFrame.removed, true);
+  assert.equal(disposedFrames, 1);
+  assert.equal(controlled.listenerCount(), 0);
+  assert.equal(entry.style.display, 'block', 'a prepared run can expose settings without claiming playback completed');
+  assert.equal(button.disabled, false);
+
+  const complete = { type: 'azhou-startup', action: 'complete', runId: runs[0].runId, skipped: false };
+  runs[0].send(complete);
+  assert.deepEqual(api.status(), timedOut, 'a late direct frame bridge cannot rewrite the timeout');
+  button.click();
+  assert.equal(runs.length, 2);
+  assert.equal(runs[1].intent, 'settings', 'recovery starts settings rather than replaying startup');
+  assert.notEqual(runs[1].runId, runs[0].runId);
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(api.status().completed, false);
+  assert.equal(api.openSettings(), false, 'an active settings session is not replaced');
+
+  controlled.host.send({ ...complete, runId: runs[1].runId, skipped: true }, firstFrame.contentWindow);
+  controlled.host.send(complete, controlled.frames[1].contentWindow);
+  runs[0].send({ ...complete, runId: runs[1].runId, skipped: true });
+  watchdog.callback();
+  assert.equal(api.status().phase, 'settings', 'old sources, run IDs and watchdogs cannot close the new run');
+  assert.equal(disposedFrames, 1);
+
+  runs[1].send({ type: 'azhou-startup', action: 'complete', runId: runs[1].runId, skipped: true });
+  assert.equal(api.status().phase, 'complete');
+  assert.deepEqual(api.status().completion, { cause: 'settings-cancel', beforeReady: false });
+  assert.equal(entry.style.display, 'block');
+  assert.equal(disposedFrames, 2);
+  api.dispose();
+  button.click();
+  assert.equal(api.openSettings(), false);
+  assert.equal(runs.length, 2);
+});
+
+test('a ready timeout retries the same appearance entry when navigation becomes usable', () => {
+  const controlled = controlledHost();
+  const [{ nav }] = addAppearanceNavigation(controlled);
+  nav.hidden = true;
+  controlled.setHostUIReady(false);
+  const runs = [];
+  installStartup((...args) => {
+    const send = args[13], spec = args[14];
+    runs.push(spec);
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+  }, controlled.host, pageAdapter);
+  const api = controlled.host.__azhouStartup;
+  const entry = controlled.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+  controlled.timers.find(timer => timer.delay === 25_000).callback();
+  assert.equal(api.status().phase, 'timeout');
+  assert.equal(entry.style.display, 'none', 'timeout recovery still respects host layout availability');
+
+  nav.hidden = false;
+  const observer = controlled.observers.find(item => item.options?.childList && item.options?.attributes);
+  observer.trigger([{ target: nav, type: 'attributes', attributeName: 'hidden' }]);
+  const scheduled = controlled.timers.at(-1);
+  assert.equal(scheduled.delay, 80, 'the enabled entry retains its bounded layout retry');
+  scheduled.callback();
+  assert.equal(entry.style.display, 'block');
+  assert.equal(nav.children[1], entry, 'the original entry moves back into the navigation');
+  assert.equal(controlled.controls.filter(node => node.attributes?.get('data-agent-skin-entry') === 'appearance').length, 1);
+  appearanceButton(controlled).click();
+  assert.equal(runs[1].intent, 'settings');
+  api.dispose();
+});
+
+test('appearance recovery stays closed for loading, unready timeout, asset failure and disposal', () => {
+  for (const outcome of ['timeout', 'failed', 'disposed']) {
+    const controlled = controlledHost();
+    addAppearanceNavigation(controlled);
+    installStartup(function () {}, controlled.host, pageAdapter);
+    const api = controlled.host.__azhouStartup;
+    const entry = controlled.controls.find(node => node.attributes?.get('data-agent-skin-entry') === 'appearance');
+    const runId = api.status().runId;
+    assert.equal(api.openSettings(), false, 'loading cannot open a second run');
+    if (outcome === 'timeout') controlled.timers.find(timer => timer.delay === 25_000).callback();
+    else if (outcome === 'failed') controlled.host.send({
+      type: 'azhou-startup', action: 'assetError', reason: 'asset-invalid', runId,
+    }, controlled.frames[0].contentWindow);
+    else api.dispose();
+    assert.equal(api.status().phase, outcome);
+    assert.equal(api.status().ready, false);
+    assert.equal(api.openSettings(), false);
+    appearanceButton(controlled).click();
+    assert.equal(controlled.frames.length, 1, outcome + ' never creates a settings frame');
+    if (outcome !== 'disposed') assert.equal(entry.style.display, 'none');
+    api.dispose();
+  }
+});
+
 test('install does not replace an existing controller or an unknown owner', () => {
   const controlled = controlledHost();
   const payload = function () {};

@@ -184,6 +184,8 @@ struct WallpaperValidationTests {
 
         checks += try wallpaperJournalChecks()
         checks += try codexTargetEnvironmentChecks()
+        checks += try await startupSignatureBoundaryChecks()
+        checks += try await standaloneSignatureBoundaryChecks()
         checks += try await wallpaperStartupBoundaryChecks()
         checks += try await wallpaperPerformBoundaryChecks()
         checks += try await wallpaperTransportChecks()
@@ -238,6 +240,9 @@ private func wallpaperTransportChecks() async throws -> Int {
     let pages = try await pagesTransport.pages(port: 49221)
     expect(pages.count == 1 && WallpaperValidation.mainPage(pages[0]),
            "the HTTP list is filtered to verified main pages")
+    let targets = try await pagesTransport.targets(port: 49221, timeout: 1)
+    expect(targets.count == pageList.count && targets.contains { $0["type"] as? String == "worker" },
+           "replacement proof retains the complete target list while wallpaper discovery stays filtered")
     expect(WallpaperTestURLProtocol.requests.first?.url?.absoluteString == "http://127.0.0.1:49221/json/list",
            "page discovery is confined to the selected IPv4 loopback port")
     pagesTransport.close()
@@ -325,6 +330,18 @@ private func wallpaperTransportChecks() async throws -> Int {
         _ = try await receiveFailureTransport.evaluate("source", timeout: 1)
     })
     receiveFailureTransport.close()
+
+    let unknownHandshakeSocket = FakeWallpaperSocket(responses: [], sendError: URLError(.badServerResponse))
+    let unknownHandshakeTransport = WallpaperTransport(session: session(), socketFactory: { _ in unknownHandshakeSocket })
+    try unknownHandshakeTransport.connect(to: endpoint, timeout: 1)
+    do {
+        _ = try await unknownHandshakeTransport.evaluate("source", timeout: 1)
+        fatalError("FAILED: an unclassified handshake error was accepted")
+    } catch let error as StartupFailure {
+        expect(error.reason == "protocol-error" && !error.pageConnectionLost,
+               "HTTP handshake failure without an explicit 404 cannot authorize replacement proof")
+    }
+    unknownHandshakeTransport.close()
 
     let missingSocketTransport = WallpaperTransport(session: session(), socketFactory: { _ in
         fatalError("socket factory must not run before connect")
@@ -1316,6 +1333,275 @@ private func wallpaperCommandChecks() throws -> Int {
     return checks
 }
 
+private func startupSignatureBoundaryChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: signature boundaries: \(label)") }
+        checks += 1
+    }
+    func scans(_ fixture: FakeCodexTargetEnvironmentState) -> Int {
+        fixture.commandCalls.filter { $0.file == "/usr/bin/codesign" }.count
+    }
+    func facts(_ fixture: FakeCodexTargetEnvironmentState) -> StartupTargetFacts {
+        StartupTargetFacts(pid: fixture.pid, bundle: fixture.bundle, executable: fixture.executable,
+                           bundleID: "com.openai.codex", launchTime: fixture.launchDate.timeIntervalSince1970)
+    }
+    func environment() -> FakeCodexTargetEnvironmentState {
+        let fixture = FakeCodexTargetEnvironmentState(
+            bundle: URL(fileURLWithPath: "/private/Agent-Skin-Signature-Fixture.app"),
+            executable: URL(fileURLWithPath: "/private/Agent-Skin-Signature-Fixture.app/Contents/MacOS/Codex"))
+        fixture.commandResponses["/usr/sbin/lsof"] = "p\(fixture.pid)\nn127.0.0.1:49221\n"
+        return fixture
+    }
+
+    // The production witness table is the regression boundary: the old
+    // extension-only method silently dispatched back into full codesign.
+    let dispatchFixture = environment()
+    let existential: any StartupTargetSystem = CodexStartupTargetSystem(environment: dispatchFixture.environment())
+    try existential.validateProcess(facts(dispatchFixture), deadline: 110)
+    expect(scans(dispatchFixture) == 0
+           && dispatchFixture.commandCalls.filter { $0.file == "/bin/ps" }.count == 2,
+           "production existential process validation freshly checks identity without codesign")
+    try existential.validate(facts(dispatchFixture), deadline: 110)
+    expect(scans(dispatchFixture) == 1, "full production validation still executes the signature command")
+
+    typealias Pages = Result<[[String: Any]], Error>
+    typealias Evaluation = Result<[String: Any], Error>
+    let href = "app://-/index.html?initialRoute=%2F"
+    func page(_ id: String) -> [String: Any] {
+        ["id": id, "type": "page", "url": href,
+         "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
+    }
+    let a = page("signature-a"), b = page("signature-b")
+    let inspected: Evaluation = .success(["href": href, "controllerPresent": false])
+    let installed: Evaluation = .success(["installed": true, "alreadyActive": false])
+    let ready: Evaluation = .success([
+        "href": href, "missing": false,
+        "status": ["owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 19,
+                   "ready": true, "completed": false, "overlay": true, "reason": "",
+                   "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+                   "completion": NSNull()] as [String: Any],
+    ])
+    let lost: Evaluation = .failure(StartupFailure(reason: "protocol-error", message: "fixture page retired", pageConnectionLost: true))
+    let transient: Pages = .failure(WallpaperFailure(state: "endpoint-unavailable", chinese: "fixture timeout", english: "fixture timeout",
+                                                     retryableListFailure: true))
+    struct Observation {
+        let outcome: StartupOutcome
+        let fixture: FakeCodexTargetEnvironmentState
+        let system: ProductionWallpaperTestSystem
+        let transport: FakeWallpaperStartupTransport
+        let invalidated: Bool
+        let payloads: Int
+    }
+    func run(discovery: Int = 0, replacement: Bool = false, lag: Int = 0, rechecks: Int = 0,
+             refusal: Int? = nil, refuseAfterProof: Bool = false,
+             drift: String? = nil, driftPhase: String = "discovery") async -> Observation {
+        let fixture = environment()
+        let system = ProductionWallpaperTestSystem(fixture.environment())
+        var pages = Array(repeating: Pages.success([]), count: discovery) + [.success([a]), .success([a])]
+        var evaluations: [Evaluation] = [inspected, installed]
+        var targetSteps: [Pages]?
+        let current = replacement ? b : a
+        if replacement {
+            evaluations += [lost, inspected, installed]
+            pages += [.success([b])]
+            targetSteps = Array(repeating: Pages.success([a, b]), count: lag) + [.success([b])]
+        }
+        evaluations += [ready]
+        pages += Array(repeating: transient, count: rechecks) + [.success([current])]
+        if rechecks > 0 { pages += [.success([current])]; evaluations += [ready] }
+        let transport = FakeWallpaperStartupTransport(pageSteps: pages, targetSteps: targetSteps, evaluationSteps: evaluations)
+        if refusal == 1 { fixture.commandFailures["/usr/bin/codesign"] = "inspection-failed" }
+        fixture.afterCommand = { [weak fixture] file in
+            guard let fixture else { return }
+            if let refusal, file == "/usr/bin/codesign", scans(fixture) == refusal - 1 {
+                fixture.commandFailures[file] = "inspection-failed"
+            }
+        }
+        var invalidated = false
+        func invalidate() {
+            guard let drift, !invalidated else { return }
+            invalidated = true
+            switch drift {
+            case "pid": fixture.processes[fixture.pid] = nil
+            case "start": fixture.processes[fixture.pid] = fixture.process(pid: fixture.pid, launchDate: fixture.launchDate.addingTimeInterval(1))
+            case "uid": fixture.commandResponses["/bin/ps"] = "502 \(fixture.executable.path)\n"
+            case "executable": fixture.processes[fixture.pid] = fixture.process(pid: fixture.pid, executableURL: URL(fileURLWithPath: "/tmp/other-fixture"))
+            case "listener": fixture.commandResponses["/usr/sbin/lsof"] = "p\(fixture.pid)\nn127.0.0.1:49222\n"
+            case "cancel": withUnsafeCurrentTask { $0?.cancel() }
+            case "budget": fixture.now = 110
+            default: fatalError("unknown signature guard fixture")
+            }
+        }
+        transport.onPages = { count in
+            if refuseAfterProof && count == discovery + (replacement ? 3 : 2) {
+                fixture.commandFailures["/usr/bin/codesign"] = "inspection-failed"
+            }
+            if driftPhase == "discovery" && count == 1 { invalidate() }
+            if driftPhase == "recheck" && count == discovery + (replacement ? 4 : 3) { invalidate() }
+        }
+        transport.onTargets = { count in if driftPhase == "replacement" && count == 1 { invalidate() } }
+        let connector = StartupConnector(target: facts(fixture), expectedPort: 49221, system: system, transport: transport,
+                                         now: { fixture.now }, sleep: { fixture.now += $0 })
+        let outcome: StartupOutcome
+        if drift == "cancel" {
+            // Cancellation is raised inside a child task at a scripted read,
+            // never by poisoning the main test task or waiting on wall time.
+            outcome = await Task { await connector.run(payload: "signature-fixture-payload", deadline: 110) }.value
+        } else { outcome = await connector.run(payload: "signature-fixture-payload", deadline: 110) }
+        let payloads = transport.evaluatedSources.filter { $0.contains("signature-fixture-payload") }.count
+        return Observation(outcome: outcome, fixture: fixture, system: system, transport: transport,
+                           invalidated: invalidated, payloads: payloads)
+    }
+    func closed(_ result: Observation) {
+        expect(result.system.lockAcquired == 1 && result.system.lockReleased == 1
+               && !result.system.validationWithoutLock && result.transport.closeCount == 1,
+               "the same operation lock spans all generation checks and closes once")
+    }
+    for polls in [0, 8] {
+        let normal = await run(discovery: polls); closed(normal)
+        expect(normal.outcome == .ready(runID: 19) && normal.payloads == 1 && scans(normal.fixture) == 3
+               && normal.system.fullValidations == 3 && normal.system.processValidations > 0,
+               "a normal startup keeps exactly entry/connect/pre-install signatures despite \(polls) discovery polls")
+        expect(normal.transport.pagesCount == polls + 3 && normal.transport.targetsCount == 0
+               && normal.transport.connectedURLs.map(\.lastPathComponent) == ["signature-a"],
+               "discovery polls neither connect extra pages nor manufacture a replacement proof")
+        let refreshed = await run(rechecks: polls); closed(refreshed)
+        expect(refreshed.outcome == .ready(runID: 19) && refreshed.payloads == 1 && scans(refreshed.fixture) == 3
+               && refreshed.system.fullValidations == 3 && refreshed.transport.pagesCount == (polls == 0 ? 3 : polls + 4),
+               "same-target transient waits do not rescan signatures or replay the payload")
+        let statuses = refreshed.transport.evaluatedSources.filter { $0 == StartupConnector.statusExpression }.count
+        expect(statuses == (polls == 0 ? 1 : 2), "a waited proof still rereads the same run's current status")
+        let replaced = await run(discovery: polls, replacement: true, lag: polls, rechecks: polls); closed(replaced)
+        expect(replaced.outcome == .ready(runID: 19) && replaced.payloads == 2 && scans(replaced.fixture) == 5
+               && replaced.system.fullValidations == 5 && replaced.transport.targetsCount == polls + 1,
+               "each replacement generation adds its own connect and pre-install signatures, independent of proof lag")
+        expect(replaced.transport.connectedURLs.map(\.lastPathComponent) == ["signature-a", "signature-b"]
+               && replaced.transport.disconnectCount == 1,
+               "old-target proof waiting authorizes only the proven replacement and one page disconnect")
+    }
+    for boundary in 1...3 {
+        let refused = await run(discovery: 4, refusal: boundary); closed(refused)
+        expect(refused.outcome == .failed(reason: "target-identity") && scans(refused.fixture) == boundary
+               && refused.payloads == 0 && refused.transport.targetsCount == 0,
+               "signature refusal at original boundary \(boundary) remains fail-closed")
+        expect(refused.transport.pagesCount == (boundary == 1 ? 0 : boundary == 2 ? 5 : 6)
+               && refused.transport.connectedURLs.count == (boundary == 3 ? 1 : 0)
+               && refused.transport.evaluatedSources.count == (boundary == 3 ? 1 : 0),
+               "entry/connect/pre-install refusal sends no prohibited later page or action request")
+    }
+    for boundary in [4, 5] {
+        let refused = await run(replacement: true, lag: 4, refusal: boundary); closed(refused)
+        expect(refused.outcome == .failed(reason: "target-identity") && scans(refused.fixture) == boundary
+               && refused.payloads == 1 && refused.transport.connectedURLs.count == (boundary == 4 ? 1 : 2),
+               "the replacement's own signature refusal cannot send a replacement payload")
+        expect(refused.transport.targetsCount == 5 && refused.transport.disconnectCount == 1,
+               "signature checking follows a complete, still-bounded old-target absence proof")
+    }
+    for replacement in [false, true] {
+        let refused = await run(replacement: replacement, refuseAfterProof: true); closed(refused)
+        expect(refused.outcome == .failed(reason: "target-identity") && scans(refused.fixture) == (replacement ? 5 : 3)
+               && refused.payloads == (replacement ? 1 : 0),
+               "a signature rejection armed by the final same-page read is caught before that generation's payload")
+    }
+    for phase in ["discovery", "replacement", "recheck"] {
+        for drift in ["pid", "start", "uid", "executable", "listener", "cancel", "budget"] {
+            let result = await run(replacement: phase == "replacement", drift: drift, driftPhase: phase); closed(result)
+            let expected: StartupOutcome = drift == "cancel" ? .partial(reason: "startup-interrupted")
+                : .failed(reason: drift == "budget" ? "attach-timeout" : drift == "listener" ? "listener-mismatch" : "target-identity")
+            expect(result.invalidated && result.outcome == expected,
+                   "\(phase) polls still enforce \(drift) using the original run budget and fresh ownership")
+            expect(result.transport.connectedURLs.count == (phase == "discovery" ? 0 : 1)
+                   && result.payloads == (phase == "discovery" ? 0 : 1),
+                   "ownership/cancellation/deadline failure cannot connect or install a later page")
+            if drift == "budget" { expect(result.fixture.now == 110, "polling never resets or extends the original absolute deadline") }
+        }
+    }
+    return checks
+}
+
+private func standaloneSignatureBoundaryChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: standalone signature boundaries: \(label)") }
+        checks += 1
+    }
+    func scans(_ fixture: FakeCodexTargetEnvironmentState) -> Int {
+        fixture.commandCalls.filter { $0.file == "/usr/bin/codesign" }.count
+    }
+    let goodState: [String: Any] = [
+        "applied": true, "version": "0.9.0", "imageDecoded": true,
+        "matchedSurfaces": 3, "transparentSurfaces": 3, "backgroundMatched": true,
+        "coverMatched": true, "fixedViewport": true, "rootClear": true,
+        "workspaceBackgroundClear": true, "footerSurfaces": 2, "footerBackgroundClear": true,
+        "footerFadeSurfaces": 1, "footerFadeClear": true, "topFadeSurfaces": 1,
+        "topFadeClear": true, "decorationEffectsClear": true, "unsupportedDecorations": [String](),
+    ]
+    let page: [String: Any] = ["type": "page", "url": "app://-/index.html?initialRoute=%2F",
+                               "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/standalone-signature"]
+    let payload = "standalone-signature-payload"
+    for action in ["apply", "retry", "restore"] {
+        for refusal in [0, 3, 4] {
+            let fixture = FakeCodexTargetEnvironmentState(
+                bundle: URL(fileURLWithPath: "/private/Agent-Skin-Signature-Fixture.app"),
+                executable: URL(fileURLWithPath: "/private/Agent-Skin-Signature-Fixture.app/Contents/MacOS/Codex"))
+            fixture.commandResponses["/usr/sbin/lsof"] = "p\(fixture.pid)\nn127.0.0.1:49221\n"
+            let resolver = CodexStartupTargetSystem(environment: fixture.environment())
+            let request = try WallpaperRequest([
+                "--action", action, "--target-pid", String(fixture.pid), "--target-bundle", fixture.bundle.path,
+                "--target-start-time", String(fixture.launchDate.timeIntervalSince1970), "--port", "49221",
+            ], resolver: resolver)
+            // Request construction uses the same injected target facts. Count
+            // only the actual standalone operation after resolution completes.
+            fixture.commandCalls.removeAll()
+            fixture.afterCommand = { [weak fixture] file in
+                guard let fixture, refusal > 0 else { return }
+                if file == "/usr/bin/codesign", scans(fixture) == refusal - 1 {
+                    fixture.commandFailures[file] = "inspection-failed"
+                }
+            }
+            let system = ProductionWallpaperTestSystem(fixture.environment())
+            let state = action == "restore" ? ["applied": false, "version": "0.9.0"] as [String: Any] : goodState
+            let session = FakeWallpaperPageSession(responses: [
+                WallpaperCLI.applyGuardSource: ["state": "ready"], payload: goodState,
+                WallpaperCLI.retrySource: ["retried": true, "wallpaper": goodState],
+                WallpaperCLI.restoreSource: ["restored": true], WallpaperCLI.statusSource: state,
+            ])
+            let transport = FakeWallpaperOperationTransport(pages: [page], session: session)
+            var result: [String: Any]?
+            var failureState: String?
+            do {
+                result = try await WallpaperCLI.perform(
+                    request, began: 100, system: system, transport: transport, now: { fixture.now },
+                    expectedVersion: "0.9.0", sourceLoader: { payload }, sleep: { fixture.now += $0 })
+            } catch let error as WallpaperFailure { failureState = error.state }
+            let expectedSources = action == "apply" ? [WallpaperCLI.applyGuardSource, payload, WallpaperCLI.statusSource]
+                : [action == "retry" ? WallpaperCLI.retrySource : WallpaperCLI.restoreSource, WallpaperCLI.statusSource]
+            expect(system.processValidations == 0 && system.lockAcquired == 1 && system.lockReleased == 1
+                   && !system.validationWithoutLock && transport.closeCount == 1 && transport.pagesCount == 1,
+                   "standalone \(action) preserves full validation and its lock/transport lifecycle")
+            if refusal == 0 {
+                expect(failureState == nil && result?["state"] as? String == (action == "restore" ? "restored" : "applied")
+                       && scans(fixture) == 4 && system.fullValidations == 4,
+                       "standalone \(action) keeps entry, outer-poll, pre-action and post-status signature checks")
+                expect(session.evaluatedSources == expectedSources && session.closeCount == 1,
+                       "successful \(action) sends exactly its original action and independent status sequence")
+            } else {
+                // The existing CLI catches the first per-page signature error,
+                // then its next outer validation refuses before another page
+                // read. Preserve that behavior; do not invent an early return.
+                expect(result == nil && failureState == "signature-refused" && scans(fixture) == refusal + 1
+                       && system.fullValidations == refusal + 1,
+                       "standalone \(action) retains its existing signature-refusal behavior at boundary \(refusal)")
+                expect(session.evaluatedSources == (refusal == 3 ? [] : expectedSources)
+                       && session.closeCount == (refusal == 3 ? 0 : 1),
+                       "pre-action refusal sends nothing; post-status refusal never replays an already sent action")
+            }
+        }
+    }
+    return checks
+}
+
 private func wallpaperStartupBoundaryChecks() async throws -> Int {
     var checks = 0
     func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
@@ -1331,7 +1617,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     )
     let startupURL = "app://-/index.html?initialRoute=%2F"
     let page: [String: Any] = [
-        "type": "page", "url": startupURL,
+        "id": "unit-startup", "type": "page", "url": startupURL,
         "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/unit-startup",
     ]
     let nowAtZero: () -> TimeInterval = { 0 }
@@ -1478,6 +1764,13 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     )
     expect(pageWithoutSocket == .failed(reason: "page-unsupported"),
            "startup refuses a main page without its page-scoped socket")
+    for id in [NSNull(), "other-target"] as [Any] {
+        var unboundPage = page; unboundPage["id"] = id
+        let unbound = await run(FakeWallpaperSystem(), FakeWallpaperStartupTransport(pages: [unboundPage]),
+                                now: nowAtZero, sleep: noSleep)
+        expect(unbound == .failed(reason: "page-unsupported"),
+               "startup requires an explicit target ID matching its websocket")
+    }
     let nonPageSocket = await run(
         FakeWallpaperSystem(),
         FakeWallpaperStartupTransport(pages: [[
@@ -1547,8 +1840,8 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
                                       now: nowAtZero, sleep: noSleep)
     expect(missingActiveFlag == .failed(reason: "protocol-error")
            && missingActiveFlagTransport.closeCount == 1
-           && missingActiveFlagTransport.disposeCount == 1,
-           "an incomplete install receipt triggers bounded cleanup before the protocol failure")
+           && missingActiveFlagTransport.disposeCount == 0,
+           "an incomplete install receipt cannot authorize cleanup without a retained controller binding")
     let alreadyActiveInstall = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
@@ -1821,27 +2114,69 @@ private final class FakeWallpaperStartupTransport: StartupTransport {
     private let responsePages: [[String: Any]]
     private var evaluationResponses: [[String: Any]]
     private let throwGenericPageError: Bool
+    private var pageSteps: [Result<[[String: Any]], Error>]?
+    private var targetSteps: [Result<[[String: Any]], Error>]?
+    private var evaluationSteps: [Result<[String: Any], Error>]?
+    var onPages: ((Int) -> Void)?
+    var onTargets: ((Int) -> Void)?
+    private(set) var pagesCount = 0
+    private(set) var targetsCount = 0
+    private(set) var connectedURLs: [URL] = []
+    private(set) var evaluatedSources: [String] = []
+    private(set) var disconnectCount = 0
     private(set) var closeCount = 0
     private(set) var disposeCount = 0
 
     init(pages: [[String: Any]] = [], evaluations: [[String: Any]] = [],
-         throwGenericPageError: Bool = false) {
+         throwGenericPageError: Bool = false,
+         pageSteps: [Result<[[String: Any]], Error>]? = nil,
+         targetSteps: [Result<[[String: Any]], Error>]? = nil,
+         evaluationSteps: [Result<[String: Any], Error>]? = nil) {
         responsePages = pages
         evaluationResponses = evaluations
         self.throwGenericPageError = throwGenericPageError
+        self.pageSteps = pageSteps
+        self.targetSteps = targetSteps
+        self.evaluationSteps = evaluationSteps
     }
 
     func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        pagesCount += 1
+        onPages?(pagesCount)
+        if var steps = pageSteps {
+            guard !steps.isEmpty else { throw StartupFailure(reason: "protocol-error", message: "fixture page steps exhausted") }
+            let step = steps.removeFirst(); pageSteps = steps
+            return try step.get()
+        }
         if throwGenericPageError { throw URLError(.cannotConnectToHost) }
         return responsePages
     }
 
-    func connect(to url: URL, timeout: TimeInterval) throws {}
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        targetsCount += 1
+        onTargets?(targetsCount)
+        // Unscripted test transports still have no complete-inventory authority.
+        guard var steps = targetSteps, !steps.isEmpty else {
+            throw StartupFailure(reason: "protocol-error", message: "fixture has no complete target inventory")
+        }
+        let step = steps.removeFirst(); targetSteps = steps
+        return try step.get()
+    }
+
+    func connect(to url: URL, timeout: TimeInterval) throws { connectedURLs.append(url) }
 
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        evaluatedSources.append(source)
         if source.contains("dispose.value.call(api)") { disposeCount += 1 }
+        if var steps = evaluationSteps {
+            guard !steps.isEmpty else { throw StartupFailure(reason: "protocol-error", message: "fixture evaluation steps exhausted") }
+            let step = steps.removeFirst(); evaluationSteps = steps
+            return try step.get()
+        }
         return evaluationResponses.isEmpty ? [:] : evaluationResponses.removeFirst()
     }
+
+    func disconnectPage() { disconnectCount += 1 }
 
     func close() { closeCount += 1 }
 }
@@ -1850,6 +2185,38 @@ private final class FakeWallpaperOperationLock: StartupOperationLock {
     private var releaseBody: (() -> Void)?
     init(release: @escaping () -> Void) { releaseBody = release }
     func release() { let body = releaseBody; releaseBody = nil; body?() }
+}
+
+/// Identity/listener/signature checks run through the real production system's
+/// existential witness table. Only the operation lock is a local test double.
+private final class ProductionWallpaperTestSystem: StartupTargetSystem {
+    private let base: any StartupTargetSystem
+    private(set) var fullValidations = 0
+    private(set) var processValidations = 0
+    private(set) var listenerValidations = 0
+    private(set) var lockAcquired = 0
+    private(set) var lockReleased = 0
+    private(set) var validationWithoutLock = false
+    init(_ environment: CodexTargetEnvironment) { base = CodexStartupTargetSystem(environment: environment) }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws { try base.preflightBundle(bundle, deadline: deadline) }
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        fullValidations += 1
+        validationWithoutLock = validationWithoutLock || lockAcquired != 1 || lockReleased != 0
+        try base.validate(target, deadline: deadline)
+    }
+    func validateProcess(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        processValidations += 1
+        validationWithoutLock = validationWithoutLock || lockAcquired != 1 || lockReleased != 0
+        try base.validateProcess(target, deadline: deadline)
+    }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
+        listenerValidations += 1
+        return try base.listeningPorts(target, deadline: deadline)
+    }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock {
+        lockAcquired += 1
+        return FakeWallpaperOperationLock { [weak self] in self?.lockReleased += 1 }
+    }
 }
 
 private final class FakeWallpaperPageSession: WallpaperPageSession {
@@ -1935,20 +2302,23 @@ private final class FakeWallpaperSocket: WallpaperSocketTask, @unchecked Sendabl
     private var responses: [URLSessionWebSocketTask.Message]
     private let sendFails: Bool
     private let receiveFails: Bool
+    private let sendError: Error?
     private(set) var sentTexts: [String] = []
     private(set) var resumeCount = 0
     private(set) var cancelCount = 0
     var maximumMessageSize = 0
 
-    init(responses: [URLSessionWebSocketTask.Message], sendFails: Bool = false, receiveFails: Bool = false) {
+    init(responses: [URLSessionWebSocketTask.Message], sendFails: Bool = false, receiveFails: Bool = false, sendError: Error? = nil) {
         self.responses = responses
         self.sendFails = sendFails
         self.receiveFails = receiveFails
+        self.sendError = sendError
     }
 
     func resume() { resumeCount += 1 }
 
     func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        if let sendError { throw sendError }
         if sendFails { throw URLError(.cannotConnectToHost) }
         if case .string(let text) = message { sentTexts.append(text) }
     }

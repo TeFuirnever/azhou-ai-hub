@@ -1,0 +1,315 @@
+{
+  "schema": "azhou.promotion-trust-study-summary.v1",
+  "date": "2026-11-10",
+  "baseline_commit": "dc980c4e48e3533cef777e312695ef4ad36f87c6",
+  "delivery_base_commit": "b2b0bf0888a25552d88b463e4f104ed1ca7e37fb",
+  "status": {
+    "p0": "candidate integrity repair verified",
+    "p1_isolation": "verified against pinned historical evaluator",
+    "p1_task_quality": "no supported improvement; post-hoc in-scope subset of two related historical tasks",
+    "p2": "stop",
+    "live_promotion": "held; no human approval or application receipt"
+  },
+  "p0": {
+    "new_test_methods": 41,
+    "raw_candidate_and_patch_bytes_bound": true,
+    "exact_base_and_target_commits_and_trees_bound": true,
+    "application_result_requires_separate_verification": true,
+    "gate_applies_patch": false,
+    "legacy_metadata_validation_is_not_source_gate": true
+  },
+  "p1_isolation": {
+    "new_test_methods": 9,
+    "synthetic_cases_passed": 16,
+    "synthetic_cases_total": 16,
+    "complete_original_evidence_entries": 8077,
+    "complete_original_evidence_unchanged": true,
+    "complete_original_evidence_sha256": "e878f23757021f7a077eb9b44260318d06df0cfeefae5fb74dd4b17ffd9a7483",
+    "wrapper_model_calls": 0,
+    "child_usage_and_cost": null,
+    "general_sandbox": false
+  },
+  "historical_pilot": {
+    "sample": "three related historical task replays; tool-disabled concrete-document drafting",
+    "requested_model": "gpt-6.1-sol",
+    "reasoning_effort": "high",
+    "harness": "Codex CLI 0.167.0",
+    "actor_attempts": 6,
+    "judge_attempts": 3,
+    "attempts_per_cell": 1,
+    "tools_enabled": false,
+    "actual_actor_tool_events": 0,
+    "timeout_seconds_per_run": 240,
+    "concurrency": 2,
+    "hard_token_or_currency_cap": null,
+    "usable_tasks_of_3": {
+      "A": 1,
+      "B": 1
+    },
+    "cases": [
+      {
+        "case_id": "hist-scope-contract-421",
+        "historical_commit": "54e35bed231d15a57bf318348219b9f86339f3a8",
+        "median_score_of_16": {
+          "A": 15,
+          "B": 14
+        },
+        "usable_votes_of_3": {
+          "A": 0,
+          "B": 0
+        },
+        "judge_preferences": [
+          "A",
+          "A",
+          "A"
+        ],
+        "estimated_material_corrections_per_judge": {
+          "A": [
+            1,
+            1,
+            1
+          ],
+          "B": [
+            1,
+            2,
+            2
+          ]
+        }
+      },
+      {
+        "case_id": "hist-resume-guidance-422",
+        "historical_commit": "523c83c670275f397b3f083c2226ca30f801fa38",
+        "median_score_of_16": {
+          "A": 14,
+          "B": 14
+        },
+        "usable_votes_of_3": {
+          "A": 0,
+          "B": 0
+        },
+        "judge_preferences": [
+          "tie",
+          "tie",
+          "tie"
+        ],
+        "estimated_material_corrections_per_judge": {
+          "A": [
+            1,
+            1,
+            1
+          ],
+          "B": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "case_id": "hist-project-workflows-429",
+        "historical_commit": "79905b55c2ac78e265813c485955b9b568127ae9",
+        "median_score_of_16": {
+          "A": 16,
+          "B": 16
+        },
+        "usable_votes_of_3": {
+          "A": 3,
+          "B": 3
+        },
+        "judge_preferences": [
+          "tie",
+          "tie",
+          "tie"
+        ],
+        "estimated_material_corrections_per_judge": {
+          "A": [
+            0,
+            0,
+            0
+          ],
+          "B": [
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    ],
+    "actor_costs": {
+      "A": {
+        "input_tokens": 139038,
+        "output_tokens": 10937,
+        "reasoning_output_tokens": 3329,
+        "wall_seconds_sum": 306.9689174579107,
+        "runs": 3,
+        "tool_events": 0,
+        "billed_cost": null,
+        "human_correction_time": null
+      },
+      "B": {
+        "input_tokens": 141795,
+        "output_tokens": 10965,
+        "reasoning_output_tokens": 3340,
+        "wall_seconds_sum": 254.12290404201485,
+        "runs": 3,
+        "tool_events": 0,
+        "billed_cost": null,
+        "human_correction_time": null
+      }
+    },
+    "judge_usage": {
+      "input_tokens": 189462,
+      "output_tokens": 27024,
+      "reasoning_output_tokens": 4385
+    },
+    "actors_plus_judges_usage": {
+      "input_tokens": 470295,
+      "output_tokens": 48926
+    },
+    "availability_probe_usage": {
+      "input_tokens": 23375,
+      "output_tokens": 5,
+      "included_in_efficacy": false
+    },
+    "complete_task_monetary_cost": null,
+    "actual_human_editing_time": null,
+    "corrections": "Independent model-review estimates; no measured human edits",
+    "actors_context_fingerprints_unchanged": true,
+    "judges_context_fingerprints_unchanged": false,
+    "judging_control": "Ignored user-config file changed; writer and effect unknown; complete effective model context unavailable",
+    "final_instruction_markdown_matches_arm_B": false,
+    "post_actor_runtime_change": "Bytecode suppression; runtime scripts were not executed by actors",
+    "cohort_status": "Original three-case cohort retained for audit; current in-scope benefit denominator is defined in scope_correction.",
+    "instruction_binding": {
+      "evaluated_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+      "original_candidate_markdown_matched_arm_B": true,
+      "governance_revision_has_later_contract_edits": true,
+      "actor_rerun_performed": false,
+      "old_results_do_not_certify_new_instructions": true
+    }
+  },
+  "engineering_review": {
+    "fresh_reviewers": 3,
+    "final_candidate_preferences": 3,
+    "remaining_source_review_blockers": 0,
+    "human_approval": false,
+    "earlier_findings_preserved": true
+  },
+  "protection": {
+    "baseline_regular_file_entries": 4746,
+    "shared_configuration_files_changed": 3,
+    "protected_git_paths": 3234,
+    "protected_git_paths_unchanged": true,
+    "shared_validator_unchanged": true,
+    "writer_attribution": "unknown",
+    "restore_or_writeback_performed": false,
+    "status": "environment_observation_not_global_blocker",
+    "limit": "Endpoint inventories, not a task-wide or transient-write guarantee",
+    "previous_status": "hold_shared_configuration_drift",
+    "disposition": "Unknown attribution preserved. Not technically resolved; no established dependency/cause blocks this independent governance/source repair. Check actual shared effects only for an affected authorized action; do not modify or revalidate pstack by default."
+  },
+  "verification": {
+    "command": [
+      "python3",
+      "scripts/verify.py"
+    ],
+    "exit": 0,
+    "runtime_test_sources_unchanged": true,
+    "hub_tests": 716,
+    "hub_skipped": 1,
+    "model_router_tests": 59,
+    "installer_tests": 45,
+    "note": "Final runtime, tests and contracts; these two aggregate files are added afterward and receive separate policy/whitespace checks and exact-head CI."
+  },
+  "limits": [
+    "Three related historical tasks from one repository are not independent natural-use evidence.",
+    "Reconstructed source packets and tool-disabled drafts do not test full live execution.",
+    "Judge outcomes are correlated assessments, not independent task samples.",
+    "No reliable efficacy, speed, monetary saving or RSI claim follows.",
+    "No measured human corrections or complete billed task cost is available.",
+    "Content digests do not authenticate a human or provide an atomic snapshot.",
+    "Post-hoc pstack exclusion leaves two related diagnostic cases, not a newly preregistered study; original three-case data and total incurred costs are retained."
+  ],
+  "source_files_sha256": {
+    "README.md": "9b39a0b713814c2a5706495023511088f1e14c217d44cf3106a546a8e877f671",
+    "README.zh-CN.md": "7ee3d843379243c3041fbd71e4ff2b78d5e302397302b27d872cdc785a9d65d8",
+    "benchmarks/super-repo-pedant/README.md": "d5b677dea6a48a718feb1c51e867afe1d6a3557a76fea792ca4cbb0f958b38fd",
+    "benchmarks/super-repo-pedant/replay_isolated.py": "2847ff933df5131e8ba9226a7e07711008d45a7630cc17b80f502b1ca37b0397",
+    "docs/architecture.md": "b2b9111f391d16aa0151fb2dbb44978f71009f3052a4fbfa9a2596d3bdb549d8",
+    "skills/super-repo-pedant/assets/evolution-evaluation.schema.json": "91fb48015f587e51c41361a784896190542caa4cfe535224f6b21a996cf67945",
+    "skills/super-repo-pedant/references/evolution-contract.md": "c9f319e93589d3065729033a2419868b484a2fcb806819575143caaaa489a97c",
+    "skills/super-repo-pedant/references/history-evolution.md": "23d086bca5d39636670170798bbb82e836a0c7d47e47aa40b545e6bb9463c29d",
+    "skills/super-repo-pedant/references/provenance.md": "669924ff4add2a1ff6dc376ce34786e79881d70a5da0bff3e78b38cd926e356b",
+    "skills/super-repo-pedant/references/setup.md": "35295d63d242f56d3f82d316f94b4ef8ccd6a6253a0fbe277dcde3013f491e10",
+    "skills/super-repo-pedant/scripts/manage_evolution.py": "8a3d79e792432559d9664055ff17716558adc8c0fe9bc52d4ac2a9d1ad4b333f",
+    "skills/super-repo-pedant/scripts/promotion_binding.py": "c693553d93734637e073b8bd3286389802e4346bc964ef9c74d7610742270eeb",
+    "tests/test_promotion_binding.py": "f7900c633fd7e781e936ee586d76530a3909b20f7cd19087339655d1a772a483",
+    "tests/test_replay_isolated.py": "d2210da8cabbf8395d6b4ae881a1cecd8483050b4d6a9575a51e728c9e5abb33"
+  },
+  "external_record_sha256": {
+    "original-gate-reproduction.json": "1e2a5895fb6c74f9d591f0cf85899eb75bf8748faa62e22c56204a117cbe2472",
+    "p0-cross-review/review-after.json": "34f6ba66dc8fe9d419db6368aba73297ee95f88a76aeb59336b12e05730e7f60",
+    "p0-bytecode-fix-r1/pre-fix.json": "ef0cf48905d5337543e449c46c38fde2671a68ed1e16df4f661afdf145eddd1e",
+    "p0-bytecode-fix-r1/post-fix.json": "08a7cb15f5ff994ec18f72a78a285b4d89a2f6663956a363a52e20f463207b7a",
+    "p1-symlink-fix-r1/pre-fix.json": "e1d844282125fa3321877a5ac36b106d804e8db866082fce90d6e7245e393f7b",
+    "p1-symlink-fix-r1/post-fix.json": "d409aa43a7040fa47639235f1b02689d85c0c88bd89018f19edb9cad2f801508",
+    "p1-original-replay-r3/run.json": "15fa0e1fc045f5fca2ad6b638a85050476689ea35c33868283ed9aa0fa64919f",
+    "p1-original-replay-r3/isolated/report.json": "e0d8c15fce7fda727d24481b74ba264d7c41a11535837cacbb6a99745da611bc",
+    "real-task-study/protocol.json": "3173320a47c2861670c9151caeb6c139cfa5285155b8b4a29b9fb0b0d28429b5",
+    "real-task-study/actor-summary.json": "603f21d5960e4e0d4975c65961f75027920db7e02933537270c6dd03fd9e8edf",
+    "real-task-study/judge-summary.json": "78f245fdfc24098f42eeeb752fac3a7abdbc7d679cd3bbe27e24c59244b36650",
+    "real-task-study/control-assessment.json": "05f28b28699be1f2c4ea0d480f8131b14fdb2c3960dad1beb883ffc466b773c2",
+    "real-task-study/analysis.json": "3370ec2283899064f23d61ef17d811d3e0b5aac3fb90403d4c0090ca6262d50a",
+    "engineering-review/review-protocol.json": "63d261a30ff99861a062fb70fd6712754e1c8d3ddc5eeb69240383b1281fb4f8",
+    "engineering-review/revision-2/protocol.json": "039df37e4c7dabdcb0cc95fd12eafb3453876c434fff274583cbc44d32a56e72",
+    "engineering-review/revision-3/protocol.json": "73f4edca194ee7e772f99fbc8427a3270282433f95f413f6f49a6a5460c07426",
+    "pstack-before.json": "84a5f34ed86ef9b5b63ee57246e305f3f8075c35b4690d490535059f3c3e735f",
+    "pstack-final.json": "0cf1bedd8bd357219bb8da061e27bd430fb9482aecb6613b26e6ac88741b4065",
+    "verification-final-runtime/run.json": "ed70f847fb1bdf3ed6a9d72edf3643cee438a77dcffe6c8f56acd0cdfcc89b67",
+    "verification-final-runtime-r2/run.json": "e44940bdd88fa609b059f492c27ff34cbfa80884d8e367ad2f1ed5965fd1577b",
+    "engineering-review/judge-1/review-r2.json": "ce995475623396cbc262d9994bd729bb3bc379e4f3bd30be4c096b12fc11d2e4",
+    "engineering-review/judge-1/review-r3.json": "0f13cb8203ad2b59bc7cae5c1115aa379be93e7241ffaa54f31b0d7d3aaf9c7c",
+    "engineering-review/judge-2/review-r2.json": "3da933681d13b0f1dc8531e742592c0586729485a6b4098331a849042b902876",
+    "engineering-review/judge-2/review-r3.json": "3b40f36e62b09fc67fe1d5030d0c749a53851e069e0746d8cc7d3915beb6417a",
+    "engineering-review/judge-3/review-r2.json": "13b15604119d4061b4c64f8de898639474416062fd8df8758c0ff491cb1a3c04",
+    "engineering-review/judge-3/review-r3.json": "48516fa0fbcb91710654e3885c956372f170fcff21521a09f366471203e8abaf"
+  },
+  "external_evidence_locator": "azhou-promotion-trust-20261110",
+  "approval_rule": "AGENTS.md and docs/skill-standard.md require fresh exact-diff human approval; this summary confers none.",
+  "scope_correction": {
+    "recorded_at": "2026-11-10T15:39:32.901798+00:00",
+    "basis": "Maintainer correction: pstack is excluded from Hub Skill upgrade and autonomous evolution.",
+    "post_hoc": true,
+    "new_preregistration": false,
+    "original_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+    "original_cohort_size": 3,
+    "excluded_case_ids": [
+      "hist-resume-guidance-422"
+    ],
+    "excluded_reason": "pstack maintenance task is out of the authorized skill upgrade/evolution scope, independent of its score",
+    "included_case_ids": [
+      "hist-scope-contract-421",
+      "hist-project-workflows-429"
+    ],
+    "eligible_case_count": 2,
+    "usable_tasks_of_2": {
+      "A": 1,
+      "B": 1
+    },
+    "original_case_results_preserved": true,
+    "original_raw_evidence_unchanged": true,
+    "all_incurred_costs_retained": true,
+    "new_model_runs": 0,
+    "quality_gain_supported": false,
+    "p2_decision": "stop; excluded pstack lineage cannot justify a new optimization candidate",
+    "raw_evidence_locator_unchanged": true
+  },
+  "evidence_binding": {
+    "source_files_sha256_scope": "Historical pre-governance source files; compare against original_candidate_commit, not current checkout.",
+    "original_candidate_commit": "c3c99a018c40bc8bcc67aea797e77ed555492a00",
+    "engineering_review_scope": "The three reviews are retained as evidence for the original candidate only; no approval for this governance diff.",
+    "verification_scope": "The existing verification record is historical. New governance verification and exact diff are recorded separately.",
+    "new_human_approval": false,
+    "governance_evidence_locator": "azhou-skill-governance-20261110"
+  }
+}

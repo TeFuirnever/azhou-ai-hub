@@ -128,6 +128,7 @@ struct NativeStartupObservation {
     let installedAt: TimeInterval?
     let status: NativeStartupStatus?
     let statusAt: TimeInterval?
+    var pageID: String? = nil
 }
 
 final class NativeStartupCapture: @unchecked Sendable {
@@ -137,12 +138,21 @@ final class NativeStartupCapture: @unchecked Sendable {
     private var installedRunID: Int?
     private var status: NativeStartupStatus?
     private var statusAt: TimeInterval?
+    private var pageID: String?
 
     init(targetPID: Int32) { self.targetPID = targetPID }
 
-    func observe(_ response: [String: Any], at uptime: TimeInterval) -> (runID: Int, installedAt: TimeInterval)? {
+    func bindPage(_ id: String?) {
         lock.lock()
         defer { lock.unlock() }
+        pageID = id
+        installAt = nil; installedRunID = nil; status = nil; statusAt = nil
+    }
+
+    func observe(_ response: [String: Any], at uptime: TimeInterval, pageID: String? = nil) -> (runID: Int, installedAt: TimeInterval)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard self.pageID == pageID else { return nil }
 
         if NativeStartupStatus.boolean(response["installed"]) == true,
            NativeStartupStatus.boolean(response["alreadyActive"]) == false,
@@ -168,7 +178,7 @@ final class NativeStartupCapture: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return NativeStartupObservation(targetPID: targetPID, installedAt: installAt,
-                                        status: status, statusAt: statusAt)
+                                        status: status, statusAt: statusAt, pageID: pageID)
     }
 }
 
@@ -225,6 +235,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     private var openedPID: Int32?
     private var installedPID: Int32?
     private var installedRunID: Int?
+    private var pageID: String?
     private var exitEmitted = false
 
     init(writer: NativeEventWriter) { self.writer = writer }
@@ -249,14 +260,26 @@ final class NativeStartupEventStream: @unchecked Sendable {
         writer.emit("target-opened", fields: ["targetPID": Int(pid)], at: uptime)
     }
 
-    func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval) {
+    func bindPage(pid: Int32, pageID: String?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard begun, finalOutcome == nil, !exitEmitted, openedPID == pid,
+              pendingFailure == nil, pendingInterruption == nil else { return false }
+        self.pageID = pageID
+        installedPID = nil; installedRunID = nil
+        return true
+    }
+
+    func startupInstalled(pid: Int32, runID: Int, at uptime: TimeInterval, pageID: String? = nil) {
         lock.lock()
         defer { lock.unlock() }
         guard begun, finalOutcome == nil, !exitEmitted, pid > 0, runID > 0,
-              openedPID == pid, installedPID == nil else { return }
+              openedPID == pid, installedPID == nil, self.pageID == pageID else { return }
         installedPID = pid
         installedRunID = runID
-        writer.emit("startup-installed", fields: ["targetPID": Int(pid), "runId": runID], at: uptime)
+        var fields: [String: Any] = ["targetPID": Int(pid), "runId": runID]
+        if let pageID { fields["pageTargetID"] = pageID }
+        writer.emit("startup-installed", fields: fields, at: uptime)
     }
 
     func portError(operation: String, errno: Int32, at uptime: TimeInterval) {
@@ -302,7 +325,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
         } else {
             resolved = Self.finalOutcome(for: outcome, observation: observation,
                                          openedPID: openedPID, installedPID: installedPID,
-                                         installedRunID: installedRunID)
+                                         installedRunID: installedRunID, pageID: pageID)
         }
         finalOutcome = resolved
         emitFinal(resolved, outcome: outcome, observation: observation, at: uptime)
@@ -413,29 +436,32 @@ final class NativeStartupEventStream: @unchecked Sendable {
             }
         case .ready:
             guard let observation, let status = observation.status, let runID = installedRunID else { return }
-            writer.emit("startup-ready", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
-                                                    "ready": true, "phase": status.phase],
-                        at: observation.statusAt ?? uptime)
+            var fields: [String: Any] = ["targetPID": Int(observation.targetPID), "runId": runID,
+                                         "ready": true, "phase": status.phase]
+            if let pageID { fields["pageTargetID"] = pageID }
+            writer.emit("startup-ready", fields: fields, at: observation.statusAt ?? uptime)
         case .skipped:
             guard let observation, let status = observation.status, let runID = installedRunID,
                   let beforeReady = status.completionBeforeReady else { return }
-            writer.emit("startup-skipped", fields: ["targetPID": Int(observation.targetPID), "runId": runID,
-                                                      "completed": true,
-                                                      "completion": ["cause": "skip", "beforeReady": beforeReady],
-                                                      "overlay": false],
-                        at: observation.statusAt ?? uptime)
+            var fields: [String: Any] = ["targetPID": Int(observation.targetPID), "runId": runID,
+                                         "completed": true,
+                                         "completion": ["cause": "skip", "beforeReady": beforeReady], "overlay": false]
+            if let pageID { fields["pageTargetID"] = pageID }
+            writer.emit("startup-skipped", fields: fields, at: observation.statusAt ?? uptime)
         case .partial(let reason), .behaviorNotProven(let reason):
             writer.emit(final.event, fields: ["reason": reason], at: uptime)
         }
     }
 
     private static func finalOutcome(for outcome: StartupOutcome, observation: NativeStartupObservation?,
-                                     openedPID: Int32?, installedPID: Int32?, installedRunID: Int?) -> NativeStartupFinalOutcome {
+                                     openedPID: Int32?, installedPID: Int32?, installedRunID: Int?,
+                                     pageID: String? = nil) -> NativeStartupFinalOutcome {
         switch outcome {
         case .activated(let pid):
             return pid > 0 ? .activated : .behaviorNotProven(reason: "target-identity")
         case .ready(let runID):
             guard let observation, let status = observation.status,
+                  observation.pageID == pageID,
                   observation.targetPID > 0, openedPID == observation.targetPID,
                   installedPID == observation.targetPID, installedRunID == runID,
                   runID > 0, status.runID == runID, status.ready,
@@ -445,6 +471,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
             return .ready
         case .skipped(let runID, let beforeReady):
             guard let observation, let status = observation.status,
+                  observation.pageID == pageID,
                   observation.targetPID > 0, openedPID == observation.targetPID,
                   installedPID == observation.targetPID, installedRunID == runID,
                   runID > 0, status.runID == runID, status.completed, !status.overlay,
@@ -477,6 +504,8 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
     private let capture: NativeStartupCapture
     private let events: NativeStartupEventStream
     private let now: () -> TimeInterval
+    private let pageLock = NSLock()
+    private var pageID: String?
 
     init(base: any StartupTransport, capture: NativeStartupCapture, events: NativeStartupEventStream,
          now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
@@ -490,16 +519,43 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
         try await base.pages(port: port, timeout: timeout)
     }
 
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await base.targets(port: port, timeout: timeout)
+    }
+
     func connect(to url: URL, timeout: TimeInterval) throws {
+        try Task.checkCancellation()
+        let id = url.lastPathComponent
+        guard events.bindPage(pid: capture.targetPID, pageID: id) else { throw CancellationError() }
+        capture.bindPage(id)
+        pageLock.lock(); pageID = id; pageLock.unlock()
         try base.connect(to: url, timeout: timeout)
     }
 
+    private func currentPageID() -> String? {
+        pageLock.lock(); defer { pageLock.unlock() }; return pageID
+    }
+
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        let boundPageID = currentPageID()
         let response = try await base.evaluate(source, timeout: timeout)
-        if let installation = capture.observe(response, at: now()) {
-            events.startupInstalled(pid: capture.targetPID, runID: installation.runID, at: installation.installedAt)
+        try Task.checkCancellation()
+        if let installation = capture.observe(response, at: now(), pageID: boundPageID) {
+            events.startupInstalled(pid: capture.targetPID, runID: installation.runID,
+                                    at: installation.installedAt, pageID: boundPageID)
         }
         return response
+    }
+
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try await base.disposeController(href: href, timeout: timeout)
+    }
+
+    func disconnectPage() {
+        base.disconnectPage()
+        pageLock.lock(); pageID = nil; pageLock.unlock()
+        capture.bindPage(nil)
+        _ = events.bindPage(pid: capture.targetPID, pageID: nil)
     }
 
     func close() { base.close() }
@@ -1125,6 +1181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         launcherPath: real(runtime.bundleURL).path,
         sink: { [weak self] in self?.writeLogRecord($0) }
     )
+    private lazy var startupDiagnostics: ((String, [String: Any]) -> Void)? =
+        StartupDiagnosticsPolicy.isEnabled(environment: ProcessInfo.processInfo.environment)
+            ? { [weak self] _, fields in self?.log("startup-diagnostic", fields) }
+            : nil
     init(runtime: (any NativeAppRuntime)? = nil,
          presentation: (any NativePlayerPresentation)? = nil) {
         let runtime = runtime ?? SystemNativeAppRuntime()
@@ -1350,13 +1410,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         default: log("unhandled-message", ["action": action])
         }
     }
-    private func startupFacts(_ app: any NativeApplication) throws -> StartupTargetFacts {
-        guard !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
-              let bundleID = app.bundleIdentifier else {
-            throw StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
+    func startupFacts(_ app: any NativeApplication,
+                     diagnostics: ((String, [String: Any]) -> Void)? = nil,
+                     at: @autoclosure () -> TimeInterval = ProcessInfo.processInfo.systemUptime) throws -> StartupTargetFacts {
+        var diagnostic = StartupIdentityDiagnostic("post-open-facts", at: at(), diagnostics: diagnostics)
+        guard diagnostic.check("notTerminated", !app.isTerminated),
+              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
+              let executable = diagnostic.present("executablePresent", app.executableURL),
+              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier) else {
+            let failure = StartupFailure(reason: "target-identity", message: "系统没有返回完整的 Codex 进程身份。")
+            diagnostic.finish("rejected", error: failure)
+            throw failure
         }
-        return StartupTargetFacts(pid: app.processIdentifier, bundle: real(bundle), executable: real(executable),
-                                  bundleID: bundleID, launchTime: app.launchTime)
+        let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
+                                       bundle: real(bundle),
+                                       executable: real(executable),
+                                       bundleID: bundleID,
+                                       launchTime: diagnostic.present("launchTimePresent", app.launchTime))
+        diagnostic.finish("accepted")
+        return facts
     }
 
     private func startupPayload() throws -> String {
@@ -1526,7 +1598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             onOpeningChanged: { [weak self] value in self?.opening = value },
             startupFacts: { [weak self] app in
                 guard let self else { throw StartupFailure(reason: "target-identity", message: "启动入口已结束。") }
-                return try self.startupFacts(app)
+                return try self.startupFacts(app, diagnostics: self.startupDiagnostics, at: self.runtime.uptime)
             },
             performDisable: nil)
         let dependencies = SkinAssemblyDependencies(
@@ -1550,12 +1622,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         return try self.startupPayload()
                     },
                     makeTargetSystem: { runtime.makeStartupTargetSystem() },
-                    makeConnector: { facts, port, connectorSystem, capture, events in
+                    makeConnector: { [weak self] facts, port, connectorSystem, capture, events in
                         StartupConnector(
                             target: facts, expectedPort: port, system: connectorSystem,
                             transport: InstallObservingStartupTransport(
                                 base: runtime.makeStartupTransport(capture: capture, events: events),
-                                recorder: installObservation))
+                                recorder: installObservation),
+                            diagnostics: self?.startupDiagnostics)
                     },
                     installObservation: installObservation, assembly: assembly)
             },
@@ -1606,7 +1679,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                            system: any StartupTargetSystem) async throws -> any NativeApplication {
         try await Self.openTargetApplication(runtime: runtime, targetBundleID: targetID, url: url,
                                              port: port, deadline: deadline, system: system,
-                                             log: { [weak self] event, fields in self?.log(event, fields) })
+                                             log: { [weak self] event, fields in self?.log(event, fields) },
+                                             diagnostics: startupDiagnostics)
     }
 
     /// Shared bounded application-open routine (same order and failures as the
@@ -1616,7 +1690,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     static func openTargetApplication(
         runtime: any NativeAppRuntime, targetBundleID: String, url: URL, port: Int,
         deadline: TimeInterval, system: any StartupTargetSystem,
-        log: @escaping (String, [String: Any]) -> Void
+        log: @escaping (String, [String: Any]) -> Void,
+        diagnostics: ((String, [String: Any]) -> Void)? = nil
     ) async throws -> any NativeApplication {
         let openTimeout = try StartupBudget.boundedTimeout(
             maximum: 45, stageDeadline: deadline, totalDeadline: deadline,
@@ -1632,35 +1707,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             log("target-open-request", ["path": url.path, "bundleID": targetBundleID, "debuggingPort": port])
             runtime.openApplication(at: url, debuggingPort: port) { app, error in
                 DispatchQueue.main.async {
-                    guard runtime.uptime < deadline else {
-                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")))
-                        return
-                    }
-                    if error != nil {
-                        waiter.finish(.failure(StartupFailure(reason: "target-missing", message: "Codex 启动失败。")))
-                        return
-                    }
-                    guard let app, !app.isTerminated, let bundle = app.bundleURL, let executable = app.executableURL,
-                          let bundleID = app.bundleIdentifier,
-                          bundle.resolvingSymlinksInPath().standardizedFileURL == url,
-                          bundleID == targetBundleID else {
-                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")))
-                        return
-                    }
-                    do {
-                        try system.validate(
-                            StartupTargetFacts(pid: app.processIdentifier,
-                                               bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
-                                               executable: executable.resolvingSymlinksInPath().standardizedFileURL,
-                                               bundleID: bundleID, launchTime: app.launchTime),
-                            deadline: deadline)
+                    let now = runtime.uptime
+                    let verdict: StartupFailure? = {
+                        // Keep synchronous journal I/O outside every identity predicate and
+                        // process query. This finite validation path produces at most 11 checks;
+                        // the single batch is emitted only once this callback verdict is final.
+                        var checks: [[String: Any]] = []
+                        let observations: ((String, [String: Any]) -> Void)? = diagnostics.map { _ in
+                            { _, record in checks.append(record) }
+                        }
+                        defer {
+                            diagnostics?("startup-diagnostic", ["stage": "target-identity", "checkpoint": "bounded-open",
+                                                                 "at": now, "checks": checks])
+                        }
+                        var diagnostic = StartupIdentityDiagnostic("callback-identity", at: now, diagnostics: observations)
+                        guard diagnostic.check("beforeDeadline", now < deadline) else {
+                            let failure = StartupFailure(reason: "attach-timeout", message: "Codex 启动接入超过当前阶段预算。")
+                            diagnostic.finish("rejected", error: failure)
+                            return failure
+                        }
+                        if diagnostic.check("callbackErrorPresent", error != nil) {
+                            diagnostic.finish("error", error: error)
+                            return StartupFailure(reason: "target-missing", message: "Codex 启动失败。")
+                        }
+                        guard let app = diagnostic.present("applicationPresent", app),
+                              diagnostic.check("notTerminated", !app.isTerminated),
+                              let bundle = diagnostic.present("bundlePresent", app.bundleURL),
+                              let executable = diagnostic.present("executablePresent", app.executableURL),
+                              let bundleID = diagnostic.present("bundleIDPresent", app.bundleIdentifier),
+                              diagnostic.check("bundleMatches", bundle.resolvingSymlinksInPath().standardizedFileURL == url),
+                              diagnostic.check("bundleIDMatches", bundleID == targetBundleID) else {
+                            let failure = StartupFailure(reason: "target-identity", message: "系统返回的应用与核验路径不符。")
+                            diagnostic.finish("rejected", error: failure)
+                            return failure
+                        }
+                        let facts = StartupTargetFacts(pid: diagnostic.processIdentifier(app.processIdentifier),
+                                                       bundle: bundle.resolvingSymlinksInPath().standardizedFileURL,
+                                                       executable: executable.resolvingSymlinksInPath().standardizedFileURL,
+                                                       bundleID: bundleID,
+                                                       launchTime: diagnostic.present("launchTimePresent", app.launchTime))
+                        diagnostic.finish("accepted")
+                        let validation = StartupIdentityDiagnostic("system-validation", pid: facts.pid, at: now, diagnostics: observations)
+                        do {
+                            try system.validate(facts, deadline: deadline, diagnostics: observations)
+                            validation.finish("accepted")
+                            return nil
+                        } catch let failure as StartupFailure where failure.reason == "attach-timeout" {
+                            validation.finish("error", error: failure)
+                            return failure
+                        } catch let failure as WallpaperFailure where failure.state == "inspection-timeout" {
+                            validation.finish("error", error: failure)
+                            return StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")
+                        } catch {
+                            validation.finish("error", error: error)
+                            return StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")
+                        }
+                    }()
+                    if let verdict {
+                        waiter.finish(.failure(verdict))
+                    } else if let app {
                         waiter.finish(.success(app))
-                    } catch let error as StartupFailure where error.reason == "attach-timeout" {
-                        waiter.finish(.failure(error))
-                    } catch let error as WallpaperFailure where error.state == "inspection-timeout" {
-                        waiter.finish(.failure(StartupFailure(reason: "attach-timeout", message: "Codex 进程核验超过当前阶段预算。")))
-                    } catch {
-                        waiter.finish(.failure(StartupFailure(reason: "target-identity", message: "Codex 进程或签名核验未通过。")))
                     }
                 }
             }
