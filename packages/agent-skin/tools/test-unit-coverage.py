@@ -21,7 +21,8 @@ EXTENSIONS = {".js": "javascript", ".mjs": "javascript", ".py": "python",
 IGNORED_DIRECTORIES = {".git", ".build", ".local", ".azhou", "dist", "assets", "__pycache__",
                        "node_modules", "docs", "plans"}
 NATIVE_EXPRESSIONS = ("statusSource", "applyGuardSource", "retrySource", "restoreSource",
-                      "inspectExpression", "statusExpression", "disposeExpression", "installExpression")
+                      "inspectExpression", "statusExpression", "disposeExpression", "installExpression",
+                      "controllerReferenceExpression", "boundStatusExpression")
 WALLPAPER_GENERATED_JAVASCRIPT = tuple(f"generated/Native-Wallpaper.{name}.js" for name in NATIVE_EXPRESSIONS)
 ZCODE_NATIVE_EXPRESSIONS = ("safeStatusExpression", "disposeExpression")
 ZCODE_GENERATED_JAVASCRIPT = tuple(f"generated/Native-ZCodeRuntime.{name}.js" for name in ZCODE_NATIVE_EXPRESSIONS)

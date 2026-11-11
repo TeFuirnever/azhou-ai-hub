@@ -773,7 +773,9 @@ function installAnimation(
     skipped = Boolean(isSkipped);
     complete = true;
     played = true;
-    drawAt(DURATION, true);
+    // Explicit exit must not depend on another render of a broken drawing surface.
+    // Natural playback still draws its final frame before reporting completion.
+    if (!isSkipped) drawAt(DURATION, true);
     root.dataset.completed = 'true';
     root.classList.add('finished');
     const finalReport = report();

@@ -412,6 +412,19 @@ try {
         matchMedia: window.matchMedia.bind(window),
         setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
       };
+    if (url.searchParams.has('manual-startup-timeout')) {
+      // Expose the actual controller watchdog only in this synthetic host. Keep
+      // its production delay and callback; tests advance this one timer boundary.
+      const schedule = host.setTimeout;
+      host.setTimeout = (callback, milliseconds, ...args) => {
+        const timer = schedule(callback, milliseconds, ...args);
+        if (milliseconds === 25_000) outerWindow.__fixtureStartupWatchdog = {
+          milliseconds,
+          fire() { outerWindow.clearTimeout(timer); callback(...args); },
+        };
+        return timer;
+      };
+    }
     let generatedInstallResult;
     if (url.searchParams.has('generated-payload')) {
       globalThis.__agentSkinFixtureHost = host;
@@ -2274,7 +2287,8 @@ try {
       await delay(200); // The real entry batches layout updates after host mutations.
       metrics = await until(async () => {
         const value = await appearanceEntryMetrics();
-        return value?.rect.height === 44 ? value : false;
+        return value?.viewport.width === 640 && value?.viewport.height === 720
+          && value?.rect.height === 44 ? value : false;
       }, 3000, 'the 44px fallback is positioned after the collapsed sidebar settles');
       assert.ok(metrics, 'completed page still exposes the appearance entry');
       assert.equal(metrics.rect.height, 44, 'the compact narrow-viewport appearance button retains a 44px touch target');
@@ -2326,8 +2340,13 @@ try {
         button.style.cssText='position:absolute;left:6px;top:8px;width:40px;height:40px';
         rail.appendChild(button);document.body.appendChild(rail);
       })()`);
-      await delay(200);
-      const metrics=await appearanceEntryMetrics();
+      await delay(200); // The real entry batches layout updates after host mutations.
+      const metrics = await until(async () => {
+        const value = await appearanceEntryMetrics();
+        return value?.viewport.width === 640 && value?.viewport.height === 720
+          && value?.rect.height === 44
+          && value?.rect.x >= 0 && value?.rect.x + value?.rect.width <= 52 ? value : false;
+      }, 3000, 'the compact avatar entry settles within the rail after the viewport override');
       assert.ok(metrics.avatar, 'the real compact fallback includes an avatar');
       assert.equal(metrics.rect.height, 44);
       assert.ok(metrics.rect.x >= 0 && metrics.rect.x + metrics.rect.width <= 52,
@@ -3895,8 +3914,8 @@ try {
     assert.equal(afterSkip.completed, true);
     assert.equal(afterSkip.skipped, true);
     assert.equal(afterSkip.stage, 'complete');
-    assert.equal(afterSkip.sceneRenderCount, beforeSkip.sceneRenderCount + 1,
-      'skip submits one completion frame before releasing scene resources');
+    assert.equal(afterSkip.sceneRenderCount, beforeSkip.sceneRenderCount,
+      'explicit skip must not redraw a possibly broken final frame before releasing resources');
     for (const key of ['liveImages', 'liveBitmaps', 'liveCanvases', 'livePaths', 'liveRAF']) {
       assert.equal(afterSkip.resources[key], 0, `skip releases ${key}`);
     }
@@ -3910,7 +3929,7 @@ try {
       const root=document.querySelector('[data-agent-skin-stage]');
       return root?.dataset.prewarmed==='true'&&root.dataset.playing==='true'
         ?window.launcherUI.report():false;
-    })()`), 10000, 'preview replay after the skipped completion frame');
+    })()`), 10000, 'preview replay after explicit skip without final rendering');
     await cdp.evaluate('window.launcherUI.pause()');
     assert.equal(replayStarted.completed, false);
     assert.ok(replayStarted.jsFrame.sceneRenderCount < afterSkip.sceneRenderCount,
@@ -3927,7 +3946,7 @@ try {
         scattered: { submissions: scatteredSecond.sceneRenderCount - identityThird.sceneRenderCount, seeks: 2 },
         drawing: { submissions: drawingSecond.sceneRenderCount - scatteredSecond.sceneRenderCount, seeks: 2 },
         portrait: { submissions: portraitSecond.sceneRenderCount - drawingSecond.sceneRenderCount, seeks: 3 },
-        skip: { completionFrameSubmitted: afterSkip.sceneRenderCount === beforeSkip.sceneRenderCount + 1,
+        skip: { noExtraFrameSubmitted: afterSkip.sceneRenderCount === beforeSkip.sceneRenderCount,
           releasedResources: afterSkip.resources },
         replay: { submissions: replayScatterSecond.sceneRenderCount - replayStarted.jsFrame.sceneRenderCount,
           stage: replayScatterSecond.stage },
@@ -6273,6 +6292,93 @@ try {
     }
   });
 
+
+  for (const delayedShell of [false, true]) {
+    await check('ready playback timeout restores Appearance ' + (delayedShell ? 'after a delayed shell' : 'in the current navigation'), async () => {
+      // Settings saved by earlier checks override no-initial-wallpaper and can
+      // surface the wallpaper recovery notice after cancel; start from a clear
+      // settings database so the asserted entry display stays deterministic.
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&home-nav-fixture=1&entry-avatar=1&no-initial-wallpaper=1&manual-startup-timeout=1'
+        + (delayedShell ? '&hold-shell=1' : ''));
+      await until(() => cdp.evaluate('window.__startupAPI?.status().phase === "playing" && window.__startupAPI.status().ready'),
+        15000, 'actual animation ready before its playback watchdog');
+      const expired = await cdp.evaluate(`(() => {
+        const state = __startupAPI.status();
+        if (state.phase !== 'playing' || !state.ready) throw new Error('fixture did not reach ready playback');
+        __startupAnimationRuns.at(-1).handle.preview.pause();
+        window.__fixtureTimeoutEntry = document.querySelector('[data-agent-skin-entry="appearance"]');
+        window.__fixtureTimeoutRunID = state.runId;
+        const watchdog = __fixtureStartupWatchdog;
+        watchdog.fire();
+        const after = __startupAPI.status();
+        return {milliseconds:watchdog.milliseconds,
+          state:{phase:after.phase,reason:after.reason,ready:after.ready,completed:after.completed,
+            overlay:after.overlay,completion:after.completion},
+          frames:document.querySelectorAll('iframe[aria-label]').length};
+      })()`);
+      assert.equal(expired.milliseconds, 25_000);
+      assert.deepEqual(expired.state, {phase:'timeout',reason:'overlay-timeout',ready:true,
+        completed:false,overlay:false,completion:null});
+      assert.equal(expired.frames, 0);
+      if (delayedShell) {
+        assert.equal(await cdp.evaluate('getComputedStyle(__fixtureTimeoutEntry).display'), 'none',
+          'an enabled recovery entry still waits for a usable host layout');
+        assert.equal(await cdp.evaluate('__releaseShell()'), true);
+      }
+      const entry = await until(() => cdp.evaluate(`(() => {
+        const entries = document.querySelectorAll('[data-agent-skin-entry="appearance"]');
+        const node = entries[0], button = node?.shadowRoot?.querySelector('button');
+        const bounds = button?.getBoundingClientRect();
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0 || getComputedStyle(node).display === 'none') return false;
+        const dot = document.querySelector('[data-fixture-your-dot]');
+        const nav = document.querySelector('[data-fixture-home-nav]');
+        const row = node.getBoundingClientRect(), anchor = dot.getBoundingClientRect(), navigation = nav.getBoundingClientRect();
+        const x = bounds.left + bounds.width / 2, y = bounds.top + bounds.height / 2;
+        const hit = node.shadowRoot.elementFromPoint(x,y);
+        return {count:entries.length,same:node===__fixtureTimeoutEntry,display:getComputedStyle(node).display,
+          marginTop:getComputedStyle(node).marginTop,inNavigation:node.parentElement===document.querySelector('[data-fixture-nav-list]'),
+          followsAnchor:node.previousElementSibling===dot,belowAnchor:row.top>=anchor.bottom,
+          withinNavigation:row.left>=navigation.left&&row.right<=navigation.right,
+          hit:document.elementFromPoint(x,y)===node&&(hit===button||button.contains(hit)),
+          disabled:button.disabled,x,y,width:bounds.width,height:bounds.height,phase:__startupAPI.status().phase};
+      })()`), 2500, 'the same timeout entry occupies a visible, clickable navigation row');
+      assert.equal(entry.count, 1);
+      assert.equal(entry.same, true);
+      assert.equal(entry.display, 'block');
+      assert.equal(entry.marginTop, '6px');
+      assert.equal(entry.inNavigation, true);
+      assert.equal(entry.followsAnchor, true);
+      assert.equal(entry.belowAnchor, true);
+      assert.equal(entry.withinNavigation, true);
+      assert.equal(entry.hit, true);
+      assert.equal(entry.disabled, false);
+      assert.equal(entry.phase, 'timeout', 'layout recovery never rewrites the timeout receipt');
+
+      await cdp.call('Input.dispatchMouseEvent', {type:'mousePressed',x:entry.x,y:entry.y,button:'left',clickCount:1});
+      await cdp.call('Input.dispatchMouseEvent', {type:'mouseReleased',x:entry.x,y:entry.y,button:'left',clickCount:1});
+      const settings = await until(() => cdp.evaluate(`(() => {
+        const state=__startupAPI.status(),frame=document.querySelector('iframe[aria-label]');
+        if(state.phase!=='settings'||!frame?.contentDocument.querySelector('dialog')?.open)return false;
+        return {runChanged:state.runId!==__fixtureTimeoutRunID,completed:state.completed,overlay:state.overlay,
+          intents:__startupAnimationRuns.map(run=>run.intent),inert:document.getElementById('root').inert};
+      })()`), 15000, 'a real entry click opens the existing settings panel');
+      assert.deepEqual(settings, {runChanged:true,completed:false,overlay:true,intents:['play','settings'],inert:true});
+      await cdp.call('Input.dispatchKeyEvent', {type:'rawKeyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27,nativeVirtualKeyCode:27});
+      await cdp.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27,nativeVirtualKeyCode:27});
+      const closed = await until(() => cdp.evaluate(`(() => {
+        const state=__startupAPI.status();
+        if(state.phase!=='complete'||state.overlay)return false;
+        const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),button=entry.shadowRoot.querySelector('button');
+        return {completion:state.completion,frames:document.querySelectorAll('iframe[aria-label]').length,
+          inert:document.getElementById('root').inert,display:getComputedStyle(entry).display,
+          focus:document.activeElement===entry&&entry.shadowRoot.activeElement===button,
+          same:entry===__fixtureTimeoutEntry,intents:__startupAnimationRuns.map(run=>run.intent)};
+      })()`), 2500, 'cancel releases the settings frame and restores entry focus');
+      assert.deepEqual(closed, {completion:{cause:'settings-cancel',beforeReady:false},frames:0,inert:false,
+        display:'block',focus:true,same:true,intents:['play','settings']});
+      return {delayedShell,expired,entry,settings,closed};
+    });
+  }
 
   await check('detached startup overlay invalidates playback readiness', async () => {
     await navigate('/fixture.html?animation=1');

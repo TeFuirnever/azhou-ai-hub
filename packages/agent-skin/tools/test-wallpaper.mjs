@@ -299,7 +299,8 @@ try {
   await check('real thread footer plate: clear backgrounds, intact composer, failure and restore', async () => {
     const result = await cdp.evaluate(`(async()=>{
       const originalTheme=document.documentElement.dataset.theme, results=[];
-      const plate=document.querySelector('[data-thread-scroll-footer] > ._background_fixture');
+      const plate=document.getElementById('fixture-footer-plate');
+      const originalClasses=plate.className, originalHidden=plate.getAttribute('aria-hidden');
       const footer=plate.parentElement, composer=document.querySelector('.composer');
       const sample=()=>{
         const r=composer.getBoundingClientRect(), s=getComputedStyle(plate);
@@ -309,22 +310,53 @@ try {
           button:getComputedStyle(composer.querySelector('button')).backgroundColor};
       };
       try {
-        for(const theme of ['dark','light']) {
+        for(const variant of ['legacy','hyphen-first','hyphen-after']) for(const theme of ['dark','light']) {
           __azhouWallpaper.dispose();document.documentElement.dataset.theme=theme;
+          plate.className=variant==='legacy'?originalClasses:
+            (variant==='hyphen-first'?'background-fixture surface-fixture':'surface-fixture background-fixture')+
+            ' pointer-events-none absolute inset-x-0 z-0 bottom-0';
+          if(variant==='legacy')plate.removeAttribute('aria-hidden');else plate.setAttribute('aria-hidden','true');
           const before=sample();await __wallpaperFixture.apply();const applied=sample(),state=__azhouWallpaper.status();
           plate.style.setProperty('background-color','var(--color-surface)','important');
           const blocked=__azhouWallpaper.status();plate.style.removeProperty('background-color');
           const recovered=__azhouWallpaper.status();
           const saved=__azhouWallpaper;let rejected=false;
           try { await __wallpaperFixture.installRenderer({...__wallpaperFixture.payload,
-            css:__wallpaperFixture.payload.css+' html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] [data-thread-scroll-footer] > div._background_fixture {background-color:#202024!important;}'}); }
+            css:__wallpaperFixture.payload.css+' html[data-azhou-wallpaper="active"] #root [data-app-shell-main-surface] [data-thread-scroll-footer] > #fixture-footer-plate {background-color:#202024!important;}'}); }
           catch { rejected=true; }
           const rollback={rejected,sameAPI:__azhouWallpaper===saved,applied:__azhouWallpaper.status().applied,plate:sample().plate};
+          let unknown=null;
+          if(variant!=='legacy'){
+            plate.removeAttribute('aria-hidden');
+            unknown={state:__azhouWallpaper.status(),paint:sample().plate,rejected:false};
+            try{await __wallpaperFixture.apply();}catch{unknown.rejected=true;}
+            unknown.sameAPI=__azhouWallpaper===saved;
+            plate.setAttribute('aria-hidden','true');
+          }
+          const protectedBefore=sample().composer;
+          composer.classList.add('background-protected','pointer-events-none');
+          composer.setAttribute('aria-hidden','true');
+          const protectedAfter=sample().composer;
+          composer.classList.remove('background-protected','pointer-events-none');
+          composer.removeAttribute('aria-hidden');
+          const decoy=document.createElement('div');
+          decoy.className='background-protected pointer-events-none';
+          decoy.setAttribute('aria-hidden','true');decoy.setAttribute('data-composer-layout','');
+          decoy.style.cssText='position:absolute;inset:0;pointer-events:none;background:rgb(89,67,45);box-shadow:0 1px 2px rgb(20,30,40)';
+          let protectedDirect;
+          try{footer.appendChild(decoy);const style=getComputedStyle(decoy);
+            protectedDirect={background:style.backgroundColor,shadow:style.boxShadow,applied:__azhouWallpaper.status().applied};
+          }finally{decoy.remove();}
           __azhouWallpaper.dispose();const restored=sample();
-          results.push({theme,before,applied,state,blocked,recovered,rollback,restored});
+          results.push({variant,theme,before,applied,state,blocked,recovered,rollback,unknown,protectedBefore,protectedAfter,protectedDirect,restored});
           await __wallpaperFixture.apply();
         }
-      } finally {plate.style.removeProperty('background-color');document.documentElement.dataset.theme=originalTheme;}
+      } finally {
+        plate.style.removeProperty('background-color');plate.className=originalClasses;
+        if(originalHidden===null)plate.removeAttribute('aria-hidden');else plate.setAttribute('aria-hidden',originalHidden);
+        document.documentElement.dataset.theme=originalTheme;
+        if(!globalThis.__azhouWallpaper)await __wallpaperFixture.apply();
+      }
       return results;
     })()`);
     for (const item of result) {
@@ -337,8 +369,148 @@ try {
       assert.equal(item.blocked.applied, false); assert.equal(item.blocked.footerBackgroundClear, false);
       assert.equal(item.recovered.applied, true); assert.equal(item.recovered.footerBackgroundClear, true);
       assert.deepEqual(item.rollback, { rejected: true, sameAPI: true, applied: true, plate: 'rgba(0, 0, 0, 0)' });
+      assert.deepEqual(item.state.unsupportedDecorations, []);
+      assert.deepEqual(item.protectedAfter, item.protectedBefore);
+      assert.deepEqual(item.protectedDirect, {background:'rgb(89, 67, 45)',shadow:'rgb(20, 30, 40) 0px 1px 2px 0px',applied:true});
+      if(item.unknown){
+        assert.equal(item.unknown.state.applied,false);
+        assert.ok(item.unknown.state.unsupportedDecorations.includes('unmatched-footer-decoration'));
+        assert.notEqual(item.unknown.paint,'rgba(0, 0, 0, 0)');
+        assert.equal(item.unknown.rejected,true);
+        assert.equal(item.unknown.sameAPI,true);
+      }
       assert.deepEqual(item.restored, item.before);
     }
+    return result;
+  });
+  await check('hyphenated plate pseudo planes are cleared and restored on dispose', async () => {
+    const results = await onFixture(async () => {
+      const plate = document.getElementById('fixture-footer-plate');
+      const originalClasses = plate.className, originalHidden = plate.getAttribute('aria-hidden');
+      const pseudo = document.createElement('style');
+      pseudo.textContent = '#root#root #fixture-footer-plate::before,#root#root #fixture-footer-plate::after'
+        + '{content:"";position:absolute;inset:0;background-color:rgb(60,70,80);'
+        + 'background-image:linear-gradient(rgb(10,20,30),transparent);box-shadow:0 2px 6px rgb(1,2,3);}';
+      const sample = () => {
+        const read = name => {
+          const style = getComputedStyle(plate, name);
+          return { content: style.content, background: style.backgroundColor,
+            image: style.backgroundImage, shadow: style.boxShadow };
+        };
+        return { before: read('::before'), after: read('::after') };
+      };
+      const results = [];
+      try {
+        document.head.appendChild(pseudo);
+        plate.setAttribute('aria-hidden', 'true');
+        // Both class orders exercise both :is() token-prefix arms of the scope;
+        // hashed module tokens pin the prefix to the observed hyphenated shape.
+        const orders = [
+          { classes: 'background-fixture surface-fixture' },
+          { classes: 'surface-fixture background-fixture' },
+          { classes: 'background-qp7x2 surface-qp7x2', inline: 'position:absolute;inset-inline:0;bottom:0;height:64px;background:var(--color-surface);pointer-events:none;' },
+          { classes: 'surface-qp7x2 background-qp7x2', inline: 'position:absolute;inset-inline:0;bottom:0;height:64px;background:var(--color-surface);pointer-events:none;' },
+        ];
+        for (const order of orders) {
+          plate.className = order.classes + ' pointer-events-none absolute inset-x-0 z-0 bottom-0';
+          plate.style.cssText = order.inline || '';
+          globalThis.__azhouWallpaper?.dispose();
+          const fault = sample();
+          const state = await __wallpaperFixture.apply();
+          const cleared = sample(), status = __azhouWallpaper.status();
+          __azhouWallpaper.dispose();
+          results.push({ order: order.classes, fault, state, cleared, restored: sample(), statusApplied: status.applied });
+        }
+        return results;
+      } finally {
+        pseudo.remove(); plate.style.cssText = ''; plate.className = originalClasses;
+        if (originalHidden === null) plate.removeAttribute('aria-hidden'); else plate.setAttribute('aria-hidden', originalHidden);
+        if (!globalThis.__azhouWallpaper) await __wallpaperFixture.apply();
+      }
+    });
+    for (const result of results) {
+      for (const pseudo of [result.fault.before, result.fault.after]) {
+        assert.ok(pseudo.image.includes('linear-gradient'), 'the fixture must paint both pseudo planes before apply');
+        assert.notEqual(pseudo.background, 'rgba(0, 0, 0, 0)');
+        assert.notEqual(pseudo.shadow, 'none');
+      }
+      assert.equal(result.state.applied, true); assert.equal(result.state.footerBackgroundClear, true);
+      assert.equal(result.state.footerSurfaces, 2, 'the renderer must recognize every plate shape the CSS scope clears');
+      assert.equal(result.statusApplied, true); assert.deepEqual(result.state.unsupportedDecorations, []);
+      for (const pseudo of [result.cleared.before, result.cleared.after]) {
+        assert.notEqual(pseudo.content, 'none', 'the pseudo plane must survive; only its paint is cleared');
+        assert.equal(pseudo.background, 'rgba(0, 0, 0, 0)'); assert.equal(pseudo.image, 'none'); assert.equal(pseudo.shadow, 'none');
+      }
+      for (const pseudo of [result.restored.before, result.restored.after]) {
+        assert.ok(pseudo.image.includes('linear-gradient'), 'dispose must restore the pseudo paint');
+        assert.notEqual(pseudo.background, 'rgba(0, 0, 0, 0)');
+      }
+    }
+    return results;
+  });
+  await check('role=dialog surfaces keep paint beside cleared hyphenated plates', async () => {
+    const result = await onFixture(async () => {
+      const plate = document.getElementById('fixture-footer-plate');
+      const originalClasses = plate.className, originalHidden = plate.getAttribute('aria-hidden');
+      const footer = plate.parentElement, main = document.querySelector('[data-app-shell-main-surface]');
+      const dialog = document.createElement('div');
+      dialog.setAttribute('role', 'dialog');
+      dialog.style.cssText = 'position:absolute;left:120px;top:80px;width:420px;height:140px;background:rgb(120,40,40);box-shadow:0 4px 10px rgb(5,6,7);pointer-events:auto;z-index:60;';
+      const dialogPlate = document.createElement('div');
+      dialogPlate.id = 'fixture-dialog-plate';
+      dialogPlate.setAttribute('role', 'dialog'); dialogPlate.setAttribute('aria-hidden', 'true');
+      dialogPlate.className = 'surface-fixture background-dialog-plate pointer-events-none absolute inset-x-0 z-0 bottom-0';
+      dialogPlate.style.cssText = 'position:absolute;inset:0;background:rgb(30,90,60);box-shadow:0 1px 4px rgb(8,9,10);pointer-events:none;';
+      const dialogFade = document.createElement('div');
+      dialogFade.id = 'fixture-dialog-fade';
+      dialogFade.className = '_MainContentTopFade_dialog';
+      dialogFade.style.cssText = 'position:absolute;left:8px;top:8px;width:200px;height:30px;background:rgb(150,60,140);box-shadow:0 1px 3px rgb(4,5,6);';
+      const pseudo = document.createElement('style');
+      pseudo.textContent = '#fixture-dialog-plate::before,#fixture-dialog-plate::after,'
+        + '#fixture-dialog-fade::before,#fixture-dialog-fade::after'
+        + '{content:"";position:absolute;inset:0;background-color:rgb(200,160,20);'
+        + 'background-image:linear-gradient(rgb(90,60,10),transparent);box-shadow:0 2px 5px rgb(3,4,5);}';
+      try {
+        plate.className = 'background-fixture surface-fixture pointer-events-none absolute inset-x-0 z-0 bottom-0';
+        plate.setAttribute('aria-hidden', 'true');
+        __azhouWallpaper.dispose(); await __wallpaperFixture.apply();
+        dialog.appendChild(dialogFade);
+        main.appendChild(dialog); footer.appendChild(dialogPlate); document.head.appendChild(pseudo);
+        const dialogStyle = getComputedStyle(dialog), plateDialogStyle = getComputedStyle(dialogPlate);
+        const fadeStyle = getComputedStyle(dialogFade);
+        const pseudoSample = (node, name) => {
+          const style = getComputedStyle(node, name);
+          return { background: style.backgroundColor, image: style.backgroundImage, shadow: style.boxShadow };
+        };
+        const status = __azhouWallpaper.status();
+        return { status: { applied: status.applied, footerSurfaces: status.footerSurfaces, unsupportedDecorations: status.unsupportedDecorations },
+          dialog: { background: dialogStyle.backgroundColor, shadow: dialogStyle.boxShadow, pointerEvents: dialogStyle.pointerEvents },
+          dialogPlate: { background: plateDialogStyle.backgroundColor, shadow: plateDialogStyle.boxShadow },
+          dialogPlatePseudo: { before: pseudoSample(dialogPlate, '::before'), after: pseudoSample(dialogPlate, '::after') },
+          dialogFade: { background: fadeStyle.backgroundColor, shadow: fadeStyle.boxShadow },
+          dialogFadePseudo: { before: pseudoSample(dialogFade, '::before'), after: pseudoSample(dialogFade, '::after') },
+          plate: getComputedStyle(plate).backgroundColor };
+      } finally {
+        pseudo.remove(); dialog.remove(); dialogPlate.remove(); plate.className = originalClasses;
+        if (originalHidden === null) plate.removeAttribute('aria-hidden'); else plate.setAttribute('aria-hidden', originalHidden);
+        if (!globalThis.__azhouWallpaper) await __wallpaperFixture.apply();
+      }
+    });
+    assert.deepEqual(result.status, { applied: true, footerSurfaces: 2, unsupportedDecorations: [] });
+    assert.deepEqual(result.dialog, { background: 'rgb(120, 40, 40)', shadow: 'rgb(5, 6, 7) 0px 4px 10px 0px', pointerEvents: 'auto' });
+    assert.deepEqual(result.dialogPlate, { background: 'rgb(30, 90, 60)', shadow: 'rgb(8, 9, 10) 0px 1px 4px 0px' });
+    for (const pseudo of [result.dialogPlatePseudo.before, result.dialogPlatePseudo.after]) {
+      assert.equal(pseudo.background, 'rgb(200, 160, 20)', 'the dialog pseudo planes must keep their paint');
+      assert.ok(pseudo.image.includes('linear-gradient'));
+      assert.equal(pseudo.shadow, 'rgb(3, 4, 5) 0px 2px 5px 0px');
+    }
+    assert.deepEqual(result.dialogFade, { background: 'rgb(150, 60, 140)', shadow: 'rgb(4, 5, 6) 0px 1px 3px 0px' });
+    for (const pseudo of [result.dialogFadePseudo.before, result.dialogFadePseudo.after]) {
+      assert.equal(pseudo.background, 'rgb(200, 160, 20)', 'a protected dialog descendant must keep its pseudo paint');
+      assert.ok(pseudo.image.includes('linear-gradient'));
+      assert.equal(pseudo.shadow, 'rgb(3, 4, 5) 0px 2px 5px 0px');
+    }
+    assert.equal(result.plate, 'rgba(0, 0, 0, 0)', 'the hyphenated plate is cleared while dialogs keep their paint');
     return result;
   });
   await check('independent footer and top fades: clearing, rollback and restore', async () => {

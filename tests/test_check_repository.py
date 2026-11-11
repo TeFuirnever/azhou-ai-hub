@@ -23,6 +23,7 @@ from scripts.check_repository import (
     peel_chat_presentation,
     check_public_boundaries,
     check_reference_script_paths,
+    check_required,
     check_rename_residue,
     check_secret_patterns,
     check_skill_brand_contract,
@@ -352,6 +353,25 @@ class AzhouDescriptionBrandTest(unittest.TestCase):
 class RenameResidueTest(unittest.TestCase):
     def test_renamed_catalog_has_no_residue_outside_allowed_surfaces(self) -> None:
         self.assertEqual([], check_rename_residue(public_files(ROOT), ROOT))
+
+    def test_upstream_identity_exception_is_exact_and_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            preview = root / "skills/super-archify/bin/preview.mjs"
+            preview.parent.mkdir(parents=True)
+            literal = "const cliPath = path.join(here, 'archify.mjs');\n"
+            preview.write_text(literal, encoding="utf-8")
+            self.assertEqual([], check_rename_residue([preview], root))
+            # The exception must not hide another residue in the same file.
+            preview.write_text(literal + "// Run archify as the canonical skill.\n", encoding="utf-8")
+            self.assertTrue(check_rename_residue([preview], root))
+            # The same literal in an unrelated file is not an upstream boundary.
+            other = root / "unexpected.mjs"
+            other.write_text(literal, encoding="utf-8")
+            self.assertTrue(check_rename_residue([other], root))
+            # Other renamed skills never inherit archify's source exception.
+            preview.write_text(literal + "// repo-pedant\n", encoding="utf-8")
+            self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([preview], root)))
 
     def test_old_name_outside_allowed_surfaces_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -726,6 +746,31 @@ class RepositoryPolicyTest(unittest.TestCase):
             legacy = root / "benchmarks" / "super-repo-pedant" / "upstream" / "neat-freak" / "SKILL.md"
             errors = check_skill_discovery([*expected, legacy], root)
             self.assertEqual(["unexpected installable skill: benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.md"], errors)
+
+            local = root / ".agents/skills/dep-refs/SKILL.md"
+            local.parent.mkdir(parents=True)
+            local.write_text("project workflow", encoding="utf-8")
+            self.assertEqual([], check_skill_discovery([*expected, local], root))
+            stray_local = root / ".agents/skills/unknown/SKILL.md"
+            self.assertIn("unexpected installable skill: .agents/skills/unknown/SKILL.md",
+                          check_skill_discovery([*expected, local, stray_local], root))
+
+    def test_pinned_upstream_notice_is_verified_before_ignoring_its_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = Path(".agents/skills/dep-refs/NOTICE-ZCode.md")
+            notice = root / relative
+            notice.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / relative, notice)
+            self.assertEqual([], check_markdown_links([notice], root))
+            notice.write_text("[changed](missing.md)", encoding="utf-8")
+            self.assertEqual([f"upstream notice changed: {relative.as_posix()}"],
+                             check_markdown_links([notice], root))
+
+    def test_project_local_workflows_are_required_public_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            errors = check_required(Path(directory))
+            self.assertIn("required public file missing: .agents/skills/dep-refs/SKILL.md", errors)
 
     def test_relative_markdown_targets_skip_remote_and_anchor_links(self) -> None:
         text = "[local](docs/run.md) [remote](https://example.com/x) [anchor](#install)"

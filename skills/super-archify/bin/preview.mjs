@@ -19,7 +19,7 @@ import {
 } from '../renderers/shared/atomic-output.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const cliPath = path.join(here, 'super-archify.mjs');
+const cliPath = path.join(here, 'archify.mjs');
 const loopbackHost = '127.0.0.1';
 const defaultDebounceMs = 400;
 const defaultPollMs = 800;

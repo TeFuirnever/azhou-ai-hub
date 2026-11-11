@@ -7,8 +7,10 @@ Read this before using the bundled history or evidence scripts, or when a comman
 | Capability | Requirement | Used by |
 |---|---|---|
 | Python | 3.10 or newer; standard library only | inventory, lifecycle hook, evolution, history, and evidence scripts |
-| Git | any maintained version | repository diff and final verification |
+| Git | Source binding requires `rev-parse --path-format=absolute`, `worktree list --porcelain -z` and ordinary commit/tree/index plumbing; verified with Git 2.54.0 on macOS; missing features fail closed | repository diff, temporary-index patch/reverse checks, and final verification |
 | ripgrep (`rg`) | optional but recommended | fast text and stale-path checks |
+
+Promotion binding requires an explicit ordinary Git checkout, full local base/candidate commit objects, and writable temporary storage outside the checkout/Git directory. It does not fetch missing commits or install Git. Temporary storage is selected without probing writes: a preconfigured Python temporary directory, otherwise the first of `TMPDIR`/`TEMP`/`TMP`, otherwise `/tmp` on POSIX. Windows requires an explicit temporary directory. An unsafe or missing choice is refused without falling back to the checkout. Source bytes must match Git exactly; line-ending conversions, sparse/hidden index state and unsupported tree modes hold for explicit review.
 
 `super-repo-pedant` has no third-party Python package and no model- or harness-specific dependency. Do not run `pip install` for this skill.
 
