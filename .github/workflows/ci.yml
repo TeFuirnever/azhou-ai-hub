@@ -126,13 +126,6 @@ jobs:
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
             Native/CodexSkinDriver.swift -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
-      - name: Run pure wallpaper validation
-        working-directory: packages/codex-startup-animation
-        run: |
-          mkdir -p .build
-          xcrun --sdk macosx swiftc Native/Wallpaper.swift Native/WallpaperValidationTests.swift \
-            -o .build/wallpaper-validation-tests -framework AppKit
-          .build/wallpaper-validation-tests
 
   agent-skin-unit-coverage:
     name: Agent Skin full production UT coverage

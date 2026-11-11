@@ -6,7 +6,7 @@
 - Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
 
 - [`docs/skill-standard.md`](docs/skill-standard.md) is the project authority for every skill's package, setup, brand lifecycle, evidence, evaluation, evolution, and closeout.
-- [`docs/integrations.md`](docs/integrations.md) governs the three optional projects under `packages/`. Maintain their canonical package sources, preserve original-import provenance, and fingerprint current `runtime_paths` inputs for each plan. Keep native installation ownership and installation/discovery/invocation evidence distinct. They do not become canonical Skills or bypass the orchestrator composition rule.
+- [`docs/integrations.md`](docs/integrations.md) governs the two optional projects under `packages/` (pstack-agent-harness and agent-skin). Maintain their canonical package sources, preserve original-import provenance, and fingerprint current `runtime_paths` inputs for each plan. Keep native installation ownership and installation/discovery/invocation evidence distinct. They do not become canonical Skills or bypass the orchestrator composition rule.
 - For Agent Skin local installation, source recovery, or installed-version checks, read [the three-host local install SOP](packages/agent-skin/docs/local-install-sop.md) first.
 - Keep every canonical skill independently installable under `skills/<canonical-name>/`; project-local engineering workflows remain in `.agents/skills/`. Keep development-only evaluation material under repository-level `benchmarks/`.
 - `README.md` is the English public entry and `README.zh-CN.md` its Chinese reader mirror. Material product, install, evidence, compatibility, security, or license changes update both in one commit.

@@ -109,7 +109,7 @@ Agent Skin 提供显式[壁纸重试](packages/agent-skin/README.md#wallpaper-re
 
 原始 startup-animation 来源目前没有已记录的开源授权。单独署名的 Dream 图片解析器采用 MIT 许可，但这一授权不覆盖 Agent Skin 的其他部分。Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。个人素材留在 Git 之外。2026-10-25 验收报告和 [2026-10-26 本地交接](evidence/optional-integrations-local-handoff-2026-10-26.md)只描述当时检查的输入与宿主，不代表当前安装归属；维护或迁移前须分别核查已安装 App 和 Pet 的回执。合成适配器测试及过去的宿主观察不能证明后续构建已完成完整冷启动、无障碍、视觉或用户验收。
 
-2026-10-26 的 Pet 回执指向保留的 `codex-startup-animation` 源目录；将源码复制到 Agent Skin 不会转移 Pet 属主。维护前核查当前 Pet 回执，并在必要的接管经过审阅前保留旧源目录。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
+2026-10-26 的 Pet 回执指向旧 `codex-startup-animation` 源目录；将源码复制到 Agent Skin 不会转移 Pet 属主。该旧源目录已于 2026-11-12 在接管经审阅后删除，现有回执按维护者记录在案的决定作为指向已删根的孤儿回执存续，Pet 本身自包含、继续可用。维护前核查当前 Pet 回执；受维护的 Pet 工具链现仅存于 Agent Skin。详见[Pet 维护边界](docs/integrations.md#pet-maintenance-after-the-import)。安装字节核验不能证明宿主已选择或播放。
 
 Pet 输入、审阅、候选选择与恢复规则统一见 [Pet 操作说明](packages/agent-skin/docs/codex-pet.md)。
 

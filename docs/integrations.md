@@ -4,7 +4,7 @@ The twelve canonical Skills under `skills/` keep their existing independent inst
 
 The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md) and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The 2026-10-26 local App and Pet handoff receipts bind `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. Later installation ownership must be checked against the current App and Pet receipts separately. Keep any source root needed by those receipts and recovery until an explicitly reviewed handoff verifies each owner.
+The 2026-10-26 local App and Pet handoff receipts bound `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. That required handoff was completed on 2026-11-12 by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval ([receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)): the tool's designed rejection was accepted as final, the installed Pet receipt remains an orphan pointing at the deleted root while the Pet itself stays self-contained and usable, and the legacy root was then deleted. Installation ownership is still checked against the current App and Pet receipts separately.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
@@ -144,52 +144,23 @@ For the test entry, use `test-uninstall --workspace ...`, then repeat with `--ap
 
 ### Pet maintenance after the import
 
-The retained `packages/codex-startup-animation/` source carries `pet/theme.json`, `tools/manage-codex-pet.py` and its isolated tests for the existing Pet owner. Agent Skin maintains its own Pet manager implementation without assuming that installation or its private state; its current contracts live in the [Agent Skin Pet runbook](../packages/agent-skin/docs/codex-pet.md). The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand. Existing legacy-source maintenance follows the [legacy-source runbook](../packages/codex-startup-animation/docs/codex-pet.md).
+The Pet toolchain — `tools/manage-codex-pet.py`, `tools/import-codex-pet.py`, their runbook and isolated tests — is maintained only in [Agent Skin](../packages/agent-skin/README.md); its current contracts live in the [Agent Skin Pet runbook](../packages/agent-skin/docs/codex-pet.md). The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand.
 
-From the Hub root, these commands inspect state or run isolated tests:
+The legacy `packages/codex-startup-animation/` root was deleted on 2026-11-12. Its installed-receipt ownership handoff was completed by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval on 2026-11-12 ([handoff receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)); the tool's designed rejection was accepted as final, so the installed Pet receipt remains an orphan pointing at the deleted root while the installed Pet stays self-contained and usable. A future Pet installation from Agent Skin follows the runbook's native prepare/generate/review chain; remove the old install the native way first, because ordinary `install` refuses a receipt owned by another `projectRoot`. Historical legacy-source maintenance followed the legacy runbook that Git history now carries.
 
-```sh
-python -B packages/codex-startup-animation/tools/manage-codex-pet.py status
-python -B packages/codex-startup-animation/tools/test-codex-pet.py
-```
-
-A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. Its `status` can report invalid source/candidate state or `unknown-target` for an existing Pet whose receipt belongs to the old `projectRoot`. Those results do not establish that the old installation is damaged. The top-level status command is an inspection result, not a readiness or host-activation verdict. Likewise, `native-check` requires that selected package root's build payload; a missing payload does not diagnose an installation built elsewhere.
-
-Use explicitly authorized private inputs and revalidate their frozen candidate/review chain before considering synchronization. A changed theme requires generation and renewed review; `sync` never generates images. Current Pet revision inputs are the two configured private images, `style.css` and `pet/theme.json`, not every visual file. Keep the old root and installation receipts intact until the handoff and recovery checks pass; rewriting `projectRoot` or copying `.local` does not create a verified installation transfer.
-
-To reuse an existing reviewed candidate, first preserve the old working tree and its private candidate/frozen-input evidence. The separate importer uses this package's validator and packaging code; `--from-project` selects data, not another implementation:
+From the Hub root, these commands inspect state or run the isolated tests at the maintained home:
 
 ```sh
-PET_SOURCE=/absolute/original-project
-PET_TARGET=/absolute/hub/packages/codex-startup-animation
-python -B "$PET_TARGET/tools/import-codex-pet.py" \
-  --from-project "$PET_SOURCE" --project-root "$PET_TARGET"
-# Review the current plan, then repeat with its exact planId:
-python -B "$PET_TARGET/tools/import-codex-pet.py" \
-  --from-project "$PET_SOURCE" --project-root "$PET_TARGET" \
-  --apply --plan-id PLAN_ID
+cd packages/agent-skin
+python -B tools/manage-codex-pet.py status
 ```
-
-The plan is read-only. Apply requires an unchanged source and target, a fully validated selected source candidate, matching public theme inputs, and absent or byte-identical private images. It refuses conflicting files and unknown target state. An owned interrupted import can be resumed after reviewing a new plan; unrelated state is never deleted to make room. The result is a newly validated, target-owned **candidate** with retained source provenance and original atlas/QA bytes. It does not call image generation, install or select a Pet, or transfer the installed receipt.
-
-For an existing installed Pet whose receipt still names the old project, the package manager offers an explicit one-time `handoff` from the final Hub package path:
 
 ```sh
-python -B "$PET_TARGET/tools/manage-codex-pet.py" handoff \
-  --project-root "$PET_TARGET" --previous-project-root "$PET_SOURCE"
-python -B "$PET_TARGET/tools/manage-codex-pet.py" status --project-root "$PET_TARGET"
+python -B packages/agent-skin/tools/test-codex-pet.py
+python -B packages/agent-skin/tools/test-import-codex-pet.py
 ```
 
-It verifies the old selected candidate, the installed package and the Hub candidate match by theme, atlas and manifest digest; then uses the existing locked installation transaction to issue a Hub-owned receipt. Ordinary `install` and `sync` remain strict about project ownership. The old source and evidence should remain until Hub status verifies the installed bytes. A successful handoff still requires separate real host selection and playback acceptance.
-
-This is an initial import or a retry of the same recorded operation. It does not merge an unrelated existing candidate store or silently switch to a changed source. After import, normal candidate updates remain with the package's existing preparation, review and packaging workflow.
-
-`matchesSelectedPackage` compares installed bytes with the tool's selected candidate, not the host's selected avatar. `pending-refresh-selection` is the tool's fixed runtime boundary; real selection, playback and direction behavior require separate observation. Private inputs, candidates and installation receipts remain local. The standard-library repository gate runs the native installer suite; the Pillow-dependent Pet and importer suites run separately in the macOS CI leg and should both run for Pet runtime changes:
-
-```sh
-python -B packages/codex-startup-animation/tools/test-codex-pet.py
-python -B packages/codex-startup-animation/tools/test-import-codex-pet.py
-```
+A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. `status` is an inspection result, not a readiness or host-activation verdict; invalid source/candidate state or `unknown-target` for a receipt bound to another `projectRoot` does not establish that an installation is damaged. Private inputs, candidates and installation receipts remain local. The Pillow-dependent Pet and importer suites above run in the macOS CI leg and should both run for Pet runtime changes.
 
 ## Why these checks are necessary
 

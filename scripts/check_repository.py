@@ -1017,6 +1017,7 @@ def assembled_exists(root: Path, resolved: Path) -> bool:
 # these roots for evidence/ files instead of rewriting frozen records.
 RETIRED_PACKAGE_ROOTS = (
     "packages/agent-orchestration-kit/",
+    "packages/codex-startup-animation/",
 )
 
 
