@@ -93,10 +93,10 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 ### 退役面
 
-三个面已于 2026-11-11 随一次物理删除的切割离开本仓库：维护范围收敛到维护者实际支持的面——此前的每次改动仍要为不再打算支持的代码支付门禁、文档与评审成本。最后支持版本与已装用户处置如下：
+三个面已于 2026-11-11 至 2026-11-12 的一次物理删除切割中离开本仓库：维护范围收敛到维护者实际支持的面——此前的每次改动仍要为不再打算支持的代码支付门禁、文档与评审成本。最后支持版本与已装用户处置如下：
 
 - **agent-skin 的 ZCode 宿主层**——最后支持版本 `0.9.0/build 41`。ZCode driver、页面适配器、测试、文档与 CI 线已删除；Codex 与 DSH 宿主及共享核心行为不变。已安装的 ZCode 皮肤作为冻结安装继续可用，但不再有新构建；退出时恢复安装事务保留的原始启动器，或连同回执一并移除阿舟入口。
-- **Agent Orchestration Kit（model router）**——从未发布（`version: unreleased`），末态即 2026-11-11 删除的目录树；model-router Hub 入口与共存判定一并移除，不留探测 stub。机器上仍存在的安装不再由本仓库管理：请使用保留的切割前字节中该包自带的卸载路径移除。**装过 model-router 的用户请先卸载它再安装 pstack**——pstack 适配器会拒绝仍在 `config.toml` 中提及已退役 router 且无 Hub 归属回执的目标。
+- **Agent Orchestration Kit（model router）**——从未发布（`version: unreleased`），末态即 2026-11-12 删除的目录树；model-router Hub 入口与共存判定一并移除，不留探测 stub。机器上仍存在的安装不再由本仓库管理：请使用保留的切割前字节中该包自带的卸载路径移除。**装过 model-router 的用户请先卸载它再安装 pstack**——pstack 适配器会拒绝仍在 `config.toml` 中提及已退役 router 且无 Hub 归属回执的目标。
 - **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，经维护者审阅的回执属主交接后于 2026-11-12 删除。受维护的 Pet 工具链在 [agent-skin](packages/agent-skin/README.md)；已安装的 App 或 Pet 继续可用，历史工具链可从保留的切割前字节取回。
 
 旧 release 与 tag 全量保留。两个退役包合入仓库的时间晚于最新已发布 release，因此对它们而言，切割前的 Git 修订（可由[来源记录](docs/integration-provenance.md)各历史行记载的删除日期与溯源 commit 定位）是具体的卸载锚点。已安装态迁移依赖的持久化/协议标识按历史原名冻结；该取舍记录于 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md)。

@@ -1,6 +1,6 @@
 # Agent Skin DeepSeek Harness plugin contract
 
-For local installation, shared-profile updates and reload checks, start with the [three-host local install SOP](local-install-sop.md).
+For local installation, shared-profile updates and reload checks, start with the [two-host local install SOP](local-install-sop.md).
 
 This page is reference for the `azhou-agent-skin` DSH plugin package. It records what the package contains, how the client module behaves, and what is deliberately absent. Build and evidence commands live in the [assembly receipt](../../../evidence/dsh-agent-skin-assembly-2026-11-05.md).
 

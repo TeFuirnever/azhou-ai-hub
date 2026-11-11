@@ -82,7 +82,7 @@ jobs:
         working-directory: packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/scripts
         run: bun test
 
-  startup-animation-macos:
+  agent-skin-macos:
     name: Startup and Pet validation
     runs-on: macos-latest
     timeout-minutes: 20
@@ -245,7 +245,7 @@ jobs:
       - policy
       - verify-windows
       - pstack-native
-      - startup-animation-macos
+      - agent-skin-macos
       - agent-skin-unit-coverage
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -255,7 +255,7 @@ jobs:
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
-      ANIMATION_RESULT: ${{ needs.startup-animation-macos.result }}
+      ANIMATION_RESULT: ${{ needs.agent-skin-macos.result }}
       AGENT_SKIN_COVERAGE_RESULT: ${{ needs.agent-skin-unit-coverage.result }}
     steps:
       - name: Require every CI gate
