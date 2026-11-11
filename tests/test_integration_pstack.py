@@ -335,16 +335,21 @@ class PstackIntegrationTest(unittest.TestCase):
         self.assertFalse((self.home / "native-operations.jsonl").exists())
         self.assertFalse(Path(plan["snapshot"]).exists())
 
-    def test_foreign_installation_and_router_are_not_adopted(self):
+    def test_foreign_installation_is_not_adopted(self):
         self.home.mkdir(parents=True)
         (self.home / "foreign-plugin.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(common.IntegrationError, "unowned Codex target"):
             self.plan()
         (self.home / "foreign-plugin.json").unlink()
-        marker = self.home / "agent-orchestration-kit/state.json"
-        marker.parent.mkdir()
-        marker.write_text("{}", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "unrecognized agent-orchestration-kit ownership record"):
+
+    def test_negative_router_mention_is_allowed_but_managed_block_is_rejected(self):
+        self.home.mkdir(parents=True)
+        instructions = self.home / "AGENTS.md"
+        instructions.write_text("Do not invoke astra-orchestrator.\n", encoding="utf-8")
+        self.assertEqual(self.plan()["operation"], "install")
+        config = self.home / "config.toml"
+        config.write_text("# astra-orchestrator router configuration\n", encoding="utf-8")
+        with self.assertRaisesRegex(common.IntegrationError, "router configuration has no Hub ownership receipt"):
             self.plan()
 
     def test_existing_config_symlink_is_not_written_through(self):
@@ -355,15 +360,6 @@ class PstackIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(common.IntegrationError, "must not be symlinks"):
             self.plan()
         self.assertEqual(external.read_text(encoding="utf-8"), "keep = true\n")
-
-    def test_negative_router_mention_is_allowed_but_managed_block_is_rejected(self):
-        self.home.mkdir(parents=True)
-        instructions = self.home / "AGENTS.md"
-        instructions.write_text("Do not invoke astra-orchestrator.\n", encoding="utf-8")
-        self.assertEqual(self.plan()["operation"], "install")
-        instructions.write_text("<!-- ASTRA-LUNA-ORCHESTRATOR:BEGIN -->\nUse the installed astra-orchestrator skill.\n<!-- ASTRA-LUNA-ORCHESTRATOR:END -->\n", encoding="utf-8")
-        with self.assertRaisesRegex(common.IntegrationError, "without its Kit ownership record"):
-            self.plan()
 
     def test_source_cannot_be_used_as_workspace_before_any_write(self):
         with self.assertRaisesRegex(common.IntegrationError, "workspace must be outside"):

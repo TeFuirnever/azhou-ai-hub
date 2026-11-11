@@ -309,7 +309,7 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
             "minimum": ".".join(str(part) for part in MIN_PYTHON),
         },
         "installable_skills": canonical_skills(root),
-        "optional_integrations": ["pstack", "model-router", "agent-skin"],
+        "optional_integrations": ["pstack", "agent-skin"],
         "integration_entry": "python scripts/azhou_hub.py integrations list --json",
         # Keep this list limited to the five portable foundation commands. The
         # receipt-owned lifecycle verbs are intentionally a separate contract.
@@ -1762,7 +1762,7 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     receipt_migration.add_argument("--plan-id")
     receipt_migration.add_argument("--json", action="store_true")
 
-    integrations = subcommands.add_parser("integrations", help="Discover or explicitly select one of three optional integrations", add_help=False)
+    integrations = subcommands.add_parser("integrations", help="Discover or explicitly select one of two optional integrations", add_help=False)
     integrations.add_argument("integration_args", nargs=argparse.REMAINDER)
 
     scope = subcommands.add_parser("scope", help="Report explicit committed and worktree change paths")

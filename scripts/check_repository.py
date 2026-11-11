@@ -263,7 +263,6 @@ VENDORED_ROOTS = (
     "packages/pstack-agent-harness/pstack/",
     "packages/pstack-agent-harness/components/",
     "packages/pstack-agent-harness/harness/",
-    "packages/agent-orchestration-kit/profiles/",
 )
 
 # Skill trees that ship inside an optional package, Hub-authored overlay
@@ -1012,6 +1011,25 @@ def assembled_exists(root: Path, resolved: Path) -> bool:
     return (root / OVERLAY_ROOT / rest).exists()
 
 
+# Package roots removed by a physical retirement decision. Frozen evidence
+# documents are historical text and may still link into the removed trees;
+# Git history is the link target, so the broken-link check allows exactly
+# these roots for evidence/ files instead of rewriting frozen records.
+RETIRED_PACKAGE_ROOTS = (
+    "packages/agent-orchestration-kit/",
+)
+
+
+def _historical_citation(relative: str, resolved: Path, root_resolved: Path) -> bool:
+    if not relative.startswith("evidence/"):
+        return False
+    try:
+        target = resolved.relative_to(root_resolved).as_posix()
+    except ValueError:
+        return False
+    return any(target.startswith(prefix) for prefix in RETIRED_PACKAGE_ROOTS)
+
+
 def check_markdown_links(files: list[Path], root: Path) -> list[str]:
     errors: list[str] = []
     root_resolved = root.resolve()
@@ -1050,6 +1068,8 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
                 errors.append(f"link escapes repository in {path.relative_to(root)}: {target}")
                 continue
             if not assembled_exists(root, resolved):
+                if _historical_citation(relative, resolved, root_resolved):
+                    continue
                 errors.append(f"broken local link in {path.relative_to(root)}: {target}")
     return errors
 
@@ -1207,7 +1227,6 @@ def check_private_startup_artwork(root: Path) -> list[str]:
         [
             "git", "ls-files", "-z", "--cached", "--",
             ":(icase)packages/agent-skin/assets/",
-            ":(icase)packages/codex-startup-animation/assets/private/",
         ],
         cwd=root,
         check=True,

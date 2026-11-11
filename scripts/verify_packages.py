@@ -105,11 +105,6 @@ def main() -> int:
 
     results = [
         run_suite(
-            "model-router package tests",
-            packages["model-router"],
-            ["-m", "unittest", "discover", "-s", "tests"],
-        ),
-        run_suite(
             "agent-skin installer lifecycle tests",
             packages["agent-skin"],
             ["tools/test-install-macos.py"],

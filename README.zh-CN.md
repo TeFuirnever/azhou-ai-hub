@@ -82,12 +82,11 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 
 ## 可选能力接入
 
-三个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十二个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
+两个完整项目位于 `packages/`，保留各自的原生目录、工具链与来源记录。`skills/` 下十二个 canonical Skills 继续使用原有的独立安装和调用合同。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力；ZCode 图形界面调用尚未验收，宿主调用、hook 信任和发布批准仍需独立证据；拟议的 `resume.mjs` 检查点工具尚未交付。 |
-| `model-router` | [Agent Orchestration Kit](packages/agent-orchestration-kit/README.md) | 可选地安装原生 Codex 配置；每个任务只保留一个工作流负责人。 |
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加 ZCode 桌面入口与可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。应用本地化显示名为 `阿舟 AI 实验室 for Codex` / `Azhou AI Lab for Codex`，原生入口仍为 `~/Applications/阿舟 AI 实验室.app`；先验证新入口，再退役已核实归属的旧名入口。使用阿舟 bot 外观入口，中英界面跟随官方应用的语言与深浅色，不另设偏好。“主题与外观”统一展示身份、启动、背景和继承状态，由 `theme-config.json` 定义构建默认值；安装身份需重建安装后生效。build 23 将 Codex 显示名与固定安装文件名分离，Finder 本地化仍跟随 macOS 语言；维护提示跟随系统语言。build 24 在页面内控件可见且可命中之前隐藏 Appearance 备用入口；Home 导航未出现时，备用位置避开 composer，导航出现后回到 Your dot 下方。build 25 兼容 Your dot 按钮位于导航列表包装中的结构。C0 定义共享宿主合同和按操作能力门；build 39 携带钉住桌面 3.17.2.9661 指纹的 ZCode driver；build 38 通过含主区像素护栏的真实宿主生产 UI 验收，原生冷启动入口打开用户日常 profile（2026-11-07 维护者确认）；热附着激活同一实例且无重播（2026-11-08 维护者确认）。build 40 将普通双击启动的全部启动事件落到 `~/Library/Logs/AzhouZCodeStartup/events.jsonl`（Codex 宿主为 `AzhouCodexStartup`），静默失败可读出诊断点与原因。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。ZCode 宿主已有 2026-11-06/07 build 35–38 真实验收回执与 ChatGPT-desktop 一致风格入口。DeepSeek Harness 形态以 `azhou-agent-skin` 插件包交付（`tools/build-dsh-plugin.py`），本地组装确定、校验器通过，已在一次性 profile 上用随应用打包的 CLI 验证官方安装路径（安装、清单、移除、重装与层栈组合），并在真实 DSH web 客户端与真实桌面 carrier 上完成机器级验证：控制器注册、动画自然收束、主题跟随宿主、默认壁纸应用并经用户验收（2026-11-07）、`Azhou appearance` 设置行出现在宿主设置弹窗且同一面板嵌入、阿舟侧栏胶囊为该设置行让路而移除（[组装回执](evidence/dsh-agent-skin-assembly-2026-11-05.md)、[安装回执](evidence/live-dsh-plugin-install-2026-11-05.md)、[宿主回执](evidence/live-dsh-plugin-host-2026-11-05.md)、[设置行回执](evidence/live-dsh-settings-section-2026-11-07.md)）。壁纸导入对话框与插件管理页展示仍开放；生产 desktop profile 经 profile workspace 符号链接实时运行（2026-11-06 起）。保留 12 秒动画及现有设置事务；Hub adapter 的状态检查保持只读。安装归属需单独核验；程序再分发尚未获授权。 |
 
 更新本机 Codex、ZCode 和 DSH 的 Agent Skin 时，按 [本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行；分别记录安装文件、实际加载版本与实机验证，不代表已有统一安装器或发行渠道。
@@ -95,7 +94,6 @@ Setup 的 dry-run 会输出确定性的 `planId`；审核后必须使用 `--appl
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
@@ -103,7 +101,7 @@ Agent Skin 提供显式[壁纸重试](packages/agent-skin/README.md#wallpaper-re
 
 当前源码增加设置键盘隔离、跟随主题的背景预览、可操作的图片错误提示，以及启动壁纸失败时的页面内重试。能从有限文件头解析尺寸的图片会在解码前检查；最终解码和尺寸校验仍然保留。真实宿主、无障碍和用户验收与自动检查分别记录。
 
-`python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。两个编排包同时交付任务归属合同——普通任务沿用 Kit 命名角色，用户明确选定的 pstack 工作流负责该任务，并以显式模型与 effort 派发且不选命名角色——并在隔离 Codex 环境留有有界派发回据（[证据](evidence/pstack-orchestrator-dispatch-2026-10-26.md)）。两个包也可共享同一受控 Codex 环境：Hub 与 Kit 两个入口共用同一兼容判定（原生注册加上模型表 `session hook: off` 行共同决定），其安装生命周期既经确定性测试验证，也在已记录的 Codex 客户端上原生验证过——一次性环境中的两种安装顺序、重复安装、armed 目标转换与两种移除顺序（[原生验收](evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)）；五个任务边界行为——普通任务默认路径、同任务追问保持负责人、pstack 任务完成后恢复默认规则、中途切换先处理在途子代理、显式模型被拒时明确阻塞并报告原因——已在一次性受控环境中真机观测（[live 会话记录](evidence/pstack-orchestrator-live-sessions-2026-10-27.md)）。每个入口也都具备属主明确的退出方式——Hub `uninstall-plan`/`uninstall` 与 Kit `--uninstall`——只恢复各自记录的受管范围，保留另一模块与用户后续修改，并以差异报告代替强制覆盖。既有安装——Kit 加共享 pstack Skills、原生插件或本地改过的共享 Skills——先经只读 `transition-plan` 入口审阅：逐状态标明实际来源、内容差异、owner 与恢复依据；仅当原生注册表能把当前注册解析回 Hub 回据的快照时才给出可应用的转换；绝不凭同名或字节相同接管未知安装；该入口本身不授权对主环境应用任何变更。
+`python scripts/azhou_hub.py integrations ...` 仍是稳定的操作入口。命令默认使用仓库内对应项目；可选 `--source` 只能断言其规范包路径。计划会为当前 `runtime_paths` 输入计算指纹，并把私有快照和恢复回据存入被忽略的 `.azhou/hub/`。详见[接入操作说明](docs/integrations.md)、[来源说明](docs/integration-provenance.md)和[支持矩阵](docs/support-matrix.md#optional-integrations)。pstack 的 coexistence 安装只拥有一个极窄变更——目标模型表的 `session hook: off` 行，其余字节一律保留——其只读 `transition-plan` 入口先审阅既有安装再谈任何变更：逐状态标明实际来源、内容差异、owner 与恢复依据；仅当原生注册表能把当前注册解析回 Hub 回据的快照时才给出可应用的转换；绝不凭同名或字节相同接管未知安装；该入口本身不授权对主环境应用任何变更。Agent Orchestration Kit 的 model-router 入口已退役并物理删除，其历史回据仅作证据保留（[派发](evidence/pstack-orchestrator-dispatch-2026-10-26.md)、[原生验收](evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)、[live 会话](evidence/pstack-orchestrator-live-sessions-2026-10-27.md)）。
 
 `pstack-azhouzhou` 0.15.37 当前为**候选版本**，统一从 Hub 维护的本地项目包交付；维护目标为 Codex、Claude Code、MiMo Code（`mimo`）、zcode 和 DeepSeek Harness（`dsh`）。Codex／Claude Code 使用原生插件，zcode 使用仅含 commands 的插件与共享 Skills；MiMo 和 DeepSeek 目前仅有共享 Skills 的发现证据，不声称存在原生 pstack 插件或完成模型调用验收。[安装说明](packages/pstack-agent-harness/README.md#install)使用本地包来源；上游链接保留作署名和源码更新依据。Codex 的 `--codex-home` 决定插件装入哪份配置；自定义目录需要通过对应的 `CODEX_HOME` 启动 Codex，不会自动在默认桌面配置中启用插件。
 
