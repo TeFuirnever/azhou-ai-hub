@@ -195,6 +195,10 @@ The Hub root license does not cover either original package source; do not publi
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
+Read-only host inventory on 2026-11-11 found the `0.15.37` pstack plugin **listed as installed** by Codex and Claude Code. This is not source-byte attestation, a successful live pstack workflow, verified SessionStart trust, or release approval. See the [dated acceptance inventory](evidence/pstack-host-readonly-inventory-2026-11-11.md) and [mirror GAP audit](docs/research/2026-11-11-pstack-upstream-gap.md); the pristine upstream source and 23-patch queue are unchanged.
+
+During Hub pstack removal, keep the target `CODEX_HOME` free of concurrent native plugin and marketplace changes; the plan states this requirement but cannot verify other processes.
+
 ### Retired surfaces
 
 Three surfaces left this repository in one physically deleted cut across 2026-11-11 and 2026-11-12: the maintained scope converged to the surfaces the maintainer actually supports, while every change was still paying gates, docs and review surface for code that no longer shipped as intended support. Last supported versions and what installed users do now:
