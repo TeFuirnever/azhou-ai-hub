@@ -353,7 +353,7 @@ def _read_pinned_file_digest(handle, child_name, parent_fd, entry_stat):
     错误文案是既有回归的断言锚点，措辞不可改动。
     """
     opened = os.fstat(handle)
-    if not _same_origin(entry_stat, opened):
+    if not stat.S_ISREG(opened.st_mode) or not _same_origin(entry_stat, opened):
         raise RuntimeError('隔离文件在核验期间发生变化。')
     hasher = hashlib.sha256()
     while chunk := os.read(handle, 64 * 1024):

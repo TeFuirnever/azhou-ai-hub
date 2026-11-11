@@ -37,7 +37,9 @@ const MAIN_SELECTOR = '[data-app-shell-main-surface],[data-app-shell-page-surfac
 const SURFACE_SELECTOR = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
 const WORKSPACE_SELECTOR = '[data-app-shell-main-surface] :is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])';
 const THREAD_FOOTER_SELECTOR = '[data-app-shell-main-surface] [data-thread-scroll-footer]';
-const FOOTER_COMBINED_SELECTOR = THREAD_FOOTER_SELECTOR + ',' + THREAD_FOOTER_SELECTOR + ' > ' + generatedLayer('_background_');
+const FOOTER_COMBINED_SELECTOR = THREAD_FOOTER_SELECTOR
+  + ',' + THREAD_FOOTER_SELECTOR + ' > ' + generatedLayer('_background_')
+  + ',' + THREAD_FOOTER_SELECTOR + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-');
 const STICKY_SHADE_SELECTOR = '[data-app-shell-main-surface] .thread-scroll-container .pointer-events-none.sticky.bottom-0';
 const FADE_SELECTOR = STICKY_SHADE_SELECTOR + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_');
 const TOP_FADE_SELECTOR = '[data-app-shell-main-surface] ' + generatedLayer('_MainContentTopFade_');
