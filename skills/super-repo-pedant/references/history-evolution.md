@@ -102,7 +102,7 @@ Invalid/failed processing retains the live signals. A successful archive is immu
 
 ## 3. Build an isolated candidate
 
-Work on an `auto-optimize` branch or copied skill directory. Change the smallest instruction, pointer, reference, or deterministic script that addresses the hypothesis. Keep the installed live skill unchanged.
+Work in the project-authorized isolated workspace (a Treehouse lease and task branch for this repository); keep one candidate commit directly on its exact base. Change the smallest instruction, pointer, reference, or deterministic script that addresses the hypothesis. Keep the installed live skill unchanged.
 
 Run structural validation and script tests. Execute baseline and candidate against identical isolated fixtures with equivalent permissions.
 
@@ -121,12 +121,25 @@ Use this paired evolution protocol:
 Represent the decision with `assets/evolution-evaluation.schema.json`, then validate all gates:
 
 ```bash
+# First describe the real bytes; this does not approve them.
+python skills/super-repo-pedant/scripts/manage_evolution.py bind \
+  --project /absolute/clean-checkout --candidate /absolute/local/candidate.json \
+  --patch /absolute/local/candidate.diff \
+  --base-commit "$BASE_COMMIT" --target-commit "$CANDIDATE_COMMIT"
+
+# Review the exact diff and returned binding. Bind the evaluation and human
+# approval to source_binding_sha256; take EXPECTED_BINDING from that approval.
 python skills/super-repo-pedant/scripts/manage_evolution.py gate \
-  --candidate .azhou/super-repo-pedant/evolution/candidates/<candidate-id>.json \
-  --evaluation /absolute/local/evaluation.json
+  --project /absolute/clean-base-checkout --candidate /absolute/local/candidate.json \
+  --patch /absolute/local/candidate.diff --evaluation /absolute/local/evaluation.json \
+  --base-commit "$BASE_COMMIT" --target-commit "$CANDIDATE_COMMIT" \
+  --expected-binding-sha256 "$EXPECTED_BINDING"
+
+# After the separately authorized Git application/commit, repeat the same
+# arguments against the applied checkout using verify-applied instead of gate.
 ```
 
-The gate requires named `schema`, `privacy`, `authorization`, `size`, and `regression` checks; odd `N>=3` unique paired judges with reversed A/B order; a candidate majority, meaning support from more than half of all judges (a tie does not support); no safety regression and no `holds` entry still marked `unresolved` (each hold carries a `resolved`/`unresolved` status and a reason); and human approval matching the exact diff SHA-256. It never applies the diff.
+The gate requires named `schema`, `privacy`, `authorization`, `size`, and `regression` checks; odd `N>=3` unique paired judges with reversed A/B order; a candidate majority, meaning support from more than half of all judges (a tie does not support); no safety regression and no `holds` entry still marked `unresolved` (each hold carries a `resolved`/`unresolved` status and a reason); and human approval matching the exact diff and actual source binding. It never applies the diff. See the current binding/application boundary and unsupported-source cases in evolution-contract.md; do not interpret promotable=true as proof of a future application.
 
 ## 5. Record the evolution
 

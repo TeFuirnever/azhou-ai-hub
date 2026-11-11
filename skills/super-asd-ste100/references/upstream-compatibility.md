@@ -1,10 +1,10 @@
 # Upstream compatibility
 
-This map records the imported `super-asd-ste100` baseline at commit `32511c6992ecb5f1971e46a2943f2e6adceedafe`. Preserve every non-conflicting capability during updates.
+This map records the imported upstream `asd-ste100` baseline at commit `32511c6992ecb5f1971e46a2943f2e6adceedafe`. Preserve every non-conflicting capability during updates.
 
 | Upstream capability | Local status | Evidence / difference |
 |---|---|---|
-| `super-asd-ste100` package name and skill identity | preserved | frontmatter `name: super-asd-ste100` and package folder |
+| Upstream `asd-ste100` package identity | locally branded | the upstream name remains source identity; local frontmatter and folder are `super-asd-ste100` under the Hub canonical naming contract |
 | Description trigger surface (disambiguate, STE100 rewrite, controlled-language rewrite, and the creative/marketing exclusion) | preserved verbatim | `SKILL.md` frontmatter description |
 | Strict / STE-flavored two-mode selection | preserved verbatim | `SKILL.md` "Two Modes" |
 | Structural rule set with the lexical direction-of-travel split | preserved verbatim | `SKILL.md` "Core Rewrite Rules" |

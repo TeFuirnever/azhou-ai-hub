@@ -43,9 +43,9 @@
     .thread-scroll-container { height:100%; overflow-x:hidden; overflow-y:auto; }
     .fixture-thread-content { display:flex; flex-direction:column; min-height:100%; }
     .fixture-scroll-bottom { position:sticky; bottom:0; margin-top:auto; width:100%; height:var(--fixture-composer-height); flex-shrink:0; z-index:10; pointer-events:none; }
-    ._background_fixture { position:absolute; inset-inline:0; z-index:0; pointer-events:none; }
+    :is(._background_fixture, .background-fixture) { position:absolute; inset-inline:0; z-index:0; pointer-events:none; }
     ._fade_fixture { top:-32px; height:32px; background-image:linear-gradient(to top in oklab,var(--color-surface),transparent); }
-    ._surface_fixture { inset-block:0; background:var(--color-surface); }
+    :is(._surface_fixture, .surface-fixture) { inset-block:0; background:var(--color-surface); }
     [data-thread-scroll-footer] { position:absolute; inset-inline:0; bottom:0; height:var(--fixture-composer-height); padding-bottom:16px; z-index:20; pointer-events:none; }
     .fixture-composer-content { position:relative; height:100%; z-index:10; pointer-events:none; }
     .composer { pointer-events:auto; --composer-layout-surface-background:var(--color-background-composer-surface); position:relative; margin-left:clamp(28px,7vw,120px); width:min(680px,calc(100% - 72px)); height:100%; padding:12px 17px; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:17px; background:var(--composer-layout-surface-background); box-shadow:0 8px 30px #00000012; }
@@ -75,7 +75,7 @@
       </div>
       </div>
       <div data-thread-scroll-footer="true">
-        <div class="_background_fixture _surface_fixture pointer-events-none absolute inset-x-0 z-0 bottom-0 bg-surface"></div>
+        <div id="fixture-footer-plate" class="_background_fixture _surface_fixture pointer-events-none absolute inset-x-0 z-0 bottom-0 bg-surface"></div>
         <div class="fixture-composer-content" data-pip-obstacle>
           <div class="composer" data-composer-layout="root" data-composer-surface-variant="default"><div class="fixture-editor vertical-scroll-fade-mask" data-composer-input-layout="true"><textarea aria-label="示例输入区" placeholder="继续描述你的想法…"></textarea></div><footer><span>本地模拟 · 输入框保留不透明表面</span><button aria-label="示例发送按钮">↑</button></footer></div>
         </div>

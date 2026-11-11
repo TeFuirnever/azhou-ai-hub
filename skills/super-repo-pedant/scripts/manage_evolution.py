@@ -17,10 +17,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+# Keep read-only CLI startup from writing caches into an installed package.
+sys.dont_write_bytecode = True
+
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 import azhou_runtime_state
+import promotion_binding
 
 
 SIGNAL_SCHEMA = "super-repo-pedant.evolution-signal.v1"
@@ -369,10 +373,13 @@ def cmd_propose(args: argparse.Namespace) -> int:
         state_root = safe_state_root(project, args.state_root)
         source_paths = [state_root / "signals.jsonl", *[path.expanduser().resolve() for path in args.include_signal_file]]
         signals, parse_errors = read_jsonl(source_paths)
+        project_id = project_identity(project)
         matching = [
             signal
             for signal in signals
-            if signal["mechanism"] == args.mechanism and signal["outcome"] in {"partial", "failure"}
+            if signal["mechanism"] == args.mechanism
+            and signal["outcome"] in {"partial", "failure"}
+            and (args.scope == "global" or signal["project_id"] == project_id)
         ]
         sessions = {signal["session_digest"] for signal in matching}
         projects = {signal["project_id"] for signal in matching}
@@ -609,6 +616,7 @@ def preference_summary(votes: list[dict[str, Any]]) -> tuple[int, int, int]:
 
 
 def validate_promotion(candidate: Any, evaluation: Any) -> list[str]:
+    """Validate record structure only; cmd_gate verifies actual source/patch bytes."""
     errors = validate_candidate_structure(candidate)
     if not isinstance(candidate, dict):
         return errors
@@ -683,13 +691,48 @@ def load_json(path: Path) -> Any:
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
+    """Bind real source/patch bytes; structural metadata alone cannot promote."""
+    result: dict[str, Any] = {"promotable": False, "applied_verified": False}
+    errors: list[str] = []
     try:
-        candidate = load_json(args.candidate.expanduser().resolve())
-        evaluation = load_json(args.evaluation.expanduser().resolve())
-        errors = validate_promotion(candidate, evaluation)
-    except EvolutionError as exc:
-        errors = [str(exc)]
-    print(json.dumps({"promotable": not errors, "errors": errors}, ensure_ascii=False, indent=2))
+        paths = [args.candidate, args.patch]
+        if args.command != "bind":
+            paths.append(args.evaluation)
+        raw = [promotion_binding.read_regular(path) for path in paths]
+        candidate = promotion_binding.parse_record(raw[0])
+        errors = validate_candidate_structure(candidate)
+        evaluation = None
+        if args.command != "bind":
+            evaluation = promotion_binding.parse_record(raw[2])
+            errors += validate_promotion(candidate, evaluation)
+        if not errors:
+            actual = promotion_binding.describe(args.project, raw[0], raw[1],
+                                                args.base_commit, args.target_commit, args.command)
+            if evaluation is not None:
+                anchor = args.expected_binding_sha256
+                if not DIGEST_RE.fullmatch(anchor) or anchor != actual["binding_sha256"]:
+                    errors.append("actual source binding differs from the external approval anchor")
+                if evaluation.get("diff_sha256") != actual["binding"]["diff_sha256"]:
+                    errors.append("actual patch bytes differ from evaluated diff")
+                if evaluation.get("source_binding_sha256") != actual["binding_sha256"]:
+                    errors.append("evaluation is not bound to actual source and patch")
+                approval = evaluation["human_approval"]
+                if approval.get("source_binding_sha256") != actual["binding_sha256"]:
+                    errors.append("human approval is not bound to actual source and patch")
+            if any(promotion_binding.read_regular(path) != value for path, value in zip(paths, raw)):
+                errors.append("input evidence/patch changed during verification")
+            if not errors:
+                result.update(actual)
+                result["promotable"] = args.command == "gate"
+                result["applied_verified"] = args.command == "verify-applied"
+                if evaluation is not None:
+                    result["evaluation_sha256"] = promotion_binding.sha256(raw[2])
+                result["claim_limit"] = "Content binding only; not human identity proof, a lock, or authority to edit live skills."
+    except (EvolutionError, promotion_binding.BindingError, OSError, UnicodeError,
+            ValueError, TypeError, AttributeError, KeyError, StopIteration, RecursionError) as exc:
+        errors = [str(exc) or "malformed promotion evidence"]
+    result["errors"] = errors
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 1 if errors else 0
 
 
@@ -766,10 +809,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     archive.add_argument("--candidate", required=True, type=Path)
     archive.set_defaults(func=cmd_archive)
 
-    gate = subparsers.add_parser("gate", help="validate deterministic, paired, safety, and human promotion evidence")
-    gate.add_argument("--candidate", required=True, type=Path)
-    gate.add_argument("--evaluation", required=True, type=Path)
-    gate.set_defaults(func=cmd_gate)
+    for command, help_text in (
+        ("bind", "describe actual candidate/patch/base/target binding without approving it"),
+        ("gate", "verify actual patch and clean base against external exact approval"),
+        ("verify-applied", "verify the actual committed result against the same approval"),
+    ):
+        gate = subparsers.add_parser(command, help=help_text)
+        gate.add_argument("--project", required=True, type=Path)
+        gate.add_argument("--candidate", required=True, type=Path)
+        gate.add_argument("--patch", required=True, type=Path)
+        gate.add_argument("--base-commit", required=True)
+        gate.add_argument("--target-commit", required=True)
+        if command != "bind":
+            gate.add_argument("--evaluation", required=True, type=Path)
+            gate.add_argument("--expected-binding-sha256", required=True,
+                              help="external human-approved binding; do not infer from untrusted evidence")
+        gate.set_defaults(func=cmd_gate)
 
     health = subparsers.add_parser("health", help="compute investigation-only 7d/30d health trends")
     health.add_argument("--project", required=True, type=Path)

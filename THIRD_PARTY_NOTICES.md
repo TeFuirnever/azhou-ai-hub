@@ -22,13 +22,17 @@ Animation character art, scene data, wallpaper and icon source are separate priv
 - License: [MIT](LICENSES/DeepSeek-Harness-MIT.txt)
 - Update path: compare the pinned source and tests at an immutable revision, review changed behavior and notices, adapt only compatible changes, and run the Hub scope and repository gates.
 
+## Project-local engineering workflows
+
+The tracked workflows under `.agents/skills/` adapt [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/tree/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159) (MIT) and [ZCode](https://github.com/zai-org/ZCode/tree/a9fe401eede6e6e5e01be9048679c206fe6f02d9) (Apache-2.0). Each workflow retains its upstream license, applicable notice, source pin and adaptation boundary. The GIF encoder and its regression tests are derived from the DeepSeek Harness source at that pin. To update, compare the pinned source and its license to the proposed revision, review the local adaptation and run the relevant checks.
+
 ## Azhou brand assets
 
 `assets/github/social-preview.png` is an Azhou-maintained brand asset generated in-house on 2026-08-23 with Codex image generation and resized to 1280×640 for GitHub previews. This version intentionally contains no third-party logos or copied assets. When replacing it, repeat visual and rights review, keep the file below GitHub's 1 MB limit, and verify the separate GitHub Social Preview setting; the README reference is not that platform receipt.
 
 ## Super Repo Pedant baseline
 
-`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`322346ded8129436b3f64707789a73e732ae24d9`](https://github.com/KKKKhazix/Khazix-Skills/commit/322346ded8129436b3f64707789a73e732ae24d9) (self-declared v3.0.0; re-baselined 2026-10-18 from the absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
+`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`cfa3436d4d31db9b1340af3082a914adf92f023f`](https://github.com/KKKKhazix/Khazix-Skills/commit/cfa3436d4d31db9b1340af3082a914adf92f023f) (official repository release v1.2.0, skill version 3.1.1; synchronized 2026-11-10 from the previous v3.0.0 reference at `322346ded8129436b3f64707789a73e732ae24d9`; original absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
 
 - Copyright: 数字生命卡兹克
 - License: [MIT](LICENSES/Khazix-Skills-MIT.txt)
@@ -60,15 +64,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 ## Eli5
 
-`skills/super-eli5/` adapts the `super-eli5` skill from [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community) at immutable commit [`794af9e63d07fad17087dcab61f21f44cb48effd`](https://github.com/anthropics/claude-plugins-community/commit/794af9e63d07fad17087dcab61f21f44cb48effd). The upstream baseline is a single 321-byte `SKILL.md`; its behavior sentence is retained verbatim in the local package.
+`skills/super-eli5/` adapts the upstream `eli5` skill from [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community) at immutable commit [`794af9e63d07fad17087dcab61f21f44cb48effd`](https://github.com/anthropics/claude-plugins-community/commit/794af9e63d07fad17087dcab61f21f44cb48effd). The upstream baseline is a single 321-byte `SKILL.md`; its behavior sentence is retained verbatim in the local package.
 
 - License: [Apache-2.0](LICENSES/Claude-Plugins-Community-Apache-2.0.txt), the repository-level license file of the upstream project
-- Imported boundary: the super-eli5 behavior sentence and trigger intent; no other upstream files exist
+- Imported boundary: the upstream eli5 behavior sentence and trigger intent; no other upstream files exist
 - Local changes: harness-neutral description and topic argument, topic boundary, self-contained artifact contract, Azhou brand protocol, stable receipt, provenance and compatibility records
 
 ## ASD-STE100
 
-`skills/super-asd-ste100/` imports the `super-asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
+`skills/super-asd-ste100/` imports the upstream `asd-ste100` skill from [TeFuirnever/asd-ste100-skill](https://github.com/TeFuirnever/asd-ste100-skill) at immutable commit [`32511c6992ecb5f1971e46a2943f2e6adceedafe`](https://github.com/TeFuirnever/asd-ste100-skill/commit/32511c6992ecb5f1971e46a2943f2e6adceedafe). The rewrite discipline, the writing-rules summary, the deterministic linter and the worked examples are vendored from the pinned commit; the ASD-STE100 standard's own dictionary is not redistributed and stays excluded by the upstream boundary, which carries over unchanged.
 
 - Copyright: Dustin Yuchen Teng, 2026
 - License: [MIT](LICENSES/asd-ste100-skill-MIT.txt)
@@ -77,11 +81,12 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 ## Archify
 
-`skills/super-archify/` imports the `super-archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.1.0`](https://github.com/tt-a1i/archify/releases/tag/v3.1.0) (commit [`1c2b42d660e4a7571813fb43839c79e3e9ca7720`](https://github.com/tt-a1i/archify/commit/1c2b42d660e4a7571813fb43839c79e3e9ca7720)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the fifteen pre-rendered example HTML files and the dev-only `package-lock.json` are the only exclusions, recorded in the package's compatibility map.
+`skills/super-archify/` imports the upstream `archify` skill package from [tt-a1i/archify](https://github.com/tt-a1i/archify) at immutable tag [`v3.2.0`](https://github.com/tt-a1i/archify/releases/tag/v3.2.0) (commit [`208acba8d412335185b2056fedf54b3405df43fb`](https://github.com/tt-a1i/archify/commit/208acba8d412335185b2056fedf54b3405df43fb)). The vendored subtree keeps the package's own `THIRD_PARTY_NOTICES.md`, which retains the bundled-asset notices including the JetBrains Mono SIL Open Font License; the pre-rendered example HTML files and the dev-only `package-lock.json` remain the documented exclusions, recorded in the package's compatibility map.
 
 - Copyright: tt-a1i (Archify), 2026
 - License: [MIT](LICENSES/archify-MIT.txt); bundled font notice inside the package under `assets/JetBrainsMono-OFL.txt`
-- Imported boundary: the ten-mode typed-JSON diagram capability with its `validate`/`deliver`/`finalize` gate chain, renderers, viewer template, contracts, examples and locale translations
+- Imported boundary: the ten-mode typed-JSON diagram capability and the explainer capability, with their artifact-specific `validate`/`deliver`/`finalize` gates, renderers, viewer templates, contracts, examples and locale translations
+- Bundled explainer dependency: Pele `1.3.0` by kepano (MIT); its retained package license also contains the Lucide rotate-ccw ISC attribution. Preserve both bundled license texts and the package notices.
 - Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `super-excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
 
 ## Public prior art excluded from distribution

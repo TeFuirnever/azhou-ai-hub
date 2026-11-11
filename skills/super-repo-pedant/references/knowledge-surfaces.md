@@ -12,7 +12,7 @@ An explicit `super-repo-pedant` reconcile or handoff covers these surfaces witho
 | Project agent rules | nearest `AGENTS.md`, `CLAUDE.md`, equivalent instruction files | keep durable rules, commands, boundaries, and pointers |
 | Project-bound agent memory | runtime memory associated with this repository or workspace | update, merge, or remove stale entries |
 
-Project-bound memory remains project knowledge even when the runtime stores it outside the Git worktree.
+Project-bound memory remains project knowledge even when the runtime stores it outside the Git worktree. Classify the surface before editing: human/agent-maintained project memory and host-generated memory/indexes have different owners. Generated Codex memory summaries, raw-memory indexes and rollout summaries stay read-only unless explicit authorization and the active host contract provide a supported maintenance path. Project association alone does not authorize editing generated state; unknown ownership stays on hold. Never use private transcripts or generated memory as the shared handoff record: update an existing discoverable README or project document.
 
 ## Separate checkpoint scope
 

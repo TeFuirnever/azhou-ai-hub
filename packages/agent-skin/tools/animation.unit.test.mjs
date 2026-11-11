@@ -137,6 +137,8 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   const stageTranslations = [];
   let bitmapCallCount = 0;
   const messages = [];
+  let failStageDraw = false;
+  let injectedDrawFailures = 0;
   let nextId = 1;
   let now = 0;
   let imageIndex = 0;
@@ -175,7 +177,15 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   const context2d = canvas => ({
     canvas, globalAlpha: 1, fillStyle: '', strokeStyle: '', lineWidth: 1,
     save() {}, restore() {}, setTransform() {}, clearRect() {}, fillRect() {},
-    beginPath() {}, arc() {}, stroke() {}, fill() {}, clip() {}, drawImage() {},
+    beginPath() {}, arc() {}, stroke() {}, fill() {}, clip() {},
+    drawImage() {
+      if (failStageDraw && canvas.getAttribute('data-agent-skin-canvas') !== null) {
+        injectedDrawFailures++;
+        const error = new Error('injected-stage-draw-failure');
+        error.name = 'InvalidStateError';
+        throw error;
+      }
+    },
     translate(x, y) {
       if (canvas.getAttribute('data-agent-skin-canvas') !== null) stageTranslations.push([x, y]);
     },
@@ -345,7 +355,9 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   return { handle, get root() { return document.body.querySelector('[data-agent-skin-stage]') || root; }, timeline, pause, replay, elapsed, controls, body, document,
     window, timers, raf, messages, mediaListeners, resizeObservers, bitmapPromises, pendingDecodes, images, resolveReady,
     ImageMock, Path2DMock, environment, payload, settingsFactory, settingsInstance, localizationFactory,
-    ready, flushFrame, dispatchWindow, drawnTexts, stageTranslations, setNow(value) { now = value; } };
+    ready, flushFrame, dispatchWindow, drawnTexts, stageTranslations, setNow(value) { now = value; },
+    setStageDrawFailure(value) { failStageDraw = value; },
+    get injectedDrawFailures() { return injectedDrawFailures; } };
 }
 
 function attachPreviewIframeEnvironment(fixture) {
@@ -1138,4 +1150,51 @@ test('image load fallback works without decode and bad decoded dimensions are re
   assert.equal(wrongDimensions.messages.find(message => message.action === 'assetError').reason, 'asset-invalid');
   assert.equal(wrongDimensions.handle.preview.report().resources.liveImages, 0);
   wrongDimensions.handle.dispose();
+});
+
+test('explicit exits release the scene without relying on a final render', async t => {
+  for (const gesture of ['button', 'escape', 'settings-cancel', 'after-failed-tick']) {
+    await t.test(gesture, async () => {
+      const fixture = createFixture({ intent: 'play', settings: gesture === 'settings-cancel' });
+      try {
+        await waitReady(fixture);
+        if (gesture === 'settings-cancel') {
+          assert.equal(fixture.handle.openSettings(), true);
+          assert.equal(fixture.messages.some(item => item.action === 'settings-open'), true);
+        }
+        fixture.setStageDrawFailure(true);
+        if (gesture === 'after-failed-tick') {
+          assert.throws(() => fixture.flushFrame(8000), /injected-stage-draw-failure/);
+          assert.equal(fixture.injectedDrawFailures, 1, 'the stage render fault was exercised');
+          assert.equal(fixture.messages.filter(item => item.action === 'complete').length, 0,
+            'a failed playback frame must not be reported as natural completion');
+        }
+        const faultsBeforeExit = fixture.injectedDrawFailures;
+        const exit = () => {
+          if (gesture === 'escape' || gesture === 'settings-cancel') {
+            fixture.dispatchWindow('keydown', {
+              key: 'Escape', preventDefault() {}, stopImmediatePropagation() {},
+            });
+          } else {
+            fixture.root.querySelector('[data-agent-skin-skip]').click();
+          }
+        };
+        assert.doesNotThrow(exit);
+        const completed = fixture.messages.filter(item => item.action === 'complete');
+        assert.equal(completed.length, 1, 'explicit exit must deliver its terminal message');
+        assert.equal(completed[0].skipped, true);
+        assert.equal(fixture.injectedDrawFailures, faultsBeforeExit,
+          'explicit exit must not call the broken stage renderer');
+        const resources = fixture.handle.preview.report().resources;
+        for (const name of ['liveRAF', 'liveImages', 'liveBitmaps', 'framesPending']) {
+          assert.equal(resources[name], 0, name + ' must be released');
+        }
+        assert.doesNotThrow(() => fixture.handle.preview.skip());
+        assert.equal(fixture.messages.filter(item => item.action === 'complete').length, 1,
+          'repeated exit must not duplicate completion');
+      } finally {
+        fixture.handle.dispose();
+      }
+    });
+  }
 });

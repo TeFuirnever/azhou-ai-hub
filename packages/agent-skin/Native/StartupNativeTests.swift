@@ -338,6 +338,33 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if let index = CommandLine.arguments.firstIndex(of: "--probe-startup-handshake"),
+           index + 1 < CommandLine.arguments.count,
+           let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
+            let socket = try WallpaperValidation.pageSocket(url.absoluteString, port: port)
+            let transport = WallpaperTransport()
+            defer { transport.close() }
+            try transport.connect(to: socket, timeout: 2)
+            do {
+                _ = try await transport.evaluate("({probe:true})", timeout: 2)
+                fatalError("a refused handshake must not evaluate JavaScript")
+            } catch let failure as StartupFailure {
+                let result: [String: Any] = ["candidate": failure.pageConnectionLost,
+                    "reason": failure.reason, "host": false,
+                    "errorDomain": failure.transportError?.domain ?? "",
+                    "errorCode": failure.transportError?.code ?? 0,
+                    "httpStatus": failure.transportError?.httpStatus ?? 0]
+                print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            }
+            return
+        }
+        if CommandLine.arguments.contains("--probe-page-replacement") {
+            let results = try await startupPageReplacementProbe()
+            for result in results {
+                print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            }
+            exit(results.allSatisfy { $0["recovered"] as? Bool == true } ? 0 : 1)
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--zcode-driver-interleave"),
            index + 1 < CommandLine.arguments.count, let port = Int(CommandLine.arguments[index + 1]) {
             try await zcodeDriverInterleave(port: port)
@@ -392,6 +419,8 @@ struct StartupNativeTests {
                 "restoreSource": WallpaperCLI.restoreSource,
                 "inspectExpression": StartupConnector.inspectExpression,
                 "statusExpression": StartupConnector.statusExpression,
+                "controllerReferenceExpression": WallpaperTransport.controllerReferenceExpression,
+                "boundStatusExpression": WallpaperTransport.boundStatusExpression,
                 "disposeExpression": try StartupConnector.disposeExpression(href),
                 "installExpression": try StartupConnector.installExpression("({installed:true})", expectedHref: href),
             ]
@@ -801,7 +830,7 @@ struct StartupNativeTests {
             sleep: { fakeNow += $0 }
         ).run(payload: "test-only-probe", deadline: 1)
         expect(successful == .ready(runID: 7), "a controlled main page reaches startup-ready")
-        expect(successfulTransport.pagesCount == 2, "a temporarily unavailable page list is retried within the shared budget")
+        expect(successfulTransport.pagesCount == 4, "page discovery retries and rechecks identity before install and ready within the shared budget")
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
         expect(successfulTransport.payloadCount == 1, "startup installs its payload once")
         expect(successfulTransport.closeCount == 1, "startup closes its socket on readiness")
@@ -967,11 +996,8 @@ struct StartupNativeTests {
         expect(malformedStatus == .failed(reason: "protocol-error"), "a malformed required status field is rejected")
         expect(malformedStatusTransport.disposeCount == 1 && malformedStatusTransport.closeCount == 1,
                "malformed status on the trusted installed controller attempts disposal before closing")
-        let disposalExpression = malformedStatusTransport.disposeExpressions.first ?? ""
-        expect(disposalExpression.contains("location.href !==")
-               && disposalExpression.contains("owner?.value !== 'azhou-codex-startup'")
-               && disposalExpression.contains("version?.value !== 1"),
-               "cleanup is guarded by the inspected document URL and exact controller owner/version")
+        expect(malformedStatusTransport.disposalHrefs == [startupURL],
+               "cleanup passes only the inspected document URL to the controller-bound transport")
 
         var expiredNow: TimeInterval = 0
         let expiredMalformedStatusTransport = FakeStartupTransport(
@@ -1022,6 +1048,9 @@ struct StartupNativeTests {
         }
 
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
+        checks += try await startupIdentityDiagnosticChecks()
+        checks += try await startupPageReplacementChecks()
+        checks += try await startupControllerBindingChecks()
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
         checks += try await zcodeRuntimeReviewChecks()
@@ -1071,7 +1100,7 @@ private final class FakeStartupTransport: StartupTransport {
     private(set) var payloadCount = 0
     private(set) var requestTimeouts: [TimeInterval] = []
     private(set) var disposeCount = 0
-    private(set) var disposeExpressions: [String] = []
+    private(set) var disposalHrefs: [String] = []
     private var pageResponses: [[String: Any]]
     private var evaluationResponses: [[String: Any]]
     private var pageFailures: Int
@@ -1108,7 +1137,6 @@ private final class FakeStartupTransport: StartupTransport {
         if expression.contains("test-only-probe") { payloadCount += 1 }
         if expression.contains("dispose.value.call(api)") {
             disposeCount += 1
-            disposeExpressions.append(expression)
         }
         afterEvaluation?(expression, index)
         if !evaluationResponses.isEmpty {
@@ -1116,6 +1144,10 @@ private final class FakeStartupTransport: StartupTransport {
             return lastEvaluation!
         }
         return repeatLastEvaluation ? lastEvaluation ?? [:] : [:]
+    }
+    func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
+        disposalHrefs.append(href)
+        return try await evaluate(try StartupConnector.disposeExpression(href), timeout: timeout)
     }
     func close() { closeCount += 1 }
 }
@@ -4364,3 +4396,1087 @@ private func zcodeDriverInterleave(port: Int) async throws {
     let output: [String:Any] = ["variant":expected,"inspectBusy":inspectBusy,"launchReady":launchReady,"lockReacquired":true,"realHost":false]
     print(String(decoding: try JSONSerialization.data(withJSONObject: output,options:.sortedKeys),as:UTF8.self))
 }
+
+// An executable transport fixture: production URLSession discovery, CDP codec,
+// connector, install recorder and event capture; only HTTP/socket/host boundaries
+// are synthetic. All document generations deliberately start at runID 1.
+private final class StartupReplacementWorld: @unchecked Sendable {
+    let stage: String
+    let mode: String
+    let handshakeStatus: Int?
+    let href = "app://-/index.html?initialRoute=%2F"
+    private let lock = NSLock()
+    private var generation = 0
+    private var statusCount = 0
+    private var clock: TimeInterval = 1
+    private var lockHeld = false
+    private(set) var installs: [String: Int] = [:]
+    private(set) var disposedControllers: [String] = []
+    private(set) var installReplyTimes: [String: TimeInterval] = [:]
+    private(set) var requests: [String] = []
+    private(set) var requestIDs: [Int] = []
+    private(set) var sockets: [StartupReplacementSocket] = []
+    private(set) var lockAcquires = 0
+    private(set) var lockReleases = 0
+    private(set) var requestsLocked = true
+    var cancel: (() -> Void)?
+    private var lagReadsLeft = 0
+    private var waitReads = 0
+    private var recheckReads = 0
+    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil) {
+        self.stage = stage; self.mode = mode
+        self.handshakeStatus = handshakeStatus ?? ["handshake-404": 404, "handshake-401": 401][mode]
+        lagReadsLeft = mode.hasPrefix("lag-") ? Int(String(mode.dropFirst(4))) ?? 0 : 0
+    }
+    func time() -> TimeInterval { lock.lock(); defer { lock.unlock() }; return clock }
+    func advance(_ seconds: TimeInterval) { lock.lock(); clock += seconds; lock.unlock() }
+    func hasReplaced() -> Bool { lock.lock(); defer { lock.unlock() }; return generation > 0 }
+    func recheckCount() -> Int { lock.lock(); defer { lock.unlock() }; return recheckReads }
+    func acquire() { lock.lock(); lockAcquires += 1; lockHeld = true; lock.unlock() }
+    func release() { lock.lock(); lockReleases += 1; lockHeld = false; lock.unlock() }
+    func pages() throws -> [[String: Any]] {
+        lock.lock(); defer { lock.unlock() }
+        clock += 0.01
+        func entry(_ id: String, type: String = "page", url: String? = nil) -> [String: Any] {
+            ["id": id, "type": type, "url": url ?? href,
+             "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
+        }
+        if generation == 0 { return [entry("page-a")] }
+        if mode.hasPrefix("recheck-") {
+            recheckReads += 1
+            let responseFailures = ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
+                                    "recheck-array", "recheck-json", "recheck-oversized"]
+            if !responseFailures.contains(mode), recheckReads == 1 || mode == "recheck-permanent" {
+                if mode == "recheck-cancel" { cancel?(); throw URLError(.cancelled) }
+                let code: URLError.Code = mode == "recheck-lost" ? .networkConnectionLost
+                    : mode == "recheck-connect" ? .cannotConnectToHost
+                    : mode == "recheck-unknown" ? .badServerResponse : .timedOut
+                throw URLError(code)
+            }
+            if mode == "recheck-page" { return [entry("page-b")] }
+            if mode == "recheck-ambiguous" { return [entry("page-a"), entry("page-b")] }
+            return [entry("page-a")]
+        }
+        if ["raw-unavailable", "complete-blip", "ready-blip"].contains(mode) { throw URLError(.badServerResponse) }
+        if ["cancel-list", "cancel-ready-list"].contains(mode) { cancel?(); throw URLError(.cancelled) }
+        if mode.hasPrefix("lag-"), generation > 0 {
+            if lagReadsLeft > 0 { lagReadsLeft -= 1; return [entry("page-a"), entry("page-b")] }
+            return [entry("page-b")]
+        }
+        if mode == "persist", generation > 0 { return [entry("page-a"), entry("page-b")] }
+        if mode == "cancel-wait", generation > 0 {
+            waitReads += 1
+            if waitReads > 1 { cancel?(); throw URLError(.cancelled) }
+            return [entry("page-a"), entry("page-b")]
+        }
+        switch mode {
+        case "same-target": return [entry("page-a")]
+        case "old-main": return [entry("page-a"), entry("page-b")]
+        case "old-avatar": return [entry("page-a", url: "app://-/index.html?initialRoute=avatar"), entry("page-b")]
+        case "old-worker": return [entry("page-a", type: "worker"), entry("page-b")]
+        case "ambiguous": return [entry("page-b"), entry("page-c")]
+        case "no-main": return [entry("worker", type: "worker")]
+        case "missing-id": return [entry("page-b"), ["type": "worker", "url": href]]
+        case "duplicate-id": return [entry("page-b"), entry("page-b", type: "worker")]
+        case "invalid-id": return [entry("page-b"), entry("bad id", type: "worker")]
+        case "socket-mismatch":
+            var value = entry("page-b"); value["webSocketDebuggerUrl"] = "ws://127.0.0.1:49221/devtools/page/other"; return [value]
+        case "foreign-socket":
+            var value = entry("page-b"); value["webSocketDebuggerUrl"] = "ws://127.0.0.1:49222/devtools/page/page-b"; return [value]
+        case "reuse": return [entry(generation > 1 ? "page-a" : "page-b")]
+        default: return [entry(generation > 1 ? "page-c" : "page-b")]
+        }
+    }
+    func socket(_ request: URLRequest) -> any WallpaperSocketTask {
+        let socket = StartupReplacementSocket(id: request.url!.lastPathComponent, world: self)
+        lock.lock(); sockets.append(socket); lock.unlock()
+        return socket
+    }
+    func reply(id: String, request: [String: Any]) throws -> Data {
+        lock.lock(); defer { lock.unlock() }
+        clock += 0.01
+        let params = request["params"] as? [String: Any] ?? [:]
+        let expression = params["expression"] as? String ?? ""
+        let boundDisposal = ((params["arguments"] as? [[String: Any]])?.first?["value"] as? Bool) == true
+        let operation = request["method"] as? String == "Runtime.callFunctionOn" ? (boundDisposal ? "dispose" : "status")
+            : expression == WallpaperTransport.controllerReferenceExpression ? "reference"
+            : expression.contains("Promise.resolve((") ? "install"
+            : expression == StartupConnector.inspectExpression ? "inspect"
+            : expression == StartupConnector.statusExpression ? "status" : "dispose"
+        requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
+        requestsLocked = requestsLocked && lockHeld
+        // CDP Runtime.callFunctionOn has no execution timeout parameter. Its
+        // independent client timer bounds the request, unlike Runtime.evaluate.
+        if request["method"] as? String == "Runtime.callFunctionOn" {
+            let allowed: Set<String> = ["functionDeclaration", "objectId", "arguments", "silent", "returnByValue", "generatePreview",
+                "userGesture", "awaitPromise", "executionContextId", "objectGroup", "throwOnSideEffect", "uniqueContextId", "serializationOptions"]
+            if !Set(params.keys).isSubset(of: allowed) {
+                return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "error": ["code": -32602, "message": "Invalid parameters"]])
+            }
+        }
+        if operation == "reference" {
+            var remote: [String: Any] = ["type": "object", "objectId": "controller-" + id]
+            if mode == "reference-null" { remote = ["type": "object", "subtype": "null"] }
+            if mode == "reference-missing-id" { remote = ["type": "object"] }
+            if mode == "reference-wrong-type" { remote = ["type": "string", "objectId": "controller-" + id] }
+            if mode == "reference-large-id" { remote["objectId"] = String(repeating: "x", count: 1025) }
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "result": ["result": remote]])
+        }
+        if request["method"] as? String == "Runtime.callFunctionOn", params["objectId"] as? String != "controller-" + id {
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "error": ["code": -32000, "message": "foreign controller object"]])
+        }
+        if operation == "dispose" {
+            let replaced = mode == "recheck-controller-http" && recheckReads > 1
+            if !replaced { disposedControllers.append(id) }
+            return try JSONSerialization.data(withJSONObject: ["id": request["id"]!, "result": ["result": ["value": ["disposed": !replaced]]]])
+        }
+        if operation == "install" { installs[id, default: 0] += 1 }
+        if id == "page-a", operation == "status" { statusCount += 1 }
+        let replaceNow = id == "page-a" && operation == stage && (stage != "status" || statusCount == 2)
+            || id == "page-b" && operation == "install" && ["chain", "reuse"].contains(mode)
+        func envelope(_ value: [String: Any]) -> [String: Any] {
+            ["id": request["id"]!, "result": ["result": ["value": value]]]
+        }
+        func data(_ value: [String: Any]) throws -> Data { try JSONSerialization.data(withJSONObject: value) }
+        var terminal: String?
+        if replaceNow {
+            generation += 1
+            if handshakeStatus != nil { throw URLError(.badServerResponse) }
+            if mode.hasPrefix("recheck-") { terminal = "ready-replaced" }
+            else { switch mode {
+            case "context-lost": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."]])
+            case "mixed-error": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Execution context was destroyed."], "result": ["exceptionDetails": [:]]])
+            case "ordinary-cdp": return try data(["id": request["id"]!, "error": ["code": -32000, "message": "Unrelated protocol failure"]])
+            case "js-exception": return try data(["id": request["id"]!, "result": ["exceptionDetails": [:]]])
+            case "wrong-id": return try data(["id": 9999, "result": ["result": ["value": [:]]]])
+            case "malformed-json": return Data("{".utf8)
+            case "bad-install": return try data(envelope(["installed": true, "alreadyActive": "invalid"]))
+            case "bad-status": return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]]))
+            case "missing-controller": return try data(envelope(["href": href, "missing": true]))
+            case "href-drift": return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false]))
+            case "cancel-task": withUnsafeCurrentTask { $0?.cancel() }; throw URLError(.networkConnectionLost)
+            case "cancel-error": throw URLError(.cancelled)
+            case "timeout-error": throw URLError(.timedOut)
+            case "handshake-unknown": throw URLError(.badServerResponse)
+            case "posix-loss": throw NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNRESET))
+            case "deadline": clock = 5; throw URLError(.networkConnectionLost)
+            case "before-install": break
+            case "cancel-ready-list": terminal = "ready-replaced"
+            case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
+            case "ready-blip", "recheck-once": terminal = "ready-replaced"
+            case "complete-blip": terminal = "complete-replaced"
+            default: throw URLError(.networkConnectionLost)
+            } }
+        }
+        if mode.hasPrefix("recheck-"), generation > 0 { terminal = "ready-replaced" }
+        let value: [String: Any]
+        switch operation {
+        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present"]
+        case "install":
+            installReplyTimes[id] = clock
+            value = mode == "missing-new-receipt" && id == "page-b" ? ["installed": "invalid"]
+                : ["installed": true, "alreadyActive": id == "page-b" && mode == "already-active"]
+        case "status":
+            if mode.hasPrefix("recheck-"), recheckReads > 1 {
+                if ["recheck-controller", "recheck-missing"].contains(mode) { return try data(envelope(["href": href, "missing": true])) }
+                if mode == "recheck-href" { return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false])) }
+                if mode == "recheck-schema" { return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]])) }
+                if mode == "recheck-complete" { terminal = "complete-replaced" }
+                if mode == "recheck-skip" { terminal = "skip-replaced" }
+                if mode == "recheck-failed" { terminal = "failed-replaced" }
+                if mode == "recheck-disposed" { terminal = "disposed-replaced" }
+                if mode == "recheck-run" { terminal = "run-drift" }
+            }
+            let timedOut = mode == "recheck-timeout" && recheckReads > 1
+            let completed = ["complete-replaced", "skip-replaced"].contains(terminal ?? "")
+            let failed = terminal == "failed-replaced"
+            let disposed = terminal == "disposed-replaced"
+            let ready = id != "page-a" || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
+            let phase = timedOut ? "timeout" : failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
+            let completion: Any = completed ? ["cause": terminal == "skip-replaced" ? "skip" : "natural",
+                                                "beforeReady": terminal == "skip-replaced" && mode != "recheck-skip"] : NSNull()
+            value = ["href": href, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": terminal == "run-drift" ? 2 : 1,
+                "ready": ready, "completed": completed, "overlay": !completed && !failed && !disposed && !timedOut,
+                "reason": timedOut ? "overlay-timeout" : failed ? "protocol-error" : "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": completion
+            ]]
+        default: value = ["disposed": true]
+        }
+        return try data(envelope(value))
+    }
+}
+
+private final class StartupReplacementSystem: StartupTargetSystem, StartupOperationLock {
+    let world: StartupReplacementWorld
+    init(_ world: StartupReplacementWorld) { self.world = world }
+    func preflightBundle(_ bundle: URL, deadline: TimeInterval) throws {}
+    func validate(_ target: StartupTargetFacts, deadline: TimeInterval) throws {
+        if world.mode == "identity-drift" && world.hasReplaced()
+            || world.mode == "recheck-identity" && world.recheckCount() > 0 {
+            throw StartupFailure(reason: "target-identity", message: "synthetic process generation changed")
+        }
+    }
+    func listeningPorts(_ target: StartupTargetFacts, deadline: TimeInterval) throws -> [Int] {
+        (world.mode == "port-drift" && world.hasReplaced()
+            || world.mode == "recheck-port" && world.recheckCount() > 0) ? [] : [49221]
+    }
+    func acquireOperationLock(pid: Int32) throws -> any StartupOperationLock { world.acquire(); return self }
+    func release() { world.release() }
+}
+
+private final class StartupReplacementSocket: WallpaperSocketTask, @unchecked Sendable {
+    let id: String
+    let world: StartupReplacementWorld
+    var maximumMessageSize = 0
+    var response: URLResponse? {
+        guard id == "page-a", let status = world.handshakeStatus else { return nil }
+        return HTTPURLResponse(url: URL(string: "http://127.0.0.1:49221/devtools/page/\(id)")!,
+            statusCode: status, httpVersion: nil, headerFields: nil)
+    }
+    private(set) var canceled = 0
+    private var pending: [String: Any] = [:]
+    var holdReference = false
+    private let referenceLock = NSLock()
+    private var heldReference: (CheckedContinuation<URLSessionWebSocketTask.Message, Never>, URLSessionWebSocketTask.Message)?
+    private var heldWaiters: [CheckedContinuation<Void, Never>] = []
+    var isHoldingReference: Bool { referenceLock.lock(); defer { referenceLock.unlock() }; return heldReference != nil }
+    func waitUntilHeldReference() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            referenceLock.lock()
+            if heldReference != nil {
+                referenceLock.unlock()
+                continuation.resume()
+            } else {
+                heldWaiters.append(continuation)
+                referenceLock.unlock()
+            }
+        }
+    }
+    func releaseReference() {
+        referenceLock.lock(); let held = heldReference; heldReference = nil; referenceLock.unlock()
+        if let held { held.0.resume(returning: held.1) }
+    }
+    init(id: String, world: StartupReplacementWorld) { self.id = id; self.world = world }
+    func resume() {}
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        guard case .string(let source) = message,
+              let request = try JSONSerialization.jsonObject(with: Data(source.utf8)) as? [String: Any] else {
+            throw URLError(.cannotParseResponse)
+        }
+        pending = request
+    }
+    func receive() async throws -> URLSessionWebSocketTask.Message {
+        let reply = URLSessionWebSocketTask.Message.data(try world.reply(id: id, request: pending))
+        if holdReference, (pending["params"] as? [String: Any])?["expression"] as? String == WallpaperTransport.controllerReferenceExpression {
+            return await withCheckedContinuation { continuation in
+                referenceLock.lock()
+                heldReference = (continuation, reply)
+                let waiters = heldWaiters
+                heldWaiters = []
+                referenceLock.unlock()
+                waiters.forEach { $0.resume() }
+            }
+        }
+        return reply
+    }
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) { canceled += 1 }
+}
+
+private final class StartupReplacementURLProtocol: URLProtocol {
+    static var world: StartupReplacementWorld?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let world = Self.world, let url = request.url,
+              url.absoluteString == "http://127.0.0.1:49221/json/list" else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL)); return
+        }
+        do {
+            var body = try JSONSerialization.data(withJSONObject: world.pages())
+            var status = 200
+            var responseURL = url
+            if world.hasReplaced() {
+                if world.mode == "recheck-http401" { status = 401 }
+                if world.mode == "recheck-http503" || world.mode == "recheck-controller-http" && world.recheckCount() > 1 { status = 503 }
+                if world.mode == "recheck-redirect" { status = 302 }
+                if world.mode == "recheck-foreign-url" { responseURL = URL(string: "http://127.0.0.1:49222/json/list")! }
+                if world.mode == "recheck-array" { body = Data("{}".utf8) }
+                if world.mode == "recheck-json" { body = Data("{".utf8) }
+                if world.mode == "recheck-oversized" { body = Data(repeating: 32, count: 2 * 1024 * 1024) }
+            }
+            let response = HTTPURLResponse(url: responseURL, statusCode: status, httpVersion: nil,
+                                           headerFields: ["Content-Type": "application/json"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: body)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+    override func stopLoading() {}
+}
+
+@MainActor
+private func startupReplacementScenario(stage: String, mode: String = "replace",
+                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil) async throws -> [String: Any] {
+    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus)
+    StartupReplacementURLProtocol.world = world
+    defer { StartupReplacementURLProtocol.world = nil }
+    var diagnosticRecords: [[String: Any]] = []
+    if enabled { diagnosticRecords.reserveCapacity(16) }
+    let task = Task { @MainActor () throws -> [String: Any] in
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StartupReplacementURLProtocol.self]
+        let base = WallpaperTransport(session: URLSession(configuration: configuration), socketFactory: world.socket)
+        let capture = NativeStartupCapture(targetPID: 4123)
+        var records: [[String: Any]] = []
+        let events = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 42,
+            launcherPath: "/synthetic/Agent-Skin.app", now: world.time, sink: { records.append($0) }))
+        events.begin(at: 0); events.targetOpened(pid: 4123, at: 0)
+        let recorder = CodexInstallObservation()
+        let transport = InstallObservingStartupTransport(
+            base: NativeStartupEventTransport(base: base, capture: capture, events: events, now: world.time), recorder: recorder)
+        let target = StartupTargetFacts(pid: 4123, bundle: URL(fileURLWithPath: "/synthetic/Codex.app"),
+            executable: URL(fileURLWithPath: "/synthetic/Codex.app/Contents/MacOS/Codex"),
+            bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
+        let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
+            transport: transport, diagnostics: enabled ? { _, fields in diagnosticRecords.append(fields) } : nil,
+            now: world.time, sleep: {
+                world.advance($0)
+                if mode == "recheck-cancel-wait", world.recheckCount() > 0 { withUnsafeCurrentTask { $0?.cancel() } }
+            })
+            .run(payload: "test-only-probe", deadline: 5)
+        let observation = capture.snapshot()
+        let final = events.resolve(outcome, observation: observation, at: world.time())
+        return ["stage": stage, "mode": mode, "recovered": outcome == .ready(runID: 1) && final == .ready,
+            "outcome": String(describing: outcome), "final": String(describing: final),
+            "installs": world.installs, "installSentCount": recorder.installSentCount, "disposedControllers": world.disposedControllers,
+            "requests": world.requests, "requestIDs": world.requestIDs,
+            "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
+            "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
+            "currentPageID": observation.pageID ?? "", "installedAt": observation.installedAt ?? -1,
+            "installReplyTimes": world.installReplyTimes,
+            "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
+            "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
+            "events": records.map { $0["event"] as? String ?? "" }, "elapsed": world.time(),
+            "diagnostics": diagnosticRecords, "recheckReads": world.recheckCount(),
+            "host": false, "productionConnectorAndCodec": true]
+    }
+    world.cancel = { task.cancel() }
+    return try await task.value
+}
+
+@MainActor
+private func startupPageReplacementProbe() async throws -> [[String: Any]] {
+    var results: [[String: Any]] = []
+    for stage in ["inspect", "install", "status"] { results.append(try await startupReplacementScenario(stage: stage)) }
+    return results
+}
+
+@MainActor
+private func startupControllerBindingChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: controller generation: \(label)") }; checks += 1
+    }
+    let world = StartupReplacementWorld(stage: "never")
+    var held: StartupReplacementSocket?
+    let transport = WallpaperTransport(session: nil, socketFactory: { request in
+        let socket = world.socket(request) as! StartupReplacementSocket
+        if request.url?.lastPathComponent == "page-a" { socket.holdReference = true; held = socket }
+        return socket
+    })
+    defer { transport.close() }
+    try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-a")!, timeout: 5)
+    let old = Task { () -> String in
+        do { _ = try await transport.evaluate(StartupConnector.statusExpression, timeout: 5); return "accepted" }
+        catch is CancellationError { return "cancelled" }
+        catch { return "other-error" }
+    }
+    await held?.waitUntilHeldReference()
+    expect(held?.isHoldingReference == true, "the original controller capture is genuinely suspended")
+    transport.disconnectPage()
+    try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
+    held?.releaseReference()
+    let outcome = await old.value
+    expect(outcome == "cancelled" && world.requests == ["page-a:reference"],
+           "a late A capture cannot commit its object ID or issue a request on B")
+    let result = try await transport.evaluate(StartupConnector.statusExpression, timeout: 5)
+    expect((result["status"] as? [String: Any])?["ready"] as? Bool == true
+        && world.requests == ["page-a:reference", "page-b:reference", "page-b:status"],
+        "B performs its own fresh capture and uses only B's object ID")
+    let disposed = try await transport.disposeController(href: world.href, timeout: 5)
+    expect(disposed["disposed"] as? Bool == true && world.disposedControllers == ["page-b"],
+        "cleanup after rebinding reaches only the newly bound controller")
+    transport.close()
+    let afterClose = try await transport.disposeController(href: world.href, timeout: 5)
+    expect(afterClose["disposed"] as? Bool == false && world.disposedControllers == ["page-b"],
+        "closed transports retain no cleanup authority")
+
+    let openingWorld = StartupReplacementWorld(stage: "never")
+    var openingTransport: WallpaperTransport?
+    var interruptOpening = true
+    let opening = WallpaperTransport(session: nil, socketFactory: { request in
+        let socket = openingWorld.socket(request)
+        if interruptOpening { interruptOpening = false; openingTransport?.disconnectPage() }
+        return socket
+    })
+    openingTransport = opening
+    defer { opening.close() }
+    var openingCancelled = false
+    do { try opening.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-a")!, timeout: 5) }
+    catch is CancellationError { openingCancelled = true }
+    expect(openingCancelled && openingWorld.sockets.first?.canceled == 1,
+        "invalidation while a socket is opening cancels the unpublished candidate")
+    try opening.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
+    let fresh = try await opening.evaluate(StartupConnector.statusExpression, timeout: 5)
+    expect((fresh["status"] as? [String: Any])?["ready"] as? Bool == true
+        && openingWorld.requests == ["page-b:reference", "page-b:status"],
+        "the next connection remains usable after interrupted socket creation")
+    return checks
+}
+
+@MainActor
+private func startupPageReplacementChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: page replacement: \(label)") }; checks += 1
+    }
+    func common(_ r: [String: Any]) {
+        expect(r["lockAcquires"] as? Int == 1 && r["lockReleases"] as? Int == 1 && r["requestsLocked"] as? Bool == true,
+               "one operation lock covers every generation")
+        expect((r["socketCloses"] as? [Int] ?? []).allSatisfy { $0 == 1 }, "every socket closes once")
+        let ids = r["requestIDs"] as? [Int] ?? []
+        expect(ids == Array(1...max(1, ids.count)), "request IDs remain monotonic across sockets")
+        let installs = r["installs"] as? [String: Int] ?? [:]
+        expect(installs.values.allSatisfy { $0 == 1 }, "each target receives at most one installation")
+        expect(r["installSentCount"] as? Int == installs.values.reduce(0, +), "cumulative sent evidence is never reset")
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage); common(r)
+        let installs = r["installs"] as? [String: Int] ?? [:]
+        expect(r["recovered"] as? Bool == true && installs["page-b"] == 1 && installs["page-a", default: 0] == (stage == "inspect" ? 0 : 1),
+               "\(stage) resumes on a proven new target")
+        expect(r["readyPageIDs"] as? [String] == ["page-b"] && r["currentPageID"] as? String == "page-b",
+               "ready belongs only to B")
+        expect(r["installedAt"] as? Double == (r["installReplyTimes"] as? [String: Double])?["page-b"],
+               "B must supply its own installation timestamp")
+        expect(r["installationPageIDs"] as? [String] == (stage == "status" ? ["page-a", "page-b"] : ["page-b"]),
+               "identical run IDs never merge document evidence")
+        expect(!(r["requests"] as? [String] ?? []).contains("page-a:dispose"), "dead page cleanup never reaches the replacement")
+    }
+    let refusals = ["same-target", "old-main", "old-avatar", "old-worker", "ambiguous", "no-main", "missing-id", "duplicate-id",
+        "invalid-id", "socket-mismatch", "foreign-socket", "raw-unavailable", "missing-launch", "identity-drift", "port-drift",
+        "ordinary-cdp", "mixed-error", "handshake-401", "handshake-unknown", "js-exception", "wrong-id", "malformed-json", "timeout-error", "cancel-error", "deadline"]
+    for mode in refusals {
+        let r = try await startupReplacementScenario(stage: mode == "handshake-401" ? "inspect" : "install", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) cannot authorize replacement")
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, mode: "cancel-task"); common(r)
+        expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")" && r["connections"] as? [String] == ["page-a"],
+               "cancellation during \(stage) never reconnects")
+    }
+    for mode in ["cancel-list", "cancel-ready-list", "bad-install", "bad-status", "missing-controller", "href-drift", "run-drift", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced"] {
+        let r = try await startupReplacementScenario(stage: mode == "bad-install" ? "install" : "status", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"], "\(mode) remains terminal")
+    }
+    // A temporary discovery transport error does not invalidate an already-owned
+    // ready controller. Recovery still needs a fresh same-page list and status.
+    for mode in ["recheck-once", "recheck-lost", "recheck-connect", "recheck-complete"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true); common(r)
+        let requests = r["requests"] as? [String] ?? []
+        expect(r["recovered"] as? Bool == true && r["connections"] as? [String] == ["page-a"]
+            && !requests.contains("page-a:dispose") && r["installs"] as? [String: Int] == ["page-a": 1],
+            "one timed-out ready proof must recover on the same page without disposal or installation replay")
+        expect(requests.filter { $0 == "page-a:reference" }.count == 1
+            && requests.filter { $0 == "page-a:status" }.count == 3 && r["recheckReads"] as? Int == 3,
+            "successful proof waits re-read exactly the retained controller before declaring readiness")
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first
+        let code = mode == "recheck-lost" ? -1005 : mode == "recheck-connect" ? -1004 : -1001
+        expect(diagnostic?["stage"] as? String == "recheck-wait" && diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == code && diagnostic?["httpStatus"] == nil,
+            "list diagnostics preserve only the actual transport domain and code")
+    }
+    let permanent = try await startupReplacementScenario(stage: "status", mode: "recheck-permanent"); common(permanent)
+    expect(permanent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+        && (permanent["elapsed"] as? Double ?? 6) <= 5 && (permanent["recheckReads"] as? Int ?? 0) > 1
+        && permanent["connections"] as? [String] == ["page-a"], "permanent failure consumes only the original deadline")
+    for mode in ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
+                 "recheck-array", "recheck-json", "recheck-oversized", "recheck-unknown"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")" && r["recheckReads"] as? Int == 1
+            && r["connections"] as? [String] == ["page-a"], "\(mode) cannot become a transient retry")
+        if mode == "recheck-http503" {
+            expect((r["diagnostics"] as? [[String: Any]])?.first?["httpStatus"] as? Int == 503,
+                "a rejected HTTP response retains its actual status without a response body")
+        }
+    }
+    for mode in ["recheck-controller", "recheck-missing", "recheck-href", "recheck-run", "recheck-disposed", "recheck-page",
+                 "recheck-cancel", "recheck-cancel-wait"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1]
+            && !(r["requests"] as? [String] ?? []).contains("page-a:dispose"),
+            "\(mode) never replays or disposes a changed controller while waiting for same-page proof")
+    }
+    for (mode, reason) in [("recheck-identity", "target-identity"), ("recheck-port", "listener-mismatch"),
+                           ("recheck-ambiguous", "ambiguous-main-page"), ("recheck-timeout", "overlay-timeout"),
+                           ("recheck-failed", "protocol-error"), ("recheck-schema", "protocol-error")] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"\(reason)\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1],
+            "\(mode) cannot reuse the earlier ready snapshot")
+    }
+    let waitedSkip = try await startupReplacementScenario(stage: "status", mode: "recheck-skip"); common(waitedSkip)
+    expect(waitedSkip["outcome"] as? String == "skipped(runID: 1, beforeReady: false)"
+        && !(waitedSkip["requests"] as? [String] ?? []).contains("page-a:dispose"), "a fresh skip after waiting remains terminal")
+    let unboundFailure = try await startupReplacementScenario(stage: "install", mode: "bad-install"); common(unboundFailure)
+    expect(unboundFailure["outcome"] as? String == "failed(reason: \"protocol-error\")"
+        && unboundFailure["disposedControllers"] as? [String] == []
+        && !(unboundFailure["requests"] as? [String] ?? []).contains("page-a:dispose"),
+        "failure before object binding cannot capture the current global merely for cleanup")
+    let swappedFailure = try await startupReplacementScenario(stage: "status", mode: "recheck-controller-http"); common(swappedFailure)
+    expect(swappedFailure["outcome"] as? String == "failed(reason: \"protocol-error\")"
+        && swappedFailure["disposedControllers"] as? [String] == []
+        && (swappedFailure["requests"] as? [String] ?? []).filter { $0 == "page-a:reference" }.count == 1,
+        "a failed list after a controller swap cannot acquire or dispose the new object")
+    for mode in ["reference-null", "reference-missing-id", "reference-wrong-type", "reference-large-id"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")"
+            && r["connections"] as? [String] == ["page-a"] && r["disposedControllers"] as? [String] == []
+            && !(r["requests"] as? [String] ?? []).contains("page-a:dispose"),
+            "\(mode) cannot bind a controller or fall back to disposing the current global")
+    }
+    for mode in ["complete-blip", "ready-blip"] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode); common(r)
+        let requests = r["requests"] as? [String] ?? []
+        if mode == "complete-blip" {
+            expect(r["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+                && !requests.contains("page-a:dispose") && r["connections"] as? [String] == ["page-a"],
+                "a transient completed-checkpoint recheck failure stays terminal without disposal or reconnection")
+        } else {
+            expect(r["outcome"] as? String == "failed(reason: \"protocol-error\")"
+                && requests.contains("page-a:dispose") && r["connections"] as? [String] == ["page-a"],
+                "a transient pre-completion recheck failure stays a strict disposal failure")
+        }
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, mode: "lag-1"); common(r)
+        expect(r["recovered"] as? Bool == true && r["connections"] as? [String] == ["page-a", "page-b"]
+            && (r["installs"] as? [String: Int])?["page-b"] == 1,
+            "\(stage) recovers once delayed inventory removal proves the old target absent")
+        expect((r["diagnostics"] as? [[String: Any]])?.isEmpty == true,
+            "\(stage) stays diagnostic-silent unless the invocation opts in")
+    }
+    let lagging = try await startupReplacementScenario(stage: "install", mode: "lag-3"); common(lagging)
+    expect(lagging["recovered"] as? Bool == true && (lagging["installs"] as? [String: Int])?["page-b"] == 1,
+        "repeated delayed inventory reads keep waiting within the shared budget")
+    let persistent = try await startupReplacementScenario(stage: "install", mode: "persist"); common(persistent)
+    expect(persistent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+        && persistent["connections"] as? [String] == ["page-a"]
+        && (persistent["installs"] as? [String: Int])?["page-b"] == nil,
+        "a never-absent old target refuses at the exhausted budget without reaching the candidate")
+    let cancelWait = try await startupReplacementScenario(stage: "install", mode: "cancel-wait"); common(cancelWait)
+    expect(cancelWait["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+        && cancelWait["connections"] as? [String] == ["page-a"],
+        "cancellation inside the proof wait never reconnects")
+    let malformedInventory = try await startupReplacementScenario(stage: "install", mode: "duplicate-id"); common(malformedInventory)
+    expect(malformedInventory["outcome"] as? String == "failed(reason: \"protocol-error\")",
+        "malformed inventory still refuses immediately")
+    let exhausted = try await startupReplacementScenario(stage: "install", mode: "deadline"); common(exhausted)
+    expect(exhausted["outcome"] as? String == "failed(reason: \"attach-timeout\")",
+        "an exhausted budget still refuses without a proof read")
+    let observed = try await startupReplacementScenario(stage: "install", mode: "lag-1", diagnostics: true); common(observed)
+    let diagnosticRecords = (observed["diagnostics"] as? [[String: Any]]) ?? []
+    let allowedKeys: Set<String> = ["stage", "at", "page", "errorDomain", "errorCode", "httpStatus", "pageConnectionLost", "state",
+                                    "oldIDPresent", "eligibleMains", "uniqueIDs"]
+    var serializedDiagnostics = ""
+    for record in diagnosticRecords {
+        serializedDiagnostics += String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+    }
+    expect(observed["recovered"] as? Bool == true
+        && !diagnosticRecords.isEmpty
+        && diagnosticRecords.allSatisfy { Set($0.keys).isSubset(of: allowedKeys) }
+        && !serializedDiagnostics.contains("test-only-probe"),
+        "opt-in diagnostics stay bounded and content-free")
+    let proofs = diagnosticRecords.filter { ($0["stage"] as? String) == "proof" }
+    expect(proofs.count == 2 && (proofs[0]["oldIDPresent"] as? Bool) == true
+        && (proofs[0]["eligibleMains"] as? Int) == 2 && (proofs[0]["uniqueIDs"] as? Bool) == true
+        && (proofs[1]["oldIDPresent"] as? Bool) == false && (proofs[1]["eligibleMains"] as? Int) == 1,
+        "proof diagnostics record the lagging read and the proven replacement inventory")
+    let recover = diagnosticRecords.first { ($0["stage"] as? String) == "install" }
+    expect(recover?["page"] as? String == "page-a" && (recover?["pageConnectionLost"] as? Bool) == true
+        && recover?["errorDomain"] as? String == NSURLErrorDomain
+        && recover?["errorCode"] as? Int == URLError.networkConnectionLost.rawValue
+        && recover?["httpStatus"] == nil,
+        "the qualifying failure preserves its original stage and network identity")
+    expect(!StartupDiagnosticsPolicy.isEnabled(environment: [:])
+        && !StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "0"])
+        && !StartupDiagnosticsPolicy.isEnabled(environment: ["UNRELATED": "1"])
+        && StartupDiagnosticsPolicy.isEnabled(environment: [StartupDiagnosticsPolicy.environmentKey: "1"]),
+        "startup diagnostics stay disabled unless the invocation opts in exactly")
+    for (status, accepted) in [(404, true), (500, true), (401, false), (503, false)] {
+        let r = try await startupReplacementScenario(stage: "inspect", diagnostics: true, handshakeStatus: status); common(r)
+        expect(r["recovered"] as? Bool == accepted
+            && r["connections"] as? [String] == (accepted ? ["page-a", "page-b"] : ["page-a"]),
+            "handshake \(status) changes only candidate qualification, not independent replacement proof")
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first { $0["stage"] as? String == "inspect" }
+        expect(diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == -1011 && diagnostic?["httpStatus"] as? Int == status
+            && diagnostic?["pageConnectionLost"] as? Bool == accepted,
+            "handshake diagnostics preserve original NSError identity, status and inspect stage")
+    }
+    for mode in ["persist", "ambiguous", "duplicate-id", "identity-drift", "port-drift", "cancel-wait"] {
+        let r = try await startupReplacementScenario(stage: "inspect", mode: mode, handshakeStatus: 500); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a"]
+            && (r["installs"] as? [String: Int])?["page-b"] == nil,
+            "HTTP 500 never bypasses \(mode) proof refusal or cancellation")
+        if mode == "persist" {
+            expect(r["outcome"] as? String == "failed(reason: \"attach-timeout\")"
+                && (r["elapsed"] as? Double ?? 0) >= 5 && (r["elapsed"] as? Double ?? 99) <= 5.1,
+                "HTTP 500 with a still-live old ID only consumes the original bounded proof budget")
+        }
+    }
+    for stage in ["inspect", "install", "status"] {
+        let r = try await startupReplacementScenario(stage: stage, diagnostics: true); common(r)
+        let diagnostic = (r["diagnostics"] as? [[String: Any]])?.first { $0["pageConnectionLost"] as? Bool == true }
+        expect(diagnostic?["stage"] as? String == stage && diagnostic?["errorDomain"] as? String == NSURLErrorDomain
+            && diagnostic?["errorCode"] as? Int == -1005 && diagnostic?["httpStatus"] == nil,
+            "each transport failure keeps its originating \(stage) instead of relabeling it recover")
+    }
+    let posix = try await startupReplacementScenario(stage: "install", mode: "posix-loss", diagnostics: true); common(posix)
+    let posixRecord = (posix["diagnostics"] as? [[String: Any]])?.first { $0["pageConnectionLost"] as? Bool == true }
+    expect(posixRecord?["errorDomain"] as? String == NSPOSIXErrorDomain
+        && posixRecord?["errorCode"] as? Int == Int(ECONNRESET) && posixRecord?["httpStatus"] == nil,
+        "non-HTTP transport failures preserve numeric provenance without inventing status")
+    for mode in ["context-lost", "posix-loss", "handshake-404", "before-install", "ready-replaced", "chain"] {
+        let stage = ["before-install", "handshake-404"].contains(mode) ? "inspect" : mode == "ready-replaced" ? "status" : "install"
+        let r = try await startupReplacementScenario(stage: stage, mode: mode); common(r)
+        expect(r["recovered"] as? Bool == true, "\(mode) requires the same replacement proof")
+    }
+    for mode in ["already-present", "already-active", "missing-new-receipt", "reuse"] {
+        let r = try await startupReplacementScenario(stage: mode == "missing-new-receipt" ? "status" : "install", mode: mode); common(r)
+        expect(r["recovered"] as? Bool == false && r["connections"] as? [String] == ["page-a", "page-b"],
+               "\(mode) cannot invent ownership or reinstall a retired ID")
+        if mode == "already-present" {
+            expect((r["installs"] as? [String: Int])?["page-b"] == nil, "pre-existing B controller is preserved")
+        }
+        if mode == "missing-new-receipt" {
+            expect(r["installedAt"] as? Double == -1 && (r["readyPageIDs"] as? [String])?.isEmpty == true,
+                   "missing B receipt cannot inherit A's evidence")
+        }
+    }
+    let valid: [String: Any] = ["owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 1,
+        "ready": true, "completed": false, "overlay": true, "reason": "",
+        "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+    let capture = NativeStartupCapture(targetPID: 4123)
+    capture.bindPage("page-a")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 1, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 2, pageID: "page-a")
+    let oldObservation = capture.snapshot()
+    capture.bindPage("page-b")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 3, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 4, pageID: "page-a")
+    _ = capture.observe(["status": valid], at: 5, pageID: "page-b")
+    expect(capture.snapshot().installedAt == nil && capture.snapshot().status == nil,
+           "late A responses and B status without B installation are discarded")
+    _ = capture.observe(["installed": true, "alreadyActive": false], at: 6, pageID: "page-b")
+    _ = capture.observe(["status": valid], at: 7, pageID: "page-b")
+    expect(capture.snapshot().installedAt == 6 && capture.snapshot().pageID == "page-b", "B establishes fresh capture evidence")
+    let stream = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 0, launcherPID: 42,
+        launcherPath: "/synthetic/Agent-Skin.app", sink: { _ in }))
+    expect(!stream.bindPage(pid: 4123, pageID: "page-a"), "dormant event stream cannot authorize page binding")
+    stream.begin(at: 0); stream.targetOpened(pid: 4123, at: 0)
+    expect(stream.bindPage(pid: 4123, pageID: "page-a"), "first page binding is accepted")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 1, pageID: "page-a")
+    expect(stream.bindPage(pid: 4123, pageID: "page-b"), "replacement invalidates the old installation")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 2, pageID: "page-a")
+    stream.startupInstalled(pid: 4123, runID: 1, at: 6, pageID: "page-b")
+    expect(stream.resolve(.ready(runID: 1), observation: oldObservation, at: 8) == .behaviorNotProven(reason: "protocol-error"),
+           "same PID and run ID cannot make an old-page observation satisfy new-page readiness")
+    return checks
+}
+
+
+#if AGENT_SKIN_NATIVE_EVENT_TESTS
+@MainActor
+private final class IdentityDiagnosticApplication: NativeApplication {
+    let mode: String
+    let expectedBundle: URL
+    let expectedExecutable: URL
+    var postOpenMode = ""
+    private(set) var reads: [String] = []
+    init(mode: String, bundle: URL, executable: URL) {
+        self.mode = mode; expectedBundle = bundle; expectedExecutable = executable
+    }
+    var processIdentifier: Int32 { reads.append("pid"); return mode == "invalid-pid" ? -1 : 4123 }
+    var bundleIdentifier: String? {
+        reads.append("bundleID")
+        if mode == "callback-id-missing" || postOpenMode == "id-missing" { return nil }
+        return mode == "callback-id-mismatch" ? "fixture.other" : "com.openai.codex"
+    }
+    var bundleURL: URL? {
+        reads.append("bundle")
+        if mode == "callback-bundle-missing" || postOpenMode == "bundle-missing"
+            || (mode == "callback-bundle-vanishes" && reads.filter { $0 == "bundle" }.count > 1) { return nil }
+        return mode == "callback-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : expectedBundle
+    }
+    var executableURL: URL? {
+        reads.append("executable")
+        if mode == "callback-executable-missing" || postOpenMode == "executable-missing" { return nil }
+        return mode == "facts-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : expectedExecutable
+    }
+    var launchTime: TimeInterval? {
+        reads.append("launchTime")
+        return ["no-launch-time", "no-launch-time-or-date"].contains(mode) ? nil : 123.456
+    }
+    var isTerminated: Bool { reads.append("terminated"); return mode == "callback-terminated" || postOpenMode == "terminated" }
+    var isActive: Bool { false }
+    var isHidden: Bool { false }
+    func activate() -> Bool { fatalError("identity diagnostics must never activate the host") }
+}
+
+private final class IdentityDiagnosticEnvironment: @unchecked Sendable {
+    let mode: String
+    let bundle: URL
+    let executable: URL
+    private(set) var probes: [String] = []
+    private var bundleReads = 0
+    private var processReads = 0
+    private var psReads = 0
+    private var time: TimeInterval = 101
+    init(_ mode: String) {
+        self.mode = mode
+        let path = mode == "invalid-extension" ? "/private/identity-private"
+            : mode == "nested-app" ? "/private/identity-private.app/Inner.app"
+            : "/private/identity-private.app"
+        bundle = URL(fileURLWithPath: path)
+        executable = bundle.appendingPathComponent("Contents/MacOS/Fixture")
+    }
+    func environment() -> CodexTargetEnvironment {
+        CodexTargetEnvironment(
+            mainBundleURL: mode == "launcher-bundle" ? bundle : URL(fileURLWithPath: "/private/launcher.app"),
+            bundleFacts: { [self] _ in
+                bundleReads += 1; probes.append("bundle:\(bundleReads)")
+                if (mode == "bundle-facts-missing" && bundleReads == 1)
+                    || (mode == "signature-bundle-missing" && bundleReads == 2) { return nil }
+                let identifier: String? = mode == "package-id-missing" ? nil
+                    : mode == "package-id-mismatch" || (mode == "signature-id-mismatch" && bundleReads == 2)
+                        ? "fixture.other" : "com.openai.codex"
+                let binary: URL? = mode == "package-executable-missing" ? nil
+                    : mode == "package-executable-outside" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
+                return CodexBundleFacts(identifier: identifier, executableURL: binary)
+            },
+            processFacts: { [self] pid in
+                processReads += 1; probes.append("process:\(processReads)")
+                if (mode == "fresh-process-missing" && processReads == 1)
+                    || (mode == "revalidate-process-missing" && processReads == 2) { return nil }
+                if mode == "ps-budget-timeout" && processReads == 2 { time = 200 }
+                let identifier: String? = mode == "fresh-id-missing" ? nil
+                    : mode == "fresh-id-mismatch" ? "fixture.other" : "com.openai.codex"
+                let processBundle: URL? = mode == "fresh-bundle-missing" ? nil
+                    : mode == "fresh-bundle-mismatch" ? URL(fileURLWithPath: "/private/identity-private-other.app") : bundle
+                let binary: URL? = mode == "fresh-executable-missing" ? nil
+                    : mode == "fresh-executable-mismatch" ? URL(fileURLWithPath: "/private/identity-private-binary") : executable
+                let date: Date? = ["fresh-launch-missing", "no-launch-time-or-date"].contains(mode) ? nil
+                    : Date(timeIntervalSince1970: mode == "fresh-launch-mismatch"
+                           || (mode == "revalidate-launch-mismatch" && processReads == 2)
+                           || (mode == "post-signature-launch-mismatch" && processReads == 3) ? 124.456 : 123.456)
+                return CodexProcessFacts(processIdentifier: pid, isTerminated: mode == "fresh-terminated",
+                                         bundleIdentifier: identifier, bundleURL: processBundle,
+                                         executableURL: binary, launchDate: date)
+            },
+            runningProcesses: { _ in fatalError("identity validation must not enumerate or open the host") },
+            isExecutableFile: { [self] _ in probes.append("executable"); return mode != "not-executable" },
+            runCommand: { [self] file, _, timeout, _ in
+                probes.append("command:\(file):\(timeout)")
+                if file == "/bin/ps" {
+                    psReads += 1
+                    if mode == "ps-nserror" { throw NSError(domain: "IdentityFixture", code: 71, userInfo: [NSLocalizedDescriptionKey: "identity-private-message"]) }
+                    if mode == "ps-inspection-failed" { throw WallpaperFailure(state: "inspection-failed", chinese: "identity-private-message", english: "identity-private-message") }
+                    if mode == "signature-budget-timeout" { time = 200 }
+                    if mode == "ps-field-count" { return "identity-private-output" }
+                    if mode == "ps-uid-missing" { return "invalid \(executable.path)" }
+                    if mode == "ps-uid-mismatch" { return "502 \(executable.path)" }
+                    if mode == "ps-executable-mismatch" { return "501 /private/identity-private-other" }
+                    return "501 \(executable.path)"
+                }
+                precondition(file == "/usr/bin/codesign", "identity fixture must not probe listeners")
+                if mode == "signature-nserror" { throw NSError(domain: "IdentityFixture", code: 72, userInfo: [NSLocalizedDescriptionKey: "identity-private-signature", NSFilePathErrorKey: "/private/identity-private-file"]) }
+                if mode == "signature-inspection-timeout" || mode == "signature-inspection-failed" {
+                    throw WallpaperFailure(state: mode == "signature-inspection-timeout" ? "inspection-timeout" : "inspection-failed",
+                                           chinese: "identity-private-message", english: "identity-private-message")
+                }
+                return ""
+            },
+            currentUID: { [self] in probes.append("uid"); return 501 },
+            now: { [self] in time })
+    }
+}
+
+@MainActor
+private func startupIdentityDiagnosticChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ value: @autoclosure () -> Bool, _ label: String) {
+        guard value() else { fatalError("FAILED: identity diagnostics: \(label)") }
+        checks += 1
+    }
+    let allowed: Set<String> = ["stage", "checkpoint", "at", "pid", "pidObserved", "outcome", "errorDomain", "errorCode", "state", "reason",
+                               "beforeDeadline", "callbackErrorPresent", "applicationPresent", "notTerminated", "bundlePresent", "executablePresent",
+                               "bundleIDPresent", "bundleMatches", "bundleIDMatches", "executableMatches", "launchTimePresent", "pidValid", "appExtensionMatches",
+                               "differentFromLauncher", "notNestedApp", "bundleFactsPresent", "executableInsideBundle", "executableFile", "processPresent",
+                               "expectedLaunchTimePresent", "observedLaunchTimePresent", "launchTimeMatches", "launchTimeAccepted", "fieldCountMatches", "uidPresent", "uidMatches"]
+    func contentFree(_ records: [[String: Any]]) throws {
+        for record in records {
+            expect(Set(record.keys).isSubset(of: allowed), "diagnostics expose only the fixed identity schema")
+            expect(record["stage"] as? String == "target-identity" && record["at"] is TimeInterval,
+                   "every identity record has a fixed stage and its sampled monotonic time")
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+            expect(!text.contains("identity-private") && !text.contains("file://") && !text.contains("/bin/") && !text.contains("/Applications/"),
+                   "paths, ps output, command text and arbitrary error descriptions never enter the sink")
+        }
+    }
+    func expanded(_ record: [String: Any]) -> [[String: Any]] {
+        guard let records = record["checks"] as? [[String: Any]] else { return [record] }
+        expect(Set(record.keys) == ["stage", "checkpoint", "at", "checks"]
+               && record["stage"] as? String == "target-identity"
+               && record["checkpoint"] as? String == "bounded-open" && record["at"] is TimeInterval,
+               "one bounded-open envelope carries only the fixed metadata and actual observations")
+        expect(!records.isEmpty && records.count <= 11, "the finite validation path keeps its diagnostic batch bounded")
+        return records
+    }
+    struct Observation {
+        let reason: String
+        let reads: [String]
+        let probes: [String]
+        let records: [[String: Any]]
+    }
+    func observe(_ mode: String, enabled: Bool) async throws -> Observation {
+        let fixture = IdentityDiagnosticEnvironment(mode)
+        let application = IdentityDiagnosticApplication(mode: mode, bundle: fixture.bundle, executable: fixture.executable)
+        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+        runtime.openedApplication = mode == "callback-missing" ? nil : application
+        if mode == "callback-error" { runtime.openError = NSError(domain: "IdentityFixture", code: 70, userInfo: [NSLocalizedDescriptionKey: "identity-private-open"]) }
+        if mode == "callback-deadline" { runtime.beforeOpenCompletion = { runtime.uptime = 200 } }
+        var records: [[String: Any]] = []
+        var emittedProbeCounts: [Int] = []
+        var emittedGetterCounts: [Int] = []
+        let sink: ((String, [String: Any]) -> Void)? = enabled ? { event, fields in
+            precondition(event == "startup-diagnostic")
+            emittedProbeCounts.append(fixture.probes.count)
+            emittedGetterCounts.append(application.reads.count)
+            records.append(contentsOf: expanded(fields))
+        } : nil
+        let system: any StartupTargetSystem = CodexStartupTargetSystem(environment: fixture.environment())
+        let reason: String
+        do {
+            let result = try await AppDelegate.openTargetApplication(
+                runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
+            expect(result === application, "the unchanged bounded open returns exactly its callback object")
+            reason = "ready"
+        } catch let failure as StartupFailure { reason = failure.reason }
+        expect(runtime.openCount == 1 && runtime.terminated == 0 && runtime.activated == 0,
+               "observations do not add opens, activation, termination or retries")
+        if enabled {
+            expect(emittedProbeCounts == [fixture.probes.count] && emittedGetterCounts == [application.reads.count],
+                   "diagnostic I/O occurs exactly once, after all callback identity decisions and host probes finish")
+        } else { expect(records.isEmpty, "off means no identity records") }
+        try contentFree(records)
+        return Observation(reason: reason, reads: application.reads, probes: fixture.probes, records: records)
+    }
+    let cases: [(String, String, String, String, Bool)] = [
+        ("valid", "ready", "callback-identity", "bundleMatches", true),
+        ("callback-bundle-vanishes", "ready", "callback-identity", "bundlePresent", true),
+        ("no-launch-time", "ready", "launch-time", "expectedLaunchTimePresent", false),
+        ("no-launch-time-or-date", "ready", "process-facts", "expectedLaunchTimePresent", false),
+        ("callback-missing", "target-identity", "callback-identity", "applicationPresent", false),
+        ("callback-terminated", "target-identity", "callback-identity", "notTerminated", false),
+        ("callback-bundle-missing", "target-identity", "callback-identity", "bundlePresent", false),
+        ("callback-executable-missing", "target-identity", "callback-identity", "executablePresent", false),
+        ("callback-id-missing", "target-identity", "callback-identity", "bundleIDPresent", false),
+        ("callback-bundle-mismatch", "target-identity", "callback-identity", "bundleMatches", false),
+        ("callback-id-mismatch", "target-identity", "callback-identity", "bundleIDMatches", false),
+        ("callback-error", "target-missing", "callback-identity", "callbackErrorPresent", true),
+        ("callback-deadline", "attach-timeout", "callback-identity", "beforeDeadline", false),
+        ("invalid-pid", "target-identity", "target-input", "pidValid", false),
+        ("invalid-extension", "target-identity", "target-input", "appExtensionMatches", false),
+        ("launcher-bundle", "target-identity", "target-input", "differentFromLauncher", false),
+        ("nested-app", "target-identity", "target-input", "notNestedApp", false),
+        ("bundle-facts-missing", "target-identity", "target-input", "bundleFactsPresent", false),
+        ("package-id-missing", "target-identity", "target-input", "bundleIDPresent", false),
+        ("package-id-mismatch", "target-identity", "target-input", "bundleIDMatches", false),
+        ("package-executable-missing", "target-identity", "target-input", "executablePresent", false),
+        ("package-executable-outside", "target-identity", "target-input", "executableInsideBundle", false),
+        ("not-executable", "target-identity", "target-input", "executableFile", false),
+        ("fresh-process-missing", "target-identity", "process-facts-initial", "processPresent", false),
+        ("fresh-terminated", "target-identity", "process-facts-initial", "notTerminated", false),
+        ("fresh-id-missing", "target-identity", "process-facts-initial", "bundleIDPresent", false),
+        ("fresh-id-mismatch", "target-identity", "process-facts-initial", "bundleIDMatches", false),
+        ("fresh-bundle-missing", "target-identity", "process-facts-initial", "bundlePresent", false),
+        ("fresh-bundle-mismatch", "target-identity", "process-facts-initial", "bundleMatches", false),
+        ("fresh-executable-missing", "target-identity", "process-facts-initial", "executablePresent", false),
+        ("fresh-executable-mismatch", "target-identity", "process-facts-initial", "executableMatches", false),
+        ("fresh-launch-missing", "target-identity", "launch-time", "observedLaunchTimePresent", false),
+        ("fresh-launch-mismatch", "target-identity", "launch-time", "launchTimeMatches", false),
+        ("revalidate-process-missing", "target-identity", "process-facts", "processPresent", false),
+        ("revalidate-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
+        ("post-signature-launch-mismatch", "target-identity", "process-facts", "launchTimeAccepted", false),
+        ("ps-field-count", "target-identity", "ps-identity", "fieldCountMatches", false),
+        ("ps-uid-missing", "target-identity", "ps-identity", "uidPresent", false),
+        ("ps-uid-mismatch", "target-identity", "ps-identity", "uidMatches", false),
+        ("ps-executable-mismatch", "target-identity", "ps-identity", "executableMatches", false),
+        ("facts-executable-mismatch", "target-identity", "system-target-input", "executableMatches", false),
+        ("signature-bundle-missing", "target-identity", "signature", "bundleFactsPresent", false),
+        ("signature-id-mismatch", "target-identity", "signature", "bundleIDMatches", false),
+    ]
+    for (mode, expectedReason, checkpoint, field, value) in cases {
+        let off = try await observe(mode, enabled: false)
+        let on = try await observe(mode, enabled: true)
+        expect(off.reason == expectedReason && on.reason == off.reason, "opt-in leaves success/refusal unchanged for \(mode)")
+        expect(on.reads == off.reads && on.probes == off.probes, "identity getters and actual host-boundary probe order/count stay unchanged for \(mode)")
+        expect(on.records.contains { $0["checkpoint"] as? String == checkpoint && $0[field] as? Bool == value },
+               "the actual rejecting/accepting predicate is distinguishable for \(mode)")
+        let callback = on.records.first { $0["checkpoint"] as? String == "callback-identity" }!
+        if on.reads.contains("pid") {
+            expect(callback["pid"] as? Int32 == (mode == "invalid-pid" ? -1 : 4123) && callback["pidObserved"] as? Bool == true,
+                   "PID comes only from the facts constructed after callback guards")
+        } else {
+            expect(callback["pid"] == nil && callback["pidObserved"] as? Bool == false,
+                   "an early refusal never samples an unvisited PID just for logging")
+        }
+        if mode == "callback-bundle-missing" {
+            expect(on.reads == ["terminated", "bundle"] && callback["executablePresent"] == nil && callback["bundleMatches"] == nil,
+                   "unvisited short-circuit predicates stay absent rather than looking missing or mismatched")
+        }
+        if mode == "fresh-process-missing" {
+            expect(on.probes == ["bundle:1", "executable", "process:1"],
+                   "a missing initial process snapshot is never re-probed for diagnosis")
+        }
+        if mode == "valid" {
+            expect(on.reads == ["terminated", "bundle", "executable", "bundleID", "pid", "launchTime"],
+                   "callback diagnostic taps consume the original getter order exactly once")
+            expect(on.probes == ["bundle:1", "executable", "process:1", "process:2", "command:/bin/ps:2.0", "uid", "bundle:2", "command:/usr/bin/codesign:12.0", "process:3", "command:/bin/ps:2.0", "uid"],
+                   "production validation through the existential still performs its original three snapshots/two ps/one signature checks")
+        }
+    }
+    let failures: [(String, String, String, String?, Int?)] = [
+        ("ps-nserror", "target-identity", "ps-identity", nil, 71),
+        ("ps-inspection-failed", "target-identity", "ps-identity", "inspection-failed", nil),
+        ("ps-budget-timeout", "attach-timeout", "ps-identity", nil, nil),
+        ("signature-budget-timeout", "attach-timeout", "signature", nil, nil),
+        ("signature-nserror", "target-identity", "signature", nil, 72),
+        ("signature-inspection-timeout", "attach-timeout", "signature", "inspection-timeout", nil),
+        ("signature-inspection-failed", "target-identity", "signature", "inspection-failed", nil),
+    ]
+    for (mode, expectedReason, checkpoint, state, code) in failures {
+        let off = try await observe(mode, enabled: false)
+        let on = try await observe(mode, enabled: true)
+        expect(off.reason == expectedReason && on.reason == off.reason && on.reads == off.reads && on.probes == off.probes,
+               "throwing checkpoint leaves error mapping and all probe counts unchanged for \(mode)")
+        let record = on.records.first { $0["checkpoint"] as? String == checkpoint && $0["outcome"] as? String == "error" }!
+        if let state { expect(record["state"] as? String == state, "original fixed WallpaperFailure state survives at \(checkpoint)") }
+        if let code { expect(record["errorDomain"] as? String == "IdentityFixture" && record["errorCode"] as? Int == code,
+                             "raw NSError identity survives before outer failure mapping") }
+        if mode == "signature-nserror" || mode == "signature-inspection-failed" {
+            expect(on.records.last?["state"] as? String == "signature-refused", "signature diagnostics distinguish the raw command failure from its existing public mapping")
+        }
+    }
+    // Default protocol forwarding keeps fake/custom target systems on their exact
+    // existing validate path; it must not swallow production dynamic dispatch.
+    let typedErrors: [Error] = [StartupFailure(reason: "attach-timeout", message: "identity-private-timeout"),
+                               WallpaperFailure(state: "inspection-timeout", chinese: "identity-private", english: "identity-private"),
+                               WallpaperFailure(state: "target-changed", chinese: "identity-private", english: "identity-private"),
+                               NSError(domain: "IdentityFixture", code: 73, userInfo: [NSLocalizedDescriptionKey: "identity-private"])]
+    for (index, error) in typedErrors.enumerated() {
+        let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"])
+        let fixture = IdentityDiagnosticEnvironment("valid")
+        runtime.openedApplication = IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+        let system = FakeStartupSystem(expectedPID: 4123, ports: [])
+        system.validationError = error
+        var records: [[String: Any]] = []
+        do {
+            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                                                           port: 9333, deadline: 200, system: system, log: { _, _ in },
+                                                           diagnostics: { _, record in records.append(contentsOf: expanded(record)) })
+            fatalError("typed validation failure must still reject")
+        } catch let failure as StartupFailure {
+            expect(failure.reason == (index < 2 ? "attach-timeout" : "target-identity"), "all existing bounded-open typed error mappings stay fixed")
+        }
+        expect(system.validatedPIDs == [4123] && records.last?["checkpoint"] as? String == "system-validation",
+               "default overload forwards once and the catch identifies its own checkpoint")
+        try contentFree(records)
+    }
+    // The callback may have complete facts while the next, independently used
+    // post-open snapshot does not. Never overwrite the earlier observation.
+    for mode in ["", "bundle-missing", "executable-missing", "id-missing", "terminated"] {
+        for enabled in [false, true] {
+            let fixture = IdentityDiagnosticEnvironment("valid")
+            let application = IdentityDiagnosticApplication(mode: "callback-bundle-vanishes", bundle: fixture.bundle, executable: fixture.executable)
+            let runtime = FakeNativeAppRuntime(arguments: ["identity fixture"]); runtime.openedApplication = application
+            let system = FakeStartupSystem(expectedPID: 4123, ports: [])
+            var records: [[String: Any]] = []
+            let sink: ((String, [String: Any]) -> Void)? = enabled ? { _, record in records.append(contentsOf: expanded(record)) } : nil
+            _ = try await AppDelegate.openTargetApplication(runtime: runtime, targetBundleID: "com.openai.codex", url: fixture.bundle,
+                                                           port: 9333, deadline: 200, system: system, log: { _, _ in }, diagnostics: sink)
+            // Use a separate application for the non-bundle predicates so the
+            // original short-circuit order is tested at every post-open field.
+            let postApplication = mode.isEmpty || mode == "bundle-missing" ? application
+                : IdentityDiagnosticApplication(mode: "valid", bundle: fixture.bundle, executable: fixture.executable)
+            postApplication.postOpenMode = mode
+            let delegate = AppDelegate(runtime: runtime, presentation: FakeNativePlayerPresentation())
+            do {
+                _ = try delegate.startupFacts(postApplication, diagnostics: sink, at: 102)
+                fatalError("post-open missing identity must still reject")
+            } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "post-open disappearance keeps its existing refusal") }
+            if enabled {
+                let callback = records.first { $0["checkpoint"] as? String == "callback-identity" }!
+                let post = records.last!
+                expect(callback["outcome"] as? String == "accepted" && callback["bundlePresent"] as? Bool == true
+                       && post["checkpoint"] as? String == "post-open-facts" && post["outcome"] as? String == "rejected",
+                       "later field loss is distinguished from the successful callback snapshot")
+                expect(post["pid"] == nil && post["pidObserved"] as? Bool == false && post["at"] as? TimeInterval == 102,
+                       "post-open refusal records only observed predicates at its own time")
+                try contentFree(records)
+            } else { expect(records.isEmpty, "post-open diagnostics also remain opt-in") }
+        }
+    }
+    let fixture = IdentityDiagnosticEnvironment("no-launch-time")
+    let application = IdentityDiagnosticApplication(mode: "no-launch-time", bundle: fixture.bundle, executable: fixture.executable)
+    var postRecords: [[String: Any]] = []
+    var clockReads = 0
+    func clock() -> TimeInterval { clockReads += 1; return 102 }
+    let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["identity fixture"]),
+                               presentation: FakeNativePlayerPresentation())
+    let offFacts = try delegate.startupFacts(application, at: clock())
+    expect(clockReads == 0 && offFacts.launchTime == nil, "disabled diagnostic does not evaluate even its clock autoclosure")
+    let onFacts = try delegate.startupFacts(application, diagnostics: { _, record in postRecords.append(record) }, at: clock())
+    expect(clockReads == 1 && onFacts.pid == offFacts.pid && onFacts.bundle == offFacts.bundle && onFacts.executable == offFacts.executable
+           && onFacts.bundleID == offFacts.bundleID && onFacts.launchTime == nil,
+           "accepted post-open facts stay identical and absent launch time remains allowed")
+    expect(postRecords.count == 1 && postRecords[0]["pid"] as? Int32 == 4123 && postRecords[0]["launchTimePresent"] as? Bool == false,
+           "accepted post-open diagnostic uses its constructed facts")
+    try contentFree(postRecords)
+    let scopeFixture = IdentityDiagnosticEnvironment("valid")
+    let scopedSystem: any StartupTargetSystem = CodexStartupTargetSystem(environment: scopeFixture.environment())
+    let facts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
+                                   bundleID: "com.openai.codex", launchTime: 123.456)
+    var scopedRecords: [[String: Any]] = []
+    try scopedSystem.validate(facts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
+    let count = scopedRecords.count
+    try scopedSystem.validate(facts, deadline: 200)
+    try scopedSystem.validate(facts, deadline: 200, diagnostics: nil)
+    expect(count > 0 && scopedRecords.count == count, "the diagnostic environment copy never leaks its sink into later validations")
+    let wrongFacts = StartupTargetFacts(pid: 4123, bundle: scopeFixture.bundle, executable: scopeFixture.executable,
+                                        bundleID: "fixture.other", launchTime: nil)
+    do {
+        try scopedSystem.validate(wrongFacts, deadline: 200, diagnostics: { _, record in scopedRecords.append(record) })
+        fatalError("a wrong target ID must still reject before any process probe")
+    } catch let failure as StartupFailure { expect(failure.reason == "target-identity", "system target-input guard is unchanged") }
+    expect(scopedRecords.last?["checkpoint"] as? String == "system-target-input"
+           && scopedRecords.last?["bundleIDMatches"] as? Bool == false,
+           "direct system input refusal gets its own content-free predicate")
+    try contentFree(scopedRecords)
+    return checks
+}
+#endif

@@ -148,6 +148,116 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertTrue(json.loads(result.stdout)["severe_trigger"])
 
+    def test_project_candidate_rejects_foreign_imported_evidence(self) -> None:
+        for severe in (False, True):
+            with self.subTest(severe=severe), tempfile.TemporaryDirectory() as directory:
+                target = Path(directory) / "target"
+                foreign = Path(directory) / "foreign"
+                target.mkdir()
+                foreign.mkdir()
+                self.add_signal(
+                    foreign, session="foreign-one",
+                    category="privacy" if severe else "stale_fact",
+                    severity="critical" if severe else "medium",
+                )
+                if not severe:
+                    self.add_signal(foreign, session="foreign-two")
+                source = foreign / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+                before = source.read_bytes()
+                result = self.propose(target, "--include-signal-file", str(source))
+                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                self.assertIn("two independent", result.stderr)
+                self.assertEqual(before, source.read_bytes())
+                self.assertFalse(list((target / ".azhou/super-repo-pedant/evolution/candidates").glob("*.json")))
+
+    def test_project_candidate_does_not_combine_owned_and_foreign_sessions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            foreign = Path(directory) / "foreign"
+            target.mkdir()
+            foreign.mkdir()
+            self.add_signal(target, session="owned")
+            self.add_signal(foreign, session="foreign")
+            source = foreign / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            result = self.propose(target, "--include-signal-file", str(source))
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+
+    def test_project_candidate_filters_polluted_batch_before_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            foreign = Path(directory) / "foreign"
+            target.mkdir()
+            foreign.mkdir()
+            owned = [
+                json.loads(self.add_signal(target, session=session).stdout)
+                for session in ("owned-one", "owned-two")
+            ]
+            success = json.loads(self.add_signal(target, session="success", outcome="success").stdout)
+            self.add_signal(foreign, session="foreign-one", category="privacy", severity="critical")
+            self.add_signal(foreign, session="foreign-two")
+            source = foreign / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            foreign_rows = [json.loads(line) for line in source.read_text().splitlines()]
+            live = target / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            live.write_text(live.read_text() + source.read_text())
+            result = self.propose(target)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            candidate = json.loads(result.stdout)
+            self.assertEqual(sorted(row["signal_id"] for row in owned), candidate["signal_ids"])
+            self.assertEqual(2, candidate["independent_sessions"])
+            self.assertEqual(1, candidate["projects"])
+            self.assertFalse(candidate["severe_trigger"])
+            archived = self.run_cli("archive", "--project", str(target), "--candidate", candidate["candidate"])
+            self.assertEqual(0, archived.returncode, archived.stdout + archived.stderr)
+            remaining = [json.loads(line)["signal_id"] for line in live.read_text().splitlines()]
+            self.assertEqual([success["signal_id"], *[row["signal_id"] for row in foreign_rows]], remaining)
+
+    def test_project_candidate_ignores_success_for_corroboration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            foreign = Path(directory) / "foreign"
+            target.mkdir()
+            foreign.mkdir()
+            self.add_signal(target, session="owned-failure")
+            self.add_signal(target, session="owned-success", outcome="success")
+            self.add_signal(foreign, session="foreign-partial", outcome="partial")
+            source = foreign / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            result = self.propose(target, "--include-signal-file", str(source))
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+
+    def test_duplicate_session_signals_do_not_clear_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            self.add_signal(project, session="same-session")
+            self.add_signal(project, session="same-session", observed_at="2026-08-24T00:00:00+00:00")
+            result = self.propose(project)
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("two independent", result.stderr)
+
+    def test_project_candidate_accepts_same_origin_linked_worktree_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            linked = Path(directory) / "linked"
+            for command in (
+                ["git", "init", "--quiet", str(target)],
+                ["git", "-C", str(target), "config", "remote.origin.url", "https://example.invalid/project.git"],
+                ["git", "-C", str(target), "-c", "user.name=Synthetic Fixture",
+                 "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+                 "commit", "--allow-empty", "-m", "Synthetic fixture"],
+                ["git", "-C", str(target), "worktree", "add", "--detach", str(linked), "HEAD"],
+            ):
+                setup = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", check=False)
+                self.assertEqual(0, setup.returncode, setup.stdout + setup.stderr)
+            owned = json.loads(self.add_signal(target, session="owned").stdout)
+            sibling = json.loads(self.add_signal(linked, session="linked").stdout)
+            self.assertEqual(owned["project_id"], sibling["project_id"])
+            source = linked / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            result = self.propose(target, "--include-signal-file", str(source))
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            candidate = json.loads(result.stdout)
+            self.assertEqual(1, candidate["projects"])
+            self.assertEqual(2, candidate["independent_sessions"])
+            self.assertEqual(sorted([owned["signal_id"], sibling["signal_id"]]), candidate["signal_ids"])
+
     def test_failed_processing_retains_batch_and_valid_candidate_can_archive_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)

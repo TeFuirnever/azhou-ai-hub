@@ -79,6 +79,33 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = set()
+PROJECT_LOCAL_SKILL_PATHS = {
+    ".agents/skills/agent-experience/SKILL.md",
+    ".agents/skills/architecture-governance/SKILL.md",
+    ".agents/skills/cordis-styling-nitpicking/SKILL.md",
+    ".agents/skills/dep-refs/SKILL.md",
+    ".agents/skills/dsh-archive-agent-notes/SKILL.md",
+    ".agents/skills/dsh-ci-test-reliability/SKILL.md",
+    ".agents/skills/dsh-client-ui-ux/SKILL.md",
+    ".agents/skills/dsh-code-review/SKILL.md",
+    ".agents/skills/dsh-create-upgrade-guide/SKILL.md",
+    ".agents/skills/dsh-doc/SKILL.md",
+    ".agents/skills/dsh-error-handling/SKILL.md",
+    ".agents/skills/dsh-find-simplifications/SKILL.md",
+    ".agents/skills/dsh-pre-push-checks/SKILL.md",
+    ".agents/skills/dsh-prose-standard/SKILL.md",
+    ".agents/skills/dsh-responsive-ui/SKILL.md",
+    ".agents/skills/dsh-speed-up-perf/SKILL.md",
+    ".agents/skills/dsh-translate-docs/SKILL.md",
+    ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
+    ".agents/skills/e2e-case-lifecycle/SKILL.md",
+    ".agents/skills/feature-boundary-planner/SKILL.md",
+    ".agents/skills/record-browser-gif/SKILL.md",
+}
+ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
+ZCODE_NOTICES = {f".agents/skills/{name}/NOTICE-ZCode.md" for name in (
+    "architecture-governance", "dep-refs", "e2e-case-lifecycle", "feature-boundary-planner"
+)}
 INVOCATION_CLASSES = (
     "user-invoked orchestrator",
     "model-invoked discipline",
@@ -154,11 +181,11 @@ SKILL_BRAND_CONTRACTS = {
 }
 
 BASELINE_HASHES = {
-    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "6c0ca2236d3518ccaad710f6db8e9c4aa7af67b685dc699ad347ae42186951e1",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "8210a3cc1211283f71f068de99fd17e62fb9ce269ca6e693879ce6c30e31aff6",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "5c771ba2695a0d0dc54ef636531d61c916ed7f0f39db39827bbb330268f7648d",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "6bf4bbf171864f2c82a5f8b8cf441df043362e8790c69ddca38f207c38bb5f72",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "cd3f4bf5cdc59c3aa51db868801f7461563a4b4a58b72799a6753c1f863c4126",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "6d10fb626bf72c53acc0b567d754837532859751ebb7be49ccd2b0ecd441c59c",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "bcf5138f079cde8368d28c8011eee1f43b8fe2df86cc1754690a3e6c802e2c60",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "696233e82288514b944f888e7ee09f922b00dd1af9f9797fc0b95099639dd383",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "b77224988faceadd5d0e67f97202565964fa8bdebd45f56fb2d7500974c3f03a",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "62881879bc01ec24d92534f67f80e34d7734c8405c7178b10eff7bc018681652",
 }
 
 
@@ -176,7 +203,7 @@ def public_files(root: Path = ROOT) -> list[Path]:
 
 
 def check_required(root: Path) -> list[str]:
-    return [f"required public file missing: {name}" for name in REQUIRED_PATHS if not (root / name).is_file()]
+    return [f"required public file missing: {name}" for name in (*REQUIRED_PATHS, *sorted(PROJECT_LOCAL_SKILL_PATHS)) if not (root / name).is_file()]
 
 
 def check_treehouse_config(root: Path) -> list[str]:
@@ -258,7 +285,9 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
     repository_extensions = {
         path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
     }
-    expected = INSTALLABLE_SKILL_PATHS | repository_extensions
+    expected = INSTALLABLE_SKILL_PATHS | repository_extensions | {
+        path for path in PROJECT_LOCAL_SKILL_PATHS if (root / path).is_file()
+    }
     errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
     errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
     return errors
@@ -601,6 +630,7 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
 RESIDUE_PROVENANCE_PATH_PATTERNS = (
     re.compile(r"^skills/[^/]+/references/(provenance|upstream-compatibility|neat-freak-compatibility)\.md$"),
     re.compile(r"^THIRD_PARTY_NOTICES\.md$"),
+    re.compile(r"^tests/archify-vendor-manifest\.json$"),
 )
 RESIDUE_COMPATIBILITY_COVERAGE_PATTERNS = (
     re.compile(r"^skills/[^/]+/scripts/[^/]+\.py$"),
@@ -705,6 +735,17 @@ def check_azhou_description_brand(root: Path) -> list[str]:
     return errors
 
 
+# Exact upstream protocol/path literals are not canonical package identities.
+# Keep this allowlist narrow: all other old-name occurrences in these same
+# files still fail. The vendor manifest independently binds the source bytes.
+UPSTREAM_IDENTITY_LITERALS = {
+    "skills/super-archify/bin/preview.mjs": ("const cliPath = path.join(here, 'archify.mjs');",),
+    "skills/super-archify/scripts/update-contract.mjs": ("export const SKILL_ID = 'archify';",),
+    "skills/super-archify/skill-release.json": ('"skillId": "archify"',),
+    "skills/super-archify/bin/archify.mjs": ("Use: archify patch explainer ",),
+}
+
+
 def check_rename_residue(files: list[Path], root: Path) -> list[str]:
     """Fail when a renamed-away canonical name leaks outside allowed surfaces."""
     errors: list[str] = []
@@ -724,7 +765,11 @@ def check_rename_residue(files: list[Path], root: Path) -> list[str]:
             continue
         for old_name, new_name in sorted(RENAMED_AWAY_SKILLS.items()):
             token = re.compile(rf"(?<![\w./-]){re.escape(old_name)}(?![\w-])")
-            if token.search(text):
+            candidate_text = text
+            if old_name == "archify":
+                for literal in UPSTREAM_IDENTITY_LITERALS.get(relative, ()):
+                    candidate_text = candidate_text.replace(literal, "")
+            if token.search(candidate_text):
                 errors.append(f"rename residue outside allowed surfaces: {relative}: {old_name} -> {new_name}")
     return errors
 
@@ -975,6 +1020,10 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
             continue
         relative = path.relative_to(root).as_posix()
         if relative.startswith(VENDORED_ROOTS):
+            continue
+        if relative in ZCODE_NOTICES:
+            if hashlib.sha256(path.read_bytes()).hexdigest() != ZCODE_NOTICE_SHA256:
+                errors.append(f"upstream notice changed: {relative}")
             continue
         # An overlay file reads as if it sat at its shipped location, so a link
         # written against that layout is checked there and not in the source tree.
