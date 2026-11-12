@@ -420,6 +420,29 @@ class PstackIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(common.IntegrationError, "router configuration has no Hub ownership receipt"):
             self.plan()
 
+    def test_marketplace_guard_recognizes_toml_key_forms(self):
+        tables = ['[marketplaces.azhou-hub]\nsource_type = "local"\n',
+                  '[marketplaces."azhou-hub"]\nsource_type = "local"\n',
+                  "[marketplaces.'azhou-hub']\nsource_type = 'local'\n",
+                  '[marketplaces.pstack-claude]\nsource_type = "local"\n',
+                  '[marketplaces."pstack-claude"]\nsource_type = "local"\n']
+        for index, table in enumerate(tables, start=1):
+            with self.subTest(table=table.strip().splitlines()[0]):
+                home = self.base / f"toml-home-{index}"
+                home.mkdir()
+                (home / "config.toml").write_text(table, encoding="utf-8")
+                with self.assertRaisesRegex(common.IntegrationError, "no Hub ownership receipt"):
+                    pstack.make_plan(source=None, workspace=self.workspace, codex_home=home,
+                                     codex_bin=self.binary, operation="install", hub_root=self.hub)
+                # The no-adoption guard must hold before any target write, so
+                # the coexistence sheet was never created either.
+                self.assertFalse((home / "pstack-models.md").exists())
+
+    def test_unrelated_marketplace_name_does_not_block_receipt_less_target(self):
+        self.home.mkdir(parents=True)
+        (self.home / "config.toml").write_text('[marketplaces."other-hub"]\nsource_type = "local"\n', encoding="utf-8")
+        self.assertEqual(self.plan()["operation"], "install")
+
     def test_existing_config_symlink_is_not_written_through(self):
         self.home.mkdir(parents=True)
         external = self.base / "external.toml"

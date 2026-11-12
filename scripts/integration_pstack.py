@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -323,6 +324,27 @@ def _registered(value: dict, name: str, section: str) -> bool:
     return any(row.get(field) == name for row in rows)
 
 
+_MARKETPLACE_TABLE_KEY = re.compile(
+    r"\[marketplaces\.(?:\"((?:[^\"\\]|\\.)*)\"|'([^']+)'|([A-Za-z0-9_-]+))")
+
+
+def _config_mentions_managed_pstack(config_text: str) -> bool:
+    """Whether a Codex config names a Hub-managed pstack marketplace or plugin.
+
+    Marketplace tables are matched as TOML table keys, not substrings, so a
+    quoted key such as ``[marketplaces."azhou-hub"]`` is recognized too and an
+    unrelated mention of the bare word never blocks. The plugin id and the
+    legacy marketplace name stay substring words: both are specific enough to
+    appear only for pstack registrations and quoted or bare forms alike.
+    """
+    names = {MARKETPLACE, LEGACY_MARKETPLACE}
+    for match in _MARKETPLACE_TABLE_KEY.finditer(config_text):
+        key = next(group for group in match.groups() if group is not None)
+        if key in names:
+            return True
+    return any(word in config_text for word in [PLUGIN, LEGACY_MARKETPLACE, "pstack@"])
+
+
 def _verify_registry_source(marketplaces: dict, snapshot: Path, plugins: dict | None = None,
                             *, plugin_id: str = PLUGIN, plugin_root: str = PLUGIN_ROOT,
                             marketplace: str = MARKETPLACE, require_enabled: bool = True) -> None:
@@ -471,9 +493,9 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         raise common.IntegrationError("remove the prior owned package version before installing changed package inputs")
     if (receipt is not None and operation == "install" and receipt.get("state") == "removed"
             and (_plugin_copies(home)[0]
-                 or (home / "config.toml").is_file() and any(
-                     word in (home / "config.toml").read_text(encoding="utf-8")
-                     for word in [PLUGIN, "marketplaces." + MARKETPLACE, LEGACY_MARKETPLACE, "pstack@"]))):
+                 or (home / "config.toml").is_file()
+                 and _config_mentions_managed_pstack(
+                     (home / "config.toml").read_text(encoding="utf-8")))):
         # A completed removal leaves its receipt behind. A registration that
         # reappeared afterwards was not installed by the Hub, and installing
         # over it — or converting the sheet around it — would be adoption.
@@ -492,9 +514,11 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
         if any("symlink" in item for item in inventory.values()):
             raise common.IntegrationError("pre-existing Codex configuration files must not be symlinks")
         config = home / "config.toml"
-        if config.is_file() and any(word in config.read_text(encoding="utf-8") for word in
-                                    [PLUGIN, "marketplaces." + MARKETPLACE, LEGACY_MARKETPLACE, "pstack@", "astra-orchestrator"]):
-            raise common.IntegrationError("existing pstack or router configuration has no Hub ownership receipt")
+        if config.is_file():
+            config_text = config.read_text(encoding="utf-8")
+            if (_config_mentions_managed_pstack(config_text)
+                    or "astra-orchestrator" in config_text):
+                raise common.IntegrationError("existing pstack or router configuration has no Hub ownership receipt")
     if operation == "install":
         origin = common.inspect_source(COMPONENT, source, hub_root=hub_root)
         source_path = Path(origin["source"])
@@ -909,8 +933,7 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
     config = home / "config.toml"
     if config.is_file():
         try:
-            config_registered = any(word in config.read_text(encoding="utf-8") for word in
-                                    [PLUGIN, "marketplaces." + MARKETPLACE, LEGACY_MARKETPLACE, "pstack@"])
+            config_registered = _config_mentions_managed_pstack(config.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             anomalies.append("config.toml could not be read: " + str(exc))
 
