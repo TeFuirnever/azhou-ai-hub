@@ -4,6 +4,8 @@
 >
 > 范围：`alchaincyf/alchaincyf`、`affaan-m/ECC`、`mattpocock/skills`，以及 GitHub 官方仓库治理文档。
 > 说明：下文把“观察”与“建议”分开。观察只描述公开仓库中可直接核验的事实；建议是针对 Azhou AI Hub 的取舍，不把参考项目做法自动视为最佳实践。
+>
+> **2026-11-12 现状注**：这是带日期的研究记录，非现行规则。合并政策的现行权威是 `Protect main` ruleset（`gh api repos/TeFuirnever/azhou-ai-hub/rulesets/21228897`）；下文若干清单项已为单人维护者工作流放宽——approval 数与 last-push 他人批准均为 0/off，`strict_required_status_checks_policy` 已于 2026-11-12 关闭（BEHIND 不再阻塞合并）。
 
 ## 结论
 
