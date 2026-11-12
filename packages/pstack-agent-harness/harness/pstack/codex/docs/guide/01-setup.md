@@ -12,7 +12,7 @@ In a Cursor chat, run:
 
 Cursor confirms the plugin is installed.
 
-In Claude Code, run `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@pstack-claude`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack-azhouzhou:` prefix there, such as `/pstack-azhouzhou:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/claude-code.md) covers the other differences.
+In Claude Code, run `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@azhou-hub`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack-azhouzhou:` prefix there, such as `/pstack-azhouzhou:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](https://github.com/cursor/plugins/blob/main/pstack/docs/harness/claude-code.md) covers the other differences.
 
 ## Pick your models
 

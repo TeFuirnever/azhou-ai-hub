@@ -22,10 +22,10 @@ in claude code:
 
 ```bash
 /plugin marketplace add <absolute-Hub-package-directory>
-/plugin install pstack-azhouzhou@pstack-claude
+/plugin install pstack-azhouzhou@azhou-hub
 ```
 
-claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `pstack-claude`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack-azhouzhou@pstack-claude`.
+claude code leaves auto-update off for third-party marketplaces, so pstack stays on the version you installed. to turn it on, run `/plugin`, open the **marketplaces** tab, select `azhou-hub`, and choose **enable auto-update**. to update once by hand, run `claude plugin update pstack-azhouzhou@azhou-hub`.
 
 claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack-azhouzhou:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack-azhouzhou:setup-pstack` writes your model choices to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
 

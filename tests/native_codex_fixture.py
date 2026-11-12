@@ -17,6 +17,12 @@ with log.open('a') as out:
     out.write(json.dumps(a)+'\n')
 def source():
     return json.loads(state.read_text())['source']
+def mkt():
+    # A real host reads the marketplace name once at `marketplace add` time
+    # and keeps reporting it. The snapshot's manifest decides the name.
+    if not state.exists():
+        return None
+    return json.loads(state.read_text()).get('name', 'pstack-claude')
 def variant():
     if not state.exists():
         return 'pstack-azhouzhou', 'harness/pstack/codex'
@@ -30,34 +36,47 @@ def variant():
     return 'pstack-azhouzhou', 'harness/pstack/codex'
 def installed():
     name, _ = variant()
-    return h / 'plugins/cache/pstack-claude' / name / '0.9.102'
+    return h / 'plugins/cache' / mkt() / name / '0.9.102'
 if a[:2] == ['marketplace', 'add']:
     assert pathlib.Path(a[2]).is_absolute()
     assert not a[2].startswith('https:')
-    state.write_text(json.dumps({'source': a[2]}))
-    print(json.dumps({'marketplaceName': 'pstack-claude', 'installedRoot': a[2], 'alreadyAdded': False}))
-elif a[0:1] == ['add'] and len(a) == 2 and a[1] == variant()[0] + '@pstack-claude':
+    name = 'pstack-claude'
+    if os.environ.get('PSTACK_TEST_PRE_RENAME_MARKETPLACE') != '1':
+        manifest = pathlib.Path(a[2])/'.agents/plugins/marketplace.json'
+        if manifest.is_file():
+            try:
+                declared = json.loads(manifest.read_text()).get('name')
+                if declared:
+                    name = declared
+            except ValueError:
+                pass
+    state.write_text(json.dumps({'source': a[2], 'name': name}))
+    print(json.dumps({'marketplaceName': name, 'installedRoot': a[2], 'alreadyAdded': False}))
+elif a[0:1] == ['add'] and len(a) == 2 and a[1] == variant()[0] + '@' + mkt():
     if os.environ.get('PSTACK_TEST_FAIL_PLUGIN'):
         sys.exit('fixture plugin installation failure')
     name, path = variant()
     shutil.copytree(pathlib.Path(source())/path, installed(), dirs_exist_ok=True)
-    print(json.dumps({'pluginId': name+'@pstack-claude', 'version': '0.9.102', 'installedPath': str(installed())}))
+    print(json.dumps({'pluginId': name+'@'+mkt(), 'version': '0.9.102', 'installedPath': str(installed())}))
 elif a == ['marketplace', 'list']:
-    entries = [{'name':'pstack-claude', 'root':source(), 'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() else []
+    entries = [{'name':mkt(), 'root':source(), 'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() else []
     print(json.dumps({'marketplaces':entries}))
-elif a == ['list', '--marketplace', 'pstack-claude'] or a == ['list']:
+elif a[0:1] == ['list']:
+    if a[1:2] == ['--marketplace'] and (len(a) != 3 or a[2] != mkt()):
+        print(json.dumps({'installed':[], 'available':[]}))
+        sys.exit(0)
     if os.environ.get('PSTACK_TEST_MALFORMED_REGISTRY'):
         print(json.dumps({'available':[]}))
         sys.exit(0)
     selected_name, selected_root = variant()
-    entries = [{'pluginId':selected_name+'@pstack-claude','name':selected_name,'marketplaceName':'pstack-claude','installed':True,'enabled':not bool(os.environ.get('PSTACK_TEST_DISABLED_PLUGIN')),'source':{'source':'local','path':str(pathlib.Path(source())/selected_root)},'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() and installed().exists() else []
+    entries = [{'pluginId':selected_name+'@'+mkt(),'name':selected_name,'marketplaceName':mkt(),'installed':True,'enabled':not bool(os.environ.get('PSTACK_TEST_DISABLED_PLUGIN')),'source':{'source':'local','path':str(pathlib.Path(source())/selected_root)},'marketplaceSource':{'sourceType':'local','source':source()}}] if state.exists() and installed().exists() else []
     if os.environ.get('PSTACK_TEST_FOREIGN_PLUGIN'):
-        entries.append({'pluginId':'foreign@pstack-claude','name':'foreign','installed':True,'enabled':True})
+        entries.append({'pluginId':'foreign@'+mkt(),'name':'foreign','installed':True,'enabled':True})
     print(json.dumps({'installed':entries,'available':[]}))
-elif a[0:1] == ['remove'] and len(a) == 2 and state.exists() and a[1] == variant()[0] + '@pstack-claude':
+elif a[0:1] == ['remove'] and len(a) == 2 and state.exists() and a[1] == variant()[0] + '@' + mkt():
     shutil.rmtree(installed())
     print(json.dumps({'removed':True}))
-elif a == ['marketplace', 'remove', 'pstack-claude']:
+elif a[:2] == ['marketplace', 'remove'] and len(a) == 3 and a[2] == mkt():
     state.unlink()
     print(json.dumps({'removed':True}))
 else:

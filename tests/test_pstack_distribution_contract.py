@@ -114,7 +114,7 @@ class PstackDistributionContractTest(unittest.TestCase):
                 self.assertIn("/pstack-azhouzhou:poteto-mode", readme)
                 self.assertNotIn("/pstack:poteto-mode", readme)
                 helper = (tree / "skills/poteto-help/SKILL.md").read_text(encoding="utf-8")
-                self.assertIn("pstack-azhouzhou@pstack-claude", helper)
+                self.assertIn("pstack-azhouzhou@azhou-hub", helper)
                 self.assertNotIn("pstack@cursor-plugins", helper)
                 guide = (tree / "docs/guide/01-setup.md").read_text(encoding="utf-8")
                 self.assertIn("/pstack-azhouzhou:setup-pstack", guide)
