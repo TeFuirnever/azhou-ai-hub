@@ -34,7 +34,7 @@ The tracked workflows under `.agents/skills/` adapt [DeepSeek Harness](https://g
 
 `assets/github/foundation-cli-effect.png`, `assets/github/integration-pstack-effect.png` and `assets/github/integration-agent-skin-effect.png` are Azhou-maintained illustrations generated in-house on 2026-11-12 with the Grok Bot assistant's image-generation tool from text prompts, using the existing `assets/skills/super-eli5-effect.png` as the style and character reference for the Azhou fox. They did not come from the local Azhou imagegen pipeline or the governed azhou-scenes pipeline, have no machine colour gate, and are not skill showcase scenes under `docs/skill-standard.md` §131. They contain no text, no third-party logos and no copied assets.
 
-Visual and rights review by the maintainer (IP owner) is pending for all 27 files; the README captions say so. When replacing any of them, repeat the visual and rights review.
+The maintainer (IP owner) visually approved all 27 files on 2026-11-12; the README captions record this. No separate rights review is recorded beyond that approval. When replacing any of them, repeat the visual and rights review.
 
 ## Super Repo Pedant baseline
 
