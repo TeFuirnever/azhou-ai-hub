@@ -17,7 +17,7 @@ export function trackOwnedChild(child) {
   let stopping;
   return {
     state,
-    stop({ termMs = 2000, killMs = 1000 } = {}) {
+    stop({ termMs = 2000, killMs = 1000, closeMs = 30000 } = {}) {
       if (stopping) return stopping;
       stopping = (async () => {
         if (!state.exited && !state.spawnFailed) {
@@ -28,7 +28,12 @@ export function trackOwnedChild(child) {
           child.kill('SIGKILL');
           await waitFor(exited, killMs);
         }
-        if (!state.closed && !state.spawnFailed) await waitFor(closed, killMs);
+        // A dead browser is not a closed pipe: Chrome helper processes inherit
+        // the stderr pipe and can outlive the exited browser by ~25s (measured
+        // on a native-transport run holding the page socket). Only runs whose
+        // child died with the pipe still open reach this wait, and past closeMs
+        // the unconfirmed pipe keeps cleanup fail-closed.
+        if (state.exited && !state.closed && !state.spawnFailed) await waitFor(closed, closeMs);
         return (state.exited && state.closed) || (state.spawnFailed && child.pid === undefined);
       })();
       return stopping;

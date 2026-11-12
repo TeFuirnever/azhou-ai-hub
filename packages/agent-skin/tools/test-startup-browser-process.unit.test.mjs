@@ -41,7 +41,7 @@ test('unconfirmed exit, missing close and signal errors cannot authorize cleanup
   assert.deepEqual(stuck.signals, ['SIGTERM', 'SIGKILL']);
   const noClose = new Child(), noCloseOwner = trackOwnedChild(noClose);
   noClose.kill = () => { queueMicrotask(() => noClose.emit('exit', 0, null)); return true; };
-  assert.equal(await noCloseOwner.stop({ termMs: 5, killMs: 2 }), false);
+  assert.equal(await noCloseOwner.stop({ termMs: 5, killMs: 2, closeMs: 2 }), false);
   const broken = new Child(), brokenOwner = trackOwnedChild(broken);
   broken.kill = () => { throw new Error('signal failed'); };
   await assert.rejects(brokenOwner.stop(), /signal failed/);
