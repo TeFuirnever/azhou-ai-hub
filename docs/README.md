@@ -4,6 +4,7 @@
 |---|---|
 | Understand product direction and tradeoffs | [Principles](principles.md) |
 | Review the Agent Skin E2E deferred architecture decisions | [E2E structural trade-offs (AS-E2E-001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
+| Understand why retired Hub surfaces were physically deleted while frozen identifiers stay | [Hub retirement: physical deletion (HUB-RET-001)](decisions/hub-retirement-physical-deletion.md) |
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
 | Use optional project packages or diagnose imported Pet state | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |
