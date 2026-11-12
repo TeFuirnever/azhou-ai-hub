@@ -12,9 +12,9 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸在暖灯桌前盖验收章，旁边是主张文字——12 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——12 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
-https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 </div>
 
