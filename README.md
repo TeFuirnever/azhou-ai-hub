@@ -12,9 +12,9 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox stamps an approval seal at a lamplit desk beside the claims: 12 packages, proven; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 12 installable skill packages; human-approved evolution only." width="100%" />
 
-https://github.com/user-attachments/assets/38a350d6-ddb3-40cf-a878-9ee5005ce993
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 </div>
 
