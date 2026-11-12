@@ -195,6 +195,10 @@ Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权�
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码与 23 项补丁队列均未改变。
+
+通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
+
 ### 退役面
 
 三个面已于 2026-11-11 至 2026-11-12 的一次物理删除切割中离开本仓库：维护范围收敛到维护者实际支持的面——此前的每次改动仍要为不再打算支持的代码支付门禁、文档与评审成本。最后支持版本与已装用户处置如下：
