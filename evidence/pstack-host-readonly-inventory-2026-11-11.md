@@ -50,12 +50,12 @@ The remote checks returned exit code 0 for `codex plugin list` and `claude plugi
 | Hold | Affected action | Evidence | Owner | Clear only when |
 | --- | --- | --- | --- | --- |
 | H1 | Promote `0.15.37` as a fully host-validated release | Native plugin lists confirm registration only; source-lock/host execution missing | pstack distribution maintainer | Exact loaded-source digest, live Skill run, model dispatch and trustworthy host lifecycle receipts are captured |
-| H2 | Activate pstack and Agent Orchestration Kit in the same default Codex home | `session hook: on` observed in default sheet; Kit coexistence contract requires `session hook: off` when sharing one home | Codex integration owner | Read actual registrations and obtain the shared compatibility verdict. No silent model sheet rewrite |
+| H2 | Install pstack into the default Codex home that previously hosted the retired Agent Orchestration Kit | `session hook: on` observed in default sheet at inventory time; the Kit coexistence contract that would have required `session hook: off` was removed by HUB-RET-001 (historical, no longer obtainable) | Codex integration owner | Follow the supported retirement path instead of the retired verdict: remove the retired Kit with its retained pre-deletion uninstaller before installing pstack (README "Retired surfaces"), and expect `scripts/integration_pstack.py` to refuse an unowned target whose `config.toml` still mentions the retired router. No silent model sheet rewrite |
 | H3 | Declare Claude live parity | CLI lists `0.15.37`, but older cache directory exists and live invocation has not been exercised | Claude adapter owner | Inspect active native registry source and exact loaded content, run host invocation and Hook receipt |
 | H4 | Declare ZCode native plugin active or GUI-supported | `zcode` CLI unavailable on inspected PATH | ZCode integration owner | Locate explicit supported host binary, run native list and GUI invocations with receipts |
 | H5 | Claim Windows / Pi / OpenCode equivalence | Hub maintains only five target harnesses and mirror portability is not acceptance evidence | Maintainer | Explicitly expand support targets and independently validate; otherwise remain unsupported |
 
-**H2 is a conditional integration hold, not a finding that the Kit is currently active in that specific `CODEX_HOME`.** Do not change configuration based on the `on` line alone.
+**H2 is a conditional integration hold, not a finding that the Kit is currently active in that specific `CODEX_HOME`.** Do not change configuration based on the `on` line alone. (2026-11-13 correction: H2's original exit criterion — obtaining the shared Kit coexistence verdict — references a mechanism HUB-RET-001 removed; the actionable path is now the supported uninstall-then-install sequence above.)
 
 ## Next executable verification runbook (not executed)
 
