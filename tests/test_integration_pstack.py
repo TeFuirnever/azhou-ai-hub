@@ -69,7 +69,7 @@ class PstackIntegrationTest(unittest.TestCase):
         self.home = self.workspace / ".azhou/hub/targets/pstack"
         self.binary = install_fake_codex(self.base / "codex")
         files = {
-            ".agents/plugins/marketplace.json": json.dumps({"name":"pstack-claude", "plugins":[]}),
+            ".agents/plugins/marketplace.json": json.dumps({"name":"azhou-hub", "plugins":[]}),
             "harness/pstack/codex/.codex-plugin/plugin.json": json.dumps({"name":"pstack-azhouzhou", "version":"0.9.102"}),
             "harness/pstack/codex/skills/poteto-mode/SKILL.md": "---\nname: poteto-mode\ndescription: fixture\n---\n# fixture\n",
             "harness/pstack/codex/skills/poteto-mode/scripts/bootstrap.ts": "// fixture dependency bootstrap\n",
@@ -111,6 +111,10 @@ class PstackIntegrationTest(unittest.TestCase):
         shutil.copytree(current, legacy)
         (legacy / ".codex-plugin/plugin.json").write_text(
             json.dumps({"name": "pstack", "version": "0.9.102"}), encoding="utf-8"
+        )
+        # A pre-rename snapshot carried the fork-era marketplace manifest.
+        (self.source / ".agents/plugins/marketplace.json").write_text(
+            json.dumps({"name": "pstack-claude", "plugins": []}), encoding="utf-8"
         )
         metadata_path = self.source / "hub-package.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -209,7 +213,7 @@ class PstackIntegrationTest(unittest.TestCase):
                 self.apply("remove")
         self.assertTrue(installed.is_dir())
         self.assertNotIn(["remove", pstack.PLUGIN], self.calls())
-        self.assertNotIn(["marketplace", "remove", "pstack-claude"], self.calls())
+        self.assertNotIn(["marketplace", "remove", pstack.MARKETPLACE], self.calls())
         self.assertEqual(self.apply("remove")["status"], "removed")
 
     def test_owned_legacy_modified_install_is_preserved_and_removal_refused(self):
@@ -229,6 +233,70 @@ class PstackIntegrationTest(unittest.TestCase):
         }}
         with self.assertRaisesRegex(common.IntegrationError, "ambiguous native plugin identity"):
             pstack._snapshot_plugin_identity(lock)
+
+    def test_receipt_records_native_identity_and_drives_install_lifecycle(self):
+        result = self.apply()
+        receipt = common.read_receipt(pstack._receipt_path(self.workspace, self.home))
+        self.assertEqual(receipt["native_identity"],
+                         {"plugin_id": pstack.PLUGIN, "marketplace": pstack.MARKETPLACE})
+        self.assertEqual(self.doctor()["status"], "installation-verified")
+        plan = self.plan("remove")
+        self.assertEqual(plan["native_identity"], receipt["native_identity"])
+        self.assertEqual(plan["commands"][0][3], pstack.PLUGIN)
+        self.assertEqual(plan["commands"][1][4], pstack.MARKETPLACE)
+        self.assertEqual(self.apply("remove")["status"], "removed")
+        self.assertFalse(Path(result["installed_path"]).exists())
+        self.assertIn(["marketplace", "remove", pstack.MARKETPLACE], self.calls())
+
+    def test_pre_rename_receipt_removes_and_verifies_through_recorded_identity(self):
+        """A receipt written before recorded identities still owns its install.
+
+        The fixture host registers the current-layout snapshot under the
+        pre-rename marketplace name, exactly how the historical install was
+        made, and the receipt carries no native_identity. Removal and doctor
+        must then drive pstack-azhouzhou@pstack-claude, never the current
+        constants.
+        """
+        snapshot = common.snapshot_source("pstack", self.source, self.workspace, hub_root=self.hub)
+        lock = common.snapshot_lock("pstack", snapshot)
+        with mock.patch.dict(os.environ, {"PSTACK_TEST_PRE_RENAME_MARKETPLACE": "1"}):
+            pstack._native(self.binary, self.home, ["marketplace", "add", str(snapshot)])
+            pstack._native(self.binary, self.home, ["add", "pstack-azhouzhou@pstack-claude"])
+        receipt = {
+            "schema": pstack.RECEIPT_SCHEMA, "codex_home": str(self.home),
+            "snapshot": str(snapshot), "source_lock_sha256": common.plan_digest(lock),
+            "commit": lock["commit"], "codex_bin": str(self.binary),
+            "codex_bin_sha256": pstack._digest(self.binary), "state": "installed",
+            "operation": "install", "commands": [], "completed_steps": [0, 1],
+            "coexistence": None,
+        }
+        common.write_receipt(pstack._receipt_path(self.workspace, self.home), receipt)
+        report = self.doctor()
+        self.assertEqual(report["status"], "installation-verified")
+        plan = self.plan("remove")
+        self.assertEqual(plan["commands"][0][3], "pstack-azhouzhou@pstack-claude")
+        self.assertEqual(plan["commands"][1][4], "pstack-claude")
+        self.assertEqual(plan["native_identity"],
+                         {"plugin_id": "pstack-azhouzhou@pstack-claude",
+                          "marketplace": "pstack-claude"})
+        self.assertEqual(self.apply("remove")["status"], "removed")
+        installed = self.home / "plugins/cache/pstack-claude/pstack-azhouzhou/0.9.102"
+        self.assertFalse(installed.exists())
+        calls = self.calls()
+        self.assertIn(["remove", "pstack-azhouzhou@pstack-claude"], calls)
+        self.assertIn(["marketplace", "remove", "pstack-claude"], calls)
+
+    def test_unrecognized_recorded_identity_blocks_native_operations(self):
+        self.apply()
+        receipt_path = pstack._receipt_path(self.workspace, self.home)
+        receipt = common.read_receipt(receipt_path)
+        receipt["native_identity"] = {"plugin_id": "other-plugin@azhou-hub", "marketplace": "azhou-hub"}
+        common.write_receipt(receipt_path, receipt)
+        with self.assertRaisesRegex(common.IntegrationError, "unrecognized native identity"):
+            self.plan("remove")
+        with self.assertRaisesRegex(common.IntegrationError, "unrecognized native identity"):
+            self.doctor()
+        self.assertNotIn(["remove", "other-plugin@azhou-hub"], self.calls())
 
     def test_plan_defaults_to_canonical_package_and_cli_needs_no_source_flag(self):
         plan = self.plan()
@@ -351,6 +419,29 @@ class PstackIntegrationTest(unittest.TestCase):
         config.write_text("# astra-orchestrator router configuration\n", encoding="utf-8")
         with self.assertRaisesRegex(common.IntegrationError, "router configuration has no Hub ownership receipt"):
             self.plan()
+
+    def test_marketplace_guard_recognizes_toml_key_forms(self):
+        tables = ['[marketplaces.azhou-hub]\nsource_type = "local"\n',
+                  '[marketplaces."azhou-hub"]\nsource_type = "local"\n',
+                  "[marketplaces.'azhou-hub']\nsource_type = 'local'\n",
+                  '[marketplaces.pstack-claude]\nsource_type = "local"\n',
+                  '[marketplaces."pstack-claude"]\nsource_type = "local"\n']
+        for index, table in enumerate(tables, start=1):
+            with self.subTest(table=table.strip().splitlines()[0]):
+                home = self.base / f"toml-home-{index}"
+                home.mkdir()
+                (home / "config.toml").write_text(table, encoding="utf-8")
+                with self.assertRaisesRegex(common.IntegrationError, "no Hub ownership receipt"):
+                    pstack.make_plan(source=None, workspace=self.workspace, codex_home=home,
+                                     codex_bin=self.binary, operation="install", hub_root=self.hub)
+                # The no-adoption guard must hold before any target write, so
+                # the coexistence sheet was never created either.
+                self.assertFalse((home / "pstack-models.md").exists())
+
+    def test_unrelated_marketplace_name_does_not_block_receipt_less_target(self):
+        self.home.mkdir(parents=True)
+        (self.home / "config.toml").write_text('[marketplaces."other-hub"]\nsource_type = "local"\n', encoding="utf-8")
+        self.assertEqual(self.plan()["operation"], "install")
 
     def test_existing_config_symlink_is_not_written_through(self):
         self.home.mkdir(parents=True)

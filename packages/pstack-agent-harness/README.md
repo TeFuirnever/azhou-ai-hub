@@ -35,12 +35,15 @@ running the host-specific commands.
 ```sh
 : "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
 claude plugin marketplace add "$PSTACK_PACKAGE"
-claude plugin install pstack-azhouzhou@pstack-claude --scope user
+claude plugin install pstack-azhouzhou@azhou-hub --scope user
 ```
 
-Refresh with `claude plugin marketplace update pstack-claude` and
-`claude plugin update pstack-azhouzhou@pstack-claude`; remove with
-`claude plugin uninstall pstack-azhouzhou@pstack-claude`.
+Refresh with `claude plugin marketplace update azhou-hub` and
+`claude plugin update pstack-azhouzhou@azhou-hub`; remove with
+`claude plugin uninstall pstack-azhouzhou@azhou-hub`. The marketplace was
+renamed from `pstack-claude` to `azhou-hub` on 2026-11-12; installs made
+under the old name keep working but refresh through the name their own
+registration recorded, then migrate at the next reviewed upgrade.
 
 **Codex** uses the Hub integration commands in
 [docs/integrations.md](../../docs/integrations.md), which install from
