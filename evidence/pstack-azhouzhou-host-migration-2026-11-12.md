@@ -6,7 +6,7 @@ Scope: migrate the maintainer machine's production Codex registration (`~/.codex
 
 - `~/.codex/config.toml` line 354: `[marketplaces.pstack-claude]`, `source_type = "local"`, `source = /Users/guanxueliang/Desktop/oh-my-ai/azhou-ai-hub/packages/pstack-agent-harness`; line 400: `[plugins."pstack-azhouzhou@pstack-claude"]`, `enabled = true`.
 - `codex plugin marketplace list` reported the `pstack-claude` marketplace rooted at the maintainer checkout package path, beside five unrelated marketplaces.
-- Model sheet `~/.codex/pstack-models.md` SHA-256 `774f5fa26a99a61c6cf1e122557e410382960038`.
+- Model sheet `~/.codex/pstack-models.md` digest `774f5fa26a99a61c6cf1e122557e410382960038` (macOS `shasum` default, SHA-1, 40 hex).
 - ChatGPT Desktop was running during the migration (Codex Framework `157.0.8103.51`, app-server daemon `0.167.2`). The CLI operates on the same `config.toml`; no concurrent host-side plugin operation was performed.
 
 ## Marketplace-root prerequisite
@@ -26,7 +26,7 @@ The registered marketplace root is the maintainer checkout itself, and that chec
 - `codex plugin list --marketplace azhou-hub`: `pstack-azhouzhou@azhou-hub  installed, enabled  0.15.37`.
 - `config.toml`: `[marketplaces.azhou-hub]` at line 366 and `[plugins."pstack-azhouzhou@azhou-hub"]` / `enabled = true` at lines 409–410; `grep -c pstack-claude config.toml` = 0.
 - Installed manifest `.codex-plugin/plugin.json` version `0.15.37`; 68 `SKILL.md` files under the installed tree.
-- Model sheet digest unchanged: `774f5fa26a99a61c6cf1e122557e410382960038`.
+- Model sheet unchanged: `shasum` (SHA-1) still `774f5fa26a99a61c6cf1e122557e410382960038`, matching the pre-state value; recomputed on 2026-11-12 as SHA-256 `af2714e6ed1b23e826927d0caaf7c5ca2e0724a90c1dbc47d4506e86d621ee80` for a full verifiable baseline. No writer touched the sheet between the two measurements.
 - The CLI removal emptied `~/.codex/plugins/cache/pstack-claude/` and left the empty directory; it was removed with `rmdir`, after which no `pstack-claude` path remains under `plugins/`.
 - No `hooks.state` table entries referencing pstack exist in `config.toml`.
 - ChatGPT Desktop was quit after the migration; a re-check with zero `ChatGPT.app` processes found `config.toml` intact (no write-back clobber) and the CLI view unchanged.
