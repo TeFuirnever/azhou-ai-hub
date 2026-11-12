@@ -82,7 +82,7 @@ jobs:
         working-directory: packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/scripts
         run: bun test
 
-  startup-animation-macos:
+  agent-skin-macos:
     name: Startup and Pet validation
     runs-on: macos-latest
     timeout-minutes: 20
@@ -102,13 +102,13 @@ jobs:
         run: |
           python -m pip install --only-binary=:all: Pillow==12.3.0
       - name: Run isolated Pet validation and candidate import tests
-        working-directory: packages/codex-startup-animation
+        working-directory: packages/agent-skin
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           python -B tools/test-codex-pet.py
           python -B tools/test-import-codex-pet.py
-      - name: Run Agent Skin startup and three-host lifecycle checks
+      - name: Run Agent Skin startup and two-host lifecycle checks
         working-directory: packages/agent-skin
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -124,15 +124,8 @@ jobs:
           mkdir -p .build
           xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
-            Native/CodexSkinDriver.swift Native/ZCodeSkinDriver.swift Native/ZCodeSkinRuntime.swift -o .build/startup-app-compile \
+            Native/CodexSkinDriver.swift -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
-      - name: Run pure wallpaper validation
-        working-directory: packages/codex-startup-animation
-        run: |
-          mkdir -p .build
-          xcrun --sdk macosx swiftc Native/Wallpaper.swift Native/WallpaperValidationTests.swift \
-            -o .build/wallpaper-validation-tests -framework AppKit
-          .build/wallpaper-validation-tests
 
   agent-skin-unit-coverage:
     name: Agent Skin full production UT coverage
@@ -252,7 +245,7 @@ jobs:
       - policy
       - verify-windows
       - pstack-native
-      - startup-animation-macos
+      - agent-skin-macos
       - agent-skin-unit-coverage
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -262,7 +255,7 @@ jobs:
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
-      ANIMATION_RESULT: ${{ needs.startup-animation-macos.result }}
+      ANIMATION_RESULT: ${{ needs.agent-skin-macos.result }}
       AGENT_SKIN_COVERAGE_RESULT: ${{ needs.agent-skin-unit-coverage.result }}
     steps:
       - name: Require every CI gate

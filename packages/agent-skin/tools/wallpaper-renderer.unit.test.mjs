@@ -864,20 +864,20 @@ test('decorative diagnostics skip protected, hidden, and noninteractive nodes wh
 });
 
 
-function zcodeWallpaperPorts({ validPage = () => true, shellState = () => 'ready', surfaces }) {
+function syntheticWallpaperPorts({ validPage = () => true, shellState = () => 'ready', surfaces }) {
   return Object.freeze({
     validPage, shellState, surfaces,
-    attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
+    attributes: Object.freeze({ surfaceMarker: 'data-azhou-synthetic-wallpaper-surface',
       observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
-    css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-zcode-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-zcode-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
-    scope: 'decoded image, viewport cover, unique validated ZCode main and root surfaces; deeper content layers and visual inspection are separate',
+    css: '\nhtml[data-azhou-wallpaper="active"] #root[data-azhou-synthetic-wallpaper-surface="active"],html[data-azhou-wallpaper="active"] #root main[data-azhou-synthetic-wallpaper-surface="active"]{background-color:transparent!important;background-image:none!important}',
+    scope: 'decoded image, viewport cover, unique validated host main and root surfaces; deeper content layers and visual inspection are separate',
   });
 }
 
 test('an adapter without the complete wallpaper ports group is refused atomically', async () => {
   for (const wallpaper of [undefined, Object.freeze({ css: 'main{background:transparent}' })]) {
-    await onPage({ url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' }, async page => {
-      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
+    await onPage({ url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' }, async page => {
+      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
         ...(wallpaper ? { wallpaper } : {}) });
       await assert.rejects(installRenderer({ ...page.payload, pageAdapter: adapter }), { code: 'invalid-host-adapter' });
       assert.equal(page.styleElements.length, 0);
@@ -886,34 +886,34 @@ test('an adapter without the complete wallpaper ports group is refused atomicall
 });
 
 
-test('ZCode renderer uses only its validated main surface and restores owned attributes', async () => {
-  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+test('A host adapter renderer uses only its validated main surface and restores owned attributes', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
   try {
     const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
     main.tagName = 'MAIN';fixture.applicationRoot.contains = node => node === main;
-    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+      wallpaper: syntheticWallpaperPorts({ surfaces: () => [main] }) });
     const payload = { ...fixture.payload, pageAdapter: adapter };
     assert.equal((await installRenderer(payload)).applied, true);
-    assert.equal(globalThis.__azhouWallpaper.owner, 'azhou.zcode-startup-animation');
-    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
+    assert.equal(globalThis.__azhouWallpaper.owner, 'azhou.synthetic-startup-animation');
+    assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'active');
     assert.equal((await installRenderer(payload)).applied, true);
     globalThis.__azhouWallpaper.dispose();
-    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
-    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), null);
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-synthetic-wallpaper-surface'), null);
   } finally { fixture.restore(); }
 });
 
-test('ZCode adapter capabilities stay bound during image decoding', async t => {
+test('Host adapter capabilities stay bound during image decoding', async t => {
   for (const field of ['css', 'validPage', 'shellState', 'surfaces']) {
     await t.test(field, async () => {
-      const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+      const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
       try {
         const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
         main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
-        const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+        const ports = { ...syntheticWallpaperPorts({ surfaces: () => [main] }) };
         const originalCSS = ports.css, originalScope = ports.scope;
-        const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+        const adapter = { controllerWallpaper: { owner: 'azhou.synthetic-startup-animation' }, wallpaper: ports };
         const decode = fixture.image.decode;
         fixture.image.decode = async function () {
           await decode.call(this);
@@ -933,63 +933,63 @@ test('ZCode adapter capabilities stay bound during image decoding', async t => {
 });
 
 test('bound adapter methods retain their receiver and recheck current page state', async () => {
-  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+  const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
   try {
     const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
     main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
     let pageAllowed = true;
-    const ports = { ...zcodeWallpaperPorts({ surfaces: () => [main] }) };
+    const ports = { ...syntheticWallpaperPorts({ surfaces: () => [main] }) };
     ports.validPage = function () { assert.equal(this, ports); return pageAllowed; };
     ports.shellState = function () { assert.equal(this, ports); return 'ready'; };
     ports.surfaces = function () { assert.equal(this, ports); return [main]; };
     for (const operation of [ports.validPage, ports.shellState, ports.surfaces]) operation.call = () => { throw new Error('not the callable operation'); };
     const decode = fixture.image.decode;
     fixture.image.decode = async function () { await decode.call(this); pageAllowed = false; };
-    const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: ports };
+    const adapter = { controllerWallpaper: { owner: 'azhou.synthetic-startup-animation' }, wallpaper: ports };
     await assert.rejects(installRenderer({ ...fixture.payload, pageAdapter: adapter }), { code: 'page-changed-during-decode' });
     assert.equal(fixture.styleElements.filter(style => style.isConnected).length, 0);
   } finally { fixture.restore(); }
 });
 
-test('ZCode refuses protected, ambiguous or foreign-marked surfaces before styling', async () => {
+test('A host adapter refuses protected, ambiguous or foreign-marked surfaces before styling', async () => {
   for (const mode of ['protected', 'ambiguous', 'foreign']) {
-    const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+    const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
     try {
       const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
       main.tagName = 'MAIN';main.protected = mode === 'protected';fixture.applicationRoot.contains = node => node === main;
-      if (mode === 'foreign') main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign');
-      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-        wallpaper: zcodeWallpaperPorts({ surfaces: () => mode === 'ambiguous' ? [main, main] : [main] }) });
+      if (mode === 'foreign') main.setAttribute('data-azhou-synthetic-wallpaper-surface', 'foreign');
+      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+        wallpaper: syntheticWallpaperPorts({ surfaces: () => mode === 'ambiguous' ? [main, main] : [main] }) });
       await assert.rejects(installRenderer({ ...fixture.payload, pageAdapter: adapter }), /unsupported-shell|namespace-conflict/);
       assert.equal(fixture.styleElements.length, 0);
-      if (mode === 'foreign') assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+      if (mode === 'foreign') assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'foreign');
     } finally { fixture.restore(); }
   }
 });
 
 
-test('ZCode does not overwrite a surface marker changed during decode or before replacement', async () => {
+test('A host adapter does not overwrite a surface marker changed during decode or before replacement', async () => {
   for (const mode of ['during-decode', 'replacement']) {
-    const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+    const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
     try {
       const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
       main.tagName = 'MAIN';fixture.applicationRoot.contains = node => node === main;
-      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-        wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+      const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+        wallpaper: syntheticWallpaperPorts({ surfaces: () => [main] }) });
       const payload = { ...fixture.payload, pageAdapter: adapter };
       let previous;
       if (mode === 'replacement') {
         await installRenderer(payload);previous = globalThis.__azhouWallpaper;
-        main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign');
+        main.setAttribute('data-azhou-synthetic-wallpaper-surface', 'foreign');
       } else {
         const decode = fixture.image.decode;
-        fixture.image.decode = async function () { await decode.call(this);main.setAttribute('data-azhou-zcode-wallpaper-surface', 'foreign'); };
+        fixture.image.decode = async function () { await decode.call(this);main.setAttribute('data-azhou-synthetic-wallpaper-surface', 'foreign'); };
       }
       await assert.rejects(installRenderer(payload), /namespace-conflict|namespace-changed-during-decode/);
-      assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+      assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'foreign');
       assert.equal(globalThis.__azhouWallpaper, previous);
       if (previous) previous.dispose();
-      assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'foreign');
+      assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'foreign');
     } finally { fixture.restore(); }
   }
 });
@@ -1110,40 +1110,40 @@ test('failed release restores the original values and a working real controller'
   assert.deepEqual(page.revoked, ['blob:recovery-2']);
 }));
 
-test('ZCode dispose preserves markers on a surface moved outside the original root', async () => {
-  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+test('Dispose preserves markers on a surface moved outside the original root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
   try {
     const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
     main.tagName = 'MAIN'; let inside = true;
     fixture.applicationRoot.contains = node => node === main && inside;
-    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+      wallpaper: syntheticWallpaperPorts({ surfaces: () => [main] }) });
     await installRenderer({ ...fixture.payload, pageAdapter: adapter });
     const style = fixture.document.getElementById(STYLE_ID);
     inside = false;
     globalThis.__azhouWallpaper.dispose();
-    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
-    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-synthetic-wallpaper-surface'), null);
     assert.equal(style.isConnected, false);
     assert.equal(globalThis.__azhouWallpaper, undefined);
   } finally { fixture.restore(); }
 });
 
-test('ZCode dispose leaves markers on a former application root', async () => {
-  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+test('Dispose leaves markers on a former application root', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
   try {
     const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
     main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
-    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+      wallpaper: syntheticWallpaperPorts({ surfaces: () => [main] }) });
     await installRenderer({ ...fixture.payload, pageAdapter: adapter });
     const oldLookup = fixture.document.getElementById;
     const foreignRoot = new Node('replacement-root');
     fixture.document.getElementById = id => id === 'root' ? foreignRoot : oldLookup(id);
     globalThis.__azhouWallpaper.dispose();
-    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
-    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
-    assert.equal(foreignRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'active');
+    assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'active');
+    assert.equal(foreignRoot.getAttribute('data-azhou-synthetic-wallpaper-surface'), null);
     assert.equal(globalThis.__azhouWallpaper, undefined);
   } finally { fixture.restore(); }
 });
@@ -1161,18 +1161,18 @@ test('dispose does not restore styles on a former document root', async () => on
   assert.equal(globalThis.__azhouWallpaper, undefined);
 }));
 
-test('ZCode dispose preserves a detached recorded surface', async () => {
-  const fixture = createPage({ shell: false, url: 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html' });
+test('Dispose preserves a detached recorded surface', async () => {
+  const fixture = createPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' });
   try {
     const main = fixture.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
     main.tagName = 'MAIN'; fixture.applicationRoot.contains = node => node === main;
-    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation' }),
-      wallpaper: zcodeWallpaperPorts({ surfaces: () => [main] }) });
+    const adapter = Object.freeze({ controllerWallpaper: Object.freeze({ owner: 'azhou.synthetic-startup-animation' }),
+      wallpaper: syntheticWallpaperPorts({ surfaces: () => [main] }) });
     await installRenderer({ ...fixture.payload, pageAdapter: adapter });
     main.isConnected = false;
     globalThis.__azhouWallpaper.dispose();
-    assert.equal(main.getAttribute('data-azhou-zcode-wallpaper-surface'), 'active');
-    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-zcode-wallpaper-surface'), null);
+    assert.equal(main.getAttribute('data-azhou-synthetic-wallpaper-surface'), 'active');
+    assert.equal(fixture.applicationRoot.getAttribute('data-azhou-synthetic-wallpaper-surface'), null);
     assert.equal(globalThis.__azhouWallpaper, undefined);
   } finally { fixture.restore(); }
 });

@@ -27,6 +27,8 @@ function createImageSettings(environment) {
   const PNG_PREFIX = 'data:image/png;base64,';
   // Storage namespace seam (agent-skin-zcode-contract/v0.1): a host page adapter may
   // inject its own verified namespace through the existing environment object.
+  // The contract name is frozen under its historical ZCode-era name; installed
+  // 0.9.0 state depends on the exact string.
   // The defaults below are the legacy Codex values and stay verbatim; nothing here
   // adds a new storage backend.
   const namespaceDefaults = Object.freeze({

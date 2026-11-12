@@ -20,13 +20,10 @@ except ImportError:
     import azhou_runtime_state
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("pstack", "model-router", "agent-skin")
+COMPONENTS = ("pstack", "agent-skin")
 PACKAGES = {
     "pstack": "pstack-agent-harness",
-    "model-router": "agent-orchestration-kit",
     "agent-skin": "agent-skin",
-    # Historical Hub receipts and the installed app/Pet still bind this source root.
-    "startup-animation": "codex-startup-animation",
 }
 PACKAGE_SCHEMA = "azhou-hub.package.v1"
 LOCK_SCHEMA = "azhou-hub.package-inputs.v1"

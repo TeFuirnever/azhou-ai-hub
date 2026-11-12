@@ -87,7 +87,7 @@ class IntegrationProvenanceVersionsTest(unittest.TestCase):
     def test_unreleased_manifest_version_is_not_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "packages" / "agent-orchestration-kit"
+            package = root / "packages" / "pstack-agent-harness"
             package.mkdir(parents=True)
             (package / "hub-package.json").write_text('{"version": "unreleased"}\n', encoding="utf-8")
             docs = root / "docs"
@@ -95,7 +95,7 @@ class IntegrationProvenanceVersionsTest(unittest.TestCase):
             (docs / "integration-provenance.md").write_text(
                 "| Integration | Runtime version and rights |\n"
                 "| --- | --- |\n"
-                "| Model router | Unreleased package; Apache-2.0 |\n",
+                "| pstack | [packages/pstack-agent-harness](x) | Unreleased package; MIT |\n",
                 encoding="utf-8",
             )
             self.assertEqual([], check_integration_provenance_versions(root))
@@ -538,7 +538,7 @@ class RepositoryPolicyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             subprocess.run(["git", "init", "-q", str(root)], check=True)
-            for relative in (".gitignore", "packages/codex-startup-animation/.gitignore"):
+            for relative in (".gitignore",):
                 target = root / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, target)
@@ -546,7 +546,6 @@ class RepositoryPolicyTest(unittest.TestCase):
             private_assets = (
                 "packages/agent-skin/assets/fixture.png",
                 "packages/agent-skin/assets/private/fixture.png",
-                "packages/codex-startup-animation/assets/private/fixture.png",
             )
             public_fixture = "packages/agent-skin/docs/fixtures/icon.png"
             for relative in (*private_assets, public_fixture):
@@ -737,7 +736,6 @@ class RepositoryPolicyTest(unittest.TestCase):
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [
                 root / "packages/pstack-agent-harness/components/cursor-team-kit/skills/deslop/SKILL.md",
-                root / "packages/agent-orchestration-kit/profiles/azhou-balanced/agents/skills/astra-orchestrator/SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery([*expected, *bundled], root))
             stray = root / "packages/unknown/skills/new/SKILL.md"
@@ -786,6 +784,26 @@ class RepositoryPolicyTest(unittest.TestCase):
             readme = root / "README.md"
             readme.write_text("[missing](docs/missing.md)\n", encoding="utf-8")
             errors = check_markdown_links([readme], root)
+            self.assertEqual(1, len(errors))
+            self.assertIn("broken local link", errors[0])
+
+    def test_evidence_citation_of_a_retired_package_root_stays_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evidence = root / "evidence" / "record.md"
+            evidence.parent.mkdir(parents=True)
+            evidence.write_text(
+                "[kit](../packages/agent-orchestration-kit/UPSTREAM.md)\n[missing](docs/missing.md)\n",
+                encoding="utf-8",
+            )
+            errors = check_markdown_links([evidence], root)
+            self.assertEqual(1, len(errors))
+            self.assertIn("docs/missing.md", errors[0])
+            self.assertNotIn("agent-orchestration-kit", errors[0])
+            # The allowance is for frozen evidence text only.
+            living = root / "README.md"
+            living.write_text("[kit](packages/agent-orchestration-kit/UPSTREAM.md)\n", encoding="utf-8")
+            errors = check_markdown_links([living], root)
             self.assertEqual(1, len(errors))
             self.assertIn("broken local link", errors[0])
 

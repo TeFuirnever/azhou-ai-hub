@@ -1,15 +1,14 @@
 """Install the Hub-maintained pstack package with Codex's native plugin manager.
 
 The Hub freezes only the declared source files and records native operations.
-It does not translate pstack's workflow into the separate model-router profile.
 A custom --codex-home requires launching Codex with that CODEX_HOME; it does not
 change the configuration used by an already-running desktop app.
-For a target shared with the Agent Orchestration Kit, the adapter owns one
-narrow change: the model sheet's ``session hook: off`` line that keeps pstack
-SessionStart auto-routing off while the plugin's on-demand Skills stay installed.
+A coexistence install owns one narrow change: the model sheet's
+``session hook: off`` line that keeps pstack SessionStart auto-routing off
+while the plugin's on-demand Skills stay installed.
 
 ``transition-plan`` reviews an existing installation read-only — the reachable
-Kit-plus-shared-Skills, compatible-native, armed and locally-modified states —
+shared-Skills, compatible-native, armed and locally-modified states —
 and names the actual source, content differences, owners and recovery basis of
 each transition, without adopting unknown installations.
 """
@@ -50,17 +49,15 @@ HOOK_LINE_PREFIX = "session hook:"
 SHEET_HEADER = "# pstack model configuration"
 SHARED_SKILL_PREFIX = PLUGIN_ROOT + "skills/"
 DEPENDENCY_DIR = "skills/poteto-mode/scripts/node_modules"
-KIT_STATE_FILE = "agent-orchestration-kit/state.json"
-KIT_INSTRUCTION_BEGIN = "ASTRA-LUNA-ORCHESTRATOR:BEGIN"
 HOOK_TRUST_UNKNOWN = "unknown; only the host's /hooks review decides whether the hook runs"
 # Byproducts the native runtime itself writes into a Codex home that is merely
-# opened (the Kit installer's native validation leaves exactly these behind).
-# They carry no configuration or installation ownership and the adapter neither
-# reads nor writes them. ``skills/.system`` is the runtime's own system-Skill
-# directory; user-placed Skills under ``skills`` stay a block reason, and any
-# unknown name still blocks. This is the observed byproduct list of the tested
-# client build, not a general allowance; a new client writing new names fails
-# closed for review instead of being silently accepted.
+# opened (a native validation pass leaves exactly these behind). They carry no
+# configuration or installation ownership and the adapter neither reads nor
+# writes them. ``skills/.system`` is the runtime's own system-Skill directory;
+# user-placed Skills under ``skills`` stay a block reason, and any unknown name
+# still blocks. This is the observed byproduct list of the tested client build,
+# not a general allowance; a new client writing new names fails closed for
+# review instead of being silently accepted.
 HOST_RUNTIME_STATE = frozenset({
     ".sandbox_migration", ".tmp", "tmp", "shell_snapshots", "installation_id",
     "goals_1.sqlite", "goals_1.sqlite-shm", "goals_1.sqlite-wal",
@@ -203,72 +200,6 @@ def _sheet_rows(raw: bytes | None) -> list[str] | None:
             and not line.startswith(HOOK_LINE_PREFIX)]
 
 
-def _kit_presence(home: Path) -> dict:
-    """Kit rules are installed only with a valid ownership record.
-
-    A stray instruction block or Skill without that record is an unknown
-    source, not an installation, and is never adopted. An unfinished Kit
-    transaction is its owner's recovery case, not an install input.
-    """
-    transaction = home / ".agent-orchestration-kit-transaction"
-    if transaction.exists() or transaction.is_symlink():
-        raise common.IntegrationError(
-            "an unfinished agent-orchestration-kit transaction exists; recover it with the Kit installer before changing this target")
-    state_path = home / KIT_STATE_FILE
-    if state_path.exists() or state_path.is_symlink():
-        if state_path.is_symlink() or not state_path.is_file():
-            raise common.IntegrationError("the agent-orchestration-kit ownership record is not a regular file")
-        try:
-            manifest = json.loads(state_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise common.IntegrationError(
-                "an unreadable agent-orchestration-kit ownership record exists; inspect it before installing pstack") from exc
-        if (not isinstance(manifest, dict) or manifest.get("schema") != 1
-                or manifest.get("project") != "agent-orchestration-kit"
-                or not isinstance(manifest.get("targets"), dict) or not isinstance(manifest.get("files"), dict)):
-            raise common.IntegrationError(
-                "an unrecognized agent-orchestration-kit ownership record exists; inspect it before installing pstack")
-        owned = {"agent-orchestration-kit/state.json", "config.toml", "AGENTS.md"}
-        for value in manifest["targets"].values():
-            if not isinstance(value, str):
-                raise common.IntegrationError("the agent-orchestration-kit ownership record has invalid target paths")
-            try:
-                relative = Path(value).relative_to(home).as_posix()
-            except ValueError:
-                continue
-            parts = Path(relative).parts
-            if relative == "skills/astra-orchestrator/SKILL.md" or (
-                    len(parts) == 2 and parts[0] == "agents" and parts[1].endswith(".toml")):
-                owned.add(relative)
-        return {"present": True, "owned_files": owned}
-    instructions = home / "AGENTS.md"
-    if instructions.is_file():
-        try:
-            text = instructions.read_text(encoding="utf-8")
-        except (OSError, ValueError) as exc:
-            raise common.IntegrationError("AGENTS.md exists but cannot be read: " + str(instructions)) from exc
-        if KIT_INSTRUCTION_BEGIN in text:
-            raise common.IntegrationError(
-                "an astra-orchestrator instruction block exists without its Kit ownership record; its source is unknown")
-    skill = home / "skills/astra-orchestrator/SKILL.md"
-    if skill.exists() or skill.is_symlink():
-        raise common.IntegrationError(
-            "an astra-orchestrator Skill exists in this target without a Kit ownership record; its source is unknown")
-    return {"present": False, "owned_files": set()}
-
-
-def _kit_record(home: Path) -> dict:
-    """Identifying facts of the already-validated Kit ownership record."""
-    try:
-        manifest = json.loads((home / KIT_STATE_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"detail": "the validated ownership record could not be re-read for this report"}
-    return {"record": str(home / KIT_STATE_FILE), "profile": manifest.get("profile"),
-            "source_digest": manifest.get("source_digest"),
-            "adopted_existing": manifest.get("adopted_existing", []),
-            "owned_target_count": len(manifest.get("targets", {}))}
-
-
 def _inventory(home: Path) -> dict:
     """Fingerprint a dedicated home without disclosing auth or configuration."""
     if not home.exists():
@@ -293,10 +224,10 @@ def _establish_sheet(home: Path, change: dict, receipt: dict, receipt_file: Path
     """Apply the reviewed sheet conversion once, recording the rollback basis first.
 
     The recovery record reaches the receipt before the sheet changes, the same
-    journal-first order the Kit installer uses: an interruption between the two
-    steps leaves either "basis recorded, sheet untouched" or "basis recorded,
-    sheet converted" — both recoverable — and never an adapter-written sheet
-    with no recorded original to restore.
+    journal-first order the adapter's own installs use: an interruption between
+    the two steps leaves either "basis recorded, sheet untouched" or "basis
+    recorded, sheet converted" — both recoverable — and never an adapter-written
+    sheet with no recorded original to restore.
     """
     path = _sheet_path(home)
     if change.get("path") != str(path):
@@ -501,14 +432,6 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
             or workspace in home.parents and ".azhou" not in home.relative_to(workspace).parts
             or home in _receipt_path(workspace, home).parents):
         raise common.IntegrationError("use a dedicated Codex home, not the workspace or its project files")
-    kit = _kit_presence(home) if operation == "install" else {"present": False, "owned_files": set()}
-    if operation == "install":
-        if coexistence is None:
-            coexistence = kit["present"]
-        if kit["present"] and not coexistence:
-            raise common.IntegrationError(
-                "agent-orchestration-kit rules are installed in this target; a standalone pstack install would arm "
-                "a second auto-router here: use a coexistence install (SessionStart routing off) or a separate home")
     receipt_file = _receipt_path(workspace, home)
     receipt = common.read_receipt(receipt_file) if receipt_file.exists() else None
     if receipt and (receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("codex_home") != str(home)):
@@ -532,8 +455,6 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
     host_runtime_state: list[str] = []
     if receipt is None:
         allowed = {"config.toml", "auth.json", SHEET_NAME, "AGENTS.md"}
-        if kit["present"]:
-            allowed |= kit["owned_files"]
         host_runtime_state = _runtime_state_roots(inventory)
         unexpected = sorted(name for name in set(inventory) - allowed
                             if not _is_runtime_state(name))
@@ -573,7 +494,7 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
                     "owner": "hub-pstack-adapter",
                     "before_sha256": _digest_bytes(raw) if raw is not None else None,
                     "after_sha256": _digest_bytes(desired),
-                    "purpose": "set the exact '" + HOOK_OFF + "' line so SessionStart auto-routing stays off in this shared target",
+                    "purpose": "set the exact '" + HOOK_OFF + "' line so SessionStart auto-routing stays off in this target",
                     "restore": "restore the prior sheet bytes (or remove the adapter-written sheet) on remove; later user edits stop automatic restore",
                 }
     elif operation == "remove":
@@ -592,7 +513,6 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
     if operation == "install":
         coexistence_report = {
             "requested": bool(coexistence),
-            "kit_rules_present": kit["present"],
             "session_hook_before": hook_before,
             "sheet_change": sheet_change,
             "on_demand_skills": "plugin Skills remain installed for explicit per-task selection",
@@ -601,14 +521,12 @@ def make_plan(*, source: Path | None, workspace: Path, codex_home: Path, codex_b
                               if sheet_change is not None else
                               "already satisfied: the sheet's '" + HOOK_OFF + "' line keeps auto-routing off"
                               if coexistence else
-                              "standalone pstack target: the existing routing mode is left unchanged; a Kit install "
-                              "here later requires '" + HOOK_OFF + "' in the sheet first"),
+                              "standalone pstack target: the existing routing mode is left unchanged"),
         }
     else:
         record = ((receipt or {}).get("coexistence") or {}).get("sheet")
         coexistence_report = {
             "requested": False,
-            "kit_rules_present": False,
             "sheet_restore": bool(record),
             "compatibility": "n/a for removal",
         }
@@ -659,7 +577,6 @@ def _operation_lock(receipt_file: Path):
 
 def doctor(*, workspace: Path, codex_home: Path, codex_bin: Path, hub_root: Path = ROOT) -> dict:
     workspace, home = _directory(workspace), _directory(codex_home)
-    kit = _kit_presence(home)
     receipt = common.read_receipt(_receipt_path(workspace, home))
     if receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("codex_home") != str(home) or receipt.get("state") != "installed":
         raise common.IntegrationError("pstack does not have a completed installation receipt for this target")
@@ -675,17 +592,17 @@ def doctor(*, workspace: Path, codex_home: Path, codex_bin: Path, hub_root: Path
     sheet = _sheet_bytes(home)
     hook = _sheet_hook(sheet)
     coexistence = {
-        "kit_rules_present": kit["present"],
         "model_sheet_present": sheet is not None,
         "session_hook": hook,
         "native_plugin_registered": True,
         "auto_routing": "off" if hook == "off" else "on",
         "hook_trust": HOOK_TRUST_UNKNOWN,
         "sheet_owner": ("hub-pstack-adapter" if (receipt.get("coexistence") or {}).get("sheet") else "not adapter-owned"),
-        "compatibility": ("coexistence target: SessionStart auto-routing is off, so Kit rules may share this home"
+        "compatibility": ("coexistence target: SessionStart auto-routing is off, so on-demand plugin Skills stay "
+                          "the only pstack surface in this home"
                           if hook == "off" else
-                          "standalone pstack target: auto-routing is armed; a Kit install here requires '"
-                          + HOOK_OFF + "' in the sheet first"),
+                          "standalone pstack target: auto-routing is armed; switching it off requires the reviewed "
+                          "sheet conversion with '" + HOOK_OFF + "'"),
     }
     return {"status": "installation-verified", "installed_path": str(installed), "commit": lock["commit"],
             "source_lock_sha256": common.plan_digest(lock), "native_registry": {"marketplaces": marketplaces, "plugins": plugins},
@@ -890,37 +807,19 @@ def _receipt_registration(receipt: dict | None, registry: dict) -> dict:
             "explanation": "the registered installation resolves to a different source than the receipt's snapshot"}
 
 
-def _shared_verdict(home: Path, shared: Path | None, hub_root: Path) -> dict:
-    """The one compatibility verdict both public entries share, loaded from the
-    Kit's hash-verified shipped implementation so this report cannot drift
-    from what the install entries would actually decide."""
-    try:
-        from . import integration_model_router as router
-    except ImportError:
-        import integration_model_router as router
-    installer = router._module(common.package_root("model-router", hub_root=hub_root),
-                               "install_codex.py", hub_root=hub_root)
-    try:
-        return installer.pstack_coexistence(home, shared)
-    except common.IntegrationError:
-        raise
-    except Exception as exc:
-        raise common.IntegrationError(f"pstack compatibility could not be established: {exc}") from exc
-
-
 def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                skills_dir: Path | None = None, hub_root: Path = ROOT) -> dict:
     """Review how an existing installation enters the compatible state; read-only.
 
-    Covers the reachable existing-install states — a Kit beside shared pstack
-    Skills, a compatible native pstack, an armed one, and locally modified
-    shared Skills — and names for each the actual source, the content
-    differences against the pinned package, the target change (if any), its
-    owner and its recovery basis. Unknown installations are never adopted: a
-    matching name or byte-identical content is not a takeover basis, and no
-    restore is claimed for history no receipt records. An applicable
-    conversion is the reviewed coexistence plan of this same entry; applying
-    it re-verifies the bound source and target and stops on drift.
+    Covers the reachable existing-install states — shared pstack Skills, a
+    compatible native pstack, an armed one, and locally modified shared Skills —
+    and names for each the actual source, the content differences against the
+    pinned package, the target change (if any), its owner and its recovery
+    basis. Unknown installations are never adopted: a matching name or
+    byte-identical content is not a takeover basis, and no restore is claimed
+    for history no receipt records. An applicable conversion is the reviewed
+    coexistence plan of this same entry; applying it re-verifies the bound
+    source and target and stops on drift.
     """
     workspace, home = _directory(workspace), _directory(codex_home)
     shared = _directory(skills_dir) if skills_dir is not None else None
@@ -946,14 +845,6 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                 receipt = candidate
         except common.IntegrationError as exc:
             receipt_error = str(exc)
-
-    kit: dict = {"present": False}
-    try:
-        presence = _kit_presence(home)
-        kit = ({"present": True, "ownership_record": _kit_record(home),
-                "owned_files": sorted(presence["owned_files"])} if presence["present"] else {"present": False})
-    except common.IntegrationError as exc:
-        kit = {"present": None, "error": str(exc)}
 
     sheet: dict = {"present": False}
     raw_sheet: bytes | None = None
@@ -1000,11 +891,6 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
     installed_report = _content_differences(copies[0], lock) if len(copies) == 1 else None
     shared_report = _shared_skills_report(shared, lock) if shared is not None else None
 
-    try:
-        verdict = _shared_verdict(home, shared, hub_root)
-    except common.IntegrationError as exc:
-        verdict = {"compatible": None, "error": str(exc)}
-
     registration = ("conflict" if len(copies) > 1 or anomalies
                     else "none" if not copies and not config_registered
                     else "single" if len(copies) == 1
@@ -1018,7 +904,7 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
 
     states: list[str] = []
     if registration == "none" and shared_visible:
-        states.append("kit-with-shared-pstack-skills" if kit.get("present") else "shared-pstack-skills-only")
+        states.append("shared-pstack-skills-only")
     if registration in ("single", "config-only"):
         states.append("compatible-native-pstack" if hook == "off" else "armed-pstack")
     if shared_drift:
@@ -1030,8 +916,8 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
 
     foreign_steps = [
         "keep the existing installation and switch routing off with its own tool: run /setup-pstack in a session "
-        "on this home and answer the session-hook question with 'off' — afterwards both public entries judge this "
-        "target compatible and the Hub owns nothing here",
+        "on this home and answer the session-hook question with 'off' — afterwards this target's SessionStart "
+        "routing is off and the Hub owns nothing here",
         "or move the installation under Hub management: remove it through the entry that installed it (codex plugin "
         "remove " + PLUGIN + ", then codex plugin marketplace remove " + MARKETPLACE + ", with CODEX_HOME set to this "
         "home), then run this entry's coexistence install, which registers the pinned snapshot and converts the "
@@ -1057,16 +943,11 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                                 "cannot be established; the Hub offers no conversion it cannot attribute"),
     }
 
-    routing: dict = {"goal": "let this Codex home share the Kit's host defaults with an on-demand pstack workflow",
-                     "compatibility": (verdict.get("error") if verdict.get("compatible") is None
-                                       else verdict.get("reason"))}
-    if kit.get("present") is None:
-        routing["kit_entry_error"] = ("the Kit's own entry refuses this target (" + kit.get("error", "")
-                                      + "); resolve that state before relying on this report for a Kit install")
+    routing: dict = {"goal": "keep this Codex home's SessionStart auto-routing off while its on-demand pstack "
+                             "workflow stays installed"}
     if registration == "conflict":
         routing.update(status="blocked",
-                       reason=(verdict.get("error")
-                               or "duplicate or anomalous pstack plugin state: " + "; ".join(anomalies)),
+                       reason="duplicate or anomalous pstack plugin state: " + "; ".join(anomalies),
                        anomalies=anomalies,
                        recovery="nothing was changed; resolve the conflicting state through the lifecycle that created it")
     elif registration == "none":
@@ -1200,7 +1081,6 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                                     "snapshot": receipt.get("snapshot"),
                                     "registration_reconciliation": reconciled} if receipt is not None
                                    else {"state": "none", "error": receipt_error}),
-                   "kit": kit,
                    "sheet": sheet,
                    "native_registration": {"copies": [str(path) for path in copies],
                                             "config_registered": config_registered,
@@ -1209,11 +1089,10 @@ def transition(*, workspace: Path, codex_home: Path, codex_bin: Path,
                    "native_registry": registry,
                    "installed_copy_vs_pinned": installed_report,
                    "shared_skills": shared_report},
-        "compatibility": verdict,
         "recognized_states": states,
         "transitions": transitions,
         "review_before_main_environment": {
-            "review": ["the recognized states and the compatibility verdict above",
+            "review": ["the recognized states above",
                        "every content difference against the pinned package (source_lock_sha256 "
                        + origin["source_lock_sha256"] + ")",
                        "each transition's owner, target change and recovery basis; unknown history is never claimed restorable"],
@@ -1362,7 +1241,7 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser.add_argument("--codex-bin", type=Path, required=True, help="explicit native Codex executable")
     parser.add_argument("--operation", choices=("install", "remove"), default="install")
     parser.add_argument("--coexistence", action="store_true",
-                        help="install pstack with SessionStart auto-routing off, ready to share the target with the Kit")
+                        help="install pstack with SessionStart auto-routing off")
     parser.add_argument("--skills-dir", type=Path, default=None,
                         help="transition-plan only: a shared Skills root compared read-only against the pinned package")
     parser.add_argument("--plan-id")

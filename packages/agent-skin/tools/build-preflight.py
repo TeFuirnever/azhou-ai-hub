@@ -15,27 +15,26 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_PATHS = (
-    ".build", ".build/module-cache", ".build/azhou-payload", ".build/azhou-zcode-payload",
+    ".build", ".build/module-cache", ".build/azhou-payload",
     ".build/azhou-install-registry",
     "dist", "assets/private",
 )
 
 
-def load_theme(root: Path, *, host: str = "codex") -> dict:
+def load_theme(root: Path) -> dict:
     path = root / "tools/verify-artifacts.py"
     spec = importlib.util.spec_from_file_location("agent_skin_preflight_artifacts", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load artifact verifier: {path}")
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
-    artifacts.configure_build_host(host)
     return artifacts.load_theme_config(root, require_inputs=True)
 
 
-def preflight(root: Path = ROOT, *, host: str = "codex", approved_icon_sha256: str | None = None) -> dict:
+def preflight(root: Path = ROOT, *, approved_icon_sha256: str | None = None) -> dict:
     """Return the validated theme after checking private paths and Git state."""
     root = Path(root).resolve()
-    theme = load_theme(root, host=host)
+    theme = load_theme(root)
     for name in BUILD_PATHS:
         if (root / name).is_symlink():
             raise SystemExit("拒绝通过符号链接构建：" + name)
@@ -69,15 +68,14 @@ def preflight(root: Path = ROOT, *, host: str = "codex", approved_icon_sha256: s
         with icon_source.open("rb") as stream:
             actual = hashlib.file_digest(stream, "sha256").hexdigest()
         if actual != approved_icon_sha256.lower():
-            raise SystemExit(f"{host} 图标源图与已批准的 SHA-256 不符，未开始构建。")
+            raise SystemExit("图标源图与已批准的 SHA-256 不符，未开始构建。")
     return theme
 
 
 def main(root: Path = ROOT, *, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", choices=("codex", "zcode"), default="codex")
     args = parser.parse_args(argv)
-    theme = preflight(root, host=args.host, approved_icon_sha256=os.environ.get("AZHOU_APPROVED_ICON_SHA256"))
+    theme = preflight(root, approved_icon_sha256=os.environ.get("AZHOU_APPROVED_ICON_SHA256"))
     print(json.dumps(theme, ensure_ascii=False, separators=(",", ":")))
     return 0
 

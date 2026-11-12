@@ -173,6 +173,7 @@ export async function installRenderer(offered) {
   if (incumbentPlacement && !controllerLegible(incumbent)) throw deny('namespace-conflict');
   const markersAccounted = seated => {
     if (!hostBound) return true;
+    // Frozen baseline key name (`zcodeAttributes`), kept verbatim for 0.9.0 installs.
     const ledger = slotValue(slotValue(seated, BASELINE_KEY), 'zcodeAttributes');
     return [shell, ...liveSurfaces()].every(node => {
       const marked = node.getAttribute(surfaceMarker);
@@ -327,6 +328,7 @@ export async function installRenderer(offered) {
     const inheritedSnapshot = {
       attribute: inheritedRaw.attribute,
       properties: new Map(inheritedRaw.properties),
+      // Same frozen `zcodeAttributes` baseline key as above; inherited maps keep it.
       zcodeAttributes: hostBound ? new Map([...(inheritedRaw.zcodeAttributes ?? []),
         ...[...(entrySnapshot.zcodeAttributes ?? [])].filter(([node]) => !inheritedRaw.zcodeAttributes?.has(node))]) : undefined,
     };
@@ -489,6 +491,7 @@ export async function installRenderer(offered) {
         && candidate.textContent === candidateText;
       if (sheetStillAuthored) candidate.remove();
       const shellStillCurrent = !hostBound || (shell.isConnected && document.getElementById('root') === shell);
+      // Restore the frozen `zcodeAttributes` baseline records exactly as captured.
       for (const [node, marked] of restoreSnapshot.zcodeAttributes ?? []) {
         const markerRestorable = shellStillCurrent && node.isConnected
           && (node === shell || shell.contains(node))
@@ -558,6 +561,7 @@ export async function installRenderer(offered) {
       // can bring it back without re-adding an inline style element that a
       // stricter content-security policy might reject.
       if (settledSheet) { settledSheet.disabled = true; settledSheet.removeAttribute('id'); }
+      // Activate the surfaces recorded under the frozen `zcodeAttributes` key.
       for (const node of entrySnapshot.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
       html.style.setProperty(SCENE_PROPERTY, 'url(' + JSON.stringify(sceneURL) + ')');
       html.style.setProperty(TINT_PROPERTY, tintGradient);

@@ -34,11 +34,8 @@ BUILD_FILES = (
     "Native/StartupNativeTests.swift",
     "Native/SkinHostContract.swift",
     "Native/CodexSkinDriver.swift",
-    "Native/ZCodeSkinDriver.swift",
-    "Native/ZCodeSkinRuntime.swift",
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
-    "extension/hosts/zcode.mjs",
     "extension/hosts/dsh.mjs",
     "extension/bootstrap.mjs",
     "image-settings.js",
@@ -211,8 +208,6 @@ def clone_source_tree(destination: Path, *, private: bool = True) -> None:
         (private_dir / "scene.js").write_text("window.AZHOU_WORKING_IMAGE = 'synthetic';\n")
         synthetic_png(private_dir / "app-icon/source.png", 1024, 1024,
                       lambda x, y: (x % 256, y % 256, 90, 255))
-        synthetic_png(private_dir / "app-icon/zcode.png", 1024, 1024,
-                      lambda x, y: (90, x % 256, y % 256, 255))
 
 
 def build_staged_product(root: Path, label: str):
@@ -1070,23 +1065,22 @@ class StartupBuildTests(unittest.TestCase):
         for source in required:
             self.assertIn(source, self.marker["inputs"])
 
-    def test_system_bash_preserves_default_and_explicit_host_arguments(self):
+    def test_system_bash_invokes_the_verifier_without_host_arguments(self):
         script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
         prefix = script.split('system_bin=', 1)[0]
         command = next(line for line in script.splitlines()
                        if line.startswith('python3 tools/verify-artifacts.py ') and '--write-bundle-info' in line)
         probe = prefix + '\nbundle=synthetic-bundle\npython3() { printf "%s\\n" "$@"; }\n' + command + '\n'
-        for args, expected in (([], ["tools/verify-artifacts.py", "--write-bundle-info", "synthetic-bundle"]),
-                               (["--host", "zcode"], ["tools/verify-artifacts.py", "--host", "zcode", "--write-bundle-info", "synthetic-bundle"])):
-            result = subprocess.run(["/bin/bash", "-c", probe, "tools/build-macos.sh", *args],
-                                    cwd=self.root, capture_output=True, text=True, check=False)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stderr, "")
-            self.assertEqual(result.stdout.splitlines(), expected)
+        result = subprocess.run(["/bin/bash", "-c", probe, "tools/build-macos.sh"],
+                                cwd=self.root, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(result.stdout.splitlines(),
+                         ["tools/verify-artifacts.py", "--write-bundle-info", "synthetic-bundle"])
 
     def test_native_display_names_are_localized_over_registration_safe_bundle_name(self):
         build_script = (PACKAGE / "tools/build-macos.sh").read_text(encoding="utf-8")
-        self.assertIn('python3 tools/verify-artifacts.py ${host_args[@]+"${host_args[@]}"} --write-bundle-info "$bundle"', build_script)
+        self.assertIn('python3 tools/verify-artifacts.py --write-bundle-info "$bundle"', build_script)
         self.assertIn("NAME = load_theme_config(ROOT)['identity']['installationName']",
                       (PACKAGE / "tools/verify-artifacts.py").read_text(encoding="utf-8"))
         info = self.verifier.write_bundle_info(self.bundle)
@@ -1131,56 +1125,6 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
                 self.verifier.verify_startup(self.bundle, self.info, self.marker)
         finally:
             self.verifier.INPUT_FILES = original
-
-    def test_zcode_factory_is_explicit_bound_and_rejects_metadata_before_page_work(self):
-        verifier = load_module(self.root / "tools/verify-artifacts.py", "zcode_factory_artifacts")
-        verifier.configure_build_host("zcode")
-        bundle = self.root / '.build/azhou-stage.zcode-factory/azhou-zcode-payload'
-        bundle.mkdir(parents=True)
-        manifest = self.builder.build_startup(bundle, root=self.root, host='zcode')
-        payload = (bundle / 'Contents/Resources/startup/install.js').read_text()
-        self.assertEqual(manifest['targetHost'], 'zcode')
-        self.assertEqual(manifest['entrypoint'], 'controller-metadata-factory/v1')
-        self.assertIn('extension/hosts/zcode.mjs', manifest['sourceInputs'])
-        wallpaper_builder = load_module(self.root / 'tools/build-wallpaper.py', 'zcode_fixture_wallpaper')
-        wallpaper_builder.package(bundle, host='zcode')
-        verifier.verify_wallpaper(bundle, self.info, self.marker)
-        wallpaper_manifest_path = bundle / 'Contents/Resources/wallpaper/manifest.json'
-        wallpaper_manifest = json.loads(wallpaper_manifest_path.read_text())
-        wallpaper_manifest['targetHost'] = 'codex'
-        wallpaper_manifest_path.write_text(json.dumps(wallpaper_manifest))
-        with self.assertRaisesRegex(RuntimeError, 'host label'):
-            verifier.verify_wallpaper(bundle, self.info, self.marker)
-
-        self.assertTrue(payload.startswith('((controllerMetadata) => {'))
-        self.assertTrue(payload.rstrip().endswith('})'))
-        self.assertNotIn('function createCodexPageAdapter(', payload)
-        verifier.verify_startup(bundle, self.info, self.marker)
-        harness = r"""const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const script=fs.readFileSync(process.argv[1],'utf8');let writes=0;
-const scope=vm.createContext({URL,document:new Proxy({},{get(){throw Error('page must not be read')}})});
-const factory=vm.runInContext(script,scope);assert.equal(typeof factory,'function');
-for(const input of [undefined,{},Object.defineProperty({},'documentToken',{get(){writes++;throw Error('getter')}})]) {
- const result=factory(input);assert.equal(result.reason,'controller-metadata-invalid');assert.equal(result.installed,false);
-}
-assert.equal(writes,0);console.log('factory-negatives:3/3');"""
-        result = subprocess.run(['node', '-e', harness, str(bundle / 'Contents/Resources/startup/install.js')], capture_output=True, text=True, check=True)
-        self.assertIn('factory-negatives:3/3', result.stdout)
-        path = bundle / 'Contents/Resources/startup/manifest.json'
-        forged = dict(manifest, targetHost='codex')
-        path.write_text(json.dumps(forged))
-        with self.assertRaisesRegex(RuntimeError, 'sourceInputs|安装入口'):
-            verifier.verify_startup(bundle, self.info, self.marker)
-        relabelled = dict(manifest, targetHost='codex', sourceInputs={k: v for k, v in manifest['sourceInputs'].items() if k != 'extension/hosts/zcode.mjs'})
-        relabelled.pop('entrypoint', None)
-        path.write_text(json.dumps(relabelled))
-        with self.assertRaisesRegex(RuntimeError, 'Codex startup cannot carry a ZCode'):
-            verifier.verify_startup(bundle, self.info, self.marker)
-        forged = dict(manifest, entrypoint='unbound')
-        path.write_text(json.dumps(forged))
-        with self.assertRaisesRegex(RuntimeError, 'metadata factory'):
-            verifier.verify_startup(bundle, self.info, self.marker)
-
     def test_payload_wires_the_codex_page_adapter_explicitly(self):
         payload = (self.bundle / "Contents/Resources/startup/install.js").read_text(encoding="utf-8")
         self.assertIn("function createCodexPageAdapter(", payload)

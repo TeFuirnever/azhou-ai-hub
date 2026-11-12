@@ -424,14 +424,14 @@ class StartupAssetsWorkTests(unittest.TestCase):
 
 class BuildLockTests(unittest.TestCase):
     def test_lock_cli_routes_run_verify_and_reports_failure(self):
-        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run', 'zcode']),              mock.patch.object(build_lock, 'run', return_value=17) as run:
+        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run']),              mock.patch.object(build_lock, 'run', return_value=17) as run:
             self.assertEqual(build_lock.main(), 17)
-            run.assert_called_once_with('zcode')
+            run.assert_called_once_with()
         with mock.patch.object(sys, 'argv', ['build-lock.py', '--verify', '42']),              mock.patch.object(build_lock, 'checked_lock_file') as checked:
             self.assertEqual(build_lock.main(), 0)
             checked.assert_called_once_with(42)
         output = io.StringIO()
-        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run', 'codex']),              mock.patch.object(build_lock, 'run', side_effect=RuntimeError('lock failed')),              contextlib.redirect_stderr(output), self.assertRaises(SystemExit) as failure:
+        with mock.patch.object(sys, 'argv', ['build-lock.py', '--run']),              mock.patch.object(build_lock, 'run', side_effect=RuntimeError('lock failed')),              contextlib.redirect_stderr(output), self.assertRaises(SystemExit) as failure:
             build_lock.main()
         self.assertEqual(failure.exception.code, 1)
         self.assertIn('lock failed', output.getvalue())
@@ -446,7 +446,7 @@ class BuildLockTests(unittest.TestCase):
             build = root / '.build'
             lock = build / '.agent-skin-build.lock'
             with mock.patch.object(build_lock, 'ROOT', root), mock.patch.object(build_lock, 'BUILD', build),                  mock.patch.object(build_lock, 'LOCK', lock):
-                self.assertEqual(build_lock.run('codex'), 0)
+                self.assertEqual(build_lock.run(), 0)
                 self.assertTrue(lock.is_file())
                 first = os.open(lock, os.O_RDWR)
                 second = os.open(lock, os.O_RDWR)
@@ -472,9 +472,8 @@ class ShellCleanupIntegrationTests(unittest.TestCase):
         start = build_script.index('cleanup_stage() {')
         end = build_script.index('trap cleanup_stage EXIT', start) + len('trap cleanup_stage EXIT')
         trap = build_script[start:end]
-        for host, mode in (('codex', 'success'), ('zcode', 'success'),
-                           ('codex', 'unknown'), ('codex', 'failed-build')):
-            with self.subTest(host=host, mode=mode), tempfile.TemporaryDirectory(prefix='agent-skin-shell-stage-') as temp:
+        for mode in ('success', 'unknown', 'failed-build'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix='agent-skin-shell-stage-') as temp:
                 root = Path(temp).resolve()
                 (root / 'tools').mkdir()
                 shutil.copyfile(SOURCE, root / 'tools/verify-artifacts.py')
@@ -484,7 +483,7 @@ class ShellCleanupIntegrationTests(unittest.TestCase):
                 build = root / '.build'
                 stage = build / 'azhou-stage.synthetic'
                 stage.mkdir(parents=True)
-                payload = stage / ('azhou-zcode-payload' if host == 'zcode' else 'azhou-payload')
+                payload = stage / 'azhou-payload'
                 payload.mkdir()
                 (payload / 'synthetic').write_bytes(b'payload')
                 (stage / 'azhou-install-registry').write_bytes(b'registry')
@@ -495,8 +494,7 @@ class ShellCleanupIntegrationTests(unittest.TestCase):
                         (icons / f'icon_{size}x{size}{suffix}.png').write_bytes(b'icon')
                 env = os.environ.copy()
                 env.pop('AZHOU_APPROVED_ICON_SHA256', None)
-                host_args = ['--host', 'zcode'] if host == 'zcode' else []
-                cli = [sys.executable, 'tools/verify-artifacts.py', *host_args]
+                cli = [sys.executable, 'tools/verify-artifacts.py']
                 identity = subprocess.run([*cli, '--stage-identity', str(stage)], cwd=root, env=env,
                                           capture_output=True, text=True, check=True).stdout
                 sealed = subprocess.run([*cli, '--seal-stage', str(stage)], cwd=root, env=env,
@@ -506,9 +504,8 @@ class ShellCleanupIntegrationTests(unittest.TestCase):
                 if mode == 'unknown':
                     (stage / 'unknown.txt').write_bytes(b'preserve')
                 env.update({'STAGE_ROOT': str(stage), 'STAGE_RECEIPT': sealed})
-                host_shell = 'host_args=(--host zcode)' if host == 'zcode' else 'host_args=()'
                 shell = ('stage_root="$STAGE_ROOT"\nstage_receipt="$STAGE_RECEIPT"\n'
-                         + host_shell + '\nbuild_succeeded=' + ('0' if mode == 'failed-build' else '1')
+                         'build_succeeded=' + ('0' if mode == 'failed-build' else '1')
                          + '\n' + trap + ('\nexit 18\n' if mode == 'failed-build' else '\nexit 0\n'))
                 lock_fd = os.open(build / '.agent-skin-build.lock', os.O_RDWR | os.O_CREAT, 0o600)
                 fcntl.flock(lock_fd, fcntl.LOCK_EX)

@@ -145,7 +145,7 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 - [ ] Lane 6. Confirm the skills-root user root still resolves and no skill duplicated between plugin and root names. Save `no-duplicate-skills.png`. Pass when the session lists one poteto-mode.
 - [ ] Lane 7. Exercise the documented exit. Uninstall restores the baseline snapshot from lane 1. Save `uninstall-restore.png`. Pass when the diff against baseline is empty.
 - [ ] Lane 8. Reinstall after uninstall and confirm convergence. Save `reinstall-converge.png`. Pass when the second install changes nothing relative to the first.
-- [ ] Lane 9. Confirm the Agent Orchestration Kit files in the default home keep working beside the plugin, one Kit command still resolves. Save `kit-coexist.png`. Pass when the Kit surface answers.
+- [ ] Lane 9. Superseded 2026-11-11: the Agent Orchestration Kit was retired and physically removed from this repository, so Kit coexistence can no longer be confirmed; the lane is kept as this plan's historical text and will not run.
 - [ ] Lane 10. Confirm the dedicated home at `~/pstack-accept-tmp` is superseded, its registration disabled in favor of the default home. Save `dedicated-superseded.png`. Pass when only one active registration remains.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.

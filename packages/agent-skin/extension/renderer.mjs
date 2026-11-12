@@ -2,11 +2,13 @@ const GLOBAL_NAME = '__azhouStartup';
 const WALLPAPER_GLOBAL = '__azhouWallpaper';
 const OWNER = 'azhou-codex-startup';
 const VERSION = 1;
+// Frozen installed-state identity inherited from codex-startup-animation;
+// installed wallpaper controllers still answer to this exact owner string.
 const LEGACY_WALLPAPER_OWNER = 'azhou.codex-startup-animation';
 const WALLPAPER_VERSIONS = new Set(['0.7.1', '0.8.0', '0.9.0']);
 // The controller-owner allowlist is the anti-hijack boundary for the startup
 // global; it stays explicit here and is never derived from adapters.
-const CONTROLLER_OWNERS = new Set(['azhou-codex-startup', 'azhou-zcode-startup', 'azhou-dsh-startup']);
+const CONTROLLER_OWNERS = new Set(['azhou-codex-startup', 'azhou-dsh-startup']);
 const PAGE_REASON = 'page-unsupported';
 const ASSET_REASON = 'asset-invalid';
 const FIXED_PAGE_REASONS = new Set(['asset-invalid', 'storage-unavailable']);

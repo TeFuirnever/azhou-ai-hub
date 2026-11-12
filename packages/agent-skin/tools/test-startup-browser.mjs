@@ -20,23 +20,20 @@ const options = {
   chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   out: join(ROOT, '.build/startup-browser-evidence'),
   generatedPayload: null,
-  legacyFixture: 'actual',
   only: [],
 };
 for (let index = 2; index < process.argv.length; index++) {
   const key = process.argv[index];
   if (key === '--help') {
-    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--legacy-fixture actual|synthetic] [--only <exact check name>]');
+    console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--only <exact check name>]');
     process.exit(0);
   }
-  if (!['--chrome', '--out', '--generated-payload', '--legacy-fixture', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  if (!['--chrome', '--out', '--generated-payload', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
   const value = process.argv[++index];
   if (key === '--only') options.only.push(value);
   else if (key === '--generated-payload') options.generatedPayload = value;
-  else if (key === '--legacy-fixture') options.legacyFixture = value;
   else options[key.slice(2)] = value;
 }
-if (!['actual', 'synthetic'].includes(options.legacyFixture)) throw new Error('Unknown legacy fixture: ' + options.legacyFixture);
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
@@ -50,7 +47,7 @@ const report = {
   checks: [],
   screenshots: [],
   limitations: [
-    ...(options.legacyFixture === 'synthetic' ? ['The legacy wallpaper is a synthetic ownership and disposal model; image decoding, real legacy CSS and visual behavior are not represented.'] : []),
+    'The legacy wallpaper is a synthetic ownership and disposal model; image decoding, real legacy CSS and visual behavior are not represented.',
     'The app:// page identity is supplied through a local host adapter; no Codex process, profile, transport or user content is accessed.',
     'The wallpaper fixture uses one generated-in-test PNG pixel. The animation fixture separately generates synthetic PNGs and contours; it does not validate private or branded source art.',
     'The cold-start wallpaper check withholds and reinserts the synthetic shell in this local host; it models delayed shell mount timing but does not establish official Codex mount timing.',
@@ -170,10 +167,8 @@ try {
     readFile(join(ROOT, 'extension/codex-page-adapter.mjs'), 'utf8'),
     readFile(join(ROOT, 'image-settings.js'), 'utf8'),
     readFile(join(ROOT, 'localization.js'), 'utf8'),
-    options.legacyFixture === 'synthetic' ? Promise.resolve('/* synthetic fixture */')
-      : readFile(join(ROOT, '../codex-startup-animation/wallpaper/wallpaper.css'), 'utf8'),
-    readFile(join(ROOT, options.legacyFixture === 'synthetic' ? 'tools/test-synthetic-legacy-wallpaper.mjs'
-      : '../codex-startup-animation/wallpaper/renderer.js'), 'utf8'),
+    Promise.resolve('/* synthetic fixture */'),
+    readFile(join(ROOT, 'tools/test-synthetic-legacy-wallpaper.mjs'), 'utf8'),
     readFile(join(ROOT, '.build/startup-helper-expressions.json'), 'utf8'),
     options.generatedPayload ? readFile(options.generatedPayload, 'utf8') : Promise.resolve(null),
   ]);
@@ -738,7 +733,6 @@ try {
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
     ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
     ['/extension/hosts/dsh.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/dsh.mjs'), 'utf8')]],
-    ['/extension/hosts/zcode.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/hosts/zcode.mjs'), 'utf8')]],
   ]);
   if (generatedPayloadRoute !== null) {
     routes.set('/generated-startup.js', ['text/javascript; charset=utf-8', generatedPayloadRoute]);
@@ -2391,7 +2385,7 @@ try {
   });
 
   await navigate('/fixture.html?legacy=1&legacy-only=1');
-  await check('compiled native helpers recognize the ' + (options.legacyFixture === 'synthetic' ? 'synthetic' : 'exact') + ' legacy wallpaper without a controller and restore it', async () => {
+  await check('compiled native helpers recognize the synthetic legacy wallpaper without a controller and restore it', async () => {
     const before = await evaluateNativeHelper('statusSource', { startup: 'none' });
     assert.equal(before.applied, true);
     assert.deepEqual(before.startup, { installed: false });
@@ -2413,7 +2407,7 @@ try {
     { label: 'later host wash edit', query: '', editWash: true, expectedWash: 'host-later', expectedPriority: 'important' },
   ]) {
     await navigate('/fixture.html?legacy=1' + scenario.query);
-    await check((options.legacyFixture === 'synthetic' ? 'synthetic' : 'frozen') + ' legacy wallpaper replacement restores ' + scenario.label, async () => {
+    await check('synthetic legacy wallpaper replacement restores ' + scenario.label, async () => {
       const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
         legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
       assert.equal(setup.legacyError, '', JSON.stringify(setup));
@@ -2454,7 +2448,7 @@ try {
     { label: 'host surface important baseline', query: '&legacy-surface=host-important', expectedSurface: '#fafafa', expectedPriority: 'important' },
   ]) {
     await navigate('/fixture.html?legacy=1' + scenario.query);
-    await check((options.legacyFixture === 'synthetic' ? 'synthetic' : 'frozen') + ' legacy wallpaper replacement restores ' + scenario.label, async () => {
+    await check('synthetic legacy wallpaper replacement restores ' + scenario.label, async () => {
       const setup = await cdp.evaluate(`({legacyError:window.__legacyWallpaperError||'',
         legacyApplied:window.__legacyWallpaperAPI?.status().applied===true,controller:typeof window.__startupAPI?.status==='function'})`);
       assert.equal(setup.legacyError, '', JSON.stringify(setup));
@@ -6338,9 +6332,7 @@ try {
         window.__DSH_BOOT__ = {};
         adapter = createDSHPageAdapter(host, {sidebarEntry:false});
       } else {
-        const href = kind === 'zcode'
-          ? 'file:///Applications/ZCode.app/Contents/Resources/app.asar/out/renderer/index.html?windowKind=main'
-          : 'app://-/index.html?initialRoute=%2F';
+        const href = 'app://-/index.html?initialRoute=%2F';
         host = new Proxy(window, {get(target, name) {
           if (name === 'top') return host;
           if (name === 'location') return new URL(href);
@@ -6348,16 +6340,8 @@ try {
           return ['addEventListener','removeEventListener','setTimeout','clearTimeout','getComputedStyle','matchMedia'].includes(name)
             ? value.bind(target) : value;
         }});
-        if (kind === 'zcode') {
-          const {createZCodePageAdapter} = await import('/extension/hosts/zcode.mjs');
-          adapter = createZCodePageAdapter(host, {controllerMetadata:{
-            controllerInstanceID:crypto.randomUUID(), createdByOperationID:crypto.randomUUID(),
-            payloadSHA256:'a'.repeat(64), documentToken:'fixture-document',
-          }});
-        } else {
-          const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
-          adapter = createCodexPageAdapter(host);
-        }
+        const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+        adapter = createCodexPageAdapter(host);
       }
       const evidence = window.lifecycleFixture = {disposed:0,closed:0};
       const payload = (_win, _doc, _location, _performance, _indexedDB, _Image, _Path2D, _URL,
@@ -6378,7 +6362,7 @@ try {
     assert.equal(state.phase, 'loading');
   }
 
-  for (const kind of ['codex', 'zcode', 'dsh']) {
+  for (const kind of ['codex', 'dsh']) {
     await check(kind + ' startup and settings lifecycle contract', async () => {
       await startLifecycleFixture(kind);
       const completed = await cdp.evaluate(`(() => {

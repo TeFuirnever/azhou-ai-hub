@@ -320,7 +320,7 @@ test('invalid input is typed while digest and renderer failures stay at their or
 test('a changing host adapter cannot cross the asynchronous apply boundary', async t => {
   const unsupported = { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported', imageDecoded: false };
   function adapterFor(shellState) {
-    return { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: {
+    return { controllerWallpaper: { owner: 'azhou.synthetic-startup-animation' }, wallpaper: {
       validPage: () => true, shellState, surfaces: () => [], css: 'original', scope: 'original',
       attributes: { surfaceMarker: 'data-test-surface', observeFilter: ['class'] },
     } };
@@ -424,7 +424,7 @@ test('a changing host adapter cannot cross the asynchronous apply boundary', asy
 
 test('a stable mutable adapter keeps its receiver and can be changed between requests', async () => {
   const fixture = createHost(), renderer = rendererRecorder();
-  const adapter = { controllerWallpaper: { owner: 'azhou.zcode-startup-animation' }, wallpaper: {
+  const adapter = { controllerWallpaper: { owner: 'azhou.synthetic-startup-animation' }, wallpaper: {
     shellState() { assert.equal(this, adapter.wallpaper); return 'ready'; }, css: 'first',
     attributes: { surfaceMarker: 'data-test-surface', observeFilter: ['class'] },
   } };
@@ -437,12 +437,12 @@ test('a stable mutable adapter keeps its receiver and can be changed between req
   assert.equal(renderer.calls[1].pageAdapter, adapter);
 });
 
-test('ZCode uses its explicit shell port and passes the same bound adapter to the renderer', async () => {
+test('A host adapter uses its explicit shell port and passes the same bound adapter to the renderer', async () => {
   const fixture = createHost({ shell: false });
   const renderer = rendererRecorder();
   const adapter = Object.freeze({ wallpaper: Object.freeze({
     shellState(isCurrent, host) { assert.equal(host, fixture.host);return isCurrent() ? 'ready' : 'cancelled'; },
-    attributes: Object.freeze({ surfaceMarker: 'data-azhou-zcode-wallpaper-surface',
+    attributes: Object.freeze({ surfaceMarker: 'data-azhou-synthetic-wallpaper-surface',
       observeFilter: ['data-testid', 'hidden', 'aria-hidden', 'class', 'style'] }),
   }) });
   const apply = createWallpaperApplicator(renderer.installRenderer, { version: '0.9.0', css: 'synthetic-css', pageAdapter: adapter }, fixture.host);

@@ -1,15 +1,14 @@
 # Optional integrations / 可选能力接入
 
-The twelve canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. The three optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
+The twelve canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. The two optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
 
-The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md), [Agent Orchestration Kit](../packages/agent-orchestration-kit/README.md), and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
+The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md) and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The 2026-10-26 local App and Pet handoff receipts bind `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. Later installation ownership must be checked against the current App and Pet receipts separately. Keep any source root needed by those receipts and recovery until an explicitly reviewed handoff verifies each owner.
+The 2026-10-26 local App and Pet handoff receipts bound `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. That required handoff was completed on 2026-11-12 by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval ([receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)): the tool's designed rejection was accepted as final, the installed Pet receipt remains an orphan pointing at the deleted root while the Pet itself stays self-contained and usable, and the legacy root was then deleted. Installation ownership is still checked against the current App and Pet receipts separately.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations model-router --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ```
 
@@ -20,12 +19,11 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 | Entry | Package runtime and adapter scope | Native owner and boundary |
 |---|---|---|
 | `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot, native install/doctor/remove adapter and read-only transition review | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
-| `model-router` | `packages/agent-orchestration-kit/`; current `runtime_paths` fingerprint, private snapshot and native install/verify/recovery adapter | Agent Orchestration Kit's installer owns its Codex settings, six roles, instructions and Skill. Codex owns actual dispatch. |
 | `agent-skin` | `packages/agent-skin/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Azhou AI Lab, a Codex adapter with the native player and wallpaper helper, plus the assembled `azhou-agent-skin` DeepSeek Harness plugin package (`tools/build-dsh-plugin.py`, local assembly only). Owned UI supports Chinese/English and follows official host language/theme without separate preferences. The bot entry portrait is a separate private input; startup artwork and Pet remain independent. Version-aware events, independent playback smoke, read-only status and scoped restore retain their existing boundaries. Local tests do not establish official-host acceptance or installation handoff. No program redistribution grant is recorded. |
 
 Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
-The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. For Agent Skin, a legacy `startup-animation` test installation blocks a new test installation in that workspace until the `agent-skin test-uninstall` path removes its original receipt-owned app and exact registration. See [package provenance and updates](integration-provenance.md).
+The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
 
 ## pstack: local source to native plugin
 
@@ -33,7 +31,7 @@ Use the maintained Hub package as the source for new pstack installations. Upstr
 
 Set task-specific paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. The package source defaults to `packages/pstack-agent-harness`; `--source` is optional and only asserts that canonical path. For the installed runtime, `CODEX_HOME` below is set only for that one process.
 
-Codex normally uses `~/.codex` when `CODEX_HOME` is unset. Its local plugin cache is below that home's `plugins/cache/`; bundled or remote catalog plugins may have other managed source locations. A sibling such as `~/.codex-pstack` is a separate configuration, even though it is outside a project. It is available only to Codex processes launched with that home; an already-running desktop app does not switch homes when a terminal command sets the variable. The adapter accepts a fresh or previously owned target and rejects unknown non-empty targets and known Agent Orchestration Kit configuration. Installing into the default home while preserving an existing Kit installation is not currently supported by this adapter.
+Codex normally uses `~/.codex` when `CODEX_HOME` is unset. Its local plugin cache is below that home's `plugins/cache/`; bundled or remote catalog plugins may have other managed source locations. A sibling such as `~/.codex-pstack` is a separate configuration, even though it is outside a project. It is available only to Codex processes launched with that home; an already-running desktop app does not switch homes when a terminal command sets the variable. The adapter accepts a fresh or previously owned target and rejects unknown non-empty targets, plus `config.toml` content that mentions a pstack registration or the retired router without a Hub ownership receipt.
 
 ```sh
 PSTACK_WORKSPACE=/absolute/test-project
@@ -57,11 +55,9 @@ After opening the dedicated session, inspect native Skills and invoke `pstack-az
 
 The `SessionStart` hook requires native `/hooks` trust review. Setting `session hook: off` in that target's model sheet stops automatic injection, while explicit Skill invocation remains available. No adapter bypasses hook trust.
 
-### Sharing one Codex home with the Agent Orchestration Kit
+### Coexistence installs: the model sheet's `session hook` line
 
-Both orchestration packages can share one controlled Codex home. One compatibility verdict — `pstack_coexistence` in the Kit's `install_codex.py` — is enforced by both public entries, so the Hub's `model-router` entry and the Kit's own `setup.sh` reach the same conclusion for the same target: a model sheet or visible pstack Skills alone is never evidence of auto-routing, and one plugin copy under the native plugins tree already counts as native registration, so even an orphaned copy conservatively reads as armed — native registration whose sheet lacks the exact `session hook: off` line blocks a Kit install until the target is converted. Duplicate pstack plugin copies and symlinked plugin state stay errors.
-
-Install the Kit first and plan pstack against the same home (coexistence is then automatic), or declare the intent before the Kit arrives:
+A coexistence install registers the plugin with SessionStart auto-routing off, for a home where routing must stay off while the plugin's on-demand Skills stay available:
 
 ```sh
 python scripts/azhou_hub.py integrations pstack plan --coexistence \
@@ -69,15 +65,15 @@ python scripts/azhou_hub.py integrations pstack plan --coexistence \
   --codex-home "$SHARED_HOME" --codex-bin "$CODEX_BIN"
 ```
 
-Besides native registration, a coexistence plan owns exactly one narrow change: the model sheet's `session hook` line switched to `off`, with every other byte, encoding and line ending preserved — or a minimal sheet written when none exists. The plan lists that change with its owner (`hub-pstack-adapter`), purpose and restore behavior, and reports the target as compatible only after the reviewed plan is applied; planning alone modifies nothing. A target whose routing is already armed is converted by that same reviewed plan, and an undecodable sheet blocks instead of being rewritten. The change's recovery record reaches the receipt before the sheet is written, so an interrupted conversion always leaves either an untouched sheet with a recorded basis or a converted sheet whose exact original is recorded — never an orphaned adapter write. An existing standalone installation is recognized when it is later updated to coexistence rules: its receipt stays valid, the plan reports the pending sheet change, and applying it converts the target in place, after which replans report the sheet as already satisfied. `remove` restores the exact prior sheet bytes or deletes the adapter-written sheet, keeps every Kit-owned file, and refuses automatic restore after later user edits, printing the recorded and observed digests of the refusal. A standalone pstack install — no Kit rules in the target — keeps its existing routing mode untouched.
+Besides native registration, a coexistence plan owns exactly one narrow change: the model sheet's `session hook` line switched to `off`, with every other byte, encoding and line ending preserved — or a minimal sheet written when none exists. The plan lists that change with its owner (`hub-pstack-adapter`), purpose and restore behavior, and reports the target as compatible only after the reviewed plan is applied; planning alone modifies nothing. A target whose routing is already armed is converted by that same reviewed plan, and an undecodable sheet blocks instead of being rewritten. The change's recovery record reaches the receipt before the sheet is written, so an interrupted conversion always leaves either an untouched sheet with a recorded basis or a converted sheet whose exact original is recorded — never an orphaned adapter write. An existing standalone installation is recognized when it is later updated to coexistence rules: its receipt stays valid, the plan reports the pending sheet change, and applying it converts the target in place, after which replans report the sheet as already satisfied. `remove` restores the exact prior sheet bytes or deletes the adapter-written sheet, and refuses automatic restore after later user edits, printing the recorded and observed digests of the refusal. A standalone pstack install keeps its existing routing mode untouched.
 
-A dedicated target also carries byproducts the native runtime itself writes the moment it is opened; the Kit installer's native validation leaves exactly these behind, and the first real Kit-then-pstack order surfaced them. The pstack plan accepts precisely that observed byproduct set, discloses the accepted entries in the plan (`host_runtime_state_accepted`) with the statement that the adapter neither reads nor writes them, and still refuses unknown names, user-placed Skills under the home's `skills/`, and symlinks — an unknown or foreign target fails closed for review, and a new client build writing new names does too.
+A dedicated target also carries byproducts the native runtime itself writes the moment it is opened; a native validation pass leaves exactly these behind. The pstack plan accepts precisely that observed byproduct set, discloses the accepted entries in the plan (`host_runtime_state_accepted`) with the statement that the adapter neither reads nor writes them, and still refuses unknown names, user-placed Skills under the home's `skills/`, and symlinks — an unknown or foreign target fails closed for review, and a new client build writing new names does too.
 
-`doctor` reports the states separately: Kit rules present, the model sheet and its `session hook` value, native plugin registration, the resulting `auto_routing` judgment, and hook trust as unknown, because only the host's `/hooks` review decides whether the hook runs.
+`doctor` reports the states separately: the model sheet and its `session hook` value, native plugin registration, the resulting `auto_routing` judgment, and hook trust as unknown, because only the host's `/hooks` review decides whether the hook runs.
 
 ### Reviewing an existing installation before any transition
 
-A target that already holds a Kit, a pstack native plugin, or shared pstack Skills is reviewed before anything changes: `transition-plan` is read-only and returns a differentiated plan or block reason for each reachable state, so an existing installation enters the compatible state through the reviewed plan of the entry that owns the change.
+A target that already holds a pstack native plugin or shared pstack Skills is reviewed before anything changes: `transition-plan` is read-only and returns a differentiated plan or block reason for each reachable state, so an existing installation enters the compatible state through the reviewed plan of the entry that owns the change.
 
 ```sh
 python scripts/azhou_hub.py integrations pstack transition-plan \
@@ -86,7 +82,7 @@ python scripts/azhou_hub.py integrations pstack transition-plan \
   --skills-dir "$SHARED_SKILLS"
 ```
 
-`--skills-dir` names the shared Skills root (for Codex shared installs, typically `~/.agents/skills`); it is compared read-only against the pinned package and never written. The report names the actual source of everything it finds — the Hub receipt and snapshot, the native registry's marketplace source, or the clone a symlinked shared Skill points at — the per-file content differences against the pinned `source_lock_sha256`, the target change (if any), its owner, and its recovery basis. A Kit beside shared Skills is already compatible and stays that way: shared Skills are never forced into a native plugin, and locally modified or locally added files are listed and preserved with the choice to keep them or migrate them after review. A compatible or armed native installation without a Hub receipt is reported, never adopted — a matching name or byte-identical content is not a takeover basis — and the plan lists the reviewed steps instead: switch routing off with `/setup-pstack` in that home, or remove the installation through its own lifecycle and install through the Hub entry. The Hub claims no byte-exact restore for installs it did not write; the recorded native registry source is the reinstall basis, and the report says so.
+`--skills-dir` names the shared Skills root (for Codex shared installs, typically `~/.agents/skills`); it is compared read-only against the pinned package and never written. The report names the actual source of everything it finds — the Hub receipt and snapshot, the native registry's marketplace source, or the clone a symlinked shared Skill points at — the per-file content differences against the pinned `source_lock_sha256`, the target change (if any), its owner, and its recovery basis. Shared Skills alone never route tasks: they are never forced into a native plugin, and locally modified or locally added files are listed and preserved with the choice to keep them or migrate them after review. A compatible or armed native installation without a Hub receipt is reported, never adopted — a matching name or byte-identical content is not a takeover basis — and the plan lists the reviewed steps instead: switch routing off with `/setup-pstack` in that home, or remove the installation through its own lifecycle and install through the Hub entry. The Hub claims no byte-exact restore for installs it did not write; the recorded native registry source is the reinstall basis, and the report says so.
 
 An armed installation the Hub does own gets the applicable conversion: the same reviewed coexistence plan as above, embedded with its plan id, owner `hub-pstack-adapter`, the exact before/after sheet digests, and the statement that every byte outside the `session hook` line — all model rows and host mappings — keeps its exact value. Ownership is not inferred from the receipt alone: the native registry must resolve the registered installation back to the receipt's snapshot first, so a completed removal followed by a user's own install, a swapped marketplace source, or an unreadable registry all stay blocked with the actual recorded source named — and the install entry refuses a stale completed-removal receipt over a reappeared registration instead of installing over it. Apply an applicable conversion through `apply --coexistence --plan-id PLAN_ID`: apply re-checks the bound source and target and stops on drift, the recovery basis reaches the receipt before the sheet changes, an interruption resumes through a fresh plan, and the update and exit paths above keep working afterwards. Duplicate plugin copies, symlinked plugin state and undecodable sheets are block reasons, not conversions. Completing this review does not authorize applying any transition to the main environment, moving local Skills, or restarting a host; each application is a separate reviewed decision.
 
@@ -107,55 +103,11 @@ Model sheets in automatically loaded rule locations still inject instructions af
 
 `~/.agents/skills` is a shared Skills discovery directory, including for Codex processes with an isolated home. A skills-only pstack installation there has no native routing hook. Its presence alone does not establish automatic routing or require a native-plugin conversion; choose one workflow owner per task. A later shared installation must link to this Hub's maintained package, and its removal affects every runtime that reads the shared directory. This manual source-retirement procedure does not adopt unknown installations or replace the planned controlled-conversion lifecycle.
 
-## Model router: native roles, one workflow owner
-
-The package is **Agent Orchestration Kit** at `packages/agent-orchestration-kit/`. Select task-specific workspace, Codex home, Skill root and runtime paths. The package source defaults to that canonical path; optional `--source` only asserts it:
-
-```sh
-ROUTER_WORKSPACE=/absolute/router-test-project
-ROUTER_HOME="$ROUTER_WORKSPACE/codex"
-ROUTER_SKILLS="$ROUTER_WORKSPACE/.agents/skills"
-CODEX_BIN=/absolute/path/to/verified/codex
-python scripts/azhou_hub.py integrations model-router plan \
-  --workspace "$ROUTER_WORKSPACE" \
-  --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS" --codex-bin "$CODEX_BIN"
-python scripts/azhou_hub.py integrations model-router apply \
-  --workspace "$ROUTER_WORKSPACE" \
-  --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
-python scripts/azhou_hub.py integrations model-router verify \
-  --workspace "$ROUTER_WORKSPACE" --codex-home "$ROUTER_HOME" --skills-dir "$ROUTER_SKILLS"
-env CODEX_HOME="$ROUTER_HOME" "$CODEX_BIN" -C "$ROUTER_WORKSPACE"
-```
-
-The source installer validates a staged configuration with the selected native binary before writing, merges its owned settings conservatively, and verifies effective configuration, the named-role tool schema, the instruction block and a unique enabled Skill. Failure rolls back. `verify` sends no model request. Run a bounded real delegation and inspect child session metadata separately. The installer refuses a target where pstack auto-routing is armed — native registration whose model sheet lacks the exact `session hook: off` line — using the same verdict both public entries share; see [Sharing one Codex home with the Agent Orchestration Kit](#sharing-one-codex-home-with-the-agent-orchestration-kit).
-
-Codex also discovers the real user's `~/.agents/skills`, even when its configuration home is isolated. Two `astra-orchestrator` Skills cause the source's uniqueness check to fail. Do not disable that check or delete the user's Skill. A pre-existing **byte-identical** selected Skill can be reused: set `ROUTER_SKILLS` to its existing root only after checking that `plan.changes` contains no user-level path. In this case the Skill is watched and reused read-only; it is not a new isolated Skill installation. The Kit's direct entry verifies native discovery from its own package directory, so an isolated project-scope Skill root outside it is not discoverable there — a `setup.sh` attempt on such a target is refused at native verification and restores every touched file (observed natively on 2026-10-26); use the Hub entry for isolated workspace targets. The dated records state exactly which case was tested: the 2026-10-25 report reused the user's byte-identical global Skill, and the 2026-10-26 native acceptance used throwaway `HOME` and `CODEX_HOME` so the installed Skill was the only discoverable copy, with the real-`HOME` refusal and rollback demonstrated separately.
-
-For exit, use the same targets with `uninstall-plan`, then `uninstall --plan-id PLAN_ID`. `recover` handles a recorded interrupted operation. Restore refuses changed installed files or unowned transaction directories, reporting the recorded and observed digest of each refusal. Pre-existing files return byte-for-byte, including original modes; unrelated files and current sessions remain. Retained evidence and empty directories are not a claim of an active installation. The Kit's direct entry has the matching exit for a completed installation: `./packages/agent-orchestration-kit/setup.sh --uninstall` restores the owned `config.toml` keys, the instruction block and the files that install created from its ownership record — never whole files — and leaves unrelated content, later additions and a shared pstack installation untouched. Uninstall and interrupted-transaction recovery (`--recover`) are separate commands on both entries; removing either module leaves the other usable in its retained mode.
-
-### Workflow and model contract
-
-| Decision | pstack mode | Agent Orchestration Kit mode |
-|---|---|---|
-| Workflow and task decomposition | Selected pstack workflow and its Codex mapping | Root following `astra-orchestrator` and the user's bounded task |
-| Task ownership | Only a task the user explicitly selected; a visible Skill, an existing model sheet, or loaded reference material does not take over | Ordinary tasks, and every task not explicitly given to another workflow; it yields decomposition, dispatch, and verification for a task the user assigned to pstack |
-| Same-goal follow-ups and task end | A status question or an added constraint within the same task keeps pstack as owner; the next task returns to the host defaults, and a mid-task switch first waits for, stops, or closes running children | The same boundary from the other side: no second flow on a pstack-owned task, and no ownership claimed after it completes |
-| Child dispatch | Ad-hoc `spawn_agent`; explicit model/effort from the selected pstack model policy, and no named custom role, because a selected custom-role file overrides the explicit fields it sets | Named custom role; the role TOML selects its model and effort |
-| Rejected model or capacity | An explicitly rejected model falls back only to a sheet-declared, host-supported model, and the fallback is reported; a capacity error stops spawning; a required independent review stays blocked | Role files select model and effort; report the role actually dispatched |
-| Root/reviewer | No Hub override to pstack policy | `gpt-6.1-sol` / `high` |
-| Explorer/worker/tester/researcher | Defined by the pstack task's policy | `gpt-6-luna` / `max` |
-| Specialist | No automatic conversion to a router role | `astra-specialist`: `gpt-6-astra` / `medium`, only under its escalation rules |
-| Concurrency and permissions | Native host capabilities and source policy | Four concurrent children; child permissions inherit from the parent, even for a role described as read-only |
-
-The existing [orchestrator composition rule](skill-standard.md) remains in force: one workflow owner per task, no orchestrator-to-orchestrator chain. Task-level ownership is a rules contract shipped by the installed artifacts themselves — the Kit's managed instruction block and `astra-orchestrator` Skill, and pstack's Codex mapping — so the rules load with each installation and never depend on this checkout at runtime. Selecting a pstack workflow never switches the active root session model, and user instructions, project rules, permissions, and concurrency limits apply on both paths.
-
-One Codex home can now hold both packages through either public entry: compatibility is judged from actual registration and the model sheet's `session hook` line rather than mere presence, and both install orders converge on the same coexistence configuration with repeat installs changing nothing. That lifecycle is verified twice: deterministically through the public entries with a fake native runtime, and natively on the recorded macOS client — both install orders, repeat installs, the armed-target conversion, both removal orders and shared-home `doctor` in throwaway homes, with the install-path protections observed firing for real (see the [2026-10-26 native acceptance record](../evidence/pstack-orchestrator-native-acceptance-2026-10-26.md)). No live coexistence session, hook-trust approval or live routing observation is claimed: the isolated home could not be authenticated without copying credentials, which this change forbids, so the two dispatch paths keep the [2026-10-26 dispatch record](../evidence/pstack-orchestrator-dispatch-2026-10-26.md) and the task-boundary transitions remain pinned rule text with repository tests. No home layout isolates every global Skill, so inspect native discovery and disable a competing Skill for the individual test invocation where needed. This is selection between workflows, not a new route adapter. No joint workflow is claimed and no combined benchmark is needed.
-
-The native configuration and child-setting rules are distinct. For the tested client, root configuration resolves CLI overrides before trusted project configuration, selected profile, user configuration and lower-priority defaults. For a child, explicit spawn values resolve before agent defaults and parent values, **then the selected custom role file overrides the fields it sets**. A role's read-only prose does not create a separate sandbox. Source: [official config precedence](https://learn.chatgpt.com/docs/config-file/config-basic), [official custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [local Skill discovery](https://learn.chatgpt.com/docs/build-skills). Recheck with native `config/read`, rendered tool schema and runtime metadata when the client changes; model self-report is not evidence.
-
 ## Agent Skin: build, test entry and production boundary
 
-For updates to existing daily installations, follow the [three-host local install SOP](../packages/agent-skin/docs/local-install-sop.md). The test-entry adapter below keeps its existing ownership boundary.
+For updates to existing daily installations, follow the [local install SOP](../packages/agent-skin/docs/local-install-sop.md). The test-entry adapter below keeps its existing ownership boundary.
+
+The ZCode host layer is retired from this package: its last supported version was `0.9.0/build 41`, installed ZCode skins are frozen installs, the [README exit statement](../README.md#retired-surfaces) carries the uninstall guidance, and the persisted/protocol identifiers that installed-state migrations depend on keep their historical names ([decision record](decisions/hub-retirement-physical-deletion.md)).
 
 The canonical package is `packages/agent-skin/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code has no recorded open-source license grant, so the Hub root license does not apply and source/binary publication remains on hold pending maintainer authorization. Personal artwork is never included in the package.
 
@@ -194,52 +146,23 @@ For the test entry, use `test-uninstall --workspace ...`, then repeat with `--ap
 
 ### Pet maintenance after the import
 
-The retained `packages/codex-startup-animation/` source carries `pet/theme.json`, `tools/manage-codex-pet.py` and its isolated tests for the existing Pet owner. Agent Skin maintains its own Pet manager implementation without assuming that installation or its private state; its current contracts live in the [Agent Skin Pet runbook](../packages/agent-skin/docs/codex-pet.md). The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand. Existing legacy-source maintenance follows the [legacy-source runbook](../packages/codex-startup-animation/docs/codex-pet.md).
+The Pet toolchain — `tools/manage-codex-pet.py`, `tools/import-codex-pet.py`, their runbook and isolated tests — is maintained only in [Agent Skin](../packages/agent-skin/README.md); its current contracts live in the [Agent Skin Pet runbook](../packages/agent-skin/docs/codex-pet.md). The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand.
 
-From the Hub root, these commands inspect state or run isolated tests:
+The legacy `packages/codex-startup-animation/` root was deleted on 2026-11-12. Its installed-receipt ownership handoff was completed by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval on 2026-11-12 ([handoff receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)); the tool's designed rejection was accepted as final, so the installed Pet receipt remains an orphan pointing at the deleted root while the installed Pet stays self-contained and usable. A future Pet installation from Agent Skin follows the runbook's native prepare/generate/review chain; remove the old install the native way first, because ordinary `install` refuses a receipt owned by another `projectRoot`. Historical legacy-source maintenance followed the legacy runbook that Git history now carries.
 
-```sh
-python -B packages/codex-startup-animation/tools/manage-codex-pet.py status
-python -B packages/codex-startup-animation/tools/test-codex-pet.py
-```
-
-A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. Its `status` can report invalid source/candidate state or `unknown-target` for an existing Pet whose receipt belongs to the old `projectRoot`. Those results do not establish that the old installation is damaged. The top-level status command is an inspection result, not a readiness or host-activation verdict. Likewise, `native-check` requires that selected package root's build payload; a missing payload does not diagnose an installation built elsewhere.
-
-Use explicitly authorized private inputs and revalidate their frozen candidate/review chain before considering synchronization. A changed theme requires generation and renewed review; `sync` never generates images. Current Pet revision inputs are the two configured private images, `style.css` and `pet/theme.json`, not every visual file. Keep the old root and installation receipts intact until the handoff and recovery checks pass; rewriting `projectRoot` or copying `.local` does not create a verified installation transfer.
-
-To reuse an existing reviewed candidate, first preserve the old working tree and its private candidate/frozen-input evidence. The separate importer uses this package's validator and packaging code; `--from-project` selects data, not another implementation:
+From the Hub root, these commands inspect state or run the isolated tests at the maintained home:
 
 ```sh
-PET_SOURCE=/absolute/original-project
-PET_TARGET=/absolute/hub/packages/codex-startup-animation
-python -B "$PET_TARGET/tools/import-codex-pet.py" \
-  --from-project "$PET_SOURCE" --project-root "$PET_TARGET"
-# Review the current plan, then repeat with its exact planId:
-python -B "$PET_TARGET/tools/import-codex-pet.py" \
-  --from-project "$PET_SOURCE" --project-root "$PET_TARGET" \
-  --apply --plan-id PLAN_ID
+cd packages/agent-skin
+python -B tools/manage-codex-pet.py status
 ```
-
-The plan is read-only. Apply requires an unchanged source and target, a fully validated selected source candidate, matching public theme inputs, and absent or byte-identical private images. It refuses conflicting files and unknown target state. An owned interrupted import can be resumed after reviewing a new plan; unrelated state is never deleted to make room. The result is a newly validated, target-owned **candidate** with retained source provenance and original atlas/QA bytes. It does not call image generation, install or select a Pet, or transfer the installed receipt.
-
-For an existing installed Pet whose receipt still names the old project, the package manager offers an explicit one-time `handoff` from the final Hub package path:
 
 ```sh
-python -B "$PET_TARGET/tools/manage-codex-pet.py" handoff \
-  --project-root "$PET_TARGET" --previous-project-root "$PET_SOURCE"
-python -B "$PET_TARGET/tools/manage-codex-pet.py" status --project-root "$PET_TARGET"
+python -B packages/agent-skin/tools/test-codex-pet.py
+python -B packages/agent-skin/tools/test-import-codex-pet.py
 ```
 
-It verifies the old selected candidate, the installed package and the Hub candidate match by theme, atlas and manifest digest; then uses the existing locked installation transaction to issue a Hub-owned receipt. Ordinary `install` and `sync` remain strict about project ownership. The old source and evidence should remain until Hub status verifies the installed bytes. A successful handoff still requires separate real host selection and playback acceptance.
-
-This is an initial import or a retry of the same recorded operation. It does not merge an unrelated existing candidate store or silently switch to a changed source. After import, normal candidate updates remain with the package's existing preparation, review and packaging workflow.
-
-`matchesSelectedPackage` compares installed bytes with the tool's selected candidate, not the host's selected avatar. `pending-refresh-selection` is the tool's fixed runtime boundary; real selection, playback and direction behavior require separate observation. Private inputs, candidates and installation receipts remain local. The standard-library repository gate runs the native installer suite; the Pillow-dependent Pet and importer suites run separately in the macOS CI leg and should both run for Pet runtime changes:
-
-```sh
-python -B packages/codex-startup-animation/tools/test-codex-pet.py
-python -B packages/codex-startup-animation/tools/test-import-codex-pet.py
-```
+A source-only checkout lacks private theme inputs, frozen snapshots and reviewed candidates. `status` is an inspection result, not a readiness or host-activation verdict; invalid source/candidate state or `unknown-target` for a receipt bound to another `projectRoot` does not establish that an installation is damaged. Private inputs, candidates and installation receipts remain local. The Pillow-dependent Pet and importer suites above run in the macOS CI leg and should both run for Pet runtime changes.
 
 ## Why these checks are necessary
 
@@ -247,7 +170,7 @@ The initial read-only review answered the four implementation questions with con
 
 | Question | Implementation consequence |
 |---|---|
-| Necessary work beyond copying capabilities? | Keep three native projects as independent packages, select only declared runtime inputs, bind current bytes to each plan, preserve recovery after source edits, and separate private artwork, playback, host launch and appearance evidence. |
+| Necessary work beyond copying capabilities? | Keep two native projects as independent packages, select only declared runtime inputs, bind current bytes to each plan, preserve recovery after source edits, and separate private artwork, playback, host launch and appearance evidence. |
 | Which primary materials prove what? | Package manifests and runtime source show current intended inputs; package licenses define stated grants; host protocol/config and task metadata prove native discovery/dispatch. README and dated receipts locate evidence but do not prove current behavior. |
 | How is the path traced? | `hub-package.json` runtime paths → per-plan digest → private package snapshot → native plan/installer → receipt → native list/config/schema → task or installed-player events. Dated acceptance records remain tied to their original inputs. |
 | What can disprove correctness? | Changed package bytes, native configuration/Skill validation, independent review, altered target/dependency/material/transaction negative controls, installed resource hashes and actual run metadata. Formal visual approval, redistribution permission and unexecuted host behavior remain explicit holds. |

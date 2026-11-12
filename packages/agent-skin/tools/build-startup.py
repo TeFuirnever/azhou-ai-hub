@@ -232,12 +232,11 @@ def _validate_contours(contours) -> tuple[int, int]:
 
 
 def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, host: str = 'codex') -> str:
-    if host not in ('codex', 'zcode', 'dsh'):
+    if host not in ('codex', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
-    adapter_name = {'zcode': 'createZCodePageAdapter', 'dsh': 'createDSHPageAdapter'}.get(host, 'createCodexPageAdapter')
-    adapter_path = {'zcode': 'extension/hosts/zcode.mjs', 'dsh': 'extension/hosts/dsh.mjs'}.get(
-        host, 'extension/codex-page-adapter.mjs')
-    adapter_label = {'zcode': 'ZCode page adapter', 'dsh': 'DSH page adapter'}.get(host, 'Codex page adapter')
+    adapter_name = {'dsh': 'createDSHPageAdapter'}.get(host, 'createCodexPageAdapter')
+    adapter_path = {'dsh': 'extension/hosts/dsh.mjs'}.get(host, 'extension/codex-page-adapter.mjs')
+    adapter_label = {'dsh': 'DSH page adapter'}.get(host, 'Codex page adapter')
     try:
         animation = _extract_animation((root / 'animation.js').read_text(encoding='utf-8'))
         settings = (root / 'image-settings.js').read_text(encoding='utf-8').strip()
@@ -284,9 +283,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
         raise RuntimeError('Startup/controller, page adapter or wallpaper module has an unexpected entry count.')
     css_literal = json.dumps(wallpaper_css, ensure_ascii=True, separators=(',', ':'))
     version_literal = json.dumps(artifacts.VERSION)
-    if host == 'zcode':
-        adapter_configuration = '{ controllerMetadata }'
-    elif host == 'dsh':
+    if host == 'dsh':
         # The DSH carrier opens appearance through the host settings modal
         # (the settings.section slot), so the sidebar entry stays off; the
         # adapter reads sidebarEntry at the configuration's top level, next
@@ -296,10 +293,8 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
     else:
         adapter_configuration = 'undefined'
     payload = '\n'.join((
-        '((controllerMetadata) => {' if host == 'zcode' else '(() => {',
+        '(() => {',
         "  'use strict';",
-        *(('  controllerMetadata = controllerMetadataSnapshot(controllerMetadata);',
-           "  if (!controllerMetadata) return { installed: false, alreadyActive: false, reason: 'controller-metadata-invalid' };") if host == 'zcode' else ()),
         f'  const APP_VERSION = {version_literal};',
         '  const DEFAULT_ASSETS = Object.freeze(' + _json_literal(assets) + ');',
         '  const WALLPAPER_CSS = ' + css_literal + ';',
@@ -331,7 +326,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
     pageAdapter,
   });
 '''.replace('ADAPTER_FACTORY', adapter_name).replace('ADAPTER_CONFIGURATION', adapter_configuration),
-        '})' if host == 'zcode' else '})()',
+        '})()',
         '',
     ))
     if len(payload.encode('utf-8')) >= MAX_STARTUP_BYTES:
@@ -367,7 +362,7 @@ def asset_work_directory(parent, artifacts):
 
 
 def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_fd: int | None = None) -> dict:
-    if host not in ('codex', 'zcode', 'dsh'):
+    if host not in ('codex', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
     root = Path(root).resolve()
     spec = importlib.util.spec_from_file_location('agent_skin_startup_build_lock', root / 'tools/build-lock.py')
@@ -395,16 +390,10 @@ def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_
 def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
-    if host != 'dsh':
-        # DSH ships as a web plugin package, not a macOS bundle; configure_build_host
-        # is bundle-identity machinery and deliberately knows no dsh entry.
-        artifacts.configure_build_host(host)
     bundle = artifacts.staged_path(bundle)
     theme_config = artifacts.load_theme_config(root, require_inputs=True)
     _require_private_inputs(root, theme_config)
-    required_inputs = (artifacts.DSH_PLUGIN_REQUIRED_INPUTS if host == 'dsh'
-                       else artifacts.ZCODE_STARTUP_REQUIRED_INPUTS if host == 'zcode'
-                       else artifacts.STARTUP_REQUIRED_INPUTS)
+    required_inputs = artifacts.DSH_PLUGIN_REQUIRED_INPUTS if host == 'dsh' else artifacts.STARTUP_REQUIRED_INPUTS
     _check_metadata(root, artifacts, theme_config, required_inputs)
     verify_image_metadata_reader(root)
     inputs = artifacts.source_inputs()
@@ -518,9 +507,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
             'contourArtworkSHA256': artwork_sha,
         },
     }
-    if host == 'zcode':
-        manifest.update(targetHost='zcode', entrypoint='controller-metadata-factory/v1')
-    elif host == 'dsh':
+    if host == 'dsh':
         manifest.update(targetHost='dsh')
     manifest_path = startup_dir / 'manifest.json'
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
@@ -529,7 +516,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--host', choices=('codex', 'zcode', 'dsh'), default='codex')
+    parser.add_argument('--host', choices=('codex', 'dsh'), default='codex')
     parser.add_argument('--bundle', type=Path,
                         help='staged .build/azhou-stage.*/azhou-payload bundle')
     parser.add_argument('--update-image-metadata-reader', action='store_true',

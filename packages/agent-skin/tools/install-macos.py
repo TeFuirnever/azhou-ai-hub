@@ -40,6 +40,8 @@ SOURCE = HELPERS['PAYLOAD']                   # .build/azhou-payload
 REGISTRY_TOOL = HELPERS['REGISTRY_TOOL']
 DESTINATION = Path.home() / 'Applications' / HELPERS['NAME']
 DIST = ROOT / 'dist'
+# Frozen installed-state owner identity inherited from codex-startup-animation;
+# installed receipts and registry records depend on this exact string.
 PROJECT_ID = 'azhou.codex-startup-animation'
 OFFICIAL_ID = 'com.openai.codex'
 LEGACY_SHA256 = '7a39526e155c2b1fd06d1f60dc74f3d6cf3e85a7bdf3d5e86b0e1381828fc680'

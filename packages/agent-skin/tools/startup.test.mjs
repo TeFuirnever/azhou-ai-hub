@@ -1957,14 +1957,14 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
 });
 
 
-test('explicit ZCode owner is independent and cannot adopt a Codex controller', () => {
-  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
-    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }),
+test('explicit DSH owner is independent and cannot adopt a Codex controller', () => {
+  const adapter = Object.freeze({ ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: true }),
     controllerMetadata: { controllerInstanceID: '11111111-1111-4111-8111-111111111111', createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64), documentToken: 'synthetic-CDP-unique-context' } });
   const host = controlledHost().host;
   assert.equal(installStartup(function () {}, host, adapter).installed, true);
-  assert.equal(host.__azhouStartup.owner, 'azhou-zcode-startup');
-  assert.equal(host.__azhouStartup.status().owner, 'azhou-zcode-startup');
+  assert.equal(host.__azhouStartup.owner, 'azhou-dsh-startup');
+  assert.equal(host.__azhouStartup.status().owner, 'azhou-dsh-startup');
   assert.equal(installStartup(function () {}, host, adapter).alreadyActive, true);
   assert.equal(installStartup(function () {}, host, pageAdapter).reason, 'owner-conflict');
   host.__azhouStartup.dispose();
@@ -1985,7 +1985,7 @@ test('unsupported or accessor controller owners refuse without page writes', () 
 });
 
 test('host settings namespace reaches the actual factory while legacy identity is unchanged', () => {
-  const namespace = Object.freeze({ databaseName: 'azhou-zcode-startup', databaseVersion: 1,
+  const namespace = Object.freeze({ databaseName: 'azhou-synthetic-startup', databaseVersion: 1,
     storeName: 'settings', settingsKey: 'images' });
   for (const custom of [false, true]) {
     const controlled = controlledHost();
@@ -2008,7 +2008,7 @@ test('host settings namespace reaches the actual factory while legacy identity i
 });
 
 
-test('ZCode metadata is validated before writes and retained by the actual controller', () => {
+test('controller metadata is validated before writes and retained by the actual controller', () => {
   const metadata = { controllerInstanceID: '11111111-1111-4111-8111-111111111111',
     createdByOperationID: '22222222-2222-4222-8222-222222222222', payloadSHA256: 'a'.repeat(64),
     documentToken: 'synthetic-CDP-unique-context' };
@@ -2016,14 +2016,14 @@ test('ZCode metadata is validated before writes and retained by the actual contr
     { ...metadata, documentToken: '' }, { ...metadata, payloadSHA256: metadata.payloadSHA256 + '\n' },
     { ...metadata, controllerInstanceID: metadata.controllerInstanceID + '\n' }, { ...metadata, controllerInstanceID: 'legacy-v1-unreported' }]) {
     const controlled = controlledHost();
-    const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
-      controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: bad };
+    const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+      controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: true }), controllerMetadata: bad };
     assert.equal(installStartup(function () {}, controlled.host, adapter).reason, 'controller-metadata-invalid');
     assert.equal(controlled.frames.length, 0);
   }
   const controlled = controlledHost();
-  const adapter = { ...pageAdapter, controllerOwner: 'azhou-zcode-startup',
-    controllerWallpaper: Object.freeze({ owner: 'azhou.zcode-startup-animation', requiresControllerMetadata: true }), controllerMetadata: metadata };
+  const adapter = { ...pageAdapter, controllerOwner: 'azhou-dsh-startup',
+    controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: true }), controllerMetadata: metadata };
   assert.equal(installStartup(function () {}, controlled.host, adapter).installed, true);
   assert.equal(controlled.frames[0].attributes.get('data-agent-skin-controller-instance'), metadata.controllerInstanceID);
   assert.equal(controlled.controls.filter(node => node.attributes?.get('data-agent-skin-controller-instance') === metadata.controllerInstanceID).length, 1);

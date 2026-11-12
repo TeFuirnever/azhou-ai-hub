@@ -173,8 +173,7 @@ def _payload_body(payload: str) -> str:
     if (not payload.startswith(_IIFE_OPEN) or not payload.endswith(_IIFE_CLOSE)
             or payload.startswith('((controllerMetadata) => {')
             or payload.count('function createDSHPageAdapter(') != 1
-            or 'createCodexPageAdapter(' in payload
-            or 'createZCodePageAdapter(' in payload):
+            or 'createCodexPageAdapter(' in payload):
         raise RuntimeError('The DSH startup payload must be the codex-style single-adapter expression.')
     body = payload[len(_IIFE_OPEN):-len(_IIFE_CLOSE)]
     if body.count(_DEPENDENCY_TAIL) != 1:

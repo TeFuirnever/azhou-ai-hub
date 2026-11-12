@@ -45,26 +45,24 @@ def acquired():
         os.close(fd)
 
 
-def run(host):
+def run():
     with acquired() as fd:
         env = os.environ.copy()
         env[ENV_KEY] = str(fd)
-        args = ['/bin/bash', str(ROOT / 'tools/build-macos.sh')]
-        if host == 'zcode':
-            args.extend(('--host', 'zcode'))
-        result = subprocess.run(args, env=env, pass_fds=(fd,), check=False)
+        result = subprocess.run(['/bin/bash', str(ROOT / 'tools/build-macos.sh')],
+                                env=env, pass_fds=(fd,), check=False)
         return result.returncode if result.returncode >= 0 else 128 - result.returncode
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_mutually_exclusive_group(required=True)
-    actions.add_argument('--run', choices=('codex', 'zcode'))
+    actions.add_argument('--run', action='store_true')
     actions.add_argument('--verify', type=int)
     args = parser.parse_args()
     try:
         if args.run:
-            return run(args.run)
+            return run()
         checked_lock_file(args.verify)
         return 0
     except (OSError, RuntimeError, ValueError) as error:

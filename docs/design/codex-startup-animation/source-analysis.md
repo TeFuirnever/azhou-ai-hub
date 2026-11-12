@@ -1,6 +1,6 @@
 # 源项目行为研读
 
-> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。旧源根 `packages/codex-startup-animation/` 已于 2026-11-12 删除；文中该路径为历史定位，指向 Git 历史。
 
 本文只记录现状；目标契约见[详细设计](detailed-design.md)。核对日期：2026-10-26。`S` 表示用户指定源目录，`H` 表示 Hub。行号用于本次定位，符号用于后续重查。
 
@@ -49,19 +49,19 @@ S 研读覆盖：README、唯一 `docs/references.md`、`extension/README.md`，
 
 | ID | 当前行为 | 证据 | 对目标设计的影响 |
 |---|---|---|---|
-| H01 | 唯一入口 `~/Applications/阿舟启动 Codex.app`，`local.azhou.codex-startup`，单可执行文件 `AzhouCodexStartup`。 | [包 README](../../../packages/codex-startup-animation/README.md)、[构建脚本](../../../packages/codex-startup-animation/tools/build-macos.sh) | 复用身份与安装所有权，不新增第二 App。 |
-| H02 | 独立 AppKit/WKWebView 播放 7.8 s 阿舟实验室动画；最大化到 visibleFrame；不 hide、不退出官方应用；动画完成和目标应用可用共同触发交接。 | [App.swift](../../../packages/codex-startup-animation/Native/App.swift) `startTarget/finishIfReady/handoff`、[animation.js](../../../packages/codex-startup-animation/animation.js) | 保留可信启动、实例激活与失败保留官方窗口，替换原生动画窗口交接；当前7.8s不冒充源12s。 |
-| H03 | 壁纸仍为 CDP 注入，使用 Foundation WebSocket；`Native/Wallpaper.swift` 与 `wallpaper/renderer.js` 分开运行，最多约 30 s；与动画交接解耦。 | [Wallpaper.swift](../../../packages/codex-startup-animation/Native/Wallpaper.swift)、[renderer.js](../../../packages/codex-startup-animation/wallpaper/renderer.js) | “原生路线”只描述动画；可选壁纸依然有页面适配与端口风险。 |
-| H04 | 已运行却无可验证调试端口时报告 `needs-restart`，继续交接；只读 `--wallpaper-status` 不注入、不启动、不写日志。 | [包 README](../../../packages/codex-startup-animation/README.md)、Wallpaper `status` 分支 | 设置 UI 也必须保留此失败语义。 |
-| H05 | 壁纸按已识别表面和装饰定点处理，保留输入框、菜单、代码块；状态检查图片解码、表面、装饰和报告版本。 | [wallpaper/renderer.js](../../../packages/codex-startup-animation/wallpaper/renderer.js)、[0.7.1 记录](../../../packages/codex-startup-animation/docs/azhou-wallpaper-0.7.1-verification.md) | 复用比 S 的较宽 CSS 覆盖更成熟的核查。记录为历史，不代表本次宿主验收。 |
-| H06 | 当前前端未纳入 S 的 `image-settings.js`、临时 iframe、⌘⌥B 设置链路；默认图是私有阿舟素材。 | [迁移清单](../../../packages/codex-startup-animation/MIGRATION-INVENTORY.md)、[manifest](../../../packages/codex-startup-animation/hub-package.json) | 自定义设置、动态图轮廓和恢复外观 UI 都属新增设计。 |
-| H07 | 包安装器核对来源、内容、安装记录和 LaunchServices 登记，原子替换唯一入口；Hub adapter 只拥有隔离测试安装；生产 install/uninstall adapter 保持阻断。 | [安装生命周期](../../../packages/codex-startup-animation/docs/installation-lifecycle.md)、[integration_startup_animation.py](../../../scripts/integration_startup_animation.py) | 新设置存放用户数据目录，不能被安装/升级当作包内容覆盖。 |
-| H08 | `hub-package.json.commit` 是历史导入基点；实际导入含当时维护工作树。当前 H 包不等于用户此次指定的干净 S。 | [UPSTREAM.md](../../../packages/codex-startup-animation/UPSTREAM.md)、[集成约定](../../integrations.md) | 两份证据分别标识，禁止用同一个 commit 推导代码相同。 |
-| H09 | Hub 还含 Pet 管理与导入链路；用户指定 S 不含这套能力。 | [pet/theme.json](../../../packages/codex-startup-animation/pet/theme.json)、[Pet 说明](../../../packages/codex-startup-animation/docs/codex-pet.md) | Pet 保持独立所有权，不扩入此次重实现。 |
-| H10 | 当前壁纸renderer没有MutationObserver；status按调用核查DOM；dispose无条件恢复快照，且旧实例只按owner/dispose识别，未精确校验version。 | [renderer.js](../../../packages/codex-startup-animation/wallpaper/renderer.js) `installRenderer/status/dispose` | 目标条件恢复与精确旧版识别是新增行为，不能当现有能力复用。 |
-| H11 | 原生transport为Wallpaper专用：2MiB入站上限，evaluate的CDP timeout=5000、socket取消6s，错误只识别壁纸分类。 | [Wallpaper.swift](../../../packages/codex-startup-animation/Native/Wallpaper.swift) `WallpaperTransport:268–325` | RC7需要重组状态和错误消费，不能只换payload文件名。 |
+| H01 | 唯一入口 `~/Applications/阿舟启动 Codex.app`，`local.azhou.codex-startup`，单可执行文件 `AzhouCodexStartup`。 | `packages/codex-startup-animation/README.md`、`packages/codex-startup-animation/tools/build-macos.sh` | 复用身份与安装所有权，不新增第二 App。 |
+| H02 | 独立 AppKit/WKWebView 播放 7.8 s 阿舟实验室动画；最大化到 visibleFrame；不 hide、不退出官方应用；动画完成和目标应用可用共同触发交接。 | `packages/codex-startup-animation/Native/App.swift` `startTarget/finishIfReady/handoff`、`packages/codex-startup-animation/animation.js` | 保留可信启动、实例激活与失败保留官方窗口，替换原生动画窗口交接；当前7.8s不冒充源12s。 |
+| H03 | 壁纸仍为 CDP 注入，使用 Foundation WebSocket；`Native/Wallpaper.swift` 与 `wallpaper/renderer.js` 分开运行，最多约 30 s；与动画交接解耦。 | `packages/codex-startup-animation/Native/Wallpaper.swift`、`packages/codex-startup-animation/wallpaper/renderer.js` | “原生路线”只描述动画；可选壁纸依然有页面适配与端口风险。 |
+| H04 | 已运行却无可验证调试端口时报告 `needs-restart`，继续交接；只读 `--wallpaper-status` 不注入、不启动、不写日志。 | `packages/codex-startup-animation/README.md`、Wallpaper `status` 分支 | 设置 UI 也必须保留此失败语义。 |
+| H05 | 壁纸按已识别表面和装饰定点处理，保留输入框、菜单、代码块；状态检查图片解码、表面、装饰和报告版本。 | `packages/codex-startup-animation/wallpaper/renderer.js`、`packages/codex-startup-animation/docs/azhou-wallpaper-0.7.1-verification.md` | 复用比 S 的较宽 CSS 覆盖更成熟的核查。记录为历史，不代表本次宿主验收。 |
+| H06 | 当前前端未纳入 S 的 `image-settings.js`、临时 iframe、⌘⌥B 设置链路；默认图是私有阿舟素材。 | `packages/codex-startup-animation/MIGRATION-INVENTORY.md`、`packages/codex-startup-animation/hub-package.json` | 自定义设置、动态图轮廓和恢复外观 UI 都属新增设计。 |
+| H07 | 包安装器核对来源、内容、安装记录和 LaunchServices 登记，原子替换唯一入口；Hub adapter 只拥有隔离测试安装；生产 install/uninstall adapter 保持阻断。 | `packages/codex-startup-animation/docs/installation-lifecycle.md`、[integration_startup_animation.py](../../../scripts/integration_startup_animation.py) | 新设置存放用户数据目录，不能被安装/升级当作包内容覆盖。 |
+| H08 | `hub-package.json.commit` 是历史导入基点；实际导入含当时维护工作树。当前 H 包不等于用户此次指定的干净 S。 | `packages/codex-startup-animation/UPSTREAM.md`、[集成约定](../../integrations.md) | 两份证据分别标识，禁止用同一个 commit 推导代码相同。 |
+| H09 | Hub 还含 Pet 管理与导入链路；用户指定 S 不含这套能力。 | `packages/codex-startup-animation/pet/theme.json`、`packages/codex-startup-animation/docs/codex-pet.md` | Pet 保持独立所有权，不扩入此次重实现。 |
+| H10 | 当前壁纸renderer没有MutationObserver；status按调用核查DOM；dispose无条件恢复快照，且旧实例只按owner/dispose识别，未精确校验version。 | `packages/codex-startup-animation/wallpaper/renderer.js` `installRenderer/status/dispose` | 目标条件恢复与精确旧版识别是新增行为，不能当现有能力复用。 |
+| H11 | 原生transport为Wallpaper专用：2MiB入站上限，evaluate的CDP timeout=5000、socket取消6s，错误只识别壁纸分类。 | `packages/codex-startup-animation/Native/Wallpaper.swift` `WallpaperTransport:268–325` | RC7需要重组状态和错误消费，不能只换payload文件名。 |
 | H12 | adapter inspect逐字核对5份旧web资源；launch要求player/complete/fade日志，而新CDP辅助只等ready。 | [integration_startup_animation.py](../../../scripts/integration_startup_animation.py) `inspect_bundle:161`、`assess_execution:455` | 新旧版本分支、资源清单和完成范围必须一起改。 |
-| H13 | 构建器与verify-artifacts均绑定0.7.1/build8、固定INPUT_FILES和wallpaper/install.js资源清单。 | [build-macos.sh](../../../packages/codex-startup-animation/tools/build-macos.sh)、[verify-artifacts.py](../../../packages/codex-startup-animation/tools/verify-artifacts.py) `INPUT_FILES/verify_wallpaper` | 不能仅更新hub-package.json；所有核验消费者都需覆盖新资源。 |
+| H13 | 构建器与verify-artifacts均绑定0.7.1/build8、固定INPUT_FILES和wallpaper/install.js资源清单。 | `packages/codex-startup-animation/tools/build-macos.sh`、`packages/codex-startup-animation/tools/verify-artifacts.py` `INPUT_FILES/verify_wallpaper` | 不能仅更新hub-package.json；所有核验消费者都需覆盖新资源。 |
 
 v0.2只读环境记录：本机`/Applications/ChatGPT.app`的Info.plist显示`com.openai.codex`、版本`26.1021.31345`、build`21828`、最低macOS13.0；codesign描述显示`TeamIdentifier=2DC432GLL2`。这只是当前候选支持目标的元数据，不是深度签名验证、CDP能力或真实运行验收。
 
