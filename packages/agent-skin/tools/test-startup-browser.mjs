@@ -116,6 +116,59 @@ async function dispatchEnter() {
   await cdp.call('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
 }
 
+// Walk the generated settings panel's Tab boundary from each edge for two full
+// rounds per direction, keeping the host-composer probe and focus-visibility
+// guarantees of the inline normal-editing walk. Used for the import-error and
+// preview-return states, whose containment shares the same dialog scope.
+async function walkGeneratedSettingsTabs() {
+  const boundaries = [];
+  const trace = [];
+  let textareaReached = null;
+  for (const shiftKey of [false, true]) {
+    const boundary = await cdp.evaluate(`(()=>{
+      const frame=document.querySelector('iframe[aria-label]'),doc=frame?.contentDocument;
+      const dialog=doc?.querySelector('[data-agent-skin-settings]');
+      const controls=[...dialog.querySelectorAll('button,input,textarea,select,[tabindex]')]
+        .filter(item=>item.tabIndex>=0&&!item.disabled&&item.type!=='hidden'
+          &&getComputedStyle(item).display!=='none'&&getComputedStyle(item).visibility!=='hidden'
+          &&item.getClientRects().length>0);
+      const control=controls.at(${shiftKey ? 0 : -1});
+      control?.focus();
+      return control&&doc.activeElement===control?{count:controls.length,
+        edge:control.getAttribute('aria-label')||control.tagName}:false;
+    })()`);
+    assert.ok(boundary, 'generated settings dialog exposes a focusable control at each Tab boundary');
+    boundaries.push({ shiftKey, ...boundary });
+    for (let index = 0; index < boundary.count * 2 + 1; index++) {
+      await dispatchTab(shiftKey);
+      const focus = await cdp.evaluate(`(()=>{
+        const input=document.querySelector('.composer textarea')||document.querySelector('textarea');
+        const frame=document.querySelector('iframe[aria-label]');
+        const selected=frame?.contentDocument?.activeElement;
+        const style=selected?frame.contentWindow.getComputedStyle(selected):null;
+        return {value:input?.value,hostTextareaFocused:document.activeElement===input,
+          hostFrameFocused:document.activeElement===frame,
+          parentFocus:document.activeElement?.tagName+'#'+(document.activeElement?.id||''),
+          dialogFocus:frame?.contentDocument?.activeElement?.tagName+'#'
+            +(frame?.contentDocument?.activeElement?.id||''),
+          focusVisible:selected?.matches(':focus-visible'),outlineStyle:style?.outlineStyle,outlineWidth:style?.outlineWidth};
+      })()`);
+      if (focus.hostFrameFocused && focus.focusVisible) {
+        assert.ok(focus.outlineStyle !== 'none' && parseFloat(focus.outlineWidth) >= 3,
+          'keyboard focus remains visible in the generated settings payload: ' + JSON.stringify(focus));
+      }
+      if (!focus.hostFrameFocused && trace.length < 4) trace.push({ shiftKey, index, ...focus });
+      if (focus.hostTextareaFocused) {
+        textareaReached = { shiftKey, index, parentFocus: focus.parentFocus };
+        await cdp.call('Input.insertText', { text: 'focus-leak' });
+        break;
+      }
+    }
+    if (textareaReached) break;
+  }
+  return { boundaries, trace, textareaReached };
+}
+
 function cleanup() {
   if (cleanupPromise) return cleanupPromise;
   cleanupPromise = (async () => {
@@ -5048,6 +5101,28 @@ try {
         'Tab must not reach the host textarea and accept keyboard text; boundary=' + JSON.stringify({ boundaries, trace, textareaReached, finalValue }));
       assert.equal(trace.length, 0,
         'focus must remain in the generated settings iframe; boundary=' + JSON.stringify({ boundaries, trace, textareaReached }));
+      const importErrorShown = await cdp.evaluate(`(()=>{
+        const frame=document.querySelector('iframe[aria-label]'),win=frame.contentWindow,doc=frame.contentDocument;
+        const input=doc?.querySelector('input[data-agent-skin-image-input="artwork"]');
+        if(!input)return false;
+        const transfer=new win.DataTransfer();
+        transfer.items.add(new win.File([],'generated-empty-artwork.png',{type:'image/png'}));
+        input.files=transfer.files;
+        input.dispatchEvent(new win.Event('change',{bubbles:true}));
+        return true;
+      })()`);
+      assert.equal(importErrorShown, true, 'an empty artwork import is dispatched for the error-state walk');
+      const importErrorAlert = await until(() => cdp.evaluate(`(()=>{
+        const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+        const status=doc?.querySelector('[data-agent-skin-settings-status]');
+        return status?.getAttribute('role')==='alert'&&status.textContent?status.textContent:false;
+      })()`), 5000, 'the generated panel reports the import error while staying open');
+      const errorWalk = await walkGeneratedSettingsTabs();
+      const errorFinalValue = await cdp.evaluate(`(document.querySelector('.composer textarea')||document.querySelector('textarea'))?.value`);
+      assert.equal(errorFinalValue, 'host-composer-sentinel',
+        'Tab must not reach the host textarea while an import error is showing; boundary=' + JSON.stringify(errorWalk));
+      assert.equal(errorWalk.trace.length, 0,
+        'focus must remain inside the panel in the import-error state; boundary=' + JSON.stringify(errorWalk));
       await cdp.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       await until(() => cdp.evaluate(`(()=>{
@@ -5066,7 +5141,8 @@ try {
         rootInert: false, lateHostInert: false, preexistingInert: true },
       'closing returns focus and each host node to its latest or original state');
       await cdp.evaluate(`document.querySelector('#fixture-focus-late-host-button')?.remove();delete window.__fixtureFocusDetachedButton;document.querySelector('#fixture-focus-preexisting-inert')?.remove()`);
-      return { boundaries, trace, textareaReached, finalValue, isolation, restored };
+      return { boundaries, trace, textareaReached, finalValue, isolation, restored,
+        importError: importErrorAlert, errorWalk };
     });
 
     await navigate('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
@@ -5159,6 +5235,12 @@ try {
       })()`), 5000, 'closing the generated preview returns to the settings draft');
       assert.deepEqual(returned, { draftTitle: 'Draft survives', previewButtonFocused: true,
         hostFrameFocused: true, rootInert: true });
+      const returnWalk = await walkGeneratedSettingsTabs();
+      const returnWalkValue = await cdp.evaluate(`(document.querySelector('.composer textarea')||document.querySelector('textarea'))?.value`);
+      assert.equal(returnWalkValue, 'preview-host-sentinel',
+        'Tab must not reach the host textarea after returning from preview; boundary=' + JSON.stringify(returnWalk));
+      assert.equal(returnWalk.trace.length, 0,
+        'focus must remain inside the panel after preview return; boundary=' + JSON.stringify(returnWalk));
       await cdp.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
       await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'&&!document.querySelector('iframe[aria-label]')`),
@@ -5169,7 +5251,7 @@ try {
         rootInert:document.querySelector('#root')?.inert
       }))()`);
       assert.deepEqual(restored, { value: 'preview-host-sentinel', inputFocused: true, rootInert: false });
-      return { runId: preview.runId, focusCycles: 4, hostComposerValue: after.value, returned, restored };
+      return { runId: preview.runId, focusCycles: 4, hostComposerValue: after.value, returned, returnWalk, restored };
     });
 
     await check('generated payload settings panel passes zh-CN/en, light/dark, and 390/980/1512 layout matrix', async () => {
