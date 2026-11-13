@@ -370,5 +370,87 @@ class AgentSkinAssessmentTests(unittest.TestCase):
         self.assertEqual("legacy", legacy["event_schema"])
 
 
+class AgentSkinOverlayPlanTests(unittest.TestCase):
+    """Optional assets/private overlays are file-by-file and bound to the approved plan."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.workspace = self.root / "workspace"
+        self.overlay = self.root / "overlay"
+        self.overlay.mkdir()
+        self.snapshot = self.root / "snapshot"
+        (self.snapshot / ".git").mkdir(parents=True)
+
+    def write(self, base: Path, name: str, data: bytes) -> None:
+        path = base / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def run_build(self, private_assets: Path | None, *, marker: dict[str, object] | None = None):
+        plan = animation.build_plan(None, self.workspace, private_assets)
+        calls = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            return {"command": command, "returncode": 0, "stdout": "", "stderr": ""}
+
+        bundle = self.snapshot / ".build/azhou-payload"
+        if marker is not None:
+            self.write(bundle, "Contents/Resources/azhou-build.json", json.dumps(marker).encode())
+        with patch.object(animation, "_mac"), patch.object(animation.os, "access", return_value=True), \
+                patch.object(common, "snapshot_source", return_value=self.snapshot), \
+                patch.object(common, "verify_snapshot"), patch.object(animation, "_run", side_effect=run), \
+                patch.object(animation, "inspect_bundle", return_value={"path": str(bundle)}):
+            result = animation.build(None, self.workspace, private_assets, plan["plan_id"])
+        return plan, result, calls
+
+    def test_partial_overlay_plans_only_supplied_assets(self) -> None:
+        self.write(self.overlay, "app-icon/source.png", b"custom icon")
+        plan = animation.build_plan(None, self.workspace, self.overlay)
+        self.assertEqual(["app-icon/source.png"], list(plan["private_inputs"]))
+        full = animation.build_plan(None, self.workspace, None)
+        self.assertEqual({}, full["private_inputs"])
+        self.assertNotEqual(plan["plan_id"], full["plan_id"])
+
+    def test_empty_overlay_and_incomplete_legacy_overlay_are_rejected(self) -> None:
+        with self.assertRaisesRegex(common.IntegrationError, "holds none of"):
+            animation.build_plan(None, self.workspace, self.overlay)
+        self.write(self.overlay, "working.png", b"legacy")
+        origin = common.inspect_source(animation.COMPONENT, None)
+        with patch.object(common, "inspect_source", return_value={**origin, "version": "0.8.0"}), \
+                self.assertRaises(common.IntegrationError):
+            animation.build_plan(None, self.workspace, self.overlay)
+
+    def test_partial_overlay_is_copied_and_bound_through_the_marker(self) -> None:
+        self.write(self.overlay, "app-icon/source.png", b"custom icon")
+        digest = animation._hash(self.overlay / "app-icon/source.png")
+        marker = {"inputs": {"assets/private/app-icon/source.png": digest},
+                  "assetSources": {"app-icon/source.png": "private", "working.png": "azhou"}}
+        _plan, result, calls = self.run_build(self.overlay, marker=marker)
+        self.assertEqual("built", result["status"])
+        self.assertEqual(b"custom icon", (self.snapshot / "assets/private/app-icon/source.png").read_bytes())
+        self.assertIn(["bash", "tools/build-macos.sh"], calls)
+
+    def test_reused_snapshot_overlay_is_rejected_for_a_library_only_plan(self) -> None:
+        self.write(self.snapshot, "assets/private/working.png", b"earlier custom skin")
+        with self.assertRaisesRegex(common.IntegrationError, "outside the approved plan"):
+            self.run_build(None)
+
+    def test_reused_snapshot_overlay_outside_a_partial_plan_is_rejected(self) -> None:
+        self.write(self.overlay, "app-icon/source.png", b"custom icon")
+        self.write(self.snapshot, "assets/private/working.png", b"earlier custom skin")
+        with self.assertRaisesRegex(common.IntegrationError, "outside the approved plan"):
+            self.run_build(self.overlay)
+
+    def test_marker_private_source_outside_the_plan_fails_validation(self) -> None:
+        marker = {"inputs": {}, "assetSources": {"working.png": "private"}}
+        with self.assertRaisesRegex(common.IntegrationError, "unapproved private overlay asset: working.png"):
+            self.run_build(None, marker=marker)
+        receipt = json.loads((self.snapshot / ".hub-build.json").read_text(encoding="utf-8"))
+        self.assertEqual("failed-validation", receipt["status"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -117,14 +117,43 @@ def _private_files(version: str, source: Path | None = None) -> tuple[str, ...]:
         raise common.IntegrationError(f"invalid theme private identity inputs: {exc}") from exc
 
 
-def _private_manifest(directory: Path, files: tuple[str, ...] = PRIVATE_FILES) -> dict[str, str]:
+def _private_manifest(directory: Path, files: tuple[str, ...] = PRIVATE_FILES, *,
+                      partial: bool = False) -> dict[str, str]:
+    """Hash overlay inputs; ``partial`` keeps only supplied names (0.9.0+ file-by-file fallback)."""
     directory = _directory(directory)
     result = {}
     for name in files:
         path = directory / name
         if any(p.is_symlink() for p in (path, *path.parents)):
             raise common.IntegrationError(f"private asset path is a symlink: {name}")
+        if partial and not path.exists():
+            continue
         result[name] = _hash(path)
+    if partial and not result:
+        raise common.IntegrationError("private asset overlay holds none of: " + ", ".join(files))
+    return result
+
+
+def _overlay_manifest(directory: Path, version: str, source: Path) -> dict[str, str]:
+    files = _private_files(version, source)
+    return _private_manifest(directory, files, partial=files is not PRIVATE_FILES)
+
+
+def _snapshot_overlay(snapshot: Path) -> dict[str, str]:
+    """Hash every file already present in a snapshot's ignored overlay directory."""
+    overlay = snapshot / "assets/private"
+    if overlay.is_symlink() or (overlay.exists() and not overlay.is_dir()):
+        raise common.IntegrationError("isolated private overlay is not a real directory; use a new workspace")
+    result = {}
+    if overlay.is_dir():
+        for path in sorted(overlay.rglob("*")):
+            name = path.relative_to(overlay).as_posix()
+            if path.is_symlink():
+                raise common.IntegrationError(f"isolated private asset path is a symlink: {name}")
+            if path.is_file():
+                result[name] = _hash(path)
+            elif not path.is_dir():
+                raise common.IntegrationError(f"isolated private asset is not a regular file: {name}")
     return result
 
 
@@ -186,7 +215,7 @@ def build_plan(source: Path, workspace: Path, private_assets: Path | None = None
     if workspace == Path(origin["source"]) or Path(origin["source"]) in workspace.parents:
         raise common.IntegrationError("build workspace must be outside the read-only source")
     assets = ({} if private_assets is None
-              else _private_manifest(private_assets, _private_files(origin["version"], Path(origin["source"]))))
+              else _overlay_manifest(private_assets, origin["version"], Path(origin["source"])))
     lock = common.load_lock(COMPONENT, hub_root=hub_root)
     snapshot = state.state_path(workspace, "hub", "sources", COMPONENT, common.plan_digest(lock))
     return _plan("build", source=origin, workspace=str(workspace),
@@ -225,9 +254,13 @@ def build(source: Path, workspace: Path, private_assets: Path | None, plan_id: s
             with target.open("xb") as handle:
                 handle.write(data)
             target.chmod(0o600)
-    if private_assets is not None and (_private_manifest(Path(private_assets), tuple(plan["private_inputs"]))
+    if private_assets is not None and (_overlay_manifest(Path(private_assets), plan["source"]["version"],
+                                                         Path(plan["source"]["source"]))
                                        != plan["private_inputs"]):
         raise common.IntegrationError("private inputs changed while preparing the isolated build")
+    if _snapshot_overlay(snapshot) != plan["private_inputs"]:
+        raise common.IntegrationError("isolated snapshot holds private overlay files outside the approved plan; "
+                                      "use a new workspace")
     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
     if (snapshot / ".git").is_symlink():
         raise common.IntegrationError("isolated build Git metadata is a symlink")
@@ -244,6 +277,12 @@ def build(source: Path, workspace: Path, private_assets: Path | None, plan_id: s
         for name, digest in plan["private_inputs"].items():
             if marker.get("inputs", {}).get("assets/private/" + name) != digest:
                 raise common.IntegrationError(f"built private input differs from the approved plan: {name}")
+        sources = marker.get("assetSources", {})
+        if not isinstance(sources, dict):
+            raise common.IntegrationError("build marker asset sources are invalid")
+        for name, origin_kind in sources.items():
+            if origin_kind == "private" and name not in plan["private_inputs"]:
+                raise common.IntegrationError(f"build used an unapproved private overlay asset: {name}")
     except BaseException as exc:
         record.update(status="failed-validation", error=str(exc))
         common.write_receipt(snapshot / ".hub-build.json", record)
