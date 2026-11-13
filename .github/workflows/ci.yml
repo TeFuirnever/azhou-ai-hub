@@ -215,6 +215,38 @@ jobs:
           python -B tools/test-bootstrap-unit-tools.py
           python -B tools/test-unit-coverage.py
 
+  agent-skin-fresh-clone:
+    name: Agent Skin fresh-clone build
+    # Proves a clean checkout builds the published Azhou skin with no local
+    # assets/private overlay. Skipped only for docs-only changes.
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Build and verify from the published library only
+        working-directory: packages/agent-skin
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          test ! -e assets/private
+          python tools/check-assets.py --require-no-overlay
+          bash tools/build-macos.sh
+          python tools/verify-artifacts.py
+          python tools/build-dsh-plugin.py
+          python tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
+          test ! -e assets/private
+
   benchmarks:
     name: Benchmark integrity
     runs-on: ubuntu-latest
@@ -300,6 +332,7 @@ jobs:
       - pstack-native
       - agent-skin-macos
       - agent-skin-unit-coverage
+      - agent-skin-fresh-clone
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -311,6 +344,7 @@ jobs:
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
       ANIMATION_RESULT: ${{ needs.agent-skin-macos.result }}
       AGENT_SKIN_COVERAGE_RESULT: ${{ needs.agent-skin-unit-coverage.result }}
+      AGENT_SKIN_FRESH_CLONE_RESULT: ${{ needs.agent-skin-fresh-clone.result }}
     steps:
       - name: Require every CI gate
         run: |
@@ -326,3 +360,4 @@ jobs:
           case "$WINDOWS_RESULT" in success|skipped) ;; *) exit 1;; esac
           case "$ANIMATION_RESULT" in success|skipped) ;; *) exit 1;; esac
           case "$AGENT_SKIN_COVERAGE_RESULT" in success|skipped) ;; *) exit 1;; esac
+          case "$AGENT_SKIN_FRESH_CLONE_RESULT" in success|skipped) ;; *) exit 1;; esac

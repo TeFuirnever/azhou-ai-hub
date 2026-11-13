@@ -5,8 +5,8 @@
   "description": "与阿舟启动器及全景壁纸采用同一主题的女性 Q 版阿舟原生 Codex pet。",
   "spriteVersionNumber": 2,
   "themeInputs": [
-    "assets/private/working.png",
-    "assets/private/wallpaper-scene-q-v3.png",
+    "assets/azhou/working.png",
+    "assets/azhou/wallpaper-scene-q-v3.png",
     "style.css",
     "pet/theme.json"
   ],
@@ -23,7 +23,7 @@
       "role": "正式 Q 版身份参考；仅记录来源，不要求普通 clone 访问原 IP 库"
     },
     {
-      "path": "assets/private/working.png",
+      "path": "assets/azhou/working.png",
       "adoptedSHA256": "34dc9a8e9c06c226ec0cc80878548f118ff4a23b4a87d160674e66db4a905e58",
       "role": "本次采用记录；实际 themeRevision 始终使用当前文件重新计算的摘要"
     }

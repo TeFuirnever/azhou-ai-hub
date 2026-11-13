@@ -12,7 +12,7 @@ Benchmark reruns and evidence refreshes do not create a release unless they chan
 
 ## Release checklist
 
-Before external distribution, check package-local rights in the [provenance ledger](integration-provenance.md). Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. The legacy startup source kept only in Git history has no redistribution grant, and binaries built with private artwork are not covered; a passing verifier does not authorize publishing either. Private artwork, candidate state and machine-specific evidence stay outside distribution.
+Before external distribution, check package-local rights in the [provenance ledger](integration-provenance.md). Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. Its Azhou artwork in `packages/agent-skin/assets/azhou/` is CC BY-NC-ND 4.0, so bundles built from it may only be shared non-commercially, unmodified and attributed, and the brand follows [TRADEMARKS.md](../TRADEMARKS.md). The legacy startup source kept only in Git history has no redistribution grant; a passing verifier does not authorize publishing it. Local overlay artwork, candidate state and machine-specific evidence stay outside distribution.
 
 1. Update [CHANGELOG.md](../CHANGELOG.md), both READMEs and affected support/provenance documents.
 2. Run <code>python scripts/verify.py</code> from a clean checkout to reproduce the public integrity gate.

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare the local startup image from an isolated source snapshot."""
+"""Prepare an optional local overlay (assets/private) from an isolated source snapshot.
+
+The published assets/azhou library needs no preparation; this tool only stages a
+reviewed custom working pose from an explicit --source or AZHOU_ASSET_ROOT.
+"""
 
 import argparse
 import base64
@@ -687,7 +691,7 @@ def require_private_git_guard(package, parser):
 
 def main():
     package = Path(__file__).resolve().parent.parent
-    library = Path(os.environ.get('AZHOU_ASSET_ROOT', str(Path.home() / 'Desktop/oh-my-ai/IP/azhou')))
+    library = os.environ.get('AZHOU_ASSET_ROOT')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--adopt-existing', action='store_true', help='Adopt a reviewed, complete legacy output set before updating.')
     parser.add_argument('--recover', action='store_true', help='Recover a verifiable interrupted preparation without reading a source image.')
@@ -721,7 +725,9 @@ def main():
             parser.error(str(exc))
         print('Private asset recovery:', outcome or 'no transaction')
         return
-    source_path = args.source or library / 'assets/characters/azhou-chibi-pet/v1.0.0/images/04-working.png'
+    if args.source is None and not library:
+        parser.error('Pass --source or set AZHOU_ASSET_ROOT; the published assets/azhou needs no preparation.')
+    source_path = args.source or Path(library) / 'assets/characters/azhou-chibi-pet/v1.0.0/images/04-working.png'
     source = source_path.expanduser().resolve(strict=True)
     if source == destination / 'working.png':
         parser.error('Use the original approved source file, not the output copy.')

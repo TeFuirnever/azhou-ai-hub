@@ -181,7 +181,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; source version `0.9.0/build 41`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT since the #441 rewrite; private artwork is not covered. |
+| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; source version `0.9.0/build 41`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT since the #441 rewrite; the bundled Azhou art is CC BY-NC-ND 4.0, so a fresh clone builds the Azhou skin. |
 
 <sub>🦊 Foundation CLI, pstack and Agent Skin previews: generated illustrations, not from the Azhou Scenes pipeline and without a colour gate; maintainer visual approval recorded 2026-11-12.</sub>
 
@@ -191,7 +191,7 @@ python scripts/azhou_hub.py integrations pstack --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441; its private artwork is not, so do not publish bundles built with it.
+pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. Its Azhou art in `packages/agent-skin/assets/azhou/` is CC BY-NC-ND 4.0, and the Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md).
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
@@ -238,4 +238,4 @@ python scripts/verify.py
 
 ## License
 
-Azhou-maintained code: [MIT](LICENSE). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -181,7 +181,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码自 #441 重写后采用 MIT；私有素材不在其内。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码自 #441 重写后采用 MIT；随附的阿舟素材采用 CC BY-NC-ND 4.0，新 clone 即可构建阿舟皮肤。 |
 
 <sub>🦊 Foundation CLI、pstack 与 Agent Skin 效果图为生成插图，未经 Azhou Scenes 流水线，也没有色彩门禁；维护者视觉批准已于 2026-11-12 记录。</sub>
 
@@ -191,7 +191,7 @@ python scripts/azhou_hub.py integrations pstack --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由 Hub 根 MIT 许可证覆盖；私有素材不在其内，用其构建的包不得公开发布。
+pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由 Hub 根 MIT 许可证覆盖。`packages/agent-skin/assets/azhou/` 的阿舟素材采用 CC BY-NC-ND 4.0，阿舟名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
@@ -238,4 +238,4 @@ python scripts/verify.py
 
 ## 许可证
 
-阿舟自研代码使用 [MIT](LICENSE)。第三方组件保留自己的版权与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+阿舟自研代码使用 [MIT](LICENSE)。阿舟素材使用 [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md)。名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的版权与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

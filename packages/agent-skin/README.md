@@ -2,15 +2,15 @@
 
 两端本机安装、旧来源恢复及安装后复查，先读 [本地安装 SOP](docs/local-install-sop.md)。
 
-本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 41**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；Codex 使用原生入口和同窗口 CDP 动画、壁纸及设置流程；DeepSeek Harness（DSH）通过可组装的插件包接入共享核心。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。Codex 宿主验收状态见 support-matrix。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
+本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 41**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；Codex 使用原生入口和同窗口 CDP 动画、壁纸及设置流程；DeepSeek Harness（DSH）通过可组装的插件包接入共享核心。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。Codex 宿主验收状态见 support-matrix。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
 
 Codex 读取构建载荷时，`startup` 目录和 `install.js` 须为实体，载荷必须是非空、严格小于 24 MiB 的 UTF-8 普通文件；读取前后检测到身份或内容状态变化会报告 `asset-invalid`。资源根仍按原规则解析；这不能排除最后检查之后的替换，也不构成宿主或权利验收。
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
-原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容。本包最初派生自该上游，上游没有提供开源许可；[#441](https://github.com/TeFuirnever/azhou-ai-hub/pull/441)（2026-11-11）独立重写了仍与上游重合的代码，此后本包代码按仓库根 [MIT 许可证](../../LICENSE) 发布。`assets/private/` 的私有素材和用它们构建的产物不在 MIT 范围内，不得对外发布。详见 [上游来源](UPSTREAM.md)。
+原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容。本包最初派生自该上游，上游没有提供开源许可；[#441](https://github.com/TeFuirnever/azhou-ai-hub/pull/441)（2026-11-11）独立重写了仍与上游重合的代码，此后本包代码按仓库根 [MIT 许可证](../../LICENSE) 发布。阿舟素材在 `assets/azhou/`，采用 [CC BY-NC-ND 4.0](assets/azhou/LICENSE)（见 [NOTICE](assets/azhou/NOTICE.md)），不属于 MIT；阿舟名称、标识与角色见 [TRADEMARKS.md](../../TRADEMARKS.md)。详见 [上游来源](UPSTREAM.md)。
 
-2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名本身没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
+2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名本身没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。本地覆盖层 `assets/private/` 和本地证据不随源码提交。
 
 原生入口使用 Swift / AppKit / WKWebView，动画使用 HTML / CSS / 2D Canvas。12 秒动画按头像、散开、线稿、上色与背景展示的阶段播放；静态壁纸保留 Q 版实验室场景。bot 入口头像不会替换启动素材或 Pet，没有新增第三方运行依赖。
 
@@ -26,36 +26,36 @@ Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留�
 
 原生播放器的页面导航仅限自身 web 资源目录内的本地文件；非本机 `file://` 地址在路径标准化前被拒绝。此判断不能排除检查后符号链接被并发替换。
 
-本机构建与安装需要 macOS 13+、Xcode Command Line Tools、Python 3，以及已安装、身份为 `com.openai.codex` 的官方应用。构建通过 `xcrun --sdk macosx swiftc` 明确选择 macOS SDK。播放器使用系统 AppKit / WebKit；壁纸辅助任务使用 Foundation 的 WebSocket 连接 CDP，不依赖旧扩展的 Node 运行链路。阿舟工作图、升级壁纸图和图标均为本地私有素材，不随公开源码分发。
+本机构建与安装需要 macOS 13+、Xcode Command Line Tools、Python 3，以及已安装、身份为 `com.openai.codex` 的官方应用。构建通过 `xcrun --sdk macosx swiftc` 明确选择 macOS SDK。播放器使用系统 AppKit / WebKit；壁纸辅助任务使用 Foundation 的 WebSocket 连接 CDP，不依赖旧扩展的 Node 运行链路。阿舟工作图、全景壁纸、入口头像和图标随源码放在 `assets/azhou/`（CC BY-NC-ND 4.0），新 clone 可直接构建。
 
 ```sh
 cd packages/agent-skin
 
-# 私有素材必须由使用者在本机从已授权来源单独提供。
-: "${AZHOU_WORKING_IMAGE:?Set an authorized local path to the 1254x1254 RGBA working image}"
-: "${AZHOU_ICON_SOURCE:?Set an authorized local path to the square PNG app icon}"
-python3 tools/prepare-azhou-assets.py --source "$AZHOU_WORKING_IMAGE"
-mkdir -p assets/private/app-icon
-cp "$AZHOU_ICON_SOURCE" assets/private/app-icon/source.png
-
-# bot 入口头像独立提供，不能用启动人物图替代；不会进入 Git。
-: "${AZHOU_ENTRY_AVATAR:?Set an authorized local PNG path for the Azhou bot entry portrait}"
-cp "$AZHOU_ENTRY_AVATAR" assets/private/entry-avatar.png
-
-# 本地还需单独提供已授权的私有 Q 版全景壁纸图。
-test -f assets/private/wallpaper-scene-q-v3.png
-
-# 构建只创建隐藏载荷；安装命令会更新 ~/Applications 并可能打开 Codex。
+# 新 clone 直接构建：素材来自已跟踪的 assets/azhou/，无需准备。
+python3 tools/check-assets.py
 bash tools/build-macos.sh
 
-# 单独获准安装时才运行安装器。
+# 单独获准安装时才运行安装器；它会更新 ~/Applications 并可能打开 Codex。
 bash tools/install-macos.sh
 
 # 仅在明确获准启动实际入口时运行，这会启动 Codex。
 open "$HOME/Applications/阿舟 AI 实验室.app"
 ```
 
-准备前会确认整个 `assets/private/` 和 `.local/agent-skin-asset-preparation/` 目录被 Git 忽略且没有已跟踪文件；仅忽略个别文件不够，规则不满足时须先核对，不会自动改 Git 配置。私有启动图的三个生成文件由本地回据绑定，并与构建共用锁。若已有旧版生成文件却没有回据，准备命令会保留它们并停止；核对来源、权利和三个文件后，确需更新时可显式运行 `python3 tools/prepare-azhou-assets.py --source "$AZHOU_WORKING_IMAGE" --adopt-existing`。该选项只校验旧文件的一致性，不证明素材获授权。
+### 自定义皮肤（可选）
+
+构建对每个素材先找 Git 忽略的 `assets/private/<同名文件>`，没有再用 `assets/azhou/`。只放想替换的文件即可，例如：
+
+```sh
+mkdir -p assets/private/app-icon
+cp /path/to/my-icon.png assets/private/app-icon/source.png   # 方形 PNG，至少 1024
+python3 tools/check-assets.py                                 # 检查覆盖层格式
+bash tools/build-macos.sh
+```
+
+可覆盖的文件：`working.png`（1254×1254 RGBA）、`wallpaper-scene-q-v3.png`（横向 8 位 RGB/RGBA）、`entry-avatar.png`（1254×1254）、`app-icon/source.png`（方形，至少 1024）。构建标记的 `assetSources` 记录每个素材来自 `azhou` 还是 `private`。覆盖层其他文件不参与构建。
+
+`tools/prepare-azhou-assets.py` 只用于从显式 `--source`（或 `AZHOU_ASSET_ROOT`）准备覆盖层里的工作图，默认构建不需要它。准备前会确认整个 `assets/private/` 和 `.local/agent-skin-asset-preparation/` 目录被 Git 忽略且没有已跟踪文件；仅忽略个别文件不够，规则不满足时须先核对，不会自动改 Git 配置。私有启动图的三个生成文件由本地回据绑定，并与构建共用锁。若已有旧版生成文件却没有回据，准备命令会保留它们并停止；核对来源、权利和三个文件后，确需更新时可显式运行 `python3 tools/prepare-azhou-assets.py --source "$AZHOU_WORKING_IMAGE" --adopt-existing`。该选项只校验旧文件的一致性，不证明素材获授权。
 
 暂存文件写入后若字节不符合预期，整个暂存目录会保留待核对，不自动认领异常字节。准备过程中断后，可运行 `python3 tools/prepare-azhou-assets.py --recover`，无需原图。只有事务记录、目录和文件身份及内容均可核验时才完成或撤回；陌生、缺失或部分清理的数据会保留，需人工核对。不要并发更改私有素材目录或 `.local/agent-skin-asset-preparation/`；锁只约束配合的进程，最后一次核验与文件操作之间仍有竞争，突然断电及部分清理也可能需要人工恢复。
 
@@ -97,9 +97,9 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 ## 应用图标
 
-原项目使用用户提供的1254×1254方形PNG作为应用图标。图标源图与私有副本未迁入；需从已授权来源在本机补齐 `assets/private/app-icon/source.png`。
+应用图标源图是 1254×1254 方形 PNG，随源码放在 `assets/azhou/app-icon/source.png`；本地可用 `assets/private/app-icon/source.png` 覆盖。
 
-正常构建自动从私有副本生成10个标准尺寸，打包为 `AzhouAppIcon.icns` 并写入应用资源，后续升级持续保留。仅应用图标使用此图，动画仍使用女性Q版阿舟的工作姿态。
+正常构建自动从解析出的图标源图生成10个标准尺寸，打包为 `AzhouAppIcon.icns` 并写入应用资源，后续升级持续保留。仅应用图标使用此图，动画仍使用女性Q版阿舟的工作姿态。
 
 构建会拒绝缺失图标、非方形PNG或小于1024×1024的源图。
 
@@ -111,11 +111,11 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 默认标题使用“阿舟 AI 实验室 / Azhou AI Lab”。默认辅助文字和字幕随官方界面语言显示；已经保存的个人文字与上传图片保持原样，不自动翻译。
 
-启动默认素材仍来自私有 `working.png` 和 `wallpaper-scene-q-v3.png`；构建时生成规范头像、背景和同图线稿。入口头像则单独读取 `assets/private/entry-avatar.png`，在入口与设置头部显示，不改变这些动画输入、应用图标或 Pet。
+启动默认素材来自 `working.png` 和 `wallpaper-scene-q-v3.png`（先找 `assets/private/`，再用 `assets/azhou/`）；构建时生成规范头像、背景和同图线稿。入口头像则单独读取 `entry-avatar.png`，在入口与设置头部显示，不改变这些动画输入、应用图标或 Pet。
 
-Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生尺寸为1672×941、RGB PNG。以正式 `04-working.png` 为 Q 版比例和画风主参考，女性v2身份图仅辅助核对角色特征，经 ImageGen 生成完整实验室场景。大头、小身体、短四肢的 Q 版造型必须保留；扩展背景不代表改用普通动漫身材。生成提示词、参考来源与摘要见私有记录 `assets/private/provenance/wallpaper-scene-q-v3.json`。
+Codex 主界面壁纸使用 `assets/azhou/wallpaper-scene-q-v3.png`（可被本地覆盖层替换），原生尺寸为1672×941、RGB PNG。以正式 `04-working.png` 为 Q 版比例和画风主参考，女性v2身份图仅辅助核对角色特征，经 ImageGen 生成完整实验室场景。大头、小身体、短四肢的 Q 版造型必须保留；扩展背景不代表改用普通动漫身材。生成提示词、参考来源与摘要见私有记录 `assets/private/provenance/wallpaper-scene-q-v3.json`。
 
-这是一份项目私有衍生图，不代表已进入正式 IP 素材库；原参考文件保持不变。场景使用 `cover` 等比铺满窗口，窄窗会裁掉部分环境，Retina或较大窗口可能放大原始像素，不宣称原生4K清晰度。
+这是一份项目衍生图，随 `assets/azhou/` 以 CC BY-NC-ND 4.0 发布，不代表已进入正式 IP 素材库；原参考文件保持不变。场景使用 `cover` 等比铺满窗口，窄窗会裁掉部分环境，Retina或较大窗口可能放大原始像素，不宣称原生4K清晰度。
 
 界面与动效遵循本机 Emil `emil-design-eng`、`animation-performance` 的审视方向：反馈明确、常用入口不做持续动画、先测量渲染成本，再减少不必要绘制。旧版 7.8 秒记录只代表历史播放器，不构成当前 Canvas 动画的验收。
 
@@ -177,7 +177,7 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 0.6.1 修复聊天页底部装饰背景横向截断人物的问题：只清除输入框外侧的整行背景，保留输入框本体底色与交互；实时状态也会核查这层背景。真实界面与回归证据见 [0.6.1修复验收](docs/azhou-wallpaper-0.6.1-verification.md)。
 
-0.6.0 通过 `Native/Wallpaper.swift` 和 `wallpaper/renderer.js`、`wallpaper/wallpaper.css` 恢复 Codex 窗口内部的静态阿舟背景。构建脚本把渲染代码、样式和私有新图打包成 `Contents/Resources/wallpaper/install.js`。辅助模式使用同一个 `AzhouCodexStartup` 可执行文件，不创建另一个 `.app`；它只改变目标页面本次运行中的背景与表面样式，不改官方安装包，也不改 macOS 桌面壁纸。
+0.6.0 通过 `Native/Wallpaper.swift` 和 `wallpaper/renderer.js`、`wallpaper/wallpaper.css` 恢复 Codex 窗口内部的静态阿舟背景。构建脚本把渲染代码、样式和解析出的壁纸图打包成 `Contents/Resources/wallpaper/install.js`。辅助模式使用同一个 `AzhouCodexStartup` 可执行文件，不创建另一个 `.app`；它只改变目标页面本次运行中的背景与表面样式，不改官方安装包，也不改 macOS 桌面壁纸。
 
 显式运行旧式静态壁纸 helper 时，仍适用以下维护条件；正常启动使用上文的冷/热启动流程：
 
@@ -245,7 +245,7 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 
 完整规则、来源保护、登记工具边界和必要回归命令见 [安装升级约定](docs/installation-lifecycle.md)。
 
-## 验收与私有素材
+## 验收与素材
 
 安装升级约定：[docs/installation-lifecycle.md](docs/installation-lifecycle.md)。
 0.7.1 顶部/底部渐隐层修复与反例回归：[docs/azhou-wallpaper-0.7.1-verification.md](docs/azhou-wallpaper-0.7.1-verification.md)。
@@ -258,7 +258,7 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 
 原项目把视觉录屏、截图、运行日志、升级清单和图标记录保存在忽略的 `.local/evidence/` 目录。这些本地证据没有迁入本包；历史记录不能替代当前验证，也不是可恢复应用备份。
 
-`assets/private/`、`dist/`、`.build/`、`.local/` 均被Git忽略，构建检查禁止它们被跟踪。原素材及其衍生应用、录屏、截图不得公开提交或发布。来源与发布边界见 [UPSTREAM.md](UPSTREAM.md)，迁移范围见 [MIGRATION-INVENTORY.md](MIGRATION-INVENTORY.md)。知识核对工作记录不随本包迁入。
+`assets/private/`、`dist/`、`.build/`、`.local/` 均被Git忽略，构建检查禁止它们被跟踪。`assets/azhou/` 是唯一跟踪的素材目录，按 CC BY-NC-ND 4.0 发布；覆盖层素材、录屏和截图不随源码提交。来源与发布边界见 [UPSTREAM.md](UPSTREAM.md)，迁移范围见 [MIGRATION-INVENTORY.md](MIGRATION-INVENTORY.md)。知识核对工作记录不随本包迁入。
 
 历史 `extension/`、`Native/Extension.swift` 和旧默认素材没有迁入；当前正常构建不使用它们。
 

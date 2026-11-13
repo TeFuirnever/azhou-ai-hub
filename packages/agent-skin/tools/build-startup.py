@@ -21,10 +21,6 @@ import zlib
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_STARTUP_INPUTS = (
-    'assets/private/working.png',
-    'assets/private/wallpaper-scene-q-v3.png',
-)
 PREVIEW_SOURCES = (
     'index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
@@ -50,15 +46,9 @@ def load_artifacts(root: Path):
     return module
 
 
-def _require_private_inputs(root: Path, theme_config: dict) -> None:
-    private = root / 'assets/private'
-    if private.is_symlink() or not private.is_dir():
-        raise RuntimeError('缺少实体私有素材目录 assets/private；source-only 构建不能生成启动默认图。')
-    configured = theme_config['identity']
-    for name in (*PRIVATE_STARTUP_INPUTS, configured['entryAvatarInput'], configured['iconInput']):
-        path = root / name
-        if path.is_symlink() or not path.is_file():
-            raise RuntimeError(f'缺少本地启动默认素材 {name}；source-only 构建失败。')
+def _require_assets(root: Path, artifacts) -> dict:
+    """Resolve every startup asset (local overlay first, then assets/azhou)."""
+    return {name: path for name, (path, _) in artifacts.resolved_assets(root).items()}
 
 
 def _check_metadata(root: Path, artifacts, theme_config: dict, required: tuple = ()) -> dict:
@@ -392,7 +382,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     artifacts = load_artifacts(root)
     bundle = artifacts.staged_path(bundle)
     theme_config = artifacts.load_theme_config(root, require_inputs=True)
-    _require_private_inputs(root, theme_config)
+    asset_paths = _require_assets(root, artifacts)
     required_inputs = artifacts.DSH_PLUGIN_REQUIRED_INPUTS if host == 'dsh' else artifacts.STARTUP_REQUIRED_INPUTS
     _check_metadata(root, artifacts, theme_config, required_inputs)
     verify_image_metadata_reader(root)
@@ -431,7 +421,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
         try:
             subprocess.run(compile_command, cwd=root, check=True, capture_output=True, text=True)
             subprocess.run([
-                str(executable), str(root / PRIVATE_STARTUP_INPUTS[0]), str(root / PRIVATE_STARTUP_INPUTS[1]),
+                str(executable), *(str(asset_paths[name]) for name in artifacts.STARTUP_ASSET_NAMES),
                 str(avatar_path), str(artwork_path), str(contours_path),
             ], cwd=root, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
@@ -443,7 +433,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
             raise RuntimeError('Vision helper did not return valid startup contour data.') from exc
 
     avatar = avatar_path.read_bytes()
-    entry_avatar_input = root / theme_config['identity']['entryAvatarInput']
+    entry_avatar_input = asset_paths[artifacts.asset_name(theme_config['identity']['entryAvatarInput'])]
     entry_avatar = entry_avatar_input.read_bytes()
     artwork = artwork_path.read_bytes()
     avatar_dimensions = _png_data(avatar, 'avatar.png')

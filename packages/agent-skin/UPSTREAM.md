@@ -21,7 +21,7 @@
 
 2026-11-13 复核：上游只有 3 个提交，`c743c2b5` 为最新；其中 23 个代码文件共 951 行有效内容（去空白后不少于 25 个字符）中，只有 31 行在当前包内出现，均为通用 API 或样板写法，例如 `import UniformTypeIdentifiers`、`let app = NSApplication.shared`、`codesign --force --sign - "$bundle"`、`<link rel="stylesheet" href="style.css">`。Pet、壁纸、安装器、校验器及其测试从未出现在上游任何提交中，它们来自本地维护工作树。包内也没有上游文件头或版权行；`vendor/dream-image-metadata.mjs` 是另一个 MIT 依赖，许可证保留在旁。
 
-MIT 只覆盖代码。`assets/private/` 的私有阿舟图像、Pet 素材及用其构建的产物不在此许可内，其授权尚未决定，不得对外发布。
+MIT 只覆盖代码。阿舟图像是维护者自有 IP，自 2026-11-13 起放在 `assets/azhou/`，采用 [CC BY-NC-ND 4.0](assets/azhou/LICENSE)（见 [NOTICE](assets/azhou/NOTICE.md)）；阿舟名称、标识与角色见 [TRADEMARKS.md](../../TRADEMARKS.md)。本地覆盖层 `assets/private/` 不随源码发布。
 
 2026-10-26 的源码导入排除了私有阿舟图像、生成素材和本地机器验收产物。同日的本地交接将构建所需私有输入放在 Hub 包内被 Git 忽略的 `assets/private/`；它们仍不属于跟踪源码或公开分发内容。参见 [迁移清单](MIGRATION-INVENTORY.md)和 [本地交接记录](../../evidence/optional-integrations-local-handoff-2026-10-26.md)。
 

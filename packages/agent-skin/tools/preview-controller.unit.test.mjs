@@ -103,7 +103,7 @@ function sceneNode(name, style = {}) {
 }
 
 function createPreviewPage({ href, imageOk = true, cssOk = true, imageBytes = PNG_BYTES,
-  cssText = WALLPAPER_CSS, composerTransparent = false, readerFails = false } = {}) {
+  cssText = WALLPAPER_CSS, composerTransparent = false, readerFails = false, imageBase = 'private' } = {}) {
   const url = href ?? PREVIEW_URL;
   const filename = new URL(url).searchParams.get('image') || 'wallpaper-scene-q-v3.png';
   const fetchCalls = [];
@@ -148,7 +148,7 @@ function createPreviewPage({ href, imageOk = true, cssOk = true, imageBytes = PN
     if (target === './wallpaper.css') {
       return Promise.resolve({ ok: cssOk, text: () => Promise.resolve(cssText) });
     }
-    if (target === '../assets/private/' + encodeURIComponent(filename)) {
+    if (target === '../assets/' + imageBase + '/' + encodeURIComponent(filename)) {
       return Promise.resolve({ ok: imageOk, arrayBuffer: () => Promise.resolve(imageBytes.slice().buffer) });
     }
     return Promise.resolve({ ok: false, text: () => Promise.resolve(''), arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
@@ -307,6 +307,7 @@ const CHILD_SCENARIOS = {
   'reader-failure': { readerFails: true },
   'initial-failure': { imageBytes: INVALID_BYTES },
   'payload-webp': { href: PREVIEW_URL + '?image=scene.webp' },
+  'library-fallback': { imageBase: 'azhou' },
 };
 
 if (process.env.PREVIEW_CONTROLLER_CHILD) {
@@ -366,7 +367,8 @@ test('loading-time rejections and alternate materials run against a fresh child 
     const result = runChildScenario('scene-missing');
     assert.equal(result.fixtureError, '缺少本地阿舟素材：missing.png');
     assert.equal(result.statusText, '缺少本地阿舟素材：missing.png');
-    assert.deepEqual([...result.fetchCalls].sort(), ['../assets/private/missing.png', './wallpaper.css'].sort());
+    assert.deepEqual([...result.fetchCalls].sort(),
+      ['../assets/private/missing.png', '../assets/azhou/missing.png', './wallpaper.css'].sort());
   });
   await t.test('unreadable wallpaper stylesheet', async () => {
     const result = runChildScenario('css-missing');
@@ -391,6 +393,13 @@ test('loading-time rejections and alternate materials run against a fresh child 
     assert.equal(result.fixtureError, null);
     assert.match(result.payload.image, /^data:image\/webp;base64,/);
     assert.deepEqual(result.fetchCalls.filter(call => call.startsWith('../assets/private/')), ['../assets/private/scene.webp']);
+    assert.equal(result.wallpaperApplied, true);
+  });
+  await t.test('without a local overlay the published library serves the image', async () => {
+    const result = runChildScenario('library-fallback');
+    assert.equal(result.fixtureError, null);
+    assert.deepEqual(result.fetchCalls.filter(call => call.startsWith('../assets/')),
+      ['../assets/private/wallpaper-scene-q-v3.png', '../assets/azhou/wallpaper-scene-q-v3.png']);
     assert.equal(result.wallpaperApplied, true);
   });
 });

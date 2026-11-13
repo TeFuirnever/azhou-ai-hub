@@ -1222,6 +1222,15 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
+# The published Azhou library (CC BY-NC-ND 4.0) is the only tracked Agent Skin
+# artwork; everything else under packages/agent-skin/assets/ stays private.
+PUBLISHED_AGENT_SKIN_ASSETS = frozenset(
+    "packages/agent-skin/assets/azhou/" + name
+    for name in ("LICENSE", "NOTICE.md", "working.png", "wallpaper-scene-q-v3.png",
+                 "entry-avatar.png", "app-icon/source.png")
+)
+
+
 def check_private_startup_artwork(root: Path) -> list[str]:
     """Check the index even when a staged file is absent from the worktree."""
     result = subprocess.run(
@@ -1234,7 +1243,8 @@ def check_private_startup_artwork(root: Path) -> list[str]:
         capture_output=True,
     )
     paths = sorted(set(result.stdout.decode("utf-8", errors="backslashreplace").split("\0")) - {""})
-    return [f"private startup artwork is public: {path}" for path in paths]
+    return [f"private startup artwork is public: {path}" for path in paths
+            if path not in PUBLISHED_AGENT_SKIN_ASSETS]
 
 
 def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:
