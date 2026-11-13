@@ -86,6 +86,22 @@ RETIRED_REFERENCE_TOKENS = (
     ("test-zcode-", re.compile(r"(?<![\w-])test-zcode-")),
     ("native-zcode-", re.compile(r"(?<![\w-])native-zcode-")),
     ("offline-acceptance-runbook", re.compile(r"(?<![\w-])offline-acceptance-runbook")),
+    # agent-orchestration-kit prose names: the product name in either
+    # spelling and the hyphenated router/routing nouns. The spaced phrase
+    # "model router" stays out on purpose: it is ordinary English for any
+    # model-facing router (super-ask-azhou describes the text "a model
+    # router sees"), not the retired package.
+    ("Orchestration Kit", re.compile(r"Orchestrat(?:or|ion)\s+Kit(?![\w-])")),
+    ("model-router", re.compile(r"(?<![\w-])model-rout(?:er|ing)(?![\w-])", re.IGNORECASE)),
+)
+
+# Markdown-only live-reference tokens. The bare product noun "Kit" is
+# precise in prose (docs called the retired package "the Kit") but collides
+# with vendored code and minified bundles, so it is matched only in Markdown.
+# "Cursor Team Kit" is a living pstack upstream component and stays allowed;
+# compounds such as "Kit-owned" or "cursor-team-kit" do not match.
+MARKDOWN_ONLY_REFERENCE_TOKENS = (
+    ("Kit", re.compile(r"(?<![\w-])(?<!Team )Kit(?![\w-])")),
 )
 
 # Exemption class 1 — frozen identifiers. Installed Codex/DSH 0.9.0 state
@@ -149,16 +165,31 @@ FROZEN_NARRATIVE_FRAGMENTS = {
     "README.md": (
         "Legacy `codex-startup-animation` package",
         "the legacy `codex-startup-animation` source",
+        "**Agent Orchestration Kit (model router)**",
+        "the model-router Hub entry",
+        "the Kit's own uninstaller",
     ),
     "README.zh-CN.md": (
         "旧 `codex-startup-animation` 包",
         "旧 `codex-startup-animation` 源目录",
+        "**Agent Orchestration Kit（model router）**",
+        "model-router Hub 入口",
+        "装过 model-router 的用户",
+    ),
+    "GLOSSARY.md": (
+        "ZCode/Kit/旧包痕迹",
+    ),
+    "THIRD_PARTY_NOTICES.md": (
+        "Agent Orchestration Kit (retired; historical row)",
     ),
     "docs/architecture.md": (
         "The legacy `codex-startup-animation` source",
     ),
     "docs/integration-provenance.md": (
         "`packages/codex-startup-animation/`",
+        "Agent Orchestration Kit, a local continuation of",
+        "The Agent Orchestration Kit model-router entry is retired",
+        "Agent Orchestration Kit selected code/profile (retired)",
     ),
     "docs/integrations.md": (
         "`packages/codex-startup-animation/`",
@@ -166,6 +197,11 @@ FROZEN_NARRATIVE_FRAGMENTS = {
     "docs/support-matrix.md": (
         "then-canonical `codex-startup-animation` source root",
         "since-deleted `codex-startup-animation` root",
+        "the since-retired Agent Orchestration Kit",
+        "Agent Orchestration Kit `azhou-balanced` (retired 2026-11-12",
+        "its `model-router` Hub entry",
+        "the Kit's own path",
+        "the retired Agent Orchestration Kit (",
     ),
     "packages/agent-skin/README.md": (
         "`packages/codex-startup-animation/`",
@@ -177,6 +213,20 @@ FROZEN_NARRATIVE_FRAGMENTS = {
         "`packages/codex-startup-animation/`",
     ),
 }
+
+# pstack-owned text that names the retired Kit as an example of a custom
+# role set. pstack is excluded from Hub Skill tasks (AGENTS.md), so its
+# hub-skills source and the four generated harness copies are exempt by
+# exact path-scoped literal until a separate pstack task rewords them.
+PSTACK_KIT_EXAMPLE = "the Agent Orchestration Kit's `explorer`, `worker`, `reviewer`"
+for _pstack_path in (
+    "packages/pstack-agent-harness/hub-skills/poteto-mode/references/codex-tools.md",
+    "packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/references/codex-tools.md",
+    "packages/pstack-agent-harness/harness/pstack/codex/skills/poteto-mode/references/codex-tools.md",
+    "packages/pstack-agent-harness/harness/pstack/skills-root/skills/poteto-mode/references/codex-tools.md",
+    "packages/pstack-agent-harness/harness/pstack/zcode/skills/poteto-mode/references/codex-tools.md",
+):
+    FROZEN_NARRATIVE_FRAGMENTS[_pstack_path] = (PSTACK_KIT_EXAMPLE,)
 
 # Gate self-reference: these files hold the retired-identifier definitions,
 # allowlists and test fixtures themselves, so they must be able to spell the
@@ -236,11 +286,14 @@ def check_retired_surface_references(files: list[Path], root: Path) -> list[str]
             + FROZEN_SITE_FRAGMENTS.get(relative, ())
             + FROZEN_NARRATIVE_FRAGMENTS.get(relative, ())
         )
+        tokens = RETIRED_REFERENCE_TOKENS
+        if relative.endswith(".md"):
+            tokens = tokens + MARKDOWN_ONLY_REFERENCE_TOKENS
         for line_number, line in enumerate(text.splitlines(), 1):
             masked = line
             for literal in masks:
                 masked = masked.replace(literal, "")
-            for label, pattern in RETIRED_REFERENCE_TOKENS:
+            for label, pattern in tokens:
                 if pattern.search(masked):
                     errors.append(
                         f"retired-surface reference: {relative}:{line_number}: {label}"

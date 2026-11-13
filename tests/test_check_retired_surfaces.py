@@ -80,6 +80,67 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
                 check_retired_surface_references([live], root),
             )
 
+    def test_kit_prose_names_fail_in_live_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            guide = write(
+                root,
+                "docs/principles.md",
+                "| Orchestrator Kit | token efficiency |\n"
+                "Install the Agent Orchestration Kit first.\n"
+                "Use the Codex model-routing integration.\n"
+                "Register the Model-Router entry.\n"
+                "pstack / Kit acceptance continues.\n"
+                "Remove it with the Kit's own uninstaller.\n",
+            )
+            self.assertEqual(
+                [
+                    "retired-surface reference: docs/principles.md:1: Orchestration Kit",
+                    "retired-surface reference: docs/principles.md:1: Kit",
+                    "retired-surface reference: docs/principles.md:2: Orchestration Kit",
+                    "retired-surface reference: docs/principles.md:2: Kit",
+                    "retired-surface reference: docs/principles.md:3: model-router",
+                    "retired-surface reference: docs/principles.md:4: model-router",
+                    "retired-surface reference: docs/principles.md:5: Kit",
+                    "retired-surface reference: docs/principles.md:6: Kit",
+                ],
+                check_retired_surface_references([guide], root),
+            )
+
+    def test_kit_tokens_avoid_living_and_generic_uses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            prose = write(
+                root,
+                "docs/new-guide.md",
+                "MIT with retained Cursor Team Kit and thermos notices.\n"
+                "Kit-owned files and cursor-team-kit stay compounds.\n"
+                "The same text a model router sees.\n"
+                "WebKit and SDKs are unrelated.\n",
+            )
+            self.assertEqual([], check_retired_surface_references([prose], root))
+            # The bare noun is Markdown-only: vendored code may spell it freely.
+            bundle = write(root, "skills/demo/references/vendor/app.js", "const Kit = 1;\n")
+            self.assertEqual([], check_retired_surface_references([bundle], root))
+            # The product phrase still fails outside Markdown.
+            script = write(root, "scripts/new_tool.py", "# wraps the Orchestration Kit\n")
+            self.assertEqual(
+                ["retired-surface reference: scripts/new_tool.py:1: Orchestration Kit"],
+                check_retired_surface_references([script], root),
+            )
+
+    def test_kit_retirement_narrative_is_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            line = (
+                "- **Agent Orchestration Kit (model router)** — never released; removed "
+                "together with the model-router Hub entry: remove it with the Kit's own uninstaller.\n"
+            )
+            readme = write(root, "README.md", line)
+            self.assertEqual([], check_retired_surface_references([readme], root))
+            mirror = write(root, "docs/new-guide.md", line)
+            self.assertTrue(check_retired_surface_references([mirror], root))
+
     def test_zcode_host_surface_tokens_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
