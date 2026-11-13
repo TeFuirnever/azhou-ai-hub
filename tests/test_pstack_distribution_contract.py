@@ -262,5 +262,41 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertFalse((payload / "hooks").exists())
 
 
+    def test_copilot_setup_overlay_cites_only_existing_setup_steps_and_anchors(self) -> None:
+        # The Hub-authored Copilot overlay outlived the fork-era setup-pstack
+        # (ten steps plus a Models section); its references must resolve
+        # against the setup-pstack SKILL.md it ships beside.
+        overlay = PACKAGE / "hub-skills/setup-pstack/copilot.md"
+        source = overlay.read_text(encoding="utf-8")
+        for host in ("claude-code", "codex", "zcode", "skills-root"):
+            skill_dir = HARNESS / host / "skills/setup-pstack"
+            with self.subTest(host=host):
+                self.assertEqual((skill_dir / "copilot.md").read_text(encoding="utf-8"), source)
+                skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+                steps = {int(n) for n in re.findall(r"^### (\d+)\. ", skill, re.MULTILINE)}
+                self.assertTrue(steps)
+                cited = {
+                    int(n)
+                    for group in re.findall(
+                        r"\bsteps? (\d+(?:(?:,| and|, and) \d+)*)", source, re.IGNORECASE
+                    )
+                    for n in re.findall(r"\d+", group)
+                }
+                self.assertTrue(cited)
+                self.assertLessEqual(cited, steps)
+                headings = {
+                    re.sub(r"[^a-z0-9 -]", "", line.lstrip("#").strip().lower()).replace(" ", "-")
+                    for line in skill.splitlines()
+                    if line.startswith("#")
+                }
+                for anchor in re.findall(r"\]\(SKILL\.md#([^)]+)\)", source):
+                    self.assertIn(anchor, headings)
+
+    def test_codex_adapter_names_no_retired_orchestrator(self) -> None:
+        source = (PACKAGE / "hub-skills/poteto-mode/references/codex-tools.md").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"Orchestrat(?:or|ion) Kit")
+        self.assertIn("named custom roles from another orchestrator", source)
+
+
 if __name__ == "__main__":
     unittest.main()

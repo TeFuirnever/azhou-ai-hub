@@ -1,6 +1,6 @@
 # Setup pstack on GitHub Copilot
 
-On GitHub Copilot this file replaces the model, effort, and hook questions in steps 1, 3, and 4 of [setup-pstack](SKILL.md), the sheet header in step 6, and step 7. Steps 2, 5, 8, and 9 still apply. pstack ships no Copilot model defaults, so every model in the sheet comes from the user's answers. Never pick a model the user has not chosen, and never write the Claude Code names in [Models](SKILL.md#models) or step 6's values into a Copilot sheet.
+On GitHub Copilot this file replaces the model and effort questions in steps 1 and 3 of [setup-pstack](SKILL.md) and the rule file and header in step 5, and it adds the session-hook question and the wiring that [setup-pstack](SKILL.md) does not cover. Steps 2, 4, 6, 7, and 8 still apply. pstack ships no Copilot model defaults, so every model in the sheet comes from the user's answers. Never pick a model the user has not chosen, and never write the default model slugs in step 5's rule shape into a Copilot sheet.
 
 Run setup on a model at least as strong as gpt-5.4-mini or a Sonnet-class Claude model. On a Haiku-class model, setup picked models the user never chose in about half of the smoke runs.
 
@@ -20,7 +20,7 @@ On Copilot, step 2's saved values are the role lines the plugin hook put in cont
 
 ## Sheet header
 
-A Copilot sheet uses step 6's role lines and settings under this header in place of step 6's paragraph, because every role keeps a line and `check-sheet.sh` checks that:
+A Copilot sheet uses step 5's role lines, plus the settings lines this file adds, under this header in place of step 5's frontmatter, comment, and `# budget` lines, because every role keeps a line and `check-sheet.sh` checks that:
 
 ```markdown
 # pstack model configuration
@@ -30,7 +30,7 @@ Per-role model choices for pstack skills on GitHub Copilot, written by setup-pst
 
 ## Detect models
 
-The detected set is the `model` enum of the `task` tool, with full IDs exactly as the enum lists them. Never shorten one to a family name. If this session has no `task` tool or its enum is not visible, write `inherit-parent` for every role, skip the model questions, and tell the user to rerun `setup-pstack` in a session with the `task` tool. The Claude Code names in [Models](SKILL.md#models) and the values in step 6's sheet shape are not Copilot model IDs; never write them into a Copilot sheet.
+The detected set is the `model` enum of the `task` tool, with full IDs exactly as the enum lists them. Never shorten one to a family name. If this session has no `task` tool or its enum is not visible, write `inherit-parent` for every role, skip the model questions, and tell the user to rerun `setup-pstack` in a session with the `task` tool. The model slugs in step 5's rule shape are not Copilot model IDs; never write them into a Copilot sheet.
 
 Group the detected IDs by vendor, from each ID's text before its first hyphen. `claude` is Claude, `gpt` is GPT, `gemini` is Gemini, `grok` is Grok, `kimi` is Kimi, and any other ID is Other. Keep the enum's order within a vendor.
 
@@ -58,13 +58,13 @@ Each tier question below writes every role in its row. The panel row's roles eac
 
 Ask in this order. Each model question is the vendor and model pair above; every other question is one `ask_user` call.
 
-0. **Session model.** "Run every pstack role on this session's model?" with `Yes, use the session's model for every role` and `No, choose models by tier`. This is for a plan that offers one model or only automatic selection, and for anyone who wants no per-role choices. On a re-run, put the choice that matches the saved sheet first, labeled `(current)`. Yes skips questions 1 through 7 and the model detection. Set every role line to `inherit-parent`, with three `inherit-parent` entries in each panel role. Ask questions 8 and 9, then say in step 8 that the panels' diversity is reduced and that panel entries can differ only by reasoning effort. This path needs no `panel vendors: any` line, because a panel of only `inherit-parent` needs no vendor check. No answers the questions below.
+0. **Session model.** "Run every pstack role on this session's model?" with `Yes, use the session's model for every role` and `No, choose models by tier`. This is for a plan that offers one model or only automatic selection, and for anyone who wants no per-role choices. On a re-run, put the choice that matches the saved sheet first, labeled `(current)`. Yes skips questions 1 through 7 and the model detection. Set every role line to `inherit-parent`, with three `inherit-parent` entries in each panel role. Ask questions 8 and 9, then say in step 6 that the panels' diversity is reduced and that panel entries can differ only by reasoning effort. This path needs no `panel vendors: any` line, because a panel of only `inherit-parent` needs no vendor check. No answers the questions below.
 1. **Default model.** "Default model: runs <the Default row's roles>." It writes every role in the Default row.
 2. **Worker model.** "Worker model: runs <the Worker row's roles>." It writes every role in the Worker row.
 3. **Strongest model.** "Strongest model: runs <the Strongest row's roles>." It writes every role in the Strongest row.
 4. **Panel model 1 of 3**, then **panel model 2 of 3**, then **panel model 3 of 3**, as three separate questions. "Panel model N of 3: panels run one subagent per model, and models from different vendors catch different mistakes." In slots 2 and 3, list the vendors not yet in the panel first, then the rest, then `inherit-parent`. Do not offer a model already in the panel.
 5. **More panel models.** "Add a 4th panel model?" with `Done` as the first choice and `Add a 4th` second. Adding asks one more slot the same way, then asks again for a 5th. Stop offering at 5 models.
-6. **Vendor check.** When the panel's model IDs, not counting `inherit-parent`, all come from one vendor and more than one vendor is detected, ask "The panel is single-vendor (Claude), so its cross-checks share blind spots." with `Pick the panel again` and `Keep it anyway`. Picking again returns to panel model 1. `Keep it anyway` writes the line `panel vendors: any` after the `session hook` line. When only one vendor is detected, skip this question, write `panel vendors: any`, and say in step 8 that the panel's diversity is reduced. A panel of only `inherit-parent` needs no check.
+6. **Vendor check.** When the panel's model IDs, not counting `inherit-parent`, all come from one vendor and more than one vendor is detected, ask "The panel is single-vendor (Claude), so its cross-checks share blind spots." with `Pick the panel again` and `Keep it anyway`. Picking again returns to panel model 1. `Keep it anyway` writes the line `panel vendors: any` after the `session hook` line. When only one vendor is detected, skip this question, write `panel vendors: any`, and say in step 6 that the panel's diversity is reduced. A panel of only `inherit-parent` needs no check.
 7. **Overrides.** "Override any individual role?" with `No, write the sheet (Recommended)` first, then one choice per tier row, with the row's current value in its label, as `Strongest (<its model ID>)`. Picking a row asks which of its roles to change, then asks one model for that role as in [Choosing one model](#choosing-one-model), with its value first as `(current)`. A panel role asks its list's slots as in questions 4 through 6 instead. After each override, ask this question again, until the answer is `No, write the sheet`.
 8. **Session hook.** "Keep the session hook that routes tasks to poteto-mode?" with `On (default)` and `Off`. On a re-run, the saved value comes first as `(current)`.
 9. **Default effort.** "Default reasoning effort for pstack subagents?" with `session (keep the parent's effort)` first, then `low`, `medium`, `high`, `xhigh`, and `max`. It writes the `default effort` line. On a re-run, the saved value comes first as `(current)`. Ask no per-role effort; a saved `@<level>` suffix on a role value stays as written.
@@ -73,7 +73,7 @@ The panel from questions 4 through 6 writes every panel role, in slot order. On 
 
 ## Write and check
 
-Validate as step 5 describes. Copilot's file tools expand neither `~` nor variables, so print the sheet's absolute path with `echo "${COPILOT_HOME:-$HOME/.copilot}/pstack-models.md"` in `bash`, and write the whole sheet to exactly that path in one tool call, so the write asks for path access at most once.
+Validate as step 4 describes. Copilot's file tools expand neither `~` nor variables, so print the sheet's absolute path with `echo "${COPILOT_HOME:-$HOME/.copilot}/pstack-models.md"` in `bash`, and write the whole sheet to exactly that path in one tool call, so the write asks for path access at most once.
 
 Then run `sh <this skill's directory>/scripts/check-sheet.sh` through `bash`, with the directory's absolute path and no arguments. It checks the Copilot sheet as the plugin hook does at session start: every role has a line, every entry is `inherit-parent`, `auto`, or a model ID with an optional `@<level>`, and each panel names models from two vendors unless the sheet has `panel vendors: any`. It prints `sheet ok`, or `sheet invalid:` and each problem. On `sheet invalid`, fix those lines and write the whole sheet again, then rerun the check. The plugin hook approves the check without a prompt.
 
