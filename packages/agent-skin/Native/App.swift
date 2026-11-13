@@ -2242,12 +2242,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                         return try self.session.productionPayload(runtime: self.runtime)
                     },
                     makeTargetSystem: { hostRuntime.makeStartupTargetSystem() },
-                    makeConnector: { facts, port, connectorSystem, capture, events in
+                    makeConnector: { [weak self] facts, port, connectorSystem, capture, events in
                         StartupConnector(
                             target: facts, expectedPort: port, system: connectorSystem,
                             transport: InstallObservingStartupTransport(
                                 base: hostRuntime.makeStartupTransport(capture: capture, events: events),
-                                recorder: installObservation))
+                                recorder: installObservation),
+                            onReady: { [weak self] in _ = self?.activateOnce("startup-ready") })
                     },
                     installObservation: installObservation, assembly: assembly)
             })
@@ -2331,7 +2332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         carryOutFinalOutcome(final, promoted: exitLedger.promoted)
     }
 
-    /// 终局编排：ready/skipped 尝试激活目标；失败两档按晋升与否决定可见错误
+    /// 终局编排：ready/skipped 复用就绪时的激活结果；失败两档按晋升与否决定可见错误
     /// 还是直接退出；成功档在晋升窗口等动画完成，否则立即退场。
     private func carryOutFinalOutcome(_ final: NativeStartupFinalOutcome, promoted: Bool) {
         exitLedger.processExitCode = final.exitCode
@@ -2339,14 +2340,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         case .activated:
             break
         case .ready:
-            if let target = session.target, !target.isTerminated {
-                let allowed = target.activate()
-                session.activated = allowed
-                journal.record("target-activation-after-startup",
-                               ["allowed": allowed, "targetPID": Int(target.processIdentifier)])
-            }
+            _ = activateOnce("startup-ready")
         case .skipped:
-            if let target = session.target, !target.isTerminated { session.activated = target.activate() }
+            _ = activateOnce("startup-skipped")
         case .partial(let reason), .behaviorNotProven(let reason):
             if promoted { presentFailure(stage.displayLocale.message(for: reason), reason) }
             else { exitLedger.terminating = true; runtime.terminate() }

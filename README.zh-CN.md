@@ -183,6 +183,8 @@ python scripts/azhou_hub.py verify
 |---|---|---|
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。程序再分发尚未获授权。 |
 
+Codex 冷启动在播放期间保持有界接入，核验后可接续替换页面；自然完成、跳过或进入设置后结束。接入结束后的换页恢复和实机视觉验收不由此机制保证，详见[启动合同](packages/agent-skin/docs/testing.md)。
+
 <sub>🦊 Foundation CLI、pstack 与 Agent Skin 效果图为生成插图，未经 Azhou Scenes 流水线，也没有色彩门禁；维护者视觉批准已于 2026-11-12 记录。</sub>
 
 ~~~bash

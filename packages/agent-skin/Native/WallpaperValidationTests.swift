@@ -1877,6 +1877,13 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
                    "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
                    "completion": NSNull()] as [String: Any],
     ])
+    let completed: Evaluation = .success([
+        "href": href, "missing": false,
+        "status": ["owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 19,
+                   "ready": true, "completed": true, "overlay": false, "reason": "",
+                   "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+                   "completion": ["cause": "natural", "beforeReady": false]] as [String: Any],
+    ])
     let lost: Evaluation = .failure(StartupFailure(reason: "protocol-error", message: "fixture page retired", pageConnectionLost: true))
     let transient: Pages = .failure(WallpaperFailure(state: "endpoint-unavailable", chinese: "fixture timeout", english: "fixture timeout",
                                                      retryableListFailure: true))
@@ -1905,6 +1912,7 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
         evaluations += [ready]
         pages += Array(repeating: transient, count: rechecks) + [.success([current])]
         if rechecks > 0 { pages += [.success([current])]; evaluations += [ready] }
+        pages += [.success([current])]; evaluations += [completed]
         let transport = FakeWallpaperStartupTransport(pageSteps: pages, targetSteps: targetSteps, evaluationSteps: evaluations)
         if refusal == 1 { fixture.commandFailures["/usr/bin/codesign"] = "inspection-failed" }
         fixture.afterCommand = { [weak fixture] file in
@@ -1958,15 +1966,15 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
         expect(normal.outcome == .ready(runID: 19) && normal.payloads == 1 && scans(normal.fixture) == 3
                && normal.system.fullValidations == 3 && normal.system.processValidations > 0,
                "a normal startup keeps exactly entry/connect/pre-install signatures despite \(polls) discovery polls")
-        expect(normal.transport.pagesCount == polls + 3 && normal.transport.targetsCount == 0
+        expect(normal.transport.pagesCount == polls + 4 && normal.transport.targetsCount == 0
                && normal.transport.connectedURLs.map(\.lastPathComponent) == ["signature-a"],
                "discovery polls neither connect extra pages nor manufacture a replacement proof")
         let refreshed = await run(rechecks: polls); closed(refreshed)
         expect(refreshed.outcome == .ready(runID: 19) && refreshed.payloads == 1 && scans(refreshed.fixture) == 3
-               && refreshed.system.fullValidations == 3 && refreshed.transport.pagesCount == (polls == 0 ? 3 : polls + 4),
+               && refreshed.system.fullValidations == 3 && refreshed.transport.pagesCount == (polls == 0 ? 4 : polls + 5),
                "same-target transient waits do not rescan signatures or replay the payload")
         let statuses = refreshed.transport.evaluatedSources.filter { $0 == StartupConnector.statusExpression }.count
-        expect(statuses == (polls == 0 ? 1 : 2), "a waited proof still rereads the same run's current status")
+        expect(statuses == (polls == 0 ? 2 : 3), "a waited proof still rereads the same run's current status")
         let replaced = await run(discovery: polls, replacement: true, lag: polls, rechecks: polls); closed(replaced)
         expect(replaced.outcome == .ready(runID: 19) && replaced.payloads == 2 && scans(replaced.fixture) == 5
                && replaced.system.fullValidations == 5 && replaced.transport.targetsCount == polls + 1,
@@ -2131,10 +2139,10 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     }
 
     let disabledWallpaperStatus: [String: Any] = [
-        "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 19,
-        "ready": true, "completed": false, "overlay": true, "reason": "",
+        "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 19,
+        "ready": true, "completed": true, "overlay": false, "reason": "",
         "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
-        "completion": NSNull(),
+        "completion": ["cause": "natural", "beforeReady": false],
     ]
     let disabledWallpaperStartup = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(pages: [page], evaluations: [

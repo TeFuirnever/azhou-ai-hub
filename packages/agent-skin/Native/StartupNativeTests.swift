@@ -349,6 +349,11 @@ struct StartupNativeTests {
             print(String(decoding: try JSONSerialization.data(withJSONObject: result), as: UTF8.self))
             return
         }
+        if CommandLine.arguments.contains("--probe-ready-replacement") {
+            let result = try await startupReplacementScenario(stage: "status", mode: "after-ready")
+            print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            exit(result["currentPageID"] as? String == "page-b" && result["completed"] as? Bool == true ? 0 : 1)
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--emit-event-jsonl") {
             let path = index + 1 < CommandLine.arguments.count
                 ? CommandLine.arguments[index + 1] : ".build/native-event-samples"
@@ -816,24 +821,60 @@ struct StartupNativeTests {
                     "ready": true, "completed": false, "overlay": true, "reason": "",
                     "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
                     "completion": NSNull()
+                ]],
+                ["href": startupURL, "missing": false, "status": [
+                    "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 7,
+                    "ready": true, "completed": true, "overlay": false, "reason": "",
+                    "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                    "completion": ["cause": "natural", "beforeReady": false]
                 ]]
             ],
             pageFailures: 1
         )
+        var readyNotifications = 0
         let successful = await StartupConnector(
             target: existing,
             expectedPort: 9222,
             system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
             transport: successfulTransport,
+            onReady: { readyNotifications += 1 },
             now: { fakeNow },
             sleep: { fakeNow += $0 }
         ).run(payload: "test-only-probe", deadline: 1)
         expect(successful == .ready(runID: 7), "a controlled main page reaches startup-ready")
-        expect(successfulTransport.pagesCount == 4, "page discovery retries and rechecks identity before install and ready within the shared budget")
+        expect(successfulTransport.pagesCount == 5, "page discovery retries and rechecks identity before install and ready within the shared budget")
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
         expect(successfulTransport.payloadCount == 1, "startup installs its payload once")
-        expect(successfulTransport.closeCount == 1, "startup closes its socket on readiness")
+        expect(successfulTransport.closeCount == 1, "startup closes its socket after playback completes")
         expect(successfulTransport.disposeCount == 0, "successful startup is not disposed")
+        expect(readyNotifications == 1 && successfulTransport.evaluateCount == 4,
+               "readiness notifies presentation once but does not finish playback observation")
+
+        for phase in ["playing", "settings"] {
+            var time: TimeInterval = 0
+            var notifications = 0
+            let transport = FakeStartupTransport(
+                pages: [["type": "page", "id": "selected-page", "url": startupURL,
+                         "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
+                evaluations: [
+                    ["href": startupURL, "controllerPresent": false],
+                    ["installed": true, "alreadyActive": false],
+                    ["href": startupURL, "missing": false, "status": [
+                        "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": 7,
+                        "ready": true, "completed": false, "overlay": true, "reason": "",
+                        "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+                        "completion": NSNull()
+                    ]]
+                ], repeatLastEvaluation: true)
+            let result = await StartupConnector(target: existing, expectedPort: 9222,
+                system: FakeStartupSystem(expectedPID: 4123, ports: [9222]), transport: transport,
+                onReady: { notifications += 1 }, now: { time }, sleep: { time += $0 })
+                .run(payload: "test-only-probe", deadline: 0.35)
+            expect(result == (phase == "playing" ? .failed(reason: "attach-timeout") : .ready(runID: 7)),
+                   "playing remains bounded while settings hands control to the user without waiting")
+            expect(notifications == 1 && transport.payloadCount == 1 && transport.closeCount == 1,
+                   "repeated ready polls neither reactivate nor reinstall, and always close")
+        }
 
         var skippedNow: TimeInterval = 0
         let skippedTransport = FakeStartupTransport(
@@ -1948,9 +1989,11 @@ private func nativeEventContractChecks() async throws -> Int {
            "read-only probe resolves synthetic app target path=\(probeEvent?["targetPath"] as? String ?? "<none>") bundle=\(probeEvent?["targetBundleID"] as? String ?? "<none>") without acquiring the launch lock")
 
     func settleLaunch(_ runtime: FakeNativeAppRuntime) async throws {
-        for _ in 0..<30 where runtime.terminated == 0 {
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while runtime.terminated == 0 && ProcessInfo.processInfo.systemUptime < deadline {
             try await Task.sleep(nanoseconds: 1_000_000)
         }
+        expect(runtime.terminated > 0, "the synthetic launcher reaches its terminal callback within the test deadline")
     }
     func eventNames(_ runtime: FakeNativeAppRuntime) -> [String] {
         runtime.output.compactMap { line in
@@ -1990,8 +2033,19 @@ private func nativeEventContractChecks() async throws -> Int {
                 "ready": true, "completed": false, "overlay": true, "reason": "",
                 "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
                 "completion": NSNull()
+            ]],
+            ["href": coldStartupURL, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 31,
+                "ready": true, "completed": true, "overlay": false, "reason": "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                "completion": ["cause": "natural", "beforeReady": false]
             ]]
-        ]
+        ], afterEvaluation: { _, index in
+            if index == 3 {
+                expect(coldTarget.activationCount == 1 && coldRuntime.terminated == 0,
+                       "the actual AppDelegate activates at playing readiness and remains alive until completion")
+            }
+        }
     )
     coldRuntime.startupTransportFactory = { capture, events in
         NativeStartupEventTransport(base: coldTransport, capture: capture, events: events,
@@ -2011,7 +2065,7 @@ private func nativeEventContractChecks() async throws -> Int {
     expect(coldTransport.closeCount == 1, "cold startup closes the injected transport")
     expect(coldTarget.activationCount == 1, "verified readiness activates the same target once")
     expect(coldRuntime.terminated == 1 && coldRuntime.acquiredLock?.releaseCount == 1,
-           "cold startup terminates after readiness and releases its instance lock")
+           "cold startup terminates after completion and releases its instance lock")
     expect(eventNames(coldRuntime).contains("startup-installed") && eventNames(coldRuntime).contains("startup-ready")
            && eventNames(coldRuntime).contains("launcher-exit") && coldRuntime.processExitCode == 0,
            "cold startup emits installed, ready, and successful teardown events")
@@ -2921,8 +2975,9 @@ private func skinHostContractChecks() async throws -> Int {
     }
     func statusBody(runID: Int, phase: String, ready: Bool) -> [String: Any] {
         ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
-         "ready": ready, "completed": false, "overlay": true, "reason": "",
-         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+         "ready": ready, "completed": phase == "complete", "overlay": phase != "complete", "reason": "",
+         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+         "completion": phase == "complete" ? ["cause": "natural", "beforeReady": false] : NSNull()]
     }
     let installedApp = FakeNativeApplication(
         pid: 5321, bundleIdentifier: "com.openai.codex",
@@ -2937,7 +2992,7 @@ private func skinHostContractChecks() async throws -> Int {
         evaluations: [
             ["href": installURL, "controllerPresent": false],
             ["installed": true, "alreadyActive": false],
-            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "complete", ready: true)],
         ])
     var readyOpening: [Bool] = []
     let readyObservation = CodexInstallObservation()
@@ -3120,7 +3175,7 @@ private func skinHostContractChecks() async throws -> Int {
         evaluations: [
             ["href": installURL, "controllerPresent": false],
             ["installed": true, "alreadyActive": false],
-            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "complete", ready: true)],
         ])
     let busyAssembly = CodexSkinAssembly(
         preflightBundle: { _, _ in }, activateExisting: { _ in false },
@@ -3474,7 +3529,7 @@ private func skinHostContractChecks() async throws -> Int {
                                                ["href": installURL, "controllerPresent": false],
                                                ["installed": true, "alreadyActive": false],
                                                ["href": installURL, "missing": false,
-                                                "status": statusBody(runID: 12, phase: "playing", ready: true)],
+                                                "status": statusBody(runID: 12, phase: "complete", ready: true)],
                                            ]),
                                            findings: verifiedCodexFindings(codexKey))
     async let busyFirstLaunch = busyDisableDriver.launch(
@@ -3903,7 +3958,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
                 if ["recheck-controller", "recheck-missing"].contains(mode) { return try data(envelope(["href": href, "missing": true])) }
                 if mode == "recheck-href" { return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false])) }
                 if mode == "recheck-schema" { return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]])) }
-                if mode == "recheck-complete" { terminal = "complete-replaced" }
+                if ["recheck-once", "recheck-lost", "recheck-connect", "recheck-complete"].contains(mode) { terminal = "complete-replaced" }
                 if mode == "recheck-skip" { terminal = "skip-replaced" }
                 if mode == "recheck-failed" { terminal = "failed-replaced" }
                 if mode == "recheck-disposed" { terminal = "disposed-replaced" }
@@ -3911,9 +3966,11 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             }
             let timedOut = mode == "recheck-timeout" && recheckReads > 1
             let completed = ["complete-replaced", "skip-replaced"].contains(terminal ?? "")
+                || id != "page-a"
             let failed = terminal == "failed-replaced"
             let disposed = terminal == "disposed-replaced"
-            let ready = id != "page-a" || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
+            let ready = id != "page-a" || mode == "after-ready"
+                || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
             let phase = timedOut ? "timeout" : failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
             let completion: Any = completed ? ["cause": terminal == "skip-replaced" ? "skip" : "natural",
                                                 "beforeReady": terminal == "skip-replaced" && mode != "recheck-skip"] : NSNull()
@@ -4055,6 +4112,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             launcherPath: "/synthetic/Agent-Skin.app", now: world.time, sink: { records.append($0) }))
         events.begin(at: 0); events.targetOpened(pid: 4123, at: 0)
         let recorder = CodexInstallObservation()
+        var presentationPages: [String] = []
         let transport = InstallObservingStartupTransport(
             base: NativeStartupEventTransport(base: base, capture: capture, events: events, now: world.time), recorder: recorder)
         let target = StartupTargetFacts(pid: 4123, bundle: URL(fileURLWithPath: "/synthetic/Codex.app"),
@@ -4062,6 +4120,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
         let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
             transport: transport, diagnostics: enabled ? { _, fields in diagnosticRecords.append(fields) } : nil,
+            onReady: { presentationPages.append(capture.snapshot().pageID ?? "") },
             now: world.time, sleep: {
                 world.advance($0)
                 if mode == "recheck-cancel-wait", world.recheckCount() > 0 { withUnsafeCurrentTask { $0?.cancel() } }
@@ -4076,6 +4135,8 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
             "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
             "currentPageID": observation.pageID ?? "", "installedAt": observation.installedAt ?? -1,
+            "completed": observation.status?.completed ?? false,
+            "presentationPages": presentationPages,
             "installReplyTimes": world.installReplyTimes,
             "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
             "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
@@ -4163,6 +4224,12 @@ private func startupPageReplacementChecks() async throws -> Int {
     func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
         guard condition() else { fatalError("FAILED: page replacement: \(label)") }; checks += 1
     }
+    let afterReady = try await startupReplacementScenario(stage: "status", mode: "after-ready")
+    expect(afterReady["recovered"] as? Bool == true && afterReady["currentPageID"] as? String == "page-b"
+        && afterReady["completed"] as? Bool == true,
+        "a playing page replaced after readiness must complete on the proven successor before handoff")
+    expect(afterReady["presentationPages"] as? [String] == ["page-a", "page-b"],
+        "presentation gets readiness before page replacement and the successor completes independently")
     func common(_ r: [String: Any]) {
         expect(r["lockAcquires"] as? Int == 1 && r["lockReleases"] as? Int == 1 && r["requestsLocked"] as? Bool == true,
                "one operation lock covers every generation")

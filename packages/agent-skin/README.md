@@ -6,6 +6,8 @@
 
 Codex 读取构建载荷时，`startup` 目录和 `install.js` 须为实体，载荷必须是非空、严格小于 24 MiB 的 UTF-8 普通文件；读取前后检测到身份或内容状态变化会报告 `asset-invalid`。资源根仍按原规则解析；这不能排除最后检查之后的替换，也不构成宿主或权利验收。
 
+Codex 冷启动在动画就绪时激活窗口，并在原有时限内继续观察播放；若宿主替换了尚未完成的主页面，只在原进程、端口和旧页面消失均核验通过后接续。自然完成、用户跳过或进入设置后结束接入；热启动仍只激活，不重播。此机制不常驻，也不恢复接入结束后的页面替换；壁纸与视觉结果需单独验收。
+
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。

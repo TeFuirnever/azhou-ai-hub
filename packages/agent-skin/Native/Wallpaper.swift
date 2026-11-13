@@ -1657,6 +1657,7 @@ struct StartupConnector {
     let now: () -> TimeInterval
     let sleep: (TimeInterval) async throws -> Void
     let diagnostics: ((String, [String: Any]) -> Void)?
+    let onReady: (() -> Void)?
 
     init(
         target: StartupTargetFacts,
@@ -1664,6 +1665,7 @@ struct StartupConnector {
         system: any StartupTargetSystem,
         transport: any StartupTransport,
         diagnostics: ((String, [String: Any]) -> Void)? = nil,
+        onReady: (() -> Void)? = nil,
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         sleep: @escaping (TimeInterval) async throws -> Void = { seconds in
             try await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
@@ -1674,6 +1676,7 @@ struct StartupConnector {
         self.system = system
         self.transport = transport
         self.diagnostics = diagnostics
+        self.onReady = onReady
         self.now = now
         self.sleep = sleep
     }
@@ -1908,6 +1911,7 @@ struct StartupConnector {
         guard !alreadyActive else { return .partial(reason: "startup-active") }
 
         var runID: Int?
+        var notifiedReady = false
         do {
             while now() < deadline {
                 try requireBudget(deadline)
@@ -1948,7 +1952,10 @@ struct StartupConnector {
                     return .skipped(runID: status.runID, beforeReady: status.completionBeforeReady ?? false)
                 }
                 if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
-                    return .ready(runID: status.runID)
+                    if !notifiedReady { notifiedReady = true; onReady?() }
+                    // A ready animation can still lose its startup page. Keep the
+                    // bounded replacement path alive until playback or user handoff.
+                    if status.completed || status.phase == "settings" { return .ready(runID: status.runID) }
                 }
                 try await sleep(min(0.1, max(0, deadline - now())))
             }
