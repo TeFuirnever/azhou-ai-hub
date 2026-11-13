@@ -1650,6 +1650,8 @@ struct NativeStartupStatus {
 }
 
 struct StartupConnector {
+    private static let controllerWatchdogDuration: TimeInterval = 25
+    private static let completionObservationReserve: TimeInterval = 1.5
     let target: StartupTargetFacts
     let expectedPort: Int
     let system: any StartupTargetSystem
@@ -1881,24 +1883,34 @@ struct StartupConnector {
 
     private func attachPage(_ selected: Page, payload: String, attempted: inout Set<String>,
                             stage: inout String, deadline: TimeInterval) async throws -> StartupOutcome {
-        try requireBudget(deadline)
-        stage = "inspect"
-        let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
-        try Task.checkCancellation()
-        guard let href = inspected["href"] as? String,
-              WallpaperValidation.mainPage(["type": "page", "url": href]),
-              let controllerPresent = Self.boolean(inspected["controllerPresent"]) else {
-            throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面在建立连接后已导航或不受支持。")
+        let admissionDeadline = deadline - Self.controllerWatchdogDuration - Self.completionObservationReserve
+        let href: String
+        while true {
+            try validateOwnership(deadline)
+            stage = "inspect"
+            let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
+            try Task.checkCancellation()
+            guard let inspectedHref = inspected["href"] as? String,
+                  WallpaperValidation.mainPage(["type": "page", "url": inspectedHref]),
+                  let controllerPresent = Self.boolean(inspected["controllerPresent"]),
+                  let shellReady = Self.boolean(inspected["shellReady"]) else {
+                throw StartupFailure(reason: "page-unsupported", message: "Codex 主页面在建立连接后已导航或不受支持。")
+            }
+            guard !controllerPresent else { return .partial(reason: "startup-active") }
+            try requireBudget(admissionDeadline)
+            if shellReady { href = inspectedHref; break }
+            try await sleep(min(0.15, max(0, admissionDeadline - now())))
         }
-        guard !controllerPresent else { return .partial(reason: "startup-active") }
         stage = "recheck"
         _ = try await requireCurrentPage(selected, deadline: deadline)
         // Every selected page keeps the original pre-install signature boundary,
         // after the final read-only page proof and before any payload is sent.
         try validateOwnership(deadline, signature: true)
+        let installTimeout = try StartupBudget.boundedTimeout(maximum: 10, stageDeadline: admissionDeadline,
+                                                              totalDeadline: deadline, now: now())
         guard attempted.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
         stage = "install"
-        let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: min(10, deadline - now()))
+        let install = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href), timeout: installTimeout)
         try Task.checkCancellation()
         guard let installed = Self.boolean(install["installed"]) else {
             throw StartupFailure(reason: "protocol-error", message: "启动载荷没有返回有效安装结果。")
@@ -1989,7 +2001,7 @@ struct StartupConnector {
     }
 
     static let inspectExpression = """
-    (() => { const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); return {href: location.href, controllerPresent: Boolean(d)}; })()
+    (() => { const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); const document = globalThis.document; const root = !d && document?.getElementById?.('root'); return {href: location.href, controllerPresent: Boolean(d), shellReady: Boolean(!d && document?.body && root?.querySelector?.('[data-app-shell-frame]') && root?.querySelector?.('[data-app-shell-main-surface],[data-app-shell-page-surface]'))}; })()
     """
     static let statusExpression = """
     (() => { const href = location.href; const d = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup'); if (!d || !("value" in d) || !d.value || typeof d.value.status !== "function") return {href, missing: true}; return {href, missing: false, status: d.value.status()}; })()

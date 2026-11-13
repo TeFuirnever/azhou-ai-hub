@@ -183,7 +183,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 |---|---|---|
 | `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; source version `0.9.0/build 41`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). No program redistribution grant is recorded. |
 
-Codex cold-start attachment remains active during playback so a verified replacement page can continue; it ends on completion, skip or entry into settings. Later page replacement and live visual acceptance remain outside that bounded handoff. See the [startup contract](packages/agent-skin/docs/testing.md).
+Codex cold starts wait for the supported page shell before playback, within the original startup deadline. A shell that arrives without enough time for the controller window is refused. Attachment remains active during playback so a verified replacement page can continue; it ends on completion, skip or entry into settings. Later page replacement and live visual acceptance remain outside that bounded handoff. See the [startup contract](packages/agent-skin/docs/testing.md).
 
 <sub>🦊 Foundation CLI, pstack and Agent Skin previews: generated illustrations, not from the Azhou Scenes pipeline and without a colour gate; maintainer visual approval recorded 2026-11-12.</sub>
 

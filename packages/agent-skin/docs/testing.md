@@ -37,6 +37,7 @@ python3 -B tools/test-unit-coverage.py
 | FT-DOCK | 将旧版固定到 Dock，升级后再查看标签和启动目标 | 标签符合 macOS 语言，只启动唯一新入口；旧固定项或缓存不能算新版本已通过 | 安装归属 UT；Dock 实际标签与目标需现场验收。没有入口时保留 pending，不能以空列表通过 |
 | FT-ICON-IDENTITY | 使用已批准的源图 SHA-256 构建，分别在预检前和预检后换入同尺寸的图 | 正确摘要生成经校验的暂存图，替换图被拒绝，原载荷保留 | preflight UT 与真实构建命令的隔离用例。实际 Dock 图案、标签和点击按 FT-DOCK 现场核对 |
 | FT-COLD | 用户完整退出官方宿主，再从阿舟入口启动 | 恰好一次冷启动、控制器就绪、动画结束和壁纸生效；没有第二个宿主 | 原生协议 UT、生成载荷测试；`test-installed-acceptance.py --cold-start` 加视觉审阅 |
+| FT-COLD-SHELL | 首个绑定页尚无支持的外壳；随后同页挂载外壳，或连接失效后出现可证明的唯一后继页 | 外壳未就绪时零安装；每页自行返回严格就绪字段。后继页沿用完整退休证明并等待自己的外壳；取消、未知字段、身份漂移和预算不足均不发送载荷 | `StartupNativeTests.swift` 的生产 connector/transport 夹具与编译后 inspect 表达式的 Node VM 用例；实机连续播放仍按 FT-COLD 验收 |
 | FT-COLD-REPLACE | Codex 接入期间在 inspect、安装回复、loading 或已 ready 的 playing 轮询阶段销毁初始主页面，并在同一进程和端口创建唯一新主页面 | 只有完整目标清单证实旧 target 已消失、进程启动身份及独占回环端口未变时才接续；每个 target 最多安装一次，新页必须自行提供安装回执与状态；旧页存活、歧义、普通协议错误、取消和已完成 run 不触发重播 | `StartupNativeTests.swift` 的生产 transport/connector/event capture 夹具、playing 重叠后换页并完成的回归、拒绝与取消矩阵；真实冷启仍按 FT-COLD 单独验收 |
 | FT-LIFECYCLE | Codex、DSH 正常完成；就绪前后页面移除浮层；设置浮层或 DSH 嵌入面板被移除 | 正常完成保持成功；浮层丢失撤销就绪并释放宿主；嵌入面板只清理和通知一次 | macOS Required 路径中的两宿主浏览器回归 |
 | FT-PLAYBACK-TIMEOUT | 动画已 ready 但播放未结束，25 秒 watchdog 到期；宿主导航已存在或随后挂载；点击恢复的外观入口 | 保留 overlay-timeout、completed=false 和空 completion；释放旧浮层，布局可用时显示同一入口；点击只创建新的 settings run，不重播。未 ready、素材失败或已释放的控制器仍拒绝；旧 frame、run 消息和 watchdog 不得影响新设置会话 | `startup.test.mjs` 的超时与迟到消息回归；`test-startup-browser.mjs` 的实际动画准备、watchdog 边界、入口顺序/几何、真实点击、取消及焦点/inert 清理。合成定时器不证明锁屏视觉或自然播放完成 |
@@ -70,6 +71,8 @@ python3 -B tools/test-installed-acceptance.py --cold-start --out .local/cold-acc
 实机报告明确标记 `unitCoverageInput: false`。Dock 没有固定入口、冷启动未执行或尚缺视觉审阅都不能输出全通过。报告包含当前检查结果和日志路径；历史截图或旧 build 记录不能替代当前安装的结果。
 
 共用生命周期改动走 FT-LIFECYCLE 两宿主检查。实机回执按宿主、运行模式和候选载荷分别记录。DSH Web 隔离配置能验证插件启动和设置交互，桌面模式另行验收。
+
+Codex 冷启动先只读轮询已绑定页面的支持外壳，再安装播放载荷，不使用固定时长作为就绪依据。谓词沿用壁纸适配合同：页面有 body，`#root` 内有 `[data-app-shell-frame]`，并有 `[data-app-shell-main-surface]` 或 `[data-app-shell-page-surface]`。这只证明当前支持的结构存在，不证明页面不会再次导航。等待期间继续核验进程、端口、取消和原截止时间；连接失效仍需完整退休证明，真正安装前仍须核对当前唯一主页面和签名。安装请求的超时从原 deadline 中扣除 26.5 秒，保留现有 25 秒控制器 watchdog 与 1.5 秒有界观察余量；最后一次异步证明或签名检查耗尽安装窗口时也拒绝发送载荷。余量不保证任意慢响应成功。外壳到达过晚按 `attach-timeout` 拒绝，不延长 45 秒接入或 60 秒总预算。门槛只改变播放前的等待；一旦开始，动画仍按原 12 秒结束，壁纸请求继续独立等待外壳、解码或应用，不以壁纸是否完成延长或重播动画。
 
 Codex 的主页面接续仅在本次尚未结束的接入操作内生效，始终使用原总 deadline 和同一进程操作锁，不增加常驻观察器。请求中断本身不证明页面已销毁；已核实 ready 的 `playing` 轮询中，若所选 target ID 和 socket 仍匹配且与候选主页面重叠，也只进入同一退休证明。首次选页、安装前、`settings` 和终态歧义仍拒绝；先经过暂态清单等待时，仍按同页证明规则中断，不借重叠恢复。Foundation WebSocket 握手的 `NSURLErrorDomain/-1011` 且实际 HTTP 状态为 404 或 500 时，仅允许进入替换证明，不以状态码认定页面已退休；401、其它状态和缺失响应仍拒绝；旧 target 从完整清单消失也可能滞后于连接失败，等待期间只做有界只读清单复核（进程与端口验证不变），旧 ID 尚在时不连接、安装或释放任何候选页，预算耗尽仍未消失则按 attach-timeout 拒绝。同一 target 的导航、控制器缺失或 run ID 漂移仍按中断处理。已观测到完成、跳过、失败或释放后不重新安装。安装发送总计不因换页清零，回复丢失仍保留未知安装状态；安装、就绪和跳过事件中的 `pageTargetID` 区分同一 PID 下重新从 run ID 1 开始的页面。确认就绪或已完成状态时，重新核对唯一当前 target；失败、超时和已释放状态直接结束，不进入换页接续。`playing` 就绪会通知原生窗口激活，但不结束接入；继续使用同一时限、进程锁和替换证明，直到自然完成、用户跳过或进入设置。进入设置即交还用户，不等待用户编辑，也不要求壁纸启用。播放始终未完成时按原预算超时，不延长 deadline；返回之后再发生的页面替换不属于本机制。动画控制器就绪和官方外壳可交互分别判断，不以固定等待或壁纸是否启用充当页面稳定证明。需要对单次真实冷启分类失败时，仅为该次启动设置环境变量 `AZHOU_STARTUP_DIAGNOSTICS=1`：启动器经既有日志通道追加有界且无内容的诊断记录（操作阶段、单调时间、页面 ID、原始传输错误 domain/code、存在时的 HTTP 状态、失败发生阶段与 pageConnectionLost 分类、复核清单的旧 ID 在场与合格主页面数）。该设施默认关闭，不改变公开失败类别，也不记录表达式、载荷或完整清单。
 
