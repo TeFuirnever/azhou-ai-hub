@@ -4,6 +4,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-13
+
 - Quoted the unquoted YAML `description` values in `skills/super-archify`, `skills/super-asd-ste100` and `skills/super-ask-azhou` that contained `: `, so `npx skills add TeFuirnever/azhou-ai-hub` can install all 12 public skills; `scripts/check_repository.py` now strictly parses every public `SKILL.md` frontmatter. `migrate-receipts` prints `nothing to migrate` and exits 0 when no legacy receipts directory exists. The 21 project-local `.agents/skills` packages set `metadata.internal: true` so they stay out of the public `npx skills add --list` catalog without changing local tooling. The Agent Skin Pet commands now document the Pillow prerequisite.
 
 - Published the Azhou skin so a fresh Agent Skin clone builds out of the box: the four build assets (`working.png`, `wallpaper-scene-q-v3.png`, `entry-avatar.png`, `app-icon/source.png`, about 6.5 MB) now live in tracked `packages/agent-skin/assets/azhou/` under CC BY-NC-ND 4.0 (`assets/azhou/LICENSE`, `NOTICE.md`), separate from the MIT code, with a root `TRADEMARKS.md` reserving the Azhou name, character and art. The resolver checks the ignored `assets/private/<name>` overlay first and falls back to the library, records each asset's source in the build marker, and no longer requires `scene.js` or `working-v2.png`; the Hub build planner accepts partial overlays and refuses a reused snapshot whose overlay differs from the approved plan; `tools/check-assets.py` validates both sets in `verify_packages.py`, and a new macOS CI job builds and verifies a fresh checkout with no overlay. Provenance records, prompts, raw source material and the Codex Pet spritesheet stay local. The Pet theme revision changes once because its inputs moved to the library path.
@@ -225,7 +227,8 @@ _No `v0.7.0` tag or GitHub release exists; these changes first shipped in the `v
 - Scoped CodeQL write permissions to the analysis job.
 - Secret scanning/push protection, dependency alerts and private vulnerability reporting are repository requirements.
 
-[Unreleased]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v0.12.0...v1.0.0
 [0.12.0]: https://github.com/TeFuirnever/azhou-ai-hub/compare/v0.11.0...v0.12.0
