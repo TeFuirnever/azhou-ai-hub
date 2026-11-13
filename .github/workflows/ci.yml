@@ -15,6 +15,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Docs-only fast-lane detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed paths
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -e
+          # Manual runs and any diff we cannot resolve take the full gate.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] \
+             || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # --no-renames: with rename detection a code file renamed into
+          # docs/ would report only the destination and hide the removal,
+          # so Native/App.swift -> docs/App.swift would wrongly classify
+          # as docs-only and skip the leg that compiles it.
+          changed="$(git diff --name-only --no-renames "${BASE_SHA}...HEAD")"
+          if [ -z "$changed" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Docs-only: every changed path is Markdown, docs/ or evidence/.
+          # The Ubuntu gates (policy, unit, benchmarks, pstack) always run;
+          # only the heavy platform legs below may skip.
+          non_docs="$(printf '%s\n' "$changed" | grep -v -E '(^|/)docs/|(^|/)evidence/|\.md$' || true)"
+          if [ -n "$non_docs" ]; then
+            printf 'Non-docs changed paths:\n%s\n' "$non_docs"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+
   tests:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
@@ -84,6 +129,8 @@ jobs:
 
   agent-skin-macos:
     name: Startup and Pet validation
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 20
     permissions:
@@ -129,6 +176,8 @@ jobs:
 
   agent-skin-unit-coverage:
     name: Agent Skin full production UT coverage
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -217,7 +266,10 @@ jobs:
     name: Verify on Windows
     # Enforced Windows leg of the deterministic gate. Flipped to Required by
     # win-13 after the last Windows-only divergences were root-caused and
-    # fixed (evidence/windows-ci-receipt-2026-09-09.md).
+    # fixed (evidence/windows-ci-receipt-2026-09-09.md). Skipped only for
+    # docs-only changes; the aggregate job accepts that skip explicitly.
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -240,6 +292,7 @@ jobs:
     name: Required
     if: always()
     needs:
+      - changes
       - tests
       - benchmarks
       - policy
@@ -250,6 +303,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
+      CHANGES_RESULT: ${{ needs.changes.result }}
       TESTS_RESULT: ${{ needs.tests.result }}
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
@@ -260,10 +314,15 @@ jobs:
     steps:
       - name: Require every CI gate
         run: |
+          # The fast-lane detector itself must always have succeeded; a
+          # failed detector must never read as an all-clear.
+          test "$CHANGES_RESULT" = "success"
           test "$TESTS_RESULT" = "success"
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
-          test "$WINDOWS_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
-          test "$ANIMATION_RESULT" = "success"
-          test "$AGENT_SKIN_COVERAGE_RESULT" = "success"
+          # Docs-only changes skip the three heavy platform legs; an explicit
+          # skip is a pass, any other non-success still fails the aggregate.
+          case "$WINDOWS_RESULT" in success|skipped) ;; *) exit 1;; esac
+          case "$ANIMATION_RESULT" in success|skipped) ;; *) exit 1;; esac
+          case "$AGENT_SKIN_COVERAGE_RESULT" in success|skipped) ;; *) exit 1;; esac
