@@ -6,12 +6,17 @@ const show = value => { status.textContent = typeof value === 'string' ? value :
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 let generation = 0;
 
+// The optional local overlay wins; otherwise the published Azhou library serves the image.
+async function fetchMaterial(filename) {
+  const name = encodeURIComponent(filename);
+  const overlay = await fetch('../assets/private/' + name);
+  return overlay.ok ? overlay : fetch('../assets/azhou/' + name);
+}
+
 async function payloadForPreview() {
   const filename = new URL(location.href).searchParams.get('image') || 'wallpaper-scene-q-v3.png';
   ensure(/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:png|webp)$/i.test(filename), '无效的本地素材文件名');
-  const [imageResponse, cssResponse] = await Promise.all([
-    fetch('../assets/private/' + encodeURIComponent(filename)), fetch('./wallpaper.css'),
-  ]);
+  const [imageResponse, cssResponse] = await Promise.all([fetchMaterial(filename), fetch('./wallpaper.css')]);
   ensure(imageResponse.ok, '缺少本地阿舟素材：' + filename);
   ensure(cssResponse.ok, '无法读取壁纸样式');
   const bytes = await imageResponse.arrayBuffer();

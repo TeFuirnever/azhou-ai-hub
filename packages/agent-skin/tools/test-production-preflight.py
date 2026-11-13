@@ -86,7 +86,7 @@ class BuildPreflightTests(unittest.TestCase):
         with run_patch, output_patch as check_output:
             theme = self.module.preflight(self.root)
         self.assertEqual(theme["identity"]["installationName"], "阿舟 AI 实验室.app")
-        self.assertEqual(len(self.run_calls), 9)
+        self.assertEqual(len(self.run_calls), 7)
         self.assertTrue(all(cwd == self.root for _, cwd in self.run_calls))
         self.assertTrue(all(command[:4] == ["git", "check-ignore", "-q", "--"]
                             for command, _ in self.run_calls))
@@ -316,8 +316,23 @@ class BuildPreflightTests(unittest.TestCase):
         self.icon_source.unlink()
         run_patch, output_patch = self.fake_git()
         with mock.patch.object(self.module, "load_theme", return_value=theme), run_patch, output_patch:
-            with self.assertRaisesRegex(SystemExit, "实体私有图标源图"):
+            with self.assertRaisesRegex(SystemExit, "缺少阿舟素材 app-icon/source.png"):
                 self.module.preflight(self.root)
+
+    def test_icon_path_prefers_the_local_overlay_over_the_library(self):
+        run_patch, output_patch = self.fake_git()
+        stdout = io.StringIO()
+        with run_patch, output_patch, contextlib.redirect_stdout(stdout):
+            self.assertEqual(self.module.main(self.root, argv=["--icon-path"]), 0)
+        self.assertEqual(stdout.getvalue().strip(), str(self.icon_source))
+        overlay = self.root / "assets/private/app-icon/source.png"
+        overlay.parent.mkdir(parents=True, exist_ok=True)
+        overlay.write_bytes(png_header(2048, 2048))
+        run_patch, output_patch = self.fake_git()
+        stdout = io.StringIO()
+        with run_patch, output_patch, contextlib.redirect_stdout(stdout):
+            self.assertEqual(self.module.main(self.root, argv=["--icon-path"]), 0)
+        self.assertEqual(stdout.getvalue().strip(), str(overlay))
 
 
 if __name__ == "__main__":

@@ -548,7 +548,8 @@ class RepositoryPolicyTest(unittest.TestCase):
                 "packages/agent-skin/assets/private/fixture.png",
             )
             public_fixture = "packages/agent-skin/docs/fixtures/icon.png"
-            for relative in (*private_assets, public_fixture):
+            published_asset = "packages/agent-skin/assets/azhou/working.png"
+            for relative in (*private_assets, public_fixture, published_asset):
                 asset = root / relative
                 asset.parent.mkdir(parents=True, exist_ok=True)
                 asset.write_bytes(b"synthetic artwork")
@@ -558,7 +559,7 @@ class RepositoryPolicyTest(unittest.TestCase):
 
             self.assertEqual([], artwork_errors())
             subprocess.run(["git", "add", "-f", "--", *private_assets], cwd=root, check=True)
-            subprocess.run(["git", "add", "--", public_fixture], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", public_fixture, published_asset], cwd=root, check=True)
             # A worktree deletion does not remove a previously staged entry.
             (root / private_assets[1]).unlink()
             self.assertCountEqual(

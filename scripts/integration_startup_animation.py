@@ -57,7 +57,11 @@ _VERSIONED_DIAGNOSTIC_EVENTS = frozenset({
     "wallpaper-helper-complete", "wallpaper-helper-failed", "wallpaper-result",
     "wallpaper-port-unavailable",
 })
+# Inputs of builds before 0.9.0, which also embedded scene.js from the overlay.
 PRIVATE_FILES = ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png")
+# 0.9.0+ resolves each asset from the optional assets/private overlay, then assets/azhou.
+ASSET_FILES = ("working.png", "wallpaper-scene-q-v3.png")
+ASSET_BASES = ("assets/private", "assets/azhou")
 REGISTRY_IDS = ("local.azhou.codex-startup", "local.aemeath.startup", "local.aemeath.extension")
 LSREGISTER = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
@@ -93,7 +97,7 @@ def _private_files(version: str, source: Path | None = None) -> tuple[str, ...]:
         return PRIVATE_FILES
     config = source / "theme-config.json" if source is not None else None
     if config is None or not config.exists():
-        return PRIVATE_FILES + ("entry-avatar.png",)
+        return ASSET_FILES + ("app-icon/source.png", "entry-avatar.png")
     try:
         identity = json.loads(config.read_text(encoding="utf-8"))["identity"]
         selected = []
@@ -103,12 +107,12 @@ def _private_files(version: str, source: Path | None = None) -> tuple[str, ...]:
                 raise ValueError(key)
             path = PurePosixPath(value)
             if (path.is_absolute() or path.as_posix() != value or len(path.parts) < 3
-                    or path.parts[:2] != ("assets", "private") or any(p in ("", ".", "..") for p in path.parts)):
+                    or "/".join(path.parts[:2]) not in ASSET_BASES or any(p in ("", ".", "..") for p in path.parts)):
                 raise ValueError(key)
             selected.append(PurePosixPath(*path.parts[2:]).as_posix())
         if selected[0] == selected[1]:
             raise ValueError("identity images must be distinct")
-        return tuple(dict.fromkeys((*PRIVATE_FILES[:3], *selected)))
+        return tuple(dict.fromkeys((*ASSET_FILES, *selected)))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise common.IntegrationError(f"invalid theme private identity inputs: {exc}") from exc
 
@@ -134,10 +138,10 @@ def _verify_packaged_sources(bundle: Path, native_root: Path, info: dict[str, An
             if packaged_source.exists() or packaged_source.is_symlink():
                 raise common.IntegrationError(f"private startup source must not be copied into the web payload: {name}")
         for name in _private_files(version, native_root):
-            relative = "assets/private/" + name
-            if inputs.get(relative) != _hash(native_root / relative):
-                raise common.IntegrationError(f"built private input differs from its frozen source: {name}")
-        return "native identity, marker, signature, icon, wallpaper, startup defaults and private source hashes"
+            recorded = [base + "/" + name for base in ASSET_BASES if base + "/" + name in inputs]
+            if len(recorded) != 1 or inputs[recorded[0]] != _hash(native_root / recorded[0]):
+                raise common.IntegrationError(f"built asset input differs from its frozen source: {name}")
+        return "native identity, marker, signature, icon, wallpaper, startup defaults and asset source hashes"
 
     for name in ("index.html", "style.css", "animation.js", "assets/private/working.png", "assets/private/scene.js"):
         if _hash(resources / "web" / name) != inputs.get(name):
@@ -174,24 +178,30 @@ def _successful(result: dict[str, Any]) -> None:
         raise common.IntegrationError(f"native command failed ({result['returncode']}): {result['stderr'][-3000:]} {result['stdout'][-3000:]}")
 
 
-def build_plan(source: Path, workspace: Path, private_assets: Path, *, hub_root: Path = ROOT) -> dict[str, Any]:
+def build_plan(source: Path, workspace: Path, private_assets: Path | None = None, *,
+               hub_root: Path = ROOT) -> dict[str, Any]:
+    """Plan an isolated build; ``private_assets`` is an optional custom-skin overlay."""
     origin = common.inspect_source(COMPONENT, source, hub_root=hub_root)
     workspace = _directory(workspace, exists=False)
     if workspace == Path(origin["source"]) or Path(origin["source"]) in workspace.parents:
         raise common.IntegrationError("build workspace must be outside the read-only source")
-    assets = _private_manifest(private_assets, _private_files(origin["version"], Path(origin["source"])))
+    assets = ({} if private_assets is None
+              else _private_manifest(private_assets, _private_files(origin["version"], Path(origin["source"]))))
     lock = common.load_lock(COMPONENT, hub_root=hub_root)
     snapshot = state.state_path(workspace, "hub", "sources", COMPONENT, common.plan_digest(lock))
-    return _plan("build", source=origin, workspace=str(workspace), private_assets=str(private_assets),
+    return _plan("build", source=origin, workspace=str(workspace),
+                 private_assets=None if private_assets is None else str(private_assets),
                  private_inputs=assets, snapshot=str(snapshot),
                  output=str(snapshot / ".build/azhou-payload"),
                  command=["bash", "tools/build-macos.sh"],
                  scope="isolated build only; no user Applications write, registration or host launch",
-                 private_distribution="private inputs and generated outputs stay in ignored local state",
+                 private_distribution=("assets/azhou ships in the snapshot; an optional overlay and generated "
+                                       "outputs stay in ignored local state"),
                  git_metadata="a new empty local Git database is used only for the native ignore checks; it is not source history")
 
 
-def build(source: Path, workspace: Path, private_assets: Path, plan_id: str, *, hub_root: Path = ROOT) -> dict[str, Any]:
+def build(source: Path, workspace: Path, private_assets: Path | None, plan_id: str, *,
+          hub_root: Path = ROOT) -> dict[str, Any]:
     plan = build_plan(source, workspace, private_assets, hub_root=hub_root)
     _approval(plan, plan_id)
     _mac()
@@ -215,7 +225,8 @@ def build(source: Path, workspace: Path, private_assets: Path, plan_id: str, *, 
             with target.open("xb") as handle:
                 handle.write(data)
             target.chmod(0o600)
-    if _private_manifest(Path(private_assets), tuple(plan["private_inputs"])) != plan["private_inputs"]:
+    if private_assets is not None and (_private_manifest(Path(private_assets), tuple(plan["private_inputs"]))
+                                       != plan["private_inputs"]):
         raise common.IntegrationError("private inputs changed while preparing the isolated build")
     common.verify_snapshot(COMPONENT, snapshot, hub_root=hub_root)
     if (snapshot / ".git").is_symlink():
@@ -876,7 +887,8 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
         if name in ("build", "test-install", "test-uninstall"):
             command.add_argument("--workspace", type=Path, required=True)
         if name == "build":
-            command.add_argument("--private-assets", type=Path, required=True)
+            command.add_argument("--private-assets", type=Path,
+                                 help="optional custom-skin overlay; defaults to the published assets/azhou")
         if name == "test-install":
             command.add_argument("--payload", type=Path, required=True)
         if name in ("inspect", "run"):

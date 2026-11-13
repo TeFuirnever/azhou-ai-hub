@@ -11,12 +11,8 @@ if [[ -n "${AZHOU_BUILD_SYSTEM_BIN:-}" && ! -d "$system_bin" ]]; then
   printf '%s\n' 'AZHOU_BUILD_SYSTEM_BIN must name an existing directory.' >&2
   exit 1
 fi
-if [[ ! -d assets/private || ! -f assets/private/working.png || ! -f assets/private/scene.js || ! -f assets/private/wallpaper-scene-q-v3.png ]]; then
-  printf '%s\n' '缺少本地阿舟素材（working.png、scene.js、wallpaper-scene-q-v3.png）。请先准备本地私有素材。' >&2
-  exit 1
-fi
 theme_json="$(python3 tools/build-preflight.py)"
-theme_icon_input="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["iconInput"])')"
+theme_icon_source="$(python3 tools/build-preflight.py --icon-path)"
 theme_installation_name="$(THEME_JSON="$theme_json" python3 -c 'import json,os; print(json.loads(os.environ["THEME_JSON"])["identity"]["installationName"])')"
 if [[ -z "${_AZHOU_BUILD_LOCK_FD:-}" ]]; then
   exec python3 tools/build-lock.py --run
@@ -52,7 +48,7 @@ python3 tools/verify-artifacts.py --write-marker "$bundle"
 "$system_bin/xcrun" --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache Native/InstallRegistry.swift Native/InstallRegistryCore.swift -o "$stage_root/azhou-install-registry" -framework AppKit -framework CoreServices
 python3 tools/build-wallpaper.py --bundle "$bundle"
 python3 tools/build-startup.py --bundle "$bundle"
-icon_source="$PWD/$theme_icon_input"
+icon_source="$theme_icon_source"
 if [[ -n "${AZHOU_APPROVED_ICON_SHA256:-}" ]]; then
   icon_source="$stage_root/approved-icon.png"
 fi

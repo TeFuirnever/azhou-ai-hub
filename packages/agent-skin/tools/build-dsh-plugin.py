@@ -182,7 +182,7 @@ def _payload_body(payload: str) -> str:
 
 
 def _render_icon(root: Path, artifacts, theme: dict) -> bytes:
-    source = artifacts._private_input(root, theme['identity']['iconInput'], 'identity.iconInput', required=True)
+    source = artifacts._asset_input(root, theme['identity']['iconInput'], 'identity.iconInput')
     sips = shutil.which('sips')
     if sips is None:
         raise RuntimeError('DSH plugin icon generation requires the macOS sips tool.')

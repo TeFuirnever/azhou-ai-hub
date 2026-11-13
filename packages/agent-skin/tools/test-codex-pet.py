@@ -2708,7 +2708,7 @@ class PetSafetyTests(unittest.TestCase):
     def test_planned_empty_stage_directories_can_be_cleaned(self):
         state = PET.state_dir(self.project)
         stage = state / (".stage-" + "8" * 32)
-        (stage / "inputs/assets/private").mkdir(parents=True)
+        (stage / "inputs/assets/azhou").mkdir(parents=True)
         planned = {name: b"planned synthetic bytes" for name in PET.stage_file_names("snapshot")}
         (stage / "inputs/style.css").write_bytes(planned["inputs/style.css"])
         PET.atomic_json(state / "package-journal.json", PET.stage_journal(self.project, stage, "snapshot", planned, None))
