@@ -49,10 +49,13 @@ export async function installRenderer(offered) {
   directory.footerPlate = directory.threadFooter + ' > ' + generatedLayer('_background_')
     + ',' + directory.threadFooter + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-');
   directory.stickyShade = directory.scrollTrack + ' .pointer-events-none.sticky.bottom-0';
-  directory.footerFade = directory.stickyShade + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_');
+  directory.footerFade = directory.stickyShade + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_')
+    + ',' + directory.stickyShade + ' > [aria-hidden="true"].pointer-events-none'
+    + generatedLayer('background-') + generatedLayer('fade-');
   directory.topFade = '[data-app-shell-main-surface] ' + generatedLayer('_MainContentTopFade_');
   directory.scrollLayers = directory.scrollTrack + ' :is('
-    + generatedLayer('_background_') + ',' + generatedLayer('_fade_') + ')';
+    + generatedLayer('_background_') + ',' + generatedLayer('_fade_') + ','
+    + generatedLayer('background-') + ',' + generatedLayer('fade-') + ')';
 
   const deny = reason => Object.assign(new Error('AZHOU_WALLPAPER: ' + reason), {
     code: reason.split(':', 1)[0],
