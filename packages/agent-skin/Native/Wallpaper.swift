@@ -1810,7 +1810,7 @@ struct StartupConnector {
     private enum PageProof { case current, refreshed, changed }
 
     private func requireCurrentPage(_ selected: Page, deadline: TimeInterval,
-                                    retryTransient: Bool = false) async throws -> PageProof {
+                                    retryTransient: Bool = false, recoverOverlap: Bool = false) async throws -> PageProof {
         var waited = false
         while true {
             try validateOwnership(deadline)
@@ -1824,6 +1824,12 @@ struct StartupConnector {
                 continue
             }
             try validateOwnership(deadline)
+            let main = entries.filter(WallpaperValidation.mainPage)
+            if recoverOverlap, !waited, main.count > 1,
+               let entry = main.first(where: { $0["id"] as? String == selected.id }),
+               let current = try? page(entry), current.socket == selected.socket {
+                throw StartupFailure(reason: "protocol-error", message: "播放中的主页面与候选页面重叠，必须先证明旧页面已退休。", pageConnectionLost: true)
+            }
             if let entry = try mainPages(entries).first {
                 let current = try page(entry)
                 if current.id == selected.id, current.socket == selected.socket { return waited ? .refreshed : .current }
@@ -1933,7 +1939,8 @@ struct StartupConnector {
                 if status.completed || status.ready {
                     stage = "recheck"
                     do {
-                        let proof = try await requireCurrentPage(selected, deadline: deadline, retryTransient: !status.completed)
+                        let proof = try await requireCurrentPage(selected, deadline: deadline,
+                                                                retryTransient: !status.completed, recoverOverlap: status.phase == "playing")
                         if proof == .changed { return .partial(reason: "startup-interrupted") }
                         // Re-read the same bound controller and run after any wait;
                         // the earlier ready snapshot may now be terminal or stale.
