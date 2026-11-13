@@ -1,6 +1,8 @@
 ---
 name: dsh-ci-test-reliability
 description: "设计、审查或诊断在 CI 并发、共享宿主资源、全局状态、时钟、跨平台与异步清理下不稳定的测试和夹具。"
+metadata:
+  internal: true
 ---
 
 # dsh-ci-test-reliability

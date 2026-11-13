@@ -15,6 +15,10 @@ from scripts.check_repository import (
     check_chat_presentation_examples,
     check_command_surface,
     check_fidelity_axis, check_azhou_description_brand,
+    check_internal_skill_metadata,
+    check_skill_frontmatter_yaml,
+    parse_skill_frontmatter,
+    SkillFrontmatterError,
     check_integration_provenance_versions,
     check_invocation_axis,
     check_legacy_broadcast_delimiter,
@@ -348,6 +352,65 @@ class AzhouDescriptionBrandTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual([], check_azhou_description_brand(root))
+
+
+class SkillFrontmatterYamlTest(unittest.TestCase):
+    def test_repository_skill_frontmatter_is_strict_yaml(self) -> None:
+        self.assertEqual([], check_skill_frontmatter_yaml(public_files(ROOT), ROOT))
+        self.assertEqual([], check_internal_skill_metadata(ROOT))
+
+    def test_unquoted_colon_space_in_description_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-probe" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: super-probe\ndescription: Triggers: one, two\ninvocation: both\n---\n# Probe\n",
+                encoding="utf-8",
+            )
+            errors = check_skill_frontmatter_yaml([skill], root)
+            self.assertEqual(1, len(errors), errors)
+            self.assertIn("skill frontmatter is not valid YAML: skills/super-probe/SKILL.md", errors[0])
+            self.assertIn("': '", errors[0])
+
+    def test_quoted_description_with_colon_space_parses(self) -> None:
+        text = (
+            "---\n"
+            "name: super-probe\n"
+            'description: "Triggers: one, two"\n'
+            "invocation: both\n"
+            "---\n# Probe\n"
+        )
+        parsed = parse_skill_frontmatter(text)
+        self.assertEqual("Triggers: one, two", parsed["description"])
+        self.assertEqual("super-probe", parsed["name"])
+        self.assertEqual("both", parsed["invocation"])
+
+    def test_project_local_skill_without_internal_metadata_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = ".agents/skills/agent-experience/SKILL.md"
+            skill = root / relative
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                '---\nname: agent-experience\ndescription: "Local tool skill."\n---\n# Probe\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                [f"project-local skill must set metadata.internal: {relative}"],
+                check_internal_skill_metadata(root),
+            )
+            skill.write_text(
+                "---\nname: agent-experience\ndescription: \"Local tool skill.\"\n"
+                "metadata:\n  internal: true\n---\n# Probe\n",
+                encoding="utf-8",
+            )
+            self.assertEqual([], check_internal_skill_metadata(root))
+            self.assertTrue(parse_skill_frontmatter(skill.read_text(encoding="utf-8"))["metadata"]["internal"])
+
+    def test_missing_frontmatter_fails_closed(self) -> None:
+        with self.assertRaises(SkillFrontmatterError):
+            parse_skill_frontmatter("# No frontmatter\n")
 
 
 class RenameResidueTest(unittest.TestCase):

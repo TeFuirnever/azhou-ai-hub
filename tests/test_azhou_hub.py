@@ -1242,6 +1242,29 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(0, result, repeated)
             self.assertEqual("already-current", repeated["status"])
 
+    def test_migrate_receipts_with_no_legacy_directory_is_a_clean_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            target.mkdir()
+            result, payload = self._json_main(
+                ["migrate-receipts", "--target", str(target), "--json"],
+                root=root,
+            )
+            self.assertEqual(0, result, payload)
+            self.assertEqual("nothing-to-migrate", payload["status"])
+            self.assertFalse(payload["applied"])
+            self.assertEqual("nothing to migrate", payload["message"])
+            self.assertFalse((target / ".azhou-ai-hub").exists())
+
+            stream = io.StringIO()
+            with redirect_stdout(stream):
+                code = azhou_hub.main(
+                    ["migrate-receipts", "--target", str(target), "--apply", "--plan-id", "unused"],
+                    root=root,
+                )
+            self.assertEqual(0, code)
+            self.assertEqual("nothing to migrate", stream.getvalue().strip())
+
     def test_receipt_write_failure_rolls_back_managed_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)

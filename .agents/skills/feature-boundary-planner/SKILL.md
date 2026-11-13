@@ -1,6 +1,8 @@
 ---
 name: feature-boundary-planner
 description: "分析功能变更会影响哪些入口、共享组件和状态所有者，澄清产品边界并规划状态组合、验收案例或实现交接。"
+metadata:
+  internal: true
 ---
 
 # feature-boundary-planner

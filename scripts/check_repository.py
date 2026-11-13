@@ -112,6 +112,271 @@ INVOCATION_CLASSES = (
     "both",
 )
 SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
+_YAML_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_YAML_BLOCK_HEADER = re.compile(r"^([|>])([+-]?)(\d*)$")
+_YAML_DOUBLE_ESCAPES = {
+    "\\": "\\",
+    '"': '"',
+    "/": "/",
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "0": "\0",
+    "a": "\a",
+    "b": "\b",
+    "e": "\x1b",
+    "f": "\f",
+    "v": "\v",
+    " ": " ",
+    "N": "\u0085",
+    "_": "\u00a0",
+    "L": "\u2028",
+    "P": "\u2029",
+}
+
+
+class SkillFrontmatterError(ValueError):
+    """Raised when a SKILL.md YAML frontmatter block is missing or invalid."""
+
+
+def parse_skill_frontmatter(text: str) -> dict[str, object]:
+    """Parse SKILL.md YAML frontmatter with a dependency-free strict subset parser.
+
+    The gate accepts the shapes this repository ships: plain or quoted scalars,
+    one-level nested mappings, and folded or literal block scalars. Unquoted
+    scalars that contain ``: `` are rejected because strict YAML parsers and
+    ``npx skills add`` treat them as nested mappings and skip the skill.
+    """
+    match = SKILL_FRONTMATTER_PATTERN.match(text)
+    if match is None:
+        raise SkillFrontmatterError("skill frontmatter is missing or unclosed")
+    return _parse_simple_yaml_mapping(match.group("frontmatter"))
+
+
+def _parse_simple_yaml_mapping(source: str) -> dict[str, object]:
+    lines = source.splitlines()
+    mapping: dict[str, object] = {}
+    index = 0
+
+    def peek_indent(offset: int) -> int | None:
+        while offset < len(lines):
+            candidate = lines[offset]
+            if not candidate.strip() or candidate.lstrip().startswith("#"):
+                offset += 1
+                continue
+            if "\t" in candidate[: len(candidate) - len(candidate.lstrip(" "))]:
+                raise SkillFrontmatterError("YAML frontmatter cannot use tab indentation")
+            return len(candidate) - len(candidate.lstrip(" "))
+        return None
+
+    def parse_block_scalar(header: str, content_indent: int, start: int) -> tuple[object, int]:
+        kind, chomp, explicit = _YAML_BLOCK_HEADER.match(header).groups()
+        collected: list[str] = []
+        offset = start
+        while offset < len(lines):
+            line = lines[offset]
+            if line.strip():
+                if "\t" in line[: len(line) - len(line.lstrip(" "))]:
+                    raise SkillFrontmatterError("YAML frontmatter cannot use tab indentation")
+                indent = len(line) - len(line.lstrip(" "))
+                if indent < content_indent:
+                    break
+                collected.append(line[content_indent:])
+            else:
+                collected.append("")
+            offset += 1
+        if kind == ">":
+            folded: list[str] = []
+            paragraph: list[str] = []
+            for piece in collected:
+                if piece == "":
+                    if paragraph:
+                        folded.append(" ".join(paragraph))
+                        paragraph = []
+                    folded.append("")
+                else:
+                    paragraph.append(piece)
+            if paragraph:
+                folded.append(" ".join(paragraph))
+            value = "\n".join(folded)
+        else:
+            value = "\n".join(collected)
+        if chomp == "-":
+            value = value.rstrip("\n")
+        elif chomp == "+":
+            if collected and not value.endswith("\n"):
+                value += "\n"
+        else:
+            # YAML clip: one trailing newline when the block has content.
+            value = value.rstrip("\n")
+            if collected:
+                value += "\n"
+        return value, offset
+
+    def parse_scalar(raw: str, *, location: str) -> object:
+        raw = raw.strip()
+        if raw.startswith("#"):
+            return None
+        if " #" in raw:
+            raw = raw[: raw.index(" #")].rstrip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+            if raw[0] == "'":
+                return raw[1:-1].replace("''", "'")
+            body = raw[1:-1]
+            decoded: list[str] = []
+            cursor = 0
+            while cursor < len(body):
+                char = body[cursor]
+                if char != "\\":
+                    decoded.append(char)
+                    cursor += 1
+                    continue
+                cursor += 1
+                if cursor >= len(body):
+                    raise SkillFrontmatterError(f"{location}: unterminated escape in double-quoted scalar")
+                escape = body[cursor]
+                if escape in _YAML_DOUBLE_ESCAPES:
+                    decoded.append(_YAML_DOUBLE_ESCAPES[escape])
+                    cursor += 1
+                    continue
+                if escape in {"x", "u", "U"}:
+                    width = {"x": 2, "u": 4, "U": 8}[escape]
+                    digits = body[cursor + 1 : cursor + 1 + width]
+                    if len(digits) != width or any(part not in "0123456789abcdefABCDEF" for part in digits):
+                        raise SkillFrontmatterError(f"{location}: invalid Unicode escape in double-quoted scalar")
+                    decoded.append(chr(int(digits, 16)))
+                    cursor += 1 + width
+                    continue
+                raise SkillFrontmatterError(f"{location}: unsupported escape \\{escape} in double-quoted scalar")
+            return "".join(decoded)
+        if raw in {"true", "True", "yes", "Yes", "on", "On"}:
+            return True
+        if raw in {"false", "False", "no", "No", "off", "Off"}:
+            return False
+        if raw in {"null", "Null", "NULL", "~", ""}:
+            return None
+        if raw.startswith(("[", "{")):
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise SkillFrontmatterError(
+                    f"{location}: flow collection is not valid JSON-compatible YAML: {exc}"
+                ) from exc
+        if raw.startswith((":", "&", "*", "!", "%", "@", "`", ",", "?", "|", ">")):
+            raise SkillFrontmatterError(f"{location}: unquoted YAML scalar starts with an indicator; quote the value")
+        if ": " in raw or raw.endswith(":"):
+            raise SkillFrontmatterError(
+                f"{location}: unquoted YAML scalar contains ': ', which strict parsers reject; quote the value"
+            )
+        if raw.startswith("- "):
+            raise SkillFrontmatterError(f"{location}: YAML lists in skill frontmatter are not supported")
+        return raw
+
+    while index < len(lines):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            index += 1
+            continue
+        if "\t" in line[: len(line) - len(line.lstrip(" "))]:
+            raise SkillFrontmatterError("YAML frontmatter cannot use tab indentation")
+        indent = len(line) - len(line.lstrip(" "))
+        if indent != 0:
+            raise SkillFrontmatterError(f"unexpected indented frontmatter line: {line.strip()}")
+        stripped = line.strip()
+        if ":" not in stripped:
+            raise SkillFrontmatterError(f"YAML frontmatter line is not a mapping entry: {stripped}")
+        key, _, remainder = stripped.partition(":")
+        key = key.strip()
+        if not _YAML_KEY_PATTERN.fullmatch(key):
+            raise SkillFrontmatterError(f"invalid YAML frontmatter key: {key}")
+        if key in mapping:
+            raise SkillFrontmatterError(f"duplicate YAML frontmatter key: {key}")
+        remainder = remainder.strip()
+        index += 1
+        if _YAML_BLOCK_HEADER.fullmatch(remainder):
+            next_indent = peek_indent(index)
+            if next_indent is None or next_indent == 0:
+                raise SkillFrontmatterError(f"{key}: block scalar is missing indented content")
+            mapping[key], index = parse_block_scalar(remainder, next_indent, index)
+            continue
+        if remainder == "" or remainder.startswith("#"):
+            next_indent = peek_indent(index)
+            if next_indent is None or next_indent == 0:
+                mapping[key] = None
+                continue
+            nested: dict[str, object] = {}
+            while True:
+                child_indent = peek_indent(index)
+                if child_indent is None or child_indent < next_indent:
+                    break
+                if child_indent > next_indent:
+                    raise SkillFrontmatterError(f"{key}: nested mappings deeper than one level are not supported")
+                # skip blanks already handled by peek
+                while index < len(lines) and (not lines[index].strip() or lines[index].lstrip().startswith("#")):
+                    index += 1
+                child_line = lines[index].strip()
+                if ":" not in child_line:
+                    raise SkillFrontmatterError(f"{key}: nested line is not a mapping entry: {child_line}")
+                child_key, _, child_remainder = child_line.partition(":")
+                child_key = child_key.strip()
+                if not _YAML_KEY_PATTERN.fullmatch(child_key):
+                    raise SkillFrontmatterError(f"{key}: invalid nested key: {child_key}")
+                if child_key in nested:
+                    raise SkillFrontmatterError(f"{key}: duplicate nested key: {child_key}")
+                child_remainder = child_remainder.strip()
+                index += 1
+                if child_remainder == "" or child_remainder.startswith("#") or _YAML_BLOCK_HEADER.fullmatch(child_remainder):
+                    raise SkillFrontmatterError(f"{key}.{child_key}: further nesting is not supported")
+                nested[child_key] = parse_scalar(child_remainder, location=f"{key}.{child_key}")
+            mapping[key] = nested
+            continue
+        mapping[key] = parse_scalar(remainder, location=key)
+    return mapping
+
+
+def _is_internal_skill_metadata(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    marker = value.get("internal")
+    return marker is True or marker in {"true", "1"}
+
+
+def check_skill_frontmatter_yaml(files: list[Path], root: Path) -> list[str]:
+    """Fail when any public SKILL.md frontmatter is not strict YAML."""
+    errors: list[str] = []
+    for path in files:
+        if path.name != "SKILL.md":
+            continue
+        relative = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            errors.append(f"cannot read skill frontmatter {relative}: {exc}")
+            continue
+        try:
+            parse_skill_frontmatter(text)
+        except SkillFrontmatterError as exc:
+            errors.append(f"skill frontmatter is not valid YAML: {relative}: {exc}")
+    return errors
+
+
+def check_internal_skill_metadata(root: Path) -> list[str]:
+    """Keep project-local .agents skills hidden from the public skills listing."""
+    errors: list[str] = []
+    for relative in sorted(PROJECT_LOCAL_SKILL_PATHS):
+        skill_path = root / relative
+        if not skill_path.is_file():
+            continue
+        try:
+            parsed = parse_skill_frontmatter(skill_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SkillFrontmatterError):
+            # Missing files and invalid YAML are reported by other checks.
+            continue
+        if not _is_internal_skill_metadata(parsed.get("metadata")):
+            errors.append(f"project-local skill must set metadata.internal: {relative}")
+    return errors
+
+
 
 SKILL_BRAND_CONTRACTS = {
     "skills/super-ask-azhou/SKILL.md": {
@@ -716,17 +981,13 @@ def check_azhou_description_brand(root: Path) -> list[str]:
         except (OSError, UnicodeDecodeError):
             errors.append(f"cannot read skill frontmatter {relative}")
             continue
-        match = SKILL_FRONTMATTER_PATTERN.match(text)
-        if not match:
-            errors.append(f"skill frontmatter missing: {relative}")
+        try:
+            parsed = parse_skill_frontmatter(text)
+        except SkillFrontmatterError:
+            # Invalid YAML is reported by check_skill_frontmatter_yaml.
             continue
-        description = None
-        for line in match.group("frontmatter").splitlines():
-            key, sep, value = line.partition(":")
-            if sep and key.strip() == "description":
-                description = value.strip()
-                break
-        if description is None:
+        description = parsed.get("description")
+        if not isinstance(description, str):
             errors.append(f"skill description missing: {relative}")
             continue
         if not description.startswith("Azhou skill."):
@@ -1331,6 +1592,8 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_skill_platform_view(root))
     errors.extend(check_invocation_axis(root))
     errors.extend(check_fidelity_axis(root))
+    errors.extend(check_skill_frontmatter_yaml(files, root))
+    errors.extend(check_internal_skill_metadata(root))
     errors.extend(check_azhou_description_brand(root))
     errors.extend(check_rename_residue(files, root))
     errors.extend(check_json(files, root))

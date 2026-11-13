@@ -1,6 +1,8 @@
 ---
 name: dsh-translate-docs
 description: "用户点名 dsh-translate-docs 时执行扩展双语流程：最小增量翻译、新建整篇译文、术语/结构复核及配对维护；普通文档修改不自动启动扩展流程。"
+metadata:
+  internal: true
 ---
 
 # dsh-translate-docs

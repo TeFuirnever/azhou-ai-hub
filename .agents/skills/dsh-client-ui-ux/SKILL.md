@@ -1,6 +1,8 @@
 ---
 name: dsh-client-ui-ux
 description: "设计、修改或审查用户界面的对齐、分组、图标、主题、几何与交互；按改动影响验证真实页面及相关状态。"
+metadata:
+  internal: true
 ---
 
 # dsh-client-ui-ux

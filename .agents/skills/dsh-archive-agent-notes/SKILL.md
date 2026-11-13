@@ -1,6 +1,8 @@
 ---
 name: dsh-archive-agent-notes
 description: "新增、检查、精简、归档或恢复项目决策与代理记录时检查替代关系和保留价值。"
+metadata:
+  internal: true
 ---
 
 # dsh-archive-agent-notes

@@ -1,6 +1,8 @@
 ---
 name: e2e-case-lifecycle
 description: "规划、维护、捕获/重放和晋级端到端用例、夹具、覆盖矩阵与 CI 准入证据；处理未执行断言、时序和失败重放。"
+metadata:
+  internal: true
 ---
 
 # e2e-case-lifecycle

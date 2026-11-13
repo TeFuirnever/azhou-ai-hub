@@ -1,6 +1,8 @@
 ---
 name: dsh-create-upgrade-guide
 description: "外部可见行为或已发布接口发生不兼容变化，或修改现有升级指南覆盖的功能时使用。"
+metadata:
+  internal: true
 ---
 
 # dsh-create-upgrade-guide

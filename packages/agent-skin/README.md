@@ -267,6 +267,8 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 
 原项目新增了 **「阿舟 · Agent 实验室」** 原生 Codex pet（ID：`azhou-agent-lab`）。本包的 Pet 工具链（manage/import 脚本、runbook 与测试）是 2026-11 独立重写后的唯一维护版本；私有图集、冻结主题与审阅证据保存在各项目根的忽略目录。旧根 `packages/codex-startup-animation/` 已于 2026-11-12 删除：其 Pet 回执属主交接以全保真隔离预演＋持久根回放指引＋维护者批准（2026-11-12）达成，工具的按设计拒绝被接受为终局，已装 Pet 回执作为指向已删根的孤儿回执存续、Pet 本身自包含继续可用。预演与机器实况见 [交接记录](evidence/codex-pet-legacy-root-handoff-2026-11-11.md)。
 
+Pet 维护命令需要已安装 Pillow（例如 `python3 -m pip install Pillow`）。
+
 ```bash
 python3 -B tools/manage-codex-pet.py status
 python3 -B tools/manage-codex-pet.py sync
