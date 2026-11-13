@@ -1,6 +1,8 @@
 ---
 name: record-browser-gif
 description: "用户要求录制浏览器或网页演示，或涉及用户可见 GUI 的变更需要演示证据时使用。"
+metadata:
+  internal: true
 ---
 
 # record-browser-gif

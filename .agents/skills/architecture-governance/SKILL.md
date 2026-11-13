@@ -1,6 +1,8 @@
 ---
 name: architecture-governance
 description: "代码变更前后检查模块边界；跨模块、共享状态、异步时序或职责归属不清时形成有界设计上下文。纯文档改动不触发。"
+metadata:
+  internal: true
 ---
 
 # architecture-governance

@@ -1,6 +1,8 @@
 ---
 name: dsh-find-simplifications
 description: "寻找、审查或评估其他分支提出的代码、配置、测试和文档简化方案。"
+metadata:
+  internal: true
 ---
 
 # dsh-find-simplifications

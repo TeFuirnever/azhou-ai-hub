@@ -1,6 +1,8 @@
 ---
 name: dsh-doc
 description: "创建、重构或审查文档、README、文档树与网站内容；按读者任务组织层次，核实操作事实、双语同步、导航和生成来源。"
+metadata:
+  internal: true
 ---
 
 # dsh-doc

@@ -1,6 +1,8 @@
 ---
 name: dsh-error-handling
 description: "设计或审查错误、重试、后台任务和用户可见失败报告。"
+metadata:
+  internal: true
 ---
 
 # dsh-error-handling

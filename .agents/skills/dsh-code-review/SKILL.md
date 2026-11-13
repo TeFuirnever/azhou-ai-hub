@@ -1,6 +1,8 @@
 ---
 name: dsh-code-review
 description: "审查 PR 或代码差异，依据独立需求追踪接口两侧、真实入口、权限拒绝、生命周期、文案及验证证据；处理与复核审查意见。"
+metadata:
+  internal: true
 ---
 
 # dsh-code-review

@@ -175,6 +175,13 @@ def migrate_receipt_namespace(
     target = target.expanduser().resolve()
     try:
         source = azhou_runtime_state.relative_path(target, ".azhou-ai-hub/receipts")
+        if not source.exists():
+            return {
+                "status": "nothing-to-migrate",
+                "applied": False,
+                "message": "nothing to migrate",
+                "source": source.as_posix(),
+            }
         for receipt_path in sorted(source.iterdir(), key=lambda path: path.name):
             if receipt_path.is_symlink() or not receipt_path.is_file() or receipt_path.suffix != ".json":
                 raise PackageError(f"legacy receipt source contains an unsupported entry: {receipt_path.name}")
@@ -1943,8 +1950,13 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
                 )
         except PackageError as exc:
             payload = {"status": "fail", "applied": False, "error": str(exc)}
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
-        return 0 if payload["status"] in {"planned", "migrated", "already-current"} else 1
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif payload["status"] == "nothing-to-migrate":
+            print(payload.get("message") or "nothing to migrate")
+        else:
+            print(payload["status"])
+        return 0 if payload["status"] in {"planned", "migrated", "already-current", "nothing-to-migrate"} else 1
 
     if args.command == "verify":
         return run_verifier(root, args.python)

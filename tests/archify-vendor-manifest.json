@@ -2,7 +2,7 @@
   "commit": "208acba8d412335185b2056fedf54b3405df43fb",
   "files": {
     "LICENSE": "b799ab081703e7821ae5096d2c1abdf14bbdc75e8ea1c4045998c36ed6db9706",
-    "SKILL.md": "a926e19e8be213e2338f7fb2c7c956098709bc7c5602e85f86c92567f1e12e3d",
+    "SKILL.md": "14cda935d8bc0748a1a7ffd8d9c785d9ca8e174d171ec66c6653cd89425cca93",
     "THIRD_PARTY_NOTICES.md": "ae6f236bd0aef72bad196099aa8687cccff6e01cc3a60e6c32bbad688266f678",
     "assets/JetBrainsMono-OFL.txt": "c1ab7c666206842a02b35b30770dac0d7a10156ed401c9defc3f02a754d89e90",
     "assets/template.html": "52e995c61a728c37da242bfaf7c83e289b00bc6b7723e020345305664b81580e",
@@ -205,7 +205,7 @@
       "base_sha256": "55c126d68c1fbef114ccdef8dd0e7f046419dc9203ac7f6dab1728f6bab3ca71",
       "disposition": "upstream_capability_body_with_local_wrapper",
       "local_sha256": "9c1aacec14831cdcfc715845a2c980484c373f67bcf35de64dd1059948f610cd",
-      "packaged_sha256": "a926e19e8be213e2338f7fb2c7c956098709bc7c5602e85f86c92567f1e12e3d",
+      "packaged_sha256": "14cda935d8bc0748a1a7ffd8d9c785d9ca8e174d171ec66c6653cd89425cca93",
       "path": "SKILL.md",
       "resolution": "new upstream description/body; retained Azhou identity/protocol/receipt and Excalidraw carve; optional explainer browser state remains not-run",
       "target_sha256": "93434ad579983f4cff639c2b7230c311e0785cc48a25b66b1498e1802be7de91"

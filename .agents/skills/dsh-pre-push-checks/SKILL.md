@@ -1,6 +1,8 @@
 ---
 name: dsh-pre-push-checks
 description: "推送、标记可审查或报告检查结果前，以及已发布分支同步后核对变更及验证证据。"
+metadata:
+  internal: true
 ---
 
 # dsh-pre-push-checks

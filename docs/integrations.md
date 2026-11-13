@@ -149,7 +149,7 @@ The Pet toolchain — `tools/manage-codex-pet.py`, `tools/import-codex-pet.py`, 
 
 The legacy `packages/codex-startup-animation/` root was deleted on 2026-11-12. Its installed-receipt ownership handoff was completed by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval on 2026-11-12 ([handoff receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)); the tool's designed rejection was accepted as final, so the installed Pet receipt remains an orphan pointing at the deleted root while the installed Pet stays self-contained and usable. A future Pet installation from Agent Skin follows the runbook's native prepare/generate/review chain; remove the old install the native way first, because ordinary `install` refuses a receipt owned by another `projectRoot`. Historical legacy-source maintenance followed the legacy runbook that Git history now carries.
 
-From the Hub root, these commands inspect state or run the isolated tests at the maintained home:
+From the Hub root, these commands inspect state or run the isolated tests at the maintained home. The Pet maintenance commands and the importer suites require Pillow (`python -m pip install Pillow`).
 
 ```sh
 cd packages/agent-skin

@@ -1,6 +1,8 @@
 ---
 name: dsh-responsive-ui
 description: "设计、实现或审查窄屏布局、文本截断/标题换行、纯图标操作、混合输入设备的 hover/tooltip、移动键盘与宽度变化时焦点。"
+metadata:
+  internal: true
 ---
 
 # dsh-responsive-ui
