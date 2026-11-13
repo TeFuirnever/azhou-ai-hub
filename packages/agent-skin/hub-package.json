@@ -6,8 +6,8 @@
   "local_source_origin": "https://github.com/TeFuirnever/codex-startup-animation.git",
   "commit": "c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248",
   "import_basis": "Current source working tree based on the recorded commit, including its modified tracked files and untracked maintained files, inspected 2026-10-26.",
-  "license_status": "no open-source license grant recorded; user is contacting the upstream maintainer",
-  "external_distribution": "not authorized",
+  "license_status": "MIT (repository root LICENSE) since the independent rewrite in #441 (2026-11-11); originally derived from the unlicensed upstream recorded above, whose historical bytes stay unlicensed; private assets under assets/private/ are not covered",
+  "external_distribution": "code: MIT; private assets and bundles built with them: not authorized",
   "runtime_version": "0.9.0",
   "runtime_build": "41",
   "build_inputs": [

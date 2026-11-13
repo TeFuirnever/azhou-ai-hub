@@ -39,7 +39,7 @@ Review Contract（Outcome、Evidence、Limits、Decision）只是轻量 candidat
 
 已确认的产品意图是：在有权控制的 Azhou character/assets 范围内，随 official packages 正常使用；单独 extraction、modification 或 redistribution 需另行 permission。这是 intended distribution boundary，**不是新 license，也不是已生效的追溯限制**。它不撤回已有 grants，不覆盖 upstream / third-party assets，也不表示全部代码或素材都可发布。
 
-Code licensing 继续逐 component 遵循实际 [LICENSE](../LICENSE)、[third-party notices](../THIRD_PARTY_NOTICES.md) 和 package notices。落地 asset policy 前须核对具体资产的 ownership、provenance、已有 grants 与发布内容；冲突或缺失项是该资产/发布的 legal implementation blocker，不能通过本页默默替换 license 或改写既有授权。现有根 MIT 与 brand-asset notices 未建立逐资产的新限制，本次不把 policy intent 宣称为已完成 legal implementation；未获授权的 animation code/private assets 保持现有 distribution hold。
+Code licensing 继续逐 component 遵循实际 [LICENSE](../LICENSE)、[third-party notices](../THIRD_PARTY_NOTICES.md) 和 package notices。落地 asset policy 前须核对具体资产的 ownership、provenance、已有 grants 与发布内容；冲突或缺失项是该资产/发布的 legal implementation blocker，不能通过本页默默替换 license 或改写既有授权。现有根 MIT 与 brand-asset notices 未建立逐资产的新限制，本次不把 policy intent 宣称为已完成 legal implementation；Agent Skin code 自 #441 独立重写后由根 MIT 覆盖；private assets 保持现有 distribution hold。
 
 ## Lightweight community practice
 

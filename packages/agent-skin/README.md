@@ -8,7 +8,7 @@ Codex 读取构建载荷时，`startup` 目录和 `install.js` 须为实体，�
 
 Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
 
-原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
+原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容。本包最初派生自该上游，上游没有提供开源许可；[#441](https://github.com/TeFuirnever/azhou-ai-hub/pull/441)（2026-11-11）独立重写了仍与上游重合的代码，此后本包代码按仓库根 [MIT 许可证](../../LICENSE) 发布。`assets/private/` 的私有素材和用它们构建的产物不在 MIT 范围内，不得对外发布。详见 [上游来源](UPSTREAM.md)。
 
 2026-10-26 的构建、启动 App 和 Pet 接管记录都指向当时的 `packages/codex-startup-animation/`。2026-10-27 建立 Agent Skin canonical package 时保留了该旧来源目录；当时安装标记和 Pet 回执绑定它，包更名本身没有转移 App、Pet、`.build` 或 `.local` 所有权。当前 App 和 Pet 来源应分别核查安装回执，历史验收只代表原记录中的输入与环境。私有角色图、壁纸图、图标源图和本地证据不随源码提交。
 
