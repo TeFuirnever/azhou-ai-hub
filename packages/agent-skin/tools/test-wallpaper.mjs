@@ -444,7 +444,7 @@ try {
     }
     return results;
   });
-  await check('role=dialog surfaces keep paint beside cleared hyphenated plates', async () => {
+  await check('protected surfaces keep paint beside cleared hyphenated decorations', async () => {
     const result = await onFixture(async () => {
       const plate = document.getElementById('fixture-footer-plate');
       const originalClasses = plate.className, originalHidden = plate.getAttribute('aria-hidden');
@@ -478,6 +478,33 @@ try {
           const style = getComputedStyle(node, name);
           return { background: style.backgroundColor, image: style.backgroundImage, shadow: style.boxShadow };
         };
+        const protectedFades = [];
+        for (const [tag, attribute, value] of [
+          ['div', 'data-composer-layout', 'root'], ['pre'], ['code'], ['div', 'role', 'menu'],
+          ['div', 'role', 'dialog'], ['div', 'contenteditable', 'true'], ['textarea'], ['input'], ['button'], ['select'],
+        ]) {
+          for (const placement of ['self', 'inside']) {
+            if (placement === 'inside' && ['textarea', 'input', 'select'].includes(tag)) continue;
+            const wrapper = document.createElement('div'), protectedNode = document.createElement(tag);
+            wrapper.className = 'pointer-events-none sticky bottom-0';
+            wrapper.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:32px;pointer-events:none;';
+            if (attribute) protectedNode.setAttribute(attribute, value);
+            const candidate = placement === 'self' ? protectedNode : document.createElement('div');
+            if (placement === 'inside') {
+              protectedNode.className = 'pointer-events-none sticky bottom-0';
+              protectedNode.appendChild(candidate);
+            }
+            candidate.className = 'background-protected fade-protected pointer-events-none';
+            candidate.setAttribute('aria-hidden', 'true');
+            candidate.style.cssText = 'position:absolute;width:40px;height:32px;pointer-events:none;background-image:linear-gradient(rgb(90,60,10),transparent);box-shadow:0 2px 5px rgb(3,4,5);';
+            wrapper.appendChild(protectedNode);
+            try {
+              document.querySelector('.thread-content').appendChild(wrapper);
+              protectedFades.push({ tag, attribute, placement, image: getComputedStyle(candidate).backgroundImage,
+                shadow: getComputedStyle(candidate).boxShadow, state: __azhouWallpaper.status() });
+            } finally { wrapper.remove(); }
+          }
+        }
         const status = __azhouWallpaper.status();
         return { status: { applied: status.applied, footerSurfaces: status.footerSurfaces, unsupportedDecorations: status.unsupportedDecorations },
           dialog: { background: dialogStyle.backgroundColor, shadow: dialogStyle.boxShadow, pointerEvents: dialogStyle.pointerEvents },
@@ -485,7 +512,7 @@ try {
           dialogPlatePseudo: { before: pseudoSample(dialogPlate, '::before'), after: pseudoSample(dialogPlate, '::after') },
           dialogFade: { background: fadeStyle.backgroundColor, shadow: fadeStyle.boxShadow },
           dialogFadePseudo: { before: pseudoSample(dialogFade, '::before'), after: pseudoSample(dialogFade, '::after') },
-          plate: getComputedStyle(plate).backgroundColor };
+          protectedFades, plate: getComputedStyle(plate).backgroundColor };
       } finally {
         pseudo.remove(); dialog.remove(); dialogPlate.remove(); plate.className = originalClasses;
         if (originalHidden === null) plate.removeAttribute('aria-hidden'); else plate.setAttribute('aria-hidden', originalHidden);
@@ -506,6 +533,12 @@ try {
       assert.ok(pseudo.image.includes('linear-gradient'));
       assert.equal(pseudo.shadow, 'rgb(3, 4, 5) 0px 2px 5px 0px');
     }
+    for (const fade of result.protectedFades) {
+      assert.ok(fade.image.includes('linear-gradient'), JSON.stringify([fade.tag, fade.attribute, fade.placement]));
+      assert.notEqual(fade.shadow, 'none');
+      assert.equal(fade.state.applied, true); assert.deepEqual(fade.state.unsupportedDecorations, []);
+      assert.equal(fade.state.footerFadeSurfaces, 1, 'protected nodes must not enter the decorative inventory');
+    }
     assert.equal(result.plate, 'rgba(0, 0, 0, 0)', 'the hyphenated plate is cleared while dialogs keep their paint');
     return result;
   });
@@ -513,6 +546,7 @@ try {
     const results = await onFixture(async () => {
       const html = document.documentElement, themeBefore = html.dataset.theme;
       const fade = document.getElementById('fixture-fade');
+      const original = { classes: fade.className, hidden: fade.getAttribute('aria-hidden'), style: fade.style.cssText };
       const top = document.querySelector('._MainContentTopFade_fixture');
       const sample = () => {
         const f = getComputedStyle(fade), r = fade.getBoundingClientRect();
@@ -527,28 +561,46 @@ try {
       };
       const results = [];
       try {
-        for (const theme of ['dark', 'light']) {
+        for (const classes of [original.classes,
+          'background-fixture fade-fixture pointer-events-none absolute inset-x-0 z-0',
+          'fade-qp7x2 background-qp7x2 pointer-events-none absolute inset-x-0 z-0',
+          'pointer-events-none absolute inset-x-0 z-0 background-qp7x2 fade-qp7x2',
+        ]) for (const theme of ['dark', 'light']) {
           __azhouWallpaper.dispose(); html.dataset.theme = theme;
+          fade.className = classes;
+          if (classes === original.classes) {
+            fade.style.cssText = original.style;
+            if (original.hidden === null) fade.removeAttribute('aria-hidden'); else fade.setAttribute('aria-hidden', original.hidden);
+          } else {
+            fade.setAttribute('aria-hidden', 'true');
+            fade.style.cssText = 'position:absolute;inset-inline:0;top:-32px;height:32px;pointer-events:none;background-image:linear-gradient(to top in oklab,var(--color-surface),transparent);';
+          }
           const before = sample(); await __wallpaperFixture.apply();
           const after = sample(), state = __azhouWallpaper.status();
           const blocked = [];
           for (const [name, node] of [['footer', fade], ['top', top]]) {
+            const image = node.style.getPropertyValue('background-image'), priority = node.style.getPropertyPriority('background-image');
             try {
               node.style.setProperty('background-image', 'linear-gradient(#181818,transparent)', 'important');
               blocked.push({ name, state: __azhouWallpaper.status() });
-            } finally { node.style.removeProperty('background-image'); }
+            } finally {
+              if (image) node.style.setProperty('background-image', image, priority); else node.style.removeProperty('background-image');
+            }
           }
-          const saved = __azhouWallpaper; let rejected = false;
+          const saved = __azhouWallpaper, savedSheet = document.getElementById('azhou-wallpaper-style'); let rejected = false;
           try { await __wallpaperFixture.installRenderer({ ...__wallpaperFixture.payload,
             css: __wallpaperFixture.payload.css + ' html[data-azhou-wallpaper="active"] #root#root #fixture-fade {background-image:linear-gradient(#181818,transparent)!important;}' }); }
           catch { rejected = true; }
-          const rollback = { rejected, sameAPI: saved === __azhouWallpaper, applied: __azhouWallpaper.status().applied };
+          const rollback = { rejected, sameAPI: saved === __azhouWallpaper,
+            sameSheet: savedSheet === document.getElementById('azhou-wallpaper-style'), applied: __azhouWallpaper.status().applied };
           __azhouWallpaper.dispose(); const restored = sample();
-          results.push({ theme, before, after, state, blocked, rollback, restored });
+          results.push({ classes, theme, before, after, state, blocked, rollback, restored });
           await __wallpaperFixture.apply();
         }
       } finally {
-        fade.style.removeProperty('background-image'); top.style.removeProperty('background-image'); html.dataset.theme = themeBefore;
+        fade.className = original.classes; fade.style.cssText = original.style;
+        if (original.hidden === null) fade.removeAttribute('aria-hidden'); else fade.setAttribute('aria-hidden', original.hidden);
+        top.style.removeProperty('background-image'); html.dataset.theme = themeBefore;
         if (!globalThis.__azhouWallpaper) await __wallpaperFixture.apply();
       }
       return results;
@@ -561,18 +613,20 @@ try {
       assert.deepEqual(item.after.protected, item.before.protected); assert.notEqual(item.after.protected.editorMask, 'none');
       assert.equal(item.state.applied, true); assert.equal(item.state.footerFadeSurfaces, 1); assert.equal(item.state.topFadeSurfaces, 1);
       assert.equal(item.state.footerFadeClear, true); assert.equal(item.state.topFadeClear, true);
+      assert.equal(item.state.decorationEffectsClear, true); assert.deepEqual(item.state.unsupportedDecorations, []);
       for (const blocked of item.blocked) {
         assert.equal(blocked.state.applied, false);
         assert.equal(blocked.state[blocked.name === 'footer' ? 'footerFadeClear' : 'topFadeClear'], false);
       }
-      assert.deepEqual(item.rollback, { rejected: true, sameAPI: true, applied: true });
+      assert.deepEqual(item.rollback, { rejected: true, sameAPI: true, sameSheet: true, applied: true });
       assert.deepEqual(item.restored, item.before);
     }
     return results;
   });
   await check('decorative effects and selector drift cannot produce false success', async () => {
-    const result = await onFixture(() => {
+    const result = await onFixture(async () => {
       const fade = document.getElementById('fixture-fade'), holder = fade.parentElement, failures = [];
+      const original = { classes: fade.className, hidden: fade.getAttribute('aria-hidden'), style: fade.style.cssText, holderClasses: holder.className };
       const inject = (name, operation, undo) => {
         try {
           operation();
@@ -585,16 +639,66 @@ try {
       const pseudo = document.createElement('style');
       pseudo.textContent = '#root#root #fixture-fade::before{content:"";position:absolute;inset:0;background-image:linear-gradient(#181818,#181818)!important;}';
       inject('pseudo', () => document.head.appendChild(pseudo), () => pseudo.remove());
-      const classes = holder.className; let drift;
-      try { holder.classList.remove('sticky', 'bottom-0'); drift = { state: __azhouWallpaper.status(), image: getComputedStyle(fade).backgroundImage }; }
-      finally { holder.className = classes; }
-      return { failures, drift, recovered: __azhouWallpaper.status() };
+      const drift = [], boundaries = [];
+      try {
+        fade.setAttribute('aria-hidden', 'true');
+        fade.style.cssText = 'position:absolute;inset-inline:0;top:-32px;height:32px;pointer-events:none;background-image:linear-gradient(to top in oklab,var(--color-surface),transparent);';
+        fade.className = 'background-effects fade-effects pointer-events-none';
+        for (const [name, property, value] of [
+          ['hyphenated-filter', 'filter', 'blur(2px)'],
+          ['hyphenated-mask', 'mask-image', 'linear-gradient(black,transparent)'],
+        ]) inject(name, () => fade.style.setProperty(property, value, 'important'), () => fade.style.removeProperty(property));
+        for (const classes of [original.classes, 'background-drift fade-drift pointer-events-none']) {
+          fade.className = classes; holder.classList.remove('sticky', 'bottom-0');
+          drift.push({ classes, state: __azhouWallpaper.status(), image: getComputedStyle(fade).backgroundImage });
+          holder.className = original.holderClasses;
+        }
+        for (const [name, classes] of [
+          ['unknown-tokens', 'unknown-background unknown-fade pointer-events-none'],
+          ['unknown-fade', 'background-fixture unknown-fade pointer-events-none'],
+          ['unknown-background', 'unknown-background fade-fixture pointer-events-none'],
+          ['missing-hidden', 'background-fixture fade-fixture pointer-events-none'],
+          ['missing-pointer-class', 'background-fixture fade-fixture'],
+          ['nested-child', 'background-fixture fade-fixture pointer-events-none'],
+        ]) {
+          const nested = document.createElement('div');
+          try {
+            fade.className = classes; fade.setAttribute('aria-hidden', 'true');
+            if (name === 'missing-hidden') fade.removeAttribute('aria-hidden');
+            if (name === 'nested-child') { holder.appendChild(nested); nested.appendChild(fade); }
+            const state = __azhouWallpaper.status(), image = getComputedStyle(fade).backgroundImage;
+            __azhouWallpaper.dispose(); let rejected = false;
+            try { await __wallpaperFixture.apply(); } catch { rejected = true; }
+            boundaries.push({ name, state, image, rejected });
+          } finally {
+            holder.appendChild(fade); nested.remove();
+            fade.className = original.classes; fade.style.cssText = original.style;
+            if (original.hidden === null) fade.removeAttribute('aria-hidden'); else fade.setAttribute('aria-hidden', original.hidden);
+            if (!globalThis.__azhouWallpaper) await __wallpaperFixture.apply();
+            fade.style.cssText = 'position:absolute;inset-inline:0;top:-32px;height:32px;pointer-events:none;background-image:linear-gradient(to top in oklab,var(--color-surface),transparent);';
+          }
+        }
+      } finally {
+        holder.appendChild(fade); holder.className = original.holderClasses;
+        fade.className = original.classes; fade.style.cssText = original.style;
+        if (original.hidden === null) fade.removeAttribute('aria-hidden'); else fade.setAttribute('aria-hidden', original.hidden);
+        if (!globalThis.__azhouWallpaper) await __wallpaperFixture.apply();
+      }
+      return { failures, drift, boundaries, recovered: __azhouWallpaper.status() };
     });
     assert.ok(result.failures.find(failure => failure.name === 'pseudo').pseudoBackgroundImage.includes('linear-gradient'),
       'The pseudo-element fault must still be painting after the wallpaper CSS cascade');
     for (const failure of result.failures) { assert.equal(failure.state.applied, false, failure.name); assert.equal(failure.state.decorationEffectsClear, false); }
-    assert.ok(result.drift.image.includes('linear-gradient')); assert.equal(result.drift.state.applied, false);
-    assert.ok(result.drift.state.unsupportedDecorations.length > 0);
+    for (const drift of result.drift) {
+      assert.ok(drift.image.includes('linear-gradient')); assert.equal(drift.state.applied, false, 'wrapper drift ' + drift.classes);
+      assert.ok(drift.state.unsupportedDecorations.includes('unmatched-scroll-decoration'));
+    }
+    for (const boundary of result.boundaries) {
+      assert.ok(boundary.image.includes('linear-gradient'), boundary.name);
+      assert.equal(boundary.state.applied, false, boundary.name); assert.equal(boundary.rejected, true, boundary.name);
+      assert.ok(boundary.state.unsupportedDecorations.includes(boundary.name === 'nested-child'
+        ? 'unmatched-scroll-decoration' : 'unmatched-sticky-decoration'), boundary.name);
+    }
     assert.equal(result.recovered.applied, true); assert.deepEqual(result.recovered.unsupportedDecorations, []);
     return result;
   });
