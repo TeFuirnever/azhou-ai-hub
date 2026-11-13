@@ -807,6 +807,8 @@ struct StartupNativeTests {
         expect(wrongPortTransport.pagesCount == 0 && wrongPortTransport.evaluateCount == 0,
                "wrong listener ownership is rejected before page lookup or payload")
 
+        checks += await startupShellAdmissionChecks(target: existing)
+
         var fakeNow: TimeInterval = 0
         let startupURL = "app://-/index.html?initialRoute=%2F"
         let successfulTransport = FakeStartupTransport(
@@ -815,7 +817,7 @@ struct StartupNativeTests {
                 "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"
             ]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 7,
@@ -841,7 +843,7 @@ struct StartupNativeTests {
             onReady: { readyNotifications += 1 },
             now: { fakeNow },
             sleep: { fakeNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(successful == .ready(runID: 7), "a controlled main page reaches startup-ready")
         expect(successfulTransport.pagesCount == 5, "page discovery retries and rechecks identity before install and ready within the shared budget")
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
@@ -858,7 +860,7 @@ struct StartupNativeTests {
                 pages: [["type": "page", "id": "selected-page", "url": startupURL,
                          "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
                 evaluations: [
-                    ["href": startupURL, "controllerPresent": false],
+                    ["href": startupURL, "controllerPresent": false, "shellReady": true],
                     ["installed": true, "alreadyActive": false],
                     ["href": startupURL, "missing": false, "status": [
                         "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": 7,
@@ -870,7 +872,7 @@ struct StartupNativeTests {
             let result = await StartupConnector(target: existing, expectedPort: 9222,
                 system: FakeStartupSystem(expectedPID: 4123, ports: [9222]), transport: transport,
                 onReady: { notifications += 1 }, now: { time }, sleep: { time += $0 })
-                .run(payload: "test-only-probe", deadline: 0.35)
+                .run(payload: "test-only-probe", deadline: 45)
             expect(result == (phase == "playing" ? .failed(reason: "attach-timeout") : .ready(runID: 7)),
                    "playing remains bounded while settings hands control to the user without waiting")
             expect(notifications == 1 && transport.payloadCount == 1 && transport.closeCount == 1,
@@ -882,7 +884,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 8,
@@ -899,7 +901,7 @@ struct StartupNativeTests {
             transport: skippedTransport,
             now: { skippedNow },
             sleep: { skippedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(skipped == .skipped(runID: 8, beforeReady: true), "a pre-ready skip stays distinct from readiness")
         expect(skippedTransport.payloadCount == 1 && skippedTransport.closeCount == 1,
                "skip does not replay and closes its page socket")
@@ -909,7 +911,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 9,
@@ -926,7 +928,7 @@ struct StartupNativeTests {
             transport: savedTransport,
             now: { savedNow },
             sleep: { savedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(saved == .ready(runID: 9), "a completed settings save remains a valid ready attachment")
         expect(savedTransport.payloadCount == 1 && savedTransport.disposeCount == 0,
                "settings save does not cause the connector to dispose the installed controller")
@@ -936,7 +938,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false]
             ]
@@ -948,7 +950,7 @@ struct StartupNativeTests {
             transport: navigationTransport,
             now: { navigationNow },
             sleep: { navigationNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(navigation == .partial(reason: "startup-interrupted"), "navigation interrupts the owned startup run")
         expect(navigationTransport.payloadCount == 1 && navigationTransport.closeCount == 1,
                "navigation does not reinject and closes its page socket")
@@ -964,7 +966,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": loadingStatus(9)],
                 ["href": startupURL, "missing": false, "status": [
@@ -981,7 +983,7 @@ struct StartupNativeTests {
             transport: driftTransport,
             now: { driftNow },
             sleep: { driftNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(drift == .partial(reason: "startup-interrupted"), "a status run ID change interrupts the owned startup run")
         expect(driftTransport.disposeCount == 0, "a changed status run ID does not dispose another run")
 
@@ -990,7 +992,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": loadingStatus(11)]
             ],
@@ -1003,11 +1005,11 @@ struct StartupNativeTests {
             transport: stalledTransport,
             now: { stalledNow },
             sleep: { stalledNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 0.35)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(stalled == .failed(reason: "attach-timeout"), "never-ready polling ends at the shared deadline")
         expect(stalledTransport.payloadCount == 1 && stalledTransport.closeCount == 1,
                "never-ready polling does not reinstall and closes the session")
-        expect(stalledTransport.requestTimeouts.allSatisfy { $0 <= 0.35 },
+        expect(stalledTransport.requestTimeouts.allSatisfy { $0 > 0 && $0 <= 10 } && stalledNow <= 45.001,
                "page lookup, WebSocket connect, and evaluation requests stay inside the absolute budget")
         expect(stalledTransport.requestTimeouts.contains { $0 < 0.1 },
                "the final status request is truncated to the remaining stage time")
@@ -1017,7 +1019,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": true,
@@ -1033,7 +1035,7 @@ struct StartupNativeTests {
             transport: malformedStatusTransport,
             now: { malformedNow },
             sleep: { malformedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(malformedStatus == .failed(reason: "protocol-error"), "a malformed required status field is rejected")
         expect(malformedStatusTransport.disposeCount == 1 && malformedStatusTransport.closeCount == 1,
                "malformed status on the trusted installed controller attempts disposal before closing")
@@ -1045,18 +1047,18 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": ["owner": "unknown"]]
             ],
-            afterEvaluation: { _, index in if index == 2 { expiredNow = 1 } }
+            afterEvaluation: { _, index in if index == 2 { expiredNow = 45 } }
         )
         let expiredMalformedStatus = await StartupConnector(
             target: existing, expectedPort: 9222,
             system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
             transport: expiredMalformedStatusTransport,
             now: { expiredNow }, sleep: { expiredNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(expiredMalformedStatus == .failed(reason: "protocol-error"),
                "malformed status remains a protocol failure when its response exhausts the budget")
         expect(expiredMalformedStatusTransport.disposeCount == 0 && expiredMalformedStatusTransport.closeCount == 1,
@@ -1190,6 +1192,83 @@ private final class FakeStartupTransport: StartupTransport {
         return try await evaluate(try StartupConnector.disposeExpression(href), timeout: timeout)
     }
     func close() { closeCount += 1 }
+}
+
+@MainActor
+private func startupShellAdmissionChecks(target: StartupTargetFacts) async -> Int {
+    var checks = 0
+    var failures: [String] = []
+    func expect(_ value: Bool, _ label: String) {
+        if !value { failures.append(label) }
+        checks += 1
+    }
+    let href = "app://-/index.html?initialRoute=%2F"
+    let pages: [[String: Any]] = [["type": "page", "id": "selected-page", "url": href,
+                                 "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]]
+    let pending: [String: Any] = ["href": href, "controllerPresent": false, "shellReady": false]
+    let ready: [String: Any] = ["href": href, "controllerPresent": false, "shellReady": true]
+    let installed: [String: Any] = ["installed": true, "alreadyActive": false]
+    let complete: [String: Any] = ["href": href, "missing": false, "status": [
+        "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 1,
+        "ready": true, "completed": true, "overlay": false, "reason": "",
+        "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+        "completion": ["cause": "natural", "beforeReady": false]
+    ]]
+    let cases: [(String, [[String: Any]], StartupOutcome, Int, Int?)] = [
+        ("a bound page waits for its shell then plays once", [pending, ready, installed, complete], .ready(runID: 1), 1, 4),
+        ("a temporary page without a shell receives no payload", [pending], .failed(reason: "attach-timeout"), 0, nil),
+        ("a missing readiness field rejects the page", [["href": href, "controllerPresent": false]], .failed(reason: "page-unsupported"), 0, 1),
+        ("a numeric readiness field cannot admit the page", [["href": href, "controllerPresent": false, "shellReady": 1]], .failed(reason: "page-unsupported"), 0, 1),
+        ("an incumbent appearing during the wait is preserved", [pending, ["href": href, "controllerPresent": true, "shellReady": false]], .partial(reason: "startup-active"), 0, 2)
+    ]
+    for (label, responses, expected, payloads, evaluations) in cases {
+        var clock: TimeInterval = 0
+        let transport = FakeStartupTransport(pages: pages, evaluations: responses, repeatLastEvaluation: true)
+        let result = await StartupConnector(target: target, expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: target.pid, ports: [9222]), transport: transport,
+            now: { clock }, sleep: { clock += $0 }).run(payload: "test-only-probe", deadline: 60)
+        expect(result == expected && transport.payloadCount == payloads, label)
+        expect(transport.closeCount == 1 && transport.disposeCount == 0, "\(label) closes without taking a controller")
+        if let evaluations { expect(transport.evaluateCount == evaluations, "\(label) uses only the admitted playback") }
+        expect(clock <= 60 && transport.requestTimeouts.allSatisfy { $0 > 0 && $0 <= 10 }, "\(label) stays bounded")
+    }
+    for lateSignature in [false, true] {
+        var clock: TimeInterval = 0
+        var inspected = false
+        var validations = 0
+        let system = FakeStartupSystem(expectedPID: target.pid, ports: [9222])
+        system.afterValidation = {
+            if inspected { validations += 1 }
+            if lateSignature && validations == 3 { clock = 34 }
+        }
+        let transport = FakeStartupTransport(pages: pages, evaluations: [ready, installed, complete],
+            afterEvaluation: { _, _ in inspected = true })
+        let result = await StartupConnector(target: target, expectedPort: 9222, system: system, transport: transport,
+            now: { clock }, sleep: { clock += $0 })
+            .run(payload: "test-only-probe", deadline: lateSignature ? 60 : 26.5)
+        expect(result == .failed(reason: "attach-timeout") && transport.payloadCount == 0,
+               lateSignature ? "the final signature check cannot consume the playback reserve" : "a late shell cannot start beyond the full controller window")
+    }
+    var cancelledClock: TimeInterval = 0
+    let cancelledTransport = FakeStartupTransport(pages: pages, evaluations: [pending], repeatLastEvaluation: true)
+    let cancelled = await Task { @MainActor in
+        await StartupConnector(target: target, expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: target.pid, ports: [9222]), transport: cancelledTransport,
+            now: { cancelledClock }, sleep: { cancelledClock += $0; withUnsafeCurrentTask { $0?.cancel() } })
+            .run(payload: "test-only-probe", deadline: 60)
+    }.value
+    expect(cancelled == .partial(reason: "startup-interrupted") && cancelledTransport.payloadCount == 0,
+           "cancelling the shell wait never installs a controller")
+    let changedSystem = FakeStartupSystem(expectedPID: target.pid, ports: [9222])
+    let changedTransport = FakeStartupTransport(pages: pages, evaluations: [pending, ready, installed, complete],
+        afterEvaluation: { _, _ in changedSystem.validationError = StartupFailure(reason: "target-identity", message: "changed process") })
+    var changedClock: TimeInterval = 0
+    let changed = await StartupConnector(target: target, expectedPort: 9222, system: changedSystem, transport: changedTransport,
+        now: { changedClock }, sleep: { changedClock += $0 }).run(payload: "test-only-probe", deadline: 60)
+    expect(changed == .failed(reason: "target-identity") && changedTransport.payloadCount == 0,
+           "ownership changes while waiting refuse without a payload")
+    precondition(failures.isEmpty, "FAILED: shell admission: " + failures.joined(separator: "; "))
+    return checks
 }
 
 #if AGENT_SKIN_NATIVE_EVENT_TESTS
@@ -2027,7 +2106,7 @@ private func nativeEventContractChecks() async throws -> Int {
         pages: [["type": "page", "id": "cold-main", "url": coldStartupURL,
                  "webSocketDebuggerUrl": "ws://127.0.0.1:45678/devtools/page/cold-main"]],
         evaluations: [
-            ["href": coldStartupURL, "controllerPresent": false],
+            ["href": coldStartupURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": coldStartupURL, "missing": false, "status": [
                 "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 31,
@@ -2991,7 +3070,7 @@ private func skinHostContractChecks() async throws -> Int {
     let readyTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "complete", ready: true)],
         ])
@@ -3115,7 +3194,7 @@ private func skinHostContractChecks() async throws -> Int {
     let activeTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": true],
         ])
     let activeAssembly = CodexSkinAssembly(
@@ -3174,7 +3253,7 @@ private func skinHostContractChecks() async throws -> Int {
     let busyTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "complete", ready: true)],
         ])
@@ -3345,7 +3424,7 @@ private func skinHostContractChecks() async throws -> Int {
     let interruptedTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false],
         ])
@@ -3416,7 +3495,7 @@ private func skinHostContractChecks() async throws -> Int {
     let skippedTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": [
                 "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 8,
@@ -3527,7 +3606,7 @@ private func skinHostContractChecks() async throws -> Int {
     let busyDisableDriver = contractDriver(runtime: busyDisableRuntime,
                                            system: FakeStartupSystem(expectedPID: 5328, ports: [9333]),
                                            transport: FakeStartupTransport(pages: [pageEntry()], evaluations: [
-                                               ["href": installURL, "controllerPresent": false],
+                                               ["href": installURL, "controllerPresent": false, "shellReady": true],
                                                ["installed": true, "alreadyActive": false],
                                                ["href": installURL, "missing": false,
                                                 "status": statusBody(runID: 12, phase: "complete", ready: true)],
@@ -3647,7 +3726,7 @@ private final class LostReplyStartupTransport: StartupTransport {
             throw WallpaperFailure(state: "endpoint-unavailable", chinese: "丢失回复", english: "lost reply")
         }
         if source.contains("dispose.value.call(api)") { disposeEvaluations += 1 }
-        if source.contains("controllerPresent") { return ["href": "app://-/index.html?initialRoute=%2F", "controllerPresent": false] }
+        if source.contains("controllerPresent") { return ["href": "app://-/index.html?initialRoute=%2F", "controllerPresent": false, "shellReady": true] }
         return [:]
     }
     func close() {}
@@ -3780,6 +3859,7 @@ private func nativePureStatusContractChecks() -> Int {
 // connector, install recorder and event capture; only HTTP/socket/host boundaries
 // are synthetic. All document generations deliberately start at runID 1.
 private final class StartupReplacementWorld: @unchecked Sendable {
+    static let deadline: TimeInterval = 45
     let stage: String
     let mode: String
     let readyOverlap: Bool
@@ -3804,6 +3884,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private var lagReadsLeft = 0
     private var waitReads = 0
     private var recheckReads = 0
+    private var inspectReads: [String: Int] = [:]
     private var oldListed = true
     init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil, readyOverlap: Bool = false) {
         self.stage = stage; self.mode = mode
@@ -3904,6 +3985,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
         if id != "page-a", oldListed { candidateActionsWhileOldListed.append("\(id):\(operation)") }
         requestsLocked = requestsLocked && lockHeld
+        if operation == "inspect" { inspectReads[id, default: 0] += 1 }
         // CDP Runtime.callFunctionOn has no execution timeout parameter. Its
         // independent client timer bounds the request, unlike Runtime.evaluate.
         if request["method"] as? String == "Runtime.callFunctionOn" {
@@ -3931,6 +4013,10 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         }
         if operation == "install" { installs[id, default: 0] += 1 }
         if id == "page-a", operation == "status" { statusCount += 1 }
+        if mode == "shell-replace", id == "page-a", operation == "inspect" {
+            if inspectReads[id] == 2 { generation += 1 }
+            if inspectReads[id] == 3 { throw URLError(.networkConnectionLost) }
+        }
         let replaceNow = id == "page-a" && operation == stage && (stage != "status" || statusCount == 2)
             || id == "page-b" && operation == "install" && ["chain", "reuse"].contains(mode)
         func envelope(_ value: [String: Any]) -> [String: Any] {
@@ -3958,7 +4044,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "timeout-error": throw URLError(.timedOut)
             case "handshake-unknown": throw URLError(.badServerResponse)
             case "posix-loss": throw NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNRESET))
-            case "deadline": clock = 5; throw URLError(.networkConnectionLost)
+            case "deadline": clock = Self.deadline; throw URLError(.networkConnectionLost)
             case "before-install": break
             case "cancel-ready-list": terminal = "ready-replaced"
             case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
@@ -3972,7 +4058,8 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         if mode.hasPrefix("recheck-"), generation > 0 { terminal = "ready-replaced" }
         let value: [String: Any]
         switch operation {
-        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present"]
+        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present",
+                                  "shellReady": mode != "shell-replace" || id != "page-a" && inspectReads[id, default: 0] > 1]
         case "install":
             installReplyTimes[id] = clock
             value = mode == "missing-new-receipt" && id == "page-b" ? ["installed": "invalid"]
@@ -4150,7 +4237,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
                 world.advance($0)
                 if mode == "recheck-cancel-wait", world.recheckCount() > 0 { withUnsafeCurrentTask { $0?.cancel() } }
             })
-            .run(payload: "test-only-probe", deadline: 5)
+            .run(payload: "test-only-probe", deadline: StartupReplacementWorld.deadline)
         let observation = capture.snapshot()
         let final = events.resolve(outcome, observation: observation, at: world.time())
         return ["stage": stage, "mode": mode, "recovered": outcome == .ready(runID: 1) && final == .ready,
@@ -4271,6 +4358,12 @@ private func startupPageReplacementChecks() async throws -> Int {
         expect(r["installSentCount"] as? Int == installs.values.reduce(0, +), "cumulative sent evidence is never reset")
     }
     common(overlap)
+    let gatedReplacement = try await startupReplacementScenario(stage: "never", mode: "shell-replace", diagnostics: true, readyOverlap: true)
+    common(gatedReplacement)
+    expect(gatedReplacement["recovered"] as? Bool == true && gatedReplacement["installs"] as? [String: Int] == ["page-b": 1]
+        && (gatedReplacement["requests"] as? [String] ?? []).filter { $0 == "page-b:inspect" }.count == 2
+        && gatedReplacement["candidateActionsWhileOldListed"] as? [String] == [],
+        "a temporary page loses its connection before installation and the uniquely proven successor waits for its own shell before one playback")
     let overlapProofs = (overlap["diagnostics"] as? [[String: Any]] ?? []).filter { $0["stage"] as? String == "proof" }
     expect(overlapProofs.compactMap { $0["oldIDPresent"] as? Bool } == [true, true, false]
         && overlap["candidateActionsWhileOldListed"] as? [String] == []
@@ -4281,7 +4374,7 @@ private func startupPageReplacementChecks() async throws -> Int {
         let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true, readyOverlap: true); common(r)
         expect(r["outcome"] as? String == "failed(reason: \"\(reason)\")"
             && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1]
-            && r["candidateActionsWhileOldListed"] as? [String] == [] && (r["elapsed"] as? Double ?? 99) <= 5.1,
+            && r["candidateActionsWhileOldListed"] as? [String] == [] && (r["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline + 0.1,
             "\(mode) cannot use a playing overlap to bypass the selected socket, retirement or deadline boundaries")
     }
     let terminalOverlap = try await startupReplacementScenario(stage: "status", mode: "complete-replaced", diagnostics: true, readyOverlap: true)
@@ -4339,7 +4432,7 @@ private func startupPageReplacementChecks() async throws -> Int {
     }
     let permanent = try await startupReplacementScenario(stage: "status", mode: "recheck-permanent"); common(permanent)
     expect(permanent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
-        && (permanent["elapsed"] as? Double ?? 6) <= 5 && (permanent["recheckReads"] as? Int ?? 0) > 1
+        && (permanent["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline && (permanent["recheckReads"] as? Int ?? 0) > 1
         && permanent["connections"] as? [String] == ["page-a"], "permanent failure consumes only the original deadline")
     for mode in ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
                  "recheck-array", "recheck-json", "recheck-oversized", "recheck-unknown"] {
@@ -4473,7 +4566,8 @@ private func startupPageReplacementChecks() async throws -> Int {
             "HTTP 500 never bypasses \(mode) proof refusal or cancellation")
         if mode == "persist" {
             expect(r["outcome"] as? String == "failed(reason: \"attach-timeout\")"
-                && (r["elapsed"] as? Double ?? 0) >= 5 && (r["elapsed"] as? Double ?? 99) <= 5.1,
+                && (r["elapsed"] as? Double ?? 0) >= StartupReplacementWorld.deadline
+                && (r["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline + 0.1,
                 "HTTP 500 with a still-live old ID only consumes the original bounded proof budget")
         }
     }
