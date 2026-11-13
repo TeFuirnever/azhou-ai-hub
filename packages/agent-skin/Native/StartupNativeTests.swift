@@ -350,7 +350,8 @@ struct StartupNativeTests {
             return
         }
         if CommandLine.arguments.contains("--probe-ready-replacement") {
-            let result = try await startupReplacementScenario(stage: "status", mode: "after-ready")
+            let result = try await startupReplacementScenario(stage: "status", mode: "after-ready",
+                                                              readyOverlap: CommandLine.arguments.contains("--ready-overlap"))
             print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
             exit(result["currentPageID"] as? String == "page-b" && result["completed"] as? Bool == true ? 0 : 1)
         }
@@ -3702,6 +3703,7 @@ private func nativePureStatusContractChecks() -> Int {
     }
     for value in [status(ready: true), status(completed: true),
                   status(phase: "playing"), status(phase: "settings"),
+                  status(phase: "playing", ready: true, completed: true, completion: ["cause": "natural", "beforeReady": false]),
                   status(phase: "complete", overlay: false),
                   status(phase: "failed", overlay: false), status(phase: "timeout", overlay: false)] {
         expect(NativeStartupStatus.parse(value) == nil, "contradictory lifecycle flags fail closed")
@@ -3780,6 +3782,7 @@ private func nativePureStatusContractChecks() -> Int {
 private final class StartupReplacementWorld: @unchecked Sendable {
     let stage: String
     let mode: String
+    let readyOverlap: Bool
     let handshakeStatus: Int?
     let href = "app://-/index.html?initialRoute=%2F"
     private let lock = NSLock()
@@ -3791,6 +3794,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private(set) var disposedControllers: [String] = []
     private(set) var installReplyTimes: [String: TimeInterval] = [:]
     private(set) var requests: [String] = []
+    private(set) var candidateActionsWhileOldListed: [String] = []
     private(set) var requestIDs: [Int] = []
     private(set) var sockets: [StartupReplacementSocket] = []
     private(set) var lockAcquires = 0
@@ -3800,8 +3804,10 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private var lagReadsLeft = 0
     private var waitReads = 0
     private var recheckReads = 0
-    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil) {
+    private var oldListed = true
+    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil, readyOverlap: Bool = false) {
         self.stage = stage; self.mode = mode
+        self.readyOverlap = readyOverlap
         self.handshakeStatus = handshakeStatus ?? ["handshake-404": 404, "handshake-401": 401][mode]
         lagReadsLeft = mode.hasPrefix("lag-") ? Int(String(mode.dropFirst(4))) ?? 0 : 0
     }
@@ -3814,11 +3820,24 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     func pages() throws -> [[String: Any]] {
         lock.lock(); defer { lock.unlock() }
         clock += 0.01
+        let entries = try pageEntries()
+        oldListed = entries.contains { $0["id"] as? String == "page-a" }
+        return entries
+    }
+    private func pageEntries() throws -> [[String: Any]] {
         func entry(_ id: String, type: String = "page", url: String? = nil) -> [String: Any] {
             ["id": id, "type": type, "url": url ?? href,
              "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
         }
         if generation == 0 { return [entry("page-a")] }
+        if readyOverlap {
+            waitReads += 1
+            if waitReads <= 3 {
+                var old = entry("page-a")
+                if mode == "old-socket-drift" { old["webSocketDebuggerUrl"] = "ws://127.0.0.1:49221/devtools/page/other" }
+                return [old, entry("page-b")]
+            }
+        }
         if mode.hasPrefix("recheck-") {
             recheckReads += 1
             let responseFailures = ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
@@ -3866,7 +3885,9 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     }
     func socket(_ request: URLRequest) -> any WallpaperSocketTask {
         let socket = StartupReplacementSocket(id: request.url!.lastPathComponent, world: self)
-        lock.lock(); sockets.append(socket); lock.unlock()
+        lock.lock()
+        if socket.id != "page-a", oldListed { candidateActionsWhileOldListed.append(socket.id + ":connect") }
+        sockets.append(socket); lock.unlock()
         return socket
     }
     func reply(id: String, request: [String: Any]) throws -> Data {
@@ -3881,6 +3902,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             : expression == StartupConnector.inspectExpression ? "inspect"
             : expression == StartupConnector.statusExpression ? "status" : "dispose"
         requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
+        if id != "page-a", oldListed { candidateActionsWhileOldListed.append("\(id):\(operation)") }
         requestsLocked = requestsLocked && lockHeld
         // CDP Runtime.callFunctionOn has no execution timeout parameter. Its
         // independent client timer bounds the request, unlike Runtime.evaluate.
@@ -3942,7 +3964,9 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
             case "ready-blip", "recheck-once": terminal = "ready-replaced"
             case "complete-blip": terminal = "complete-replaced"
-            default: throw URLError(.networkConnectionLost)
+            default:
+                if readyOverlap { terminal = "ready-replaced" }
+                else { throw URLError(.networkConnectionLost) }
             } }
         }
         if mode.hasPrefix("recheck-"), generation > 0 { terminal = "ready-replaced" }
@@ -4096,8 +4120,9 @@ private final class StartupReplacementURLProtocol: URLProtocol {
 
 @MainActor
 private func startupReplacementScenario(stage: String, mode: String = "replace",
-                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil) async throws -> [String: Any] {
-    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus)
+                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil,
+                                        readyOverlap: Bool = false) async throws -> [String: Any] {
+    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus, readyOverlap: readyOverlap)
     StartupReplacementURLProtocol.world = world
     defer { StartupReplacementURLProtocol.world = nil }
     var diagnosticRecords: [[String: Any]] = []
@@ -4133,6 +4158,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             "installs": world.installs, "installSentCount": recorder.installSentCount, "disposedControllers": world.disposedControllers,
             "requests": world.requests, "requestIDs": world.requestIDs,
             "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
+            "candidateActionsWhileOldListed": world.candidateActionsWhileOldListed,
             "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
             "currentPageID": observation.pageID ?? "", "installedAt": observation.installedAt ?? -1,
             "completed": observation.status?.completed ?? false,
@@ -4230,6 +4256,10 @@ private func startupPageReplacementChecks() async throws -> Int {
         "a playing page replaced after readiness must complete on the proven successor before handoff")
     expect(afterReady["presentationPages"] as? [String] == ["page-a", "page-b"],
         "presentation gets readiness before page replacement and the successor completes independently")
+    let overlap = try await startupReplacementScenario(stage: "status", mode: "after-ready", diagnostics: true, readyOverlap: true)
+    expect(overlap["recovered"] as? Bool == true && overlap["currentPageID"] as? String == "page-b"
+        && overlap["completed"] as? Bool == true && overlap["installs"] as? [String: Int] == ["page-a": 1, "page-b": 1],
+        "a playing old page overlapping its successor must wait for retirement and complete on the successor")
     func common(_ r: [String: Any]) {
         expect(r["lockAcquires"] as? Int == 1 && r["lockReleases"] as? Int == 1 && r["requestsLocked"] as? Bool == true,
                "one operation lock covers every generation")
@@ -4240,6 +4270,27 @@ private func startupPageReplacementChecks() async throws -> Int {
         expect(installs.values.allSatisfy { $0 == 1 }, "each target receives at most one installation")
         expect(r["installSentCount"] as? Int == installs.values.reduce(0, +), "cumulative sent evidence is never reset")
     }
+    common(overlap)
+    let overlapProofs = (overlap["diagnostics"] as? [[String: Any]] ?? []).filter { $0["stage"] as? String == "proof" }
+    expect(overlapProofs.compactMap { $0["oldIDPresent"] as? Bool } == [true, true, false]
+        && overlap["candidateActionsWhileOldListed"] as? [String] == []
+        && overlap["disposedControllers"] as? [String] == []
+        && overlap["presentationPages"] as? [String] == ["page-a", "page-b"],
+        "overlap performs only retirement proof until the old ID disappears and each page supplies its own readiness")
+    for (mode, reason) in [("persist", "attach-timeout"), ("old-socket-drift", "ambiguous-main-page")] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true, readyOverlap: true); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"\(reason)\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1]
+            && r["candidateActionsWhileOldListed"] as? [String] == [] && (r["elapsed"] as? Double ?? 99) <= 5.1,
+            "\(mode) cannot use a playing overlap to bypass the selected socket, retirement or deadline boundaries")
+    }
+    let terminalOverlap = try await startupReplacementScenario(stage: "status", mode: "complete-replaced", diagnostics: true, readyOverlap: true)
+    common(terminalOverlap)
+    expect(terminalOverlap["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+        && terminalOverlap["connections"] as? [String] == ["page-a"]
+        && terminalOverlap["installs"] as? [String: Int] == ["page-a": 1]
+        && !(terminalOverlap["diagnostics"] as? [[String: Any]] ?? []).contains { $0["stage"] as? String == "proof" },
+        "a completed run cannot enter retirement proof or replay even while the old and new pages overlap")
     for stage in ["inspect", "install", "status"] {
         let r = try await startupReplacementScenario(stage: stage); common(r)
         let installs = r["installs"] as? [String: Int] ?? [:]
