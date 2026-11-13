@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 12 installable skill packages; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 12 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -38,7 +38,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 ~~~
 
-Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `azhou-*` packages still require an explicit local checkout.
+Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
 
 [Verify what you installed](docs/installation.md#verify-what-you-installed) · [Installation guide](docs/installation.md) · [Offline recovery](docs/installation.md#offline-recovery)
 
@@ -53,7 +53,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | Diagnose repository, explicit install target, optional Treehouse lease and host stale-install migration health without mutation. | Read-only doctor contract, real Treehouse 2.3.0 smoke, fail-closed target checks and the read-only host migration probe. |
 | [Azhou Setup](skills/super-azhou-setup/SKILL.md) | Plan and explicitly apply checkout-assisted install or receipt-owned lifecycle operations. | Dry-run-first setup, mutation lock, identity guards, rollback and receipt regressions. |
 | [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate. | Delegates to repository policy, unit, benchmark-integrity and whitespace gates. |
-| [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for against the stable repository release v1.2.0 / skill 3.1.1; 4 registered behavior cases (registry/integrity coverage); fixed execution protocol and inventory proof. |
+| [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At explicit task close, reconcile docs, project rules, handoff state and project-bound memory against current code. | 28/28 <code>neat-freak</code> capabilities accounted for against upstream <code>neat-freak</code> release v1.2.0 / skill 3.1.1; 4 registered behavior cases (registry/integrity coverage); fixed execution protocol and inventory proof. |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | Create or edit an editable scene, render the real artifact, inspect it, and deliver CJK-safe SVG/PNG when requested. | 5 frozen benchmark cases; deterministic style, scene, overlap and same-DOM gates. Checked-in reference output proves wiring only, not model quality. |
 | [Eli5](skills/super-eli5/SKILL.md) | Explain a topic like the reader knows nothing about it: one self-contained HTML artifact of big pictures and few words. | Upstream behavior sentence retained verbatim at the locked upstream commit with a reproducible SHA-256 source check. No behavior benchmark yet. |
 | [Ask Azhou](skills/super-ask-azhou/SKILL.md) | Router for the whole catalog: describe the intent, get the skill, its mode, and its boundary. Recommendation-only. | Router pattern adapted from a pinned upstream; routing-map parity is a repository-gate check with a negative control. No behavior benchmark yet. |
@@ -132,7 +132,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
 - **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite, a 4-case Super Repo Pedant suite, a 5-case Excalidraw benchmark integrity check, a Session Insights wiring-integrity suite on synthetic session stores, JSON/link/provenance/credential policy and whitespace checks.
-- **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`) and zcode; other harnesses are temporarily unsupported. See the [support matrix](docs/support-matrix.md) and the [per-skill platform view](docs/skill-platform-view.md).
+- **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode; other harnesses are temporarily unsupported. See the [support matrix](docs/support-matrix.md) and the [per-skill platform view](docs/skill-platform-view.md).
 - **History cannot silently rewrite a live skill.** Promotion requires a regression, deterministic checks, paired majority, no safety regression and exact-diff human approval.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).
 

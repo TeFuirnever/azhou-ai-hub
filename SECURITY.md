@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Until the first stable release, the latest GitHub release and current <code>main</code> receive security fixes. After 1.0, the latest minor line receives fixes; older lines are supported only when a release note says so.
+The latest minor line of the current major release (currently 2.x, starting at <code>v2.0.0</code>) and current <code>main</code> receive security fixes. Older lines, including 1.x and the pre-1.0 releases, are supported only when a release note says so.
 
 ## Report privately
 
