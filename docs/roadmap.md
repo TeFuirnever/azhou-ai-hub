@@ -4,9 +4,9 @@
 
 ## Next milestone
 
-- **Principles 与现有工作对齐**：确立 Myself first, community-ready 与三个互补 pillars；复用既有工作和验收路径，不重复实现，不开展 full repository audit。
+- **Principles 与现有工作对齐**：确立 Myself first, community-ready 与两个互补 pillars；复用既有工作和验收路径，不重复实现，不开展 full repository audit。
 - **Planned — `super-i-have-adhd`**：来源为 [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd)。已形成 [bounded pilot design](specs/super-i-have-adhd-pilot.md)：先对照 upstream instructions、当前 Hub Skills 与 retired Super Caveman 的历史边界，再在一个真实 workflow 比较原始、当前与最小增强。当前只授权 design；没有 Skill implementation、pilot execution、installation 或 publication。它不被预设为 Super Caveman 的 replacement。
-- **Existing integrations 继续既有 acceptance tracks**：pstack / Kit 沿 [integration contract](integrations.md) 与 [support matrix](support-matrix.md)；Agent Skin 沿既有 tickets 与其实现分支验收，不新建并行实现。Focused Skill pilot 不以所有 integrations 完成为前置条件。
+- **Existing integrations 继续既有 acceptance tracks**：pstack 沿 [integration contract](integrations.md) 与 [support matrix](support-matrix.md)；Agent Skin 沿既有 tickets 与其实现分支验收，不新建并行实现。Focused Skill pilot 不以所有 integrations 完成为前置条件。
 
 ## Current-work reconciliation
 
@@ -17,7 +17,6 @@ Agent Skin 已在本仓库的 [canonical package](../packages/agent-skin/README.
 ## Maintenance decisions
 
 - 按 capability 记录 verified versions、upstream revision 和 known limits；先 review upstream changes，再决定 merge。Bug reports、planned releases 和 known breaking changes 触发相关 revalidation，无 SLA 或全版本支持承诺。
-- Kit evaluation 在同一 task topology 和显式 quality requirements 下比较 routing，纳入 retries；分别报告 token counts、monetary cost、quota，未测不得宣称 savings。
 - Azhou asset policy A 已确认为 product intent；逐资产 grants、provenance 与 license consistency 尚须落地核对。保留现有法律授权，冲突或 missing provenance 阻断受影响发布，不把原则批准当成 distribution permission。
 - 用 Try → Report → Improve → Verify 接纳真实 examples、脱敏 failure cases、validation 与 docs；可继续为一个可复现问题建立一个 `good first issue`。
 

@@ -6,15 +6,16 @@
 
 先解决维护者真实使用中的 workflow 问题，再把有价值的能力做成别人可复用、可配置的 package。社区实践用于发现不同场景、改进能力与边界；不为了抽象上的完整性建设无人使用的平台。
 
-## 三个互补 pillars
+## 两个互补 pillars
 
 | Pillar | 主要价值 | 约束 |
 |---|---|---|
 | Human-facing Skills | 帮助人理解、判断并行动，补充 pstack、matt-style engineering workflows | 保持真实任务的 actionability，不重复接管已有 engineering workflow |
 | Azhou UI personalization | 统一角色体验，可适度改善 readability 与 layout | 尊重 agent harness 的 native workflow、permissions、tools 与 model semantics；可配置、可逆，不做 replacement client |
-| Orchestrator Kit | 在明确 quality requirements 下提高 token / model-budget efficiency | 不建设 generic scheduling platform，也不承诺超过 unlimited-budget best-model execution |
 
-各项能力独立 opt-in。某个 Skill、UI 或 Kit 的安装与启用不自动启用其他能力；现有每个 task 一个 workflow owner 的 composition rule 保持有效。
+原第三个 pillar（模型编排与路由）已于 2026-11-12 退役，不再是现役方向；见 [HUB-RET-001](decisions/hub-retirement-physical-deletion.md)。
+
+各项能力独立 opt-in。某个 Skill 或 UI 的安装与启用不自动启用其他能力；现有每个 task 一个 workflow owner 的 composition rule 保持有效。
 
 ## Azhou IP 与 firsthand endorsement
 
@@ -26,7 +27,7 @@ Azhou IP 是一个统一角色，以及维护者亲自使用后认为 useful / v
 
 按真实 capability 选择适合的 harness，不永久规定全项目 Codex-first，也不要求所有 harness 同时支持。每项 support claim 写明 capability、upstream revision、实际 validated harness/version、evidence 与 known limits；未验证、experimental、unsupported、deprecated 如实标注，不用 portable package 推导 runtime parity。
 
-Upstream updates 先 review 再 merge，不自动覆盖本地适配。Bug report、planned release 或 known breaking change 触发相关 revalidation；没有 SLA 或 all-version promise。Kit comparisons 固定同一 task topology 和 quality criteria，计入 retries，区分 token counts、monetary cost 与 quota；没有对应 evidence 不宣称 savings。
+Upstream updates 先 review 再 merge，不自动覆盖本地适配。Bug report、planned release 或 known breaking change 触发相关 revalidation；没有 SLA 或 all-version promise。Efficiency 或 cost comparisons 固定同一 task topology 和 quality criteria，计入 retries，区分 token counts、monetary cost 与 quota；没有对应 evidence 不宣称 savings。
 
 ## 让人理解，再作判断与行动
 

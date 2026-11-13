@@ -2,7 +2,7 @@
 
 ## Optional external integrations
 
-The existing Skill installation paths below remain independent. For the three explicitly selected pstack, Codex model-routing and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
+The existing Skill installation paths below remain independent. For the two optional pstack and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
 
 ## Package-manager install
 
@@ -19,6 +19,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
+npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
+npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
@@ -30,7 +32,7 @@ Package-manager installs resolve the mutable default branch and carry no reposit
 **Tag-snapshot comparison (works on every host).** Compare the installed skill directory against the version you intended, at a published tag:
 
 ~~~bash
-git clone --depth 1 --branch v0.9.0 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
+git clone --depth 1 --branch v2.0.0 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
 diff -r /tmp/azhou-tag/skills/<skill-name> <installed-skills-root>/<skill-name> && echo identical
 ~~~
 
@@ -110,7 +112,7 @@ REPO_ROOT=/absolute/path/to/azhou-ai-hub
 SKILLS_HOME=/absolute/path/to/harness/skills
 
 ln -s "$REPO_ROOT/skills/super-repo-pedant" "$SKILLS_HOME/super-repo-pedant"
-ln -s "$REPO_ROOT/skills/super-excalidraw-diagram" "$SKILLS_HOME/excalidraw-diagram"
+ln -s "$REPO_ROOT/skills/super-excalidraw-diagram" "$SKILLS_HOME/super-excalidraw-diagram"
 ~~~
 
 If a harness cached its skill catalog before the symlink existed, reload the harness or start a new task. Do not create duplicate copies to force refresh.
@@ -150,6 +152,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 - Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/super-excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/super-arch-doc/references/setup.md).
+- Archify runs a self-contained Node.js CLI and needs Node.js 18+ (`package.json` `engines.node`); do not run `npm install`. A local Chrome or Chromium is required for the native-diagram `finalize` browser gate and explicit explainer browser checks: [Archify setup](../skills/super-archify/references/setup.md).
 
 No package requires <code>agents/openai.yaml</code> or a model-specific runtime copy.
 
