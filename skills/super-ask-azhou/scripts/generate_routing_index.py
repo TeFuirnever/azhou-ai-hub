@@ -29,7 +29,7 @@ import sys
 BEGIN_MARKER = "<!-- generated-routing-index:begin -->"
 END_MARKER = "<!-- generated-routing-index:end -->"
 FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
-FRONTMATTER_LINE_PATTERN = re.compile(r"^(?P<key>name|description|invocation):(?P<value>.*)$")
+FRONTMATTER_LINE_PATTERN = re.compile(r"^(?P<key>name|description|invocation):(?:$|\s)(?P<value>.*)$")
 ROUTER_RELATIVE = "skills/super-ask-azhou/SKILL.md"
 
 

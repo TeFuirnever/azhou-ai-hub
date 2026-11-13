@@ -386,6 +386,29 @@ class SkillFrontmatterYamlTest(unittest.TestCase):
         self.assertEqual("super-probe", parsed["name"])
         self.assertEqual("both", parsed["invocation"])
 
+    def test_mapping_colon_without_whitespace_fails_the_gate(self) -> None:
+        with self.assertRaises(SkillFrontmatterError) as raised:
+            parse_skill_frontmatter(
+                "---\nname:super-ask-azhou\ndescription: Azhou skill. Probe.\ninvocation: both\n---\n# Probe\n"
+            )
+        self.assertIn("must be followed by whitespace or end of line", str(raised.exception))
+        with self.assertRaises(SkillFrontmatterError) as nested:
+            parse_skill_frontmatter(
+                "---\nname: agent-experience\ndescription: \"Local.\"\nmetadata:\n  internal:true\n---\n# Probe\n"
+            )
+        self.assertIn("must be followed by whitespace or end of line", str(nested.exception))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-probe" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname:super-probe\ndescription: Azhou skill. Probe.\ninvocation: both\n---\n# Probe\n",
+                encoding="utf-8",
+            )
+            errors = check_skill_frontmatter_yaml([skill], root)
+            self.assertEqual(1, len(errors), errors)
+            self.assertIn("must be followed by whitespace or end of line", errors[0])
+
     def test_unescaped_interior_quotes_in_description_fail_the_gate(self) -> None:
         with self.assertRaises(SkillFrontmatterError) as raised:
             parse_skill_frontmatter(

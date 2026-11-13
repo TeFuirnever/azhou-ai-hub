@@ -113,6 +113,26 @@ INVOCATION_CLASSES = (
 )
 SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
 _YAML_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _split_yaml_mapping_entry(line: str, *, location: str) -> tuple[str, str]:
+    """Split a block mapping entry, requiring YAML separator whitespace.
+
+    A colon is a mapping separator only when it is at end of line or followed
+    by whitespace. ``name:super-ask-azhou`` is a plain scalar, not a mapping
+    entry, and must fail closed.
+    """
+    separator = line.find(":")
+    if separator == -1:
+        raise SkillFrontmatterError(f"{location}: YAML frontmatter line is not a mapping entry: {line}")
+    remainder = line[separator + 1 :]
+    if remainder and not remainder[0].isspace():
+        raise SkillFrontmatterError(
+            f"{location}: YAML mapping separator must be followed by whitespace or end of line"
+        )
+    key = line[:separator].strip()
+    return key, remainder.strip()
+
 _YAML_BLOCK_HEADER = re.compile(r"^([|>])([+-]?)(\d*)$")
 _YAML_DOUBLE_ESCAPES = {
     "\\": "\\",
@@ -313,10 +333,7 @@ def _parse_simple_yaml_mapping(source: str) -> dict[str, object]:
         if indent != 0:
             raise SkillFrontmatterError(f"unexpected indented frontmatter line: {line.strip()}")
         stripped = line.strip()
-        if ":" not in stripped:
-            raise SkillFrontmatterError(f"YAML frontmatter line is not a mapping entry: {stripped}")
-        key, _, remainder = stripped.partition(":")
-        key = key.strip()
+        key, remainder = _split_yaml_mapping_entry(stripped, location="frontmatter")
         if not _YAML_KEY_PATTERN.fullmatch(key):
             raise SkillFrontmatterError(f"invalid YAML frontmatter key: {key}")
         if key in mapping:
@@ -345,10 +362,7 @@ def _parse_simple_yaml_mapping(source: str) -> dict[str, object]:
                 while index < len(lines) and (not lines[index].strip() or lines[index].lstrip().startswith("#")):
                     index += 1
                 child_line = lines[index].strip()
-                if ":" not in child_line:
-                    raise SkillFrontmatterError(f"{key}: nested line is not a mapping entry: {child_line}")
-                child_key, _, child_remainder = child_line.partition(":")
-                child_key = child_key.strip()
+                child_key, child_remainder = _split_yaml_mapping_entry(child_line, location=key)
                 if not _YAML_KEY_PATTERN.fullmatch(child_key):
                     raise SkillFrontmatterError(f"{key}: invalid nested key: {child_key}")
                 if child_key in nested:
@@ -867,15 +881,12 @@ def check_invocation_axis(root: Path) -> list[str]:
         except (OSError, UnicodeDecodeError) as exc:
             errors.append(f"cannot read skill frontmatter {relative}: {exc}")
             continue
-        match = SKILL_FRONTMATTER_PATTERN.match(text)
-        declared = None
-        if match:
-            declared = [
-                line.partition(":")[2].strip()
-                for line in match.group("frontmatter").splitlines()
-                if line.partition(":")[0].strip() == "invocation"
-            ]
-            declared = declared[0] if declared else None
+        try:
+            parsed = parse_skill_frontmatter(text)
+        except SkillFrontmatterError:
+            # Invalid YAML is reported by check_skill_frontmatter_yaml.
+            continue
+        declared = parsed.get("invocation")
         if declared is None:
             errors.append(f"skill invocation declaration missing: {relative}")
         elif declared not in INVOCATION_CLASSES:
