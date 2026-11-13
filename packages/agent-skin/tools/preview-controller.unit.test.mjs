@@ -41,7 +41,8 @@ const FOOTER_COMBINED_SELECTOR = THREAD_FOOTER_SELECTOR
   + ',' + THREAD_FOOTER_SELECTOR + ' > ' + generatedLayer('_background_')
   + ',' + THREAD_FOOTER_SELECTOR + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-');
 const STICKY_SHADE_SELECTOR = '[data-app-shell-main-surface] .thread-scroll-container .pointer-events-none.sticky.bottom-0';
-const FADE_SELECTOR = STICKY_SHADE_SELECTOR + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_');
+const FADE_SELECTOR = STICKY_SHADE_SELECTOR + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_')
+  + ',' + STICKY_SHADE_SELECTOR + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-') + generatedLayer('fade-');
 const TOP_FADE_SELECTOR = '[data-app-shell-main-surface] ' + generatedLayer('_MainContentTopFade_');
 
 class StyleDeclaration {
