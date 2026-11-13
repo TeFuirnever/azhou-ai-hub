@@ -12,7 +12,7 @@
 - `README.md` is the English public entry and `README.zh-CN.md` its Chinese reader mirror. Material product, install, evidence, compatibility, security, or license changes update both in one commit.
 - Public support claims must match `docs/support-matrix.md`. Portable runtime does not imply identical hooks, memory APIs, or tool access across harnesses.
 - Do not add `agents/openai.yaml` or other model-specific package identity. Harness adapters must call a neutral core or stay in documented examples. This restriction applies to public repository files; untracked, Git-ignored local tool installations under `.agents/skills/` may retain their upstream metadata.
-- Interactive skills use one restrained Azhou anchor per material stage and a stable receipt. Emoji stays out of schema keys, enums, digests, paths, commands, tests, and raw evidence.
+- Every canonical package carries one restrained Azhou identity anchor in its `SKILL.md`; interactive skills additionally broadcast one restrained Azhou anchor per material stage with a stable receipt. Emoji stays out of schema keys, enums, digests, paths, commands, tests, and raw evidence.
 - Adapted or vendored material requires an immutable source, license, retained notice, local boundary and reproducible update path. Public code without a license is not reusable source.
 - Long-range plans and ticket drafts live under `.planning/`, which is git-ignored and therefore absent from Treehouse worktrees; read them from the maintainer checkout by absolute path whenever a task references them.
 

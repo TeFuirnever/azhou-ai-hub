@@ -10,7 +10,7 @@ invocation: both
 
 > 🧹 代码是唯一现役答案，其他都要对齐。
 
-任务收尾时，以洁癖级机械盘点让 spec、文档、项目规则、状态、交接和项目 memory 停止说旧话。`super-repo-pedant` 是 `neat-freak` 的严格增强版；兼容边界见 [neat-freak-compatibility.md](references/neat-freak-compatibility.md)。
+任务收尾时，以洁癖级机械盘点让 spec、文档、项目规则、状态、交接和项目 memory 停止说旧话。命名沿革：前身 `neat-freak` 已不存在于任何可加载位置；其能力矩阵与兼容边界完整保留，见 [neat-freak-compatibility.md](references/neat-freak-compatibility.md)。
 
 ## 触发与授权
 
