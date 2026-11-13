@@ -135,6 +135,62 @@ _YAML_DOUBLE_ESCAPES = {
 }
 
 
+def _trailing_after_quoted_scalar(raw: str, end: int, location: str) -> None:
+    trailing = raw[end:].strip()
+    if trailing and not trailing.startswith("#"):
+        raise SkillFrontmatterError(f"{location}: unexpected characters after a quoted YAML scalar")
+
+
+def _decode_double_quoted_scalar(raw: str, location: str) -> str:
+    decoded: list[str] = []
+    cursor = 1
+    while cursor < len(raw):
+        char = raw[cursor]
+        if char == '"':
+            _trailing_after_quoted_scalar(raw, cursor + 1, location)
+            return "".join(decoded)
+        if char != "\\":
+            decoded.append(char)
+            cursor += 1
+            continue
+        cursor += 1
+        if cursor >= len(raw):
+            raise SkillFrontmatterError(f"{location}: unterminated escape in double-quoted scalar")
+        escape = raw[cursor]
+        if escape in _YAML_DOUBLE_ESCAPES:
+            decoded.append(_YAML_DOUBLE_ESCAPES[escape])
+            cursor += 1
+            continue
+        if escape in {"x", "u", "U"}:
+            width = {"x": 2, "u": 4, "U": 8}[escape]
+            digits = raw[cursor + 1 : cursor + 1 + width]
+            if len(digits) != width or any(part not in "0123456789abcdefABCDEF" for part in digits):
+                raise SkillFrontmatterError(f"{location}: invalid Unicode escape in double-quoted scalar")
+            decoded.append(chr(int(digits, 16)))
+            cursor += 1 + width
+            continue
+        raise SkillFrontmatterError(f"{location}: unsupported escape \\{escape} in double-quoted scalar")
+    raise SkillFrontmatterError(f"{location}: unterminated double-quoted YAML scalar")
+
+
+def _decode_single_quoted_scalar(raw: str, location: str) -> str:
+    decoded: list[str] = []
+    cursor = 1
+    while cursor < len(raw):
+        char = raw[cursor]
+        if char == "'":
+            if cursor + 1 < len(raw) and raw[cursor + 1] == "'":
+                decoded.append("'")
+                cursor += 2
+                continue
+            _trailing_after_quoted_scalar(raw, cursor + 1, location)
+            return "".join(decoded)
+        decoded.append(char)
+        cursor += 1
+    raise SkillFrontmatterError(f"{location}: unterminated single-quoted YAML scalar")
+
+
+
 class SkillFrontmatterError(ValueError):
     """Raised when a SKILL.md YAML frontmatter block is missing or invalid."""
 
@@ -217,38 +273,12 @@ def _parse_simple_yaml_mapping(source: str) -> dict[str, object]:
         raw = raw.strip()
         if raw.startswith("#"):
             return None
+        if raw.startswith('"'):
+            return _decode_double_quoted_scalar(raw, location)
+        if raw.startswith("'"):
+            return _decode_single_quoted_scalar(raw, location)
         if " #" in raw:
             raw = raw[: raw.index(" #")].rstrip()
-        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
-            if raw[0] == "'":
-                return raw[1:-1].replace("''", "'")
-            body = raw[1:-1]
-            decoded: list[str] = []
-            cursor = 0
-            while cursor < len(body):
-                char = body[cursor]
-                if char != "\\":
-                    decoded.append(char)
-                    cursor += 1
-                    continue
-                cursor += 1
-                if cursor >= len(body):
-                    raise SkillFrontmatterError(f"{location}: unterminated escape in double-quoted scalar")
-                escape = body[cursor]
-                if escape in _YAML_DOUBLE_ESCAPES:
-                    decoded.append(_YAML_DOUBLE_ESCAPES[escape])
-                    cursor += 1
-                    continue
-                if escape in {"x", "u", "U"}:
-                    width = {"x": 2, "u": 4, "U": 8}[escape]
-                    digits = body[cursor + 1 : cursor + 1 + width]
-                    if len(digits) != width or any(part not in "0123456789abcdefABCDEF" for part in digits):
-                        raise SkillFrontmatterError(f"{location}: invalid Unicode escape in double-quoted scalar")
-                    decoded.append(chr(int(digits, 16)))
-                    cursor += 1 + width
-                    continue
-                raise SkillFrontmatterError(f"{location}: unsupported escape \\{escape} in double-quoted scalar")
-            return "".join(decoded)
         if raw in {"true", "True", "yes", "Yes", "on", "On"}:
             return True
         if raw in {"false", "False", "no", "No", "off", "Off"}:

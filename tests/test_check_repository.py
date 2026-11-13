@@ -386,6 +386,30 @@ class SkillFrontmatterYamlTest(unittest.TestCase):
         self.assertEqual("super-probe", parsed["name"])
         self.assertEqual("both", parsed["invocation"])
 
+    def test_unescaped_interior_quotes_in_description_fail_the_gate(self) -> None:
+        with self.assertRaises(SkillFrontmatterError) as raised:
+            parse_skill_frontmatter(
+                '---\nname: super-probe\ndescription: "Azhou skill. Explain "quoted" text."\ninvocation: both\n---\n# Probe\n'
+            )
+        self.assertIn("unexpected characters after a quoted YAML scalar", str(raised.exception))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-probe" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                '---\nname: super-probe\ndescription: "Azhou skill. Explain "quoted" text."\ninvocation: both\n---\n# Probe\n',
+                encoding="utf-8",
+            )
+            errors = check_skill_frontmatter_yaml([skill], root)
+            self.assertEqual(1, len(errors), errors)
+            self.assertIn("unexpected characters after a quoted YAML scalar", errors[0])
+
+    def test_escaped_quotes_in_description_parse(self) -> None:
+        parsed = parse_skill_frontmatter(
+            '---\nname: super-probe\ndescription: "Azhou skill. Explain \\"quoted\\" text."\ninvocation: both\n---\n# Probe\n'
+        )
+        self.assertEqual('Azhou skill. Explain "quoted" text.', parsed["description"])
+
     def test_project_local_skill_without_internal_metadata_fails_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
