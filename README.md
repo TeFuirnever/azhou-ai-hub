@@ -175,7 +175,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **candidate**: native Codex/Claude plugins, zcode commands-only plugin, and shared Skills discovery for MiMo and DeepSeek Harness. ZCode GUI invocation remains unverified; host invocation, hook trust, and release approval require separate evidence. |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **candidate**: native Codex/Claude plugins, zcode commands-only plugin, and shared Skills discovery for MiMo and DeepSeek Harness. A 2026-11-14 GUI probe verified the zcode command surface (`/architect` recognized and executed) while its referenced skills are absent from the machine's skill roots, so end-to-end workflow invocation stays unverified; hook trust and release approval require separate evidence. |
 
 ![Agent Skin effect preview](assets/github/integration-agent-skin-effect.png)
 
