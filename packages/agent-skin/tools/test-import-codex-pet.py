@@ -224,9 +224,9 @@ class CandidateImportTests(unittest.TestCase):
         self.assertFalse((self.target / ".local").exists())
 
         (self.target / "style.css").write_bytes((self.source / "style.css").read_bytes())
-        private = self.target / "assets/private/working.png"
+        private = self.target / "assets/azhou/working.png"
         private.parent.mkdir(parents=True)
-        private.symlink_to(self.source / "assets/private/working.png")
+        private.symlink_to(self.source / "assets/azhou/working.png")
         result = self.cli(code=2)
         self.assertEqual(result["status"], "unknown-target")
         self.assertTrue(private.is_symlink())

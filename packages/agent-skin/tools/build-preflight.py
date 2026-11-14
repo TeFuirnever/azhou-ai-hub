@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate private build inputs and Git boundaries before staging a bundle."""
+"""Resolve Azhou build assets and validate Git boundaries before staging a bundle."""
 from __future__ import annotations
 
 import argparse
@@ -21,19 +21,34 @@ BUILD_PATHS = (
 )
 
 
-def load_theme(root: Path) -> dict:
+def load_artifacts(root: Path):
     path = root / "tools/verify-artifacts.py"
     spec = importlib.util.spec_from_file_location("agent_skin_preflight_artifacts", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load artifact verifier: {path}")
     artifacts = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artifacts)
-    return artifacts.load_theme_config(root, require_inputs=True)
+    return artifacts
+
+
+def load_theme(root: Path) -> dict:
+    return load_artifacts(root).load_theme_config(root, require_inputs=True)
+
+
+def resolve_icon(root: Path, theme: dict) -> Path:
+    """Path of the icon source after the local overlay/library resolution."""
+    artifacts = load_artifacts(root)
+    return artifacts.resolve_asset(root, artifacts.asset_name(theme["identity"]["iconInput"]))[0]
 
 
 def preflight(root: Path = ROOT, *, approved_icon_sha256: str | None = None) -> dict:
     """Return the validated theme after checking private paths and Git state."""
     root = Path(root).resolve()
+    artifacts = load_artifacts(root)
+    try:
+        artifacts.resolved_assets(root)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     theme = load_theme(root)
     for name in BUILD_PATHS:
         if (root / name).is_symlink():
@@ -44,17 +59,15 @@ def preflight(root: Path = ROOT, *, approved_icon_sha256: str | None = None) -> 
     if tracked:
         raise SystemExit("私有素材、构建或验收产物进入 Git 跟踪范围，停止构建：\n" + tracked)
     paths = (
-        "assets/private/working.png", "assets/private/working-v2.png", "assets/private/wallpaper-scene-q-v3.png",
-        theme["identity"]["entryAvatarInput"], theme["identity"]["iconInput"], "assets/private/scene.js",
+        "assets/private/working.png", "assets/private/wallpaper-scene-q-v3.png",
+        "assets/private/entry-avatar.png", "assets/private/app-icon/source.png",
         "dist/check.app", ".build/check.app", ".local/check",
     )
     for name in paths:
         result = subprocess.run(["git", "check-ignore", "-q", "--", name], cwd=root)
         if result.returncode:
             raise SystemExit("缺少私有产物 ignore 规则：" + name)
-    icon_source = root / theme["identity"]["iconInput"]
-    if icon_source.is_symlink() or not icon_source.is_file():
-        raise SystemExit("缺少 theme-config.json 指定的实体私有图标源图。")
+    icon_source = resolve_icon(root, theme)
     with icon_source.open("rb") as stream:
         header = stream.read(24)
     if len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
@@ -74,8 +87,13 @@ def preflight(root: Path = ROOT, *, approved_icon_sha256: str | None = None) -> 
 
 def main(root: Path = ROOT, *, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--icon-path", action="store_true",
+                        help="print the resolved icon source path instead of the theme")
     args = parser.parse_args(argv)
     theme = preflight(root, approved_icon_sha256=os.environ.get("AZHOU_APPROVED_ICON_SHA256"))
+    if args.icon_path:
+        print(resolve_icon(Path(root).resolve(), theme))
+        return 0
     print(json.dumps(theme, ensure_ascii=False, separators=(",", ":")))
     return 0
 

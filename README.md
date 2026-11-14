@@ -181,7 +181,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 42`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). No program redistribution grant is recorded. |
+| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 42`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
 
 On a Codex cold start, the native launcher submits its own cover for drawing before opening Codex, reads the validated appearance snapshot, and plays the existing 12-second animation in its native window. It releases the cover after both playback and a supported Codex workspace are observed; hot starts still activate the existing process without replay. Build 42 is installed on the maintainer Mac. The standalone player, hot activation and cold-start event checks passed; cold-start visual continuity remains unverified. DSH uses a separate document gate. Build 42 is installed in the maintainer Mac’s shared DSH package and loaded in its desktop profile: the observed startup showed a host loading placeholder, the Azhou animation, then the workspace. Continuous first-frame capture remains pending. See the [startup contract](packages/agent-skin/docs/testing.md).
 
@@ -193,7 +193,7 @@ python scripts/azhou_hub.py integrations pstack --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-The Hub root license does not cover either original package source; do not publish the combined source or binaries until redistribution permission is clarified.
+pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. Its Azhou art in `packages/agent-skin/assets/azhou/` is CC BY-NC-ND 4.0, and the Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md).
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
@@ -240,4 +240,4 @@ python scripts/verify.py
 
 ## License
 
-Azhou-maintained code: [MIT](LICENSE). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

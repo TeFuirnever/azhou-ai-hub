@@ -36,7 +36,7 @@ from PIL import Image
 PET_ID = "azhou-agent-lab"
 PET_DISPLAY_NAME = "阿舟 · Agent 实验室"
 OWNER = "codex-startup-animation/native-pet-v1"
-INPUTS = ("assets/private/working.png", "assets/private/wallpaper-scene-q-v3.png",
+INPUTS = ("assets/azhou/working.png", "assets/azhou/wallpaper-scene-q-v3.png",
           "style.css", "pet/theme.json")
 FRAME_COUNTS = (6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8)
 TOOLCHAIN_NEUTRAL_CELL = (0, 6)  # hatch-pet parks its neutral reference here; never a frame.

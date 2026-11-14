@@ -1,8 +1,8 @@
 # Agent Skin 包边界与历史迁移清单
 
-以下迁移清单记录 2026-10-26 的原始导入事实，不描述 2026-10-27 的包更名。当时新增 `packages/agent-skin/` 为 canonical Hub package，并保留 `packages/codex-startup-animation/` 原目录；当时的已安装 App 和 Pet 回执以该旧 source root 为 owner。本次导入未迁移安装状态或本地 `.build`、`.local` 数据；当前归属须分别核查实际安装回执。历史导入提交、来源与授权状态仍见[上游记录](UPSTREAM.md)；本包及其来源均未获对外再分发授权。
+以下迁移清单记录 2026-10-26 的原始导入事实，不描述 2026-10-27 的包更名。当时新增 `packages/agent-skin/` 为 canonical Hub package，并保留 `packages/codex-startup-animation/` 原目录；当时的已安装 App 和 Pet 回执以该旧 source root 为 owner。本次导入未迁移安装状态或本地 `.build`、`.local` 数据；当前归属须分别核查实际安装回执。历史导入提交、来源与授权状态仍见[上游记录](UPSTREAM.md)；上游来源仍未获对外再分发授权，本包代码自 #441 独立重写后按根 MIT 发布。
 
-状态：2026-10-26 从当时源仓维护工作树完成源码迁移并修正包内路径。本清单中的“源工作树”“本次”均指该次导入；同日后续本地安装交接见 [Hub 验证记录](../../evidence/optional-integrations-local-handoff-2026-10-26.md)。用户正联系上游维护者确认许可；在收到明确许可前不对外发布或再分发。历史验证文件仍只代表原工作树当时的证据。
+状态：2026-10-26 从当时源仓维护工作树完成源码迁移并修正包内路径。本清单中的“源工作树”“本次”均指该次导入；同日后续本地安装交接见 [Hub 验证记录](../../evidence/optional-integrations-local-handoff-2026-10-26.md)。当时用户正联系上游维护者确认许可，并暂停对外发布；#441 独立重写后，本包代码改按根 MIT 发布；2026-11-13 起阿舟素材以 CC BY-NC-ND 4.0 放在 `assets/azhou/`。历史验证文件仍只代表原工作树当时的证据。
 
 ## 候选运行时与维护面
 

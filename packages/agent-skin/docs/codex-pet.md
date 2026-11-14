@@ -19,7 +19,7 @@
 - `tools/test-codex-pet.py`：完全隔离的测试。
 - 本文档。
 
-私有生成数据和候选包放在 `.local/pets/azhou-agent-lab/`。**不要把 pet 生成产物放入 `assets/private/`**：现有应用构建摘要会递归包含该目录，新增 pet 数据会令旧安装包与源摘要失配。此能力不运行现有应用构建或安装器。
+私有生成数据和候选包放在 `.local/pets/azhou-agent-lab/`。**不要把 pet 生成产物放入 `assets/private/` 或 `assets/azhou/`**：前者是只放同名构建素材的本地覆盖层，后者是按 CC BY-NC-ND 4.0 发布的固定素材集，`tools/check-assets.py` 会拒绝额外文件。此能力不运行现有应用构建或安装器。
 
 ## 依赖与入口
 
@@ -59,8 +59,8 @@ python3 -B tools/manage-codex-pet.py prepare
 
 | 输入 | 作用 |
 | --- | --- |
-| `assets/private/working.png` | 已采用的启动角色主题参考 |
-| `assets/private/wallpaper-scene-q-v3.png` | 已采用的全景场景与配色参考 |
+| `assets/azhou/working.png` | 已采用的启动角色主题参考 |
+| `assets/azhou/wallpaper-scene-q-v3.png` | 已采用的全景场景与配色参考 |
 | `style.css` | 当前界面的视觉上下文 |
 | `pet/theme.json` | pet 身份、生成与主题约束 |
 

@@ -29,12 +29,43 @@ import sys
 BEGIN_MARKER = "<!-- generated-routing-index:begin -->"
 END_MARKER = "<!-- generated-routing-index:end -->"
 FRONTMATTER_PATTERN = re.compile(r"^---\n(?P<frontmatter>.*?)\n---\n", re.DOTALL)
-FRONTMATTER_LINE_PATTERN = re.compile(r"^(?P<key>name|description|invocation):(?P<value>.*)$")
+FRONTMATTER_LINE_PATTERN = re.compile(r"^(?P<key>name|description|invocation):(?:$|\s)(?P<value>.*)$")
 ROUTER_RELATIVE = "skills/super-ask-azhou/SKILL.md"
 
 
 class GenerationError(RuntimeError):
     """Raised when the manifest or the router block cannot be trusted."""
+
+
+def _unquote_yaml_scalar(value: str, *, path: Path, key: str) -> str:
+    """Strip one layer of YAML quotes so catalog text keeps its meaning."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        if value[0] == "'":
+            return value[1:-1].replace("''", "'")
+        decoded: list[str] = []
+        body = value[1:-1]
+        cursor = 0
+        while cursor < len(body):
+            char = body[cursor]
+            if char != "\\":
+                decoded.append(char)
+                cursor += 1
+                continue
+            cursor += 1
+            if cursor >= len(body):
+                raise GenerationError(f"unterminated escape in {key} of {path}")
+            escape = body[cursor]
+            mapping = {"\\": "\\", '"': '"', "n": "\n", "t": "\t"}
+            if escape not in mapping:
+                raise GenerationError(f"unsupported escape \\{escape} in {key} of {path}")
+            decoded.append(mapping[escape])
+            cursor += 1
+        return "".join(decoded)
+    if ": " in value:
+        raise GenerationError(
+            f"unquoted frontmatter value for {key!r} in {path} contains ': '; quote the value"
+        )
+    return value
 
 
 def parse_frontmatter(path: Path) -> tuple[str, str]:
@@ -55,7 +86,7 @@ def parse_frontmatter(path: Path) -> tuple[str, str]:
         if pair is None:
             raise GenerationError(f"unsupported frontmatter line in {path}: {line.strip()!r}")
         key = pair.group("key")
-        value = pair.group("value").strip()
+        value = _unquote_yaml_scalar(pair.group("value").strip(), path=path, key=key)
         if not value:
             raise GenerationError(f"empty frontmatter value for {key!r} in {path}")
         if key == "name":

@@ -32,7 +32,7 @@ Package-manager installs resolve the mutable default branch and carry no reposit
 **Tag-snapshot comparison (works on every host).** Compare the installed skill directory against the version you intended, at a published tag:
 
 ~~~bash
-git clone --depth 1 --branch v2.0.0 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
+git clone --depth 1 --branch v2.0.1 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
 diff -r /tmp/azhou-tag/skills/<skill-name> <installed-skills-root>/<skill-name> && echo identical
 ~~~
 

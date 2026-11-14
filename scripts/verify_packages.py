@@ -88,6 +88,11 @@ def main() -> int:
         print("package source validation failed", flush=True)
         return 1
 
+    # Standard-library only, so it runs on every platform: a fresh checkout must
+    # carry the complete published Azhou asset library.
+    if run_suite("agent-skin asset library", packages["agent-skin"], ["tools/check-assets.py"]):
+        return 1
+
     if os.name != "posix":
         if sys.platform == "win32":
             print(
@@ -108,6 +113,11 @@ def main() -> int:
             "agent-skin installer lifecycle tests",
             packages["agent-skin"],
             ["tools/test-install-macos.py"],
+        ),
+        run_suite(
+            "agent-skin asset library and resolver tests",
+            packages["agent-skin"],
+            ["tools/test-production-assets.py"],
         ),
     ]
     return next((code for code in results if code), 0)

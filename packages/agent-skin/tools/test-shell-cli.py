@@ -30,12 +30,12 @@ def write_executable(path: Path, source: str) -> None:
 
 
 def make_fixture(root: Path, *, missing: str | None = None, build_symlink: bool = False,
-                 icon_size: int = 1024, missing_private: bool = False) -> Path:
+                 icon_size: int = 1024, missing_private: bool = False, library: bool = False) -> Path:
     root.mkdir(parents=True)
     (root / "tools").mkdir()
     (root / "Native").mkdir()
-    (root / "assets/private/app-icon").mkdir(parents=True)
-    (root / "assets/private").mkdir(exist_ok=True)
+    assets = root / ("assets/azhou" if library else "assets/private")
+    (assets / "app-icon").mkdir(parents=True)
     (root / "hub-package.json").write_bytes((PACKAGE / "hub-package.json").read_bytes())
     (root / "theme-config.json").write_bytes((PACKAGE / "theme-config.json").read_bytes())
     for name in ("verify-artifacts.py", "build-preflight.py"):
@@ -44,11 +44,11 @@ def make_fixture(root: Path, *, missing: str | None = None, build_symlink: bool 
             shutil.copy2(source, root / "tools" / name)
     for name in ("App.swift", "Wallpaper.swift", "InstallRegistry.swift", "InstallRegistryCore.swift"):
         (root / "Native" / name).write_text("// shell fixture\n", encoding="utf-8")
-    for name in ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "entry-avatar.png"):
-        (root / "assets/private" / name).write_bytes(b"fixture\n")
+    for name in ("working.png", "wallpaper-scene-q-v3.png", "entry-avatar.png"):
+        (assets / name).write_bytes(b"fixture\n")
     icon = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR"
             + struct.pack(">II", icon_size, icon_size))
-    (root / "assets/private/app-icon/source.png").write_bytes(icon)
+    (assets / "app-icon/source.png").write_bytes(icon)
     (root / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
     (root / ".gitignore").write_text("/.build/\n/assets/private/\n", encoding="utf-8")
     if build_symlink:
@@ -58,9 +58,9 @@ def make_fixture(root: Path, *, missing: str | None = None, build_symlink: bool 
     else:
         (root / ".build").mkdir()
     if missing:
-        (root / "assets/private" / missing).unlink(missing_ok=True)
+        (assets / missing).unlink(missing_ok=True)
     if missing_private:
-        shutil.rmtree(root / "assets/private")
+        shutil.rmtree(assets)
     return root
 
 
@@ -304,10 +304,10 @@ def run_suite(report_path: Path) -> dict[str, object]:
         def add_case(name: str, entrypoint: str, args: tuple[str, ...] = (), *,
                      environment: dict[str, str] | None = None, missing: str | None = None,
                      build_symlink: bool = False, icon_size: int = 1024,
-                     missing_private: bool = False) -> Path:
+                     missing_private: bool = False, library: bool = False) -> Path:
             fixture = make_fixture(fixtures_root / f"f{len(case_specs)}", missing=missing,
                                    build_symlink=build_symlink, icon_size=icon_size,
-                                   missing_private=missing_private)
+                                   missing_private=missing_private, library=library)
             bin_dir = fixture / ".build/sys tools"
             bin_dir.mkdir(parents=True, exist_ok=True)
             fake_tools(bin_dir)
@@ -334,7 +334,7 @@ def run_suite(report_path: Path) -> dict[str, object]:
 
         add_case("missing-input", "build", missing="working.png")
         add_case("missing-private-directory", "build", missing_private=True)
-        add_case("missing-scene-script", "build", missing="scene.js")
+        add_case("library-missing-input", "build", missing="entry-avatar.png", library=True)
         add_case("missing-wallpaper-scene", "build", missing="wallpaper-scene-q-v3.png")
         add_case("invalid-system-bin", "build", environment={
             "AZHOU_BUILD_SYSTEM_BIN": str(temporary_root / "not a tools directory"),
@@ -344,6 +344,7 @@ def run_suite(report_path: Path) -> dict[str, object]:
         add_case("preflight-ignore", "build", environment={"FAKE_GIT_UNIGNORED_EXIT": "1"})
         add_case("preflight-bad-icon", "build", icon_size=256)
         add_case("build-success", "build")
+        add_case("build-library-only", "build", library=True)
         add_case("build-preserve-stage", "build", environment={"FAKE_PRESERVE_STAGE": "1"})
         add_case("build-xcrun-failure", "build", environment={"FAKE_XCRUN_EXIT": "18"})
         add_case("build-codesign-failure", "build", environment={"FAKE_CODESIGN_EXIT": "19"})
@@ -408,10 +409,10 @@ exit status.exitstatus
             )
 
         expected_cases = {
-            "missing-input": (1, "", "缺少本地阿舟素材", (), ("xcrun", "build-preflight.py")),
-            "missing-private-directory": (1, "", "缺少本地阿舟素材", (), ("xcrun", "build-preflight.py")),
-            "missing-scene-script": (1, "", "缺少本地阿舟素材", (), ("xcrun", "build-preflight.py")),
-            "missing-wallpaper-scene": (1, "", "缺少本地阿舟素材", (), ("xcrun", "build-preflight.py")),
+            "missing-input": (1, "", "缺少阿舟素材 working.png", ("build-preflight.py",), ("xcrun",)),
+            "missing-private-directory": (1, "", "缺少阿舟素材", ("build-preflight.py",), ("xcrun",)),
+            "library-missing-input": (1, "", "缺少阿舟素材 entry-avatar.png", ("build-preflight.py",), ("xcrun",)),
+            "missing-wallpaper-scene": (1, "", "缺少阿舟素材 wallpaper-scene-q-v3.png", ("build-preflight.py",), ("xcrun",)),
             "invalid-system-bin": (1, "", "AZHOU_BUILD_SYSTEM_BIN", (), ("build-preflight.py", "xcrun")),
             "preflight-symlink": (1, "", "拒绝通过符号链接构建", ("build-preflight.py",), ("xcrun",)),
             "preflight-tracked": (1, "", "私有素材、构建或验收产物进入 Git 跟踪范围", ("ls-files",), ("xcrun",)),
@@ -422,6 +423,7 @@ exit status.exitstatus
                 "Native/InstallRegistry.swift Native/InstallRegistryCore.swift",
                 "-framework AppKit -framework CoreServices",
             ), ()),
+            "build-library-only": (0, "构建完成", "", ("xcrun", "sips", "iconutil", "codesign"), ()),
             "build-preserve-stage": (1, "", "暂存无法确认安全清理", ("--publish-build",), ()),
             "build-xcrun-failure": (18, "", "", ("xcrun",), ("codesign", "--publish")),
             "build-codesign-failure": (19, "", "", ("codesign",), ("--publish",)),
@@ -440,11 +442,11 @@ exit status.exitstatus
             assert_case(output_root, name, status, stdout=stdout, stderr=stderr,
                         events=events, absent=absent)
 
-        for name, icon_name in (("build-success", "source.png"),):
+        for name, icon_base in (("build-success", "private"), ("build-library-only", "azhou")):
             events = (output_root / name / "events.log").read_text(encoding="utf-8").splitlines()
             resizes = [line for line in events if line.startswith("sips\t")]
             assert len(resizes) == 10, f"{name}: expected ten icon sizes"
-            assert all(f"/assets/private/app-icon/{icon_name} --out " in line for line in resizes), \
+            assert all(f"/assets/{icon_base}/app-icon/source.png --out " in line for line in resizes), \
                 f"{name}: production shell selected the wrong host icon: {resizes!r}"
 
         build_success = output_root / "build-success"

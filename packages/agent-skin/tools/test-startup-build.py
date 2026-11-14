@@ -691,13 +691,13 @@ class BuildOwnedThemeTests(unittest.TestCase):
             clone_source_tree(root)
             config_path = root / "theme-config.json"
             config = json.loads(config_path.read_text(encoding="utf-8"))
-            config["identity"]["iconInput"] = "assets/private/../../outside.png"
+            config["identity"]["iconInput"] = "assets/azhou/../../outside.png"
             config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
             bundle = root / ".build/azhou-stage.test/azhou-payload"
             bundle.mkdir(parents=True)
             builder = load_module(BUILDER_PATH, "agent_skin_unsafe_theme_builder")
 
-            with self.assertRaisesRegex(RuntimeError, "assets/private"):
+            with self.assertRaisesRegex(RuntimeError, "assets/azhou"):
                 builder.build_startup(bundle, root=root)
             self.assertFalse((bundle / "Contents/Resources/startup/install.js").exists())
 
@@ -1053,7 +1053,7 @@ class StartupBuildTests(unittest.TestCase):
         clone_source_tree(root, private=False)
         bundle = root / ".build/azhou-stage.test/azhou-payload"
         bundle.mkdir(parents=True)
-        with self.assertRaisesRegex(RuntimeError, "assets/private|私有素材"):
+        with self.assertRaisesRegex(RuntimeError, "缺少阿舟素材"):
             self.builder.build_startup(bundle, root=root)
         self.assertFalse((bundle / "Contents/Resources/startup/install.js").exists())
 
@@ -1061,7 +1061,7 @@ class StartupBuildTests(unittest.TestCase):
         private = self.root / "assets/private"
         build_root = self.root / ".build"
         original_children = {path.name for path in build_root.iterdir()}
-        for name in ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "entry-avatar.png", "app-icon/source.png"):
+        for name in ("working.png", "wallpaper-scene-q-v3.png", "entry-avatar.png", "app-icon/source.png"):
             path = private / name
             original = path.read_bytes()
             path.unlink()

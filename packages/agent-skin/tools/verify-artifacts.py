@@ -75,33 +75,84 @@ def _locale_map(value, label: str, *, max_length: int, allow_empty: bool = False
     return value
 
 
-def _private_input_path(value, label: str) -> PurePosixPath:
+# Published Azhou artwork (CC BY-NC-ND 4.0) and the optional, Git-ignored local
+# overlay. A logical asset resolves from the overlay first, then the library.
+ASSET_LIBRARY = 'assets/azhou'
+ASSET_OVERLAY = 'assets/private'
+ASSET_SOURCES = (('private', ASSET_OVERLAY), ('azhou', ASSET_LIBRARY))
+STARTUP_ASSET_NAMES = ('working.png', 'wallpaper-scene-q-v3.png')
+# Themes embedded in earlier bundles name their inputs under the overlay.
+_ASSET_PREFIXES = (('assets', 'azhou'), ('assets', 'private'))
+
+
+def _asset_input_path(value, label: str) -> PurePosixPath:
     if not isinstance(value, str) or not value or '\\' in value:
-        raise RuntimeError(f'{label} must be a relative assets/private path.')
+        raise RuntimeError(f'{label} must be a relative assets/azhou path.')
     relative = PurePosixPath(value)
     if (relative.is_absolute() or relative.as_posix() != value
-            or len(relative.parts) < 3 or relative.parts[:2] != ('assets', 'private')
+            or len(relative.parts) < 3 or relative.parts[:2] not in _ASSET_PREFIXES
             or any(part in ('', '.', '..') for part in relative.parts)):
-        raise RuntimeError(f'{label} must stay inside assets/private.')
+        raise RuntimeError(f'{label} must stay inside assets/azhou.')
     return relative
 
 
-def _private_input(root: Path, value, label: str, *, required: bool) -> Path:
-    relative = _private_input_path(value, label)
+def asset_name(value, label: str = 'asset') -> str:
+    """Logical asset name of a theme input, independent of where it resolves."""
+    return PurePosixPath(*_asset_input_path(value, label).parts[2:]).as_posix()
+
+
+def resolve_asset(root: Path, name: str, label: str | None = None) -> tuple[Path, str]:
+    """Return (path, source) for one logical asset: overlay first, then library."""
+    label = label or name
+    relative = PurePosixPath(name)
+    if (not name or '\\' in name or relative.is_absolute() or relative.as_posix() != name
+            or any(part in ('', '.', '..') for part in relative.parts)):
+        raise RuntimeError(f'{label} is not a safe logical asset name: {name!r}')
     root = Path(root)
-    target = root.joinpath(*relative.parts)
-    current = root
-    for part in relative.parts:
-        current = current / part
-        if current.is_symlink():
-            raise RuntimeError(f'{label} cannot pass through a symlink: {current}')
-    try:
-        target.resolve(strict=required).relative_to(root.resolve())
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise RuntimeError(f'{label} must resolve to an existing path inside assets/private.') from exc
-    if required and not target.is_file():
-        raise RuntimeError(f'{label} is missing or is not a regular file: {value}')
-    return target
+    for source, base in ASSET_SOURCES:
+        parts = (*PurePosixPath(base).parts, *relative.parts)
+        current = root
+        for part in parts:
+            current = current / part
+            if current.is_symlink():
+                raise RuntimeError(f'{label} cannot pass through a symlink: {current}')
+        target = root.joinpath(*parts)
+        if not target.exists():
+            continue
+        if not target.is_file():
+            raise RuntimeError(f'{label} is not a regular file: {target}')
+        target.resolve(strict=True).relative_to(root.resolve())
+        return target, source
+    raise RuntimeError(f'缺少阿舟素材 {name}：assets/private/ 与 assets/azhou/ 中都没有。')
+
+
+def _asset_input(root: Path, value, label: str) -> Path:
+    return resolve_asset(root, asset_name(value, label), label)[0]
+
+
+def asset_names(theme: dict) -> tuple[str, ...]:
+    identity = theme['identity']
+    return (*STARTUP_ASSET_NAMES, asset_name(identity['iconInput'], 'identity.iconInput'),
+            asset_name(identity['entryAvatarInput'], 'identity.entryAvatarInput'))
+
+
+def resolved_assets(root: Path = ROOT) -> dict:
+    """Map each required logical asset to its (path, source) for this checkout."""
+    root = Path(root)
+    overlay = root / ASSET_OVERLAY
+    if overlay.is_symlink() or (overlay.exists() and not overlay.is_dir()):
+        raise RuntimeError('assets/private 只能是实体目录（可选的本地覆盖层）。')
+    return {name: resolve_asset(root, name) for name in asset_names(load_theme_config(root))}
+
+
+def asset_sources(root: Path = ROOT) -> dict:
+    return {name: source for name, (_, source) in resolved_assets(root).items()}
+
+
+def asset_key(root: Path, name: str) -> str:
+    """Repository-relative path a build input records for one logical asset."""
+    path, _ = resolve_asset(root, name)
+    return path.relative_to(Path(root)).as_posix()
 
 
 def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
@@ -119,9 +170,9 @@ def _validate_theme_config_data(config: dict, version: str, build: str) -> dict:
             or not installation_name.endswith('.app') or installation_name == '.app'
             or any(ord(character) < 32 or ord(character) == 127 for character in installation_name)):
         raise RuntimeError('theme-config.json installationName must be a safe .app basename.')
-    icon_input = _private_input_path(identity.get('iconInput'), 'identity.iconInput')
-    entry_avatar_input = _private_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
-    if icon_input == entry_avatar_input:
+    icon_input = _asset_input_path(identity.get('iconInput'), 'identity.iconInput')
+    entry_avatar_input = _asset_input_path(identity.get('entryAvatarInput'), 'identity.entryAvatarInput')
+    if icon_input.parts[2:] == entry_avatar_input.parts[2:]:
         raise RuntimeError('theme-config.json iconInput and entryAvatarInput must be distinct assets.')
 
     startup = config.get('startup')
@@ -190,8 +241,8 @@ def load_theme_config(root: Path = ROOT, *, require_inputs: bool = False) -> dic
     package = load_package_metadata(root)
     theme = _validate_theme_config_data(config, package['runtime_version'], package['runtime_build'])
     if require_inputs:
-        _private_input(root, theme['identity']['iconInput'], 'identity.iconInput', required=True)
-        _private_input(root, theme['identity']['entryAvatarInput'], 'identity.entryAvatarInput', required=True)
+        _asset_input(root, theme['identity']['iconInput'], 'identity.iconInput')
+        _asset_input(root, theme['identity']['entryAvatarInput'], 'identity.entryAvatarInput')
     return theme
 
 
@@ -432,16 +483,7 @@ def require_no_asset_transaction(root):
 def source_inputs():
     require_no_asset_transaction(ROOT)
     files = [ROOT / name for name in INPUT_FILES]
-    private = ROOT / 'assets/private'
-    if private.is_symlink() or not private.is_dir():
-        raise RuntimeError('缺少实体私有素材目录 assets/private。')
-    for item in checked_descendants(private):
-        if item.is_symlink():
-            raise RuntimeError(f'拒绝通过符号链接构建素材：{item}')
-        if item.is_file():
-            files.append(item)
-        elif not item.is_dir():
-            raise RuntimeError(f'拒绝非普通素材文件：{item}')
+    files.extend(path for path, _ in resolved_assets(ROOT).values())
     inputs = {}
     for path in sorted(files):
         if path.is_symlink() or not path.is_file():
@@ -495,7 +537,7 @@ def write_marker(path, *, approved_icon_sha256=None):
     inputs = source_inputs()
     if approved_icon_sha256 is not None:
         approved = approved_icon_sha256.lower()
-        icon_input = load_theme_config(ROOT)['identity']['iconInput']
+        icon_input = asset_key(ROOT, asset_name(load_theme_config(ROOT)['identity']['iconInput']))
         if inputs.get(icon_input) != approved:
             raise RuntimeError('图标源图与已批准的 SHA-256 不符，未发布。')
         # Render from the verified copy even if the original changes after recording inputs.
@@ -509,6 +551,7 @@ def write_marker(path, *, approved_icon_sha256=None):
         'bundleID': IDENTITY[0], 'executable': IDENTITY[1],
         'version': VERSION, 'build': BUILD,
         'inputSHA256': aggregate_inputs(inputs), 'inputs': inputs,
+        'assetSources': asset_sources(ROOT),
     }
     marker_path = path / MARKER
     marker_path.parent.mkdir(parents=True, exist_ok=True)
@@ -840,6 +883,9 @@ def write_bundle_info(path):
     return info
 
 
+WALLPAPER_ASSET_KEYS = tuple(f'{base}/wallpaper-scene-q-v3.png' for _, base in ASSET_SOURCES)
+
+
 def verify_wallpaper(path, info, marker):
     if info.get('CFBundleShortVersionString') != VERSION:
         return  # Verified earlier launchers remain valid upgrade sources.
@@ -853,8 +899,8 @@ def verify_wallpaper(path, info, marker):
             or type(height) is not int or not 512 <= height <= 8192 or not 1.4 <= width / height <= 2.5
             or type(color_type) is not int or color_type not in (2, 6) or manifest.get('bitDepth') != 8
             or manifest.get('alpha') is not (color_type == 6) or manifest.get('displayMode') != 'cover'
-            or manifest.get('asset') != 'assets/private/wallpaper-scene-q-v3.png'
-            or manifest.get('imageSHA256') != marker['inputs'].get('assets/private/wallpaper-scene-q-v3.png')
+            or manifest.get('asset') not in WALLPAPER_ASSET_KEYS
+            or manifest.get('imageSHA256') != marker['inputs'].get(manifest['asset'])
             or manifest.get('rendererSHA256') != marker['inputs'].get('wallpaper/renderer.js')
             or manifest.get('cssSHA256') != marker['inputs'].get('wallpaper/wallpaper.css')
             or manifest.get('scriptSHA256') != hashlib.sha256(script.read_bytes()).hexdigest()):

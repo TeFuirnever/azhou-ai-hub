@@ -15,7 +15,13 @@
 
 源仓根目录没有 `LICENSE`、`NOTICE` 或 `COPYING` 文件，也没有发现授予本包再分发权的许可文本。源仓 `docs/references.md` 说明历史参考项目仅用于研究、未复制其源码；该说明不能替代本项目代码许可，也不覆盖素材权利。
 
-用户已授权本地迁移。Hub 包中记录该上游归属，并保留源工作树当前维护的代码与文档；用户正在联系上游维护者确认许可。本文件不推定开源许可，也不构成权利转让。在得到明确许可前，不得对外发布或再分发本包。
+用户已授权本地迁移。Hub 包中记录该上游归属，并保留源工作树当时维护的代码与文档。2026-10-26 导入时，用户联系上游维护者确认许可，并在得到明确许可前暂停对外发布。本文件不推定上游的开源许可，也不构成权利转让。
+
+[#441](https://github.com/TeFuirnever/azhou-ai-hub/pull/441)（2026-11-11）按 [衍生面清点](../../evidence/agent-skin-derivative-surface-audit-2026-11-08.md) 独立重写了仍与迁入快照重合的代码段。自此本包代码按仓库根 [MIT 许可证](../../LICENSE) 发布。上游仓库及 Git 历史中已删除的 `packages/codex-startup-animation/` 字节仍未获许可，MIT 不覆盖它们，本包也不再分发它们。
+
+2026-11-13 复核：上游只有 3 个提交，`c743c2b5` 为最新；其中 23 个代码文件共 951 行有效内容（去空白后不少于 25 个字符）中，只有 31 行在当前包内出现，均为通用 API 或样板写法，例如 `import UniformTypeIdentifiers`、`let app = NSApplication.shared`、`codesign --force --sign - "$bundle"`、`<link rel="stylesheet" href="style.css">`。Pet、壁纸、安装器、校验器及其测试从未出现在上游任何提交中，它们来自本地维护工作树。包内也没有上游文件头或版权行；`vendor/dream-image-metadata.mjs` 是另一个 MIT 依赖，许可证保留在旁。
+
+MIT 只覆盖代码。阿舟图像是维护者自有 IP，自 2026-11-13 起放在 `assets/azhou/`，采用 [CC BY-NC-ND 4.0](assets/azhou/LICENSE)（见 [NOTICE](assets/azhou/NOTICE.md)）；阿舟名称、标识与角色见 [TRADEMARKS.md](../../TRADEMARKS.md)。本地覆盖层 `assets/private/` 不随源码发布。
 
 2026-10-26 的源码导入排除了私有阿舟图像、生成素材和本地机器验收产物。同日的本地交接将构建所需私有输入放在 Hub 包内被 Git 忽略的 `assets/private/`；它们仍不属于跟踪源码或公开分发内容。参见 [迁移清单](MIGRATION-INVENTORY.md)和 [本地交接记录](../../evidence/optional-integrations-local-handoff-2026-10-26.md)。
 

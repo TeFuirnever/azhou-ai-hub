@@ -1,6 +1,6 @@
 ---
 name: super-ask-azhou
-description: Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf.
+description: "Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf."
 invocation: user-invoked orchestrator
 ---
 

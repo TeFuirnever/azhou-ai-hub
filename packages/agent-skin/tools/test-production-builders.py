@@ -109,13 +109,20 @@ class WallpaperPackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "azhou-stage"):
                 self.module.package(self.root / "ordinary/azhou-payload")
             self.image.unlink()
-            with self.assertRaisesRegex(RuntimeError, "Missing private wallpaper artwork"):
+            with self.assertRaisesRegex(RuntimeError, "缺少阿舟素材 wallpaper-scene-q-v3.png"):
                 self.module.package(self.stage)
             outside = Path(self.temporary.name) / "outside.png"
             outside.write_bytes(png_header(1400, 1000))
             self.image.symlink_to(outside)
-            with self.assertRaisesRegex(RuntimeError, "Missing private wallpaper artwork"):
+            with self.assertRaisesRegex(RuntimeError, "cannot pass through a symlink"):
                 self.module.package(self.stage)
+            self.image.unlink()
+            library = self.root / "assets/azhou/wallpaper-scene-q-v3.png"
+            library.parent.mkdir(parents=True, exist_ok=True)
+            library.write_bytes(png_header(1400, 1000))
+            self.module.package(self.stage)
+            manifest = json.loads((self.stage / "Contents/Resources/wallpaper/manifest.json").read_text())
+            self.assertEqual(manifest["asset"], "assets/azhou/wallpaper-scene-q-v3.png")
 
     def test_package_preserves_artwork_across_encoding_boundaries(self):
         header = png_header(1400, 1000)
@@ -306,7 +313,7 @@ class WallpaperPackageTests(unittest.TestCase):
         with mock.patch.object(sys, "argv", [str(script), "--bundle", str(self.stage)]), \
                 contextlib.redirect_stdout(stdout):
             runpy.run_path(str(script), run_name="__main__")
-        self.assertIn("Packaged private Azhou wallpaper", stdout.getvalue())
+        self.assertIn("Packaged Azhou wallpaper: assets/private/wallpaper-scene-q-v3.png", stdout.getvalue())
         self.assertTrue((self.stage / "Contents/Resources/wallpaper/manifest.json").is_file())
 
 
@@ -1483,13 +1490,12 @@ class PrepareAzhouAssetTests(unittest.TestCase):
         receipt = self.state / ".azhou-assets-receipt.json"
         paths = [destination / name for name in ("working.png", "scene.js", "provenance.json")] + [receipt]
         before = {str(path): (path.stat().st_dev, path.stat().st_ino, path.read_bytes()) for path in paths}
-        verifier = load_module(TOOLS / "verify-artifacts.py", "synthetic_asset_input_fingerprint")
-        verifier.ROOT = self.root
-        verifier.INPUT_FILES = ()
-        inputs = verifier.source_inputs()
+        def fingerprint():
+            return {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(destination.iterdir())}
+        inputs = fingerprint()
         self.invoke()
         self.assertEqual({str(path): (path.stat().st_dev, path.stat().st_ino, path.read_bytes()) for path in paths}, before)
-        self.assertEqual(verifier.source_inputs(), inputs)
+        self.assertEqual(fingerprint(), inputs)
         self.assertEqual(sorted(path.name for path in destination.iterdir()), ["provenance.json", "scene.js", "working.png"])
         self.assertFalse((self.state / ".azhou-assets-transaction.json").exists())
         self.assertFalse(list(self.state.glob(".azhou-assets-stage-*")))
@@ -1983,23 +1989,29 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         module = self.module
         with tempfile.TemporaryDirectory(prefix="agent-skin-startup-inputs-") as temporary:
             root = Path(temporary)
-            theme = {"identity": {"entryAvatarInput": "assets/private/entry.png",
-                                  "iconInput": "assets/private/icon.png"}}
-            private = root / "assets/private"
-            private.mkdir(parents=True)
-            for relative in (*module.PRIVATE_STARTUP_INPUTS, "assets/private/entry.png", "assets/private/icon.png"):
-                path = root / relative
+            for name in ("hub-package.json", "theme-config.json"):
+                shutil.copy2(PACKAGE / name, root / name)
+            artifacts = load_module(TOOLS / "verify-artifacts.py", "agent_skin_require_assets_fixture")
+            names = ("working.png", "wallpaper-scene-q-v3.png", "entry-avatar.png", "app-icon/source.png")
+            for name in names:
+                path = root / "assets/azhou" / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"fixture")
-            module._require_private_inputs(root, theme)
-            (root / module.PRIVATE_STARTUP_INPUTS[0]).unlink()
-            with self.assertRaisesRegex(RuntimeError, "缺少本地启动默认素材"):
-                module._require_private_inputs(root, theme)
-            (root / module.PRIVATE_STARTUP_INPUTS[0]).write_bytes(b"fixture")
+            self.assertEqual({name: root / "assets/azhou" / name for name in names},
+                             module._require_assets(root, artifacts))
+            overlay = root / "assets/private/working.png"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_bytes(b"overlay")
+            self.assertEqual(overlay, module._require_assets(root, artifacts)["working.png"])
+            (root / "assets/azhou/entry-avatar.png").unlink()
+            with self.assertRaisesRegex(RuntimeError, "缺少阿舟素材 entry-avatar.png"):
+                module._require_assets(root, artifacts)
+            (root / "assets/azhou/entry-avatar.png").write_bytes(b"fixture")
+            private = root / "assets/private"
             private.rename(root / "private-dir")
             private.symlink_to(root / "private-dir", target_is_directory=True)
-            with self.assertRaisesRegex(RuntimeError, "缺少实体私有素材目录"):
-                module._require_private_inputs(root, theme)
+            with self.assertRaisesRegex(RuntimeError, "assets/private"):
+                module._require_assets(root, artifacts)
 
         class Artifacts:
             STARTUP_REQUIRED_INPUTS = ("source.py", "hub-package.json")
@@ -2218,6 +2230,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
                 return theme
             def load_package_metadata(self, _root):
                 return json.loads((root / "hub-package.json").read_text(encoding="utf-8"))
+            def resolved_assets(self, _root): return artifacts.resolved_assets(root)
             def source_inputs(self): return {}
 
         with mock.patch.object(module, "load_artifacts", return_value=MissingInputArtifacts()), \
@@ -2277,7 +2290,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
                 Path(command[5]).write_text("[[[1,1],[2,2]]]")
             return subprocess.CompletedProcess(command, 0)
         theme = json.loads((root / "theme-config.json").read_text(encoding="utf-8"))
-        entry_input = root / theme["identity"]["entryAvatarInput"]
+        entry_input = artifacts.resolve_asset(root, artifacts.asset_name(theme["identity"]["entryAvatarInput"]))[0]
         helpers.synthetic_png(entry_input, 1253, 1254, lambda _x, _y: (1, 2, 3, 255))
         with mock.patch.object(module.subprocess, "check_output", return_value="arm64\n"), \
                 mock.patch.object(module.subprocess, "run", side_effect=good_artwork), \

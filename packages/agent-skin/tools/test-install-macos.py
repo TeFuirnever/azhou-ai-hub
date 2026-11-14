@@ -41,9 +41,14 @@ class InstallerTests(unittest.TestCase):
             path = m.ROOT / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('test source: ' + name)
-        private = m.ROOT / 'assets/private'
-        private.mkdir(parents=True)
-        (private / 'scene.js').write_text('test fixture')
+        # The asset resolver reads the real theme contract; the published library
+        # is represented by synthetic bytes under assets/azhou.
+        for name in ('theme-config.json', 'hub-package.json'):
+            (m.ROOT / name).write_bytes((INSTALLER.parent.parent / name).read_bytes())
+        for name in ('working.png', 'wallpaper-scene-q-v3.png', 'entry-avatar.png', 'app-icon/source.png'):
+            asset = m.ROOT / 'assets/azhou' / name
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            asset.write_text('test fixture: ' + name)
         self.bundle(m.SOURCE)
         self.registry = {identity[0]: set() for identity in m.KNOWN}
         self.commands = []

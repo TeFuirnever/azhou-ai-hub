@@ -19,13 +19,13 @@ const options = { chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google
 for (let i = 2; i < process.argv.length; i++) {
   const key = process.argv[i];
   if (key === '--help') {
-    console.log('node tools/test-wallpaper.mjs [--chrome /path/to/Chrome] [--image private-file.png] [--out /path/to/evidence] [--baseline-dir /path/to/source-before]');
+    console.log('node tools/test-wallpaper.mjs [--chrome /path/to/Chrome] [--image asset-file.png] [--out /path/to/evidence] [--baseline-dir /path/to/source-before]');
     process.exit(0);
   }
   if (!['--chrome', '--image', '--out', '--baseline-dir'].includes(key) || !process.argv[i + 1]) throw new Error('Unknown/missing argument: ' + key);
   options[key.slice(2)] = process.argv[++i];
 }
-if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:png|webp)$/i.test(options.image)) throw new Error('Expected a private PNG/WebP filename, without directories');
+if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:png|webp)$/i.test(options.image)) throw new Error('Expected an asset PNG/WebP filename, without directories');
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options['baseline-dir']) options.baselineDir = resolve(options['baseline-dir']);
@@ -95,9 +95,11 @@ try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket; no package install is needed');
   await access(options.chrome);
   await mkdir(options.out, { recursive: true });
+  // Same resolution as the build: the optional local overlay first, then the published library.
+  const imageBase = await access(join(ROOT, 'assets/private', options.image)).then(() => 'private', () => 'azhou');
   const [renderer, css, preview, imageBytes] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/renderer.js'), 'utf8'), readFile(join(ROOT, 'wallpaper/wallpaper.css'), 'utf8'),
-    readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'), readFile(join(ROOT, 'assets/private', options.image)),
+    readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'), readFile(join(ROOT, 'assets', imageBase, options.image)),
   ]);
   const previewController = await readFile(join(ROOT, 'wallpaper/preview-controller.js'), 'utf8');
   const imageSHA256 = createHash('sha256').update(imageBytes).digest('hex');
@@ -106,7 +108,7 @@ try {
   const installer = renderer.replace(/^export\s+(?=async function installRenderer)/m, '');
   assert.ok(!/^export\s/m.test(installer), 'Renderer must expose one self-contained function');
   const installExpression = '(async()=>{' + installer + '\nreturn await installRenderer(' + JSON.stringify(payload) + ');})()';
-  report.input = { image: options.image, imageSHA256, imageBytes: imageBytes.length,
+  report.input = { image: options.image, imageSource: imageBase, imageSHA256, imageBytes: imageBytes.length,
     rendererSHA256: createHash('sha256').update(renderer).digest('hex'), cssSHA256: createHash('sha256').update(css).digest('hex') };
   // Optional captured source proves the old false success using its actual bytes.
   let baseline;
@@ -128,7 +130,7 @@ try {
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', renderer]],
     ['/wallpaper/preview-controller.js', ['text/javascript; charset=utf-8', previewController]],
     ['/wallpaper/wallpaper.css', ['text/css; charset=utf-8', css]],
-    ['/assets/private/' + options.image, [mime, imageBytes]],
+    ['/assets/' + imageBase + '/' + options.image, [mime, imageBytes]],
     ['/fixture-base.css', ['text/css; charset=utf-8', baseCSS]],
     ['/csp-allow.html', ['text/html; charset=utf-8', bareFixture, allowedPolicy]],
     ['/csp-no-inline-style.html', ['text/html; charset=utf-8', bareFixture, allowedPolicy.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'")]],

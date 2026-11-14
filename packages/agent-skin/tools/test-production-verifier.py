@@ -194,9 +194,7 @@ class VerifierApiTests(unittest.TestCase):
         non_file = self.root / "assets/private/non-file.png"
         non_file.mkdir()
         with self.assertRaisesRegex(RuntimeError, "not a regular file"):
-            self.verifier._private_input(
-                self.root, "assets/private/non-file.png", "fixture", required=True,
-            )
+            self.verifier._asset_input(self.root, "assets/azhou/non-file.png", "fixture")
 
         with self.assertRaisesRegex(RuntimeError, "JSON object with identity metadata"):
             self.verifier.validate_embedded_theme_config(None, self.verifier.VERSION, self.verifier.BUILD)
@@ -213,36 +211,44 @@ class VerifierApiTests(unittest.TestCase):
                 wrong_release, self.verifier.VERSION, self.verifier.BUILD,
             )
 
-    def test_private_input_paths_and_source_snapshot_reject_links_and_missing_files(self):
+    def test_asset_input_paths_and_source_snapshot_reject_links_and_missing_files(self):
         with self.assertRaisesRegex(RuntimeError, "must stay inside"):
-            self.verifier._private_input_path("assets/private/../outside.png", "asset")
-        with self.assertRaisesRegex(RuntimeError, "relative assets/private"):
-            self.verifier._private_input_path("assets\\private\\working.png", "asset")
-        with self.assertRaisesRegex(RuntimeError, "does not exist|inside assets/private"):
-            self.verifier._private_input(self.root, "assets/private/missing.png", "asset", required=True)
+            self.verifier._asset_input_path("assets/azhou/../outside.png", "asset")
+        with self.assertRaisesRegex(RuntimeError, "relative assets/azhou"):
+            self.verifier._asset_input_path("assets\\azhou\\working.png", "asset")
+        with self.assertRaisesRegex(RuntimeError, "缺少阿舟素材 missing.png"):
+            self.verifier._asset_input(self.root, "assets/azhou/missing.png", "asset")
 
         private = self.root / "assets/private"
-        link = private / "linked.png"
-        link.symlink_to(private / "working.png")
+        working = private / "working.png"
+        original = working.read_bytes()
+        working.unlink()
+        working.symlink_to(private / "entry-avatar.png")
         try:
             with self.assertRaisesRegex(RuntimeError, "符号链接|symlink"):
                 self.verifier.source_inputs()
             with self.assertRaisesRegex(RuntimeError, "符号链接|symlink"):
-                self.verifier._private_input(self.root, "assets/private/linked.png", "asset", required=False)
+                self.verifier._asset_input(self.root, "assets/azhou/working.png", "asset")
         finally:
-            link.unlink()
-        self.assertIn("assets/private/working.png", self.verifier.source_inputs())
+            working.unlink()
+            working.write_bytes(original)
+        inputs = self.verifier.source_inputs()
+        self.assertIn("assets/private/working.png", inputs)
+        self.assertNotIn("assets/private/scene.js", inputs)
 
     def test_source_inputs_reject_pending_asset_transaction_before_and_after_scan(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-asset-journal-") as temporary:
             root = Path(temporary).resolve()
-            private = root / "assets/private"
-            private.mkdir(parents=True)
-            (private / "working.png").write_bytes(b"synthetic")
+            for name in ("hub-package.json", "theme-config.json"):
+                shutil.copy2(self.root / name, root / name)
+            library = root / "assets/azhou"
+            for name in ("working.png", "wallpaper-scene-q-v3.png", "entry-avatar.png", "app-icon/source.png"):
+                (library / name).parent.mkdir(parents=True, exist_ok=True)
+                (library / name).write_bytes(b"synthetic " + name.encode())
             state = root / ".local/agent-skin-asset-preparation"
             state.mkdir(parents=True)
             journal = state / ".azhou-assets-transaction.json"
-            original = self.verifier.checked_descendants
+            original = self.verifier.resolved_assets
             with mock.patch.object(self.verifier, "ROOT", root), mock.patch.object(self.verifier, "INPUT_FILES", ()):
                 journal.write_bytes(b"preserve transaction")
                 with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
@@ -250,24 +256,31 @@ class VerifierApiTests(unittest.TestCase):
                 self.assertEqual(journal.read_bytes(), b"preserve transaction")
                 journal.unlink()
                 def insert_after_scan(path):
-                    yield from original(path)
+                    result = original(path)
                     journal.write_bytes(b"appeared during scan")
-                with mock.patch.object(self.verifier, "checked_descendants", side_effect=insert_after_scan):
+                    return result
+                with mock.patch.object(self.verifier, "resolved_assets", side_effect=insert_after_scan):
                     with self.assertRaisesRegex(RuntimeError, "preparation is incomplete"):
                         self.verifier.source_inputs()
                 self.assertEqual(journal.read_bytes(), b"appeared during scan")
                 journal.unlink()
-                self.assertIn("assets/private/working.png", self.verifier.source_inputs())
+                self.assertIn("assets/azhou/working.png", self.verifier.source_inputs())
+                self.assertEqual({"azhou"}, set(self.verifier.asset_sources(root).values()))
 
-    def test_source_snapshot_hashes_large_private_inputs_exactly(self):
-        path = self.root / "assets/private/synthetic-large.bin"
+    def test_source_snapshot_hashes_large_inputs_exactly_and_ignores_extra_overlay_files(self):
+        path = self.root / "assets/private/wallpaper-scene-q-v3.png"
+        original = path.read_bytes()
+        extra = self.root / "assets/private/provenance.json"
         data = b"synthetic-input" * 100_000
         path.write_bytes(data)
+        extra.write_text("{}", encoding="utf-8")
         try:
             inputs = self.verifier.source_inputs()
-            self.assertEqual(inputs["assets/private/synthetic-large.bin"], hashlib.sha256(data).hexdigest())
+            self.assertEqual(inputs["assets/private/wallpaper-scene-q-v3.png"], hashlib.sha256(data).hexdigest())
+            self.assertFalse(any(name.endswith("provenance.json") for name in inputs))
         finally:
-            path.unlink()
+            path.write_bytes(original)
+            extra.unlink()
 
     def test_marker_reader_validates_schema_digest_paths_identity_and_version(self):
         marker_path = self.bundle / self.verifier.MARKER
@@ -359,17 +372,11 @@ class VerifierApiTests(unittest.TestCase):
                     self.assertEqual(raised.exception.errno, code)
 
     def test_verification_rejects_unreadable_trees(self):
-        private = self.root / "assets/private"
-        private_child = private / "synthetic-scan-error"
-        private_child.mkdir()
-        self.addCleanup(private_child.rmdir)
         plugin = self.case_dir / "unreadable-plugin"
         (plugin / "locale").mkdir(parents=True)
         checks = (
             (self.bundle, lambda: self.verifier.require(self.bundle, self.verifier.IDENTITY)),
             (self.bundle / "Contents", lambda: self.verifier.require(self.bundle, self.verifier.IDENTITY)),
-            (private, self.verifier.source_inputs),
-            (private_child, self.verifier.source_inputs),
             (plugin, lambda: self.verifier.verify_dsh_plugin(plugin)),
             (plugin / "locale", lambda: self.verifier.verify_dsh_plugin(plugin)),
         )

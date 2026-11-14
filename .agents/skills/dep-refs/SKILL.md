@@ -1,6 +1,8 @@
 ---
 name: dep-refs
 description: "列出文件导出、定位符号调用与重导出，或在重构、改名和删除前复核未使用导出及跨包消费者。"
+metadata:
+  internal: true
 ---
 
 # dep-refs

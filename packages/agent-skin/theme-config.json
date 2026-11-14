@@ -9,8 +9,8 @@
       "en": "Azhou"
     },
     "installationName": "阿舟 AI 实验室.app",
-    "iconInput": "assets/private/app-icon/source.png",
-    "entryAvatarInput": "assets/private/entry-avatar.png"
+    "iconInput": "assets/azhou/app-icon/source.png",
+    "entryAvatarInput": "assets/azhou/entry-avatar.png"
   },
   "startup": {
     "durationMs": 12000,

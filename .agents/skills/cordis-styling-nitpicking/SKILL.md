@@ -1,6 +1,8 @@
 ---
 name: cordis-styling-nitpicking
 description: "对插件、服务及其可达辅助代码进行生命周期审查：共享状态所有者、副作用释放，以及消费者清理完成前依赖被关闭的竞争。"
+metadata:
+  internal: true
 ---
 
 # cordis-styling-nitpicking

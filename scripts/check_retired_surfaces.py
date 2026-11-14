@@ -214,20 +214,6 @@ FROZEN_NARRATIVE_FRAGMENTS = {
     ),
 }
 
-# pstack-owned text that names the retired Kit as an example of a custom
-# role set. pstack is excluded from Hub Skill tasks (AGENTS.md), so its
-# hub-skills source and the four generated harness copies are exempt by
-# exact path-scoped literal until a separate pstack task rewords them.
-PSTACK_KIT_EXAMPLE = "the Agent Orchestration Kit's `explorer`, `worker`, `reviewer`"
-for _pstack_path in (
-    "packages/pstack-agent-harness/hub-skills/poteto-mode/references/codex-tools.md",
-    "packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/references/codex-tools.md",
-    "packages/pstack-agent-harness/harness/pstack/codex/skills/poteto-mode/references/codex-tools.md",
-    "packages/pstack-agent-harness/harness/pstack/skills-root/skills/poteto-mode/references/codex-tools.md",
-    "packages/pstack-agent-harness/harness/pstack/zcode/skills/poteto-mode/references/codex-tools.md",
-):
-    FROZEN_NARRATIVE_FRAGMENTS[_pstack_path] = (PSTACK_KIT_EXAMPLE,)
-
 # Gate self-reference: these files hold the retired-identifier definitions,
 # allowlists and test fixtures themselves, so they must be able to spell the
 # identifiers (same exemption the legacy-broadcast check grants its own

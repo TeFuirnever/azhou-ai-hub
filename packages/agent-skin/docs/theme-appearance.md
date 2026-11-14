@@ -7,7 +7,7 @@
 | 配置 | 当前来源与所有者 | 页面能力 | 生效方式 |
 | --- | --- | --- | --- |
 | App 中英名称、安装文件名 | `theme-config.json` 的 `identity`；构建所有 | 只读展示，展开修改流程 | 修改配置，重新构建并按安装生命周期安装 |
-| App 图标、bot 头像 | `identity.iconInput`、`identity.entryAvatarInput` 指定的私有文件 | 展示各自来源；bot 头像用于入口和页面标识 | 替换文件后重新构建安装；两者不能共用路径 |
+| App 图标、bot 头像 | `identity.iconInput`、`identity.entryAvatarInput` 指定的 `assets/azhou/` 文件（可被同名覆盖层替换） | 展示各自来源；bot 头像用于入口和页面标识 | 替换文件后重新构建安装；两者不能共用路径 |
 | bot 中英名称 | `identity.botName` | 只读，跟随界面语言显示 | 重新构建安装 |
 | 版本、build | `hub-package.json`，构建注入 `themeConfig.identity` | 只读展示 | 新构建；没有第二份可写版本定义 |
 | 启动标题、标题说明、背景字幕 | `startup.text` 为双语默认值；用户可覆盖 | 编辑、恢复默认、预览草稿 | 保存后供下次启动使用；已保存自定义文字不因语言切换而改写 |
@@ -22,7 +22,7 @@
 
 ## 定义与保存边界
 
-`theme-config.json` 是构建所有的主题定义，包含双语显示身份、私有身份资源路径、启动默认文案和背景默认强度。构建器校验此文件，把完整定义随现有 `assets` 注入启动载荷与独立预览；本地化工厂、设置页、Info.plist/InfoPlist.strings、原生窗口和菜单使用该构建结果。配置及构建器均纳入现有输入指纹，不另加常驻服务或可写全局配置。
+`theme-config.json` 是构建所有的主题定义，包含双语显示身份、身份素材路径、启动默认文案和背景默认强度。构建器校验此文件，把完整定义随现有 `assets` 注入启动载荷与独立预览；本地化工厂、设置页、Info.plist/InfoPlist.strings、原生窗口和菜单使用该构建结果。配置及构建器均纳入现有输入指纹，不另加常驻服务或可写全局配置。
 
 保留的 `--wallpaper-helper` 维护入口也使用同一 `wallpaper.strength` 构建默认值，包含 `0`；它不读取或写入用户 IndexedDB 覆盖。
 
@@ -34,15 +34,15 @@
 
 用户图片、文字和强度继续使用 `azhou-codex-startup` 数据库、`settings` store 的 `images` 记录，schemaVersion 1 不变。构建主题、官方偏好、系统偏好和 bot 头像不进入用户记录。保存继续采用完整候选校验与事务内基线冲突检查；取消、配额、超时和资源释放沿用现有合同。恢复默认只修改草稿，保存后才替换用户覆盖。
 
-私有路径必须在实体 `assets/private/` 内，不接受穿越或符号链接。启动文案上限为 UTF-16 16/48/60 单位；背景强度范围和 12 秒阶段结构是现有运行契约，不是新增调节项。更改这些限制需要实现和验证运行时，不能只修改 JSON。
+素材路径写成 `assets/azhou/<名称>`，构建先找 `assets/private/<名称>` 覆盖层，再用 `assets/azhou/`；不接受穿越或符号链接。启动文案上限为 UTF-16 16/48/60 单位；背景强度范围和 12 秒阶段结构是现有运行契约，不是新增调节项。更改这些限制需要实现和验证运行时，不能只修改 JSON。
 
 ## 双入口图标构建
 
-构建读取 `identity.iconInput`（`assets/private/app-icon/source.png`）。该私有 PNG 不得与 `identity.entryAvatarInput` 共用路径；嵌入应用的主题保留原有三段结构和已选定的 `identity.iconInput` 字符串；历史 Codex 配置无需增加映射。
+构建读取 `identity.iconInput`（`assets/azhou/app-icon/source.png`，可被同名覆盖层替换）。该 PNG 不得与 `identity.entryAvatarInput` 共用路径；嵌入应用的主题保留原有三段结构和已选定的 `identity.iconInput` 字符串；历史 Codex 配置无需增加映射。
 
 `bash tools/build-macos.sh` 构建 Codex 候选。图标源图要求至少 1024×1024 的方形 PNG；图标与 bot、启动动画素材分别管理。
 
-将已审阅素材以原字节放入上述私有路径，并保留来源、SHA-256 和审阅边界。宿主标识不会因本机构建而获得公开再分发授权，私有素材、ICNS 与应用产物均不得提交到 Git。产物检查需核对候选构建的图标；候选构建成功不代表 Finder、Dock、启动台的已安装入口已经完成实机验收。
+自定义素材以原字节放入 `assets/private/` 同名路径，并保留来源、SHA-256 和审阅边界；覆盖层、ICNS 与应用产物均不得提交到 Git。`assets/azhou/` 的发布素材按 CC BY-NC-ND 4.0 授权，名称与形象见根目录 TRADEMARKS.md。产物检查需核对候选构建的图标；候选构建成功不代表 Finder、Dock、启动台的已安装入口已经完成实机验收。
 
 ## 验证边界
 

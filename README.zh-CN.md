@@ -181,7 +181,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 42`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。程序再分发尚未获授权。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 42`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
 
 Codex 冷启动先提交自有原生遮罩的绘制，再打开宿主、读取通过校验的外观快照，并在原生窗口播放现有 12 秒动画；播放结束且支持的工作区已被观察到后才释放遮罩。热启动仍只激活现有进程，不重播。build 42 已安装到维护者的 Mac，独立播放器、热启动和冷启动事件检查通过；冷启动的视觉连续性仍待验收。DSH 使用独立的页面启动门。维护者 Mac 的 DSH 共享包已安装 build 42，桌面 profile 已加载；观察到宿主加载提示、阿舟动画和工作区依次出现，连续首帧录像仍待完成。详见[启动合同](packages/agent-skin/docs/testing.md)。
 
@@ -193,7 +193,7 @@ python scripts/azhou_hub.py integrations pstack --help
 python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-Hub 根目录许可证不覆盖两个原始包源；组合包的再分发授权明确前，不要公开发布其源代码或二进制文件。
+pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由 Hub 根 MIT 许可证覆盖。`packages/agent-skin/assets/azhou/` 的阿舟素材采用 CC BY-NC-ND 4.0，阿舟名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
@@ -240,4 +240,4 @@ python scripts/verify.py
 
 ## 许可证
 
-阿舟自研代码使用 [MIT](LICENSE)。第三方组件保留自己的版权与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+阿舟自研代码使用 [MIT](LICENSE)。阿舟素材使用 [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md)。名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的版权与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

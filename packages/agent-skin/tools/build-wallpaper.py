@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package local private wallpaper into a staged payload; never commit generated artwork."""
+"""Package the resolved Azhou wallpaper (local overlay first) into a staged payload."""
 
 import argparse
 import base64
@@ -14,13 +14,13 @@ import struct
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSET = 'assets/private/wallpaper-scene-q-v3.png'
+ASSET_NAME = 'wallpaper-scene-q-v3.png'
 DATA_PREFIX = 'data:image/png;base64,'
 MAX_IMAGE_BYTES = ((16 * 1024 * 1024 - len(DATA_PREFIX)) // 4) * 3
 
 
 def snapshot_image(path, output):
-    missing = 'Missing private wallpaper artwork assets/private/wallpaper-scene-q-v3.png; retain the local project asset when updating.'
+    missing = 'Missing Azhou wallpaper artwork wallpaper-scene-q-v3.png in assets/private/ or assets/azhou/.'
     limit = 'Wallpaper image exceeds the renderer local-image limit.'
     def identity(info):
         return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -68,7 +68,7 @@ def snapshot_image(path, output):
         os.close(fd)
     if (len(header) < 26 or header[:8] != b'\x89PNG\r\n\x1a\n'
             or header[12:16] != b'IHDR' or header[24] != 8 or header[25] not in (2, 6)):
-        raise RuntimeError('Wallpaper requires the private 8-bit RGB/RGBA PNG Q-style Azhou panorama.')
+        raise RuntimeError('Wallpaper requires an 8-bit RGB/RGBA PNG Q-style Azhou panorama.')
     width, height = struct.unpack('>II', header[16:24])
     if not (1024 <= width <= 8192 and 512 <= height <= 8192 and 1.4 <= width / height <= 2.5):
         raise RuntimeError('Wallpaper artwork must be a landscape PNG, 1024–8192px wide, 512–8192px high, aspect 1.4–2.5.')
@@ -118,8 +118,9 @@ def package(bundle):
     bundle = helper['staged_path'](bundle)
     theme = helper['load_theme_config'](ROOT)
     version = helper['VERSION']
+    asset = helper['asset_key'](ROOT, ASSET_NAME)
     with tempfile.TemporaryFile(mode='w+b') as image:
-        image_hash, width, height, depth, color = snapshot_image(ROOT / ASSET, image)
+        image_hash, width, height, depth, color = snapshot_image(ROOT / asset, image)
         renderer_text = (ROOT / 'wallpaper/renderer.js').read_text(encoding='utf-8')
         css = (ROOT / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
         renderer = as_classic_module(renderer_text, 'export async function installRenderer(',
@@ -130,7 +131,7 @@ def package(bundle):
         output.mkdir(parents=True, exist_ok=True)
         script_hash = write_script(output / 'install.js', renderer, image, payload)
     manifest = {
-        'version': version, 'imageSHA256': image_hash, 'asset': ASSET,
+        'version': version, 'imageSHA256': image_hash, 'asset': asset,
         'width': width, 'height': height, 'alpha': color == 6,
         'bitDepth': depth, 'colorType': color, 'displayMode': 'cover',
         'rendererSHA256': hashlib.sha256(renderer_text.encode('utf-8')).hexdigest(),
@@ -139,7 +140,7 @@ def package(bundle):
         'scope': 'Codex renderer only; no desktop image or official bundle writes',
     }
     (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    print('Packaged private Azhou wallpaper:', output)
+    print('Packaged Azhou wallpaper:', asset, '->', output)
 
 
 def main():
