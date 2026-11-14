@@ -3,9 +3,10 @@
 Records the host-side closeout of PR #471 (squash `fcf2606b`, Hub distribution
 `0.15.38`, quilt patch `0024`): installing the bundled-skills ZCode plugin on
 the maintainer host and deleting the 66 shared-root skill symlinks that build
-replaced. This is installation, file-identity and CLI-discovery evidence. It
-is not a GUI invocation receipt, a SessionStart hook-trust receipt, or a
-complete pstack task run.
+replaced. This is installation, file-identity, CLI-discovery and — after the
+app restart recorded below — GUI-session skill-loading evidence. It is not a
+full bundled command→skill workflow receipt, a SessionStart hook-trust
+receipt, or a complete read-only pstack task run.
 
 ## Inputs
 
@@ -86,7 +87,7 @@ boundary this receipt had left open:
   from the payload and the registered agent roster. A full bundled
   command→skill workflow run, a complete read-only pstack task run and
   SessionStart hook trust remain unclaimed; the 2026-11-14 GUI receipt
-  remains the evidence for command recognition on the link-served form.
+  remains the evidence for the command→skill chain on the link-served form.
 - The stale `0.0.0`/`0.15.36` cache directories are host-managed leftovers;
   they were not touched.
 - Bundled upstream prose that still describes cursor-team-kit/thermos as
