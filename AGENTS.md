@@ -14,7 +14,7 @@
 - Do not add `agents/openai.yaml` or other model-specific package identity. Harness adapters must call a neutral core or stay in documented examples. This restriction applies to public repository files; untracked, Git-ignored local tool installations under `.agents/skills/` may retain their upstream metadata.
 - Every canonical package carries one restrained Azhou identity anchor in its `SKILL.md`; interactive skills additionally broadcast one restrained Azhou anchor per material stage with a stable receipt. Emoji stays out of schema keys, enums, digests, paths, commands, tests, and raw evidence.
 - Adapted or vendored material requires an immutable source, license, retained notice, local boundary and reproducible update path. Public code without a license is not reusable source.
-- Long-range plans and ticket drafts live under `.planning/`, which is git-ignored and therefore absent from Treehouse worktrees; read them from the maintainer checkout by absolute path whenever a task references them.
+- Long-range plans and ticket drafts live under `.planning/`, which is git-ignored and therefore absent from Treehouse worktrees; read them from the maintainer checkout by absolute path whenever a task references them. Maintainer-requested, reviewed design references may be promoted to tracked package `docs/design/` directories. Mark proposals and unverified behavior explicitly. Keep raw transcripts, private inventories, installation receipts and lease state in ignored local evidence.
 
 ## Change scope
 
