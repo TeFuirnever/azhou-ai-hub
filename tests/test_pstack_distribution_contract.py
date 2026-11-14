@@ -30,6 +30,14 @@ def skills_for(tree: str) -> set[str]:
     return {p.name for p in root.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()}
 
 
+def tree_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(root)): p.read_bytes()
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+
+
 class PstackDistributionContractTest(unittest.TestCase):
     def test_harness_ci_parity_detects_untracked_generator_outputs(self) -> None:
         # A clean git diff alone does not notice a newly generated file.
@@ -262,11 +270,14 @@ class PstackDistributionContractTest(unittest.TestCase):
         # The bundled payload carries the full inventory, so ZCode no longer
         # needs shared-root links to serve these skills.
         self.assertEqual(skills_for(f"zcode-plugin/{EXPECTED_PLUGIN}"), skills_for("zcode"))
+        source = HARNESS / "zcode"
         for name in sorted(skills_for("zcode")):
-            self.assertEqual(
-                (payload / "skills" / name / "SKILL.md").read_bytes(),
-                (HARNESS / "zcode" / "skills" / name / "SKILL.md").read_bytes(),
-            )
+            self.assertEqual(tree_bytes(payload / "skills" / name),
+                             tree_bytes(source / "skills" / name))
+        for rel in ("agents", "docs/guide"):
+            self.assertEqual(tree_bytes(payload / rel), tree_bytes(source / rel))
+        self.assertEqual((payload / "README.md").read_bytes(),
+                         (source / "README.md").read_bytes())
         self.assertTrue((payload / "docs/harness/zcode.md").is_file())
         self.assertFalse((payload / "hooks").exists())
 

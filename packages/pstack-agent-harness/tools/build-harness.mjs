@@ -317,13 +317,16 @@ try {
   // the same root-level skills directory the host's official github,
   // zcode-guide and visualize plugins use, so ZCode needs no symlinks in the
   // shared skills root (`~/.agents/skills`) to serve the 68 skills. The
-  // bundled bodies are the `zcode/` tree variant, and the payload ships
-  // `docs/harness/zcode.md` so each skill's adapter pointer resolves inside
-  // the installed plugin. The
+  // bundled bodies are the `zcode/` tree variant, and the payload carries
+  // the whole serving surface they reference — skills/, agents/, README.md,
+  // docs/guide/ and docs/harness/zcode.md — so every relative link resolves
+  // inside the installed plugin. The
   // local-marketplace layout and the `commands`/`skills` manifest pointers
   // were proven against zcode 0.17.1 (2026-11-03) and the bundled-skills
-  // shape against the official plugins cache (2026-11-14); a `hooks` field
-  // has no proven declaration format and stays out.
+  // shape against the official plugins cache (2026-11-14). The tree's
+  // hooks/ and plugin.json/.claude-plugin identity files stay out: a `hooks`
+  // field has no proven declaration format, and the payload identity is
+  // .zcode-plugin/plugin.json.
   const ZCODE_MARKETPLACE = "azhou-hub";
   const zcodeRoot = join(outDir, "pstack", "zcode-plugin");
   // No version layer: the local-source installer copies the plugin directory
@@ -358,8 +361,11 @@ try {
   cpSync(join(zcodeTree, "skills"), join(zcodeBundle, "skills"), { recursive: true });
   const zcodeSkills = readdirSync(join(zcodeBundle, "skills"), { withFileTypes: true })
     .filter((entry) => entry.isDirectory()).length;
+  cpSync(join(zcodeTree, "agents"), join(zcodeBundle, "agents"), { recursive: true });
+  cpSync(join(zcodeTree, "README.md"), join(zcodeBundle, "README.md"));
   mkdirSync(join(zcodeBundle, "docs", "harness"), { recursive: true });
   cpSync(join(zcodeTree, "docs", "harness", "zcode.md"), join(zcodeBundle, "docs", "harness", "zcode.md"));
+  cpSync(join(zcodeTree, "docs", "guide"), join(zcodeBundle, "docs", "guide"), { recursive: true });
   cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
   writeFileSync(
     join(zcodeRoot, "marketplace.json"),
