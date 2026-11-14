@@ -339,6 +339,12 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.contains("--probe-cold-window-ordering") {
+            _ = NSApplication.shared
+            NSApp.setActivationPolicy(.accessory)
+            print("Cold-window ordering checks: \(try nativeColdWindowOrderingChecks())")
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--probe-startup-handshake"),
            index + 1 < CommandLine.arguments.count,
            let url = URL(string: CommandLine.arguments[index + 1]), let port = url.port {
@@ -5667,7 +5673,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
     let originalMenu = NSApp.mainMenu
     defer { NSApp.mainMenu = originalMenu }
     for mode in ["complete", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
-                 "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close"] {
+                 "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close",
+                 "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-wait", "space-wait"] {
         let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
         let app = FakeNativeApplication(pid: 4123, bundleIdentifier: key.bundleIdentifier, bundleURL: bundle,
             executableURL: key.executableURL, launchTime: 100)
@@ -5679,12 +5686,15 @@ private func nativeColdLaunchChecks() async throws -> Int {
         let transport = PreparedConnectorTransport(world)
         let system = FakeStartupSystem(expectedPID: 4123, ports: [49221])
         let presentation = FakeNativePlayerPresentation()
+        let workspaceNotifications = NotificationCenter()
+        let unrelated = FakeNativeApplication(pid: 800, bundleIdentifier: "fixture.other", bundleURL: URL(fileURLWithPath: "/Applications/Other.app"))
         presentation.coverValid = mode != "bad-cover"
         presentation.coverHook = {
             world.runNonce = $0
             if mode == "short-cover" { runtime.uptime = 108 }
         }
         if mode == "short-attach" { world.afterWorkspaceClock = { runtime.uptime = 130 } }
+        if mode == "interrupt-prepare" { world.afterWorkspaceClock = { presentation.nativeHandler?.applicationActivated(unrelated) } }
         let callerDeadline: TimeInterval = ["short-preflight", "short-cover"].contains(mode) ? 108 : mode == "short-attach" ? 130 : 160
         var closeWindow: NSWindow?
         var windowCloseCount = 0
@@ -5713,6 +5723,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
             expect(deadline == min(146, callerDeadline), "opening respects the earlier caller and 45-second attach deadline")
             if mode == "deadline" { presentation.schedules.last?.fire() }
             if mode == "cancel-open" { throw CancellationError() }
+            if mode == "host-activation" { presentation.nativeHandler?.applicationActivated(app) }
+            if mode == "interrupt-open" { presentation.nativeHandler?.applicationActivated(unrelated) }
             if mode == "window-close" {
                 guard let window = closeWindow, let delegate = window.delegate as? NativeColdPlayer else {
                     preconditionFailure("actual cover window must bind NativeColdPlayer as its X delegate")
@@ -5728,7 +5740,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
         onOpeningChanged: { _ in }, startupFacts: { _ in facts }, performDisable: nil)
         assembly.nativePresentation = { nonce, event in
             sequence.append("cover")
-            return NativeColdPlayer(nonce: nonce, runtime: runtime, presentation: realPresentation ?? presentation, event: event)
+            return NativeColdPlayer(nonce: nonce, expectedApplication: key, runtime: runtime,
+                presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications, event: event)
         }
         presentation.evaluationHook = { source in
             if source.contains("finishNativeSnapshot") {
@@ -5742,7 +5755,9 @@ private func nativeColdLaunchChecks() async throws -> Int {
             }
             if source == "window.launcherUI.beginLaunch()" {
                 sequence.append("play")
-                presentation.nativeHandler?.receive(body: ["action": "complete", "runId": world.runNonce, "skipped": false], isMainFrame: true)
+                if mode == "interrupt-wait" { presentation.nativeHandler?.applicationActivated(unrelated) }
+                else if mode == "space-wait" { workspaceNotifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil) }
+                else { presentation.nativeHandler?.receive(body: ["action": "complete", "runId": world.runNonce, "skipped": false], isMainFrame: true) }
             }
             return (true, nil)
         }
@@ -5761,7 +5776,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             continue
         }
         guard case .nativePresentation(let receipt) = result else { preconditionFailure("cold native result lost its presentation identity") }
-        if mode == "complete" {
+        if mode == "complete" || mode == "host-activation" {
             expect(receipt.presentation == .completed && receipt.workspace?.wallpaperDisposition == "disabled", "native completion reconciles independently observed workspace")
             expect(sequence == ["preflight", "payload", "cover", "open", "play"], "production driver invokes real NativeColdPlayer in the intended order")
             expect(presentation.evaluations.contains { $0.contains("acceptNativeSnapshotDescriptor") }
@@ -5771,7 +5786,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             expect(events.resolveNative(receipt, at: 110) == .ready, "native journal accepts independent evidence without page-player ready")
             expect(records.contains { $0["event"] as? String == "startup-native-result" }
                 && !records.contains { $0["event"] as? String == "startup-ready" }, "native evidence is not relabelled as page playback")
-        } else if mode == "cancel-open" || mode == "cancel-task" {
+        } else if mode == "cancel-open" || mode == "cancel-task" || mode.hasPrefix("interrupt-") || mode == "space-wait" {
             expect(receipt.presentation == .interrupted && receipt.reason == "startup-interrupted" && receipt.workspace == nil,
                 "actual driver distinguishes Task cancellation from protocol failure and user skip")
             expect(events.resolveNative(receipt, at: 110) == .partial(reason: "startup-interrupted"),
@@ -5779,6 +5794,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             if mode == "cancel-task" {
                 expect(world.operationLog.contains("page-a:cancelWorkspace"), "cancelled driver cleans up its bound workspace operation")
             }
+            expect(transport.closed || mode == "cancel-open" || mode == "interrupt-open", "interruption exits connector preparation or completion wait and releases transport")
         } else if mode == "skip" || mode == "window-close" {
             expect(receipt.presentation == .skipped && receipt.workspace == nil, "skip releases without inventing workspace readiness")
             expect(events.resolveNative(receipt, at: 110) == .skipped, "native user skip has its own terminal receipt")
@@ -5842,6 +5858,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
         makeVisible: { reusedWindow = $0 }, runAlert: { _ in }, orderCover: { firstWindow = $0 })
     let previewDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
     let cover = try panel.showColdCover(locale: .chinese, runNonce: "appkit-unit", delegate: previewDelegate)
+    expect(firstWindow?.level == .floating, "cold cover stays above a subsequently opened normal host window")
     panel.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
         nativeStartup: .init(runNonce: "appkit-unit", locale: "zh-CN", theme: "light"),
         messageHandler: previewDelegate, navigationDelegate: previewDelegate)
@@ -5850,5 +5867,115 @@ private func nativeColdLaunchChecks() async throws -> Int {
     expect(cover.drawObserved && cover.transactionCommitted && activationCount == 0, "AppKit receipt reports draw/commit without activation or a visual no-flash claim")
     panel.discardColdPlayer()
     expect(panel.geometry.isEmpty, "cold teardown drops the owned window and WebKit view")
+    checks += try nativeColdWorkspaceChecks(key: key)
+    return checks
+}
+
+private final class TrackingWorkspaceNotifications: NotificationCenter, @unchecked Sendable {
+    private(set) var removalCount = 0
+    override func removeObserver(_ observer: Any) {
+        removalCount += 1
+        super.removeObserver(observer)
+    }
+}
+
+@MainActor
+private func nativeColdWorkspaceChecks(key: HostApplicationKey) throws -> Int {
+    var checks = 0
+    func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
+    for mode in ["activation", "foreign-path", "space", "release"] {
+        let runtime = FakeNativeAppRuntime(arguments: ["skin"])
+        let presentation = FakeNativePlayerPresentation()
+        let notifications = TrackingWorkspaceNotifications()
+        var interruptions = 0
+        var player: NativeColdPlayer? = NativeColdPlayer(nonce: "workspace-test", expectedApplication: key,
+            runtime: runtime, presentation: presentation, workspaceNotifications: notifications) { event in
+                if case .interrupted = event { interruptions += 1 }
+            }
+        weak var releasedPlayer = player
+        let original = FakeNativeApplication(pid: 700, bundleIdentifier: "fixture.original", bundleURL: URL(fileURLWithPath: "/Applications/Original.app"))
+        runtime.frontmostApplication = original
+        _ = try player?.showCover()
+        expect(interruptions == 0, "an initially unrelated foreground application is not an activation switch")
+        let host = FakeNativeApplication(pid: 701, bundleIdentifier: key.bundleIdentifier, bundleURL: key.bundleURL)
+        let launcher = FakeNativeApplication(pid: Int32(runtime.processIdentifier), bundleIdentifier: "fixture.launcher", bundleURL: runtime.bundleURL)
+        var activated: (any NativeApplication)? = host
+        runtime.applicationOverride = { _ in activated }
+        func activate(_ application: any NativeApplication) {
+            activated = application
+            notifications.post(name: NSWorkspace.didActivateApplicationNotification, object: nil,
+                userInfo: [NSWorkspace.applicationUserInfoKey: NSRunningApplication.current])
+        }
+        activate(launcher); activate(host)
+        expect(interruptions == 0, "launcher and verified host activation are admitted before open completion")
+        if mode == "activation" { activate(original) }
+        else if mode == "foreign-path" {
+            activate(FakeNativeApplication(pid: 702, bundleIdentifier: key.bundleIdentifier,
+                bundleURL: URL(fileURLWithPath: "/Applications/Foreign/Codex.app")))
+        }
+        else if mode == "space" { notifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil) }
+        else { player?.releaseCover() }
+        expect(interruptions == (mode == "release" ? 0 : 1) && presentation.orderedOutCount == 1,
+            "application or Space departure interrupts and releases exactly once")
+        expect(notifications.removalCount == 2, "release removes both run-scoped workspace observations")
+        activate(original)
+        notifications.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        player?.beginPlayback(deadline: 160)
+        player?.receive(body: ["action": "ready", "runId": "workspace-test", "duration": 12000], isMainFrame: true)
+        player?.releaseCover()
+        expect(interruptions == (mode == "release" ? 0 : 1) && presentation.orderedOutCount == 1
+            && presentation.coldRevealCount == 0, "late workspace and renderer events cannot revive or release a finished cover")
+        expect(notifications.removalCount == 2, "duplicate release never removes workspace observers twice")
+        player = nil
+        expect(releasedPlayer == nil, "released workspace observations do not retain the player")
+    }
+    return checks
+}
+
+@MainActor
+private func nativeColdWindowOrderingChecks() throws -> Int {
+    var checks = 0
+    func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
+    let beforePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+    let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
+    for normalControl in [true, false] {
+        var cover: NSWindow?
+        let frame = NSRect(x: 24, y: 40, width: 260, height: 160)
+        let presentation = AppKitNativePlayerPresentation(
+            activateApp: { preconditionFailure("cold ordering must not activate") },
+            makeVisible: { _ in preconditionFailure("cold ordering must not select a key window") },
+            runAlert: { _ in }, orderCover: { window in
+                cover = window
+                if normalControl { window.level = .normal }
+                window.setFrame(frame, display: false); window.orderFront(nil)
+            })
+        _ = try presentation.showColdCover(locale: .chinese, runNonce: "ordering-test", delegate: delegate)
+        guard let cover else { preconditionFailure("production cold presentation must own a window") }
+        let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
+        host.orderFront(nil)
+        let windowNumber = cover.windowNumber
+        presentation.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
+            nativeStartup: .init(runNonce: "ordering-test", locale: "zh-CN", theme: "light"),
+            messageHandler: delegate, navigationDelegate: delegate)
+        for revealed in [false, true] {
+            if revealed { presentation.revealColdPlayer() }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+            let ids = rows.compactMap { $0[kCGWindowNumber as String] as? Int }
+            guard let coverIndex = ids.firstIndex(of: windowNumber), let hostIndex = ids.firstIndex(of: host.windowNumber) else {
+                preconditionFailure("ordering regression needs both real onscreen window identities")
+            }
+            print("cold-ordering control=\(normalControl) revealed=\(revealed) cover=\(windowNumber) host=\(host.windowNumber) coverIndex=\(coverIndex) hostIndex=\(hostIndex) frontmost=\(beforePID ?? 0)")
+            fflush(stdout)
+            expect(normalControl ? hostIndex < coverIndex : coverIndex < hostIndex,
+                "real AppKit ordering distinguishes the normal-level negative control from the cold fix before and after reveal")
+            expect(cover.windowNumber == windowNumber && NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID,
+                "cold cover and reveal reuse their window without changing the foreground application")
+        }
+        expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
+            "cold window never follows the user to another Space")
+    }
     return checks
 }

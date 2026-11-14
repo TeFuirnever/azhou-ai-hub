@@ -84,6 +84,7 @@ enum CodexNativePresentationEvent {
     case ready(duration: Double)
     case completed
     case skipped
+    case interrupted
     case failed(String)
 }
 
@@ -280,6 +281,9 @@ final class CodexSkinDriver: SkinHostDriver {
     private func receiveNative(_ event: CodexNativePresentationEvent, nonce: String) {
         guard let run = nativeRun, run.nonce == nonce, !run.released else { return }
         switch event {
+        case .interrupted:
+            run.state = .interrupted
+            run.release()
         case .skipped:
             run.state = .skipped
             run.release()
@@ -372,7 +376,7 @@ final class CodexSkinDriver: SkinHostDriver {
                         do { try await presentation.play(snapshot, deadline: run.deadline) }
                         catch { if !run.skipped { throw error } }
                         if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生播放器失败。") }
-                    }, presentationFinished: { run.completed }, releaseRequested: { run.skipped },
+                    }, presentationFinished: { run.completed }, releaseRequested: { run.skipped || run.interrupted },
                     presentationFailure: { run.failure })
                 if case .observed(let observed) = result {
                     workspace = SkinNativeWorkspaceObservation(pageGeneration: observed.pageID, runID: observed.runID,
@@ -380,9 +384,9 @@ final class CodexSkinDriver: SkinHostDriver {
                 }
             }
         } catch {
-            if !run.skipped {
+            if !run.skipped && run.failure == nil {
                 if Task.isCancelled || error is CancellationError { run.state = .interrupted }
-                else if run.failure == nil { run.state = .failed((error as? StartupFailure)?.reason ?? "protocol-error") }
+                else { run.state = .failed((error as? StartupFailure)?.reason ?? "protocol-error") }
             }
         }
         let end: SkinNativePresentationEnd = run.skipped ? .skipped : run.interrupted ? .interrupted
