@@ -5,7 +5,7 @@ description: Watch an open PR — fix failing CI, handle the straightforward rev
 
 # Babysit a PR
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex.
+In ZCode, read [the ZCode adapter](../../docs/harness/zcode.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to ZCode.
 
 On Codex, read the [platform mapping](../poteto-mode/references/codex-tools.md), including its per-skill notes, before following this skill.
 

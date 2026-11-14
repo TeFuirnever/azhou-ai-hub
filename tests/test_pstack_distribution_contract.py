@@ -262,6 +262,12 @@ class PstackDistributionContractTest(unittest.TestCase):
         # The bundled payload carries the full inventory, so ZCode no longer
         # needs shared-root links to serve these skills.
         self.assertEqual(skills_for(f"zcode-plugin/{EXPECTED_PLUGIN}"), skills_for("zcode"))
+        for name in sorted(skills_for("zcode")):
+            self.assertEqual(
+                (payload / "skills" / name / "SKILL.md").read_bytes(),
+                (HARNESS / "zcode" / "skills" / name / "SKILL.md").read_bytes(),
+            )
+        self.assertTrue((payload / "docs/harness/zcode.md").is_file())
         self.assertFalse((payload / "hooks").exists())
 
 

@@ -5,7 +5,7 @@ description: Configure which models pstack uses per role and at what reasoning b
 
 # Setup pstack
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex.
+In ZCode, read [the ZCode adapter](../../docs/harness/zcode.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to ZCode.
 
 Write `~/.cursor/rules/pstack-models.mdc`, an always-applied rule that sets pstack's model per role.
 

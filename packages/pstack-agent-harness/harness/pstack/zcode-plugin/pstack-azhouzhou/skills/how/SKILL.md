@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # How
 
-In Codex, read [the Codex adapter](../../docs/harness/codex.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to Codex.
+In ZCode, read [the ZCode adapter](../../docs/harness/zcode.md) once per session before you follow this skill. It maps the Cursor names in pstack skills to ZCode.
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem, enough to build a working mental model, not so much that it reads like annotated source code.
 
